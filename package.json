@@ -9,6 +9,8 @@
     "dev:full": "concurrently --names \"vite,api\" --prefix-colors \"cyan,green\" \"vite\" \"tsx src/server/main.ts\"",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "init": "tsx src/cli/init.ts",
+    "doctor": "tsx src/cli/doctor.ts",
     "extract": "tsx src/cli/extract.ts",
     "extract-vat": "tsx src/cli/extract-vat.ts",
     "match": "tsx src/cli/match.ts",
