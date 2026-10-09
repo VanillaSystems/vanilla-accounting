@@ -1,6 +1,6 @@
 /**
  * The casebook (examples/cases/) cannot drift from the engine: every case is booked into a copy
- * of the demo workspace, and its declared Ziffern are what computeVatReport / figuresFromBooks
+ * of each shipped demo workspace, and its declared Ziffern are what computeVatReport / figuresFromBooks
  * then add to its quarter. Selection (selectCases) and the classify prompt are tested on
  * synthetic transactions.
  */
