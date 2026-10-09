@@ -19,6 +19,7 @@ export default {
     'common.search': 'Search…',
     'common.clearSearch': 'Clear search',
     'splitPane.handle': 'Drag to resize · double-click to reset',
+    'splitPane.placeholder': 'Select a row on the left to show it here.',
     'pdf.fullscreen': 'Full screen',
     'pdf.openFullscreen': 'Open full screen',
     'pdf.closeEsc': 'Close (Esc)',

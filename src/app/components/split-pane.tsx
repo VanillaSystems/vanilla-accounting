@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { cn } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
 
 interface SplitPaneProps {
   left: ReactNode;
-  /** Right pane content. When falsy, the left pane fills the whole width and no divider is shown. */
+  /** Right pane content. When falsy, the pane stays in place and shows `placeholder`, so selecting a row never moves the layout. */
   right: ReactNode | null | false;
+  /** What the empty right pane says; defaults to "select something on the left". */
+  placeholder?: string;
   /** Unique key for persisting the divider position in localStorage. */
   storageKey: string;
   /** Initial left-pane width as a percentage (used when nothing is stored yet). */
@@ -20,9 +23,8 @@ interface SplitPaneProps {
 }
 
 /**
- * Two-column layout with a draggable divider. The left pane width is remembered
- * per `storageKey`. When `right` is falsy the left pane fills the container and
- * the divider disappears (matching the old `w-[XX%] : flex-1` behaviour).
+ * Two-column layout with a draggable divider. The left pane width is remembered per `storageKey`.
+ * Both columns are always there: with nothing selected the right one shows a placeholder.
  */
 export function SplitPane({
   left,
@@ -34,6 +36,7 @@ export function SplitPane({
   leftClassName,
   leftRef,
   className,
+  placeholder,
 }: SplitPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const key = `splitpane:${storageKey}`;
@@ -43,8 +46,6 @@ export function SplitPane({
     return Number.isFinite(n) ? Math.min(maxLeft, Math.max(minLeft, n)) : defaultLeft;
   });
   const [dragging, setDragging] = useState(false);
-
-  const hasRight = Boolean(right);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -85,28 +86,31 @@ export function SplitPane({
     <div ref={containerRef} className={cn('flex-1 flex overflow-hidden relative', className)}>
       <div
         ref={leftRef}
-        className={cn('flex flex-col', leftClassName, hasRight && 'border-r border-border')}
-        style={hasRight ? { width: `${leftPct}%`, flex: '0 0 auto' } : { flex: '1 1 0%' }}
+        className={cn('flex flex-col border-r border-border', leftClassName)}
+        style={{ width: `${leftPct}%`, flex: '0 0 auto' }}
       >
         {left}
       </div>
 
-      {hasRight && (
-        <>
-          <div
-            onMouseDown={onMouseDown}
-            onDoubleClick={onDoubleClick}
-            role="separator"
-            aria-orientation="vertical"
-            title={t('splitPane.handle')}
-            className={cn(
-              'shrink-0 w-1.5 -mx-px z-10 cursor-col-resize bg-transparent hover:bg-primary/40 transition-colors',
-              dragging && 'bg-primary/60',
-            )}
-          />
-          <div className="flex-1 flex flex-col bg-background overflow-hidden min-w-0">{right}</div>
-        </>
-      )}
+        <div
+          onMouseDown={onMouseDown}
+          onDoubleClick={onDoubleClick}
+          role="separator"
+          aria-orientation="vertical"
+          title={t('splitPane.handle')}
+          className={cn(
+            'shrink-0 w-1.5 -mx-px z-10 cursor-col-resize bg-transparent hover:bg-primary/40 transition-colors',
+            dragging && 'bg-primary/60',
+          )}
+        />
+        <div className="flex-1 flex flex-col bg-background overflow-hidden min-w-0">
+          {right || (
+            <div data-testid="split-placeholder" className="flex-1 flex items-center justify-center gap-2 p-6 text-sm text-dim">
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              <span>{placeholder ?? t('splitPane.placeholder')}</span>
+            </div>
+          )}
+        </div>
 
       {/* While dragging, this overlay keeps mouse events off iframes/PDF embeds. */}
       {dragging && <div className="absolute inset-0 z-50 cursor-col-resize" />}

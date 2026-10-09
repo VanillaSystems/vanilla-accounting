@@ -19,6 +19,7 @@ export default {
     'common.search': 'Cerca…',
     'common.clearSearch': 'Cancella ricerca',
     'splitPane.handle': 'Trascina per regolare · doppio clic per ripristinare',
+    'splitPane.placeholder': 'Seleziona una riga a sinistra per vederla qui.',
     'pdf.fullscreen': 'Schermo intero',
     'pdf.openFullscreen': 'Apri a schermo intero',
     'pdf.closeEsc': 'Chiudi (Esc)',

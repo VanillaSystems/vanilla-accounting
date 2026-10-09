@@ -16,6 +16,7 @@ export const messages = {
   'common.search': 'Suchen…',
   'common.clearSearch': 'Suche leeren',
   'splitPane.handle': 'Ziehen zum Anpassen · Doppelklick zum Zurücksetzen',
+  'splitPane.placeholder': 'Links eine Zeile auswählen, um sie hier anzuzeigen.',
   'pdf.fullscreen': 'Vollbild',
   'pdf.openFullscreen': 'Vollbild öffnen',
   'pdf.closeEsc': 'Schliessen (Esc)',
