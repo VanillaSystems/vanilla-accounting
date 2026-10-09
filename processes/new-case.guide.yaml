@@ -19,6 +19,14 @@ steps:
         why: the answer is one rule, so it should be one question
         source: proposed 2026-10-07 by Claude — confirm or replace
         status: proposed
+      - id: nc-language
+        when: always
+        then: >
+          write the question and its options in the language of company.language in belege.workspace.yaml
+          (de, fr, it or en; German when it is absent); account numbers, VAT codes and the rule ids stay as they are
+        why: the owner answers in the language the app speaks to them; a question they misread gets a wrong rule
+        source: proposed 2026-10-09 by Claude — confirm or replace
+        status: proposed
     precedents: []
 
   who:

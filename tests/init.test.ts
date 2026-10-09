@@ -42,7 +42,7 @@ function cli(script: string, args: string[], path?: string, env: Record<string, 
 
 const consultant = (dir: string, envFile: string, ...more: string[]) => [
   '--preset', 'consultant', '--dir', dir, '--name', 'Beispiel Beratung GmbH', '--uid', 'CHE-153.004.184',
-  '--owner', 'Erika Beispiel', '--bank', 'UBS:CHF', '--bank', 'Wise:EUR', '--app-env', envFile, '--yes', ...more,
+  '--owner', 'Erika Beispiel', '--language', 'fr', '--bank', 'UBS:CHF', '--bank', 'Wise:EUR', '--app-env', envFile, '--yes', ...more,
 ];
 
 test('UID: canonical form from spacing and suffix; a wrong check digit or shape is refused', () => {
@@ -86,6 +86,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   const ws = workspaceAt(dir);
   assert.equal(ws.company.uid, 'CHE-153.004.184');
   assert.equal(ws.company.legalForm, 'GmbH');
+  assert.equal(ws.company.language, 'fr');
   assert.equal(ws.profile?.sells, 'services');
   assert.equal(ws.profile?.ownerPaysPrivately, 'yes');
   assert.deepEqual(ws.bankAccounts.map((a) => `${a.bank} ${a.currency} ${a.account} ${a.statements ?? '-'}`), [

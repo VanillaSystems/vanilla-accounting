@@ -22,14 +22,14 @@ import { BANKS, bankKind, parseIban } from '../workspace/banks.js';
 import { applyPlan, planWorkspace, suggestAccount, type InitInput } from '../workspace/scaffold.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, isSupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import { parseUid } from '../workspace/uid.js';
-import { APP_ROOT, MANIFEST_FILE, workspaceAt } from '../workspace/workspace.js';
+import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from '../workspace/workspace.js';
 
 const flagOf = (key: QuestionKey) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
 const { values: flags } = parseArgs({
   options: {
     dir: { type: 'string' }, name: { type: 'string' }, uid: { type: 'string' }, owner: { type: 'string' },
-    about: { type: 'string' }, preset: { type: 'string' }, bank: { type: 'string', multiple: true },
+    about: { type: 'string' }, language: { type: 'string' }, preset: { type: 'string' }, bank: { type: 'string', multiple: true },
     'export-to': { type: 'string' },
     'app-env': { type: 'string' }, 'no-env': { type: 'boolean' }, 'set-env': { type: 'boolean' },
     yes: { type: 'boolean', short: 'y' },
@@ -215,12 +215,15 @@ async function main(): Promise<string> {
     const uid = (parseUid(uidText) as { uid: InitInput['uid'] }).uid;
     const owner = await text('owner', 'Owner (managing director)');
     const about = await answer('about', 'What the company does, in a few words (helps booking; optional)', '');
+    const languages = appLanguages();
+    const language = await answer('language', `Language of the app (${languages.join(', ')})`, 'de');
+    if (!languages.includes(language)) throw new Stop(`--language must be one of ${languages.join(', ')}.`);
     const answers = await askAnswers(preset);
     if (!isSupported(answers)) throw new Stop(firstUnsupported(answers)!.option.unsupported!, 2);
     const banks = await askBanks();
     const exportTo = await answer('export-to', '\nWhere do the books go at year-end (accounting software or Treuhand; optional)', '');
 
-    const input: InitInput = { name, uid, owner, ...(about ? { business: about } : {}), preset, answers, banks, ...(exportTo ? { exportTo } : {}) };
+    const input: InitInput = { name, uid, owner, ...(about ? { business: about } : {}), ...(language !== 'de' ? { language } : {}), preset, answers, banks, ...(exportTo ? { exportTo } : {}) };
     const applied = applyPlan(root, planWorkspace(input, loadChart(), root, APP_ROOT));
     workspaceAt(root);
     message = [
