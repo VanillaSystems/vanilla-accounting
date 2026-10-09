@@ -6,6 +6,7 @@ import { getAccounts } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
 import type { Period } from '../../accounting/periods.js';
 import { PdfFrame } from './pdf-frame.js';
+import { AccountCombobox } from './account-combobox.js';
 import { SplitPane } from './split-pane.js';
 import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
@@ -64,20 +65,23 @@ export function AccountLedgerTab({ index, period }: Props) {
     setView(viewPath(), params);
   }, [selectedAccount, selectedEntryId, selectedReceiptId]);
 
-  // Accounts that have at least one journal entry
-  const activeAccounts = useMemo(() => {
-    const usedAccounts = new Set<string>();
-    for (const je of journalEntries) {
-      usedAccounts.add(je.accountDebit);
-      usedAccounts.add(je.accountCredit);
-    }
-    const allAccounts = getAccounts();
-    return allAccounts
-      .filter((a) => usedAccounts.has(a.number))
-      .sort((a, b) => a.number.localeCompare(b.number));
-  }, [journalEntries]);
-
   const { from, to } = period;
+  const allAccounts = useMemo(() => [...getAccounts()].sort((a, b) => a.number.localeCompare(b.number)), []);
+
+  // The accounts with an entry in the period, offered first.
+  const activeAccounts = useMemo(() => {
+    const used = new Set<string>();
+    for (const je of journalEntries) {
+      if (!je.date || je.date < from || je.date > to) continue;
+      used.add(je.accountDebit);
+      used.add(je.accountCredit);
+    }
+    return allAccounts.filter((a) => used.has(a.number));
+  }, [journalEntries, allAccounts, from, to]);
+
+  const picker = (
+    <AccountCombobox accounts={activeAccounts} allAccounts={allAccounts} value={selectedAccount} onChange={setSelectedAccount} />
+  );
   const openingBalance = useMemo(
     () => (selectedAccount ? openingBalancesAt(journalEntries, from, index.config?.openingBalances)[selectedAccount] ?? 0 : 0),
     [selectedAccount, journalEntries, from, index.config?.openingBalances],
@@ -99,18 +103,7 @@ export function AccountLedgerTab({ index, period }: Props) {
       <div className="flex flex-col h-full overflow-hidden">
         {/* Toolbar */}
         <div className="bg-muted border-b border-border px-3 py-1.5 flex items-center gap-2 shrink-0">
-          <select
-            value={selectedAccount}
-            onChange={(e) => setSelectedAccount(e.target.value)}
-            className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">{t('ledger.chooseAccountOption')}</option>
-            {activeAccounts.map((a) => (
-              <option key={a.number} value={a.number}>
-                {a.number} {a.name}
-              </option>
-            ))}
-          </select>
+          {picker}
         </div>
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           {t('ledger.chooseAccount')}
@@ -123,18 +116,7 @@ export function AccountLedgerTab({ index, period }: Props) {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar */}
       <div className="bg-muted border-b border-border px-3 py-1.5 flex items-center gap-2 shrink-0">
-        <select
-          value={selectedAccount}
-          onChange={(e) => setSelectedAccount(e.target.value)}
-          className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">{t('ledger.chooseAccountOption')}</option>
-          {activeAccounts.map((a) => (
-            <option key={a.number} value={a.number}>
-              {a.number} {a.name}
-            </option>
-          ))}
-        </select>
+          {picker}
         <div className="ml-auto text-xs text-muted-foreground tabular-nums">
           {t('common.entryCount', { n: ledger?.rows.length ?? 0 })}
         </div>
