@@ -1,0 +1,34 @@
+id: vehicle-fuel
+rank: 23
+segment: services
+title: Fuel and other costs of a company car
+applies: >
+  The company pays fuel, service or parking for its car. Fuel receipts at Swiss stations show
+  8.1% MWST.
+receipt:
+  swissVat: true
+  text: |
+    Tankstelle Seeblick, Bleifrei 95, 52.3 l
+    Total CHF 97.29 inkl. MWST 8.1% 7.29
+transaction:
+  amount: 97.29
+  currency: CHF
+  direction: DBIT
+  description: Tankstelle Seeblick Kartenzahlung
+  account: "1020"
+date: 2026-08-08
+lines:
+  - { debit: "6200", credit: "1020", amount: 97.29, vatCode: I81, description: "Tankstelle Seeblick, Tanken" }
+ziffern: { "405": 7.29, "479": 7.29 }
+payable: -7.29
+rules: [pv-charged]
+law:
+  - MWSTG Art. 28 Abs. 1 (input tax)
+  - MWST-Info 08 (private use of a company car, 0.9% of the price per month)
+why: >
+  Fuel with a Swiss receipt is ordinary input tax: I81 on 62xx.
+pitfalls:
+  - When the owner also drives the car privately, the private use is corrected separately (MWST-Info 08), not by skipping the input tax.
+signals:
+  kind: supplier-ch
+  keywords: [tankstelle, tanken, bleifrei, diesel, parking]

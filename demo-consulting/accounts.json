@@ -1,0 +1,102 @@
+[
+  {
+    "number": "1020",
+    "name": "Bank Raiffeisen"
+  },
+  {
+    "number": "1023",
+    "name": "Wise EUR"
+  },
+  {
+    "number": "1170",
+    "name": "Vorsteuer Material und Dienstleistungen"
+  },
+  {
+    "number": "1171",
+    "name": "Vorsteuer Investitionen und Betriebsaufwand"
+  },
+  {
+    "number": "1520",
+    "name": "Büromaschinen, Informatik"
+  },
+  {
+    "number": "2000",
+    "name": "Verbindlichkeiten aus Lieferungen und Leistungen"
+  },
+  {
+    "number": "2200",
+    "name": "Geschuldete MWST"
+  },
+  {
+    "number": "2201",
+    "name": "Abrechnungskonto MWST"
+  },
+  {
+    "number": "2451",
+    "name": "Kontokorrent Gesellschafter"
+  },
+  {
+    "number": "2800",
+    "name": "Stammkapital"
+  },
+  {
+    "number": "2970",
+    "name": "Gewinnvortrag"
+  },
+  {
+    "number": "3400",
+    "name": "Ertrag Beratung"
+  },
+  {
+    "number": "5000",
+    "name": "Lohnaufwand"
+  },
+  {
+    "number": "5700",
+    "name": "AHV, IV, EO, ALV"
+  },
+  {
+    "number": "5720",
+    "name": "Berufliche Vorsorge"
+  },
+  {
+    "number": "5730",
+    "name": "Unfallversicherung"
+  },
+  {
+    "number": "5740",
+    "name": "Krankentaggeldversicherung"
+  },
+  {
+    "number": "5810",
+    "name": "Aus- und Weiterbildung"
+  },
+  {
+    "number": "6000",
+    "name": "Raumaufwand"
+  },
+  {
+    "number": "6500",
+    "name": "Büromaterial, Fachliteratur"
+  },
+  {
+    "number": "6510",
+    "name": "Telefon, Internet"
+  },
+  {
+    "number": "6570",
+    "name": "Informatik, Software"
+  },
+  {
+    "number": "6640",
+    "name": "Reisespesen"
+  },
+  {
+    "number": "6641",
+    "name": "Kundenbetreuung"
+  },
+  {
+    "number": "6940",
+    "name": "Bankspesen"
+  }
+]

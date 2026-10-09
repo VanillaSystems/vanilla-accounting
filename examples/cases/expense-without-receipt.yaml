@@ -1,0 +1,30 @@
+id: expense-without-receipt
+rank: 8
+segment: services
+title: Business expense without a receipt
+applies: >
+  A business payment whose receipt is lost, or was never issued. The expense is still booked,
+  but without a receipt there is nothing to deduct.
+receipt: none
+transaction:
+  amount: 108.1
+  currency: CHF
+  direction: DBIT
+  description: Papeterie Seeblick Kartenzahlung
+  account: "1020"
+date: 2026-08-06
+lines:
+  - { debit: "6500", credit: "1020", amount: 108.1, vatCode: I0, description: "Papeterie Seeblick, Büromaterial" }
+ziffern: {}
+payable: 0
+rules: [pv-no-receipt]
+law:
+  - MWSTG Art. 28 Abs. 4 (the deduction needs proof that the tax was paid)
+why: >
+  No receipt, no input tax: I0. If the receipt turns up after the quarter is filed, the tax is
+  recovered with a correction entry (see vorsteuer-recovered-filed-quarter).
+pitfalls:
+  - Do not guess I81 because the shop always charges VAT; ask the vendor for a copy instead.
+signals:
+  kind: supplier-ch
+  keywords: [kartenzahlung, card payment, twint]

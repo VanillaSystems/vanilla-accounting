@@ -1,0 +1,36 @@
+id: consulting-revenue-abroad
+rank: 6
+segment: services
+title: Consulting fee paid by a client abroad (Ziffer 221)
+applies: >
+  A business client abroad pays for a service. The place of a service is where the client has
+  its seat, so it is supplied abroad and the invoice carries no Swiss MWST.
+receipt:
+  swissVat: false
+  text: |
+    Invoice 2026-029 to Nordlicht Software GmbH, Hamburg, German VAT ID on file
+    Software architecture review, July 2026
+    Total EUR 8000. Reverse charge: VAT to be accounted for by the recipient.
+transaction:
+  amount: 8000
+  currency: EUR
+  direction: CRDT
+  description: Nordlicht Software GmbH Invoice 2026-029
+  account: "1021"
+date: 2026-08-14
+lines:
+  - { debit: "1021", credit: "3400", amount: 8000, currency: EUR, rate: 0.94711, vatCode: V0-E, description: "Nordlicht Software, Architektur-Review Jul 2026" }
+ziffern: { "200": 7576.88, "221": 7576.88, "289": 7576.88 }
+payable: 0
+rules: [cls-fx]
+law:
+  - MWSTG Art. 8 Abs. 1 (a service is supplied where the recipient has its seat)
+  - ESTV form 0550 Ziffer 221 (Leistungen im Ausland, declared in 200 and deducted again)
+why: >
+  The service is supplied abroad, so no Swiss tax: V0-E declares it in Ziffer 200 and deducts it
+  in 221. The EUR amount is converted at the ESTV sell rate of the payment date.
+pitfalls:
+  - Not V0 (Ziffer 220, exports of goods), and not V81. A private client abroad is still abroad for most services, but check Art. 8 Abs. 2 for exceptions (on-site work, events).
+signals:
+  kind: customer-abroad
+  keywords: [invoice, reverse charge, consulting, review]

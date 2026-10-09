@@ -1,0 +1,36 @@
+id: asset-purchase
+rank: 22
+segment: services
+title: Laptop or other equipment worth keeping (asset)
+applies: >
+  The company buys equipment that lasts several years and costs more than a few hundred francs,
+  such as a laptop. It is capitalised and depreciated, not expensed at once.
+receipt:
+  swissVat: true
+  text: |
+    Elektronik Muster AG, Laptop 14 Zoll, 32 GB
+    Total CHF 2162.00 inkl. MWST 8.1% 162.00
+transaction:
+  amount: 2162
+  currency: CHF
+  direction: DBIT
+  description: Elektronik Muster AG Laptop
+  account: "1020"
+date: 2026-07-21
+lines:
+  - { debit: "1520", credit: "1020", amount: 2162, vatCode: I81, description: "Elektronik Muster, Laptop" }
+ziffern: { "405": 162, "479": 162 }
+payable: -162
+rules: [cls-expense-vs-asset, pv-charged]
+law:
+  - MWSTG Art. 28 Abs. 1 (input tax on investments, Ziffer 405)
+  - OR Art. 960a (assets at cost, depreciated)
+why: >
+  An investment takes an I code like an operating expense; the full input tax is deducted when it
+  is paid, even though the cost is depreciated over years.
+pitfalls:
+  - Under about CHF 150 a purchase is expensed (6xxx), not capitalised.
+  - When the laptop is also used privately, add a private-share correction.
+signals:
+  kind: supplier-ch
+  keywords: [laptop, notebook, computer, monitor]

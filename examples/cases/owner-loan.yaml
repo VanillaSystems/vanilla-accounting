@@ -1,0 +1,29 @@
+id: owner-loan
+rank: 20
+segment: services
+title: Owner pays money into the company
+applies: >
+  The owner transfers private money to the company, as a loan or to fund the start. It is
+  financing, not revenue.
+receipt: none
+transaction:
+  amount: 20000
+  currency: CHF
+  direction: CRDT
+  description: A. Beispiel Einzahlung
+  account: "1020"
+date: 2026-07-03
+lines:
+  - { debit: "1020", credit: "2451", amount: 20000, description: "A. Beispiel, Einzahlung Kontokorrent" }
+ziffern: {}
+payable: 0
+rules: []
+law:
+  - MWSTG Art. 18 Abs. 2 lit. e (contributions and loans to a business are no consideration)
+why: >
+  Money the owner puts in is owed back (a loan) or is equity, never turnover: no code, no Ziffer.
+pitfalls:
+  - V0 or V81 here would report financing as sales.
+signals:
+  kind: owner
+  keywords: [einzahlung, einlage, darlehen, kontokorrent]

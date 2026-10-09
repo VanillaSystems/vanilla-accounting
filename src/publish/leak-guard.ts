@@ -2,8 +2,9 @@
  * The leak guard of the public app repo. Two halves, both pure:
  *
  * - Structural (needs no workspace, so the public repo's CI can run it): every file is named by
- *   public-files.txt, binaries only at exact listed paths or under demo/, no valid IBAN and no
- *   Swiss UID except the ones demo/ and the public vendor files declare, and in prose no amount
+ *   public-files.txt, binaries only at exact listed paths or under a demo workspace (demo/,
+ *   demo-<name>/), no valid IBAN and no Swiss UID except the ones the demos and the public vendor
+ *   files declare, and in prose no amount
  *   with cents and no number of six digits or more: those are one company's items (invoice,
  *   order, account numbers, figures). A rate below 1 (0.91) and a date (31.12) pass.
  * - Secrets (needs the real workspace): every string that identifies the company, derived from
@@ -12,7 +13,7 @@
 import type { Books } from '../books/store.js';
 import type { Counterparty, RawCounterparty } from '../knowledge/counterparties.js';
 import { namesOf } from '../knowledge/mentions.js';
-import type { Company } from '../workspace/workspace.js';
+import { DEMO_NAME, type Company } from '../workspace/workspace.js';
 
 export type SecretKind =
   | 'company' | 'owner' | 'uid' | 'company-domain' | 'mailbox' | 'iban' | 'bank-account-id'
@@ -213,13 +214,13 @@ export interface ScanOptions {
 
 /**
  * Pure. The findings of the structural half, then of the secrets (an empty list runs only the
- * structural half). IBANs and UIDs that demo/ (or, for UIDs, a public vendor file) declares
- * are fine elsewhere too, so the demo's tests and the vendor rules may name them.
+ * structural half). IBANs and UIDs that a demo workspace (or, for UIDs, a public vendor file)
+ * declares are fine elsewhere too, so the demo's tests and the vendor rules may name them.
  */
 export function scan(files: readonly PublicFile[], secrets: readonly Secret[], allowlist: Allowlist, opts: ScanOptions): Finding[] {
   const findings: Finding[] = [];
   const declares = (f: PublicFile, re: RegExp) => [...(f.text ?? '').matchAll(re)].map((m) => m[0]);
-  const isDemo = (p: string) => p.startsWith('demo/');
+  const isDemo = (p: string) => DEMO_NAME.test(p.split('/')[0]) && p.includes('/');
   const publicUids = new Set(files.filter((f) => isDemo(f.path) || f.path.startsWith('processes/counterparties/'))
     .flatMap((f) => declares(f, UID)).map((u) => u.replace(/\D/g, '')));
   const publicIbans = new Set(files.filter((f) => isDemo(f.path)).flatMap((f) => declares(f, IBAN)).map(compact));
@@ -258,13 +259,15 @@ export function scan(files: readonly PublicFile[], secrets: readonly Secret[], a
       for (const m of text.matchAll(IBAN)) if (isIban(m[0]) && !publicIbans.has(compact(m[0]))) hit('iban-pattern', m[0], m.index!);
       for (const m of text.matchAll(UID)) if (!publicUids.has(m[0].replace(/\D/g, ''))) hit('foreign-uid', m[0], m.index!);
       const prose = PROSE.test(f.path);
+      // The casebook's figures are invented like the demo's; a real amount of the books is still caught.
+      const synthetic = f.path.startsWith('examples/');
       // App code holds no figure of the books either (an example in a comment); tests and the demo
       // hold synthetic amounts that may equal a real one by chance, so only src/ is checked.
       if (prose || f.path.startsWith('src/')) {
         for (const m of text.matchAll(AMOUNT)) {
           const plain = m[0].replace(/['’]/g, '');
           if (amounts.has(plain)) hit('amount', m[0], m.index!);
-          else if (prose && Number(plain) >= 1 && !looksLikeDate(plain)) hit('amount-in-prose', m[0], m.index!);
+          else if (prose && !synthetic && Number(plain) >= 1 && !looksLikeDate(plain)) hit('amount-in-prose', m[0], m.index!);
         }
       }
       if (prose) for (const m of text.matchAll(LONG_NUMBER)) hit('long-number', m[0], m.index!);

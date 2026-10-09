@@ -42,7 +42,7 @@ const sources: SecretSources = {
   terms: ['Geheimschmiede', 'Nabe', 'Speiche*'],
 };
 const secrets = secretsOf(sources);
-const allowlist = parseAllowlist('README.md\ntests/**\nsrc/**\ndocs/**\nprocesses/**\ndemo/**\npublic/logo.png\n');
+const allowlist = parseAllowlist('README.md\ntests/**\nsrc/**\ndocs/**\nprocesses/**\ndemo/**\nexamples/**\npublic/logo.png\n');
 const kindsIn = (text: string, path = 'src/x.ts') =>
   scan([{ path, text }], secrets, allowlist, { requireAllowlisted: true }).map((f) => f.kind);
 
@@ -96,6 +96,8 @@ test('scan, structural half: allowlist, binaries, IBANs, UIDs, prose amounts and
     { path: 'docs/a.md', text: 'Alibaba (CHE-447.613.666) charged 8.1%' }]), []);
   assert.deepEqual(run([{ path: 'docs/a.md', text: 'fees 23.50, order 304-9462744, rate 0.91 at 31.12, ref WEUR000042' }]),
     ['docs/a.md amount-in-prose', 'docs/a.md long-number']);
+  assert.deepEqual(run([{ path: 'examples/cases/c.yaml', text: 'Total CHF 108.10, order 304-9462744' }]), ['examples/cases/c.yaml long-number'],
+    'casebook figures are invented; long numbers are still refused');
 });
 
 test("this repo's public view passes the structural half", () => {

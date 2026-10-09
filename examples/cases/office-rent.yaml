@@ -1,0 +1,34 @@
+id: office-rent
+rank: 21
+segment: services
+title: Office rent
+applies: >
+  The company rents an office and pays the monthly rent. Renting space is exempt from VAT unless
+  the landlord opted to tax it.
+receipt:
+  swissVat: false
+  text: |
+    Immobilien Seeblick AG, Mietzinsrechnung September 2026
+    Büro 2. OG, Miete 1400, Nebenkosten akonto 100, Total 1500
+transaction:
+  amount: 1500
+  currency: CHF
+  direction: DBIT
+  description: Immobilien Seeblick AG Miete Sep 2026
+  account: "1020"
+date: 2026-08-31
+lines:
+  - { debit: "6000", credit: "1020", amount: 1500, vatCode: I0, description: "Immobilien Seeblick, Büromiete Sep 2026" }
+ziffern: {}
+payable: 0
+rules: [pv-otherwise]
+law:
+  - MWSTG Art. 21 Abs. 2 Ziff. 21 (renting real estate is exempt)
+  - MWSTG Art. 22 (the landlord may opt; the invoice then shows 8.1%)
+why: >
+  The rent invoice shows no MWST, so there is nothing to deduct: I0.
+pitfalls:
+  - When the landlord opted, the invoice shows 8.1% and the rent is I81. Read the invoice, not the habit.
+signals:
+  kind: landlord
+  keywords: [miete, mietzins, büromiete, nebenkosten]

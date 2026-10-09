@@ -1,0 +1,37 @@
+id: bvg-premium
+rank: 3
+segment: services
+title: Pension fund (BVG) premium
+applies: >
+  The pension fund bills the BVG contributions, usually quarterly. Employer and employee each
+  pay at least half; the employee's half was withheld with the salary.
+receipt:
+  swissVat: false
+  text: |
+    Vorsorgestiftung Beispiel, Beitragsrechnung Q3 2026
+    Sparbeiträge und Risikobeiträge, Arbeitgeber 1050, Arbeitnehmer 1050
+    Total 2100
+transaction:
+  amount: 2100
+  currency: CHF
+  direction: DBIT
+  description: Vorsorgestiftung Beispiel Beitraege Q3
+  account: "1020"
+date: 2026-08-31
+lines:
+  - { debit: "5720", credit: "1020", amount: 1050, vatCode: I0, description: "Vorsorgestiftung Beispiel, BVG Q3 2026 Anteil AG" }
+  - { debit: "2270", credit: "1020", amount: 1050, description: "Vorsorgestiftung Beispiel, BVG Q3 2026 Anteil AN" }
+ziffern: {}
+payable: 0
+rules: [pv-otherwise]
+law:
+  - MWSTG Art. 21 Abs. 2 Ziff. 18 (insurance is exempt, so the invoice shows no MWST)
+  - BVG Art. 66 Abs. 1 (the employer pays at least half)
+why: >
+  Insurance is exempt from VAT, so there is no input tax: I0 on the expense. The employee's half
+  clears what the salary withheld on 2270.
+pitfalls:
+  - The whole premium on 5720 expenses the employee's half twice.
+signals:
+  kind: insurer
+  keywords: [vorsorge, bvg, pensionskasse, sammelstiftung, beitragsrechnung]

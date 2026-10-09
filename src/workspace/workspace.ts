@@ -106,7 +106,8 @@ export function workspaceAt(root: string): Workspace {
 
 /**
  * Resolution, first hit wins:
- *   1. BELEGE_WORKSPACE ("demo" means APP_ROOT/demo, a leading ~ is the home directory), from
+ *   1. BELEGE_WORKSPACE ("demo" or "demo-<name>" means that demo under APP_ROOT, a leading ~ is
+ *      the home directory), from
  *      the environment or else from the app's own .env (an empty value skips both)
  *   2. walking up from the cwd to the first directory holding a belege.workspace.yaml
  * Memoized: every CLI and the API resolve it once per process.
@@ -116,10 +117,13 @@ export function openWorkspace(): Workspace {
 }
 let opened: Workspace | undefined;
 
+/** The demo workspaces the app ships (tools/demo/generate.ts): demo/, demo-consulting/, … */
+export const DEMO_NAME = /^demo(-[a-z0-9]+)*$/;
+
 function locate(): string {
   const env = process.env.BELEGE_WORKSPACE ?? workspaceFromAppEnv();
   if (env) {
-    const root = env === 'demo' ? join(APP_ROOT, 'demo') : resolve(env.replace(/^~(?=$|\/)/, homedir()));
+    const root = DEMO_NAME.test(env) ? join(APP_ROOT, env) : resolve(env.replace(/^~(?=$|\/)/, homedir()));
     if (!existsSync(join(root, MANIFEST_FILE))) {
       throw new WorkspaceError(`BELEGE_WORKSPACE=${env}: no ${MANIFEST_FILE} in ${root}.`);
     }

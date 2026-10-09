@@ -1,0 +1,30 @@
+id: bank-fees
+rank: 13
+segment: services
+title: Bank account and card fees
+applies: >
+  The bank charges account, card or transfer fees and debits them directly. The bank statement is
+  the only document.
+receipt: none
+transaction:
+  amount: 15
+  currency: CHF
+  direction: DBIT
+  description: Musterbank Kontofuehrung Q3 2026
+  account: "1020"
+date: 2026-09-30
+lines:
+  - { debit: "6940", credit: "1020", amount: 15, vatCode: I0, description: "Musterbank, Kontoführung Q3 2026" }
+ziffern: {}
+payable: 0
+rules: [pv-no-receipt]
+law:
+  - MWSTG Art. 21 Abs. 2 Ziff. 19 (banking and payment services are exempt)
+why: >
+  Banking services are exempt, so there is no MWST to deduct: I0. No receipt is needed beyond the
+  statement.
+pitfalls:
+  - Card foreign-currency fees are bank fees too, not part of the purchase they came with.
+signals:
+  kind: bank
+  keywords: [kontoführung, kontofuehrung, gebühr, gebuehr, spesen, charges, fee]
