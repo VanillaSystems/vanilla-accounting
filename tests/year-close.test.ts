@@ -197,6 +197,21 @@ test('a one-leg entry is a named cause of a difference, never absorbed', () => {
   assert.deepEqual(l.causes, [{ code: 'oneLeg', entryIds: ['half'], amount: 10 }]);
 });
 
+test('a single-leg tax correction in EUR balances in CHF: no difference', () => {
+  const b = books();
+  b.journalEntries.push(e('fee', '2026-03-31', '', '6570', 10, { vatCode: 'M81-2', exchangeCurrency: 'EUR', exchangeRate: 0.95 }));
+  const l = closingLedger(b, '2026', CHART, ACCOUNTS);
+  assert.deepEqual([l.residual, l.causes], [0, []]);
+});
+
+test('a booking split over several one-leg lines balances under its ref; an account in several currencies is not revalued', () => {
+  const b = books();
+  b.journalEntries.push(e('s1', '2026-06-01', '6570', '', 30, { transactionRef: 'split' }), e('s2', '2026-06-01', '', '1020', 30, { transactionRef: 'split' }));
+  assert.deepEqual(closingLedger(b, '2026', CHART, ACCOUNTS).causes, []);
+  const manual = (currency: string): LedgerBankAccount => ({ bank: 'manual', currency, account: '2451', label: 'Kontokorrent' });
+  assert.deepEqual(foreignAccounts([...BANKS, manual('CHF'), manual('EUR')]).map((f) => f.account), ['1021']);
+});
+
 test('profit allocation: a dividend of 10000 owes 3500 Verrechnungssteuer, 6500 to pay out', () => {
   assert.deepEqual(dividendSplit(10000), { net: 6500, withholdingTax: 3500 });
   assert.deepEqual(dividendSplit(333.33), { net: 216.66, withholdingTax: 116.67 });

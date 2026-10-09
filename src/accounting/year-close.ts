@@ -13,7 +13,7 @@ import type { Index, JournalEntry, QuarterKey } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
-import { computeBalances, isDebitNormal } from './ledger.js';
+import { chfAmount, computeBalances, isDebitNormal } from './ledger.js';
 import { parseVatCode, vatLine } from './vat-report.js';
 import { figuresFromBooks, type ReturnFigures } from './return-figures.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
@@ -153,14 +153,20 @@ export function closingLedger(books: Books, year: string, chart: readonly string
     else if (digit(account) === '2') openLiabilities += toRappen(value);
   }
   if (openAssets !== openLiabilities) causes.push({ code: 'openingUnbalanced', amount: fromRappen(openAssets - openLiabilities) });
-  const oneLeg = new Map<string, number>();
+  // A booking of several lines (Banana's split entry) has one-leg lines that balance under its ref.
+  const oneLeg = new Map<string, { effect: number; ids: string[] }>();
   for (const p of [...entries, ...vat]) {
-    const id = p.id.replace(/^vat:/, '');
-    const effect = (p.accountDebit === '' ? toRappen(p.amount) : 0) - (p.accountCredit === '' ? toRappen(p.amount) : 0);
-    if (effect) oneLeg.set(id, (oneLeg.get(id) ?? 0) + effect);
+    const chf = toRappen(chfAmount(p));
+    const effect = (p.accountDebit === '' ? chf : 0) - (p.accountCredit === '' ? chf : 0);
+    if (!effect) continue;
+    const ref = oneLeg.get(p.transactionRef) ?? { effect: 0, ids: [] };
+    ref.effect += effect;
+    ref.ids.push(p.id.replace(/^vat:/, ''));
+    oneLeg.set(p.transactionRef, ref);
   }
-  const unbalanced = [...oneLeg].filter(([, v]) => v !== 0);
-  if (unbalanced.length) causes.push({ code: 'oneLeg', entryIds: unbalanced.map(([id]) => id), amount: fromRappen(-unbalanced.reduce((s, [, v]) => s + v, 0)) });
+  // Lines that balance across refs (a payout booked over several refs) leave no difference.
+  const unbalanced = [...oneLeg.values()].filter((r) => r.effect !== 0);
+  if (unbalanced.reduce((s, r) => s + r.effect, 0) !== 0) causes.push({ code: 'oneLeg', entryIds: [...new Set(unbalanced.flatMap((r) => r.ids))], amount: fromRappen(-unbalanced.reduce((s, r) => s + r.effect, 0)) });
   const inChart = new Set(chart);
   for (const [account, balance] of Object.entries(balances)) {
     if (account === '') continue;
@@ -183,10 +189,18 @@ export function closingLedger(books: Books, year: string, chart: readonly string
 /** A foreign-currency account the year-end revalues: a bank account of the manifest not in CHF. */
 export type ForeignAccount = Pick<LedgerBankAccount, 'account' | 'currency' | 'label'>;
 
+/**
+ * An account that books in one currency, not CHF. An account the manifest names in several
+ * currencies (a shareholder's current account paid in CHF, EUR and USD) holds CHF: its entries
+ * are converted when booked, and it has no single native balance to revalue.
+ */
 export function foreignAccounts(bankAccounts: readonly LedgerBankAccount[]): ForeignAccount[] {
-  const seen = new Map<string, ForeignAccount>();
-  for (const b of bankAccounts) if (b.currency !== 'CHF' && !seen.has(b.account)) seen.set(b.account, { account: b.account, currency: b.currency, label: b.label });
-  return [...seen.values()].sort((a, b) => a.account.localeCompare(b.account));
+  const byAccount = new Map<string, LedgerBankAccount[]>();
+  for (const b of bankAccounts) byAccount.set(b.account, [...(byAccount.get(b.account) ?? []), b]);
+  return [...byAccount.values()]
+    .filter((bs) => bs[0].currency !== 'CHF' && bs.every((b) => b.currency === bs[0].currency))
+    .map(([b]) => ({ account: b.account, currency: b.currency, label: b.label }))
+    .sort((a, b) => a.account.localeCompare(b.account));
 }
 
 /** The id (and ref) of the year-end's own revaluation entry of one account: rerunning replaces it. */
