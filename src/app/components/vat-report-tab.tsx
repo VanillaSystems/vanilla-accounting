@@ -9,6 +9,7 @@ import { CorrectionCases } from './vat-correction-cases.js';
 import { EntryDetail } from './vat-entry-table.js';
 import { cn, fmt } from '../lib/utils.js';
 import { api } from '../lib/api.js';
+import { accountingName, t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
@@ -171,27 +172,26 @@ export function VatReportTab({ index, period }: Props) {
     <div className="flex flex-col h-full overflow-hidden">
       {filed && (
         <div className="shrink-0 px-4 py-2 text-xs border-b border-border bg-amber-50 dark:bg-amber-950 text-amber-800 dark:text-amber-200">
-          Eingereicht — diese Periode ist abgeschlossen. Massgebend ist die eingereichte Abrechnung in filings/{from.slice(0, 4)}/.
-          Die Zahlen hier sind aus den heutigen Buchungen neu berechnet und können abweichen; Abweichungen eines Quartals werden mit seiner Korrekturabrechnung (Formular 0535) deklariert.
+          {t('vat.filedNotice', { folder: `filings/${from.slice(0, 4)}/` })}
         </div>
       )}
       {filedReturn && (
         <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-border">
           <div className="inline-flex rounded-md border border-border overflow-hidden text-sm">
-            {([['return', 'Abrechnung'], ['correction', 'Korrekturabrechnung (0535)']] as const).map(([v, label]) => (
+            {([['return', 'vat.viewReturn'], ['correction', 'vat.viewCorrection']] as const).map(([v, label]) => (
               <button
                 key={v}
                 type="button"
                 className={cn('px-3 py-1', view === v ? 'bg-primary text-primary-foreground' : 'hover:bg-accent text-muted-foreground')}
                 onClick={() => { setView(v); setSelectedZiffer(null); }}
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
           {correcting && (
             <button type="button" className="ml-auto text-sm px-3 py-1 rounded-md border border-border hover:bg-accent" onClick={() => window.print()}>
-              Drucken
+              {t('vat.print')}
             </button>
           )}
         </div>
@@ -208,83 +208,78 @@ export function VatReportTab({ index, period }: Props) {
           )}
           <div className={cn('max-w-3xl mx-auto', correcting && 'hidden')}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-foreground">MWST-Abrechnung</h2>
-              <span className="text-xs text-muted-foreground">{from} bis {to}</span>
+              <h2 className="text-lg font-bold text-foreground">{t('vat.title')}</h2>
+              <span className="text-xs text-muted-foreground">{t('common.dateRange', { from, to })}</span>
             </div>
 
             <div className="text-xs text-muted-foreground mb-4">
-              Alle Umsatzangaben sind Brutto (inkl. MWST) — Ziffer anklicken für Details
+              {t('vat.grossHint')}
             </div>
 
-            {/* I. Umsatz */}
-            <SectionHeader title="I. Umsatz" />
+            <SectionHeader title={t('vat.sectionTurnover')} />
             <div className="bg-background border border-border rounded-lg divide-y divide-border/50">
               <div className="flex items-baseline gap-3 px-4 py-1 text-xs text-muted-foreground">
-                <span className="w-8 shrink-0">Ziffer</span>
-                <span className="flex-1">Entgelte</span>
-                <span className="w-32 text-right">Umsatz CHF</span>
+                <span className="w-8 shrink-0">{t('vat.colZiffer')}</span>
+                <span className="flex-1">{t('vat.colConsideration')}</span>
+                <span className="w-32 text-right">{t('vat.colTurnoverChf')}</span>
               </div>
-              <Row ziffer="200" label="Total der vereinbarten bzw. vereinnahmten Entgelte (weltweiter Umsatz)" amount={z('200')} bold onClick={toggle('200')} selected={sel('200')} />
-              <Row ziffer="205" label="Entgelte optiert (Art. 22)" amount={z('205') || null} indent onClick={toggle('205')} selected={sel('205')} />
-              <Row ziffer="220" label="Von der Steuer befreite Leistungen (Exporte, Art. 23)" amount={z('220') || null} indent onClick={toggle('220')} selected={sel('220')} />
-              <Row ziffer="221" label="Leistungen im Ausland" amount={z('221') || null} indent onClick={toggle('221')} selected={sel('221')} />
-              <Row ziffer="225" label="Übertragungen im Meldeverfahren (Art. 38)" amount={z('225') || null} indent onClick={toggle('225')} selected={sel('225')} />
-              <Row ziffer="230" label="Von der Steuer ausgenommene Inlandleistungen (Art. 21)" amount={z('230') || null} indent onClick={toggle('230')} selected={sel('230')} />
-              <Row ziffer="235" label="Entgeltsminderungen (Skonti, Rabatte)" amount={z('235') || null} indent onClick={toggle('235')} selected={sel('235')} />
-              <Row ziffer="280" label="Diverses" amount={z('280') || null} indent onClick={toggle('280')} selected={sel('280')} />
-              <Row ziffer="289" label="Total Abzüge" amount={z('289')} className="border-t border-border" />
-              <Row ziffer="299" label="Steuerbarer Gesamtumsatz" amount={z('299')} bold className="bg-muted/50" />
+              <Row ziffer="200" label={t('vat.z200')} amount={z('200')} bold onClick={toggle('200')} selected={sel('200')} />
+              <Row ziffer="205" label={t('vat.z205')} amount={z('205') || null} indent onClick={toggle('205')} selected={sel('205')} />
+              <Row ziffer="220" label={t('vat.z220')} amount={z('220') || null} indent onClick={toggle('220')} selected={sel('220')} />
+              <Row ziffer="221" label={t('vat.z221')} amount={z('221') || null} indent onClick={toggle('221')} selected={sel('221')} />
+              <Row ziffer="225" label={t('vat.z225')} amount={z('225') || null} indent onClick={toggle('225')} selected={sel('225')} />
+              <Row ziffer="230" label={t('vat.z230')} amount={z('230') || null} indent onClick={toggle('230')} selected={sel('230')} />
+              <Row ziffer="235" label={t('vat.z235')} amount={z('235') || null} indent onClick={toggle('235')} selected={sel('235')} />
+              <Row ziffer="280" label={t('vat.z280')} amount={z('280') || null} indent onClick={toggle('280')} selected={sel('280')} />
+              <Row ziffer="289" label={t('vat.z289')} amount={z('289')} className="border-t border-border" />
+              <Row ziffer="299" label={t('vat.z299')} amount={z('299')} bold className="bg-muted/50" />
             </div>
 
-            {/* II. Steuerberechnung */}
-            <SectionHeader title="II. Steuerberechnung" />
+            <SectionHeader title={t('vat.sectionTax')} />
             <div className="bg-background border border-border rounded-lg divide-y divide-border/50">
               <div className="flex items-baseline gap-3 px-4 py-1 text-xs text-muted-foreground">
-                <span className="w-8 shrink-0">Ziffer</span>
+                <span className="w-8 shrink-0">{t('vat.colZiffer')}</span>
                 <span className="flex-1"></span>
-                <span className="w-28 text-right">Leistungen CHF</span>
+                <span className="w-28 text-right">{t('vat.colSuppliesChf')}</span>
                 <span className="w-4"></span>
-                <span className="w-24 text-right">Steuer CHF</span>
-                <span className="w-12 text-right">Satz</span>
+                <span className="w-24 text-right">{t('vat.colTaxChf')}</span>
+                <span className="w-12 text-right">{t('vat.colRate')}</span>
               </div>
               {rateRows.filter((r) => r.row.kind === 'supply').map(({ row, base, tax }) => (
-                <TaxRow key={row.ziffer} ziffer={row.ziffer} label={row.name} taxable={base} tax={tax} rate={`${row.rate.toFixed(2)}%`} onClick={toggle(row.ziffer)} selected={sel(row.ziffer)} />
+                <TaxRow key={row.ziffer} ziffer={row.ziffer} label={accountingName(row.name)} taxable={base} tax={tax} rate={`${row.rate.toFixed(2)}%`} onClick={toggle(row.ziffer)} selected={sel(row.ziffer)} />
               ))}
-              <Row ziffer="379" label="Steuerbarer Gesamtumsatz (wie Ziff. 299)" amount={z('299')} className="border-t border-border" />
+              <Row ziffer="379" label={t('vat.z379')} amount={z('299')} className="border-t border-border" />
               {rateRows.filter((r) => r.row.kind === 'acquisition').map(({ row, base, tax }) => (
-                <TaxRow key={row.ziffer} ziffer={row.ziffer} label={`${row.name} (netto, exkl. MWST)`} taxable={base} tax={tax} rate={`${row.rate.toFixed(2)}%`} onClick={toggle(row.ziffer)} selected={sel(row.ziffer)} />
+                <TaxRow key={row.ziffer} ziffer={row.ziffer} label={t('vat.acquisitionNet', { name: accountingName(row.name) })} taxable={base} tax={tax} rate={`${row.rate.toFixed(2)}%`} onClick={toggle(row.ziffer)} selected={sel(row.ziffer)} />
               ))}
-              <Row ziffer="399" label="Total geschuldete Steuer" amount={z('399')} bold className="bg-muted/50" />
+              <Row ziffer="399" label={t('vat.z399')} amount={z('399')} bold className="bg-muted/50" />
             </div>
 
-            {/* Vorsteuer */}
-            <SectionHeader title="Vorsteuer" />
+            <SectionHeader title={t('vat.sectionInputTax')} />
             <div className="bg-background border border-border rounded-lg divide-y divide-border/50">
               <div className="flex items-baseline gap-3 px-4 py-1 text-xs text-muted-foreground">
-                <span className="w-8 shrink-0">Ziffer</span>
+                <span className="w-8 shrink-0">{t('vat.colZiffer')}</span>
                 <span className="flex-1"></span>
-                <span className="w-32 text-right">Steuer CHF</span>
+                <span className="w-32 text-right">{t('vat.colTaxChf')}</span>
               </div>
-              <Row ziffer="400" label="Vorsteuer auf Material-/Dienstleistungsaufwand" amount={z('400')} onClick={toggle('400')} selected={sel('400')} />
-              <Row ziffer="405" label="Vorsteuer auf Investitionen/übrigem Betriebsaufwand" amount={z('405')} onClick={toggle('405')} selected={sel('405')} />
-              <Row ziffer="410" label="Einlageentsteuerung (Art. 32)" amount={z('410') || null} onClick={toggle('410')} selected={sel('410')} />
-              <Row ziffer="415" label="Vorsteuerkorrekturen (Art. 30, 31)" amount={z('415') || null} onClick={toggle('415')} selected={sel('415')} />
-              <Row ziffer="420" label="Vorsteuerkürzungen (Art. 33 Abs. 2)" amount={z('420') || null} onClick={toggle('420')} selected={sel('420')} />
-              <Row ziffer="479" label="Total Vorsteuer" amount={z('479')} bold className="bg-muted/50" />
+              <Row ziffer="400" label={t('vat.z400')} amount={z('400')} onClick={toggle('400')} selected={sel('400')} />
+              <Row ziffer="405" label={t('vat.z405')} amount={z('405')} onClick={toggle('405')} selected={sel('405')} />
+              <Row ziffer="410" label={t('vat.z410')} amount={z('410') || null} onClick={toggle('410')} selected={sel('410')} />
+              <Row ziffer="415" label={t('vat.z415')} amount={z('415') || null} onClick={toggle('415')} selected={sel('415')} />
+              <Row ziffer="420" label={t('vat.z420')} amount={z('420') || null} onClick={toggle('420')} selected={sel('420')} />
+              <Row ziffer="479" label={t('vat.z479')} amount={z('479')} bold className="bg-muted/50" />
             </div>
 
-            {/* Abrechnung */}
-            <SectionHeader title="Abrechnung" />
+            <SectionHeader title={t('vat.sectionSettlement')} />
             <div className="bg-background border border-border rounded-lg divide-y divide-border/50">
-              <Row ziffer="500" label="Zu bezahlender Betrag" amount={z('500')} large className="bg-primary/5" />
-              <Row ziffer="510" label="Guthaben der steuerpflichtigen Person" amount={z('510')} large className="bg-primary/5" />
+              <Row ziffer="500" label={t('vat.z500')} amount={z('500')} large className="bg-primary/5" />
+              <Row ziffer="510" label={t('vat.z510')} amount={z('510')} large className="bg-primary/5" />
             </div>
 
-            {/* III. Andere Mittelflüsse */}
-            <SectionHeader title="III. Andere Mittelflüsse (Art. 18 Abs. 2)" />
+            <SectionHeader title={t('vat.sectionOtherFlows')} />
             <div className="bg-background border border-border rounded-lg divide-y divide-border/50">
-              <Row ziffer="900" label="Subventionen, Tourismusabgaben, Entsorgungsbeiträge (Bst. a-c)" amount={z('900') || null} onClick={toggle('900')} selected={sel('900')} />
-              <Row ziffer="910" label="Spenden, Dividenden, Schadenersatz (Bst. d-l)" amount={z('910') || null} onClick={toggle('910')} selected={sel('910')} />
+              <Row ziffer="900" label={t('vat.z900')} amount={z('900') || null} onClick={toggle('900')} selected={sel('900')} />
+              <Row ziffer="910" label={t('vat.z910')} amount={z('910') || null} onClick={toggle('910')} selected={sel('910')} />
             </div>
           </div>
         </div>
@@ -298,15 +293,15 @@ export function VatReportTab({ index, period }: Props) {
             <>
               {!correcting && adjustmentsForReturn(adjustments, entries, period).filter((a) => a.ziffer === selectedZiffer).map((a) => (
                 <div key={a.id} className="mx-4 mt-3 px-3 py-2 text-xs rounded border border-border bg-blue-50 dark:bg-blue-950 text-foreground">
-                  <span className="font-semibold">Nachdeklaration CHF {a.amount.toFixed(2)}</span> — {a.reason}
-                  <span className="block text-muted-foreground font-mono mt-0.5">Buchungen: {a.entryIds.join(', ')}</span>
+                  <span className="font-semibold">{t('vat.adjustment', { amount: a.amount.toFixed(2) })}</span> — {a.reason}
+                  <span className="block text-muted-foreground font-mono mt-0.5">{t('vat.adjustmentEntries', { ids: a.entryIds.join(', ') })}</span>
                 </div>
               ))}
-              <EntryDetail entries={selectedEntries} title={correcting ? `Ziffer ${selectedZiffer}, Korrekturbuchungen` : `Ziffer ${selectedZiffer}`} />
+              <EntryDetail entries={selectedEntries} title={correcting ? t('vat.zifferCorrections', { ziffer: selectedZiffer }) : t('vat.ziffer', { ziffer: selectedZiffer })} />
             </>
           ) : correcting ? null : (
             <div className="flex-1 flex items-center justify-center text-sm text-dim">
-              Ziffer auswählen für Details
+              {t('vat.selectZiffer')}
             </div>
           )}
         </div>

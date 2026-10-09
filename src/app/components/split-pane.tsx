@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { cn } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 interface SplitPaneProps {
   left: ReactNode;
@@ -97,7 +98,7 @@ export function SplitPane({
             onDoubleClick={onDoubleClick}
             role="separator"
             aria-orientation="vertical"
-            title="Ziehen zum Anpassen · Doppelklick zum Zurücksetzen"
+            title={t('splitPane.handle')}
             className={cn(
               'shrink-0 w-1.5 -mx-px z-10 cursor-col-resize bg-transparent hover:bg-primary/40 transition-colors',
               dragging && 'bg-primary/60',

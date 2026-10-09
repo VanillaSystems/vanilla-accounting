@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 
-export function useApiStatus() {
-  const [online, setOnline] = useState(false);
+/** Whether the API answers, and whether it refuses every write (audit mode); polled every 5 s. */
+export function useApiStatus(): { online: boolean; readonly: boolean } {
+  const [status, setStatus] = useState({ online: false, readonly: false });
 
   useEffect(() => {
     let cancelled = false;
 
     async function check() {
-      const ok = await api.status().then(() => true, () => false);
-      if (!cancelled) setOnline(ok);
+      const next = await api.status().then((s) => ({ online: true, readonly: s.readonly }), () => ({ online: false, readonly: false }));
+      if (!cancelled) setStatus((prev) => (prev.online === next.online && prev.readonly === next.readonly ? prev : next));
     }
 
     check();
@@ -17,5 +18,5 @@ export function useApiStatus() {
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  return online;
+  return status;
 }

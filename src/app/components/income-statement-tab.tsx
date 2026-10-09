@@ -3,6 +3,7 @@ import type { Index } from '../../types/index.js';
 import { computeIncomeStatement } from '../../accounting/index.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
+import { accountingName, t } from '../i18n/index.js';
 import type { IncomeStatementSection } from '../../accounting/income-statement.js';
 
 interface Props {
@@ -35,7 +36,7 @@ function SectionBlock({ section }: { section: IncomeStatementSection }) {
   return (
     <div className="mb-2">
       <div className="flex justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wide px-3 py-1">
-        <span>{section.title}</span>
+        <span>{accountingName(section.title)}</span>
         <span className="normal-case">CHF</span>
       </div>
       {section.rows.map(row => (
@@ -50,7 +51,7 @@ function SectionBlock({ section }: { section: IncomeStatementSection }) {
         </div>
       ))}
       <div className="flex justify-between px-3 py-0.5 text-sm font-medium border-t border-border mt-0.5">
-        <span>Total {section.title}</span>
+        <span>{t('income.sectionTotal', { section: accountingName(section.title) })}</span>
         <span className="font-mono tabular-nums text-right min-w-[100px]">
           {fmt(section.total)}
         </span>
@@ -94,12 +95,12 @@ export function IncomeStatementTab({ index, period }: Props) {
       <div className="max-w-2xl mx-auto space-y-2">
         <SectionBlock section={statement.revenue} />
         <SectionBlock section={statement.costOfGoods} />
-        <ResultLine label="= Bruttoergebnis" amount={statement.grossProfit} />
+        <ResultLine label={`= ${t('income.grossProfit')}`} amount={statement.grossProfit} />
 
         <div className="pt-2">
           <SectionBlock section={statement.operatingExpenses} />
         </div>
-        <ResultLine label="= Betriebsergebnis" amount={statement.operatingResult} />
+        <ResultLine label={`= ${t('income.operatingResult')}`} amount={statement.operatingResult} />
 
         <div className="pt-2">
           <SectionBlock section={statement.otherIncome} />
@@ -108,7 +109,7 @@ export function IncomeStatementTab({ index, period }: Props) {
         </div>
 
         <div className="pt-2">
-          <ResultLine label="= Jahresgewinn/-verlust" amount={statement.netResult} highlight />
+          <ResultLine label={`= ${t('income.netResult')}`} amount={statement.netResult} highlight />
         </div>
       </div>
     </div>

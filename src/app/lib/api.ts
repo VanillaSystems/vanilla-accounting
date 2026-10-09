@@ -2,8 +2,16 @@ import type { BankTransaction, JournalEntry, Receipt, ReceiptPatch, TransactionP
 import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { Account } from './accounts.js';
 import type { Workspace } from '../../workspace/workspace.js';
+import type { ApiErrorBody, ApiStatus } from '../../types/api-error.js';
+import { t } from '../i18n/index.js';
+import { formatDate } from './utils.js';
 
-/** Every call throws an Error carrying the API's own message when the response is not ok. */
+/** A refused request: the API's body, whose code errorText says in the user's language. */
+export class ApiError extends Error {
+  constructor(readonly body: ApiErrorBody) { super(body.error); }
+}
+
+/** Every call throws an ApiError when the response is not ok. */
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(path, body === undefined ? { method } : {
     method,
@@ -11,10 +19,26 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(err?.error ?? `HTTP ${res.status}`);
+    const err = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
   return res.json() as Promise<T>;
+}
+
+/** What to tell the user about a failed call: a coded refusal in their language, else the API's own text. */
+export function errorText(e: unknown): string {
+  if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
+  const b = e.body;
+  switch (b.code) {
+    case 'readonly': return t('error.readonly');
+    case 'manualOnly': return t('error.manualOnly');
+    case 'fileExists': return t('error.fileExists', b.params);
+    case 'periodClosed': {
+      const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
+      return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;
+    }
+    case undefined: return b.error;
+  }
 }
 
 /** Awaits an API call and shows its refusal in an alert instead of throwing. True when it succeeded. */
@@ -23,7 +47,7 @@ export async function orAlert(call: Promise<unknown>): Promise<boolean> {
     await call;
     return true;
   } catch (e) {
-    alert(e instanceof Error ? e.message : String(e));
+    alert(errorText(e));
     return false;
   }
 }
@@ -60,7 +84,7 @@ export const api = {
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
   classifyTransaction: (txRef: string) => request<unknown>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`),
 
-  status: () => request<Ok>('GET', '/api/status'),
+  status: () => request<ApiStatus>('GET', '/api/status'),
   accounts: () => request<Account[]>('GET', '/api/accounts'),
   workspace: () => request<Pick<Workspace, 'company' | 'bankAccounts'>>('GET', '/api/workspace'),
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', `/api/vat/filed?year=${year}`),

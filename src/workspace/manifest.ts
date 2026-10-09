@@ -4,7 +4,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { parse } from 'yaml';
-import { WORKSPACE_SCHEMA, WorkspaceError, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
+import { WORKSPACE_SCHEMA, WorkspaceError, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
 import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
 import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
 
@@ -25,6 +25,7 @@ export function readManifest(path: string): { company: Company; bankAccounts: Le
   if (vat.method !== 'effective' || vat.reporting !== 'received' || (vat.registered ?? true) !== true || (vat.period ?? 'quarterly') !== 'quarterly') {
     fail('company.vat must be { registered: true, method: effective, reporting: received, period: quarterly }: the only VAT setup the engine supports');
   }
+  if (c.language !== undefined && !appLanguages().includes(c.language as string)) fail(`company.language must be one of ${appLanguages().join(', ')}`);
   if (c.legalForm !== undefined && !LEGAL_FORMS.includes(c.legalForm as LegalForm)) fail(`company.legalForm must be one of ${LEGAL_FORMS.join(', ')}`);
   const company: Company = {
     name: text(c.name, 'company.name'),
@@ -32,6 +33,7 @@ export function readManifest(path: string): { company: Company; bankAccounts: Le
     owner: text(c.owner, 'company.owner'),
     ...(c.business === undefined ? {} : { business: text(c.business, 'company.business') }),
     ...(c.legalForm === undefined ? {} : { legalForm: c.legalForm as LegalForm }),
+    ...(c.language === undefined ? {} : { language: c.language as string }),
     vat: { method: 'effective', reporting: 'received' },
   };
 

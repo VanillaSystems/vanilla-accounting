@@ -5,6 +5,7 @@ import { PdfFrame } from './pdf-frame.js';
 import { useState } from 'react';
 import { SplitPane } from './split-pane.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
+import { monthLocale, t } from '../i18n/index.js';
 
 interface BankStatementsTabProps {
   index: Index;
@@ -52,7 +53,7 @@ function columnsFor(statements: readonly BankStatement[], accounts: readonly Sta
 function monthLabel(fromDate: string) {
   const [year, month] = fromDate.split('-');
   const d = new Date(Number(year), Number(month) - 1, 1);
-  return d.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' });
+  return d.toLocaleDateString(monthLocale(), { month: 'long', year: 'numeric' });
 }
 
 export function BankStatementsTab({ index }: BankStatementsTabProps) {
@@ -66,7 +67,7 @@ export function BankStatementsTab({ index }: BankStatementsTabProps) {
   if (index.bankStatements.length === 0) {
     return (
       <div className="flex items-center justify-center h-40 text-sm text-muted-foreground w-full">
-        Keine Kontoauszüge indexiert. <code className="mx-1 font-mono bg-muted px-1 py-0.5 rounded">npm run extract</code> ausführen.
+        {t('statements.none', { command: 'npm run extract' })}
       </div>
     );
   }
@@ -96,7 +97,7 @@ export function BankStatementsTab({ index }: BankStatementsTabProps) {
             <thead>
               <tr>
                 <th className="text-left pb-3 pr-6 font-medium text-muted-foreground text-xs uppercase tracking-wide w-36">
-                  Monat
+                  {t('col.month')}
                 </th>
                 {columns.map((acc) => (
                   <th key={acc} className={cn('pb-3 px-3 font-semibold text-sm text-left', styleOf(acc).header)}>
@@ -159,12 +160,13 @@ export function BankStatementsTab({ index }: BankStatementsTabProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                title="In neuem Tab öffnen"
+                title={t('common.openInNewTab')}
               >
                 <ExternalLink className="h-4 w-4" />
               </a>
               <button
                 onClick={() => setPreview(null)}
+                title={t('common.close')}
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />

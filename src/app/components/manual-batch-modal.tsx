@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, Trash2, Wand2, X } from 'lucide-react';
 import type { Receipt } from '../../../src/types/index.js';
 import { api } from '../lib/api.js';
+import { t } from '../i18n/index.js';
 
 interface BatchRow {
   receiptId: string;
@@ -12,7 +13,6 @@ interface BatchRow {
   currency: string;
   suggesting: boolean;
   fromCache: boolean;
-  suggestError?: string;
 }
 
 interface ManualBatchModalProps {
@@ -53,7 +53,6 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
         amount: data?.amount != null ? String(data.amount) : row.amount,
         currency: data?.currency || row.currency,
         suggesting: false,
-        suggestError: data ? undefined : 'Kein Vorschlag erhalten',
       }));
     }
 
@@ -110,7 +109,7 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
     }
 
     setSaving(false);
-    onDone(`${created} manuelle Transaktion(en) erstellt${failed > 0 ? `, ${failed} fehlgeschlagen` : ''}`);
+    onDone(failed > 0 ? t('manualBatch.doneWithFailures', { created, failed }) : t('manualBatch.done', { n: created }));
   }
 
   return (
@@ -120,24 +119,24 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-1 shrink-0">
-          <h2 className="text-sm font-semibold text-foreground">Manuelle Transaktionen erstellen (Auslagen)</h2>
-          <button onClick={() => !saving && onClose()} className="text-muted-foreground hover:text-foreground">
+          <h2 className="text-sm font-semibold text-foreground">{t('manualBatch.title')}</h2>
+          <button onClick={() => !saving && onClose()} title={t('common.close')} className="text-muted-foreground hover:text-foreground">
             <X className="h-4 w-4" />
           </button>
         </div>
         <p className="text-xs text-muted-foreground mb-3 shrink-0">
-          Für jeden ausgewählten Beleg wird eine manuelle Transaktion erstellt und verknüpft. Bereits im Beleg vorhandene Daten werden übernommen, für die übrigen wird ein KI-Vorschlag geladen.
+          {t('manualBatch.intro')}
         </p>
 
         <div className="flex-1 overflow-y-auto border border-border rounded">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-muted border-b border-border">
               <tr>
-                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Beleg</th>
-                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-32">Datum</th>
-                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">Beschreibung</th>
-                <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-24">Betrag</th>
-                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">Währung</th>
+                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">{t('col.receipt')}</th>
+                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-32">{t('col.date')}</th>
+                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground">{t('col.description')}</th>
+                <th className="text-right px-2 py-1.5 font-medium text-muted-foreground w-24">{t('col.amount')}</th>
+                <th className="text-left px-2 py-1.5 font-medium text-muted-foreground w-20">{t('col.currency')}</th>
                 <th className="px-2 py-1.5 w-8" />
               </tr>
             </thead>
@@ -161,7 +160,7 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
                       type="text"
                       value={row.description}
                       onChange={(e) => updateRow(row.receiptId, { description: e.target.value })}
-                      placeholder="Beschreibung"
+                      placeholder={t('col.description')}
                       disabled={row.suggesting || saving}
                       className="w-full border border-border rounded px-1.5 py-1 text-xs bg-background focus:outline-none focus:ring-1 focus:ring-violet-400 disabled:opacity-50"
                     />
@@ -197,7 +196,7 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
                         onClick={() => removeRow(row.receiptId)}
                         disabled={saving}
                         className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40"
-                        title="Aus Stapel entfernen"
+                        title={t('manualBatch.removeRow')}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -211,7 +210,7 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
 
         <div className="flex items-center justify-between mt-3 shrink-0">
           <span className="text-xs text-muted-foreground">
-            {readyRows.length}/{rows.length} bereit
+            {t('manualBatch.ready', { ready: readyRows.length, total: rows.length })}
           </span>
           <div className="flex gap-2">
             <button
@@ -219,7 +218,7 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
               disabled={saving}
               className="px-3 py-1.5 text-xs border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50"
             >
-              Abbrechen
+              {t('common.cancel')}
             </button>
             <button
               onClick={commit}
@@ -227,7 +226,7 @@ export function ManualBatchModal({ receipts, onClose, onDone }: ManualBatchModal
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-violet-700 text-white rounded hover:bg-violet-800 disabled:opacity-50"
             >
               <Check className="h-3 w-3" />
-              {saving ? 'Wird erstellt…' : `${rows.length} Transaktion(en) erstellen`}
+              {saving ? t('manualBatch.creating') : t('manualBatch.create', { n: rows.length })}
             </button>
           </div>
         </div>

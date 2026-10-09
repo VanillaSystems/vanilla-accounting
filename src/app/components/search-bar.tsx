@@ -1,5 +1,6 @@
 import { Search, X } from 'lucide-react';
 import { cn } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 interface SearchBarProps {
   value: string;
@@ -8,7 +9,7 @@ interface SearchBarProps {
   className?: string;
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Search…', className }: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder = t('common.search'), className }: SearchBarProps) {
   return (
     <div className={cn('relative flex items-center', className)}>
       <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -22,6 +23,7 @@ export function SearchBar({ value, onChange, placeholder = 'Search…', classNam
       {value && (
         <button
           onClick={() => onChange('')}
+          title={t('common.clearSearch')}
           className="absolute right-2 text-muted-foreground hover:text-foreground"
         >
           <X className="h-4 w-4" />

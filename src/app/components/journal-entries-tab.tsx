@@ -8,12 +8,14 @@ import { accountTitle } from '../lib/accounts.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { SplitPane } from './split-pane.js';
 import { api, orAlert } from '../lib/api.js';
+import { t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
   period: string;
   onRefresh: () => void;
-  apiOnline: boolean;
+  /** Show the controls that write: the API runs and is not in audit mode. */
+  canEdit: boolean;
 }
 
 interface EditState {
@@ -30,7 +32,7 @@ function rowTxRef(row: Row): string {
   return row.txRef;
 }
 
-export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props) {
+export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'classified' | 'unclassified'>('all');
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -258,7 +260,7 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
 
   async function deleteEntry(je: JournalEntry, date: string) {
     const amount = `${je.exchangeCurrency ?? 'CHF'} ${je.amount.toFixed(2)}`;
-    if (!confirm(`Buchung löschen?\n\n${date}  ${amount}\n${je.description ?? ''}`)) return;
+    if (!confirm(t('journal.deleteConfirm', { date, amount, description: je.description ?? '' }))) return;
     if (await orAlert(api.deleteJournalEntry(je.id))) onRefresh();
   }
 
@@ -283,10 +285,10 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
             className="w-full border border-ring rounded-sm px-1.5 py-0.5 text-sm font-mono bg-background text-foreground focus:outline-none"
             autoFocus
           />
-          <button onClick={saveEdit} disabled={saving} className="p-px text-green-600 hover:text-green-800">
+          <button onClick={saveEdit} disabled={saving} title={t('common.save')} className="p-px text-green-600 hover:text-green-800">
             <Check className="h-3 w-3" />
           </button>
-          <button onClick={() => setEditState(null)} className="p-px text-muted-foreground hover:text-foreground">
+          <button onClick={() => setEditState(null)} title={t('common.cancel')} className="p-px text-muted-foreground hover:text-foreground">
             <X className="h-3 w-3" />
           </button>
         </div>
@@ -296,12 +298,12 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
     const display = isAccount && value ? accountTitle(value) : value;
     return (
       <span
-        className={cn('truncate block', apiOnline && 'cursor-pointer hover:underline hover:decoration-dotted')}
+        className={cn('truncate block', canEdit && 'cursor-pointer hover:underline hover:decoration-dotted')}
         onDoubleClick={(e) => {
           e.stopPropagation();
-          if (apiOnline) startEdit(entry.id, field, value);
+          if (canEdit) startEdit(entry.id, field, value);
         }}
-        title={apiOnline ? `Doppelklick: bearbeiten` : undefined}
+        title={canEdit ? t('journal.doubleClickEdit') : undefined}
       >
         {display || <span className="text-dim">—</span>}
       </span>
@@ -324,13 +326,13 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
                   : 'bg-background text-muted-foreground border-border hover:bg-accent -ml-px first:ml-0',
               )}
             >
-              {f === 'all' ? `Alle (${periodFiltered.length})` : f === 'classified' ? `Klassifiziert (${classifiedCount})` : `Offen (${unclassifiedCount})`}
+              {f === 'all' ? t('journal.filterAll', { n: periodFiltered.length }) : f === 'classified' ? t('journal.filterClassified', { n: classifiedCount }) : t('journal.filterOpen', { n: unclassifiedCount })}
             </button>
           ))}
         </div>
-        <SearchBar value={search} onChange={setSearch} className="w-64" placeholder="Suchen…" />
+        <SearchBar value={search} onChange={setSearch} className="w-64" placeholder={t('common.search')} />
         <div className="ml-auto text-xs text-muted-foreground tabular-nums">
-          {filtered.length} Zeilen
+          {t('journal.rowCount', { n: filtered.length })}
         </div>
       </div>
 
@@ -355,16 +357,16 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
             <thead className="sticky top-0 z-10">
               <tr className="bg-muted border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
                 {([
-                  ['datum', 'Datum', 'text-left'],
-                  ['beschreibung', 'Beschreibung', 'text-left'],
-                  ['soll', 'Soll', 'text-left'],
-                  ['haben', 'Haben', 'text-left'],
-                  ['betrag', 'Betrag', 'text-right'],
-                  ['whg', 'Whg', 'text-center'],
-                  ['mwst', 'MWST', 'text-left'],
+                  ['datum', 'col.date', 'text-left'],
+                  ['beschreibung', 'col.description', 'text-left'],
+                  ['soll', 'col.debit', 'text-left'],
+                  ['haben', 'col.credit', 'text-left'],
+                  ['betrag', 'col.amount', 'text-right'],
+                  ['whg', 'col.currencyShort', 'text-center'],
+                  ['mwst', 'col.vat', 'text-left'],
                 ] as const).map(([key, label, align]) => (
                   <th key={key} className={cn('px-3 py-2 font-semibold relative select-none', align)}>
-                    {label}
+                    {t(label)}
                     <span
                       onMouseDown={(e) => onResizeStart(key, e)}
                       className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize group flex justify-center"
@@ -402,12 +404,12 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
                       <td className="px-3 py-2 text-center text-muted-foreground">{tx.currency}</td>
                       <td className="px-3 py-2 text-dim">—</td>
                       <td className="px-2 py-2 text-center">
-                        {apiOnline && (
+                        {canEdit && (
                           <button
                             onClick={(e) => { e.stopPropagation(); classifyTransaction(tx.ref); }}
                             disabled={classifyingRef === tx.ref}
                             className="p-0.5 text-amber-500 hover:text-amber-600 disabled:opacity-40"
-                            title="Klassifizieren"
+                            title={t('journal.classify')}
                           >
                             <Sparkles className="h-3.5 w-3.5" />
                           </button>
@@ -446,20 +448,20 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
                       <EditableCell entry={je} field="vatCode" value={je.vatCode ?? ''} />
                     </td>
                     <td className="px-2 py-2 text-center">
-                      {apiOnline && (
+                      {canEdit && (
                         <div className="flex items-center justify-center gap-0">
                           <button
                             onClick={(e) => { e.stopPropagation(); classifyTransaction(je.transactionRef); }}
                             disabled={classifyingRef === je.transactionRef}
                             className="p-0.5 text-muted-foreground hover:text-amber-600 disabled:opacity-40"
-                            title="Neu klassifizieren"
+                            title={t('journal.reclassify')}
                           >
                             <Sparkles className="h-3 w-3" />
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteEntry(je, row.txDate); }}
                             className="p-0.5 text-muted-foreground hover:text-destructive"
-                            title="Löschen"
+                            title={t('common.delete')}
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -475,7 +477,7 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
         right={
           !selectedRow || !selectedTx ? (
             <div className="flex-1 flex items-center justify-center text-sm text-dim">
-              Zeile auswählen für Details
+              {t('journal.selectRow')}
             </div>
           ) : (
           <>
@@ -490,13 +492,14 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
                       ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                       : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
                 )}>
-                  {selectedTx.source === 'manual' ? 'MAN' : selectedTx.direction}
+                  {selectedTx.source === 'manual' ? t('journal.manualShort') : selectedTx.direction}
                 </span>
                 <span className="text-base font-bold tabular-nums text-foreground">{selectedTx.currency} {selectedTx.amount.toFixed(2)}</span>
                 <span className="text-sm text-muted-foreground">{formatDate(selectedTx.date)}</span>
                 {selectedTx.source !== 'manual' && <span className="text-xs text-muted-foreground">{selectedTx.bank}</span>}
                 <button
                   onClick={() => { setSelectedRowId(null); setSelectedReceiptId(null); }}
+                  title={t('common.close')}
                   className="ml-auto p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
                 >
                   <X className="h-4 w-4" />
@@ -515,11 +518,11 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
             {/* Journal entries for this tx */}
             <div className="shrink-0 border-b border-border px-4 py-2.5 space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Buchungen</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tab.journalEntries')}</span>
                 <span className="text-xs text-muted-foreground">({siblingEntries.length})</span>
               </div>
               {siblingEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Keine Buchungen</p>
+                <p className="text-sm text-muted-foreground italic">{t('journal.noEntries')}</p>
               ) : (
                 <div className="space-y-0.5">
                   {(() => {
@@ -554,11 +557,11 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
             {/* Receipts */}
             <div className="shrink-0 border-b border-border px-4 py-2.5 space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Belege</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tab.receipts')}</span>
                 <span className="text-xs text-muted-foreground">({selectedReceipts.length})</span>
               </div>
               {selectedReceipts.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Keine Belege</p>
+                <p className="text-sm text-muted-foreground italic">{t('journal.noReceipts')}</p>
               ) : (
                 <div className="space-y-0.5">
                   {selectedReceipts.map((r) => (
@@ -591,11 +594,11 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
-                        title="PDF in neuem Tab"
+                        title={t('journal.pdfInNewTab')}
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                      <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" title="In Belegverwaltung öffnen" />
+                      <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" title={t('journal.openInReceipts')} />
                     </div>
                   ))}
                 </div>
@@ -607,11 +610,11 @@ export function JournalEntriesTab({ index, period, onRefresh, apiOnline }: Props
               <PdfFrame
                 key={selectedReceiptId}
                 src={`/api/receipts/${selectedReceiptId}`}
-                title="Receipt preview"
+                title={t('journal.receiptPreview')}
               />
             ) : (
               <div className="flex-1 flex items-center justify-center text-sm text-dim">
-                Kein Beleg
+                {t('journal.noReceipt')}
               </div>
             )}
           </>

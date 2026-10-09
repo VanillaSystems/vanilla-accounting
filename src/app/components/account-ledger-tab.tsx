@@ -7,6 +7,7 @@ import { cn, buildReceiptUrl } from '../lib/utils.js';
 import { PdfFrame } from './pdf-frame.js';
 import { SplitPane } from './split-pane.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
+import { t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
@@ -122,7 +123,7 @@ export function AccountLedgerTab({ index, period }: Props) {
             onChange={(e) => setSelectedAccount(e.target.value)}
             className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <option value="">Konto wählen...</option>
+            <option value="">{t('ledger.chooseAccountOption')}</option>
             {activeAccounts.map((a) => (
               <option key={a.number} value={a.number}>
                 {a.number} {a.name}
@@ -131,7 +132,7 @@ export function AccountLedgerTab({ index, period }: Props) {
           </select>
         </div>
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          Konto wählen
+          {t('ledger.chooseAccount')}
         </div>
       </div>
     );
@@ -146,7 +147,7 @@ export function AccountLedgerTab({ index, period }: Props) {
           onChange={(e) => setSelectedAccount(e.target.value)}
           className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         >
-          <option value="">Konto wählen...</option>
+          <option value="">{t('ledger.chooseAccountOption')}</option>
           {activeAccounts.map((a) => (
             <option key={a.number} value={a.number}>
               {a.number} {a.name}
@@ -154,7 +155,7 @@ export function AccountLedgerTab({ index, period }: Props) {
           ))}
         </select>
         <div className="ml-auto text-xs text-muted-foreground tabular-nums">
-          {ledger?.rows.length ?? 0} Buchungen
+          {t('common.entryCount', { n: ledger?.rows.length ?? 0 })}
         </div>
       </div>
 
@@ -166,19 +167,19 @@ export function AccountLedgerTab({ index, period }: Props) {
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="bg-muted border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2 text-left font-semibold w-28">Datum</th>
-              <th className="px-3 py-2 text-left font-semibold">Beschreibung</th>
-              <th className="px-2 py-2 text-left font-semibold w-14" title="Belege">Belege</th>
-              <th className="px-3 py-2 text-right font-semibold w-28">Soll CHF</th>
-              <th className="px-3 py-2 text-right font-semibold w-28">Haben CHF</th>
-              <th className="px-3 py-2 text-right font-semibold w-32">Saldo CHF</th>
+              <th className="px-3 py-2 text-left font-semibold w-28">{t('col.date')}</th>
+              <th className="px-3 py-2 text-left font-semibold">{t('col.description')}</th>
+              <th className="px-2 py-2 text-left font-semibold w-14" title={t('tab.receipts')}>{t('tab.receipts')}</th>
+              <th className="px-3 py-2 text-right font-semibold w-28">{t('col.debitChf')}</th>
+              <th className="px-3 py-2 text-right font-semibold w-28">{t('col.creditChf')}</th>
+              <th className="px-3 py-2 text-right font-semibold w-32">{t('col.balanceChf')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
             {/* Opening balance row */}
             <tr className="bg-muted/50">
               <td className="px-3 py-2 text-muted-foreground"></td>
-              <td className="px-3 py-2 text-muted-foreground font-medium">Eröffnungssaldo</td>
+              <td className="px-3 py-2 text-muted-foreground font-medium">{t('ledger.openingBalance')}</td>
               <td className="px-2 py-2"></td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2"></td>
@@ -206,7 +207,7 @@ export function AccountLedgerTab({ index, period }: Props) {
                 </td>
                 <td className="px-2 py-2 text-xs tabular-nums">
                   {count > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-foreground" title={`${count} Beleg(e)`}>
+                    <span className="inline-flex items-center gap-1 text-foreground" title={t('app.receiptCount', { n: count })}>
                       <FileText className="h-3.5 w-3.5 text-muted-foreground" />{count}
                     </span>
                   ) : (
@@ -229,7 +230,7 @@ export function AccountLedgerTab({ index, period }: Props) {
           <tfoot>
             <tr className={cn('border-t-2 border-border bg-muted/50')}>
               <td className="px-3 py-2"></td>
-              <td className="px-3 py-2 font-medium text-foreground">Schlusssaldo</td>
+              <td className="px-3 py-2 font-medium text-foreground">{t('ledger.closingBalance')}</td>
               <td className="px-2 py-2"></td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2"></td>
@@ -244,14 +245,14 @@ export function AccountLedgerTab({ index, period }: Props) {
           <>
             <div className="shrink-0 border-b border-border px-4 py-2.5 space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Belege</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tab.receipts')}</span>
                 <span className="text-xs text-muted-foreground">({selectedReceipts.length})</span>
                 <span className="ml-auto truncate text-xs text-muted-foreground" title={entryById.get(selectedEntryId)?.transactionRef}>
                   {entryById.get(selectedEntryId)?.transactionRef}
                 </span>
               </div>
               {selectedReceipts.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Keine Belege</p>
+                <p className="text-sm text-muted-foreground italic">{t('journal.noReceipts')}</p>
               ) : (
                 <div className="space-y-0.5">
                   {selectedReceipts.map((r) => (
@@ -278,20 +279,20 @@ export function AccountLedgerTab({ index, period }: Props) {
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground shrink-0"
-                        title="PDF in neuem Tab"
+                        title={t('journal.pdfInNewTab')}
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                      <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" title="In Belegverwaltung öffnen" />
+                      <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" title={t('journal.openInReceipts')} />
                     </div>
                   ))}
                 </div>
               )}
             </div>
             {selectedReceiptId ? (
-              <PdfFrame key={selectedReceiptId} src={`/api/receipts/${selectedReceiptId}`} title="Beleg" />
+              <PdfFrame key={selectedReceiptId} src={`/api/receipts/${selectedReceiptId}`} title={t('col.receipt')} />
             ) : (
-              <div className="flex-1 flex items-center justify-center text-sm text-dim">Kein Beleg</div>
+              <div className="flex-1 flex items-center justify-center text-sm text-dim">{t('journal.noReceipt')}</div>
             )}
           </>
         )}

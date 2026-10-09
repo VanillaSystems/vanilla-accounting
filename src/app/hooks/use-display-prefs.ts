@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.js';
+import { useWorkspace } from './use-workspace.js';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -54,4 +56,26 @@ export function usePersistedFlag(key: string, fallback: boolean): [boolean, (v: 
   }
 
   return [value, set];
+}
+
+/**
+ * The UI language: the one picked in the header (localStorage), else the workspace's
+ * company.language, else the browser's, else German. Applied before the first render.
+ */
+export function useLanguage(): [string, (code: string) => void] {
+  const [lang, setLang] = useState(() => {
+    try { return supportedLanguage(localStorage.getItem('language')); } catch { return undefined; }
+  });
+  const workspace = useWorkspace();
+  const resolved = lang
+    ?? supportedLanguage(workspace?.company.language)
+    ?? navigator.languages.map(supportedLanguage).find(Boolean)
+    ?? DEFAULT_LANGUAGE;
+  setLanguage(resolved);
+
+  function choose(code: string) {
+    setLang(code);
+    try { localStorage.setItem('language', code); } catch { /* storage unavailable */ }
+  }
+  return [resolved, choose];
 }

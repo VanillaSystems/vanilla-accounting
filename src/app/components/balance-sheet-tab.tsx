@@ -3,6 +3,7 @@ import type { Index } from '../../types/index.js';
 import { computeBalanceSheet } from '../../accounting/index.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
+import { accountingName, t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
@@ -44,7 +45,7 @@ export function BalanceSheetTab({ index, period }: Props) {
   if (!hasData) {
     return (
       <div className="flex items-center justify-center h-40 text-sm text-muted-foreground w-full">
-        Keine Bilanzdaten vorhanden.
+        {t('balance.none')}
       </div>
     );
   }
@@ -53,7 +54,7 @@ export function BalanceSheetTab({ index, period }: Props) {
     return sections.map((section) => (
       <div key={section.title} className="mb-4">
         <div className="flex items-center justify-between px-3 py-1.5 bg-muted rounded text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          <span>{section.title}</span>
+          <span>{accountingName(section.title)}</span>
           <span className="font-mono tabular-nums">CHF {fmt(section.total)}</span>
         </div>
         {section.rows.length > 0 ? (
@@ -62,7 +63,7 @@ export function BalanceSheetTab({ index, period }: Props) {
               {section.rows.map((row) => (
                 <tr key={row.account} className="border-b border-border/50">
                   <td className="py-1 px-3 text-muted-foreground w-16 font-mono text-xs">{row.account}</td>
-                  <td className="py-1 px-1">{row.name}</td>
+                  <td className="py-1 px-1">{row.account ? row.name : accountingName(row.name)}</td>
                   <td className="py-1 px-3 text-right font-mono tabular-nums whitespace-nowrap">
                     {fmt(row.balance)}
                   </td>
@@ -71,7 +72,7 @@ export function BalanceSheetTab({ index, period }: Props) {
             </tbody>
           </table>
         ) : (
-          <div className="px-3 py-2 text-xs text-muted-foreground">Keine Konten</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">{t('balance.noAccounts')}</div>
         )}
       </div>
     ));
@@ -82,13 +83,13 @@ export function BalanceSheetTab({ index, period }: Props) {
       <div className="grid grid-cols-2 gap-8 flex-1">
         {/* Assets */}
         <div>
-          <h2 className="text-base font-semibold mb-4">Aktiven <span className="text-xs font-normal text-muted-foreground">CHF</span></h2>
+          <h2 className="text-base font-semibold mb-4">{t('balance.assets')} <span className="text-xs font-normal text-muted-foreground">CHF</span></h2>
           {renderSection(bs.assets)}
         </div>
 
         {/* Liabilities + Equity */}
         <div>
-          <h2 className="text-base font-semibold mb-4">Passiven <span className="text-xs font-normal text-muted-foreground">CHF</span></h2>
+          <h2 className="text-base font-semibold mb-4">{t('balance.liabilities')} <span className="text-xs font-normal text-muted-foreground">CHF</span></h2>
           {renderSection(bs.liabilities)}
         </div>
       </div>
@@ -97,11 +98,11 @@ export function BalanceSheetTab({ index, period }: Props) {
       <div className="border-t border-border mt-4 pt-4">
         <div className="grid grid-cols-2 gap-8">
           <div className="flex items-center justify-between px-3 py-2 bg-muted rounded font-semibold text-sm">
-            <span>Total Aktiven</span>
+            <span>{t('balance.totalAssets')}</span>
             <span className="font-mono tabular-nums">CHF {fmt(bs.totalAssets)}</span>
           </div>
           <div className="flex items-center justify-between px-3 py-2 bg-muted rounded font-semibold text-sm">
-            <span>Total Passiven</span>
+            <span>{t('balance.totalLiabilities')}</span>
             <span className="font-mono tabular-nums">CHF {fmt(bs.totalLiabilities)}</span>
           </div>
         </div>
@@ -114,7 +115,7 @@ export function BalanceSheetTab({ index, period }: Props) {
                 : 'bg-destructive/10 text-destructive',
             )}
           >
-            {bs.isBalanced ? 'Bilanz ausgeglichen' : `Differenz: ${fmt(Math.abs(bs.totalAssets - bs.totalLiabilities))}`}
+            {bs.isBalanced ? t('balance.balanced') : t('balance.difference', { amount: fmt(Math.abs(bs.totalAssets - bs.totalLiabilities)) })}
           </span>
         </div>
       </div>

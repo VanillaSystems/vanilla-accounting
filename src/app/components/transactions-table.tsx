@@ -3,16 +3,17 @@ import { AlertTriangle } from 'lucide-react';
 import type { Index, Receipt } from '../../../src/types/index.js';
 import { cn, formatDate, formatAmount, periodMatchesDate, buildTxUrl } from '../lib/utils.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
+import { t } from '../i18n/index.js';
 
 const COLUMNS = [
-  ['ref', 'Ref', 'text-left'],
-  ['datum', 'Datum', 'text-left'],
-  ['beschreibung', 'Beschreibung', 'text-left'],
-  ['betrag', 'Betrag', 'text-right'],
-  ['richtung', 'Richtung', 'text-left'],
-  ['bank', 'Bank', 'text-left'],
-  ['beleg', 'Beleg(e)', 'text-left'],
-  ['status', 'Status', 'text-left'],
+  ['ref', 'col.ref', 'text-left'],
+  ['datum', 'col.date', 'text-left'],
+  ['beschreibung', 'col.description', 'text-left'],
+  ['betrag', 'col.amount', 'text-right'],
+  ['richtung', 'col.direction', 'text-left'],
+  ['bank', 'col.bank', 'text-left'],
+  ['beleg', 'col.receipts', 'text-left'],
+  ['status', 'col.status', 'text-left'],
 ] as const;
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
@@ -109,7 +110,7 @@ export function TransactionsTable({
   if (rows.length === 0) {
     return (
       <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-        Keine Transaktionen gefunden.
+        {t('transactions.none')}
       </div>
     );
   }
@@ -126,7 +127,7 @@ export function TransactionsTable({
           <tr>
             {COLUMNS.map(([key, label, align]) => (
               <th key={key} className={cn('px-3 py-2 font-medium text-muted-foreground relative select-none', align)}>
-                {label}
+                {t(label)}
                 <span
                   onMouseDown={(e) => onResizeStart(key, e)}
                   className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize group flex justify-center"
@@ -184,7 +185,7 @@ export function TransactionsTable({
                 </td>
                 <td className="px-3 py-2 text-xs">
                   {tx.source === 'manual'
-                    ? <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">Manuell</span>
+                    ? <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-medium">{t('transactions.manualBadge')}</span>
                     : <span className="text-muted-foreground">{tx.bank}</span>}
                 </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
@@ -195,7 +196,7 @@ export function TransactionsTable({
                         : '—'}
                     </span>
                     {hasDuplicateReceipt && (
-                      <span title="Beleg ist mehreren Transaktionen zugeordnet" className="shrink-0">
+                      <span title={t('transactions.sharedReceipt')} className="shrink-0">
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                       </span>
                     )}
@@ -214,7 +215,7 @@ export function TransactionsTable({
                         : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
                     )}
                   >
-                    {isLinked ? 'zugeordnet' : tx.type === 'wise-fee' ? 'Gebühr' : tx.noReceiptNeeded ? 'kein Beleg nötig' : 'fehlend'}
+                    {isLinked ? t('filter.linked') : tx.type === 'wise-fee' ? t('transactions.statusFee') : tx.noReceiptNeeded ? t('transactions.statusNoReceiptNeeded') : t('transactions.statusMissing')}
                   </span>
                 </td>
               </tr>

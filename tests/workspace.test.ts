@@ -33,6 +33,7 @@ test('a malformed manifest fails at open, naming the field', () => {
   bad('schema: 1', 'schema: 2', /schema must be 1/);
   bad(/uid: .*/.exec(manifest)![0], 'uid: "123456789"', /company\.uid "123456789"/);
   bad('method: effective', 'method: flat', /company\.vat/);
+  bad(/owner: .*/.exec(manifest)![0], `${/owner: .*/.exec(manifest)![0]}\n  language: xx`, /company\.language must be one of de, en, fr, it/);
   bad('account: "1023"', 'account: "10x"', /bankAccounts\[1\]\.account/);
   bad('{ bank: Wise, currency: EUR,', '{ bank: Raiffeisen, currency: CHF,', /Raiffeisen CHF is listed twice/);
   rmSync(ws.paths.root, { recursive: true, force: true });

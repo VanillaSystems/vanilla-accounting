@@ -2,11 +2,12 @@ import type { JournalEntry } from '../../types/index.js';
 import { vatLine, chfAmount } from '../../accounting/index.js';
 import { accountTitle } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 /** The journal entries behind a VAT figure, each with its CHF and tax signed as it counts. */
 export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title: string }) {
   if (entries.length === 0) return (
-    <div className="p-4 text-sm text-muted-foreground">{title}: keine Buchungen</div>
+    <div className="p-4 text-sm text-muted-foreground">{t('vatEntries.none', { title })}</div>
   );
 
   // A "-" code (refund, reversal) works against the Ziffer: show it negative, so a purchase
@@ -21,19 +22,19 @@ export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title
   return (
     <div className="border-t border-border">
       <div className="px-4 py-2 bg-muted text-xs font-semibold text-muted-foreground">
-        {title}: {entries.length} Buchungen
+        {title}: {t('common.entryCount', { n: entries.length })}
       </div>
       <table className="w-full table-fixed text-sm">
         <thead>
           <tr className="text-xs text-muted-foreground border-b border-border">
-            <th className="px-3 py-1 text-left w-24">Datum</th>
-            <th className="px-3 py-1 text-left">Beschreibung</th>
-            <th className="px-3 py-1 text-left w-16">MWST</th>
-            <th className="px-3 py-1 text-left w-14">Soll</th>
-            <th className="px-3 py-1 text-left w-14">Haben</th>
-            <th className="px-3 py-1 text-right w-28">Betrag</th>
+            <th className="px-3 py-1 text-left w-24">{t('col.date')}</th>
+            <th className="px-3 py-1 text-left">{t('col.description')}</th>
+            <th className="px-3 py-1 text-left w-16">{t('col.vat')}</th>
+            <th className="px-3 py-1 text-left w-14">{t('col.debit')}</th>
+            <th className="px-3 py-1 text-left w-14">{t('col.credit')}</th>
+            <th className="px-3 py-1 text-right w-28">{t('col.amount')}</th>
             <th className="px-3 py-1 text-right w-24">CHF</th>
-            <th className="px-3 py-1 text-right w-20">Steuer CHF</th>
+            <th className="px-3 py-1 text-right w-20">{t('vat.colTaxChf')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
@@ -54,7 +55,7 @@ export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title
         </tbody>
         <tfoot>
           <tr className="border-t border-border font-semibold">
-            <td className="px-3 py-1" colSpan={6}>Total</td>
+            <td className="px-3 py-1" colSpan={6}>{t('common.total')}</td>
             <td className={signed(sum('chf'))}>{sum('chf').toFixed(2)}</td>
             <td className={signed(sum('tax'))}>{sum('tax').toFixed(2)}</td>
           </tr>
