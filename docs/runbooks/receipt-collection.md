@@ -171,13 +171,13 @@ Vendors to cover (non-exhaustive; the login of each is in the workspace runbook)
 
 Before collecting:
 1. Open the provider's app-password page (Google: https://myaccount.google.com/apppasswords)
-2. Name it "belege-collect"
+2. Name it "vanilla-accounting-collect"
 3. Copy the generated password
 4. Add to the workspace `.env`: `<ENV>_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx` (the `env` prefix of that mailbox in mail.yaml)
 
 After collecting:
 1. Open the same app-password page
-2. Delete the "belege-collect" app password
+2. Delete the "vanilla-accounting-collect" app password
 3. Remove or blank the password in `.env`
 
 **Claude: always remind the user to revoke the app password after the collection run completes.**
@@ -190,7 +190,7 @@ Explicit date range via `--quarter` shorthand:
 
 ## Code Location
 
-Utility functions in `src/collect/` within the belege repo:
+Utility functions in `src/collect/` within the app repo:
 - `imap.ts` — IMAP connection, email fetch, quarter parsing
 - `mail-config.ts` — the workspace's `mail.yaml`: mailboxes and sender classification (skip / include / ambiguous)
 - Attachment extraction from email
@@ -680,7 +680,7 @@ Google Ads and Google's consumer subscriptions send no PDF anywhere.
 
 ## Matching Notes
 
-- `npm run match` (`src/cli/match.ts`) is the primary path. It calls the model once per receipt through `src/llm/ask.ts`, the one way belege calls a model (ADR 0002); each call is logged in `data/llm-ledger.jsonl` under step `evidence.guide.yaml#ai`. The `MATCH_LLM=codex` switch is gone.
+- `npm run match` (`src/cli/match.ts`) is the primary path. It calls the model once per receipt through `src/llm/ask.ts`, the one way the app calls a model (ADR 0002); each call is logged in `data/llm-ledger.jsonl` under step `evidence.guide.yaml#ai`. The `MATCH_LLM=codex` switch is gone.
 - Transaction matching requires camt053 bank statements for the quarter. Without them, receipts get renamed/archived but stay unlinked (confidence-based filename still applied).
 - **Grouped vendors (AliExpress, Amazon, FedEx) bundle several receipts into one bank transaction** — a single receipt's amount can be a small fraction of the transaction total (e.g. two small AliExpress orders landing in one Wise card charge alongside other same-day orders). `match.ts` detects these vendors by keyword in the receipt text and matches by vendor-name-in-description instead of amount proximity for them; the ordinary ±30% amount filter only applies to non-grouped vendors. If a grouped-vendor receipt still comes back unlinked, check by hand whether it's part of a transaction another receipt from the same day already claims (sum the receipt amounts and compare to the transaction total) rather than assuming the LLM just failed.
 

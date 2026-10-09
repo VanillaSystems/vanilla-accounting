@@ -35,7 +35,7 @@ const GIT_ID = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', 
 function cli(script: string, args: string[], path?: string, env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli', script), ...args], {
     cwd: APP_ROOT, input: '', encoding: 'utf8',
-    env: { ...process.env, ...GIT_ID, BELEGE_WORKSPACE: '', ...(path ? { PATH: `${path}:${process.env.PATH}` } : {}), ...env },
+    env: { ...process.env, ...GIT_ID, VANILLA_WORKSPACE: '', ...(path ? { PATH: `${path}:${process.env.PATH}` } : {}), ...env },
   });
   return { code: r.status, out: r.stdout + r.stderr };
 }
@@ -98,7 +98,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
     assert.ok(existsSync(d), d);
   }
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /AGENTS\.md \(golden rule 1/);
-  assert.equal(readFileSync(envFile, 'utf8'), `BELEGE_WORKSPACE=${dir}\n`);
+  assert.equal(readFileSync(envFile, 'utf8'), `VANILLA_WORKSPACE=${dir}\n`);
   const log = spawnSync('git', ['log', '--oneline'], { cwd: dir, encoding: 'utf8' }).stdout.trim().split('\n');
   assert.equal(log.length, 1, 'one first commit');
 
@@ -119,16 +119,16 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   rmSync(bin, { recursive: true, force: true });
 });
 
-test('init keeps a BELEGE_WORKSPACE that points elsewhere unless told to replace it', () => {
+test('init keeps a VANILLA_WORKSPACE that points elsewhere unless told to replace it', () => {
   const base = tmp();
   const envFile = join(base, 'app.env');
-  writeFileSync(envFile, 'OTHER=1\nBELEGE_WORKSPACE=../older-books\n');
+  writeFileSync(envFile, 'OTHER=1\nVANILLA_WORKSPACE=../older-books\n');
   const kept = cli('init.ts', consultant(join(base, 'a'), envFile));
   assert.equal(kept.code, 0, kept.out);
   assert.match(kept.out, /still points at \.\.\/older-books/);
-  assert.equal(readFileSync(envFile, 'utf8'), 'OTHER=1\nBELEGE_WORKSPACE=../older-books\n');
+  assert.equal(readFileSync(envFile, 'utf8'), 'OTHER=1\nVANILLA_WORKSPACE=../older-books\n');
   assert.equal(cli('init.ts', consultant(join(base, 'b'), envFile, '--set-env')).code, 0);
-  assert.equal(readFileSync(envFile, 'utf8'), `OTHER=1\nBELEGE_WORKSPACE=${join(base, 'b')}\n`);
+  assert.equal(readFileSync(envFile, 'utf8'), `OTHER=1\nVANILLA_WORKSPACE=${join(base, 'b')}\n`);
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -219,7 +219,7 @@ test('a new workspace books its first transaction: no prior-year export, the cha
   writeFileSync(booksPath, JSON.stringify(books));
 
   const prompts = join(base, 'prompts.txt');
-  const r = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { BELEGE_WORKSPACE: dir, CLAUDE_STUB_PROMPTS: prompts });
+  const r = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { VANILLA_WORKSPACE: dir, CLAUDE_STUB_PROMPTS: prompts });
   assert.equal(r.code, 0, r.out);
   const entries = JSON.parse(readFileSync(booksPath, 'utf8')).journalEntries as { transactionRef: string; accountDebit: string; accountCredit: string; amount: number }[];
   assert.deepEqual(entries.map((e) => [e.transactionRef, e.accountDebit, e.accountCredit, e.amount]), [['TX-1', '6570', '1020', 50]]);

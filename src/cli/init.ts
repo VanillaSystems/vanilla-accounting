@@ -160,13 +160,17 @@ async function askBanks(): Promise<InitInput['banks']> {
 /** Points the app's .env at the workspace. Another value stays unless the person (or --set-env) says to replace it. */
 async function pointEnvAt(envFile: string, root: string): Promise<string> {
   const content = existsSync(envFile) ? readFileSync(envFile, 'utf8') : '';
-  const line = `BELEGE_WORKSPACE=${root}`;
-  const current = /^BELEGE_WORKSPACE=(.*)$/m.exec(content);
-  if (current?.[1].trim() === root) return `${envFile} already points at this workspace.`;
+  const line = `VANILLA_WORKSPACE=${root}`;
+  const current = /^(?:VANILLA|BELEGE)_WORKSPACE=(.*)$/m.exec(content);
+  if (current?.[0] === line) return `${envFile} already points at this workspace.`;
+  if (current?.[1].trim() === root) {
+    writeFileSync(envFile, content.replace(current[0], line));
+    return `${envFile} points at this workspace, now as VANILLA_WORKSPACE.`;
+  }
   if (current) {
     const replace = flags['set-env'] === true
       || (interactive && /^y/i.test(await rl!.question(`\n${envFile} points at ${current[1]}. Point it at ${root} instead? [y/N] > `)));
-    if (!replace) return `${envFile} still points at ${current[1]}. To use the new books: BELEGE_WORKSPACE=${root} npm start`;
+    if (!replace) return `${envFile} still points at ${current[1]}. To use the new books: VANILLA_WORKSPACE=${root} npm start`;
     writeFileSync(envFile, content.replace(current[0], line));
     return `${envFile} now points at ${root}.`;
   }
@@ -188,7 +192,7 @@ function gitInit(root: string): string {
 }
 
 async function main(): Promise<string> {
-  if (interactive) console.log('Belege: set up the books of a company. Enter takes the value in [brackets].\n');
+  if (interactive) console.log('Vanilla Accounting: set up the books of a company. Enter takes the value in [brackets].\n');
   const presetPrompt = interactive
     ? `Which fits best? ${PRESET_NAMES.map((p, i) => `${i + 1}) ${PRESETS[p].label}`).join('   ')}\n`
     : 'Preset';

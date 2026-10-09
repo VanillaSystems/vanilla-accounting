@@ -73,7 +73,7 @@ export interface Scenario {
 
 /** One demo workspace: who the company is, its chart and banks, and its year as a Scenario. */
 export interface Demo {
-  /** The directory under the app root, which is also its BELEGE_WORKSPACE shortcut. */
+  /** The directory under the app root, which is also its VANILLA_WORKSPACE shortcut. */
   dir: string;
   company: Company;
   closedThrough: string;

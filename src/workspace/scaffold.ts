@@ -182,12 +182,12 @@ const KNOWLEDGE_TEMPLATES: [string, string][] = [
 function agentsMd(input: InitInput, appRel: string): string {
   return `# ${input.name}: books (private workspace)
 
-This folder holds the books, not the code. It is a Belege workspace: \`belege.workspace.yaml\`
+This folder holds the books, not the code. It is a Vanilla Accounting workspace: \`belege.workspace.yaml\`
 (who the company is, how it works, which ledger account each bank books on), \`accounts.json\`
 (chart of accounts), \`books.json\`, \`receipts/\`, \`bank-statements/\`, \`filings/\`, plus the
 company's own knowledge: \`knowledge/\` (suppliers, customers, authorities, rules), \`mail.yaml\`.
 
-The app is at \`${appRel}\`. Its \`.env\` sets \`BELEGE_WORKSPACE\` to this folder, so every
+The app is at \`${appRel}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
 command run there works on these books:
 
     cd ${appRel} && npm start          # UI on http://localhost:5173

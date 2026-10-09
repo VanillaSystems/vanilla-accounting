@@ -1,6 +1,6 @@
-# Belege verification map
+# Vanilla Accounting verification map
 
-This directory is the maintained source for verifying the user-facing behavior of Belege. Read this index first, then use the matching feature file as the recipe. `S`, `B`, `UI`, `API`, `SB`, and `EVIDENCE` are defined in [../SKILL.md](../SKILL.md).
+This directory is the maintained source for verifying the user-facing behavior of Vanilla Accounting. Read this index first, then use the matching feature file as the recipe. `S`, `B`, `UI`, `API`, `SB`, and `EVIDENCE` are defined in [../SKILL.md](../SKILL.md).
 
 ## Baseline preconditions
 

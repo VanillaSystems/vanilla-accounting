@@ -21,15 +21,15 @@ export function tempWorkspace(prefix = 'belege-ws-', manifestOf: string = DEMO_R
 }
 
 /**
- * The real company workspace this checkout is set up for, if any: BELEGE_WORKSPACE, else the
+ * The real company workspace this checkout is set up for, if any: VANILLA_WORKSPACE, else the
  * one .env names, else the app root's own manifest. A demo never counts. In the public repo
  * there is none.
  */
 export function companyWorkspace(): Workspace | undefined {
   const envFile = join(APP_ROOT, '.env');
-  const fromEnvFile = existsSync(envFile) ? parseEnv(readFileSync(envFile)).BELEGE_WORKSPACE : undefined;
+  const fromEnvFile = existsSync(envFile) ? parseEnv(readFileSync(envFile)).VANILLA_WORKSPACE : undefined;
   const demos = new Set(DEMO_ROOTS.map((d) => realpathSync(d)));
-  for (const candidate of [process.env.BELEGE_WORKSPACE, fromEnvFile, APP_ROOT]) {
+  for (const candidate of [process.env.VANILLA_WORKSPACE, fromEnvFile, APP_ROOT]) {
     if (!candidate || DEMO_NAME.test(candidate)) continue;
     const root = resolve(candidate.replace(/^~(?=$|\/)/, homedir()));
     if (existsSync(join(root, MANIFEST_FILE)) && !demos.has(realpathSync(root))) return workspaceAt(root);

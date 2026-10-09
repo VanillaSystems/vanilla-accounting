@@ -48,7 +48,7 @@ export const QUESTIONS = {
       { value: 'yes', label: 'yes, I have a MWST number' },
       {
         value: 'no', label: 'no',
-        unsupported: 'Books without VAT are not supported yet: today every entry carries a VAT code and the app files a VAT return each quarter. This mode is planned; until then Belege is not the right tool for a company that is not registered.',
+        unsupported: 'Books without VAT are not supported yet: today every entry carries a VAT code and the app files a VAT return each quarter. This mode is planned; until then Vanilla Accounting is not the right tool for a company that is not registered.',
       },
     ],
   },
@@ -123,11 +123,11 @@ export const QUESTIONS = {
   },
   employees: {
     ask: 'Employees',
-    why: 'Salaries come from your payroll provider or Treuhand; Belege books the payments, it does not calculate payroll.',
+    why: 'Salaries come from your payroll provider or Treuhand; Vanilla Accounting books the payments, it does not calculate payroll.',
     options: [
       { value: 'none', label: 'none' },
-      { value: 'owner', label: 'the owner only', caveat: 'Belege books the salary and the AHV, BVG and UVG payments; the payroll itself (Lohnausweis, AHV statement) stays with your provider.' },
-      { value: 'staff', label: 'staff', caveat: 'Belege books the salary and the AHV, BVG and UVG payments; the payroll itself (Lohnausweis, AHV statement) stays with your provider.' },
+      { value: 'owner', label: 'the owner only', caveat: 'Vanilla Accounting books the salary and the AHV, BVG and UVG payments; the payroll itself (Lohnausweis, AHV statement) stays with your provider.' },
+      { value: 'staff', label: 'staff', caveat: 'Vanilla Accounting books the salary and the AHV, BVG and UVG payments; the payroll itself (Lohnausweis, AHV statement) stays with your provider.' },
     ],
   },
   ownerPaysPrivately: {

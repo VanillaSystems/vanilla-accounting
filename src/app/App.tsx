@@ -179,7 +179,7 @@ export default function App() {
       {/* Header */}
       <header className="bg-background border-b border-border px-6 py-3 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-foreground">Belege</h1>
+          <h1 className="text-lg font-semibold text-foreground">Vanilla Accounting</h1>
           <span className="text-xs text-muted-foreground">Belegverwaltung</span>
         </div>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">

@@ -1,12 +1,12 @@
 /**
- * The one way belege calls a model through the `claude` CLI (subscription).
+ * The one way the app calls a model through the `claude` CLI (subscription).
  *
  * A plain `claude -p` from the repo loads Claude Code's system prompt, tool
  * schemas, CLAUDE.md, AGENTS.md, auto-memory, hooks and skills: ~36,000 tokens
  * before the prompt (measured 2026-10-07). This caller runs from an empty
  * directory with its own short system prompt, no tools unless a step needs to
  * read a file, no MCP servers, no settings and no session: ~630 tokens.
- * `--bare` would also do it, but it requires an API key, and belege runs on
+ * `--bare` would also do it, but it requires an API key, and the app runs on
  * the subscription. See docs/adr/0002-counterparty-knowledge-and-lean-calls.md.
  *
  * Every call appends its real usage to data/llm-ledger.jsonl, tagged with the

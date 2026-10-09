@@ -186,7 +186,7 @@ function filedReturn(demo: Demo, books: Index): string {
     writeFileSync(join(dir, 'books.json'), JSON.stringify(books));
     const out = join(dir, 'filed.xml');
     execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), demo.filed.period, out], {
-      cwd: dir, env: { ...process.env, BELEGE_WORKSPACE: dir }, stdio: 'pipe',
+      cwd: dir, env: { ...process.env, VANILLA_WORKSPACE: dir }, stdio: 'pipe',
     });
     return readFileSync(out, 'utf8').replace(/<eCH-0217:generationTime>[^<]*</, `<eCH-0217:generationTime>${demo.filed.generationTime}<`);
   } finally {

@@ -3,7 +3,7 @@
  * the claude CLI and its login, without a model call) and the workspace (manifest, books.json,
  * folders, chart, bank accounts, which bank account each statement lands on, the answers of
  * npm run init). Prints one line per check and the fix for each ✗; exit code 1 on any ✗.
- * `--workspace <dir>` checks that folder instead of the one BELEGE_WORKSPACE names.
+ * `--workspace <dir>` checks that folder instead of the one VANILLA_WORKSPACE names.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -128,7 +128,7 @@ function main(): number {
   try {
     ws = values.workspace ? workspaceAt(values.workspace) : openWorkspace();
   } catch (e) {
-    results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set BELEGE_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
+    results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set VANILLA_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
   }
   if (ws) results.push(...workspaceChecks(ws));
 

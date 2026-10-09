@@ -87,8 +87,8 @@ function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
     <eCH-0217:formOfReporting>2</eCH-0217:formOfReporting>
     <eCH-0217:businessReferenceId>MWST-${periodKey}</eCH-0217:businessReferenceId>
     <eCH-0217:sendingApplication>
-      <eCH-0058:manufacturer>Belege</eCH-0058:manufacturer>
-      <eCH-0058:product>Belege</eCH-0058:product>
+      <eCH-0058:manufacturer>Vanilla Accounting</eCH-0058:manufacturer>
+      <eCH-0058:product>Vanilla Accounting</eCH-0058:product>
       <eCH-0058:productVersion>1.0</eCH-0058:productVersion>
     </eCH-0217:sendingApplication>
   </eCH-0217:generalInformation>

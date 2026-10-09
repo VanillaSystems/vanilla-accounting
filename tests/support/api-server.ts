@@ -42,7 +42,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   const base = `http://127.0.0.1:${port}`;
   const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(REPO, 'src/server/main.ts')], {
     cwd: root,
-    env: { ...process.env, BELEGE_WORKSPACE: root, PORT: String(port), READONLY: '', ...env },
+    env: { ...process.env, VANILLA_WORKSPACE: root, PORT: String(port), READONLY: '', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise<void>((resolve, reject) => {
