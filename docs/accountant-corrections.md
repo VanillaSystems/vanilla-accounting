@@ -71,17 +71,17 @@ small GmbH: often (most reviews), sometimes (a few reviews a year), rare (once i
 | 22 | Correct the exchange rate | `exchangeRate` (and with it the CHF amount) | The entry used a flat rate or the rate of the wrong day; the rule is the ESTV sell rate on the payment date (ADR 0001). `npm run restamp-fx` fixes most cases on the owner's side. | rare | `editEntry` | yes (it is a field of the entry form) |
 | 23 | Delkredere | a new entry `D 3xxx / C 1109` | Year end: a doubtful receivable. A one-person consultancy on cash basis rarely has one, because receivables are not booked. | rare | `addEntry` | yes (a new entry like rows 15 to 21) |
 | 24 | Inventory change (Bestandesänderung) | a new entry `D 1200 / C 4xxx` or the reverse | Year end: goods in stock counted. Only for a company that sells goods. | sometimes (goods only) | `addEntry` | yes (a new entry like rows 15 to 21) |
-| 25 | Add an account to the chart | `accounts.json` | An account the chart of the workspace lacks. The entry form already offers every account of the Swiss SME chart (`reference/charts/ch-kmu.yaml`); a booking on one adds nothing else to change. | rare | none | no, later |
+| 25 | Add an account to the chart | `accounts.json` | The year-end entries need accounts a small chart lacks (1300, 2300, 2330, 6800). The entry form offers every account of the Swiss SME chart (`reference/charts/ch-kmu.yaml`) under «auch Konten ohne Buchungen», and the owner's merge adds an account a merged entry uses to `accounts.json`. An account outside that chart waits. | sometimes (year end) | `addEntry` (implied) | yes, for the SME chart's accounts |
 | 26 | Fix an opening balance | `config.openingBalances` | The carried-forward balance of an account differs from the prior year's closed accounts. `npm run import-opening` derives them from the prior year's Banana export; a fix is the owner's rerun. | rare | none | no, later |
 | 27 | Closing entries (profit to Gewinnvortrag, dividend) | entries after the year's result | The year's result moves to the equity accounts. Done in Banana Accounting today (year-close.flow.yaml step banana_close). | once a year | `addEntry` | no, later (possible as a new entry, not designed for) |
 | 28 | Close a quarter (move the period lock) | `config.closedThrough`, a seal | The quarter is filed. Only the owner files and closes (`npm run seal -- <quarter> --close`); the Treuhänder signs off (row 8). | each quarter | none | no, never in a review |
 
 ## What v1 must do
 
-All the "often" rows and everything a year-end close needs are v1: rows 1 to 24. They need
-seven kinds of change plus comments and sign-off. Rows 25 to 28 wait: the chart and the opening
-balances are rare and the owner fixes them with a command, closing entries are made in Banana
-today, and closing a quarter stays the owner's act.
+All the "often" rows and everything a year-end close needs are v1: rows 1 to 25. They need
+seven kinds of change plus comments and sign-off. Rows 26 to 28 wait: the opening balances are
+rare and the owner fixes them with a command, closing entries are made in Banana today, and
+closing a quarter stays the owner's act.
 
 ## Acceptance tests
 
@@ -105,11 +105,29 @@ Each v1 row is accepted when all of these hold for it in the review package of
 | 13 | Change the VAT code of a Q1 entry. The review package books a Storno and the corrected entry, both with `corrects: "2026-Q1"`, dated in the open period; Q1's entries stay as filed (`mutateJournal` accepts the result). |
 | 14 | Tick "kein Beleg nötig" on an open transaction. The commit sets `noReceiptNeeded` on that transaction only. |
 | 15 to 24 | Book each as a new entry with the entry form (account combobox, VAT code picker, live VAT preview). The Bilanz and Erfolgsrechnung recompute. One sample of the group is enough to accept the form; row 4 and row 17 are the samples. |
+| 25 | Book depreciation on 6800, which `accounts.json` of demo-consulting lacks, by ticking «auch Konten ohne Buchungen». After the merge `accounts.json` holds 6800 with its name and type from the SME chart. |
 | all | The owner imports the file: one commit per correction, author the Treuhänder, message his reason. The PR view lists each with its before and after, its VAT effect per quarter, and its status against today's books (applicable, already so, conflict, closed period). Merging applies the accepted ones through `mutateJournal`, records a merge commit, and the VAT figures of each quarter change exactly as the review package previewed. Importing the same file again changes nothing. |
 
 ## Checked
 
-Filled in with the evidence when the review package is verified (`.verify/evidence/review/`).
+Verified on 2026-10-09 by `.claude/skills/verify/review-e2e.sh` in a sandbox of demo-consulting. The file names are in its evidence folder, `.verify/evidence/review/`.
 
 | # | Checked | Evidence |
 | --- | --- | --- |
+| 1 | yes | Inline Soll 6000 → 6500; dialog `01-soll-dialog.png`; branch commit «Fixdesk ist Büroaufwand…» changes `accountDebit` and stamps `origin: manual`, as every hand edit in the app does (PR view `20-owner-pr-view.png`). |
+| 2 | yes | Inline I81 → I0; the preview lowers Ziffer 405 in `02-vat-i0-dialog.png`; merged Q3 405 equals the preview (`vat-figures.txt`). |
+| 3 | yes | Inline I81 → B81-1; the preview raises Ziffer 383 by the net amount and 405 by its tax in `03-bezugsteuer-dialog.png`. |
+| 4 | yes | New entry 2451/6510 with K81-B; the preview raises Ziffer 415 by the tax in `04-new-entry-private-share.png`, and the merged Q3 shows the same Ziffer 415. |
+| 5 | yes | Inline description; the owner rejected it with a reason (`21-owner-after-merge.png`, `workspace-review-dir/*/decisions.json`). |
+| 6 | yes | Unlink and link in **Transaktionen** (`06-link-dialog.png`); a link in Q1 refused with «Periode geschlossen bis 31.03.2026. Zuordnungen …» (`run.log`). |
+| 7 | yes | Comments on an entry (`07-comment-dialog.png`) and on a receipt; both in the review file and the PR view. |
+| 8 | yes | Sign-off 2026-Q3 with a statement (`08-review-tab.png`); in the review file and the PR view. |
+| 9 | yes | Entry form amount changed; the commit changes `amount` (and `origin: manual`). |
+| 10 | yes | Entry form split into an I81 line and a line to 2451 without code; lines that do not sum are refused with «Die Zeilen ergeben …, die Buchung ….» (`10-split-refused.png`, `10-split-form.png`); tests/review.test.ts: a split line keeps its own code. |
+| 11 | yes | Entry form date 2026-07-01 → 2026-06-30; preview moves 405 from Q3 to Q2 (`11-date-form.png`); a new date in Q1 refused (tests/review.test.ts). |
+| 12 | yes | Open duplicate removed (`12-reverse-open-dialog.png`); Q1 entry reversed by a Storno dated 2026-04-01 with `corrects: 2026-Q1` (`12-reverse-filed-dialog.png`, `13-corrects-entries-in-open-period.png`). |
+| 13 | yes | Q1 I81 → I0 became Storno and corrected entry with `corrects: 2026-Q1`, the Q1 entry stays I81 (`13-filed-edit-dialog.png`, `run.log`); merged Q1 405 equals the preview; the Q1 seal stays intact (tests/review.test.ts). |
+| 14 | yes | «kein Beleg nötig» on the BVG transaction; commit changes `noReceiptNeeded` only. |
+| 15 to 24 | yes | Depreciation 6800/1520 with the entry form (`17-depreciation-form.png`) and the private share (row 4) as the samples. |
+| 25 | yes | 6800 picked under «auch Konten ohne Buchungen»; after the merge `accounts.json` holds «6800 Abschreibungen auf Sachanlagen» (`run.log`). |
+| all | yes | 16 corrections imported as 17 commits by Anna Muster; PR statuses all «anwendbar»; one rejected with a reason, 15 merged in a merge commit with two parents (`git-log-graph.txt`); re-import changes nothing (`run.log`); every merged VAT figure equals the preview (`vat-figures.txt`); tests/review.test.ts covers conflict, filed-after-snapshot, refused and idempotence. |

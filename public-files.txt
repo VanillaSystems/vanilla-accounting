@@ -39,6 +39,10 @@ docs/getting-started.md
 docs/audit-export.md
 docs/accountant-corrections.md
 docs/accountant-review.md
+docs/images/accountant-review/vat-correction.png
+docs/images/accountant-review/split.png
+docs/images/accountant-review/review-tab.png
+docs/images/accountant-review/pull-request.png
 docs/releasing.md
 docs/mail-setup.md
 docs/quarter-workflow.md

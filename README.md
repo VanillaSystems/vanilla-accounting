@@ -87,6 +87,14 @@ Zip it and hand it to your Treuhänder or auditor, who serves it with `npx serve
 protection. The demo exports can be hosted openly. `docs/audit-export.md` explains how to make,
 hand over and host an export.
 
+## Review by your Treuhänder
+
+`npm run review -- 2026-Q3 --for "Anna Muster" <folder>` builds the same export in review mode.
+Your Treuhänder corrects the books in his browser and sends back one file. The **Prüfungen** tab
+turns it into a git branch with one commit per correction and shows it as a pull request, with
+each correction's VAT effect; you merge or reject each one. `docs/accountant-review.md` walks
+through it, and `docs/accountant-corrections.md` lists the corrections it supports.
+
 ## Rules that never bend
 
 A filed quarter never changes. Corrections are booked in the next open quarter and declared on

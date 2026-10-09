@@ -16,6 +16,21 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Review by your Treuhänder: `npm run review -- 2026-Q3 --for "<name>" <folder>` builds the audit
+  export in review mode. He corrects the books in his browser (inline edits, an entry form with
+  split, new entries and a live VAT preview, reversals, receipt links, comments, sign-off), and
+  **Review abschicken** downloads one file. An edit of a filed quarter becomes a Storno and the
+  corrected entry with `corrects`. The **Prüfungen** tab (or `npm run review:import`) turns the
+  file into a git branch with one commit per correction, author the Treuhänder, message his
+  reason, and shows it as a pull request: before and after, VAT effect per quarter, status
+  against today's books. Merge or reject per correction; the merge goes through the period lock
+  and keeps his commits in history. `docs/accountant-review.md`, `docs/accountant-corrections.md`.
+- **⚠ action** Every save of the books is a git commit of `books.json` in the workspace, by the
+  writer (the owner from `belege.workspace.yaml` unless a process sets another), with the action
+  as message. A workspace that is not a git repository saves as before, with a note: run
+  `git init` there and commit once to get the history. The new **Protokoll** tab, and
+  `data/log.json` in an audit export, list the commits with the records before and after.
+
 - Periods: the header's period button opens a picker with presets (today, yesterday, last 7/30/90/365
   days, last week/month/quarter/12 months/year, week/month/quarter/year to date), the quarters and
   years of the books (filed ones with a lock), and a two-month calendar with typed start and end
