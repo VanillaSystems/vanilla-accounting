@@ -39,6 +39,7 @@ export function errorText(e: unknown): string {
   const b = e.body;
   switch (b.code) {
     case 'readonly': return t('error.readonly');
+    case 'localOnly': return t('error.localOnly');
     case 'manualOnly': return t('error.manualOnly');
     case 'fileExists': return t('error.fileExists', b.params);
     case 'periodClosed': {

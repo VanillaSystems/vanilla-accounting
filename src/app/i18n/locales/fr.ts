@@ -58,6 +58,7 @@ export default {
     'col.receipts': 'Justificatif(s)',
 
     'error.readonly': 'Mode révision: les modifications sont désactivées.',
+    'error.localOnly': 'Accessible uniquement depuis cet ordinateur.',
     'error.periodClosed': 'Période clôturée jusqu’au {date}.',
     'error.closed.editTransaction': 'Les transactions d’une période clôturée ne peuvent pas être modifiées.',
     'error.closed.deleteTransaction': 'Les transactions d’une période clôturée ne peuvent pas être supprimées.',

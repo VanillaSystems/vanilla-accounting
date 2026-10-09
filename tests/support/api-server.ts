@@ -12,6 +12,7 @@ const REPO = process.cwd();
 
 export interface ApiServer {
   root: string;
+  port: number;
   indexPath: string;
   send(method: string, path: string, body?: unknown): Promise<{ status: number; json: Record<string, unknown> }>;
   stop(): void;
@@ -52,6 +53,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
     });
   });
   return {
+    port,
     root,
     indexPath,
     async send(method, path, body) {

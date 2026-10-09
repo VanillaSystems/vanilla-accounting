@@ -13,6 +13,7 @@ export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
 export type ApiRefusal =
   | { code: 'readonly' }
+  | { code: 'localOnly' }
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason } }
   | { code: 'manualOnly' }
   | { code: 'fileExists'; params: { filename: string } };

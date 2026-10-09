@@ -58,6 +58,7 @@ export default {
     'col.receipts': 'Receipt(s)',
 
     'error.readonly': 'Audit mode: changes are disabled.',
+    'error.localOnly': 'Only reachable from this computer.',
     'error.periodClosed': 'Period closed up to {date}.',
     'error.closed.editTransaction': 'Transactions in a closed period cannot be changed.',
     'error.closed.deleteTransaction': 'Transactions in a closed period cannot be deleted.',

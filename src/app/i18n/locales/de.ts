@@ -55,6 +55,7 @@ export const messages = {
   'col.receipts': 'Beleg(e)',
 
   'error.readonly': 'Prüfmodus: Änderungen sind deaktiviert.',
+  'error.localOnly': 'Nur von diesem Computer aus erreichbar.',
   'error.periodClosed': 'Periode geschlossen bis {date}.',
   'error.closed.editTransaction': 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   'error.closed.deleteTransaction': 'Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',

@@ -58,6 +58,7 @@ export default {
     'col.receipts': 'Giustificativo/i',
 
     'error.readonly': 'Modalità revisione: le modifiche sono disattivate.',
+    'error.localOnly': 'Accessibile solo da questo computer.',
     'error.periodClosed': 'Periodo chiuso fino al {date}.',
     'error.closed.editTransaction': 'Le transazioni di un periodo chiuso non possono essere modificate.',
     'error.closed.deleteTransaction': 'Le transazioni di un periodo chiuso non possono essere eliminate.',

@@ -13,6 +13,17 @@ import { router as config } from './routes/config.js';
 import { router as files } from './files.js';
 
 export const app = express();
+
+/**
+ * The server listens on the network only so the phone app can upload scans (src/server/routes/scan.ts).
+ * Everything else — the books, receipts, every write — answers only to this computer.
+ */
+export const NETWORK_PATHS: ReadonlySet<string> = new Set(['/scan', '/scan/manifest.json', '/api/upload', '/api/status']);
+const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+app.use((req, res, next) => {
+  if (LOOPBACK.test(req.socket.remoteAddress ?? '') || NETWORK_PATHS.has(req.path)) return next();
+  res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
+});
 app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
