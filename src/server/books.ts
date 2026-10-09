@@ -4,7 +4,8 @@
  */
 import type { Response } from 'express';
 import type { Index } from '../types/index.js';
-import { loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
+import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 export const WS = openWorkspace();
@@ -41,7 +42,7 @@ export function withBooks<T>(res: Response, fn: (books: Books) => Sync<T>): void
 // Golden rule 1 (AGENTS.md): nothing dated on or before config.closedThrough may change.
 // Every route that writes the books refuses a closed date with one of these first, so the
 // UI can say why; mutateJournal in withBooks catches whatever a route forgets.
-export const CLOSED = {
+export const CLOSED: Record<ClosedReason, string> = {
   editTransaction: 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   deleteTransaction: 'Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
   newTransaction: 'Neue Transaktionen müssen in der offenen Periode liegen.',
@@ -50,11 +51,13 @@ export const CLOSED = {
   deleteReceipt: 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
   editEntry: 'Korrekturen als neue Buchung in der offenen Periode erfassen.',
   deleteEntry: 'Buchungen in geschlossenen Perioden können nicht gelöscht werden.',
-} as const;
+};
 
-export function assertOpen(books: Pick<Index, 'config'>, dates: Array<string | undefined>, reason: string): void {
+export function assertOpen(books: Pick<Index, 'config'>, dates: Array<string | undefined>, reason: ClosedReason): void {
   const lock = periodLock(books);
-  for (const date of dates) lock.assertOpen(date, reason);
+  if (dates.some(lock.isClosed)) {
+    throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}. ${CLOSED[reason]}`, lock.closedThrough, reason);
+  }
 }
 
 /** The dates a transaction ref stands for: the transaction's, and its entries' (an Eigenverbrauch ref has only entries). */
@@ -72,7 +75,7 @@ export function receiptDates(books: Pick<Index, 'transactions' | 'journalEntries
 
 /** A request the API refuses with this status; the error handler in api.ts sends it. */
 export class RequestError extends Error {
-  constructor(readonly status: number, message: string) { super(message); }
+  constructor(readonly status: number, message: string, readonly refusal?: ApiRefusal) { super(message); }
 }
 
 export function patchBody(body: unknown, fields: readonly string[]): Record<string, unknown> {

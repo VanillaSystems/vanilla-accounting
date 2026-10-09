@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { CLOSED, assertOpen, withBooks, RequestError } from '../books.js';
+import { assertOpen, withBooks, RequestError } from '../books.js';
 
 export const router = Router();
 
@@ -10,7 +10,7 @@ router.patch('/api/journal-entries/:id', (req, res) => {
   return withBooks(res, (books) => {
     const entry = books.journalEntries.find((je) => je.id === id);
     if (!entry) throw new RequestError(404, 'Journal entry not found');
-    assertOpen(books, [entry.date, updates.date], CLOSED.editEntry);
+    assertOpen(books, [entry.date, updates.date], 'editEntry');
 
     if (updates.date !== undefined) entry.date = updates.date;
     if (updates.accountDebit !== undefined) entry.accountDebit = updates.accountDebit;
@@ -27,7 +27,7 @@ router.delete('/api/journal-entries/:id', (req, res) => {
   return withBooks(res, (books) => {
     const entry = books.journalEntries.find((je) => je.id === id);
     if (!entry) throw new RequestError(404, 'Journal entry not found');
-    assertOpen(books, [entry.date], CLOSED.deleteEntry);
+    assertOpen(books, [entry.date], 'deleteEntry');
 
     books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
     return { ok: true };

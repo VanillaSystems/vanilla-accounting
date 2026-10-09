@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { TransactionPatch } from '../../types/index.js';
 import { ask } from '../../llm/ask.js';
 import { buildManualTxSuggestPrompt } from '../../llm/prompts.js';
-import { CLOSED, assertOpen, refDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { assertOpen, refDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
@@ -57,7 +57,7 @@ router.post('/api/transactions/manual', (req, res) => {
   }
 
   return withBooks(res, (books) => {
-    assertOpen(books, [date], CLOSED.newTransaction);
+    assertOpen(books, [date], 'newTransaction');
     const year = date.slice(0, 4);
     // A ref is taken if anything points at it: the Eigenverbrauch rebookings carry
     // M<year>-NNN refs with no transaction behind them, so transactions alone are not enough.
@@ -93,7 +93,7 @@ router.patch('/api/transactions/:ref', (req, res) => {
   return withBooks(res, (books) => {
     const idx = books.transactions.findIndex((t) => t.ref === ref);
     if (idx === -1) throw new RequestError(404, 'Transaction not found');
-    assertOpen(books, refDates(books, ref), CLOSED.editTransaction);
+    assertOpen(books, refDates(books, ref), 'editTransaction');
 
     books.transactions[idx] = { ...books.transactions[idx], ...patch };
     return { ok: true, transaction: books.transactions[idx] };
@@ -106,9 +106,9 @@ router.delete('/api/transactions/:ref', (req, res) => {
     const tx = books.transactions.find((t) => t.ref === ref);
     if (!tx) throw new RequestError(404, 'Transaction not found');
     if (tx.source !== 'manual') {
-      throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).');
+      throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).', { code: 'manualOnly' });
     }
-    assertOpen(books, refDates(books, ref), CLOSED.deleteTransaction);
+    assertOpen(books, refDates(books, ref), 'deleteTransaction');
 
     books.transactions = books.transactions.filter((t) => t.ref !== ref);
     books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);

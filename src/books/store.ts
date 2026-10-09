@@ -5,10 +5,14 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { AccountingConfig, Index, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
+import type { ClosedReason } from '../types/api-error.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
 
-export class ClosedPeriodError extends Error {}
+export class ClosedPeriodError extends Error {
+  /** `reason` names which refusal (src/types/api-error.ts) when the API's assertOpen threw it. */
+  constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason) { super(message); }
+}
 
 /** Keys loadBooks filled in, so saveBooks leaves them off the disk again while still empty. */
 const filledDefaults = new WeakMap<Books, Array<'journalEntries' | 'config'>>();
@@ -56,7 +60,7 @@ export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
     closedThrough,
     isClosed,
     assertOpen(date, what) {
-      if (isClosed(date)) throw new ClosedPeriodError(`Periode geschlossen bis ${closedThrough}. ${what}`);
+      if (isClosed(date)) throw new ClosedPeriodError(`Periode geschlossen bis ${closedThrough}. ${what}`, closedThrough);
     },
   };
 }
@@ -76,12 +80,12 @@ export function mutateJournal<T>(books: Books, fn: (books: Books) => T | Promise
   const check = () => {
     const lock = periodLock(books);
     if (lock.closedThrough !== before.closedThrough) {
-      throw new ClosedPeriodError(`config.closedThrough changed from ${before.closedThrough} to ${lock.closedThrough}.`);
+      throw new ClosedPeriodError(`config.closedThrough changed from ${before.closedThrough} to ${lock.closedThrough}.`, before.closedThrough);
     }
     const after = closedPart(books, lock);
     const changed = (['entries', 'transactions', 'mappings'] as const).flatMap((k) => diff(k, before[k], after[k]));
     if (changed.length) {
-      throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}: ${changed.join('; ')}`);
+      throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}: ${changed.join('; ')}`, lock.closedThrough);
     }
   };
   const outer = guards.get(books);

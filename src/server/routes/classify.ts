@@ -8,14 +8,14 @@ import { ask } from '../../llm/ask.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
 import type { Books } from '../../books/store.js';
-import { WS, CLOSED, assertOpen, readBooks, refDates, withBooks, RequestError } from '../books.js';
+import { WS, assertOpen, readBooks, refDates, withBooks, RequestError } from '../books.js';
 
 export const router = Router();
 
 function openTransaction(books: Books, txRef: string) {
   const tx = books.transactions.find((t) => t.ref === txRef);
   if (!tx) throw new RequestError(404, 'Transaction not found');
-  assertOpen(books, refDates(books, txRef), CLOSED.editEntry);
+  assertOpen(books, refDates(books, txRef), 'editEntry');
   return tx;
 }
 
