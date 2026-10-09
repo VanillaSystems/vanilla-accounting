@@ -1,0 +1,179 @@
+# Schweizer Kontenrahmen KMU: the common accounts of classes 1-9, as a starting chart for a new
+# workspace (npm run init). Public standard data, no company's numbers.
+#
+# Each account has a `type` (asset | liability | equity | revenue | expense | closing) and a
+# `line`: the line of the balance sheet (OR 959a) or of the income statement (OR 959b, by nature
+# of expense) it is shown on. `profiles` limits an account to a business profile (services,
+# goods); `legalForms` limits it to a legal form; `names` renames it for a legal form. An account
+# without them is in every chart. Read by src/workspace/chart.ts, which checks every rule here.
+schema: 1
+name: Kontenrahmen KMU
+
+lines:
+  fluessige-mittel:        { statement: bilanz, label: Flüssige Mittel und kurzfristig gehaltene Aktiven mit Börsenkurs, article: OR 959a Abs. 1 Ziff. 1 }
+  forderungen-ll:          { statement: bilanz, label: Forderungen aus Lieferungen und Leistungen, article: OR 959a Abs. 1 Ziff. 1 }
+  uebrige-forderungen:     { statement: bilanz, label: Übrige kurzfristige Forderungen, article: OR 959a Abs. 1 Ziff. 1 }
+  vorraete:                { statement: bilanz, label: Vorräte und nicht fakturierte Dienstleistungen, article: OR 959a Abs. 1 Ziff. 1 }
+  aktive-abgrenzungen:     { statement: bilanz, label: Aktive Rechnungsabgrenzungen, article: OR 959a Abs. 1 Ziff. 1 }
+  finanzanlagen:           { statement: bilanz, label: Finanzanlagen, article: OR 959a Abs. 1 Ziff. 2 }
+  beteiligungen:           { statement: bilanz, label: Beteiligungen, article: OR 959a Abs. 1 Ziff. 2 }
+  sachanlagen:             { statement: bilanz, label: Sachanlagen, article: OR 959a Abs. 1 Ziff. 2 }
+  immaterielle-werte:      { statement: bilanz, label: Immaterielle Werte, article: OR 959a Abs. 1 Ziff. 2 }
+  verbindlichkeiten-ll:    { statement: bilanz, label: Verbindlichkeiten aus Lieferungen und Leistungen, article: OR 959a Abs. 2 Ziff. 1 }
+  kurzfristig-verzinslich: { statement: bilanz, label: Kurzfristige verzinsliche Verbindlichkeiten, article: OR 959a Abs. 2 Ziff. 1 }
+  uebrige-kurzfristige:    { statement: bilanz, label: Übrige kurzfristige Verbindlichkeiten, article: OR 959a Abs. 2 Ziff. 1 }
+  passive-abgrenzungen:    { statement: bilanz, label: Passive Rechnungsabgrenzungen und kurzfristige Rückstellungen, article: OR 959a Abs. 2 Ziff. 1 }
+  langfristig-verzinslich: { statement: bilanz, label: Langfristige verzinsliche Verbindlichkeiten, article: OR 959a Abs. 2 Ziff. 2 }
+  uebrige-langfristige:    { statement: bilanz, label: Übrige langfristige Verbindlichkeiten, article: OR 959a Abs. 2 Ziff. 2 }
+  rueckstellungen:         { statement: bilanz, label: Rückstellungen sowie vom Gesetz vorgesehene ähnliche Positionen, article: OR 959a Abs. 2 Ziff. 2 }
+  kapital:                 { statement: bilanz, label: Grund-, Gesellschafter- oder Stiftungskapital, article: OR 959a Abs. 2 Ziff. 3 }
+  kapitalreserve:          { statement: bilanz, label: Gesetzliche Kapitalreserve, article: OR 959a Abs. 2 Ziff. 3 }
+  gewinnreserve:           { statement: bilanz, label: Gesetzliche Gewinnreserve, article: OR 959a Abs. 2 Ziff. 3 }
+  freiwillige-reserven:    { statement: bilanz, label: Freiwillige Gewinnreserven oder kumulierte Verluste, article: OR 959a Abs. 2 Ziff. 3 }
+  nettoerloese:            { statement: erfolgsrechnung, label: Nettoerlöse aus Lieferungen und Leistungen, article: OR 959b Abs. 2 Ziff. 1 }
+  bestandesaenderungen:    { statement: erfolgsrechnung, label: Bestandesänderungen an unfertigen und fertigen Erzeugnissen sowie an nicht fakturierten Dienstleistungen, article: OR 959b Abs. 2 Ziff. 2 }
+  materialaufwand:         { statement: erfolgsrechnung, label: Materialaufwand, article: OR 959b Abs. 2 Ziff. 3 }
+  personalaufwand:         { statement: erfolgsrechnung, label: Personalaufwand, article: OR 959b Abs. 2 Ziff. 4 }
+  uebriger-aufwand:        { statement: erfolgsrechnung, label: Übriger betrieblicher Aufwand, article: OR 959b Abs. 2 Ziff. 5 }
+  abschreibungen:          { statement: erfolgsrechnung, label: Abschreibungen und Wertberichtigungen auf Positionen des Anlagevermögens, article: OR 959b Abs. 2 Ziff. 6 }
+  finanzerfolg:            { statement: erfolgsrechnung, label: Finanzaufwand und Finanzertrag, article: OR 959b Abs. 2 Ziff. 7 }
+  betriebsfremd:           { statement: erfolgsrechnung, label: Betriebsfremder Aufwand und betriebsfremder Ertrag, article: OR 959b Abs. 2 Ziff. 8 }
+  ausserordentlich:        { statement: erfolgsrechnung, label: Ausserordentlicher, einmaliger oder periodenfremder Aufwand und Ertrag, article: OR 959b Abs. 2 Ziff. 9 }
+  direkte-steuern:         { statement: erfolgsrechnung, label: Direkte Steuern, article: OR 959b Abs. 2 Ziff. 10 }
+  abschluss:               { statement: abschluss, label: Abschlusskonten }
+
+accounts:
+  # 1 Aktiven: Umlaufvermögen
+  - { number: "1000", name: Kasse, type: asset, line: fluessige-mittel }
+  - { number: "1020", name: Bankguthaben, type: asset, line: fluessige-mittel }
+  - { number: "1060", name: Wertschriften, type: asset, line: fluessige-mittel }
+  - { number: "1090", name: Transferkonto, type: asset, line: fluessige-mittel }
+  - { number: "1093", name: Guthaben Zahlungsanbieter (Shopify, Stripe), type: asset, line: fluessige-mittel, profiles: [goods] }
+  - { number: "1100", name: Forderungen aus Lieferungen und Leistungen, type: asset, line: forderungen-ll }
+  - { number: "1109", name: Delkredere, type: asset, line: forderungen-ll }
+  - { number: "1140", name: Vorschüsse und Darlehen, type: asset, line: uebrige-forderungen }
+  - { number: "1170", name: Vorsteuer Material und Dienstleistungen, type: asset, line: uebrige-forderungen }
+  - { number: "1171", name: Vorsteuer Investitionen und Betriebsaufwand, type: asset, line: uebrige-forderungen }
+  - { number: "1176", name: Verrechnungssteuer, type: asset, line: uebrige-forderungen }
+  - { number: "1190", name: Sonstige kurzfristige Forderungen, type: asset, line: uebrige-forderungen }
+  - { number: "1200", name: Handelswaren, type: asset, line: vorraete, profiles: [goods] }
+  - { number: "1210", name: Rohstoffe, type: asset, line: vorraete, profiles: [goods] }
+  - { number: "1280", name: Nicht fakturierte Dienstleistungen, type: asset, line: vorraete, profiles: [services] }
+  - { number: "1300", name: Bezahlter Aufwand des Folgejahres, type: asset, line: aktive-abgrenzungen }
+  - { number: "1301", name: Noch nicht erhaltener Ertrag, type: asset, line: aktive-abgrenzungen }
+  # 1 Aktiven: Anlagevermögen
+  - { number: "1400", name: Wertschriften des Anlagevermögens, type: asset, line: finanzanlagen }
+  - { number: "1440", name: Darlehen an Dritte, type: asset, line: finanzanlagen }
+  - { number: "1480", name: Beteiligungen, type: asset, line: beteiligungen }
+  - { number: "1500", name: Maschinen und Apparate, type: asset, line: sachanlagen, profiles: [goods] }
+  - { number: "1510", name: Mobiliar und Einrichtungen, type: asset, line: sachanlagen }
+  - { number: "1520", name: Büromaschinen, Informatik, Kommunikationstechnologie, type: asset, line: sachanlagen }
+  - { number: "1530", name: Fahrzeuge, type: asset, line: sachanlagen }
+  - { number: "1540", name: Werkzeuge und Geräte, type: asset, line: sachanlagen, profiles: [goods] }
+  - { number: "1600", name: Geschäftsliegenschaften, type: asset, line: sachanlagen }
+  - { number: "1700", name: Patente, Know-how, Lizenzen, Rechte, Entwicklungen, type: asset, line: immaterielle-werte }
+  - { number: "1770", name: Goodwill, type: asset, line: immaterielle-werte }
+
+  # 2 Passiven: kurzfristiges Fremdkapital
+  - { number: "2000", name: Verbindlichkeiten aus Lieferungen und Leistungen, type: liability, line: verbindlichkeiten-ll }
+  - { number: "2030", name: Erhaltene Anzahlungen, type: liability, line: verbindlichkeiten-ll }
+  - { number: "2100", name: Bankverbindlichkeiten, type: liability, line: kurzfristig-verzinslich }
+  - { number: "2101", name: Kreditkarte, type: liability, line: kurzfristig-verzinslich }
+  - { number: "2200", name: Geschuldete MWST, type: liability, line: uebrige-kurzfristige }
+  - { number: "2201", name: Abrechnungskonto MWST, type: liability, line: uebrige-kurzfristige }
+  - { number: "2206", name: Geschuldete Verrechnungssteuer, type: liability, line: uebrige-kurzfristige, legalForms: [GmbH, AG] }
+  - { number: "2208", name: Direkte Steuern, type: liability, line: uebrige-kurzfristige, legalForms: [GmbH, AG] }
+  - { number: "2270", name: Sozialversicherungen und Vorsorgeeinrichtungen, type: liability, line: uebrige-kurzfristige }
+  - { number: "2279", name: Quellensteuer, type: liability, line: uebrige-kurzfristige }
+  - { number: "2300", name: Noch nicht bezahlter Aufwand, type: liability, line: passive-abgrenzungen }
+  - { number: "2301", name: Erhaltener Ertrag des Folgejahres, type: liability, line: passive-abgrenzungen }
+  - { number: "2330", name: Kurzfristige Rückstellungen, type: liability, line: passive-abgrenzungen }
+  # 2 Passiven: langfristiges Fremdkapital
+  - { number: "2400", name: Bankdarlehen, type: liability, line: langfristig-verzinslich }
+  - { number: "2450", name: Darlehen, type: liability, line: langfristig-verzinslich }
+  - { number: "2451", name: Kontokorrent Gesellschafter, type: liability, line: uebrige-langfristige, legalForms: [GmbH, AG] }
+  - { number: "2600", name: Rückstellungen, type: liability, line: rueckstellungen }
+  # 2 Passiven: Eigenkapital
+  - { number: "2800", name: Stammkapital, type: equity, line: kapital, names: { AG: Aktienkapital, Einzelfirma: Eigenkapital } }
+  - { number: "2850", name: Privat, type: equity, line: kapital, legalForms: [Einzelfirma] }
+  - { number: "2900", name: Gesetzliche Kapitalreserve, type: equity, line: kapitalreserve, legalForms: [GmbH, AG] }
+  - { number: "2950", name: Gesetzliche Gewinnreserve, type: equity, line: gewinnreserve, legalForms: [GmbH, AG] }
+  - { number: "2960", name: Freiwillige Gewinnreserven, type: equity, line: freiwillige-reserven, legalForms: [GmbH, AG] }
+  - { number: "2970", name: Gewinnvortrag oder Verlustvortrag, type: equity, line: freiwillige-reserven }
+  - { number: "2979", name: Jahresgewinn oder Jahresverlust, type: equity, line: freiwillige-reserven }
+
+  # 3 Betrieblicher Ertrag aus Lieferungen und Leistungen
+  - { number: "3000", name: Produktionserlöse, type: revenue, line: nettoerloese, profiles: [goods] }
+  - { number: "3200", name: Handelserlöse, type: revenue, line: nettoerloese, profiles: [goods] }
+  - { number: "3400", name: Dienstleistungserlöse, type: revenue, line: nettoerloese }
+  - { number: "3600", name: Übrige Erlöse aus Lieferungen und Leistungen, type: revenue, line: nettoerloese }
+  - { number: "3700", name: Eigenleistungen und Eigenverbrauch, type: revenue, line: nettoerloese }
+  - { number: "3800", name: Erlösminderungen, type: revenue, line: nettoerloese }
+  - { number: "3805", name: Verluste aus Forderungen, type: revenue, line: nettoerloese }
+  - { number: "3900", name: Bestandesänderungen nicht fakturierte Dienstleistungen, type: revenue, line: bestandesaenderungen, profiles: [services] }
+  - { number: "3901", name: Bestandesänderungen fertige Erzeugnisse, type: revenue, line: bestandesaenderungen, profiles: [goods] }
+
+  # 4 Aufwand für Material, Handelswaren, Dienstleistungen und Energie
+  - { number: "4000", name: Materialaufwand Produktion, type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4200", name: Handelswarenaufwand, type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4400", name: Aufwand für bezogene Dienstleistungen, type: expense, line: materialaufwand }
+  - { number: "4500", name: Energieaufwand zur Leistungserstellung, type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4900", name: Aufwandminderungen, type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4070", name: Frachten und Zölle (Einkauf), type: expense, line: materialaufwand, profiles: [goods] }
+
+  # 5 Personalaufwand
+  - { number: "5000", name: Lohnaufwand, type: expense, line: personalaufwand }
+  - { number: "5700", name: Sozialversicherungsaufwand AHV, IV, EO, ALV, type: expense, line: personalaufwand }
+  - { number: "5710", name: Familienausgleichskasse, type: expense, line: personalaufwand }
+  - { number: "5720", name: Vorsorgeeinrichtungen (BVG), type: expense, line: personalaufwand }
+  - { number: "5730", name: Unfallversicherung (UVG), type: expense, line: personalaufwand }
+  - { number: "5740", name: Krankentaggeldversicherung, type: expense, line: personalaufwand }
+  - { number: "5800", name: Übriger Personalaufwand, type: expense, line: personalaufwand }
+  - { number: "5810", name: Aus- und Weiterbildung, type: expense, line: personalaufwand }
+  - { number: "5820", name: Spesenentschädigung effektiv, type: expense, line: personalaufwand }
+  - { number: "5830", name: Spesenentschädigung pauschal, type: expense, line: personalaufwand }
+  - { number: "5900", name: Leistungen Dritter (Temporärpersonal), type: expense, line: personalaufwand }
+
+  # 6 Übriger betrieblicher Aufwand, Abschreibungen, Finanzerfolg
+  - { number: "6000", name: Mietaufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6040", name: Reinigung, type: expense, line: uebriger-aufwand }
+  - { number: "6100", name: Unterhalt, Reparaturen, Ersatz, type: expense, line: uebriger-aufwand }
+  - { number: "6105", name: Leasingaufwand mobile Sachanlagen, type: expense, line: uebriger-aufwand }
+  - { number: "6200", name: Fahrzeugaufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6260", name: Fahrzeugleasing und -mieten, type: expense, line: uebriger-aufwand }
+  - { number: "6280", name: Transportaufwand, type: expense, line: uebriger-aufwand, profiles: [goods] }
+  - { number: "6300", name: Sachversicherungen, type: expense, line: uebriger-aufwand }
+  - { number: "6360", name: Abgaben, Gebühren, Bewilligungen, type: expense, line: uebriger-aufwand }
+  - { number: "6400", name: Energie- und Entsorgungsaufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6500", name: Verwaltungsaufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6503", name: Büromaterial, type: expense, line: uebriger-aufwand }
+  - { number: "6510", name: Telefon, Internet, type: expense, line: uebriger-aufwand }
+  - { number: "6513", name: Porti, type: expense, line: uebriger-aufwand }
+  - { number: "6520", name: Beiträge, Spenden, type: expense, line: uebriger-aufwand }
+  - { number: "6530", name: Buchführungs- und Beratungsaufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6540", name: Verwaltungsrat, Generalversammlung, Revisionsstelle, type: expense, line: uebriger-aufwand, legalForms: [GmbH, AG] }
+  - { number: "6570", name: Informatikaufwand inkl. Software und Hosting, type: expense, line: uebriger-aufwand }
+  - { number: "6580", name: Webshop- und Zahlungsanbietergebühren, type: expense, line: uebriger-aufwand, profiles: [goods] }
+  - { number: "6600", name: Werbeaufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6640", name: Reisespesen, type: expense, line: uebriger-aufwand }
+  - { number: "6641", name: Kundenbetreuung und Repräsentation, type: expense, line: uebriger-aufwand }
+  - { number: "6700", name: Übriger betrieblicher Aufwand, type: expense, line: uebriger-aufwand }
+  - { number: "6800", name: Abschreibungen auf Sachanlagen, type: expense, line: abschreibungen }
+  - { number: "6840", name: Zahlungsverkehrsgebühren, type: expense, line: finanzerfolg }
+  - { number: "6900", name: Finanzaufwand, type: expense, line: finanzerfolg }
+  - { number: "6940", name: Bankspesen, type: expense, line: finanzerfolg }
+  - { number: "6950", name: Finanzertrag, type: revenue, line: finanzerfolg }
+  - { number: "6960", name: Kursdifferenzen, type: expense, line: finanzerfolg }
+
+  # 8 Betriebsfremder, ausserordentlicher Erfolg, direkte Steuern
+  - { number: "8000", name: Betriebsfremder Aufwand, type: expense, line: betriebsfremd }
+  - { number: "8100", name: Betriebsfremder Ertrag, type: revenue, line: betriebsfremd }
+  - { number: "8500", name: Ausserordentlicher, einmaliger oder periodenfremder Aufwand, type: expense, line: ausserordentlich }
+  - { number: "8510", name: Ausserordentlicher, einmaliger oder periodenfremder Ertrag, type: revenue, line: ausserordentlich }
+  - { number: "8900", name: Direkte Steuern, type: expense, line: direkte-steuern, legalForms: [GmbH, AG] }
+
+  # 9 Abschluss
+  - { number: "9000", name: Erfolgsrechnung, type: closing, line: abschluss }
+  - { number: "9100", name: Eröffnungsbilanz, type: closing, line: abschluss }
+  - { number: "9101", name: Schlussbilanz, type: closing, line: abschluss }
+  - { number: "9200", name: Gewinn oder Verlust, type: closing, line: abschluss }
