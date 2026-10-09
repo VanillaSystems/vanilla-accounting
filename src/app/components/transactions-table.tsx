@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import type { Index, Receipt } from '../../../src/types/index.js';
-import { cn, formatDate, formatAmount, periodMatchesDate, buildTxUrl } from '../lib/utils.js';
+import { cn, formatDate, formatAmount } from '../lib/utils.js';
+import { txHref } from '../lib/location.js';
+import { inPeriod, type Period } from '../../accounting/periods.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
 
@@ -24,7 +26,7 @@ interface TransactionsTableProps {
   index: Index;
   search: string;
   filter: 'all' | 'linked' | 'unlinked';
-  period: string;
+  period: Period;
   onSelectReceipt: (r: Receipt) => void;
   selectedTxRef: string | null;
   onSelectTx: (ref: string) => void;
@@ -98,7 +100,7 @@ export function TransactionsTable({
       const isLinked = receiptIds.length > 0;
       if (filter === 'linked' && !isLinked) return false;
       if (filter === 'unlinked' && (isLinked || tx.type === 'wise-fee' || tx.noReceiptNeeded)) return false;
-      if (!periodMatchesDate(period, tx.date)) return false;
+      if (!inPeriod(period, tx.date)) return false;
       if (q) {
         const hay = `${tx.ref} ${tx.description} ${tx.bank} ${tx.currency}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -170,7 +172,7 @@ export function TransactionsTable({
                 <td className="px-3 py-2 font-mono text-xs text-foreground">
                   <span className="flex items-center gap-1 min-w-0">
                     <span className="truncate">{tx.ref}</span>
-                    <OpenInTabLink href={buildTxUrl(tx.ref)} size="xs" />
+                    <OpenInTabLink href={txHref(tx.ref)} size="xs" />
                   </span>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>

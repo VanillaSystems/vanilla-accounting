@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Calendar, Lock } from 'lucide-react';
+import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Lock } from 'lucide-react';
 import type { Receipt } from '../../src/types/index.js';
 import { useIndex } from './hooks/use-index.js';
 import { useApiStatus } from './hooks/use-api-status.js';
@@ -18,6 +18,7 @@ import { VatReportTab } from './components/vat-report-tab.js';
 import { AccountLedgerTab } from './components/account-ledger-tab.js';
 import { BankReconciliationTab } from './components/bank-reconciliation-tab.js';
 import { SplitPane } from './components/split-pane.js';
+import { PeriodPicker } from './components/period-picker.js';
 import { AssignPanel } from './components/assign-panel.js';
 import { ManualBatchModal } from './components/manual-batch-modal.js';
 import { TransactionDetail } from './components/transaction-detail.js';
@@ -43,7 +44,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [selectedTxRef, setSelectedTxRef] = useState<string | null>(null);
   const { tab, setTab, period, setPeriod, filterMode, setFilterMode, search, setSearch, initialSelection } =
-    useUrlState({ loading, receiptId: selectedReceipt?.id ?? null, txRef: selectedTxRef });
+    useUrlState({ loading, language, receiptId: selectedReceipt?.id ?? null, txRef: selectedTxRef });
   const [assignOpen, setAssignOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,21 +154,15 @@ export default function App({ language, onLanguage }: { language: string; onLang
     }
   }, [loading, index]);
 
-  // Compute available period options from transactions
+  // The quarters and years the picker lists: those with transactions, newest first.
   const periodOptions = useMemo(() => {
     const years = new Set<string>();
     const quarters = new Set<string>();
     for (const tx of index.transactions) {
-      const year = tx.date.slice(0, 4);
-      years.add(year);
-      quarters.add(`${year}-Q${Math.ceil(parseInt(tx.date.slice(5, 7)) / 3)}`);
+      years.add(tx.date.slice(0, 4));
+      quarters.add(`${tx.date.slice(0, 4)}-Q${Math.ceil(parseInt(tx.date.slice(5, 7)) / 3)}`);
     }
-    const opts: string[] = ['all'];
-    for (const year of [...years].sort()) {
-      opts.push(year);
-      opts.push(...[...quarters].filter((q) => q.startsWith(year)).sort());
-    }
-    return opts;
+    return { years: [...years].sort().reverse(), quarters: [...quarters].sort().reverse() };
   }, [index.transactions]);
 
   const linkedCount = new Set(index.mappings.map((m) => m.receiptId)).size;
@@ -199,17 +194,14 @@ export default function App({ language, onLanguage }: { language: string; onLang
           <span>{t('app.receiptCount', { n: index.receipts.length })}</span>
           <span>{t('app.transactionCount', { n: index.transactions.length })}</span>
           <span className="text-amber-600">{t('app.unlinkedCount', { n: unlinkedCount })}</span>
-          <div className="flex items-center gap-1.5 ml-2" title={t('app.periodPicker')}>
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="border border-border rounded px-2 py-1 text-xs text-foreground bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {periodOptions.map((opt) => (
-                <option key={opt} value={opt}>{opt === 'all' ? t('app.allPeriods') : opt.replace('-Q', ' Q')}</option>
-              ))}
-            </select>
+          <div className="ml-2">
+            <PeriodPicker
+              period={period}
+              onChange={setPeriod}
+              quarters={periodOptions.quarters}
+              years={periodOptions.years}
+              closedThrough={index.config?.closedThrough}
+            />
           </div>
           {apiOnline && !snapshot && <span className="text-green-600">● {t('app.apiOnline')}</span>}
           <div className="flex items-center rounded-md border border-border overflow-hidden" role="group" aria-label={t('app.language')}>
@@ -644,7 +636,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
             value="vat-report"
             className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
           >
-            <VatReportTab index={index} period={period} />
+            <VatReportTab index={index} period={period} onPeriod={setPeriod} />
           </Tabs.Content>
 
           {/* Kontoauszug tab */}
@@ -660,7 +652,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
             value="bank-reconciliation"
             className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
           >
-            <BankReconciliationTab index={index} />
+            <BankReconciliationTab index={index} period={period} />
           </Tabs.Content>
         </Tabs.Root>
       )}

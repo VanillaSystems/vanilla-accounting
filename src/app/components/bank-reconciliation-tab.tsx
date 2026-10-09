@@ -5,9 +5,12 @@ import { cn, fmt } from '../lib/utils.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { monthLocale, t } from '../i18n/index.js';
 import { sources } from '../lib/api.js';
+import { inPeriod, type Period } from '../../accounting/periods.js';
 
 interface Props {
   index: Index;
+  /** Its month ends are the rows shown. */
+  period: Period;
 }
 
 function monthLabel(date: string): string {
@@ -15,9 +18,12 @@ function monthLabel(date: string): string {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(monthLocale(), { month: 'short', year: 'numeric' });
 }
 
-export function BankReconciliationTab({ index }: Props) {
+export function BankReconciliationTab({ index, period }: Props) {
   const bankAccounts = useWorkspace()?.bankAccounts;
-  const accounts = useMemo(() => reconcileMonthly(index, bankAccounts ?? []), [index, bankAccounts]);
+  const accounts = useMemo(() => reconcileMonthly(index, bankAccounts ?? []).map((a) => {
+    const rows = a.rows.filter((r) => inPeriod(period, r.date));
+    return { ...a, rows, allMatched: rows.every((r) => r.matched) };
+  }), [index, bankAccounts, period]);
 
   // Map statement PDF filenames to receipt ids so each bank figure links to its source.
   const receiptByFilename = useMemo(() => {

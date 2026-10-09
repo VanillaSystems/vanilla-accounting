@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { X, Plus, Wand2, Check, AlertTriangle, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import type { Index, Receipt, BankTransaction } from '../../../src/types/index.js';
-import { cn, buildTxUrl } from '../lib/utils.js';
+import { cn } from '../lib/utils.js';
+import { txHref } from '../lib/location.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { api, errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
@@ -155,7 +156,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   count={(receiptCountByRef.get(tx.ref) ?? 1) - 1}
                   title={t('assign.alsoLinkedTo', { n: (receiptCountByRef.get(tx.ref) ?? 1) - 1 })}
                 />
-                <OpenInTabLink href={buildTxUrl(tx.ref)} size="xs" />
+                <OpenInTabLink href={txHref(tx.ref)} size="xs" />
                 <button
                   onClick={() => handleRemove(tx.ref)}
                   disabled={busy === tx.ref}
@@ -238,7 +239,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   count={receiptCountByRef.get(tx.ref) ?? 0}
                   title={t('assign.alreadyLinked', { n: receiptCountByRef.get(tx.ref) ?? 0 })}
                 />
-                <OpenInTabLink href={buildTxUrl(tx.ref)} size="xs" />
+                <OpenInTabLink href={txHref(tx.ref)} size="xs" />
               </div>
             ))}
           </div>

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { X, Plus, Trash2, AlertTriangle, Check, MessageSquare, AlignLeft, ShieldCheck } from 'lucide-react';
 import type { Index, Receipt } from '../../../src/types/index.js';
-import { cn, formatDate, buildTxUrl, buildReceiptUrl } from '../lib/utils.js';
+import { cn, formatDate } from '../lib/utils.js';
+import { receiptHref, txHref } from '../lib/location.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
@@ -95,7 +96,7 @@ export function TransactionDetail({
       <div className="px-4 py-2.5 border-b border-border bg-muted flex items-center gap-3 flex-wrap">
         <span className="font-mono text-sm font-semibold text-foreground inline-flex items-center gap-1">
           {tx.ref}
-          <OpenInTabLink href={buildTxUrl(tx.ref)} size="xs" />
+          <OpenInTabLink href={txHref(tx.ref)} size="xs" />
         </span>
         <span className="text-xs text-muted-foreground">{formatDate(tx.date)}</span>
         {tx.source === 'manual'
@@ -319,7 +320,7 @@ export function TransactionDetail({
                   {isDuplicate && isDupApproved && (
                     <span title={t('receipts.duplicateApproved')}><Check className="h-3.5 w-3.5 shrink-0 text-green-500" /></span>
                   )}
-                  <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" />
+                  <OpenInTabLink href={receiptHref(r.id)} size="xs" />
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRemove(r.id); }}

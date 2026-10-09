@@ -1,26 +1,14 @@
 import { useMemo } from 'react';
 import type { Index } from '../../types/index.js';
 import { computeBalanceSheet } from '../../accounting/index.js';
+import { localToday, type Period } from '../../accounting/periods.js';
 import { getAccountMap } from '../lib/accounts.js';
-import { cn } from '../lib/utils.js';
+import { cn, formatDate } from '../lib/utils.js';
 import { accountingName, t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
-  period: string;
-}
-
-function parseAsOfDate(period: string): string {
-  if (period.includes('-Q')) {
-    const [year, q] = period.split('-Q');
-    const quarterEnd: Record<string, string> = { '1': '03-31', '2': '06-30', '3': '09-30', '4': '12-31' };
-    return `${year}-${quarterEnd[q] ?? '12-31'}`;
-  }
-  if (/^\d{4}$/.test(period)) {
-    return `${period}-12-31`;
-  }
-  // 'all' or anything else — use current year
-  return `${new Date().getFullYear()}-12-31`;
+  period: Period;
 }
 
 function fmt(n: number): string {
@@ -28,7 +16,7 @@ function fmt(n: number): string {
 }
 
 export function BalanceSheetTab({ index, period }: Props) {
-  const asOfDate = useMemo(() => parseAsOfDate(period), [period]);
+  const asOfDate = period.kind === 'all' ? localToday() : period.to;
 
   const year = asOfDate.slice(0, 4);
   const openingBalances = index.config?.openingBalances?.[year] ?? {};
@@ -80,6 +68,7 @@ export function BalanceSheetTab({ index, period }: Props) {
 
   return (
     <div className="flex flex-col flex-1 overflow-auto p-6">
+      <p className="text-sm text-muted-foreground mb-4" data-testid="balance-as-of">{t('balance.asOf', { date: formatDate(asOfDate) })}</p>
       <div className="grid grid-cols-2 gap-8 flex-1">
         {/* Assets */}
         <div>

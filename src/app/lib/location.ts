@@ -1,9 +1,10 @@
 import { STATIC_EXPORT } from './api.js';
+import { LOCALES, language } from '../i18n/index.js';
 
 /**
- * The view's path and query (/<period>/<tab>?q=…). With the API they are the URL's own path and
- * query. The static audit export keeps them after '#': a plain file server has no route for
- * /2026-Q3/vat-report, and the export must work under any base path.
+ * The view's path and query (/<lang>/<period>/<tab>?q=…). With the API they are the URL's own path
+ * and query. The static audit export keeps them after '#': a plain file server has no route for
+ * /de/2026-Q3/vat-report, and the export must work under any base path.
  */
 export function viewPath(): string {
   return STATIC_EXPORT ? hashPart().split('?')[0] || '/' : window.location.pathname;
@@ -15,8 +16,7 @@ export function viewParams(): URLSearchParams {
 
 /** Replaces the current history entry; no-op when nothing changed. */
 export function setView(path: string, params: URLSearchParams): void {
-  const qs = params.toString();
-  const view = qs ? `${path}?${qs}` : path;
+  const view = withQuery(path, params);
   if (STATIC_EXPORT) {
     if (hashPart() !== view) history.replaceState(null, '', `#${view}`);
   } else if (`${window.location.pathname}${window.location.search}` !== view) {
@@ -24,4 +24,37 @@ export function setView(path: string, params: URLSearchParams): void {
   }
 }
 
-const hashPart = () => window.location.hash.slice(1);
+/** The path's parts: the language when it names one, then the period and tab segments. */
+export function splitViewPath(path: string): { lang?: string; rest: string[] } {
+  const parts = path.split('/').filter(Boolean);
+  return LOCALES.some((l) => l.code === parts[0]) ? { lang: parts[0], rest: parts.slice(1) } : { rest: parts };
+}
+
+/** /<lang>/<period>/<tab>; the period 'all' is left out. */
+export function buildViewPath(lang: string, period: string, tab: string): string {
+  return period === 'all' ? `/${lang}/${tab}` : `/${lang}/${period}/${tab}`;
+}
+
+/** A link to another view in the current language, as an href that works in the export too. */
+export function viewHref(tab: string, params: Record<string, string>, period = 'all'): string {
+  const view = withQuery(buildViewPath(language(), period, tab), new URLSearchParams(params));
+  return STATIC_EXPORT ? `#${view}` : view;
+}
+
+/** A receipt's detail view, in the period 'all' so it is always visible. */
+export const receiptHref = (id: string) => viewHref('receipts', { receipt: id });
+
+/** A transaction's detail view, in the period 'all' so it is always visible. */
+export const txHref = (ref: string) => viewHref('transactions', { tx: ref });
+
+/** The language the URL named when the page loaded: it wins over a stored or configured one. */
+export const URL_LANGUAGE_AT_LOAD: string | undefined = splitViewPath(viewPath()).lang;
+
+function withQuery(path: string, params: URLSearchParams): string {
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+function hashPart(): string {
+  return window.location.hash.slice(1);
+}

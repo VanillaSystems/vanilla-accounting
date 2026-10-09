@@ -10,10 +10,13 @@ import { EntryDetail } from './vat-entry-table.js';
 import { cn, fmt } from '../lib/utils.js';
 import { api } from '../lib/api.js';
 import { accountingName, t } from '../i18n/index.js';
+import { derivePeriod, vatPeriodOf, type Period } from '../../accounting/periods.js';
+import { Lock } from 'lucide-react';
 
 interface Props {
   index: Index;
-  period: string;
+  period: Period;
+  onPeriod: (token: string) => void;
 }
 
 /** Ziffern the engine does not declare yet: the codes that would feed them, for the detail list. */
@@ -126,7 +129,52 @@ function useFiledReturn(quarter: QuarterKey | null): ReturnFigures | null {
   return filed.find((f) => f.period === quarter) ?? null;
 }
 
-export function VatReportTab({ index, period }: Props) {
+/**
+ * A VAT return exists only for an ESTV reporting period (quarter, half-year, year). Any other range
+ * gets a notice with the quarters it touches, never a "return" computed for arbitrary dates.
+ */
+export function VatReportTab({ index, period, onPeriod }: Props) {
+  const key = vatPeriodOf(period);
+  return key ? <VatReturn index={index} period={key} /> : <QuarterChoice index={index} period={period} onPeriod={onPeriod} />;
+}
+
+function QuarterChoice({ index, period, onPeriod }: Props) {
+  const closedThrough = index.config?.closedThrough;
+  const quarters = useMemo(() => {
+    const keys = new Set(index.transactions.map((tx) => `${tx.date.slice(0, 4)}-Q${Math.ceil(+tx.date.slice(5, 7) / 3)}`));
+    return [...keys].sort().filter((q) => {
+      const r = derivePeriod(q)!;
+      return r.from <= period.to && r.to >= period.from;
+    });
+  }, [index.transactions, period]);
+  return (
+    <div className="flex-1 flex items-start justify-center p-10" data-testid="vat-range-notice">
+      <div className="max-w-md rounded-lg border border-border bg-background p-5 space-y-3">
+        <p className="text-sm text-foreground">{t('vat.rangeNotice')}</p>
+        {quarters.length > 0 && (
+          <>
+            <p className="text-xs text-muted-foreground">{t('vat.rangeQuarters')}</p>
+            <div className="flex flex-wrap gap-2">
+              {quarters.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => onPeriod(q)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1 text-sm hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {!!closedThrough && derivePeriod(q)!.to <= closedThrough && <Lock className="h-3 w-3 text-muted-foreground" />}
+                  {t('period.quarter', { quarter: q.slice(-1), year: q.slice(0, 4) })}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VatReturn({ index, period }: { index: Index; period: string }) {
   const entries = index.journalEntries ?? [];
   const { from, to } = useMemo(() => reportRange(period), [period]);
   const adjustments = useMemo(() => index.config?.vatAdjustments ?? [], [index.config?.vatAdjustments]);

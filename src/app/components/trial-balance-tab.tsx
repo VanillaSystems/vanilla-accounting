@@ -1,44 +1,26 @@
 import { useState, useMemo } from 'react';
 import type { Index } from '../../types/index.js';
-import { computeTrialBalance, computeAccountLedger } from '../../accounting/index.js';
+import { computeTrialBalance, computeAccountLedger, openingBalancesAt } from '../../accounting/index.js';
+import type { Period } from '../../accounting/periods.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
 
-export function periodToRange(period: string): { from: string; to: string; year: string } {
-  if (period === 'all') {
-    return { from: '2000-01-01', to: '2099-12-31', year: '2026' };
-  }
-  if (period.includes('-Q')) {
-    const [year, q] = period.split('-Q');
-    const quarter = parseInt(q);
-    const startMonth = (quarter - 1) * 3 + 1;
-    const endMonth = quarter * 3;
-    const endDay = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][endMonth];
-    return {
-      from: `${year}-${String(startMonth).padStart(2, '0')}-01`,
-      to: `${year}-${String(endMonth).padStart(2, '0')}-${endDay}`,
-      year,
-    };
-  }
-  return { from: `${period}-01-01`, to: `${period}-12-31`, year: period };
-}
-
 interface Props {
   index: Index;
-  period: string;
+  period: Period;
 }
 
 export function TrialBalanceTab({ index, period }: Props) {
-  const { from, to, year } = useMemo(() => periodToRange(period), [period]);
+  const { from, to } = period;
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-
-  const openingBalances = useMemo(() => {
-    return index.config?.openingBalances?.[year] ?? {};
-  }, [index.config?.openingBalances, year]);
 
   const accountNames = useMemo(() => getAccountMap(), []);
   const entries = index.journalEntries ?? [];
+  const openingBalances = useMemo(
+    () => openingBalancesAt(entries, from, index.config?.openingBalances),
+    [entries, from, index.config?.openingBalances],
+  );
 
   const trialBalance = useMemo(() => {
     return computeTrialBalance(entries, from, to, openingBalances, accountNames);

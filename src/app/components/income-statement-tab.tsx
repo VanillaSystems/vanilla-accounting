@@ -5,27 +5,13 @@ import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
 import { accountingName, t } from '../i18n/index.js';
 import type { IncomeStatementSection } from '../../accounting/income-statement.js';
+import type { Period } from '../../accounting/periods.js';
 
 interface Props {
   index: Index;
-  period: string;
+  period: Period;
 }
 
-function parsePeriod(period: string): { from: string; to: string } {
-  if (period === 'all') return { from: '2000-01-01', to: '2099-12-31' };
-  const yearMatch = period.match(/^(\d{4})$/);
-  if (yearMatch) return { from: `${yearMatch[1]}-01-01`, to: `${yearMatch[1]}-12-31` };
-  const qMatch = period.match(/^(\d{4})-Q(\d)$/);
-  if (qMatch) {
-    const year = qMatch[1];
-    const q = parseInt(qMatch[2]);
-    const startMonth = String((q - 1) * 3 + 1).padStart(2, '0');
-    const endMonth = q * 3;
-    const lastDay = new Date(parseInt(year), endMonth, 0).getDate();
-    return { from: `${year}-${startMonth}-01`, to: `${year}-${String(endMonth).padStart(2, '0')}-${lastDay}` };
-  }
-  return { from: '2000-01-01', to: '2099-12-31' };
-}
 
 function fmt(n: number): string {
   return n.toFixed(2);
@@ -86,8 +72,7 @@ export function IncomeStatementTab({ index, period }: Props) {
   const accountNames = getAccountMap();
 
   const statement = useMemo(() => {
-    const { from, to } = parsePeriod(period);
-    return computeIncomeStatement(entries, from, to, accountNames);
+    return computeIncomeStatement(entries, period.from, period.to, accountNames);
   }, [entries, period, accountNames]);
 
   return (
