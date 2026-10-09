@@ -56,7 +56,7 @@ python3 -m http.server --directory ../audit-2026-10-09 8080
 Then open the address it prints. A link to a view ends in `#/<period>/<tab>`, for example
 `#/2026-Q3/vat-report`, so the link works whatever the folder's address is.
 
-The app loads its fonts from Google Fonts. Offline, it shows the browser's fonts instead.
+The fonts ship with the app (no request to Google or any other third party), so the export looks the same offline.
 
 ## Hand it over
 
