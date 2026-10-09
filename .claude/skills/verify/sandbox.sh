@@ -51,7 +51,7 @@ cmd_up() {
   # and Vite run the repo's working tree, and BELEGE_WORKSPACE points the API here.
   for f in belege.workspace.yaml books.json accounts.json; do cp -c "$WS_SRC/$f" "$SB/$f"; done
   for d in receipts bank-statements filings; do cp -cR "$WS_SRC/$d" "$SB/$d"; done
-  for d in history counterparties policy; do if [[ -d "$WS_SRC/$d" ]]; then cp -cR "$WS_SRC/$d" "$SB/$d"; fi; done
+  for d in history knowledge; do if [[ -d "$WS_SRC/$d" ]]; then cp -cR "$WS_SRC/$d" "$SB/$d"; fi; done
   if [[ -d "$WS_SRC/beleg-import" ]]; then cp -cR "$WS_SRC/beleg-import" "$SB/beleg-import"; else mkdir "$SB/beleg-import"; fi
   cp -c "$SB/books.json" "$SB/index.snapshot.json"
   # No model calls: src/llm/ask.ts spawns `claude`, and the API finds this refusing shim first.

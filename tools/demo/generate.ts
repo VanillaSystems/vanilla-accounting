@@ -3,7 +3,7 @@
  *
  * Writes every demo workspace in DEMOS (synthetic companies, see tools/demo/kit.ts), or only
  * --demo's: books.json, receipts/ as text PDFs, bank-statements/ as camt053 XML plus monthly
- * PDFs, the as-filed Q1 return under filings/, accounts.json, counterparties/ and the manifest.
+ * PDFs, the as-filed Q1 return under filings/, accounts.json, knowledge/ and the manifest.
  * Each lands in <app>/<demo.dir> unless --out names another directory (only with --demo).
  * The same seed always gives the same bytes; the output directory is replaced as a whole.
  *
@@ -319,7 +319,7 @@ function build(demo: Demo, seed: number): Tree {
   tree.set('books.json', json(books));
   tree.set('accounts.json', json(demo.accounts.map(([number, name]) => ({ number, name }))));
   tree.set('belege.workspace.yaml', manifest(demo));
-  for (const [file, yaml] of Object.entries(demo.counterparties)) tree.set(`counterparties/${file}`, yaml);
+  for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`knowledge/${file}`, yaml);
   tree.set('.gitignore', 'data/\n.env\nbeleg-import/\n');
   return tree;
 }

@@ -34,8 +34,8 @@ const sources: SecretSources = {
     bankStatements: [],
   },
   counterparties: [
-    compileCounterparty({ id: 'rahmenwerk', name: 'Rahmenwerk AG', match: { tx: ['rahmenwerk'], domain: ['rahmenwerk.ch'] } }, { binding: 'counterparties/rahmenwerk.yaml' }),
-    compileCounterparty({ id: 'fedex', name: 'FedEx', match: { tx: ['fedex'] } }, { vendor: 'processes/counterparties/fedex.yaml' }),
+    compileCounterparty({ id: 'rahmenwerk', name: 'Rahmenwerk AG', match: { tx: ['rahmenwerk'], domain: ['rahmenwerk.ch'] } }, { binding: 'knowledge/suppliers/rahmenwerk.yaml' }, 'supplier'),
+    compileCounterparty({ id: 'fedex', name: 'FedEx', match: { tx: ['fedex'] } }, { vendor: 'processes/suppliers/fedex.yaml' }, 'supplier'),
   ],
   bindings: [{ id: 'fedex', match: { tx: ['fedex kundennr 77881'] } }],
   statements: [{ name: `Kontoauszug 01.07.2026 - ${IBAN} - 2026-07-31.pdf`, text: null }, { name: 'statement_98765432_EUR_2026-07-01_2026-07-31.pdf', text: null }],
@@ -92,7 +92,7 @@ test('scan, structural half: allowlist, binaries, IBANs, UIDs, prose amounts and
   assert.deepEqual(run([{ path: 'src/a.ts', text: `${j('CH93', '00762011623852958')} is no IBAN, ${j('CH93 ', '0076 2011 6238 5295 7')} is` }]), ['src/a.ts iban-pattern']);
   assert.deepEqual(run([{ path: 'demo/m.yaml', text: `iban: ${IBAN}\nuid: CHE-123.456.789` },
     { path: 'src/a.ts', text: `demo ${IBAN} CHE-123.456.789, other ${j('CHE-', '111.222.333')}` }]), ['src/a.ts foreign-uid']);
-  assert.deepEqual(run([{ path: 'processes/counterparties/v.yaml', text: 'uid: [CHE-447.613.666]' },
+  assert.deepEqual(run([{ path: 'processes/suppliers/v.yaml', text: 'uid: [CHE-447.613.666]' },
     { path: 'docs/a.md', text: 'Alibaba (CHE-447.613.666) charged 8.1%' }]), []);
   assert.deepEqual(run([{ path: 'docs/a.md', text: 'fees 23.50, order 304-9462744, rate 0.91 at 31.12, ref WEUR000042' }]),
     ['docs/a.md amount-in-prose', 'docs/a.md long-number']);

@@ -94,7 +94,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string; type: string }[];
   assert.deepEqual(accounts.filter((a) => ['1020', '1021', '1022', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Bankguthaben USD', 'Kontokorrent Gesellschafter']);
   assert.deepEqual(JSON.parse(readFileSync(ws.paths.books, 'utf8')).config, {}, 'no closedThrough');
-  for (const d of [ws.paths.receipts, ws.paths.inbox, ws.paths.filings, join(ws.paths.statements, 'UBS'), join(ws.paths.statements, 'Wise'), join(dir, 'policy'), join(dir, 'counterparties')]) {
+  for (const d of [ws.paths.receipts, ws.paths.inbox, ws.paths.filings, join(ws.paths.statements, 'UBS'), join(ws.paths.statements, 'Wise'), ...['suppliers', 'customers', 'authorities', 'rules'].map((k) => join(dir, 'knowledge', k))]) {
     assert.ok(existsSync(d), d);
   }
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /AGENTS\.md \(golden rule 1/);

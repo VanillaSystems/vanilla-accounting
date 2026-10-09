@@ -85,8 +85,8 @@ export interface Demo {
   openingOther: Record<string, number>;
   accounts: ReadonlyArray<readonly [string, string]>;
   vendors: Record<string, Vendor>;
-  /** counterparties/<file>: the workspace's own bindings. */
-  counterparties: Record<string, string>;
+  /** knowledge/<role>/<file>: the workspace's own business files (bindings and private ones). */
+  knowledge: Record<string, string>;
   scenario(seed: number): Scenario;
 }
 

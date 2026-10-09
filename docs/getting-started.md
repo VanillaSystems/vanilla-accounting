@@ -96,7 +96,7 @@ The workspace gets:
 | `beleg-import/` | Where new receipts arrive |
 | `receipts/` | Receipts after they are read and matched |
 | `filings/` | Your VAT returns as filed |
-| `counterparties/`, `policy/` | What Belege learns about your suppliers and your decisions |
+| `knowledge/` | What the app learns about your suppliers (`suppliers/`), customers (`customers/`), authorities (`authorities/`) and your own rules (`rules/`); each folder starts with a commented `_example.yaml` |
 | `mail.yaml` | Mailboxes to collect receipts from (optional, commented template) |
 | `AGENTS.md` | Notes for Claude about your company |
 

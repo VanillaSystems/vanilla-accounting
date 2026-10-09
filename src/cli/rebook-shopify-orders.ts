@@ -19,7 +19,7 @@
  * The VAT code comes from the order page's own Taxes line, never from a country guess:
  * "MwSt 8.1%" (Swiss delivery) → V81; an EU VAT line or no tax line → V0 (EU VAT collected
  * by Shopify is not Swiss output tax; how to book it is an open question with the tax
- * advisor, processes/counterparties/shopify.yaml sv-eu-vat).
+ * advisor, processes/suppliers/shopify.yaml sv-eu-vat).
  *
  * What it replaces: EVERY journal entry on the quarter's Stripe payout transactions (open
  * period only), so no old aggregated revenue survives next to the per-order sales. Orders

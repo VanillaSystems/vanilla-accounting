@@ -18,7 +18,7 @@ $S up my-run            # run-id optional; default v<timestamp>
 
 `up` does the following, in about 2 s:
 
-- It clones (APFS copy-on-write) the workspace layout into `$TMPDIR/belege-verify/<run>/`, which then is a workspace of its own: `belege.workspace.yaml`, `books.json`, `accounts.json`, `receipts/`, `bank-statements/`, `beleg-import/`, `history/`, `counterparties/`, `policy/`, and `filings/` (the filed VAT returns the MWST tab's Korrekturabrechnung reads). The source is `$VERIFY_WORKSPACE`, default the repo root when it holds a `belege.workspace.yaml`, else `demo/` (set it to your workspace to verify against your own books).
+- It clones (APFS copy-on-write) the workspace layout into `$TMPDIR/belege-verify/<run>/`, which then is a workspace of its own: `belege.workspace.yaml`, `books.json`, `accounts.json`, `receipts/`, `bank-statements/`, `beleg-import/`, `history/`, `knowledge/`, and `filings/` (the filed VAT returns the MWST tab's Korrekturabrechnung reads). The source is `$VERIFY_WORKSPACE`, default the repo root when it holds a `belege.workspace.yaml`, else `demo/` (set it to your workspace to verify against your own books).
 - No code is copied or linked. The API runs the repo's working tree with `BELEGE_WORKSPACE` set to the sandbox (and `cwd` there, so no repo `.env` is loaded), so every read and write lands in the clone. Vite runs from the repo and proxies `/api`, `/scan`, `/books.json`, `/receipts/*` and `/bank-statements/*` to the sandbox API, so the UI loads the cloned books and PDFs.
 - It picks free ports starting at 3556 for the API and 5273 for the UI. It never uses 3456 or 5173, which belong to the user's `npm start`.
 

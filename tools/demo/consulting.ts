@@ -485,8 +485,8 @@ function scenario(seed: number): Scenario {
   };
 }
 
-const COUNTERPARTIES: Record<string, string> = {
-  'beispiel-treuhand.yaml': `# A private client: no public vendor file, so this binding is the whole counterparty.
+const KNOWLEDGE: Record<string, string> = {
+  'customers/beispiel-treuhand.yaml': `# A private client: no public file, so this one is the whole business.
 id: beispiel-treuhand
 name: Beispiel Treuhand AG
 match:
@@ -503,7 +503,7 @@ steps:
         source: correction 2026-Q1-treuhand-inland, decision 2026-04-14
     precedents: []
 `,
-  'sample-labs.yaml': `# A foreign software service without Swiss MWST.
+  'suppliers/sample-labs.yaml': `# A foreign software service without Swiss MWST.
 id: sample-labs
 name: Sample Labs Inc.
 match:
@@ -532,6 +532,6 @@ export const consulting: Demo = {
   openingOther: OPENING_OTHER,
   accounts: ACCOUNTS,
   vendors: VENDORS,
-  counterparties: COUNTERPARTIES,
+  knowledge: KNOWLEDGE,
   scenario,
 };

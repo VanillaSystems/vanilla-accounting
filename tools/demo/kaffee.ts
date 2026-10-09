@@ -315,9 +315,9 @@ function scenario(seed: number): Scenario {
   };
 }
 
-const COUNTERPARTIES: Record<string, string> = {
+const KNOWLEDGE: Record<string, string> = {
   // A binding of a public vendor: only what is true for this company.
-  'swiss-post.yaml': `# Binding of the public vendor processes/counterparties/swiss-post.yaml to Muster Kaffee's chart.
+  'suppliers/swiss-post.yaml': `# Binding of the public file processes/suppliers/swiss-post.yaml to Muster Kaffee's chart.
 id: swiss-post
 accounts: ["6513"]
 
@@ -330,8 +330,8 @@ steps:
         source: decision 2026-01-20
     precedents: []
 `,
-  // A private counterparty with no public twin carries its own name and match signals.
-  'gruenkaffee-muster.yaml': `# A private supplier: no public vendor file, so this binding is the whole counterparty.
+  // A private supplier with no public twin carries its own name and match signals.
+  'suppliers/gruenkaffee-muster.yaml': `# A private supplier: no public file, so this one is the whole business.
 id: gruenkaffee-muster
 name: Grünkaffee Muster AG
 match:
@@ -361,6 +361,6 @@ export const kaffee: Demo = {
   openingOther: OPENING_OTHER,
   accounts: ACCOUNTS,
   vendors: VENDORS,
-  counterparties: COUNTERPARTIES,
+  knowledge: KNOWLEDGE,
   scenario,
 };

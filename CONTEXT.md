@@ -35,3 +35,6 @@ The official Swiss foreign-exchange **sell** rate (Devisenkurs *Verkauf*) publis
 
 ## Exchange Difference (Kursdifferenz)
 The unrealized foreign-exchange gain or loss on a foreign-currency bank account, arising because its transactions are booked at varying daily rates while its native balance is fixed. Surfaced only at year-end by revaluing the account's CHF book value against the 31.12 rate; booked to a Kursgewinn/-verlust account. Independent of native-currency bank reconciliation, which compares balances in the account's own currency.
+
+## Counterparty (Lieferant, Kunde, Behörde)
+A business the company deals with that has particulars worth writing down: how to recognise its receipts and bank lines, its accounts, its rules per step. Its main role decides the folder of its one file: a **supplier** (Lieferant: vendors, Shopify, Stripe, banks, payment services), a **customer** (Kunde) or an **authority** (Behörde: ESTV, Ausgleichskasse, cantonal tax office, BAZG, BVG foundation, UVG insurer). `roles:` lists any further role. The app ships public files under `processes/<suppliers|customers|authorities>/`; a workspace adds its own under `knowledge/<same folder>/` (`src/knowledge/layers.ts`, processes/README.md).

@@ -1,4 +1,4 @@
-# Binding of the public vendor processes/counterparties/swiss-post.yaml to Muster Kaffee's chart.
+# Binding of the public file processes/suppliers/swiss-post.yaml to Muster Kaffee's chart.
 id: swiss-post
 accounts: ["6513"]
 

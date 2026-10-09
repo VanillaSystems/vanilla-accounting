@@ -311,7 +311,7 @@ Structurally the same split as a FedEx Zollrechnung, but with traps of its own. 
 input tax, M81/I81, exactly as with a Tax Invoice. Page 3, the hover popover with "VAT: … included",
 proves that Alibaba (CHE-447.613.666) charged the tax. MWSTG Art. 81 Abs. 3 says input tax may not
 depend on one specific kind of document. Private items are still not claimed. Record the decision
-as a rule in the workspace's `counterparties/aliexpress.yaml`.
+as a rule in the workspace's `knowledge/suppliers/aliexpress.yaml`.
 
 **Decision rule — per order:**
 1. Try to obtain the **Tax Invoice** PDF. Whatever you download, VERIFY it contains `Tax Invoice` + `CHE-447.613.666` + a tax amount before filing. If it says "Order Summary" / has no CHE number, it is the invalid artifact — discard it, do not file it.
@@ -589,7 +589,7 @@ All three Shopify document types can be fetched programmatically via the Shopify
   (golden rule 1). The chat PDF keeps the real date.
 - Booking: goods or samples to the material account (M0), equipment over ~CHF 150 to an asset
   account (I0), all credited to the owner's account; which accounts is the workspace's
-  counterparties/tutti.yaml. tutti is always paid by the owner first.
+  knowledge/suppliers/tutti.yaml. tutti is always paid by the owner first.
 - Pickup with no price talk = bought at the listing price. If the listing is gone, the price
   is nowhere, so ask the owner.
 

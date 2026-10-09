@@ -1,4 +1,4 @@
-# A private supplier: no public vendor file, so this binding is the whole counterparty.
+# A private supplier: no public file, so this one is the whole business.
 id: gruenkaffee-muster
 name: Grünkaffee Muster AG
 match:

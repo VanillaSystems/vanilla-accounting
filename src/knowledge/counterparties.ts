@@ -16,6 +16,10 @@ import type { BankTransaction, Receipt, ReceiptKind } from '../types/index.js';
 export const TIERS = ['uid', 'domain', 'tx', 'file'] as const;
 export type Tier = (typeof TIERS)[number];
 
+/** What a business is to the company. Its main role is the folder of its file; `roles:` lists the others. */
+export const ROLES = ['supplier', 'customer', 'authority'] as const;
+export type Role = (typeof ROLES)[number];
+
 export interface Matchers {
   /** Swiss UID. Only list one that this counterparty alone prints (the lint proves it on the index). */
   uid: string[];
@@ -39,6 +43,10 @@ export interface DocumentType {
 export interface Counterparty {
   id: string;
   name: string;
+  /** The main role, from the folder its file is in. */
+  role: Role;
+  /** Further roles, e.g. a supplier that is also a customer. */
+  roles: Role[];
   match: Matchers;
   /** Several receipts settle in one charge: match as a sum, split one entry per invoice. */
   grouped: boolean;
@@ -126,16 +134,21 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
 }
 
 export type RawCounterparty = {
-  id?: string; name?: string; grouped?: boolean; accounts?: string[];
+  id?: string; name?: string; grouped?: boolean; accounts?: string[]; roles?: string[];
   match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
   documents?: { id?: string; kind?: string; text?: string[] }[];
 };
 
 /** Validate one counterparty after its layers are merged. Throws naming the file and the fix. */
-export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['origin']): Counterparty {
+export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['origin'], role: Role): Counterparty {
   const stem = raw.id!;
   const fail = (msg: string) => { throw new Error(`${origin.binding ?? origin.vendor}: ${msg}`); };
   if (!raw.name) fail('needs a name');
+  const roles = raw.roles ?? [];
+  for (const r of roles) {
+    if (!(ROLES as readonly string[]).includes(r)) fail(`roles: "${r}" is not a role — use ${ROLES.join(', ')}`);
+    if (r === role) fail(`roles: "${r}" is already its main role (the folder) — delete it here`);
+  }
   const m = raw.match ?? {};
   for (const k of Object.keys(m)) if (!(TIERS as readonly string[]).includes(k)) fail(`match.${k} is not a signal — use ${TIERS.join(', ')}`);
   const match: Matchers = {
@@ -150,7 +163,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')) };
   });
   return {
-    id: stem, name: raw.name!, match, grouped: raw.grouped === true, documents,
+    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, documents,
     accounts: raw.accounts, steps: raw.steps ?? {}, origin,
   };
 }

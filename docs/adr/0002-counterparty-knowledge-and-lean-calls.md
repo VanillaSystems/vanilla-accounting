@@ -28,7 +28,9 @@ it requires an API key, so it is not used.
 
 ## Decision
 
-1. **One file per counterparty with particulars:** `processes/counterparties/<id>.yaml`.
+1. **One file per counterparty with particulars:** `processes/counterparties/<id>.yaml`
+   (since 2026-10-09 `processes/<suppliers|customers|authorities>/<id>.yaml`, and
+   the company's part in `knowledge/`; see processes/README.md).
    It holds `match` (signals), `grouped`, `accounts`, and rules per step under the
    step's exact `with.guide` address. Guides keep only rules that hold for any
    company. The placement test: *would it still be true for a company we have
