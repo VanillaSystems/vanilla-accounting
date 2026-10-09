@@ -2,17 +2,23 @@
  * npm run doctor: is everything in place to keep the books? Checks the tools (Node, pdftotext,
  * the claude CLI and its login, without a model call) and the workspace (manifest, books.json,
  * folders, chart, bank accounts, which bank account each statement lands on, the answers of
- * npm run init). Prints one line per check and the fix for each ✗; exit code 1 on any ✗.
+ * npm run init), the mailboxes of mail.yaml (their keys in the app's .env; `--mail` also logs in
+ * to each, nothing fetched) and how many open transactions route to no knowledge file. Prints one
+ * line per check and the fix for each ✗; exit code 1 on any ✗.
  * `--workspace <dir>` checks that folder instead of the one BELEGE_WORKSPACE names.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
-import { loadBooks } from '../books/store.js';
+import { config as loadEnv } from 'dotenv';
+import { loadBooks, periodLock } from '../books/store.js';
+import { loadMailConfig, loginOf, mailConfigured } from '../collect/mail-config.js';
+import { knowledgeGaps } from '../knowledge/gaps.js';
+import { loadKnowledge } from '../knowledge/layers.js';
 import { bankKind, parseIban } from '../workspace/banks.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
-import { openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
 
 type Result =
   | { status: 'ok'; label: string }
@@ -121,8 +127,58 @@ function workspaceChecks(ws: Workspace): Result[] {
   return results;
 }
 
-function main(): number {
-  const { values } = parseArgs({ options: { workspace: { type: 'string' } } });
+/** The open transactions no supplier, customer or authority file claims: booked by the generic rules alone. */
+function knowledgeCheck(ws: Workspace): Result[] {
+  if (!existsSync(ws.paths.books)) return [];
+  try {
+    const books = loadBooks(ws);
+    const lock = periodLock(books);
+    const open = books.transactions.filter((t) => !lock.isClosed(t.date));
+    const unrouted = knowledgeGaps(open, books, loadKnowledge(APP_ROOT, ws.paths.root).counterparties).reduce((n, g) => n + g.count, 0);
+    return [!open.length ? ok('Knowledge base: no open transactions yet')
+      : unrouted ? warn(`Knowledge base: ${unrouted} of ${open.length} open transactions route to no supplier, customer or authority file`, 'npm run gaps lists them by merchant, most frequent first')
+      : ok(`Knowledge base: every one of ${open.length} open transactions routes to a knowledge file`)];
+  } catch (e) {
+    return [fail(`Knowledge base does not load: ${(e as Error).message.split('\n')[0]}`, 'Fix the file the message names, then run npm run check-processes.')];
+  }
+}
+
+/** Each mailbox of mail.yaml: its keys in the app's .env, and with `login` a real IMAP login and logout. */
+async function mailChecks(ws: Workspace, login: boolean): Promise<Result[]> {
+  if (!mailConfigured(ws)) {
+    return [login ? fail('--mail: mail.yaml lists no mailboxes', 'Set up the mailboxes first: docs/mail-setup.md.') : ok('No mailboxes in mail.yaml: receipts are not collected from a mailbox (docs/mail-setup.md sets one up)')];
+  }
+  let mailboxes;
+  try { mailboxes = loadMailConfig(ws).mailboxes; } catch (e) {
+    return [fail((e as Error).message, 'Fix mail.yaml as docs/mail-setup.md shows.')];
+  }
+  // The collector reads the app's .env (dotenv, from the app folder); so does this check.
+  loadEnv({ path: join(APP_ROOT, '.env'), quiet: true });
+  const { checkLogin } = login ? await import('../collect/imap.js') : { checkLogin: undefined };
+  const results: Result[] = [];
+  for (const m of mailboxes) {
+    const label = `Mailbox ${m.label} (${m.address})`;
+    const creds = loginOf(m, process.env);
+    if (creds.status === 'missing') {
+      results.push(fail(`${label}: ${creds.keys.join(', ')} not set`, `Add to ${join(APP_ROOT, '.env')}: ${creds.keys.map((k) => `${k}=…`).join('  ')} (docs/mail-setup.md).`));
+      continue;
+    }
+    if (!checkLogin) { results.push(ok(`${label}: credentials in .env (npm run doctor -- --mail logs in)`)); continue; }
+    try {
+      await checkLogin({ label: m.label, ...creds });
+      results.push(ok(`${label}: logs in to ${creds.host}:${creds.port}`));
+    } catch (e) {
+      const err = e as Error & { authenticationFailed?: boolean; responseText?: string; code?: string };
+      results.push(err.authenticationFailed
+        ? fail(`${label}: ${creds.host} refused the login (${err.responseText ?? err.message})`, `Create a new app-specific password and put it in ${m.env}_IMAP_PASSWORD; check ${m.env}_IMAP_USER is the full address (docs/mail-setup.md).`)
+        : fail(`${label}: cannot reach ${creds.host}:${creds.port} (${err.code ?? err.message})`, `Check host in mail.yaml or ${m.env}_IMAP_HOST / ${m.env}_IMAP_PORT, and that IMAP is enabled for the mailbox (docs/mail-setup.md).`));
+    }
+  }
+  return results;
+}
+
+async function main(): Promise<number> {
+  const { values } = parseArgs({ options: { workspace: { type: 'string' }, mail: { type: 'boolean' } } });
   const results = toolChecks();
   let ws: Workspace | undefined;
   try {
@@ -130,7 +186,7 @@ function main(): number {
   } catch (e) {
     results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set BELEGE_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
   }
-  if (ws) results.push(...workspaceChecks(ws));
+  if (ws) results.push(...workspaceChecks(ws), ...knowledgeCheck(ws), ...await mailChecks(ws, values.mail === true));
 
   for (const r of results) {
     if (r.status === 'ok') console.log(`✓ ${r.label}`);
@@ -142,4 +198,4 @@ function main(): number {
   return failed ? 1 : 0;
 }
 
-process.exitCode = main();
+process.exitCode = await main();
