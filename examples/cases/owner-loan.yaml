@@ -17,7 +17,7 @@ lines:
   - { debit: "1020", credit: "2451", amount: 20000, description: "A. Beispiel, Einzahlung Kontokorrent" }
 ziffern: {}
 payable: 0
-rules: []
+rules: [cls-owner-account]
 law:
   - MWSTG Art. 18 Abs. 2 lit. e (contributions and loans to a business are no consideration)
 why: >

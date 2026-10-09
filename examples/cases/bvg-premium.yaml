@@ -23,7 +23,7 @@ lines:
   - { debit: "2270", credit: "1020", amount: 1050, description: "Vorsorgestiftung Beispiel, BVG Q3 2026 Anteil AN" }
 ziffern: {}
 payable: 0
-rules: [pv-otherwise]
+rules: [cls-social-insurance, pv-otherwise]
 law:
   - MWSTG Art. 21 Abs. 2 Ziff. 18 (insurance is exempt, so the invoice shows no MWST)
   - BVG Art. 66 Abs. 1 (the employer pays at least half)

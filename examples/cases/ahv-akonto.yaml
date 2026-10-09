@@ -24,7 +24,7 @@ lines:
   - { debit: "5700", credit: "1020", amount: 1370, description: "Ausgleichskasse Musterkanton, AHV Q3 2026 Anteil AG" }
 ziffern: {}
 payable: 0
-rules: []
+rules: [cls-social-insurance]
 law:
   - AHVG Art. 14 Abs. 1 and AHVV Art. 35 (advance contributions on the expected payroll)
   - MWSTG Art. 18 Abs. 2 (social contributions are no consideration for a supply)

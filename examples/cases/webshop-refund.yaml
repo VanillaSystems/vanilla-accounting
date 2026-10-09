@@ -21,7 +21,7 @@ lines:
   - { debit: "3200", credit: "1020", amount: 108.1, vatCode: -V81, description: "Webshop Rückerstattung #1203" }
 ziffern: { "200": -108.1, "299": -108.1, "303": -108.1, "399": -8.1 }
 payable: -8.1
-rules: []
+rules: [sid-sale-refund]
 law:
   - MWSTG Art. 41 Abs. 1 (a reduced consideration reduces the tax owed)
 why: >

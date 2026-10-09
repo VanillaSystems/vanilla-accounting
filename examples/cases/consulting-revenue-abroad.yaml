@@ -22,7 +22,7 @@ lines:
   - { debit: "1021", credit: "3400", amount: 8000, currency: EUR, rate: 0.94711, vatCode: V0-E, description: "Nordlicht Software, Architektur-Review Jul 2026" }
 ziffern: { "200": 7576.88, "221": 7576.88, "289": 7576.88 }
 payable: 0
-rules: [cls-fx]
+rules: [sv-service-abroad, cls-fx]
 law:
   - MWSTG Art. 8 Abs. 1 (a service is supplied where the recipient has its seat)
   - ESTV form 0550 Ziffer 221 (Leistungen im Ausland, declared in 200 and deducted again)
