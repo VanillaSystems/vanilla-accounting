@@ -1,0 +1,29 @@
+id: vorsteuer-recovered-filed-quarter
+rank: 17
+segment: services
+title: Input tax recovered for a filed quarter (single-leg -2 entry)
+applies: >
+  A receipt turns up after its quarter was filed; the expense was booked I0 for lack of it. The
+  tax is recovered with one row that carries only the VAT amount.
+receipt:
+  swissVat: true
+  text: |
+    Druckerei Beispiel AG, Rechnung März 2026
+    Visitenkarten und Briefpapier, Total CHF 324.30 inkl. MWST 8.1% 24.30
+transaction: none
+date: 2026-08-10
+lines:
+  - { debit: "", credit: "6500", amount: 24.3, vatCode: I81-2, corrects: 2026-Q1, description: "Korrektur zu <entry id>: Vorsteuer Beleg nachgereicht" }
+ziffern: { "405": 24.3, "479": 24.3 }
+payable: -24.3
+rules: [cor-vat, cor-shape, cor-korrekturabrechnung]
+law:
+  - MWSTG Art. 28 Abs. 1 lit. a and Art. 72 Abs. 1
+why: >
+  A -2 code says the amount IS the tax: the empty debit is the VAT account, the expense shrinks by
+  the tax, and Ziffer 405 of the corrected quarter grows by it.
+pitfalls:
+  - The tax only, not the gross amount. I81 on 324.30 would claim the receipt's tax a second time.
+signals:
+  kind: supplier-ch
+  keywords: [nachgereicht, korrektur, vorsteuer]

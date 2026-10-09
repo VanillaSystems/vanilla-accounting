@@ -1,0 +1,34 @@
+id: vat-payment
+rank: 19
+segment: services
+title: Paying the quarterly VAT to the ESTV
+applies: >
+  After filing a quarter, the company pays the tax the return shows. The payment settles the VAT
+  account; it is not an expense.
+receipt:
+  swissVat: false
+  text: |
+    Eidgenössische Steuerverwaltung ESTV, MWST-Abrechnung 2. Quartal 2026
+    Zu bezahlender Betrag 1250, zahlbar innert 60 Tagen
+transaction:
+  amount: 1250
+  currency: CHF
+  direction: DBIT
+  description: ESTV MWST Q2 2026
+  account: "1020"
+date: 2026-08-25
+lines:
+  - { debit: "2201", credit: "1020", amount: 1250, description: "ESTV, MWST Q2 2026" }
+ziffern: {}
+payable: 0
+rules: []
+law:
+  - MWSTG Art. 86 Abs. 1 (payment within 60 days after the period)
+why: >
+  The tax was already booked by the codes on each entry; the payment only clears the VAT
+  account. No code, no Ziffer.
+pitfalls:
+  - Not an expense (6xxx) and no I0. Either would book the tax as a cost.
+signals:
+  kind: tax-authority
+  keywords: [estv, mwst, mehrwertsteuer, steuerverwaltung]

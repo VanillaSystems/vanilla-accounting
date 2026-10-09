@@ -44,7 +44,8 @@
     "test:freeze": "BELEGE_WORKSPACE=demo tsx tests/support/freeze-books.ts && BELEGE_WORKSPACE=demo-consulting tsx tests/support/freeze-books.ts",
     "test:books": "node --env-file-if-exists=.env --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
     "test:books:update": "UPDATE_GOLDEN=1 node --env-file-if-exists=.env --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
-    "test:books:freeze": "tsx --env-file-if-exists=.env tests/support/freeze-books.ts"
+    "test:books:freeze": "tsx --env-file-if-exists=.env tests/support/freeze-books.ts",
+    "mine-cases": "tsx tools/cases/mine.ts"
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.1.6",

@@ -259,13 +259,15 @@ export function scan(files: readonly PublicFile[], secrets: readonly Secret[], a
       for (const m of text.matchAll(IBAN)) if (isIban(m[0]) && !publicIbans.has(compact(m[0]))) hit('iban-pattern', m[0], m.index!);
       for (const m of text.matchAll(UID)) if (!publicUids.has(m[0].replace(/\D/g, ''))) hit('foreign-uid', m[0], m.index!);
       const prose = PROSE.test(f.path);
+      // The casebook's figures are invented like the demo's; a real amount of the books is still caught.
+      const synthetic = f.path.startsWith('examples/');
       // App code holds no figure of the books either (an example in a comment); tests and the demo
       // hold synthetic amounts that may equal a real one by chance, so only src/ is checked.
       if (prose || f.path.startsWith('src/')) {
         for (const m of text.matchAll(AMOUNT)) {
           const plain = m[0].replace(/['’]/g, '');
           if (amounts.has(plain)) hit('amount', m[0], m.index!);
-          else if (prose && Number(plain) >= 1 && !looksLikeDate(plain)) hit('amount-in-prose', m[0], m.index!);
+          else if (prose && !synthetic && Number(plain) >= 1 && !looksLikeDate(plain)) hit('amount-in-prose', m[0], m.index!);
         }
       }
       if (prose) for (const m of text.matchAll(LONG_NUMBER)) hit('long-number', m[0], m.index!);

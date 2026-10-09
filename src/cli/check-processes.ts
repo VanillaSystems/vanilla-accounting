@@ -22,6 +22,8 @@ import {
   type Knowledge, type KnowledgeFile, type Rule, type Section, type Guide,
 } from '../knowledge/layers.js';
 import { GATE_TESTS } from '../knowledge/gates.js';
+import { loadCaseChart, loadCases, validateCase } from '../knowledge/cases.js';
+import { loadFxResolver } from '../accounting/fx-rates.js';
 import { namesOf, mentionIn, counterpartiesNamedIn } from '../knowledge/mentions.js';
 import { APP_ROOT, identityIn, openWorkspace } from '../workspace/workspace.js';
 
@@ -353,6 +355,25 @@ for (const f of readdirSync(join(APP_ROOT, 'src'), { recursive: true, encoding: 
   if (hits.length) errors.push(`src/${f.split(sep).join('/')}: names the company (${hits.join(', ')}); read it from openWorkspace().company`);
 }
 
+// ─── Casebook (examples/cases/) ─────────────────────────────────────────────
+
+// A case is public, so it may only cite the app's own rules.
+const appRuleIds = new Set([...guides.values()]
+  .flatMap((g) => Object.values(g.steps ?? {}).flatMap((s) => [...(s.gates ?? []), ...(s.rules ?? [])].flatMap((r) => (r.id ? [r.id] : [])))));
+let caseCount = 0;
+try {
+  const cases = loadCases();
+  const chart = loadCaseChart();
+  const fx = loadFxResolver();
+  caseCount = cases.length;
+  for (const c of cases) errors.push(...validateCase(c, { chart, ruleIds: appRuleIds, fx }));
+  const ranks = cases.map((c) => c.rank);
+  const twice = ranks.find((r, i) => ranks.indexOf(r) !== i);
+  if (twice !== undefined) errors.push(`examples/cases: rank ${twice} is used twice — every case has its own place in the casebook`);
+} catch (e) {
+  errors.push((e as Error).message);
+}
+
 // ─── Report ─────────────────────────────────────────────────────────────────
 
 for (const w of warnings) console.log(`warn   ${w}`);
@@ -362,7 +383,7 @@ const allRules = [
   ...counterpartyFiles.flatMap((f) => Object.values(f.body.steps ?? {}).flatMap((s) => (s as Section).rules ?? [])),
 ];
 const unrouted = [...unknownMerchants.values()].reduce((a, b) => a + b, 0);
-console.log(`\n${errors.length} error(s), ${warnings.length} warning(s); ${counterparties.length} counterparties; ${allRules.filter((r) => r.status === 'open').length} open question(s), ${allRules.filter((r) => r.status === 'proposed').length} proposed rule(s) awaiting confirmation; ${unrouted} transactions route to no counterparty (generic rules)`);
+console.log(`\n${errors.length} error(s), ${warnings.length} warning(s); ${counterparties.length} counterparties; ${caseCount} casebook cases; ${allRules.filter((r) => r.status === 'open').length} open question(s), ${allRules.filter((r) => r.status === 'proposed').length} proposed rule(s) awaiting confirmation; ${unrouted} transactions route to no counterparty (generic rules)`);
 if (process.argv.includes('--unknown')) {
   console.log('\nMerchants no counterparty file claims, most frequent first:');
   for (const [m, n] of [...unknownMerchants].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log(`  ${String(n).padStart(4)}  ${m}`);

@@ -1,0 +1,27 @@
+id: correction-private-purchase
+rank: 16
+segment: services
+title: Correction of a filed quarter (Stornobuchung with corrects)
+applies: >
+  After a quarter was filed, an entry in it turns out wrong: a private purchase was booked as a
+  business expense with input tax. The filed quarter is never edited; a correction entry in the
+  open quarter reverses it.
+receipt: none
+transaction: none
+date: 2026-08-20
+lines:
+  - { debit: "2451", credit: "6570", amount: 216.2, vatCode: -I81, corrects: 2026-Q1, description: "Korrektur zu <entry id>: Kopfhörer privat" }
+ziffern: { "405": -16.2, "479": -16.2 }
+payable: 16.2
+rules: [cor-vat, cor-shape, cor-korrekturabrechnung]
+law:
+  - MWSTG Art. 72 Abs. 1 (errors in a filed return are corrected)
+  - MWSTG Art. 28 Abs. 1 (only business use gives input tax)
+why: >
+  The entry is dated in the open quarter for the books, and corrects: 2026-Q1 declares its VAT in
+  the Korrekturabrechnung (form 0535) of Q1, not in the open quarter's return.
+pitfalls:
+  - Never change or delete the filed entry. Name its id in the description so the trail is clear.
+signals:
+  kind: owner
+  keywords: [korrektur, storno, privat]

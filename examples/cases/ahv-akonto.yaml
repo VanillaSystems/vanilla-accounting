@@ -1,0 +1,40 @@
+id: ahv-akonto
+rank: 2
+segment: services
+title: AHV/IV/EO/ALV quarterly advance to the Ausgleichskasse
+applies: >
+  The Ausgleichskasse bills an advance (Akonto) on the year's estimated payroll every quarter. It
+  covers the employee's withheld share and the employer's own share, plus FAK and
+  administration costs.
+receipt:
+  swissVat: false
+  text: |
+    Ausgleichskasse Musterkanton, Akontorechnung 3. Quartal 2026
+    AHV/IV/EO 10.6%, ALV 2.2%, FAK, Verwaltungskosten
+    Total 2600, zahlbar bis 10.10.2026
+transaction:
+  amount: 2600
+  currency: CHF
+  direction: DBIT
+  description: Ausgleichskasse Musterkanton Akonto Q3 2026
+  account: "1020"
+date: 2026-09-28
+lines:
+  - { debit: "2270", credit: "1020", amount: 1230, description: "Ausgleichskasse Musterkanton, AHV Q3 2026 Anteil AN" }
+  - { debit: "5700", credit: "1020", amount: 1370, description: "Ausgleichskasse Musterkanton, AHV Q3 2026 Anteil AG" }
+ziffern: {}
+payable: 0
+rules: []
+law:
+  - AHVG Art. 14 Abs. 1 and AHVV Art. 35 (advance contributions on the expected payroll)
+  - MWSTG Art. 18 Abs. 2 (social contributions are no consideration for a supply)
+why: >
+  Social contributions are no supply, so no VAT code. The employee's share was already expensed
+  with the salary and sits on 2270; only the employer's share (with FAK and admin costs) is new
+  expense.
+pitfalls:
+  - Do not book the whole payment on 5700, the employee share would be expensed twice.
+  - The year-end statement of the Ausgleichskasse settles the difference to the real payroll; book it the same way.
+signals:
+  kind: social-insurance
+  keywords: [ausgleichskasse, ahv, akonto, sva, fak]

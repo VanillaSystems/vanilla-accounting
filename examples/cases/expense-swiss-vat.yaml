@@ -1,0 +1,36 @@
+id: expense-swiss-vat
+rank: 7
+segment: services
+title: Business expense with a receipt that shows 8.1% MWST
+applies: >
+  The company buys something for the business in Switzerland and keeps the receipt. The receipt
+  shows the seller's MWST number and 8.1% tax.
+receipt:
+  swissVat: true
+  text: |
+    Papeterie Seeblick, Büromaterial
+    Ordner, Papier, Druckerpatrone
+    Total CHF 108.10 inkl. MWST 8.1% 8.10, MWST-Nr. auf Beleg
+transaction:
+  amount: 108.1
+  currency: CHF
+  direction: DBIT
+  description: Papeterie Seeblick Kartenzahlung
+  account: "1020"
+date: 2026-08-05
+lines:
+  - { debit: "6500", credit: "1020", amount: 108.1, vatCode: I81, description: "Papeterie Seeblick, Büromaterial" }
+ziffern: { "405": 8.1, "479": 8.1 }
+payable: -8.1
+rules: [pv-charged, pv-prefix-from-account]
+law:
+  - MWSTG Art. 28 Abs. 1 lit. a (input tax on a business purchase)
+  - MWSTG Art. 26 Abs. 2 (what the receipt must show)
+why: >
+  The receipt shows Swiss MWST, so its tax is deductible: I81 on the gross amount puts the tax
+  into Ziffer 405. An operating expense takes an I code, goods for resale an M code.
+pitfalls:
+  - The receipt decides the code, not the vendor. A shop receipt without a MWST line is I0.
+signals:
+  kind: supplier-ch
+  keywords: [büromaterial, papeterie, quittung, kassenbon]

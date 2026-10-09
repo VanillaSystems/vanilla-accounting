@@ -1,0 +1,38 @@
+id: webshop-export
+rank: 27
+segment: goods
+title: Webshop order shipped abroad (export, Ziffer 220)
+applies: >
+  A webshop ships goods to a customer abroad and charges no Swiss MWST. Exported goods are
+  exempt, with the export proven by the shipping and customs documents.
+receipt:
+  swissVat: false
+  text: |
+    Webshop Bestellung #1202, K. Beispiel, München, Deutschland
+    Artikel total CHF 150.00, keine Schweizer MWST (Export)
+    Gebühren Zahlungsanbieter 5.00, Auszahlung 145.00
+transaction:
+  amount: 145
+  currency: CHF
+  direction: CRDT
+  description: Zahlungsanbieter Auszahlung
+  account: "1020"
+date: 2026-08-19
+lines:
+  - { debit: "1093", credit: "3200", amount: 150, vatCode: V0, description: "Webshop Bestellung #1202, K. Beispiel, Deutschland" }
+  - { debit: "6580", credit: "1093", amount: 5, vatCode: I0, description: "Webshop Gebühren #1202" }
+  - { debit: "1020", credit: "1093", amount: 145, description: "Zahlungsanbieter, Auszahlung #1202" }
+ziffern: { "200": 150, "220": 150, "289": 150 }
+payable: 0
+rules: [sv-order-tax]
+law:
+  - MWSTG Art. 23 Abs. 2 Ziff. 1 (export of goods is exempt)
+  - MWSTG Art. 23 Abs. 4 (proof by customs documents)
+why: >
+  V0 declares the sale in Ziffer 200 and deducts it as export in 220; the country goes in the
+  description as the reason.
+pitfalls:
+  - Keep the export proof (tracking, customs declaration); without it the ESTV taxes the sale at 8.1%.
+signals:
+  kind: platform
+  keywords: [bestellung, export, deutschland, ausland]

@@ -1,0 +1,34 @@
+id: owner-paid-expense
+rank: 9
+segment: services
+title: Expense the owner paid privately (Auslagen)
+applies: >
+  The owner pays a business expense with a private card or cash and hands in the receipt. The
+  company owes the owner the money, on the owner's current account.
+receipt:
+  swissVat: true
+  text: |
+    Bahn Ticket Zürich HB - Bern retour, 1. Klasse
+    Total CHF 129.70 inkl. MWST 8.1% 9.72
+transaction:
+  amount: 129.7
+  currency: CHF
+  direction: DBIT
+  description: Spesen A. Beispiel August 2026
+  account: "2451"
+date: 2026-08-12
+lines:
+  - { debit: "6640", credit: "2451", amount: 129.7, vatCode: I81, description: "Bahn, Kundentermin Bern" }
+ziffern: { "405": 9.72, "479": 9.72 }
+payable: -9.72
+rules: [pv-charged]
+law:
+  - MWSTG Art. 28 Abs. 1 (input tax on a business expense, whoever advanced the money)
+why: >
+  The expense is the company's, so its input tax is too: I81 on the receipt amount. The credit
+  goes to the owner's current account instead of the bank.
+pitfalls:
+  - Paying the owner back later is D 2451 / C bank with no code; claiming the VAT there again counts it twice.
+signals:
+  kind: owner
+  keywords: [spesen, auslagen, spesenabrechnung, rückerstattung inhaber]

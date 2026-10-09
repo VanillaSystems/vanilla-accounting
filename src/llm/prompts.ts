@@ -1,5 +1,6 @@
 import type { BankTransaction, VatRateGroup, ReceiptLine } from "../types/index.js";
 import { deriveHasSwissVat } from "../accounting/ziffern.js";
+import { formatCase, type BookingCase } from "../knowledge/cases.js";
 
 export interface MatchResult {
   suggestedFilename: string;
@@ -277,6 +278,7 @@ export interface ClassifyPromptContext {
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
   { companyName, chartOfAccounts, historicEntries, vatCodes }: ClassifyPromptContext,
+  cases: readonly BookingCase[] = [],
 ): string {
   const txSections = transactions.map(({ tx, receipts }, i) => {
     let receiptPart: string;
@@ -314,7 +316,11 @@ ${vatCodes}
 
 ## Historic Journal Entry Examples (prior year)
 ${historicEntries}
-
+${cases.length ? `
+## Casebook: invented examples of how similar cases are booked
+These are standard Swiss cases on KMU account numbers. Follow their pattern and VAT code, but use this company's own chart of accounts above. "bank" is the side you leave empty.
+${cases.map(formatCase).join('\n')}
+` : ''}
 ${CLASSIFY_INSTRUCTIONS}
 
 Return ONLY a valid JSON object keyed by transaction ref. Each value has an "entries" array.
