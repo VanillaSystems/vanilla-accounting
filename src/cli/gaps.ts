@@ -30,5 +30,5 @@ if (gaps.length) {
   console.log('\n count  merchant                                   example');
   for (const g of gaps) console.log(`${String(g.count).padStart(6)}  ${g.merchant.padEnd(40)}   ${g.example}`);
   console.log('\nThe frequent ones are worth a file: knowledge/suppliers/<id>.yaml (or customers/, authorities/)'
-    + ' with match.tx naming the merchant text. See docs/quarter-workflow.md#5-review-the-open-cases.');
+    + ' with match.tx naming the merchant text. See docs/quarter-workflow.md#6-review-the-open-cases.');
 }
