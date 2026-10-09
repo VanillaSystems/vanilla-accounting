@@ -47,7 +47,8 @@ test('openWorkspace: BELEGE_WORKSPACE first, else the nearest manifest above the
     + '.then((m) => console.log(m.openWorkspace().paths.root)).catch((e) => console.log(e.constructor.name))';
   const open = (cwd: string, env: Record<string, string> = {}) => {
     const { BELEGE_WORKSPACE: _, ...rest } = process.env;
-    return execFileSync(process.execPath, ['--import', import.meta.resolve('tsx'), '-e', script], { cwd, env: { ...rest, ...env }, encoding: 'utf8' }).trim();
+    // An empty BELEGE_WORKSPACE also skips the app's .env, so a developer's own .env can't leak in.
+    return execFileSync(process.execPath, ['--import', import.meta.resolve('tsx'), '-e', script], { cwd, env: { ...rest, BELEGE_WORKSPACE: '', ...env }, encoding: 'utf8' }).trim();
   };
   const root = realpathSync(ws.paths.root);
   assert.equal(open(nowhere, { BELEGE_WORKSPACE: ws.paths.root }), root);

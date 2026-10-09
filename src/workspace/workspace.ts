@@ -3,10 +3,11 @@
  * books, receipts, statements and filings, found by its belege.workspace.yaml. The app's own
  * files (processes/, reference/, src/server/scan.html) are found from APP_ROOT, never the cwd.
  */
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
+import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
 
 declare const brand: unique symbol;
@@ -91,7 +92,8 @@ export function workspaceAt(root: string): Workspace {
 
 /**
  * Resolution, first hit wins:
- *   1. BELEGE_WORKSPACE ("demo" means APP_ROOT/demo, a leading ~ is the home directory)
+ *   1. BELEGE_WORKSPACE ("demo" means APP_ROOT/demo, a leading ~ is the home directory), from
+ *      the environment or else from the app's own .env (an empty value skips both)
  *   2. walking up from the cwd to the first directory holding a belege.workspace.yaml
  * Memoized: every CLI and the API resolve it once per process.
  */
@@ -101,7 +103,7 @@ export function openWorkspace(): Workspace {
 let opened: Workspace | undefined;
 
 function locate(): string {
-  const env = process.env.BELEGE_WORKSPACE;
+  const env = process.env.BELEGE_WORKSPACE ?? workspaceFromAppEnv();
   if (env) {
     const root = env === 'demo' ? join(APP_ROOT, 'demo') : resolve(env.replace(/^~(?=$|\/)/, homedir()));
     if (!existsSync(join(root, MANIFEST_FILE))) {
@@ -116,6 +118,12 @@ function locate(): string {
   throw new WorkspaceError(
     `No workspace: set BELEGE_WORKSPACE to a directory holding ${MANIFEST_FILE}, or run from inside one.`,
   );
+}
+
+/** BELEGE_WORKSPACE as the app's .env sets it, so every npm script finds the books without exporting it. */
+function workspaceFromAppEnv(): string | undefined {
+  const file = join(APP_ROOT, '.env');
+  return existsSync(file) ? parseEnv(readFileSync(file, 'utf8')).BELEGE_WORKSPACE : undefined;
 }
 
 /**

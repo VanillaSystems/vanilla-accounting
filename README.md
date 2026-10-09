@@ -30,7 +30,7 @@ npm install
 BELEGE_WORKSPACE=demo npm start
 ```
 
-Open http://localhost:5173. To work on your own books, point `BELEGE_WORKSPACE` at a directory
+Open http://localhost:5173. To work on your own books, set `BELEGE_WORKSPACE` in `.env` (or the environment) to a directory
 that holds a `belege.workspace.yaml` (copy `demo/belege.workspace.yaml` and change it).
 
 ## Rules that never bend
