@@ -37,6 +37,8 @@ tools/hooks/**
 
 docs/getting-started.md
 docs/audit-export.md
+docs/accountant-corrections.md
+docs/accountant-review.md
 docs/releasing.md
 docs/mail-setup.md
 docs/quarter-workflow.md
