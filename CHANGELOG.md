@@ -16,6 +16,15 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
+  entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it
+  means, its rate, the Ziffern it feeds and when to use it. A click, or **Codes erklärt** in the
+  MWST tab, opens the list of all codes by family with a search, when to use each code and when
+  not, an example from the casebook, and the period's entries that use it. A code the app does
+  not declare in any Ziffer (VS, F, Z codes, V81-B) shows in amber. The Ziffern come from the
+  engine, so the explanation cannot drift from the return (tests/vat-codes.test.ts).
+  `docs/vat-codes.md` is the same catalogue as a document; `npm run vat-codes` regenerates it
+  and its data from `reference/MWST-codes.txt` and the casebook.
 - Exchange rates: every foreign amount (Buchungen, MWST Ziffer detail, Kontoauszug, the account
   panel, a transaction's entries) explains itself on hover as "EUR amount × rate = CHF amount ·
   ESTV Devisenkurs Verkauf <date>", and the Buchungen and transaction details spell it out.

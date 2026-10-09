@@ -11,9 +11,10 @@ import { cn, fmt } from '../lib/utils.js';
 import { api } from '../lib/api.js';
 import { accountingName, t } from '../i18n/index.js';
 import { derivePeriod, localToday, parsePeriod, vatPeriodOf, type Period } from '../../accounting/periods.js';
-import { Lock } from 'lucide-react';
+import { BookOpen, Lock } from 'lucide-react';
 import { useUrlParam } from '../hooks/use-url-state.js';
 import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
+import { VatCodesView } from './vat-codes-view.js';
 
 interface Props {
   index: Index;
@@ -140,11 +141,27 @@ function useFiledReturn(quarter: QuarterKey | null): ReturnFigures | null {
  * gets a notice with the quarters it touches, never a "return" computed for arbitrary dates.
  */
 export function VatReportTab({ index, period, onPeriod }: Props) {
+  const [view, setView] = useUrlParam('view');
+  const [code, setCode] = useUrlParam('code');
+  if (view === 'codes') {
+    return <VatCodesView index={index} period={period} code={code} onCode={setCode} onBack={() => { setView(null); setCode(null); }} />;
+  }
+  const openCodes = () => setView('codes');
   const key = vatPeriodOf(period);
-  return key ? <VatReturn index={index} period={key} /> : <QuarterChoice index={index} period={period} onPeriod={onPeriod} />;
+  return key ? <VatReturn index={index} period={key} onCodes={openCodes} /> : <QuarterChoice index={index} period={period} onPeriod={onPeriod} onCodes={openCodes} />;
 }
 
-function QuarterChoice({ index, period, onPeriod }: Props) {
+/** The way into the code list (VatCodesView) from the return. */
+function CodesButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} data-testid="vat-codes-open" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-border hover:bg-accent text-muted-foreground hover:text-foreground">
+      <BookOpen className="h-3.5 w-3.5" />
+      {t('vatCodes.open')}
+    </button>
+  );
+}
+
+function QuarterChoice({ index, period, onPeriod, onCodes }: Props & { onCodes: () => void }) {
   const closedThrough = index.config?.closedThrough;
   const quarters = useMemo(() => {
     const keys = new Set(index.transactions.map((tx) => `${tx.date.slice(0, 4)}-Q${Math.ceil(+tx.date.slice(5, 7) / 3)}`));
@@ -157,6 +174,7 @@ function QuarterChoice({ index, period, onPeriod }: Props) {
     <div className="flex-1 flex items-start justify-center p-10" data-testid="vat-range-notice">
       <div className="max-w-md rounded-lg border border-border bg-background p-5 space-y-3">
         <p className="text-sm text-foreground">{t('vat.rangeNotice')}</p>
+        <CodesButton onClick={onCodes} />
         {quarters.length > 0 && (
           <>
             <p className="text-xs text-muted-foreground">{t('vat.rangeQuarters')}</p>
@@ -180,7 +198,7 @@ function QuarterChoice({ index, period, onPeriod }: Props) {
   );
 }
 
-function VatReturn({ index, period }: { index: Index; period: string }) {
+function VatReturn({ index, period, onCodes }: { index: Index; period: string; onCodes: () => void }) {
   const entries = index.journalEntries ?? [];
   const { from, to } = useMemo(() => reportRange(period), [period]);
   const adjustments = useMemo(() => index.config?.vatAdjustments ?? [], [index.config?.vatAdjustments]);
@@ -271,7 +289,10 @@ function VatReturn({ index, period }: { index: Index; period: string }) {
           <div className={cn('max-w-3xl mx-auto', correcting && 'hidden')}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-foreground">{t('vat.title')}</h2>
-              <span className="text-xs text-muted-foreground">{t('common.dateRange', { from, to })}</span>
+              <div className="flex items-center gap-3">
+                <CodesButton onClick={onCodes} />
+                <span className="text-xs text-muted-foreground">{t('common.dateRange', { from, to })}</span>
+              </div>
             </div>
 
             <div className="text-xs text-muted-foreground mb-4">

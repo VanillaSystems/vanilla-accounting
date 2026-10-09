@@ -1,6 +1,6 @@
 import { STATIC_EXPORT } from './api.js';
 import { LOCALES, language } from '../i18n/index.js';
-import { periodContaining, type Period } from '../../accounting/periods.js';
+import { localToday, parsePeriod, periodContaining, type Period } from '../../accounting/periods.js';
 
 /**
  * The view's path and query (/<lang>/<period>/<tab>?q=…). With the API they are the URL's own path
@@ -57,6 +57,12 @@ export const entryHref = (id: string, date?: string, current?: Period) =>
 
 /** An account's Kontoauszug in the period `token` names. */
 export const accountHref = (account: string, token: string) => viewHref('account-ledger', { account }, token);
+
+/** A VAT code in the MWST tab's code list, in the period the page shows now (its entries are listed there). */
+export function vatCodeHref(code: string): string {
+  const first = splitViewPath(viewPath()).rest[0];
+  return viewHref('vat-report', { view: 'codes', code }, first && parsePeriod(first, localToday()) ? first : 'all');
+}
 
 /** The language the URL named when the page loaded: it wins over a stored or configured one. */
 export const URL_LANGUAGE_AT_LOAD: string | undefined = splitViewPath(viewPath()).lang;

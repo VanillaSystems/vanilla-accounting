@@ -37,6 +37,10 @@ the ESTV in 2026, and it prepares the year-end close, updated when the year turn
   `processes/suppliers/`, `processes/customers/` and `processes/authorities/` (ESTV,
   Ausgleichskasse, cantonal tax office, BAZG). A workspace adds its own in `knowledge/`.
   `processes/README.md` explains them.
+- **The VAT codes** (V81, I0, B81-1, -I81, …) on every journal entry are Banana's MWST codes.
+  [`docs/vat-codes.md`](docs/vat-codes.md) explains each one: what it means, which Ziffern of
+  the VAT return it feeds, and when to use it. In the app, hover or click any code, or open
+  **Codes erklärt** in the MWST tab.
 - **The demos** are complete workspaces of made-up companies, January to September 2026, with
   Q1 filed and corrected:
   - `demo/`: Muster Kaffee GmbH, a coffee roaster with a café and a webshop (reduced rates,

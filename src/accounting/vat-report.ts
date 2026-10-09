@@ -73,6 +73,9 @@ const CODES = new Map<string, Omit<VatCodeInfo, 'code' | 'isNegative' | 'amountI
   ]),
 ]);
 
+/** Every code the engine knows by name (src/accounting/vat-codes.ts explains each). K codes parse by pattern. */
+export const NAMED_VAT_CODES: readonly string[] = [...CODES.keys()];
+
 /** Corrections (K81-B = 8.1% into 415). The rate is encoded as rate×10, like I81/M81. */
 const CORRECTION_ZIFFER: Record<string, string> = { A: '410', B: '415', C: '420' };
 

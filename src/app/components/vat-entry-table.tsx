@@ -6,6 +6,7 @@ import { t } from '../i18n/index.js';
 import type { Period } from '../../accounting/periods.js';
 import { EntryLinks } from './open-in-tab-link.js';
 import { ForeignAmount } from './fx-amount.js';
+import { VatCode } from './vat-code.js';
 
 /** The journal entries behind a VAT figure, each with its CHF and tax signed as it counts. */
 export function EntryDetail({ entries, title, period }: { entries: JournalEntry[]; title: string; /** The period links keep when it holds an entry. */ period?: Period }) {
@@ -46,7 +47,7 @@ export function EntryDetail({ entries, title, period }: { entries: JournalEntry[
             <tr key={e.id} className="hover:bg-accent">
               <td className="px-3 py-1 tabular-nums text-muted-foreground">{e.date}</td>
               <td className="px-3 py-1 truncate print:whitespace-normal" title={e.description}>{e.description}</td>
-              <td className="px-3 py-1 font-mono text-xs">{e.vatCode}</td>
+              <td className="px-3 py-1 text-xs">{e.vatCode && <VatCode code={e.vatCode} />}</td>
               <td className="px-3 py-1 font-mono text-xs" title={accountTitle(e.accountDebit)}>{e.accountDebit}</td>
               <td className="px-3 py-1 font-mono text-xs" title={accountTitle(e.accountCredit)}>{e.accountCredit}</td>
               <td className="px-3 py-1 text-right font-mono tabular-nums text-muted-foreground truncate">

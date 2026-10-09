@@ -57,6 +57,27 @@ English still enters the figures on the German, French or Italian form.
 | Gebühr (Wise fee) | Frais | Commissione | Fee | |
 | MWST-Nr | No TVA | N. IVA | VAT no. | |
 
+## VAT codes explained (`vatCodes.*`)
+
+The code list (MWST tab, **Codes erklärt**) explains each kind of code in plain words and cites
+the law. The French and Italian name the law LTVA/LIVA and its articles "art. 8, al. 1" and
+"art. 8 cpv. 1". Check these terms first:
+
+| Key | fr | it | Unsure about |
+|---|---|---|---|
+| `vatCodes.kind.depositRelief.name` | Dégrèvement ultérieur de l’impôt préalable | Sgravio fiscale successivo | the ESTV's term for Einlageentsteuerung |
+| `vatCodes.kind.inputCorrection.name` | Correction de l’impôt préalable (part privée, prestation à soi-même) | Correzione dell’imposta precedente (quota privata, consumo proprio) | "consumo proprio" for Eigenverbrauch |
+| `vatCodes.kind.notification.name` | Transfert avec la procédure de déclaration | Trasferimento mediante procedura di notifica | |
+| `vatCodes.kind.flatRate.name`, `vatCodes.family.F` | Taux de la dette fiscale nette | Aliquota saldo | it may be "aliquote saldo" (plural, the method) |
+| `vatCodes.kind.taxCredit.name` | Imputation de l’impôt selon le formulaire 1050 ou 1055 | Computo dell’imposta secondo il modulo 1050 o 1055 | the forms' own titles |
+| `vatCodes.kind.nonConsideration.name`, `vatCodes.family.Z` | Non-contre-prestations | Non controprestazioni | the ESTV's wording for Nicht-Entgelte |
+| `vatCodes.kind.subsidies.when` | contributions aux services d’élimination ou des eaux | contributi per lo smaltimento o l’approvvigionamento idrico | Entsorgungs- und Wasserwerkbeiträge |
+| `vatCodes.kind.discount.name` | Diminution de la contre-prestation (escompte, rabais) | Diminuzione della controprestazione (sconto, ribasso) | |
+| `vatCodes.example` | recueil de cas | raccolta di casi | the casebook's name |
+
+The examples the list shows come from the casebook (`examples/cases/`), whose titles are English
+in every language.
+
 ## German texts that changed
 
 Moving the texts to `de.ts` changed a few German strings. Check that each still reads well.
