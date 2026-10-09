@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { derivePeriod } from '../accounting/periods.js';
+import { derivePeriod, vatQuarterOf as quarterOf } from '../accounting/periods.js';
 import type { Index, QuarterKey } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { canonical } from './canonical.js';
@@ -146,7 +146,7 @@ export function checkSeals(ws: Workspace, books: Records & Pick<Index, 'config'>
   return { checks, unsealed };
 }
 
-export const quarterOf = (date: string): QuarterKey => `${date.slice(0, 4)}-Q${Math.floor((+date.slice(5, 7) - 1) / 3) + 1}` as QuarterKey;
+export { quarterOf };
 
 export function nextQuarter(q: QuarterKey): QuarterKey {
   const [, year, n] = QUARTER.exec(q)!;

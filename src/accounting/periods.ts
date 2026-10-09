@@ -10,6 +10,7 @@
  *
  * Bookkeeping is by day: no hour presets. Weeks start on Monday (Swiss). "Last N days" ends today.
  */
+import type { QuarterKey } from '../types/index.js';
 
 /** A calendar day, YYYY-MM-DD. */
 export type IsoDate = string;
@@ -153,6 +154,9 @@ export function periodContaining(date: IsoDate | undefined, current?: Period): s
   if (current && inPeriod(current, date)) return current.token;
   return `${date.slice(0, 4)}-Q${quarterOf(Number(date.slice(5, 7)))}`;
 }
+
+/** The VAT quarter a date falls in, e.g. 2026-08-20 → 2026-Q3. */
+export const vatQuarterOf = (date: IsoDate): QuarterKey => `${date.slice(0, 4)}-Q${quarterOf(Number(date.slice(5, 7)))}` as QuarterKey;
 
 /** Today in the local time zone, YYYY-MM-DD. */
 export function localToday(now = new Date()): IsoDate {
