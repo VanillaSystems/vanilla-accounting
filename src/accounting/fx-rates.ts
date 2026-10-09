@@ -12,6 +12,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { REFERENCE_DIR } from '../workspace/workspace.js';
+import { estvRates, type EstvRateTable } from './fx-conversion.js';
 
 const DAILY_RATES_FILE = 'estv-daily-rates-2026.json';
 const FLAT_RATES_FILE = 'wechselkurse.txt'; // legacy per-currency fallback only
@@ -23,16 +24,17 @@ export interface FxResolver {
   flat(currency: string): number | undefined;
 }
 
+/** The ESTV daily sell rates in `dir` (the app's reference/), or an empty table before `npm run fetch-rates`. */
+export function readEstvRateTable(dir: string = REFERENCE_DIR): EstvRateTable {
+  const path = join(dir, DAILY_RATES_FILE);
+  if (!existsSync(path)) return { rates: {} };
+  const file = JSON.parse(readFileSync(path, 'utf8')) as Partial<EstvRateTable>;
+  return { fetchedAt: file.fetchedAt, rates: file.rates ?? {} };
+}
+
 /** `dir` holds the rate files: the app's reference/ unless a test points elsewhere. */
 export function loadFxResolver(dir: string = REFERENCE_DIR): FxResolver {
-
-  // Daily ESTV rates, keyed by the calendar date each rate is valid for.
-  let rates: Record<string, Record<string, number | string>> = {};
-  const dailyPath = join(dir, DAILY_RATES_FILE);
-  if (existsSync(dailyPath)) {
-    rates = JSON.parse(readFileSync(dailyPath, 'utf8')).rates ?? {};
-  }
-  const dates = Object.keys(rates).sort(); // ascending, for the fallback scan
+  const estv = estvRates(readEstvRateTable(dir));
 
   // Legacy flat rates (reference/wechselkurse.txt), only consulted when a daily rate is absent.
   const flatRates: Record<string, number> = { CHF: 1 };
@@ -46,17 +48,7 @@ export function loadFxResolver(dir: string = REFERENCE_DIR): FxResolver {
 
   return {
     daily(currency, date) {
-      if (currency === 'CHF') return 1;
-      const exact = rates[date]?.[currency];
-      if (typeof exact === 'number') return exact;
-      // ESTV fallback: most recently recorded rate on/before the payment date.
-      for (let i = dates.length - 1; i >= 0; i--) {
-        if (dates[i] <= date) {
-          const r = rates[dates[i]]?.[currency];
-          if (typeof r === 'number') return r;
-        }
-      }
-      return undefined;
+      return currency === 'CHF' ? 1 : estv.on(currency, date)?.rate;
     },
     flat(currency) {
       return flatRates[currency];

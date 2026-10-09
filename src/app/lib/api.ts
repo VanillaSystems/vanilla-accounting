@@ -1,5 +1,6 @@
 import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
+import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { ApiErrorBody, ApiStatus } from '../../types/api-error.js';
@@ -98,4 +99,5 @@ export const api = {
   accounts: () => request<Account[]>('GET', sources.accounts()),
   workspace: () => request<Pick<Workspace, 'company' | 'bankAccounts'>>('GET', sources.workspace()),
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
+  fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),
 };
