@@ -38,7 +38,7 @@ test('every read the UI makes is a file of the export, under any base path', asy
   const books = await json<Index>(EXPORT_SOURCES.books());
   const years = new Set(books.transactions.map((t) => t.date.slice(0, 4)));
   const urls = [
-    EXPORT_SOURCES.status(), EXPORT_SOURCES.accounts(), EXPORT_SOURCES.workspace(),
+    EXPORT_SOURCES.status(), EXPORT_SOURCES.accounts(), EXPORT_SOURCES.workspace(), EXPORT_SOURCES.fxRates(),
     ...[...years].map((y) => EXPORT_SOURCES.filedReturns(y)),
     ...books.receipts.map((r) => EXPORT_SOURCES.receipt(r.id)),
     ...books.bankStatements.map((s) => EXPORT_SOURCES.statement(s.bank, s.filename)),

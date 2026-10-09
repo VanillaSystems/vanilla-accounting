@@ -3,6 +3,7 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Lock, ClipboardCheck, MessageSquarePlus } from 'lucide-react';
 import type { Receipt } from '../../src/types/index.js';
 import { useIndex } from './hooks/use-index.js';
+import { FxProvider } from './hooks/use-fx.js';
 import { useApiStatus } from './hooks/use-api-status.js';
 import { useUrlState, type FilterMode } from './hooks/use-url-state.js';
 import { useTheme, useZoom, usePersistedFlag } from './hooks/use-display-prefs.js';
@@ -291,6 +292,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
       )}
 
       {!loading && !error && (
+        <FxProvider index={index}>
         <Tabs.Root
           value={tab}
           onValueChange={setTab}
@@ -701,6 +703,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
             </Tabs.Content>
           )}
         </Tabs.Root>
+        </FxProvider>
       )}
 
       <ReviewAsk />

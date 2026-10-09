@@ -9,6 +9,7 @@ import { accountHref } from '../lib/location.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { BookOpen } from 'lucide-react';
 import { inPeriod, type Period } from '../../accounting/periods.js';
+import { FxRatesSection } from './fx-rates-section.js';
 
 interface Props {
   index: Index;
@@ -46,6 +47,7 @@ export function BankReconciliationTab({ index, period }: Props) {
         <div className="p-6 text-sm text-muted-foreground">
           {t('recon.none', { command: 'npm run extract-balances' })}
         </div>
+        <div className="px-6 pb-6"><FxRatesSection index={index} period={period} /></div>
       </div>
     );
   }
@@ -174,6 +176,8 @@ export function BankReconciliationTab({ index, period }: Props) {
         <p className="text-xs text-muted-foreground">
           {t('recon.explanation')}
         </p>
+
+        <FxRatesSection index={index} period={period} />
       </div>
     </div>
   );

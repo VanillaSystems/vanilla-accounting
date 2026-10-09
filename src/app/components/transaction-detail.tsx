@@ -7,6 +7,7 @@ import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { accountTitle } from '../lib/accounts.js';
 import { errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
+import { ForeignAmount, FxLine } from './fx-amount.js';
 
 interface TransactionDetailProps {
   txRef: string;
@@ -273,13 +274,16 @@ export function TransactionDetail({
         {entries.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">{t('transactions.noEntries')}</p>
         ) : entries.map((e) => (
-          <div key={e.id} className="flex items-center gap-2 text-xs rounded px-2 py-1 bg-muted">
-            <span className="tabular-nums text-muted-foreground shrink-0">{formatDate(e.date)}</span>
-            <span className="flex-1 min-w-0 truncate text-foreground" title={e.description}>{e.description}</span>
-            <span className="font-mono shrink-0" title={`${accountTitle(e.accountDebit)} / ${accountTitle(e.accountCredit)}`}>{e.accountDebit}/{e.accountCredit}</span>
-            {e.vatCode && <span className="font-mono shrink-0 text-muted-foreground">{e.vatCode}</span>}
-            <span className="font-mono tabular-nums shrink-0">{e.exchangeCurrency ?? ''} {e.amount.toFixed(2)}</span>
-            <EntryLinks entry={{ id: e.id, date: e.date }} />
+          <div key={e.id} className="rounded px-2 py-1 bg-muted">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="tabular-nums text-muted-foreground shrink-0">{formatDate(e.date)}</span>
+              <span className="flex-1 min-w-0 truncate text-foreground" title={e.description}>{e.description}</span>
+              <span className="font-mono shrink-0" title={`${accountTitle(e.accountDebit)} / ${accountTitle(e.accountCredit)}`}>{e.accountDebit}/{e.accountCredit}</span>
+              {e.vatCode && <span className="font-mono shrink-0 text-muted-foreground">{e.vatCode}</span>}
+              <ForeignAmount entry={e} className="font-mono tabular-nums shrink-0" />
+              <EntryLinks entry={{ id: e.id, date: e.date }} />
+            </div>
+            <FxLine entry={e} />
           </div>
         ))}
       </div>

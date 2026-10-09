@@ -13,6 +13,7 @@ import { receiptHref, setView, txHref, viewParams, viewPath } from '../lib/locat
 import { t } from '../i18n/index.js';
 import { useReview } from '../lib/review.js';
 import { EntryForm } from './entry-form.js';
+import { ForeignAmount, FxLine } from './fx-amount.js';
 
 interface Props {
   index: Index;
@@ -440,7 +441,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit, canProces
                     <td className="px-3 py-2 font-mono truncate text-foreground">
                       <EditableCell entry={je} field="accountCredit" value={je.accountCredit} />
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-foreground tabular-nums">{je.amount.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-foreground tabular-nums"><ForeignAmount entry={je} currency={false} /></td>
                     <td className="px-3 py-2 text-center text-muted-foreground">{je.exchangeCurrency ?? 'CHF'}</td>
                     <td className="px-3 py-2 font-mono text-foreground">
                       <EditableCell entry={je} field="vatCode" value={je.vatCode ?? ''} />
@@ -538,25 +539,27 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit, canProces
                   {(() => {
                     const hasMixedDates = siblingEntries.some((je) => je.date && je.date !== selectedTx?.date);
                     return siblingEntries.map((je) => (
-                      <div
-                        key={je.id}
-                        onClick={() => setSelectedRowId(je.id)}
-                        className={cn(
-                          'flex items-center gap-1.5 text-sm rounded px-2 py-1.5 cursor-pointer font-mono',
-                          je.id === selectedRowId
-                            ? 'bg-blue-100 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-700'
-                            : 'bg-muted hover:bg-accent',
-                        )}
-                      >
-                        {hasMixedDates && <span className="text-muted-foreground shrink-0 text-xs">{je.date ?? selectedTx?.date}</span>}
-                        <span className="truncate text-foreground">{accountTitle(je.accountDebit)}</span>
-                        <ChevronRight className="h-3 w-3 text-dim shrink-0" />
-                        <span className="truncate text-foreground">{accountTitle(je.accountCredit)}</span>
-                        <span className="ml-auto tabular-nums font-bold text-foreground shrink-0">{je.amount.toFixed(2)}</span>
-                        {je.exchangeCurrency && je.exchangeCurrency !== 'CHF' && (
-                          <span className="text-muted-foreground text-xs shrink-0">{je.exchangeCurrency}</span>
-                        )}
-                        {je.vatCode && <span className="text-muted-foreground text-xs shrink-0">{je.vatCode}</span>}
+                      <div key={je.id}>
+                        <div
+                          onClick={() => setSelectedRowId(je.id)}
+                          className={cn(
+                            'flex items-center gap-1.5 text-sm rounded px-2 py-1.5 cursor-pointer font-mono',
+                            je.id === selectedRowId
+                              ? 'bg-blue-100 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-700'
+                              : 'bg-muted hover:bg-accent',
+                          )}
+                        >
+                          {hasMixedDates && <span className="text-muted-foreground shrink-0 text-xs">{je.date ?? selectedTx?.date}</span>}
+                          <span className="truncate text-foreground">{accountTitle(je.accountDebit)}</span>
+                          <ChevronRight className="h-3 w-3 text-dim shrink-0" />
+                          <span className="truncate text-foreground">{accountTitle(je.accountCredit)}</span>
+                          <span className="ml-auto tabular-nums font-bold text-foreground shrink-0">{je.amount.toFixed(2)}</span>
+                          {je.exchangeCurrency && je.exchangeCurrency !== 'CHF' && (
+                            <span className="text-muted-foreground text-xs shrink-0">{je.exchangeCurrency}</span>
+                          )}
+                          {je.vatCode && <span className="text-muted-foreground text-xs shrink-0">{je.vatCode}</span>}
+                        </div>
+                        <FxLine entry={je} className="px-2 pb-1" />
                       </div>
                     ));
                   })()}

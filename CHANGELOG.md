@@ -31,6 +31,14 @@ Two markers flag an entry you must read before you update:
   `git init` there and commit once to get the history. The new **Protokoll** tab, and
   `data/log.json` in an audit export, list the commits with the records before and after.
 
+- Exchange rates: every foreign amount (Buchungen, MWST Ziffer detail, Kontoauszug, the account
+  panel, a transaction's entries) explains itself on hover as "EUR amount × rate = CHF amount ·
+  ESTV Devisenkurs Verkauf <date>", and the Buchungen and transaction details spell it out.
+  An entry whose rate is not the ESTV sell rate of its payment date (a stale or flat rate) gets a
+  warning naming the right rate; `npm run restamp-fx` sets it. Kontenabgleich lists the rates the
+  period used per currency (validity date, rate, entries, ESTV publication), each opening its
+  entries, and the 31.12. rate for the Kursdifferenz once the ESTV has published it. The audit
+  export carries the rate table (`data/fx-rates.json`).
 - Periods: the header's period button opens a picker with presets (today, yesterday, last 7/30/90/365
   days, last week/month/quarter/12 months/year, week/month/quarter/year to date), the quarters and
   years of the books (filed ones with a lock), and a two-month calendar with typed start and end

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { accountsOf, filedReturnsOf, workspaceInfo } from '../../workspace/reads.js';
 import { WS, readBooks } from '../books.js';
+import { readEstvRateTable } from '../../accounting/fx-rates.js';
 
 export const router = Router();
 
@@ -17,6 +18,11 @@ router.get('/api/vat/filed', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+// The ESTV daily sell rates the books convert foreign amounts with (reference/, public data).
+router.get('/api/fx-rates', (_req, res) => {
+  res.json(readEstvRateTable());
 });
 
 router.get('/api/workspace', (_req, res) => {
