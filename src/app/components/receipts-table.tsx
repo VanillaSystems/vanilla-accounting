@@ -180,7 +180,7 @@ export function ReceiptsTable({
                         {t(`receipts.kind.${r.kind}`)}
                       </span>
                     )}
-                    <OpenInTabLink href={receiptHref(r.id)} size="xs" />
+                    <OpenInTabLink href={receiptHref(r.id, r.date, period)} size="xs" />
                   </span>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDate(date)}</td>

@@ -148,9 +148,9 @@ export const inPeriod = (p: Period, date: IsoDate | undefined): boolean => !date
  * The period a link to an item dated `date` opens in: the current one when it holds the date,
  * else the date's quarter. Undated items open in 'all'.
  */
-export function periodContaining(date: IsoDate | undefined, current: Period): string {
+export function periodContaining(date: IsoDate | undefined, current?: Period): string {
   if (!date) return 'all';
-  if (inPeriod(current, date)) return current.token;
+  if (current && inPeriod(current, date)) return current.token;
   return `${date.slice(0, 4)}-Q${quarterOf(Number(date.slice(5, 7)))}`;
 }
 

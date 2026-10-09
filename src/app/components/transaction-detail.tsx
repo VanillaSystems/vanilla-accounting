@@ -3,7 +3,8 @@ import { X, Plus, Trash2, AlertTriangle, Check, MessageSquare, AlignLeft, Shield
 import type { Index, Receipt } from '../../../src/types/index.js';
 import { cn, formatDate } from '../lib/utils.js';
 import { receiptHref, txHref } from '../lib/location.js';
-import { OpenInTabLink } from './open-in-tab-link.js';
+import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
+import { accountTitle } from '../lib/accounts.js';
 import { errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 
@@ -51,6 +52,7 @@ export function TransactionDetail({
   const tx = index.transactions.find((t) => t.ref === txRef);
   if (!tx) return null;
 
+  const entries = (index.journalEntries ?? []).filter((e) => e.transactionRef === txRef);
   const linkedReceiptIds = index.mappings
     .filter((m) => m.transactionRef === txRef)
     .map((m) => m.receiptId);
@@ -96,7 +98,7 @@ export function TransactionDetail({
       <div className="px-4 py-2.5 border-b border-border bg-muted flex items-center gap-3 flex-wrap">
         <span className="font-mono text-sm font-semibold text-foreground inline-flex items-center gap-1">
           {tx.ref}
-          <OpenInTabLink href={txHref(tx.ref)} size="xs" />
+          <OpenInTabLink href={txHref(tx.ref, tx.date)} size="xs" />
         </span>
         <span className="text-xs text-muted-foreground">{formatDate(tx.date)}</span>
         {tx.source === 'manual'
@@ -265,6 +267,23 @@ export function TransactionDetail({
         </div>
       )}
 
+      {/* Buchungen dieser Transaktion */}
+      <div className="px-4 pt-3 space-y-1" data-testid="tx-entries">
+        <p className="text-xs font-medium text-muted-foreground">{t('transactions.entries')}</p>
+        {entries.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">{t('transactions.noEntries')}</p>
+        ) : entries.map((e) => (
+          <div key={e.id} className="flex items-center gap-2 text-xs rounded px-2 py-1 bg-muted">
+            <span className="tabular-nums text-muted-foreground shrink-0">{formatDate(e.date)}</span>
+            <span className="flex-1 min-w-0 truncate text-foreground" title={e.description}>{e.description}</span>
+            <span className="font-mono shrink-0" title={`${accountTitle(e.accountDebit)} / ${accountTitle(e.accountCredit)}`}>{e.accountDebit}/{e.accountCredit}</span>
+            {e.vatCode && <span className="font-mono shrink-0 text-muted-foreground">{e.vatCode}</span>}
+            <span className="font-mono tabular-nums shrink-0">{e.exchangeCurrency ?? ''} {e.amount.toFixed(2)}</span>
+            <EntryLinks entry={{ id: e.id, date: e.date }} />
+          </div>
+        ))}
+      </div>
+
       {/* Zugeordnete Belege */}
       <div className="px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -320,7 +339,7 @@ export function TransactionDetail({
                   {isDuplicate && isDupApproved && (
                     <span title={t('receipts.duplicateApproved')}><Check className="h-3.5 w-3.5 shrink-0 text-green-500" /></span>
                   )}
-                  <OpenInTabLink href={receiptHref(r.id)} size="xs" />
+                  <OpenInTabLink href={receiptHref(r.id, r.date)} size="xs" />
                   {canEdit && (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRemove(r.id); }}

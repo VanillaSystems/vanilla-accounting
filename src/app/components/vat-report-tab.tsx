@@ -10,7 +10,7 @@ import { EntryDetail } from './vat-entry-table.js';
 import { cn, fmt } from '../lib/utils.js';
 import { api } from '../lib/api.js';
 import { accountingName, t } from '../i18n/index.js';
-import { derivePeriod, vatPeriodOf, type Period } from '../../accounting/periods.js';
+import { derivePeriod, localToday, parsePeriod, vatPeriodOf, type Period } from '../../accounting/periods.js';
 import { Lock } from 'lucide-react';
 
 interface Props {
@@ -345,7 +345,7 @@ function VatReturn({ index, period }: { index: Index; period: string }) {
                   <span className="block text-muted-foreground font-mono mt-0.5">{t('vat.adjustmentEntries', { ids: a.entryIds.join(', ') })}</span>
                 </div>
               ))}
-              <EntryDetail entries={selectedEntries} title={correcting ? t('vat.zifferCorrections', { ziffer: selectedZiffer }) : t('vat.ziffer', { ziffer: selectedZiffer })} />
+              <EntryDetail period={parsePeriod(period, localToday()) ?? undefined} entries={selectedEntries} title={correcting ? t('vat.zifferCorrections', { ziffer: selectedZiffer }) : t('vat.ziffer', { ziffer: selectedZiffer })} />
             </>
           ) : correcting ? null : (
             <div className="flex-1 flex items-center justify-center text-sm text-dim">

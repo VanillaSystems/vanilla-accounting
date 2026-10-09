@@ -5,6 +5,9 @@ import { cn, fmt } from '../lib/utils.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { monthLocale, t } from '../i18n/index.js';
 import { sources } from '../lib/api.js';
+import { accountHref } from '../lib/location.js';
+import { OpenInTabLink } from './open-in-tab-link.js';
+import { BookOpen } from 'lucide-react';
 import { inPeriod, type Period } from '../../accounting/periods.js';
 
 interface Props {
@@ -120,7 +123,12 @@ export function BankReconciliationTab({ index, period }: Props) {
                   const receiptId = receiptByFilename.get(r.sourceFile);
                   return (
                     <tr key={r.date} className="border-t border-border/50">
-                      <td className="px-4 py-1.5 text-foreground whitespace-nowrap">{monthLabel(r.date)}</td>
+                      <td className="px-4 py-1.5 text-foreground whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          {monthLabel(r.date)}
+                          <OpenInTabLink href={accountHref(acc.account, r.date.slice(0, 7))} size="xs" icon={BookOpen} title={t('links.openMonthLedger')} />
+                        </span>
+                      </td>
                       <td className="px-4 py-1.5 text-right font-mono tabular-nums whitespace-nowrap text-foreground">
                         {`${fmt(r.bankBalance)} ${acc.currency}`}
                       </td>

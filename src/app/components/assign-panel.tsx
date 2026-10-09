@@ -156,7 +156,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   count={(receiptCountByRef.get(tx.ref) ?? 1) - 1}
                   title={t('assign.alsoLinkedTo', { n: (receiptCountByRef.get(tx.ref) ?? 1) - 1 })}
                 />
-                <OpenInTabLink href={txHref(tx.ref)} size="xs" />
+                <OpenInTabLink href={txHref(tx.ref, tx.date)} size="xs" />
                 <button
                   onClick={() => handleRemove(tx.ref)}
                   disabled={busy === tx.ref}
@@ -239,7 +239,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   count={receiptCountByRef.get(tx.ref) ?? 0}
                   title={t('assign.alreadyLinked', { n: receiptCountByRef.get(tx.ref) ?? 0 })}
                 />
-                <OpenInTabLink href={txHref(tx.ref)} size="xs" />
+                <OpenInTabLink href={txHref(tx.ref, tx.date)} size="xs" />
               </div>
             ))}
           </div>

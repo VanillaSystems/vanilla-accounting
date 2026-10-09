@@ -498,7 +498,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
               )}
               <div className="text-xs font-mono text-muted-foreground mt-0.5 inline-flex items-center gap-1">
                 {selectedTx.ref}
-                <OpenInTabLink href={txHref(selectedTx.ref)} size="xs" />
+                <OpenInTabLink href={txHref(selectedTx.ref, selectedTx.date, period)} size="xs" />
               </div>
             </div>
 
@@ -585,7 +585,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                      <OpenInTabLink href={receiptHref(r.id)} size="xs" title={t('journal.openInReceipts')} />
+                      <OpenInTabLink href={receiptHref(r.id, r.date, period)} size="xs" title={t('journal.openInReceipts')} />
                     </div>
                   ))}
                 </div>

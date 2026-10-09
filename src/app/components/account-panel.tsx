@@ -4,10 +4,10 @@ import type { Index, Receipt } from '../../types/index.js';
 import { computeAccountLedger, openingBalancesAt } from '../../accounting/index.js';
 import type { Period } from '../../accounting/periods.js';
 import { getAccountMap } from '../lib/accounts.js';
-import { accountHref, entryHref } from '../lib/location.js';
+import { accountHref } from '../lib/location.js';
 import { cn, fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
-import { OpenInTabLink } from './open-in-tab-link.js';
+import { EntryLinks } from './open-in-tab-link.js';
 
 /** The receipts of each transaction ref: mappings link receipts to transactions, entries reach them through their ref. */
 export function useReceiptsByTxRef(index: Index): Map<string, Receipt[]> {
@@ -55,7 +55,7 @@ export function AccountPanel({ index, account, from, to, period, onClose, moveme
         <span className="text-sm text-foreground truncate">{name}</span>
         <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">{t('common.dateRange', { from: formatDate(from), to: formatDate(to) })}</span>
         <a
-          href={accountHref(account, period)}
+          href={accountHref(account, period.token)}
           className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline whitespace-nowrap"
           data-testid="open-ledger"
         >
@@ -76,7 +76,7 @@ export function AccountPanel({ index, account, from, to, period, onClose, moveme
               <th className="px-3 py-2 text-right font-semibold w-24">{t('col.debitChf')}</th>
               <th className="px-3 py-2 text-right font-semibold w-24">{t('col.creditChf')}</th>
               <th className="px-3 py-2 text-right font-semibold w-28">{t('col.balanceChf')}</th>
-              <th className="w-7" />
+              <th className="w-12" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -106,7 +106,7 @@ export function AccountPanel({ index, account, from, to, period, onClose, moveme
                   <td className="px-3 py-1.5 text-right font-mono tabular-nums">{row.credit != null ? fmt(row.credit) : ''}</td>
                   <td className="px-3 py-1.5 text-right font-mono tabular-nums">{fmt(row.balance)}</td>
                   <td className="pr-2">
-                    <OpenInTabLink href={entryHref(row.entryId, row.date, period)} size="xs" title={t('links.openEntry')} />
+                    <EntryLinks entry={{ id: row.entryId, date: row.date, transactionRef: refOf.get(row.entryId) }} period={period} />
                   </td>
                 </tr>
               );

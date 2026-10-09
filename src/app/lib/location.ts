@@ -43,20 +43,20 @@ export function viewHref(tab: string, params: Record<string, string>, period = '
 }
 
 /**
- * Links to one item's detail view. Given the item's date and the current period, the link keeps
- * the period when it holds the date, else opens the date's quarter; without them, 'all'.
+ * Links to one item's detail view. The link keeps the current period when it holds the item's
+ * date, else opens the date's quarter; an item without a date opens in 'all'.
  */
 export const receiptHref = (id: string, date?: string, current?: Period) =>
-  viewHref('receipts', { receipt: id }, current ? periodContaining(date, current) : 'all');
+  viewHref('receipts', { receipt: id }, periodContaining(date, current));
 
 export const txHref = (ref: string, date?: string, current?: Period) =>
-  viewHref('transactions', { tx: ref }, current ? periodContaining(date, current) : 'all');
+  viewHref('transactions', { tx: ref }, periodContaining(date, current));
 
-export const entryHref = (id: string, date: string | undefined, current: Period) =>
+export const entryHref = (id: string, date?: string, current?: Period) =>
   viewHref('journal-entries', { je: id }, periodContaining(date, current));
 
-/** An account's Kontoauszug for the period. */
-export const accountHref = (account: string, current: Period) => viewHref('account-ledger', { account }, current.token);
+/** An account's Kontoauszug in the period `token` names. */
+export const accountHref = (account: string, token: string) => viewHref('account-ledger', { account }, token);
 
 /** The language the URL named when the page loaded: it wins over a stored or configured one. */
 export const URL_LANGUAGE_AT_LOAD: string | undefined = splitViewPath(viewPath()).lang;

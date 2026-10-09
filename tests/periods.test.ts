@@ -146,4 +146,5 @@ test('periodContaining: a link keeps the current period when it holds the date, 
   assert.equal(periodContaining('2025-12-31', parsePeriod('2026', '2026-10-09')!), '2025-Q4');
   assert.equal(periodContaining('2026-01-01', parsePeriod('all', '2026-10-09')!), 'all');
   assert.equal(periodContaining(undefined, qtd), 'all');
+  assert.equal(periodContaining('2026-08-15'), '2026-Q3', 'without a current period: the quarter');
 });

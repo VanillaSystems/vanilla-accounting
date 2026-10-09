@@ -172,7 +172,7 @@ export function TransactionsTable({
                 <td className="px-3 py-2 font-mono text-xs text-foreground">
                   <span className="flex items-center gap-1 min-w-0">
                     <span className="truncate">{tx.ref}</span>
-                    <OpenInTabLink href={txHref(tx.ref)} size="xs" />
+                    <OpenInTabLink href={txHref(tx.ref, tx.date, period)} size="xs" />
                   </span>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>

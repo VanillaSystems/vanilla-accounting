@@ -7,7 +7,7 @@ import { cn } from '../lib/utils.js';
 import type { Period } from '../../accounting/periods.js';
 import { PdfFrame } from './pdf-frame.js';
 import { SplitPane } from './split-pane.js';
-import { OpenInTabLink } from './open-in-tab-link.js';
+import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
 import { sources } from '../lib/api.js';
 import { receiptHref, setView, viewParams, viewPath } from '../lib/location.js';
@@ -154,6 +154,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               <th className="px-3 py-2 text-right font-semibold w-28">{t('col.debitChf')}</th>
               <th className="px-3 py-2 text-right font-semibold w-28">{t('col.creditChf')}</th>
               <th className="px-3 py-2 text-right font-semibold w-32">{t('col.balanceChf')}</th>
+              <th className="w-12" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -167,6 +168,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground font-medium">
                 {fmt(ledger!.openingBalance)}
               </td>
+              <td />
             </tr>
 
             {/* Entry rows */}
@@ -204,6 +206,7 @@ export function AccountLedgerTab({ index, period }: Props) {
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
                   {fmt(row.balance)}
                 </td>
+                <td className="px-1"><EntryLinks entry={{ id: row.entryId, date: row.date, transactionRef: entryById.get(row.entryId)?.transactionRef }} period={period} /></td>
               </tr>
               );
             })}
@@ -218,6 +221,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground font-bold">
                 {fmt(closingBalance)}
               </td>
+              <td />
             </tr>
           </tfoot>
         </table>
@@ -264,7 +268,7 @@ export function AccountLedgerTab({ index, period }: Props) {
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                      <OpenInTabLink href={receiptHref(r.id)} size="xs" title={t('journal.openInReceipts')} />
+                      <OpenInTabLink href={receiptHref(r.id, r.date, period)} size="xs" title={t('journal.openInReceipts')} />
                     </div>
                   ))}
                 </div>

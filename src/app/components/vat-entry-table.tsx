@@ -3,9 +3,11 @@ import { vatLine, chfAmount } from '../../accounting/index.js';
 import { accountTitle } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
+import type { Period } from '../../accounting/periods.js';
+import { EntryLinks } from './open-in-tab-link.js';
 
 /** The journal entries behind a VAT figure, each with its CHF and tax signed as it counts. */
-export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title: string }) {
+export function EntryDetail({ entries, title, period }: { entries: JournalEntry[]; title: string; /** The period links keep when it holds an entry. */ period?: Period }) {
   if (entries.length === 0) return (
     <div className="p-4 text-sm text-muted-foreground">{t('vatEntries.none', { title })}</div>
   );
@@ -35,6 +37,7 @@ export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title
             <th className="px-3 py-1 text-right w-28">{t('col.amount')}</th>
             <th className="px-3 py-1 text-right w-24">CHF</th>
             <th className="px-3 py-1 text-right w-20">{t('vat.colTaxChf')}</th>
+            <th className="w-12 print:hidden" />
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
@@ -50,6 +53,7 @@ export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title
               </td>
               <td className={signed(chf)}>{chf.toFixed(2)}</td>
               <td className={signed(tax)}>{tax.toFixed(2)}</td>
+              <td className="px-1 print:hidden"><EntryLinks entry={e} period={period} /></td>
             </tr>
           ))}
         </tbody>
@@ -58,6 +62,7 @@ export function EntryDetail({ entries, title }: { entries: JournalEntry[]; title
             <td className="px-3 py-1" colSpan={6}>{t('common.total')}</td>
             <td className={signed(sum('chf'))}>{sum('chf').toFixed(2)}</td>
             <td className={signed(sum('tax'))}>{sum('tax').toFixed(2)}</td>
+            <td className="print:hidden" />
           </tr>
         </tfoot>
       </table>
