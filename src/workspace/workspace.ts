@@ -21,7 +21,6 @@ export const APP_ROOT: string = resolve(fileURLToPath(new URL('../..', import.me
 /** Public reference data shipped with the app: VAT codes, ESTV daily rates. */
 export const REFERENCE_DIR = join(APP_ROOT, 'reference');
 export const MANIFEST_FILE = 'belege.workspace.yaml';
-export const WORKSPACE_SCHEMA = 1;
 
 export interface Company {
   name: string;

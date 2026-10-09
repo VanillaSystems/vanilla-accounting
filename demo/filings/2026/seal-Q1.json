@@ -1,0 +1,12 @@
+{
+  "quarter": "2026-Q1",
+  "through": "2026-03-31",
+  "sha256": "4166b5be0ec3cd044e6255264f3ee80190e3a02fa3de9a10c98d1c432d6684b7",
+  "records": {
+    "entries": 34,
+    "transactions": 25,
+    "mappings": 20
+  },
+  "sealedAt": "2026-04-28",
+  "rule": "SHA-256 of the canonical JSON of the journal entries, bank transactions and their receipt mappings dated on or before `through` (src/books/seal.ts closedPart)"
+}

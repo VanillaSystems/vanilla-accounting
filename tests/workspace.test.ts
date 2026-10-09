@@ -30,7 +30,7 @@ test('a malformed manifest fails at open, naming the field', () => {
     writeFileSync(ws.paths.manifest, manifest.replace(from, to));
     assert.throws(() => workspaceAt(ws.paths.root), (e: Error) => e instanceof WorkspaceError && msg.test(e.message), msg.source);
   };
-  bad('schema: 1', 'schema: 2', /schema must be 1/);
+  bad('schema: 1', 'schema: 2', /has schema 2; this version of the app reads up to 1\. Update the app: npm run update/);
   bad(/uid: .*/.exec(manifest)![0], 'uid: "123456789"', /company\.uid "123456789"/);
   bad('method: effective', 'method: flat', /company\.vat/);
   bad('account: "1023"', 'account: "10x"', /bankAccounts\[1\]\.account/);

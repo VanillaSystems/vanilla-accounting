@@ -22,10 +22,10 @@ function root(content?: string): Workspace {
 
 const fixtureBooks = (): Books => loadBooks(root());
 
-test('saveBooks writes what the CLIs always wrote, atomically, with no temp file left', () => {
+test('saveBooks writes what the CLIs always wrote, stamped with the schema, atomically, with no temp file left', () => {
   const dir = root();
   const books = loadBooks(dir);
-  const expected = JSON.stringify(JSON.parse(readFileSync(FIXTURE, 'utf8')), null, 2);
+  const expected = JSON.stringify({ schema: 1, ...JSON.parse(readFileSync(FIXTURE, 'utf8')) }, null, 2);
   saveBooks(dir, books);
   assert.equal(readFileSync(dir.paths.books, 'utf8'), expected);
   assert.deepEqual(readdirSync(dir.paths.root).sort(), ['belege.workspace.yaml', 'books.json']);
@@ -40,7 +40,7 @@ test('loadBooks fills journalEntries and config, and saveBooks leaves them off w
   assert.equal(books.journalEntries.length, 0);
   assert.deepEqual(books.config, {});
   saveBooks(dir, books);
-  assert.equal(readFileSync(dir.paths.books, 'utf8'), bare);
+  assert.equal(readFileSync(dir.paths.books, 'utf8'), JSON.stringify({ schema: 1, ...JSON.parse(bare) }, null, 2));
 
   books.journalEntries.push({ id: 'n', transactionRef: 'x', date: '2026-08-01', accountDebit: '6500', accountCredit: '1021', amount: 1 });
   saveBooks(dir, books);
