@@ -33,6 +33,7 @@
     "board": "tsx src/cli/import-board.ts",
     "extract-balances": "tsx src/cli/extract-statement-balances.ts",
     "check-processes": "tsx src/cli/check-processes.ts",
+    "migrate-workspace": "tsx src/cli/migrate-workspace.ts",
     "check-public": "tsx src/cli/check-public.ts",
     "export-public": "tsx src/cli/export-public.ts",
     "llm-usage": "tsx src/cli/llm-usage.ts",
