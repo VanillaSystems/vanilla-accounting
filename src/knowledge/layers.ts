@@ -149,7 +149,8 @@ export function loadKnowledge(appRoot: string, workspaceRoot: string): Knowledge
 const GENERIC_SOURCES = [
   /^definition$/,
   /^(AGENTS|CONTEXT)\.md\b/, /^docs\//, /^processes\//, /^reference\//, /^[\w-]+\.(flow|guide)\.yaml\b/, /^src\//,
-  /^(MWSTG|MWSTV) /,
+  // A federal law by its abbreviation: VAT, social insurance, Code of Obligations, direct tax.
+  /^(MWSTG|MWSTV|AHVG|AHVV|BVG|UVG|OR|DBG|StHG) /,
   /^(owner |advisor )?decision \d{4}-\d{2}-\d{2}(, (owner|advisor))?$/,
   /^proposed \d{4}-\d{2}-\d{2} by Claude — confirm or replace$/,
 ];

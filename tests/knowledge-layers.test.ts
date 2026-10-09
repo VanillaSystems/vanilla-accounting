@@ -44,6 +44,8 @@ test('each field has one owner', () => {
 test('the app layer refuses one company’s items', () => {
   assert.equal(companySpecific({ id: 'x', when: 'a purchase under about CHF 150', then: 'expense it', source: 'AGENTS.md § VAT code rules' }), undefined);
   assert.equal(companySpecific({ id: 'x', when: 'w', then: 't', source: 'proposed 2026-10-07 by Claude — confirm or replace' }), undefined);
+  assert.equal(companySpecific({ id: 'x', when: 'w', then: 't', source: 'AHVG Art. 14 Abs. 1; BVG Art. 66 Abs. 1' }), undefined, 'a social-insurance law is a law');
+  assert.equal(companySpecific({ id: 'x', when: 'w', then: 't', source: 'OR 959b Abs. 2 Ziff. 10' }), undefined, 'the Code of Obligations is a law');
   assert.match(companySpecific({ id: 'x', when: 'w', then: 't', source: 'proposed 2026-10-08 by Claude — CARD-1234567890' })!, /source .* is not generic/);
   assert.match(companySpecific({ id: 'x', when: 'w', then: 't', source: 'commit 0123abc' })!, /source .* is not generic/, 'a private commit resolves to nothing in the public repo');
   assert.match(companySpecific({ id: 'x', when: 'w', then: 't', source: 'memory — blank PDF captures' })!, /source .* is not generic/);
