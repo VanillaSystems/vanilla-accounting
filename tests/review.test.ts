@@ -14,6 +14,7 @@ import { applyChange } from '../src/books/changes.js';
 import { IntentError, quartersOf, seededIds, vatEffect, type Intent } from '../src/review/corrections.js';
 import { comment, record, replay, reviewFile, signOff, startReview, undo, type ReviewState } from '../src/review/session.js';
 import { decideReview, importReview, listReviews, viewReview } from '../src/review/git.js';
+import { decidedReviews } from '../src/review/package.js';
 import { figuresFromBooks } from '../src/accounting/return-figures.js';
 import { parseReviewFile, type ReviewFile } from '../src/review/types.js';
 import { DEMO_ROOTS, tempWorkspace } from './support/workspace.js';
@@ -180,6 +181,8 @@ test('merge: the accepted corrections through mutateJournal, a merge commit keep
 
     const decisions = JSON.parse(readFileSync(join(ws.paths.root, 'review/anna-muster-2026-Q3-2026-10-12/decisions.json'), 'utf8'));
     assert.equal(decisions.decisions.find((d: { correctionId: string }) => d.correctionId === 'k5').reason, 'Die Spesen sind nicht doppelt.');
+    const [earlier] = decidedReviews(ws);
+    assert.deepEqual(earlier.corrections.find((c) => c.id === 'k5'), { id: 'k5', kind: 'reverseEntry', reason: 'doppelt gebucht', decision: 'rejected', status: 'applicable', ownerReason: 'Die Spesen sind nicht doppelt.', by: 'Lukas Beispiel', at: earlier.corrections.find((c) => c.id === 'k5')!.at }, 'the next review package shows the decision and its reason');
 
     const tip = git(ws.paths.root, ['rev-parse', 'HEAD']).trim();
     assert.deepEqual(decideReview(ws, branch, { accept: 'all' }), { merged: [], rejected: [], skipped: [] });

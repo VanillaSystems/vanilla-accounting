@@ -134,7 +134,9 @@ export function viewReview(ws: Workspace, branch: string): ReviewView {
   const tip = tryGit(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]);
   if (!branch.startsWith(PREFIX) || !tip) throw new ReviewGitError(`Zweig ${branch} gibt es nicht.`);
   const file = parseReviewFile(JSON.parse(git(root, ['show', `${tip}:${reviewDir(branch)}/review.json`])));
-  const base = git(root, ['merge-base', tip, 'HEAD']).trim();
+  // The snapshot's commit when the repository has it (the import branched from it), else where the branch left HEAD.
+  const known = file.base.commit && tryGit(root, ['merge-base', '--is-ancestor', file.base.commit, tip]) !== undefined;
+  const base = known ? tryGit(root, ['rev-parse', file.base.commit!])! : git(root, ['merge-base', tip, 'HEAD']).trim();
   const commits: Record<string, string> = {};
   const log = git(root, ['log', '--format=%H%x1f%(trailers:key=Vanilla-Correction,valueonly,separator=)', `${base}..${tip}`]);
   for (const line of log.split('\n').filter(Boolean)) {

@@ -95,7 +95,7 @@ function ReviewPr({ view, index, onDecided }: { view: ReviewView; index: Index; 
               {plan && plan.vat.length > 0 && <div className="ml-6"><VatDeltaTable deltas={plan.vat} /></div>}
               {rejecting[c.id] !== undefined && (
                 <div className="ml-6 flex items-center gap-2">
-                  <input autoFocus value={rejecting[c.id]} onChange={(e) => setRejecting((r) => ({ ...r, [c.id]: e.target.value }))} placeholder={t('reviews.rejectReason')} className="flex-1 border border-input rounded px-2 py-1 text-sm bg-background text-foreground" />
+                  <input autoFocus name="rejectReason" value={rejecting[c.id]} onChange={(e) => setRejecting((r) => ({ ...r, [c.id]: e.target.value }))} placeholder={t('reviews.rejectReason')} className="flex-1 border border-input rounded px-2 py-1 text-sm bg-background text-foreground" />
                   <button onClick={() => decide([], { [c.id]: rejecting[c.id] })} disabled={busy || !rejecting[c.id]?.trim()} className="px-3 py-1 text-xs rounded bg-destructive text-white disabled:opacity-50">{t('reviews.reject')}</button>
                   <button onClick={() => setRejecting(({ [c.id]: _, ...r }) => r)} className="px-2 py-1 text-xs text-muted-foreground">{t('common.cancel')}</button>
                 </div>

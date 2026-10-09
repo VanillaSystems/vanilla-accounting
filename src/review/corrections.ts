@@ -8,7 +8,7 @@
 import type { BankTransaction, JournalEntry, QuarterKey, TransactionPatch } from '../types/index.js';
 import { applyChange, currentOf, type RecordChange } from '../books/changes.js';
 import { canonical } from '../books/canonical.js';
-import { assertOpen, ClosedPeriodError, periodLock, refDates, type Books } from '../books/lock.js';
+import { assertOpen, periodLock, refDates, type Books } from '../books/lock.js';
 import { addDays, vatQuarterOf } from '../accounting/periods.js';
 import { figuresFromBooks } from '../accounting/return-figures.js';
 import { parseVatCode } from '../accounting/vat-report.js';
@@ -296,4 +296,3 @@ export function touchesClosed(books: BooksLike, change: RecordChange): boolean {
   return dates.some(lock.isClosed);
 }
 
-export { ClosedPeriodError };

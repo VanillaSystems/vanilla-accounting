@@ -16,7 +16,7 @@ import { parseReviewFile, type Target } from '../../review/types.js';
 type Review = NonNullable<AuditSnapshot['review']>;
 
 /** A question the UI puts to the Treuhänder: the reason of a correction, or a comment's text. */
-export interface Ask { kind: 'reason' | 'comment'; planned?: Planned; intent?: Intent; resolve(text: string | null): void }
+export interface Ask { kind: 'reason' | 'comment'; planned?: Planned; resolve(text: string | null): void }
 
 export class ReviewSession {
   private listeners = new Set<() => void>();
@@ -59,9 +59,9 @@ export class ReviewSession {
    * One correction: planned on the current books (a refusal throws), its reason asked, then
    * recorded. False when the Treuhänder cancels.
    */
-  async write(intent: Intent, reason?: string): Promise<boolean> {
+  async write(intent: Intent): Promise<boolean> {
     const planned = this.plan(intent);
-    const text = reason ?? await this.question({ kind: 'reason', planned, intent });
+    const text = await this.question({ kind: 'reason', planned });
     if (!text?.trim()) return false;
     this.set(record(this.state, this.books, intent, text, new Date().toISOString()));
     return true;

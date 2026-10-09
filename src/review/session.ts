@@ -84,4 +84,3 @@ export const reviewFileName = (state: Pick<ReviewState, 'base' | 'reviewer'>) =>
 export const slug = (text: string) =>
   text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'treuhand';
 
-export type { Intent };
