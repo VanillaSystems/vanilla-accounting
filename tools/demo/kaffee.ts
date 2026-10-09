@@ -1,32 +1,25 @@
 /**
  * The story of Muster Kaffee GmbH, a fictional coffee roaster with a café and a webshop,
- * for January to September 2026. Every bank movement is one Payment; the books, the
- * receipts, the camt053 statements and the filed return are all derived from this list,
- * so they cannot disagree.
+ * for January to September 2026 (the shape every demo shares is in tools/demo/kit.ts).
  *
  * Public vendors (Swiss Post, Coop Pronto, Shopify, Infomaniak, Digitec Galaxus) appear
  * under their real names and public UIDs. Everyone else is invented, and every invented
  * UID has a wrong check digit, so it can never belong to a real company.
  */
-import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
+import type { CorrectionCase } from '../../src/types/index.js';
+import {
+  YEAR, bankDay, chf, invoicesFor, isoDate, lastDay, MONTHS, mulberry32, pad, qrReference, r2, taxIn,
+  type Company, type Demo, type Doc, type ManualEntry, type Part, type Payment, type Scenario, type StatementBank, type Vendor,
+} from './kit.js';
 
-export const YEAR = '2026';
-export const CLOSED_THROUGH = '2026-03-31';
-export const FILED: { period: QuarterKey; generationTime: string } = { period: '2026-Q1', generationTime: '2026-04-28T08:15:00' };
-
-export const COMPANY = {
+const COMPANY: Company = {
   name: 'Muster Kaffee GmbH',
   uid: 'CHE-123.456.789',
   owner: 'Anna Muster',
   address: ['Musterstrasse 1', '8000 Zürich'],
 };
 
-export type BankId = 'raiffeisen' | 'wise-eur';
-
-export const BANKS: Record<BankId, {
-  bank: 'Raiffeisen' | 'Wise'; currency: 'CHF' | 'EUR'; account: string; label: string;
-  iban: string; institution: string; opening: number;
-}> = {
+const BANKS: Record<'raiffeisen' | 'wise-eur', StatementBank> = {
   raiffeisen: {
     bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank Raiffeisen',
     iban: 'CH4180808000000000001', institution: 'Raiffeisenbank Musterdorf', opening: 18500,
@@ -37,10 +30,9 @@ export const BANKS: Record<BankId, {
   },
 };
 
-/** The other opening balances (CHF) of 1 January; 2970 is derived so the opening balance sheet balances. */
-export const OPENING_OTHER: Record<string, number> = { '1510': 12000, '1520': 2500, '2800': 20000 };
+const OPENING_OTHER: Record<string, number> = { '1510': 12000, '1520': 2500, '2800': 20000 };
 
-export const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
+const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
   ['1021', 'Bank Raiffeisen'],
   ['1023', 'Wise EUR'],
   ['1170', 'Vorsteuer Material und Dienstleistungen'],
@@ -68,149 +60,25 @@ export const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
   ['6940', 'Bankspesen'],
 ];
 
-interface Vendor { name: string; address: string[]; uid?: string; bankName: string }
-
-export const VENDORS = {
+const VENDORS = {
   gruenkaffee: { name: 'Grünkaffee Muster AG', address: ['Hafenstrasse 12', '4057 Basel'], uid: 'CHE-999.888.777', bankName: 'Gruenkaffee Muster AG' },
   liegenschaften: { name: 'Liegenschaften Muster AG', address: ['Beispielweg 5', '8000 Zürich'], bankName: 'Liegenschaften Muster AG' },
   terminal: { name: 'Muster Payments AG', address: ['Kartenweg 3', '8005 Zürich'], bankName: 'Muster Payments AG' },
   esempio: { name: 'Torrefazione Esempio S.r.l.', address: ['Via Esempio 7', '34121 Trieste', 'Italien'], uid: 'CHE-111.222.333', bankName: 'TORREFAZIONE ESEMPIO TRIESTE' },
   exampleCloud: { name: 'Example Cloud Inc.', address: ['100 Example Street', 'San Francisco, CA 94105', 'USA'], bankName: 'EXAMPLE CLOUD INC SAN FRANCISCO' },
-  post: { name: 'Post CH AG', address: ['Wankdorfallee 4', '3030 Bern'], uid: 'CHE-116.302.542', bankName: 'Post CH AG' },
-  coop: { name: 'Coop Pronto', address: ['Tankstelle Musterdorf', '8000 Zürich'], uid: 'CHE-312.150.257', bankName: 'Coop Pronto Musterdorf' },
-  shopify: { name: 'Shopify International Ltd.', address: ['2nd Floor, 1-2 Victoria Buildings', 'Haddington Road, Dublin 4', 'Irland'], uid: 'CHE-153.004.184', bankName: 'Shopify Payments' },
-  infomaniak: { name: 'Infomaniak Network SA', address: ['Rue Eugène-Marziano 25', '1227 Les Acacias'], uid: 'CHE-103.167.648', bankName: 'Infomaniak Network SA' },
-  digitec: { name: 'Digitec Galaxus AG', address: ['Pfingstweidstrasse 60b', '8005 Zürich'], uid: 'CHE-109.049.266', bankName: 'Digitec Galaxus AG' },
+  post: { name: 'Post CH AG', address: ['Wankdorfallee 4', '3030 Bern'], uid: 'CHE-116.302.542', bankName: 'Post CH AG', public: true },
+  coop: { name: 'Coop Pronto', address: ['Tankstelle Musterdorf', '8000 Zürich'], uid: 'CHE-312.150.257', bankName: 'Coop Pronto Musterdorf', public: true },
+  shopify: { name: 'Shopify International Ltd.', address: ['2nd Floor, 1-2 Victoria Buildings', 'Haddington Road, Dublin 4', 'Irland'], uid: 'CHE-153.004.184', bankName: 'Shopify Payments', public: true },
+  infomaniak: { name: 'Infomaniak Network SA', address: ['Rue Eugène-Marziano 25', '1227 Les Acacias'], uid: 'CHE-103.167.648', bankName: 'Infomaniak Network SA', public: true },
+  digitec: { name: 'Digitec Galaxus AG', address: ['Pfingstweidstrasse 60b', '8005 Zürich'], uid: 'CHE-109.049.266', bankName: 'Digitec Galaxus AG', public: true },
   estv: { name: 'Eidg. Steuerverwaltung ESTV', address: ['Schwarztorstrasse 50', '3003 Bern'], bankName: 'Eidg. Steuerverwaltung ESTV' },
 } satisfies Record<string, Vendor>;
 
-/** A printed document: the receipt facts the index stores, and the lines its PDF shows. */
-export interface Doc {
-  file: string;
-  kind: ReceiptKind;
-  date: string;
-  description: string;
-  currency: string;
-  total: number;
-  vatId?: string;
-  vat: VatRateGroup[];
-  lines: string[];
-}
-
-/** One booking line of a payment. amount is signed as it moves the bank: + money in, − money out. */
-export interface Leg { account: string; amount: number; vatCode?: string; text: string; key?: string }
-
-/** One payment inside a bank booking. A Sammelzahlung has several. */
-export interface Part { counterparty: string; reference?: string; text: string; legs: Leg[]; doc?: Doc; noReceipt?: string }
-
-export interface Payment { bank: BankId; date: string; text: string; parts: Part[] }
-
-/** An entry that moves no bank: a private share, a correction. `{id:key}` in the text names a leg's entry id. */
-export interface ManualEntry {
-  ref: string; date: string; debit: string; credit: string; amount: number; vatCode: string;
-  text: string; currency?: 'EUR'; corrects?: QuarterKey; key: string; doc?: Doc;
-}
-
-export interface Scenario {
-  payments: Payment[];
-  manual: ManualEntry[];
-  /** The case that explains Q1's Korrekturabrechnung; entry ids are given as leg/entry keys. */
-  correctionCases: CorrectionCase[];
-  /** The bank payment of a filed quarter's tax, once its figure is known. */
-  taxPayment(payable: number): Payment;
-}
-
-// ─── numbers ────────────────────────────────────────────────────────────────
-
-const r2 = (n: number) => Math.round(n * 100) / 100;
-/** Swiss notation, 1’234.50, without the runtime's locale data. */
-export function chf(n: number): string {
-  const [int, dec] = Math.abs(n).toFixed(2).split('.');
-  return `${n < 0 ? '-' : ''}${int.replace(/\B(?=(\d{3})+(?!\d))/g, '’')}.${dec}`;
-}
-
-/** The tax inside a gross amount, the way src/accounting/vat-report.ts extracts it. */
-export function taxIn(gross: number, rate: number): number {
-  const g = Math.round(gross * 100);
-  return (g - Math.round(g * 100 / (100 + rate))) / 100;
-}
-
-function mulberry32(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** A QR reference: 26 digits plus the recursive mod-10 check digit of Swiss payment slips. */
-function qrReference(base: string): string {
-  const table = [0, 9, 4, 6, 8, 2, 7, 1, 3, 5];
-  const digits = base.padStart(26, '0');
-  let carry = 0;
-  for (const d of digits) carry = table[(carry + Number(d)) % 10];
-  return digits + String((10 - carry) % 10);
-}
-
-const pad = (n: number) => String(n).padStart(2, '0');
-const isoDate = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
-const lastDay = (m: number) => new Date(Date.UTC(2026, m, 0)).getUTCDate();
-
-/** The next banking day on or after the date (Saturday and Sunday move to Monday). */
-function bankDay(date: string): string {
-  const d = new Date(`${date}T12:00:00Z`);
-  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-const dmy = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
-const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
-
-// ─── documents ──────────────────────────────────────────────────────────────
-
-interface Item { text: string; gross: number; rate: number }
-
-/** An invoice or receipt with its items and the MWST summary a Swiss invoice prints. */
-function invoice(o: {
-  file: string; vendor: Vendor; date: string; title: string; number: string; description: string;
-  currency: string; items: Item[]; footer?: string[]; kind?: ReceiptKind;
-}): Doc {
-  const total = r2(o.items.reduce((s, i) => s + i.gross, 0));
-  const rates = [...new Set(o.items.map((i) => i.rate))].sort((a, b) => b - a);
-  const vat: VatRateGroup[] = rates.filter((rate) => rate > 0 && o.vendor.uid).map((rate) => {
-    const gross = r2(o.items.filter((i) => i.rate === rate).reduce((s, i) => s + i.gross, 0));
-    const tax = taxIn(gross, rate);
-    return { ratePercent: rate, net: r2(gross - tax), vat: tax, gross };
-  });
-  const lines = [
-    o.vendor.name, ...o.vendor.address,
-    ...(o.vendor.uid ? [`${o.vendor.uid} MWST`] : []),
-    '',
-    COMPANY.name, ...COMPANY.address,
-    '',
-    `${o.title} ${o.number}`,
-    `Datum: ${dmy(o.date)}`,
-    '',
-    ...o.items.map((i) => `${i.text}: ${o.currency} ${chf(i.gross)}`),
-    '',
-    `Total ${o.currency} ${chf(total)}`,
-    ...(vat.length
-      ? vat.map((g) => `MWST ${g.ratePercent}% auf ${o.currency} ${chf(g.net!)}: ${o.currency} ${chf(g.vat)}`)
-      : [o.vendor.uid ? 'Ohne MWST' : 'Keine Schweizer MWST ausgewiesen']),
-    ...(o.footer ? ['', ...o.footer] : []),
-  ];
-  return {
-    file: `${o.file}.pdf`, kind: o.kind ?? 'invoice', date: o.date, description: o.description,
-    currency: o.currency, total, ...(o.vendor.uid ? { vatId: o.vendor.uid } : {}), vat, lines,
-  };
-}
+const invoice = invoicesFor(COMPANY);
 
 // ─── the year ───────────────────────────────────────────────────────────────
 
-export function scenario(seed: number): Scenario {
+function scenario(seed: number): Scenario {
   const rnd = mulberry32(seed);
   /** A CHF amount between lo and hi, on 5 Rappen. */
   const between = (lo: number, hi: number) => Math.round((lo + rnd() * (hi - lo)) * 20) / 20;
@@ -411,12 +279,12 @@ export function scenario(seed: number): Scenario {
   const correctionTax = taxIn(129, 8.1);
   const manual: ManualEntry[] = [
     {
-      ref: 'M2026-001', date: '2026-04-15', debit: '', credit: '6100', amount: correctionTax, vatCode: 'I81-2', corrects: '2026-Q1', key: 'digitec-correction',
+      date: '2026-04-15', debit: '', credit: '6100', amount: correctionTax, vatCode: 'I81-2', corrects: '2026-Q1', key: 'digitec-correction',
       text: `Korrekturbuchung zu Buchung {id:digitec} (Q1): Vorsteuer Digitec Galaxus Rechnung 118203344, Beleg nachgereicht; deklariert mit der Korrekturabrechnung Q1 2026`,
       doc: digitecDoc,
     },
     {
-      ref: 'M2026-002', date: '2026-06-30', debit: '2451', credit: '6200', amount: privateShare, vatCode: 'K81-B', key: 'private-fuel',
+      date: '2026-06-30', debit: '2451', credit: '6200', amount: privateShare, vatCode: 'K81-B', key: 'private-fuel',
       text: `Eigenverbrauch: Privatanteil Fahrzeug Q2 2026, 30% von CHF ${chf(q2Fuel)} Treibstoff (${COMPANY.owner})`,
     },
   ];
@@ -446,3 +314,53 @@ export function scenario(seed: number): Scenario {
     }),
   };
 }
+
+const COUNTERPARTIES: Record<string, string> = {
+  // A binding of a public vendor: only what is true for this company.
+  'swiss-post.yaml': `# Binding of the public vendor processes/counterparties/swiss-post.yaml to Muster Kaffee's chart.
+id: swiss-post
+accounts: ["6513"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-post-parcels
+        when: the monthly Post CH invoice for webshop parcels
+        then: '6513 Porti und Versand, I81; description "Post CH, Pakete Webshop <Monat>"'
+        source: decision 2026-01-20
+    precedents: []
+`,
+  // A private counterparty with no public twin carries its own name and match signals.
+  'gruenkaffee-muster.yaml': `# A private supplier: no public vendor file, so this binding is the whole counterparty.
+id: gruenkaffee-muster
+name: Grünkaffee Muster AG
+match:
+  tx: ["gruenkaffee muster"]
+  uid: ["CHE-999.888.777"]
+  file: ['^\\d{8}-gruenkaffee-muster']
+accounts: ["4000"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-gruenkaffee-green-coffee
+        when: a Grünkaffee Muster invoice for green coffee
+        then: '4000 Rohkaffee, M26 (green coffee is food, reduced rate 2.6%); one entry per invoice'
+        source: decision 2026-01-25
+    precedents: []
+`,
+};
+
+export const kaffee: Demo = {
+  dir: 'demo',
+  company: COMPANY,
+  closedThrough: '2026-03-31',
+  filed: { period: '2026-Q1', generationTime: '2026-04-28T08:15:00' },
+  banks: BANKS,
+  ownerAccount: { account: '2451', label: `Kontokorrent ${COMPANY.owner}` },
+  openingOther: OPENING_OTHER,
+  accounts: ACCOUNTS,
+  vendors: VENDORS,
+  counterparties: COUNTERPARTIES,
+  scenario,
+};
