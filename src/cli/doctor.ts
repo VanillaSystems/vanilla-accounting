@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { config as loadEnv } from 'dotenv';
-import { loadBooks, periodLock } from '../books/store.js';
+import { loadBooks, periodLock, sealsOf, type Books } from '../books/store.js';
 import { loadMailConfig, loginOf, mailConfigured } from '../collect/mail-config.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -69,8 +69,8 @@ function workspaceChecks(ws: Workspace): Result[] {
     : warn('No profile in belege.workspace.yaml', 'set up before npm run init; nothing is missing for booking'));
 
   try {
-    loadBooks(ws);
-    results.push(ok('books.json reads'));
+    const books = loadBooks(ws);
+    results.push(ok(`books.json reads (schema ${books.schema})`), ...sealChecks(books));
   } catch (e) {
     results.push(fail(`books.json: ${(e as Error).message.split('\n')[0]}`, 'Restore books.json from git (git checkout books.json), or create it with npm run init in a new folder.'));
   }
@@ -125,6 +125,19 @@ function workspaceChecks(ws: Workspace): Result[] {
     ? `Booking reads the prior-year export ${charts.at(-1)} in history/`
     : 'Booking reads accounts.json and the casebook (no prior-year export in history/)'));
   return results;
+}
+
+/** The seals of the filed quarters (src/books/seal.ts): broken is a problem, missing a note. */
+function sealChecks(books: Books): Result[] {
+  const { checks, unsealed } = sealsOf(books);
+  const intact = checks.filter((c) => c.status === 'intact').map((c) => c.quarter);
+  return [
+    ...checks.flatMap((c) => c.status === 'broken'
+      ? [fail(`Seal ${c.quarter} broken: ${c.problem}`, 'The books open read-only. Restore books.json from git (git log -p books.json; npm run check-closed shows what changed); a seal is never rewritten.')]
+      : []),
+    ...(intact.length ? [ok(`Seals hold: ${intact.join(', ')}`)] : []),
+    ...(unsealed.length ? [warn(`Filed quarters without a seal: ${unsealed.join(', ')}`, `npm run seal -- ${unsealed[0]} (one run per quarter), then commit filings/`)] : []),
+  ];
 }
 
 /** The open transactions no supplier, customer or authority file claims: booked by the generic rules alone. */
