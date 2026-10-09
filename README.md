@@ -22,16 +22,28 @@ Belege runs the books of Vanilla Systems GmbH, and is built by Ken Steiner.
 
 ## Quick start
 
-You need Node.js 22 and `pdftotext` (poppler). Booking and matching call Claude through the
-Claude Code CLI (`claude`).
+You need Node.js 22, `pdftotext` (poppler) and Claude Code with a Claude subscription: reading,
+matching and booking receipts call Claude through the `claude` command.
+
+To look around first, open the demo company:
 
 ```sh
 npm install
 BELEGE_WORKSPACE=demo npm start
 ```
 
-Open http://localhost:5173. To work on your own books, set `BELEGE_WORKSPACE` in `.env` (or the environment) to a directory
-that holds a `belege.workspace.yaml` (copy `demo/belege.workspace.yaml` and change it).
+Open http://localhost:5173.
+
+To keep your own books:
+
+```sh
+npm run init      # asks about your company, creates its workspace, points .env at it
+npm run doctor    # checks the tools and the workspace, and says how to fix what is missing
+npm start
+```
+
+`docs/getting-started.md` walks through the questions, the first bank statement, the first
+receipts and the first VAT return, and lists what Belege does not do yet.
 
 ## Rules that never bend
 

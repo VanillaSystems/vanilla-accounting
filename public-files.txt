@@ -29,6 +29,7 @@ demo/**
 tools/demo/**
 tools/hooks/**
 
+docs/getting-started.md
 docs/adr/**
 docs/runbooks/**
 docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf

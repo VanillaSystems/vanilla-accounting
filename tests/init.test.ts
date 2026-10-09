@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
+import { QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
 import { APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt } from '../src/workspace/workspace.js';
 
@@ -179,3 +180,9 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   rmSync(bin, { recursive: true, force: true });
 });
 
+test('getting-started.md documents every init question, in the order the wizard asks', () => {
+  const guide = readFileSync(join(APP_ROOT, 'docs', 'getting-started.md'), 'utf8');
+  const at = QUESTION_ORDER.map((k) => guide.indexOf(`**${QUESTIONS[k].ask}`));
+  QUESTION_ORDER.forEach((k, i) => assert.ok(at[i] >= 0, `the guide names "${QUESTIONS[k].ask}"`));
+  assert.deepEqual(at, [...at].sort((a, b) => a - b), 'same order as QUESTION_ORDER');
+});
