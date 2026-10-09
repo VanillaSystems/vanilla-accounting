@@ -31,12 +31,14 @@ demo/**
 demo-consulting/**
 tools/demo/**
 tools/cases/**
+tools/vat-codes/**
 examples/**
 demo-consulting/**
 tools/hooks/**
 
 docs/getting-started.md
 docs/audit-export.md
+docs/vat-codes.md
 docs/releasing.md
 docs/mail-setup.md
 docs/quarter-workflow.md

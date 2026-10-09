@@ -29,6 +29,7 @@
     "vat-report": "tsx src/cli/vat-report.ts",
     "vat-report-html": "tsx src/cli/vat-report-html.ts",
     "vat-xml": "tsx src/cli/vat-ech0217.ts",
+    "vat-codes": "tsx tools/vat-codes/generate.ts",
     "fetch-rates": "tsx src/cli/fetch-estv-rates.ts",
     "restamp-fx": "tsx src/cli/restamp-fx-rates.ts",
     "reconcile-balances": "tsx src/cli/reconcile-balances.ts",
