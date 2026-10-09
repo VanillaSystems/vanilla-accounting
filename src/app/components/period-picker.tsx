@@ -89,7 +89,7 @@ function PickerPanel({ initial, quarters, years, closedThrough, onCancel, onAppl
 }) {
   const today = localToday();
   const [draft, setDraft] = useState(initial);
-  const [menu, setMenu] = useState<Menu>(() => initialMenu(initial));
+  const [menu, setMenu] = useState<Menu>(() => initialMenu(initial, today));
   /** After a first click on the calendar, the next click ends the range. */
   const [pickingEnd, setPickingEnd] = useState(false);
   /** The first of the left calendar's month; the right one shows the month after. */
@@ -131,17 +131,24 @@ function PickerPanel({ initial, quarters, years, closedThrough, onCancel, onAppl
       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onCancel(); } }}
       className="flex rounded-lg border border-border bg-background shadow-xl text-sm text-foreground overflow-hidden"
     >
-      <nav className="w-52 shrink-0 bg-muted border-r border-border py-2 max-h-[26rem] overflow-y-auto">
+      <nav className="w-52 shrink-0 bg-muted border-r border-border py-2 max-h-[34rem] overflow-y-auto">
         {menu === 'root' ? (
           <>
+            {/* Accounting first: the year so far and this year's quarters, then the rest. */}
+            <Item active={draft.token === 'ytd'} onClick={() => choose('ytd')}>{t('period.ytd')}</Item>
+            {quartersBegun(today).map((q) => (
+              <Item key={q} active={draft.token === q} onClick={() => choose(q)} filed={isFiled(q)}>
+                {periodName(parsePeriod(q, today)!)}
+              </Item>
+            ))}
+            <Divider />
+            <Item sub active={TO_DATE.includes(draft.token as RelativePreset) && draft.token !== 'ytd'} onClick={() => setMenu('todate')}>{t('period.menuToDate')}</Item>
+            <Item sub active={LAST.includes(draft.token as RelativePreset)} onClick={() => setMenu('last')}>{t('period.menuLast')}</Item>
+            <Item sub active={draft.kind === 'quarter' && !quartersBegun(today).includes(draft.token)} onClick={() => setMenu('quarters')}>{t('period.menuQuarters')}</Item>
+            <Item sub active={draft.kind === 'year'} onClick={() => setMenu('years')}>{t('period.menuYears')}</Item>
+            <Divider />
             <Item active={draft.token === 'today'} onClick={() => choose('today')}>{t('period.today')}</Item>
             <Item active={draft.token === 'yesterday'} onClick={() => choose('yesterday')}>{t('period.yesterday')}</Item>
-            <Divider />
-            <Item sub active={LAST.includes(draft.token as RelativePreset)} onClick={() => setMenu('last')}>{t('period.menuLast')}</Item>
-            <Item sub active={TO_DATE.includes(draft.token as RelativePreset)} onClick={() => setMenu('todate')}>{t('period.menuToDate')}</Item>
-            <Divider />
-            <Item sub active={draft.kind === 'quarter'} onClick={() => setMenu('quarters')}>{t('period.menuQuarters')}</Item>
-            <Item sub active={draft.kind === 'year'} onClick={() => setMenu('years')}>{t('period.menuYears')}</Item>
             <Divider />
             <Item active={draft.kind === 'all'} onClick={() => choose('all')}>{t('app.allPeriods')}</Item>
             <Item active={['range', 'month', 'half'].includes(draft.kind)} onClick={() => startInput.current?.focus()}>{t('period.custom')}</Item>
@@ -196,9 +203,17 @@ function PickerPanel({ initial, quarters, years, closedThrough, onCancel, onAppl
   );
 }
 
+/** This year's quarters that have begun, the running one first. */
+function quartersBegun(today: IsoDate): string[] {
+  const year = today.slice(0, 4);
+  const current = Math.floor((Number(today.slice(5, 7)) - 1) / 3) + 1;
+  return Array.from({ length: current }, (_, i) => `${year}-Q${current - i}`);
+}
+
 const MENU_TITLE = { last: 'period.menuLast', todate: 'period.menuToDate', quarters: 'period.menuQuarters', years: 'period.menuYears' } as const;
 
-function initialMenu(p: Period): Menu {
+function initialMenu(p: Period, today: IsoDate): Menu {
+  if (p.kind === 'ytd' || quartersBegun(today).includes(p.token)) return 'root';
   if (LAST.includes(p.kind as RelativePreset)) return 'last';
   if (TO_DATE.includes(p.kind as RelativePreset)) return 'todate';
   if (p.kind === 'quarter') return 'quarters';
