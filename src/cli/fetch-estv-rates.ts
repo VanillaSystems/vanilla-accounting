@@ -13,10 +13,13 @@
  * the calendar dates it applies to, so Friday's rate rolls over the weekend — matching the ESTV
  * rule "should the current rate not yet be published, apply the most recently recorded one".
  *
- * Output: reference/estv-daily-rates-2026.json  (checked in, auditor-verifiable)
+ * Output: reference/estv-daily-rates-<year>.json, one file per year from 22.12. of the year
+ * before (so the New-Year holiday inherits December's last rate) to 31.12. (checked in,
+ * auditor-verifiable). src/accounting/fx-rates.ts reads every year's file.
  *
- * Usage: npm run fetch-rates            # skips if the file already covers the range
- *        npm run fetch-rates -- --force # refetch everything from START
+ * Usage: npm run fetch-rates                    # this year's file, up to today
+ *        npm run fetch-rates -- --year 2027     # that year's file, up to today or its 31.12.
+ *        npm run fetch-rates -- --force         # refetch the year from its start
  *        npm run fetch-rates -- --end 2026-09-30
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
@@ -24,25 +27,29 @@ import { join } from 'path';
 import { XMLParser } from 'fast-xml-parser';
 import { REFERENCE_DIR } from '../workspace/workspace.js';
 
-const RATES_PATH = join(REFERENCE_DIR, 'estv-daily-rates-2026.json');
-
 // Currencies we actually book in (see BankTransaction currencies). GBP is only used for
 // receipt↔transaction proximity ranking in match.ts, never for booking, so it is out of scope.
 const CURRENCIES = ['EUR', 'USD'];
 
-// Fetch publication dates from late Dec 2025 (so the New-Year holiday inherits Dec's last rate)
-// up to the end date. END used to be hardcoded to the end of H1 2026, which made this script a
-// SILENT NO-OP for every later quarter: it printed "already covers through 2026-06-30 ✓" and
-// exited, so `classify` ran a whole quarter with no booking rates. END now defaults to today
-// (no rate can exist for the future) and can be overridden: `npm run fetch-rates -- --end 2026-09-30`.
-const START = '2025-12-22';
-const endArgIdx = process.argv.indexOf('--end');
-const endArg = endArgIdx >= 0 ? process.argv[endArgIdx + 1] : undefined;
+// END used to be hardcoded to the end of H1 2026, which made this script a SILENT NO-OP for
+// every later quarter: it printed "already covers through 2026-06-30 ✓" and exited, so
+// `classify` ran a whole quarter with no booking rates. END now defaults to today (no rate can
+// exist for the future), capped at the year's 31.12., and can be overridden with --end.
+const argOf = (name: string) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
+const endArg = argOf('--end');
 if (endArg && !/^\d{4}-\d{2}-\d{2}$/.test(endArg)) {
   console.error(`Invalid --end date: ${endArg}. Use YYYY-MM-DD.`);
   process.exit(1);
 }
-const END = endArg ?? new Date().toISOString().slice(0, 10);
+const today = new Date().toISOString().slice(0, 10);
+const YEAR = argOf('--year') ?? (endArg ?? today).slice(0, 4);
+if (!/^\d{4}$/.test(YEAR)) {
+  console.error(`Invalid --year: ${YEAR}. Use YYYY.`);
+  process.exit(1);
+}
+const RATES_PATH = join(REFERENCE_DIR, `estv-daily-rates-${YEAR}.json`);
+const START = `${+YEAR - 1}-12-22`;
+const END = [endArg ?? today, `${YEAR}-12-31`].sort()[0];
 
 const API = 'https://www.backend-rates.bazg.admin.ch/api/xmldaily';
 

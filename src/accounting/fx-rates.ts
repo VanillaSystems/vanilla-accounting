@@ -9,12 +9,13 @@
  * Both `classify` (stamping rates on new entries) and `restamp-fx` (backfilling existing
  * ones) go through here, so the two can never drift. See docs/adr/0001-foreign-currency-conversion.md.
  */
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { REFERENCE_DIR } from '../workspace/workspace.js';
 import { estvRates, type EstvRateTable } from './fx-conversion.js';
 
-const DAILY_RATES_FILE = 'estv-daily-rates-2026.json';
+/** One file per year, reference/estv-daily-rates-<year>.json (npm run fetch-rates -- --year <year>). */
+const DAILY_RATES_FILE = /^estv-daily-rates-(\d{4})\.json$/;
 const FLAT_RATES_FILE = 'wechselkurse.txt'; // legacy per-currency fallback only
 
 export interface FxResolver {
@@ -24,12 +25,20 @@ export interface FxResolver {
   flat(currency: string): number | undefined;
 }
 
-/** The ESTV daily sell rates in `dir` (the app's reference/), or an empty table before `npm run fetch-rates`. */
+/**
+ * The ESTV daily sell rates in `dir` (the app's reference/), every year's file merged, or an
+ * empty table before `npm run fetch-rates`. A later year's file wins on a date both hold.
+ */
 export function readEstvRateTable(dir: string = REFERENCE_DIR): EstvRateTable {
-  const path = join(dir, DAILY_RATES_FILE);
-  if (!existsSync(path)) return { rates: {} };
-  const file = JSON.parse(readFileSync(path, 'utf8')) as Partial<EstvRateTable>;
-  return { fetchedAt: file.fetchedAt, rates: file.rates ?? {} };
+  if (!existsSync(dir)) return { rates: {} };
+  const files = readdirSync(dir).filter((f) => DAILY_RATES_FILE.test(f)).sort();
+  const table: EstvRateTable = { rates: {} };
+  for (const f of files) {
+    const file = JSON.parse(readFileSync(join(dir, f), 'utf8')) as Partial<EstvRateTable>;
+    Object.assign(table.rates, file.rates ?? {});
+    if (file.fetchedAt && (!table.fetchedAt || file.fetchedAt > table.fetchedAt)) table.fetchedAt = file.fetchedAt;
+  }
+  return table;
 }
 
 /** `dir` holds the rate files: the app's reference/ unless a test points elsewhere. */
