@@ -5,6 +5,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { parse } from 'yaml';
 import { WORKSPACE_SCHEMA, WorkspaceError, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
+import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
 import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatRegistered', 'vatMethod', 'basis', 'period'].includes(k)) as ProfileKey[];
@@ -38,19 +39,25 @@ export function readManifest(path: string): { company: Company; bankAccounts: Le
   const bankAccounts = (raw.bankAccounts as Record<string, unknown>[]).map((a, i): LedgerBankAccount => {
     const account = String(a.account ?? '');
     if (!/^\d{4}$/.test(account)) fail(`bankAccounts[${i}].account "${account}" must be a 4-digit ledger account`);
+    const bank = text(a.bank, `bankAccounts[${i}].bank`);
+    if (a.statements !== undefined && !STATEMENT_KINDS.includes(a.statements as StatementKind)) fail(`bankAccounts[${i}].statements must be ${STATEMENT_KINDS.join(' or ')}`);
+    const statements = bank === MANUAL_BANK ? undefined : (a.statements as StatementKind | undefined) ?? bankKind(bank).statements;
+    const iban = a.iban === undefined ? undefined : parseIban(String(a.iban)) ?? fail(`bankAccounts[${i}].iban "${String(a.iban)}" is not an IBAN (wrong length or check digits)`);
     return {
-      bank: text(a.bank, `bankAccounts[${i}].bank`),
+      bank,
       currency: text(a.currency, `bankAccounts[${i}].currency`),
       account,
       label: text(a.label, `bankAccounts[${i}].label`),
-      ...(a.statements === undefined ? {} : { statements: a.statements === 'camt053' || a.statements === 'wise' ? a.statements : fail(`bankAccounts[${i}].statements must be camt053 or wise`) }),
+      ...(statements ? { statements } : {}),
+      ...(iban ? { iban } : {}),
     };
   });
   const seen = new Set<string>();
   for (const a of bankAccounts) {
-    const key = `${a.bank} ${a.currency}`;
-    if (seen.has(key)) fail(`bankAccounts: ${key} is listed twice`);
-    seen.add(key);
+    for (const key of [`${a.bank} ${a.currency}`, ...(a.iban ? [`${a.iban} ${a.currency}`] : [])]) {
+      if (seen.has(key)) fail(`bankAccounts: ${key} is listed twice`);
+      seen.add(key);
+    }
   }
   return { company, bankAccounts, ...(raw.profile === undefined ? {} : { profile: readProfile(raw.profile, fail) }) };
 }

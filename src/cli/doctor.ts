@@ -10,7 +10,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadBooks } from '../books/store.js';
-import { bankKind } from '../workspace/scaffold.js';
+import { bankKind } from '../workspace/banks.js';
 import { openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
 
 type Result =

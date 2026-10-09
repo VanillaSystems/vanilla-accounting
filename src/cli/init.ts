@@ -7,6 +7,9 @@
  *   npm run init -- --preset consultant --dir ../my-books --name "Beispiel GmbH" \
  *     --uid <UID> --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
  *
+ * A bank is <bank>:<currency>[:<ledger account>[:<IBAN>]]; the IBAN routes its statements to the
+ * account (without it, the folder bank-statements/<bank>/ does).
+ *
  * Rerun on a finished workspace changes nothing. Exit code 2: an answer the app does not support yet.
  */
 import { execFileSync } from 'node:child_process';
@@ -15,7 +18,8 @@ import { join, resolve } from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import { loadChart } from '../workspace/chart.js';
-import { applyPlan, BANKS, bankKind, planWorkspace, suggestAccount, type InitInput } from '../workspace/scaffold.js';
+import { BANKS, bankKind, parseIban } from '../workspace/banks.js';
+import { applyPlan, planWorkspace, suggestAccount, type InitInput } from '../workspace/scaffold.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, isSupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_ROOT, MANIFEST_FILE, workspaceAt } from '../workspace/workspace.js';
@@ -106,7 +110,9 @@ const CURRENCY = /^[A-Z]{3}$/;
 async function askBanks(): Promise<InitInput['banks']> {
   const taken = new Set<string>();
   const banks: InitInput['banks'] = [];
-  const add = (bank: string, currency: string, account: string) => {
+  const add = (bank: string, currency: string, account: string, ibanRaw = '') => {
+    const iban = ibanRaw ? parseIban(ibanRaw) : undefined;
+    if (ibanRaw && !iban) throw new Stop(`Bank ${bank}: "${ibanRaw}" is not an IBAN (wrong length or check digits).`);
     if (!CURRENCY.test(currency)) throw new Stop(`Bank ${bank}: currency "${currency}" must be a 3-letter code like CHF or EUR.`);
     const range = bankKind(bank).range;
     if (!/^\d{4}$/.test(account) || account[0] !== (range === 'card' ? '2' : '1')) {
@@ -115,7 +121,7 @@ async function askBanks(): Promise<InitInput['banks']> {
     if (taken.has(account)) throw new Stop(`Bank ${bank}: ledger account ${account} is used twice.`);
     if (banks.some((b) => b.bank === bank && b.currency === currency)) throw new Stop(`${bank} ${currency} is listed twice.`);
     taken.add(account);
-    banks.push({ bank, currency, account });
+    banks.push({ bank, currency, account, ...(iban ? { iban } : {}) });
     const note = bankKind(bank).note;
     console.log(`    ${bank} ${currency} on ledger account ${account}${note ? `. Note: ${note}` : ''}`);
   };
@@ -123,9 +129,9 @@ async function askBanks(): Promise<InitInput['banks']> {
 
   if (Array.isArray(flags.bank)) {
     for (const spec of flags.bank) {
-      const [name, currency = 'CHF', account] = spec.split(':').map((s) => s.trim());
+      const [name, currency = 'CHF', account, iban] = spec.split(':').map((s) => s.trim());
       const bank = canonical(name);
-      add(bank, currency.toUpperCase(), account ?? suggestAccount(bank, taken));
+      add(bank, currency.toUpperCase(), account || suggestAccount(bank, taken), iban);
     }
   } else if (interactive) {
     const names = [...Object.keys(BANKS).slice(0, 4), 'other cantonal or regional bank', ...Object.keys(BANKS).slice(4)];
@@ -141,7 +147,10 @@ async function askBanks(): Promise<InitInput['banks']> {
       const currency = ((await rl!.question('    Currency [CHF] > ')).trim() || 'CHF').toUpperCase();
       const suggested = suggestAccount(bank, taken);
       const account = (await rl!.question(`    Ledger account [${suggested}] > `)).trim() || suggested;
-      try { add(bank, currency, account); } catch (e) { console.log(`    ${(e as Error).message}`); }
+      const iban = bankKind(bank).statements
+        ? (await rl!.question('    IBAN (Enter to skip: the statement folder then decides; npm run doctor reads it from the first statement) > ')).trim()
+        : '';
+      try { add(bank, currency, account, iban); } catch (e) { console.log(`    ${(e as Error).message}`); }
     }
   }
   if (banks.length === 0) throw new Stop('At least one bank account is needed: --bank <bank>:<currency>[:<ledger account>], e.g. --bank UBS:CHF.');

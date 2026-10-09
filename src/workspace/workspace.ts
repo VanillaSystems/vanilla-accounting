@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
 import type { LegalForm, Preset, QuestionKey, SupportedAnswers } from './setup.js';
+import type { Iban, StatementKind } from './banks.js';
 
 declare const brand: unique symbol;
 type Brand<T, B> = T & { readonly [brand]: B };
@@ -43,14 +44,20 @@ export type WorkspaceProfile = Pick<SupportedAnswers, ProfileKey> & {
   exportTo?: string;
 };
 
-/** A ledger account money moves through, keyed by the `bank` + `currency` of a BankTransaction. */
+/**
+ * A ledger account money moves through, keyed by the `bank` + `currency` of a BankTransaction.
+ * A statement lands on the account whose `iban` and currency it names, else on the account of
+ * its folder (bank-statements/<bank>/) and currency (src/accounting/bank-accounts.ts).
+ */
 export interface LedgerBankAccount {
+  /** The bank's label: the statements folder, and the `bank` of every transaction booked here. */
   bank: string;
   currency: string;
   account: string;
   label: string;
-  /** The statement format this account's transactions are imported from; absent for manual. */
-  statements?: 'camt053' | 'wise';
+  /** How this account's statements are read: from the manifest, else the bank registry; absent for `manual`. */
+  statements?: StatementKind;
+  iban?: Iban;
 }
 
 /** Fixed layout. No path is configurable, so there is one way to find each thing. */
