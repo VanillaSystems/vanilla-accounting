@@ -42,6 +42,6 @@ Preconditions:
 - Editing works only while the header shows `● API aktiv`. Without the API, cells are not editable.
 - The alert is auto-accepted by `browse`. Read it with `$B dialog`, not from a screenshot.
 - `$B dialog-dismiss` stays in effect for every later dialog in the browse session, alerts included. Run `$B dialog-accept` once you are done testing the cancel path.
-- The `Klassifiziert` and `Offen` counts are global, not per period (only `Alle (n)` follows the period). `Offen` can be negative because some entries hang on refs with no transaction (e.g. `SHOPIFY-<n>`, `M<year>-<n>` corrections). Existing behavior, not your change.
+- `Alle`, `Klassifiziert` and `Offen` count the rows each filter shows for the selected period: `Alle = Klassifiziert + Offen`, never negative.
 - Set an input's value with `$B fill` + `$B press Enter`. Setting `.value` and dispatching events from `$B js` does not reach React and silently saves nothing.
 - Account cells display `accountTitle()` (`6570 Informatik…`). The stored value is the bare number, so assert on the diff, not on the display text.

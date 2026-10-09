@@ -153,8 +153,9 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
     });
   }, [modeFiltered, search, txByRef]);
 
-  const classifiedCount = classifiedRefs.size;
-  const unclassifiedCount = index.transactions.length - classifiedCount;
+  // The counts are the rows each filter shows for the selected period.
+  const classifiedCount = periodFiltered.filter((r) => r.type === 'entry').length;
+  const unclassifiedCount = periodFiltered.filter((r) => r.type === 'unclassified').length;
 
   const selectedRow = useMemo(() => {
     if (!selectedRowId) return null;
