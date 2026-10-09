@@ -169,8 +169,10 @@ function headingsOf(full: string): string[] {
 
 function checkProcedure(where: string, procedure: string, err: (m: string) => void, root: string) {
   const [path, ...anchors] = procedure.split('§').map((p) => p.trim().replace(/,$/, '').trim());
-  if (!existsSync(join(root, path))) { err(`${where}: procedure file "${path}" does not exist`); return; }
-  const heads = headingsOf(join(root, path));
+  // A workspace rule may point at its own docs or at the app's public runbooks.
+  const full = [join(root, path), join(APP_ROOT, path)].find((f) => existsSync(f));
+  if (!full) { err(`${where}: procedure file "${path}" does not exist`); return; }
+  const heads = headingsOf(full);
   for (const a of anchors.filter(Boolean)) {
     if (!heads.some((h) => h.startsWith(a))) err(`${where}: procedure "§ ${a}" is not a heading in ${path}`);
   }
