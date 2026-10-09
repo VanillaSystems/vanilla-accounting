@@ -1,0 +1,503 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>MSG-STM-RAIFFEISEN-2026-04</MsgId>
+      <CreDtTm>2026-07-01T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>STM-RAIFFEISEN-2026-04</Id>
+      <CreDtTm>2026-07-01T06:00:00</CreDtTm>
+      <FrToDt><FrDtTm>2026-04-01T00:00:00</FrDtTm><ToDtTm>2026-06-30T23:59:59</ToDtTm></FrToDt>
+      <Acct>
+        <Id><IBAN>CH5880808000000000002</IBAN></Id>
+        <Ccy>CHF</Ccy>
+        <Ownr><Nm>Muster Consulting GmbH</Nm></Ownr>
+        <Svcr><FinInstnId><Nm>Raiffeisenbank Bern-Muster</Nm></FinInstnId></Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">34729.83</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-04-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">31220.79</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-06-30</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="CHF">450.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-01</Dt></BookgDt>
+        <ValDt><Dt>2026-04-01</Dt></ValDt>
+        <AcctSvcrRef>90000000025</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">450.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Coworking AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000030112026042</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung CW-2026-04</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Coworking AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">24.60</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-07</Dt></BookgDt>
+        <ValDt><Dt>2026-04-07</Dt></ValDt>
+        <AcctSvcrRef>90000000026</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">24.60</Amt>
+            <RltdPties><Cdtr><Pty><Nm>SAMPLE LABS INC SEATTLE</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>SAMPLE LABS INC SEATTLE</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte SAMPLE LABS INC SEATTLE</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1425.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-15</Dt></BookgDt>
+        <ValDt><Dt>2026-04-15</Dt></ValDt>
+        <AcctSvcrRef>90000000027</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1425.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Sammelstiftung BVG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000005720202624</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>BVG-Beitrag Q2 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Sammelstiftung BVG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">6486.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-20</Dt></BookgDt>
+        <ValDt><Dt>2026-04-20</Dt></ValDt>
+        <AcctSvcrRef>90000000028</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">6486.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-041</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-041</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">104.20</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-20</Dt></BookgDt>
+        <ValDt><Dt>2026-04-20</Dt></ValDt>
+        <AcctSvcrRef>90000000029</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">104.20</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026045</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202604</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">7150.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-27</Dt></BookgDt>
+        <ValDt><Dt>2026-04-27</Dt></ValDt>
+        <AcctSvcrRef>90000000030</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">7150.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Lohn April 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Nettolohn April 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Lohnzahlung Lukas Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">62.70</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-28</Dt></BookgDt>
+        <ValDt><Dt>2026-04-28</Dt></ValDt>
+        <AcctSvcrRef>90000000031</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">62.70</Amt>
+            <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Spesen April 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Spesenabrechnung April 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Spesenrückerstattung Lukas Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">450.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-01</Dt></BookgDt>
+        <ValDt><Dt>2026-05-01</Dt></ValDt>
+        <AcctSvcrRef>90000000032</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">450.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Coworking AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000030112026058</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung CW-2026-05</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Coworking AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">24.60</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-07</Dt></BookgDt>
+        <ValDt><Dt>2026-05-07</Dt></ValDt>
+        <AcctSvcrRef>90000000033</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">24.60</Amt>
+            <RltdPties><Cdtr><Pty><Nm>SAMPLE LABS INC SEATTLE</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>SAMPLE LABS INC SEATTLE</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte SAMPLE LABS INC SEATTLE</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">4798.88</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-12</Dt></BookgDt>
+        <ValDt><Dt>2026-05-12</Dt></ValDt>
+        <AcctSvcrRef>90000000034</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">4798.88</Amt>
+            <RltdPties><Dbtr><Pty><Nm>MUSTER LOGISTIK AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-032</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-032</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Muster Logistik AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">111.85</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-18</Dt></BookgDt>
+        <ValDt><Dt>2026-05-18</Dt></ValDt>
+        <AcctSvcrRef>90000000035</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">111.85</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026050</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202605</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">6486.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-20</Dt></BookgDt>
+        <ValDt><Dt>2026-05-20</Dt></ValDt>
+        <AcctSvcrRef>90000000036</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">6486.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-051</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-051</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1200.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-20</Dt></BookgDt>
+        <ValDt><Dt>2026-05-20</Dt></ValDt>
+        <AcctSvcrRef>90000000037</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1200.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Akademie</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000581020260513</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung KURS-2026-118</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Akademie</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">7150.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-25</Dt></BookgDt>
+        <ValDt><Dt>2026-05-25</Dt></ValDt>
+        <AcctSvcrRef>90000000038</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">7150.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Lohn Mai 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Nettolohn Mai 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Lohnzahlung Lukas Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1062.82</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-27</Dt></BookgDt>
+        <ValDt><Dt>2026-05-27</Dt></ValDt>
+        <AcctSvcrRef>90000000039</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1062.82</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Eidg. Steuerverwaltung ESTV</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000461246813579120264</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>MWST 1. Quartal 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Eidg. Steuerverwaltung ESTV</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">195.60</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-28</Dt></BookgDt>
+        <ValDt><Dt>2026-05-28</Dt></ValDt>
+        <AcctSvcrRef>90000000040</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">195.60</Amt>
+            <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Spesen Mai 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Spesenabrechnung Mai 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Spesenrückerstattung Lukas Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">450.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-01</Dt></BookgDt>
+        <ValDt><Dt>2026-06-01</Dt></ValDt>
+        <AcctSvcrRef>90000000041</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">450.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Coworking AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000030112026063</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung CW-2026-06</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Coworking AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">3108.45</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-01</Dt></BookgDt>
+        <ValDt><Dt>2026-06-01</Dt></ValDt>
+        <AcctSvcrRef>90000000042</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">3108.45</Amt>
+            <RltdPties><Dbtr><Pty><Nm>EXAMPLE ANALYTICS INC</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-054</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-054</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Example Analytics Inc.</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">24.60</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-08</Dt></BookgDt>
+        <ValDt><Dt>2026-06-08</Dt></ValDt>
+        <AcctSvcrRef>90000000043</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">24.60</Amt>
+            <RltdPties><Cdtr><Pty><Nm>SAMPLE LABS INC SEATTLE</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>SAMPLE LABS INC SEATTLE</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte SAMPLE LABS INC SEATTLE</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">87.90</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-18</Dt></BookgDt>
+        <ValDt><Dt>2026-06-18</Dt></ValDt>
+        <AcctSvcrRef>90000000044</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">87.90</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026061</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202606</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">6486.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-22</Dt></BookgDt>
+        <ValDt><Dt>2026-06-22</Dt></ValDt>
+        <AcctSvcrRef>90000000045</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">6486.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-061</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-061</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">7150.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-25</Dt></BookgDt>
+        <ValDt><Dt>2026-06-25</Dt></ValDt>
+        <AcctSvcrRef>90000000046</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">7150.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Lohn Juni 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Nettolohn Juni 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Lohnzahlung Lukas Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">3612.60</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-26</Dt></BookgDt>
+        <ValDt><Dt>2026-06-26</Dt></ValDt>
+        <AcctSvcrRef>90000000047</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">3612.60</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Ausgleichskasse Muster</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000007700202620</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Akonto AHV Q2 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Ausgleichskasse Muster</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">125.90</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-29</Dt></BookgDt>
+        <ValDt><Dt>2026-06-29</Dt></ValDt>
+        <AcctSvcrRef>90000000048</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">125.90</Amt>
+            <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Spesen Juni 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Spesenabrechnung Juni 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Spesenrückerstattung Lukas Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">12.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-30</Dt></BookgDt>
+        <ValDt><Dt>2026-06-30</Dt></ValDt>
+        <AcctSvcrRef>90000000049</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">12.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Raiffeisenbank Bern-Muster</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Kontoführung 2. Quartal</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Kontoführungsgebühren</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

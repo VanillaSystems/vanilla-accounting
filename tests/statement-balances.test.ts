@@ -1,6 +1,6 @@
 /**
  * Characterization of the camt053 balance parser behind `reconcile-balances`, on the synthetic
- * statements under tests/fixtures/camt053/ and the demo workspace's.
+ * statements under tests/fixtures/camt053/ and the demo workspaces'.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseStatementBalances } from '../src/parsers/statement-balances.js';
 import { parseCamt053 } from '../src/parsers/camt053.js';
-import { DEMO_ROOT } from './support/workspace.js';
+import { DEMO_ROOTS } from './support/workspace.js';
 
 const FIXTURES = join(import.meta.dirname, 'fixtures/camt053');
 const read = (name: string) => readFileSync(join(FIXTURES, name), 'utf8');
@@ -30,9 +30,9 @@ test('Wise: a midnight DtTm is the close of the previous day', () => {
 });
 
 test('every statement: opening balance plus parsed movements equals closing balance', () => {
-  const dirs = [FIXTURES, join(DEMO_ROOT, 'bank-statements/Raiffeisen'), join(DEMO_ROOT, 'bank-statements/Wise')];
+  const dirs = [FIXTURES, ...DEMO_ROOTS.flatMap((root) => ['Raiffeisen', 'Wise'].map((bank) => join(root, 'bank-statements', bank)))];
   const files = dirs.flatMap((dir) => readdirSync(dir).filter((f) => f.startsWith('uuid_') && f.endsWith('.xml')).map((f) => join(dir, f)));
-  assert.ok(files.length >= 8, `${files.length} statements`);
+  assert.ok(files.length >= 14, `${files.length} statements`);
   for (const file of files) {
     const xml = readFileSync(file, 'utf8');
     const bals = parseStatementBalances(xml, file);

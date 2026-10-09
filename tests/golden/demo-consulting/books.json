@@ -1,0 +1,1069 @@
+{
+ "note": "books.json of Muster Consulting GmbH frozen on 2026-10-09, the golden master's input.",
+ "journalEntries": [
+  {
+   "id": "3c5d5f06b3dd3400",
+   "transactionRef": "90000000001",
+   "date": "2026-01-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk Januar 2026"
+  },
+  {
+   "id": "d9c2e3f88f681295",
+   "transactionRef": "90000000002",
+   "date": "2026-01-07",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting Januar 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "a1892e1bf94a77ea",
+   "transactionRef": "CARD-7000001",
+   "date": "2026-01-12",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung Januar 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.94096
+  },
+  {
+   "id": "b85aaab24928203d",
+   "transactionRef": "M2026-001",
+   "date": "2026-01-12",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 38.15,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Januar 2026)"
+  },
+  {
+   "id": "407739fc9d32a1c9",
+   "transactionRef": "90000000003",
+   "date": "2026-01-15",
+   "accountDebit": "5720",
+   "accountCredit": "1020",
+   "amount": 1425,
+   "description": "Muster Sammelstiftung, BVG-Beiträge Q1 2026"
+  },
+  {
+   "id": "d9ca56afa980744c",
+   "transactionRef": "90000000004",
+   "date": "2026-01-19",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 101.55,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo Januar 2026"
+  },
+  {
+   "id": "735bda20ff7593b7",
+   "transactionRef": "90000000005",
+   "date": "2026-01-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat Januar 2026"
+  },
+  {
+   "id": "7592ad33ec4c2b9d",
+   "transactionRef": "90000000006",
+   "date": "2026-01-20",
+   "accountDebit": "5730",
+   "accountCredit": "1020",
+   "amount": 486,
+   "description": "Muster Versicherungen, UVG-Prämie 2026"
+  },
+  {
+   "id": "8393db4ef92dee57",
+   "transactionRef": "90000000006",
+   "date": "2026-01-20",
+   "accountDebit": "5740",
+   "accountCredit": "1020",
+   "amount": 912,
+   "description": "Muster Versicherungen, KTG-Prämie 2026"
+  },
+  {
+   "id": "c9c976536f024ca5",
+   "transactionRef": "90000000007",
+   "date": "2026-01-26",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn Januar 2026, Lukas Beispiel"
+  },
+  {
+   "id": "8f7617ef74112b9c",
+   "transactionRef": "90000000008",
+   "date": "2026-01-28",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 38.15,
+   "description": "Spesenrückerstattung Januar 2026, Lukas Beispiel"
+  },
+  {
+   "id": "936052b8cd6eb9fa",
+   "transactionRef": "90000000009",
+   "date": "2026-02-02",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk Februar 2026"
+  },
+  {
+   "id": "d98d8a2196f5b83a",
+   "transactionRef": "TRANSFER-8000001",
+   "date": "2026-02-02",
+   "accountDebit": "1023",
+   "accountCredit": "3400",
+   "amount": 3800,
+   "vatCode": "V0-E",
+   "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92532
+  },
+  {
+   "id": "3dfefc8da253a062",
+   "transactionRef": "90000000010",
+   "date": "2026-02-09",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting Februar 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "5b6ad748e1718215",
+   "transactionRef": "CARD-7000002",
+   "date": "2026-02-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung Februar 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92663
+  },
+  {
+   "id": "695617fe09217f26",
+   "transactionRef": "M2026-002",
+   "date": "2026-02-12",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 94.9,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Februar 2026)"
+  },
+  {
+   "id": "a91520075efdd675",
+   "transactionRef": "90000000011",
+   "date": "2026-02-16",
+   "accountDebit": "1520",
+   "accountCredit": "1020",
+   "amount": 2349,
+   "vatCode": "I81",
+   "description": "Digitec Galaxus, Laptop 14\" (aktiviert)"
+  },
+  {
+   "id": "b14e365af14be8eb",
+   "transactionRef": "M2026-003",
+   "date": "2026-02-16",
+   "accountDebit": "6641",
+   "accountCredit": "2451",
+   "amount": 165.7,
+   "vatCode": "I81",
+   "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (Februar 2026)"
+  },
+  {
+   "id": "635f0b815578c5f4",
+   "transactionRef": "90000000012",
+   "date": "2026-02-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 98.75,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo Februar 2026"
+  },
+  {
+   "id": "25a6e2f7ffd5f002",
+   "transactionRef": "90000000013",
+   "date": "2026-02-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat Februar 2026"
+  },
+  {
+   "id": "6d385a56041c9217",
+   "transactionRef": "90000000014",
+   "date": "2026-02-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn Februar 2026, Lukas Beispiel"
+  },
+  {
+   "id": "f26716c1b0d7dce7",
+   "transactionRef": "90000000015",
+   "date": "2026-03-02",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk März 2026"
+  },
+  {
+   "id": "e12b32a16cd8b10b",
+   "transactionRef": "90000000016",
+   "date": "2026-03-02",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 260.6,
+   "description": "Spesenrückerstattung Februar 2026, Lukas Beispiel"
+  },
+  {
+   "id": "beb46de0da819eda",
+   "transactionRef": "90000000017",
+   "date": "2026-03-09",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting März 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "ede413d44965c34b",
+   "transactionRef": "90000000018",
+   "date": "2026-03-09",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 5695.68,
+   "vatCode": "V81",
+   "description": "Muster Logistik, Konzept Lagersteuerung"
+  },
+  {
+   "id": "992666e1780b8b82",
+   "transactionRef": "CARD-7000003",
+   "date": "2026-03-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung März 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.90956
+  },
+  {
+   "id": "f192c42579ed2380",
+   "transactionRef": "M2026-004",
+   "date": "2026-03-11",
+   "accountDebit": "6500",
+   "accountCredit": "2451",
+   "amount": 89,
+   "vatCode": "I26",
+   "description": "Buchhandlung Muster, Fachbuch Netzwerksicherheit"
+  },
+  {
+   "id": "51f3678405755ab5",
+   "transactionRef": "M2026-005",
+   "date": "2026-03-12",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 73.55,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch März 2026)"
+  },
+  {
+   "id": "c2c2906d5a08c35e",
+   "transactionRef": "90000000019",
+   "date": "2026-03-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 91.85,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo März 2026"
+  },
+  {
+   "id": "d05230c47dd4c418",
+   "transactionRef": "90000000020",
+   "date": "2026-03-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V0-E",
+   "description": "Beispiel Treuhand, Beratungsmandat März 2026"
+  },
+  {
+   "id": "b7993a933f2b6101",
+   "transactionRef": "90000000021",
+   "date": "2026-03-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn März 2026, Lukas Beispiel"
+  },
+  {
+   "id": "be79fbaa19281a28",
+   "transactionRef": "90000000022",
+   "date": "2026-03-26",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 3612.6,
+   "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q1 2026"
+  },
+  {
+   "id": "4cefe3d6364871ca",
+   "transactionRef": "90000000023",
+   "date": "2026-03-30",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 162.55,
+   "description": "Spesenrückerstattung März 2026, Lukas Beispiel"
+  },
+  {
+   "id": "e70d8e4ecb23ae77",
+   "transactionRef": "90000000024",
+   "date": "2026-03-31",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 12,
+   "description": "Raiffeisen, Kontoführung Q1"
+  },
+  {
+   "id": "16afc4222abc1991",
+   "transactionRef": "90000000025",
+   "date": "2026-04-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk April 2026"
+  },
+  {
+   "id": "a4f51b563f758893",
+   "transactionRef": "90000000026",
+   "date": "2026-04-07",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting April 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "3fd94c93052d2e50",
+   "transactionRef": "CARD-7000004",
+   "date": "2026-04-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung April 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.93222
+  },
+  {
+   "id": "63f20b8b18b5466b",
+   "transactionRef": "M2026-006",
+   "date": "2026-04-13",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 62.7,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch April 2026)"
+  },
+  {
+   "id": "277a7cc9c995bac2",
+   "transactionRef": "M2026-015",
+   "date": "2026-04-14",
+   "accountDebit": "3400",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "-V0-E",
+   "description": "Stornobuchung zu Buchung d05230c47dd4c418 (Q1): Beispiel Treuhand Rechnung 2026-031 war als Leistung im Ausland (V0-E) gebucht",
+   "corrects": "2026-Q1"
+  },
+  {
+   "id": "2c0186a7adb8dd51",
+   "transactionRef": "M2026-016",
+   "date": "2026-04-14",
+   "accountDebit": "3400",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Korrekturbuchung zu Buchung d05230c47dd4c418 (Q1): Beispiel Treuhand Rechnung 2026-031 ist eine Inlandleistung, 8.1% MWST",
+   "corrects": "2026-Q1"
+  },
+  {
+   "id": "dd65c91e02798c86",
+   "transactionRef": "90000000027",
+   "date": "2026-04-15",
+   "accountDebit": "5720",
+   "accountCredit": "1020",
+   "amount": 1425,
+   "description": "Muster Sammelstiftung, BVG-Beiträge Q2 2026"
+  },
+  {
+   "id": "e7525e69bc60defd",
+   "transactionRef": "90000000028",
+   "date": "2026-04-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat April 2026"
+  },
+  {
+   "id": "db29fd20d9cf2827",
+   "transactionRef": "90000000029",
+   "date": "2026-04-20",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 104.2,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo April 2026"
+  },
+  {
+   "id": "83557dd9ede17684",
+   "transactionRef": "90000000030",
+   "date": "2026-04-27",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn April 2026, Lukas Beispiel"
+  },
+  {
+   "id": "0cf15ff866cb4b68",
+   "transactionRef": "90000000031",
+   "date": "2026-04-28",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 62.7,
+   "description": "Spesenrückerstattung April 2026, Lukas Beispiel"
+  },
+  {
+   "id": "95ecf31aef2632a9",
+   "transactionRef": "TRANSFER-8000002",
+   "date": "2026-04-29",
+   "accountDebit": "1023",
+   "accountCredit": "3400",
+   "amount": 3800,
+   "vatCode": "V0-E",
+   "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.93055
+  },
+  {
+   "id": "aef1a9e8719e3c1c",
+   "transactionRef": "90000000032",
+   "date": "2026-05-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk Mai 2026"
+  },
+  {
+   "id": "98f9457060a1c8f7",
+   "transactionRef": "90000000033",
+   "date": "2026-05-07",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting Mai 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "f8f2ab28235126d6",
+   "transactionRef": "CARD-7000005",
+   "date": "2026-05-11",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung Mai 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92468
+  },
+  {
+   "id": "228b371788a00e7f",
+   "transactionRef": "90000000034",
+   "date": "2026-05-12",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 4798.88,
+   "vatCode": "V81",
+   "description": "Muster Logistik, Umsetzung Lagersteuerung, Phase 1"
+  },
+  {
+   "id": "8b2f339b4c42dd82",
+   "transactionRef": "M2026-007",
+   "date": "2026-05-12",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 64.4,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Mai 2026)"
+  },
+  {
+   "id": "3565426d22e5adf7",
+   "transactionRef": "90000000035",
+   "date": "2026-05-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 111.85,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo Mai 2026"
+  },
+  {
+   "id": "e5804ddea05eeabb",
+   "transactionRef": "M2026-008",
+   "date": "2026-05-18",
+   "accountDebit": "6641",
+   "accountCredit": "2451",
+   "amount": 131.2,
+   "vatCode": "I81",
+   "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (Mai 2026)"
+  },
+  {
+   "id": "b91b2d9477a0716f",
+   "transactionRef": "90000000036",
+   "date": "2026-05-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat Mai 2026"
+  },
+  {
+   "id": "dbedf1b643cd6e91",
+   "transactionRef": "90000000037",
+   "date": "2026-05-20",
+   "accountDebit": "5810",
+   "accountCredit": "1020",
+   "amount": 1200,
+   "vatCode": "I0",
+   "description": "Muster Akademie, Kurs Cloud Security (von der MWST ausgenommen)"
+  },
+  {
+   "id": "c19d1fdf340a4a48",
+   "transactionRef": "90000000038",
+   "date": "2026-05-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn Mai 2026, Lukas Beispiel"
+  },
+  {
+   "id": "0b35a5e2f155aba4",
+   "transactionRef": "90000000039",
+   "date": "2026-05-27",
+   "accountDebit": "2201",
+   "accountCredit": "1020",
+   "amount": 1062.82,
+   "description": "ESTV, MWST-Abrechnung Q1 2026"
+  },
+  {
+   "id": "5104621e655f3498",
+   "transactionRef": "90000000040",
+   "date": "2026-05-28",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 195.6,
+   "description": "Spesenrückerstattung Mai 2026, Lukas Beispiel"
+  },
+  {
+   "id": "b9a7cba1c428824f",
+   "transactionRef": "90000000041",
+   "date": "2026-06-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk Juni 2026"
+  },
+  {
+   "id": "c600692da0ad15d3",
+   "transactionRef": "90000000042",
+   "date": "2026-06-01",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3108.45,
+   "vatCode": "V0-E",
+   "description": "Example Analytics, Code-Review (Leistung im Ausland)"
+  },
+  {
+   "id": "fa97142ba4558bb4",
+   "transactionRef": "90000000043",
+   "date": "2026-06-08",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting Juni 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "e914164bb4fc574d",
+   "transactionRef": "M2026-009",
+   "date": "2026-06-09",
+   "accountDebit": "6500",
+   "accountCredit": "2451",
+   "amount": 64.5,
+   "vatCode": "I26",
+   "description": "Buchhandlung Muster, Fachbuch Cloud-Architektur"
+  },
+  {
+   "id": "9dacd043ada2dd03",
+   "transactionRef": "CARD-7000006",
+   "date": "2026-06-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung Juni 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92935
+  },
+  {
+   "id": "680d7c35bef765c4",
+   "transactionRef": "M2026-010",
+   "date": "2026-06-12",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 61.4,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Juni 2026)"
+  },
+  {
+   "id": "ab182932d537f7ff",
+   "transactionRef": "90000000044",
+   "date": "2026-06-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 87.9,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo Juni 2026"
+  },
+  {
+   "id": "d134b5cb2aefe43c",
+   "transactionRef": "90000000045",
+   "date": "2026-06-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat Juni 2026"
+  },
+  {
+   "id": "ec15a424fe8da881",
+   "transactionRef": "90000000046",
+   "date": "2026-06-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn Juni 2026, Lukas Beispiel"
+  },
+  {
+   "id": "a35b34e4f215b649",
+   "transactionRef": "90000000047",
+   "date": "2026-06-26",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 3612.6,
+   "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q2 2026"
+  },
+  {
+   "id": "bec9823f547deb8c",
+   "transactionRef": "90000000048",
+   "date": "2026-06-29",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 125.9,
+   "description": "Spesenrückerstattung Juni 2026, Lukas Beispiel"
+  },
+  {
+   "id": "13ce8ebaa2feed1d",
+   "transactionRef": "90000000049",
+   "date": "2026-06-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 12,
+   "description": "Raiffeisen, Kontoführung Q2"
+  },
+  {
+   "id": "e1d235c3897c2758",
+   "transactionRef": "M2026-017",
+   "date": "2026-06-30",
+   "accountDebit": "2451",
+   "accountCredit": "6510",
+   "amount": 60.79,
+   "vatCode": "K81-B",
+   "description": "Eigenverbrauch: Privatanteil Mobiltelefon Q2 2026, 20% von CHF 303.95 (Lukas Beispiel)"
+  },
+  {
+   "id": "fc8f59188c3974ce",
+   "transactionRef": "90000000050",
+   "date": "2026-07-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk Juli 2026"
+  },
+  {
+   "id": "fe35aade6ffcb9c4",
+   "transactionRef": "90000000051",
+   "date": "2026-07-07",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting Juli 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "6b9883e5de54cf19",
+   "transactionRef": "CARD-7000007",
+   "date": "2026-07-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung Juli 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.9317
+  },
+  {
+   "id": "10ced974a52c0855",
+   "transactionRef": "M2026-011",
+   "date": "2026-07-13",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 46.95,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Juli 2026)"
+  },
+  {
+   "id": "f20c49f966d7fa29",
+   "transactionRef": "90000000052",
+   "date": "2026-07-15",
+   "accountDebit": "5720",
+   "accountCredit": "1020",
+   "amount": 1425,
+   "description": "Muster Sammelstiftung, BVG-Beiträge Q3 2026"
+  },
+  {
+   "id": "0ded262aaa3c8940",
+   "transactionRef": "90000000053",
+   "date": "2026-07-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat Juli 2026"
+  },
+  {
+   "id": "cb81d1072a39749c",
+   "transactionRef": "90000000054",
+   "date": "2026-07-20",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 90.95,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo Juli 2026"
+  },
+  {
+   "id": "738c01da7cc7001c",
+   "transactionRef": "90000000055",
+   "date": "2026-07-27",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn Juli 2026, Lukas Beispiel"
+  },
+  {
+   "id": "bd99dc7f1fd46934",
+   "transactionRef": "90000000056",
+   "date": "2026-07-28",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 46.95,
+   "description": "Spesenrückerstattung Juli 2026, Lukas Beispiel"
+  },
+  {
+   "id": "08e30341b84e4a29",
+   "transactionRef": "TRANSFER-8000003",
+   "date": "2026-07-28",
+   "accountDebit": "1023",
+   "accountCredit": "3400",
+   "amount": 3800,
+   "vatCode": "V0-E",
+   "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.93835
+  },
+  {
+   "id": "4be8575d9926d3db",
+   "transactionRef": "90000000057",
+   "date": "2026-07-31",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 7127.41,
+   "vatCode": "V81",
+   "description": "Muster Logistik, Umsetzung Lagersteuerung, Phase 2"
+  },
+  {
+   "id": "3f83d2653b0cdfc4",
+   "transactionRef": "90000000058",
+   "date": "2026-08-03",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk August 2026"
+  },
+  {
+   "id": "a0252c5543ee84ca",
+   "transactionRef": "90000000059",
+   "date": "2026-08-07",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting August 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "fc468693720cd04e",
+   "transactionRef": "CARD-7000008",
+   "date": "2026-08-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung August 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.94558
+  },
+  {
+   "id": "0e0eecec014a1e11",
+   "transactionRef": "M2026-012",
+   "date": "2026-08-12",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 41.9,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch August 2026)"
+  },
+  {
+   "id": "d7d2c4a90f8e495c",
+   "transactionRef": "M2026-013",
+   "date": "2026-08-17",
+   "accountDebit": "6641",
+   "accountCredit": "2451",
+   "amount": 124.4,
+   "vatCode": "I81",
+   "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (August 2026)"
+  },
+  {
+   "id": "2e100442f7d8fd3a",
+   "transactionRef": "90000000060",
+   "date": "2026-08-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 97.7,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo August 2026"
+  },
+  {
+   "id": "1d41695834ab1bb3",
+   "transactionRef": "90000000061",
+   "date": "2026-08-19",
+   "accountDebit": "6640",
+   "accountCredit": "1020",
+   "amount": 24,
+   "vatCode": "I0",
+   "description": "Parkhaus Beispiel, Kundenbesuch (Beleg fehlt)"
+  },
+  {
+   "id": "3a00c8c9167d4ff1",
+   "transactionRef": "90000000062",
+   "date": "2026-08-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat August 2026"
+  },
+  {
+   "id": "de9bbad101f334c4",
+   "transactionRef": "90000000063",
+   "date": "2026-08-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn August 2026, Lukas Beispiel"
+  },
+  {
+   "id": "73e73f5d28c34372",
+   "transactionRef": "90000000064",
+   "date": "2026-08-28",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 166.3,
+   "description": "Spesenrückerstattung August 2026, Lukas Beispiel"
+  },
+  {
+   "id": "aee3a9aa151a75a6",
+   "transactionRef": "90000000065",
+   "date": "2026-09-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 450,
+   "vatCode": "I81",
+   "description": "Muster Coworking, Fixdesk September 2026"
+  },
+  {
+   "id": "6c1d0331543f4975",
+   "transactionRef": "90000000066",
+   "date": "2026-09-01",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3358.4,
+   "vatCode": "V0-E",
+   "description": "Example Analytics, Code-Review (Leistung im Ausland)"
+  },
+  {
+   "id": "4516305e8009d720",
+   "transactionRef": "90000000067",
+   "date": "2026-09-07",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 24.6,
+   "vatCode": "B81-1",
+   "description": "Sample Labs, Code-Hosting September 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "944bbf3466ff6fe3",
+   "transactionRef": "CARD-7000009",
+   "date": "2026-09-10",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 32.43,
+   "vatCode": "I81",
+   "description": "Beispiel Software, Projektplanung September 2026",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.95045
+  },
+  {
+   "id": "daa3cab7c38d97c4",
+   "transactionRef": "M2026-014",
+   "date": "2026-09-14",
+   "accountDebit": "6640",
+   "accountCredit": "2451",
+   "amount": 54.6,
+   "vatCode": "I81",
+   "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch September 2026)"
+  },
+  {
+   "id": "0697c066928fbcb1",
+   "transactionRef": "90000000068",
+   "date": "2026-09-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 105.5,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo September 2026"
+  },
+  {
+   "id": "8194a068c1be023e",
+   "transactionRef": "90000000069",
+   "date": "2026-09-21",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Beispiel Treuhand, Beratungsmandat September 2026"
+  },
+  {
+   "id": "5220d6f058f4049b",
+   "transactionRef": "90000000070",
+   "date": "2026-09-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 7150,
+   "description": "Nettolohn September 2026, Lukas Beispiel"
+  },
+  {
+   "id": "41f24a41ee040c67",
+   "transactionRef": "90000000071",
+   "date": "2026-09-28",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 3612.6,
+   "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q3 2026"
+  },
+  {
+   "id": "82132cf4492e0b89",
+   "transactionRef": "90000000072",
+   "date": "2026-09-28",
+   "accountDebit": "2451",
+   "accountCredit": "1020",
+   "amount": 54.6,
+   "description": "Spesenrückerstattung September 2026, Lukas Beispiel"
+  },
+  {
+   "id": "46a79516892745b1",
+   "transactionRef": "90000000073",
+   "date": "2026-09-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 12,
+   "description": "Raiffeisen, Kontoführung Q3"
+  }
+ ],
+ "config": {
+  "closedThrough": "2026-03-31",
+  "openingBalances": {
+   "2026": {
+    "1020": 42000,
+    "1023": 2345.85,
+    "1520": 1800,
+    "2800": 20000,
+    "2970": 26145.85
+   }
+  },
+  "openingBalancesNative": {
+   "2026": {
+    "1023": {
+     "amount": 2500,
+     "currency": "EUR"
+    }
+   }
+  },
+  "vatAdjustments": [],
+  "correctionCases": [
+   {
+    "id": "2026-Q1-treuhand-inland",
+    "period": "2026-Q1",
+    "title": "Inlandleistung Beispiel Treuhand als Auslandleistung deklariert",
+    "wrong": "Die Zahlung der Beispiel Treuhand AG (Zürich) für die Rechnung 2026-031 lief mit V0-E (Ziffer 221) statt V81: CHF 6’486.00 ohne Steuer deklariert.",
+    "fix": "Storno -V0-E und Neubuchung V81 über je CHF 6’486.00 vom 14.04.2026 mit corrects 2026-Q1, Steuer CHF 486.00 nachdeklariert; die Buchung vom März bleibt wie eingereicht.",
+    "originalEntryIds": [
+     "d05230c47dd4c418"
+    ],
+    "correctionEntryIds": [
+     "277a7cc9c995bac2",
+     "2c0186a7adb8dd51"
+    ],
+    "source": "receipts/20260302-muster-consulting-rechnung-2026-031.pdf"
+   }
+  ]
+ }
+}

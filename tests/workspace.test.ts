@@ -52,6 +52,9 @@ test('openWorkspace: BELEGE_WORKSPACE first, else the nearest manifest above the
   };
   const root = realpathSync(ws.paths.root);
   assert.equal(open(nowhere, { BELEGE_WORKSPACE: ws.paths.root }), root);
+  assert.equal(open(nowhere, { BELEGE_WORKSPACE: 'demo' }), realpathSync(DEMO_ROOT), 'demo is the shipped demo');
+  assert.equal(open(nowhere, { BELEGE_WORKSPACE: 'demo-consulting' }), realpathSync(join(APP_ROOT, 'demo-consulting')), 'demo-<name> is another shipped demo');
+  assert.equal(open(nowhere, { BELEGE_WORKSPACE: 'demo-nonesuch' }), 'WorkspaceError', 'a demo name with no demo behind it');
   assert.equal(open(deep), root, 'walks up from a subdirectory');
   assert.equal(open(nowhere, { BELEGE_WORKSPACE: deep }), 'WorkspaceError', 'the env names the workspace root itself');
   assert.equal(open(nowhere), 'WorkspaceError', 'no workspace above the cwd');

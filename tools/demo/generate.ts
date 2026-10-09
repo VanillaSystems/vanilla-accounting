@@ -24,9 +24,10 @@ import { camt053Xml, type CamtEntry } from './camt053.js';
 import { textPdf } from './pdf.js';
 import { chf, PAID_PRIVATELY, uidChecksumValid, YEAR, type Demo, type Doc, type Payment, type StatementBank } from './kit.js';
 import { kaffee } from './kaffee.js';
+import { consulting } from './consulting.js';
 
 /** Every demo workspace `npm run demo:generate` writes. */
-const DEMOS: readonly Demo[] = [kaffee];
+const DEMOS: readonly Demo[] = [kaffee, consulting];
 
 const APP_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -246,6 +247,7 @@ function build(demo: Demo, seed: number): Tree {
   const mappings: Mapping[] = [];
   const addDoc = (doc: Doc, ref: string, indexedOn: string) => {
     const pdf = textPdf(doc.lines);
+    if (tree.has(`receipts/${doc.file}`)) throw new Error(`${demo.dir}: two receipts are named ${doc.file}`);
     tree.set(`receipts/${doc.file}`, pdf);
     const receipt = receiptOf(doc, pdf, indexedOn);
     receipts.push(receipt);
