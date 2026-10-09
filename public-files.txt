@@ -27,6 +27,7 @@ processes/**
 reference/**
 demo/**
 tools/demo/**
+tools/cases/**
 tools/hooks/**
 
 docs/adr/**
