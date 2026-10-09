@@ -3,7 +3,7 @@
  * books, receipts, statements and filings, found by its belege.workspace.yaml. The app's own
  * files (processes/, reference/, src/server/scan.html) are found from APP_ROOT, never the cwd.
  */
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -29,6 +29,8 @@ export interface Company {
   /** What the company does, in a few words: context for prompts that judge business vs. private. */
   business?: string;
   legalForm?: LegalForm;
+  /** The language of the app's UI and of the questions agents ask the owner (appLanguages()); German when absent. */
+  language?: string;
   /** Registered, effective method, cash basis, quarterly: the only setup the engine supports. */
   vat: { method: 'effective'; reporting: 'received' };
 }
@@ -122,6 +124,11 @@ export function openWorkspace(): Workspace {
   return (opened ??= workspaceAt(locate()));
 }
 let opened: Workspace | undefined;
+
+/** The languages the UI speaks: one dictionary each in src/app/i18n/locales/ (docs/i18n.md). */
+export function appLanguages(): string[] {
+  return readdirSync(join(APP_ROOT, 'src/app/i18n/locales')).filter((f) => f.endsWith('.ts')).map((f) => f.slice(0, -3)).sort();
+}
 
 /** The demo workspaces the app ships (tools/demo/generate.ts): demo/, demo-consulting/, … */
 export const DEMO_NAME = /^demo(-[a-z0-9]+)*$/;

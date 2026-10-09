@@ -78,6 +78,10 @@ Period close (Periodensperre):
 - Seals: `npm run seal -- <YYYY-Qn> --close` moves `closedThrough` to a filed quarter's end and writes `filings/<year>/seal-<Qn>.json`, a hash of every entry, transaction and mapping dated on or before it (src/books/seal.ts). `loadBooks` checks every seal; books whose sealed part changed load read-only (`saveBooks` throws `SealBrokenError`). Never edit, delete or rewrite a seal; restore the books from git instead.
 - Enforcement: every API route (src/server/routes/) that writes the index does it inside `withBooks` (src/server/books.ts: load, `mutateJournal`, `saveBooks`) and calls `assertOpen` first (403, proven in tests/period-lock.test.ts); `classify` skips closed-period transactions (`--force` keeps closed-period entries); `restamp-fx` skips closed-period entries. CLI and collect scripts read and write the index only through src/books/store.ts: `loadBooks`/`saveBooks` (atomic write), `periodLock(books).isClosed`, and every mutation inside `mutateJournal`, which throws if a closed entry, closed transaction or mapping to a closed transaction changed (tests/books-store.test.ts). Any new code path that mutates journal entries, transactions, mappings or receipts must do the same (an API route: `withBooks`, `assertOpen` and a row in tests/period-lock.test.ts).
 
+UI texts (src/app/):
+- Every text a user reads goes through `t('key')` and the dictionaries in src/app/i18n/locales/ (de is the source; fr, it, en must match it). See docs/i18n.md. tests/i18n.test.ts fails on text written straight into a component.
+- An API refusal the UI shows carries a `code` (src/types/api-error.ts) besides its German `error`; add one when a new refusal needs words in the UI.
+
 UI theming (src/app/):
 - Uses CSS custom properties for light/dark mode (see index.css and tailwind.config.js).
 - NEVER use hardcoded Tailwind gray colors (bg-white, bg-gray-50, text-gray-700, border-gray-200, etc.) in components. Use semantic tokens instead:

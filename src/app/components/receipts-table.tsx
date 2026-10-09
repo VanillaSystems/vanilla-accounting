@@ -3,18 +3,19 @@ import { AlertTriangle, Check } from 'lucide-react';
 import type { Index, Receipt } from '../../../src/types/index.js';
 import { cn, formatDate, formatAmount, dateFromFilename, labelFromFilename, periodMatchesDate, buildReceiptUrl } from '../lib/utils.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
+import { t } from '../i18n/index.js';
 
-
-const KIND_LABEL: Partial<Record<NonNullable<Receipt['kind']>, string>> = {
-  supporting: 'Begleitdokument', statement: 'Kontoauszug', noise: 'kein Beleg', duplicate: 'Duplikat',
-};
+/** The kinds of document that are not a receipt of their own, each with a badge. */
+const NON_RECEIPT_KINDS = ['supporting', 'statement', 'noise', 'duplicate'] as const;
+type NonReceiptKind = (typeof NON_RECEIPT_KINDS)[number];
+const isNonReceiptKind = (kind: Receipt['kind']): kind is NonReceiptKind => NON_RECEIPT_KINDS.includes(kind as NonReceiptKind);
 
 /**
  * A document that needs no payment: typed as supporting/statement/noise/duplicate, or worth
  * exactly 0 (not merely unread) with no VAT and no link (brochures, labels, blank captures).
  */
 export function isNonReceipt(r: Receipt, linkedIds: Set<string>): boolean {
-  if (r.kind && r.kind in KIND_LABEL) return true;
+  if (isNonReceiptKind(r.kind)) return true;
   return r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && !linkedIds.has(r.id);
 }
 
@@ -106,12 +107,12 @@ export function ReceiptsTable({
             onChange={(e) => setNoDateOnly(e.target.checked)}
             className="rounded"
           />
-          Nur ohne Datum ({index.receipts.filter((r) => !r.date && !dateFromFilename(r.filename)).length})
+          {t('receipts.noDateOnly', { n: index.receipts.filter((r) => !r.date && !dateFromFilename(r.filename)).length })}
         </label>
       </div>
       {rows.length === 0 ? (
         <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-          Keine Belege gefunden.
+          {t('receipts.none')}
         </div>
       ) : (
       <div className="overflow-auto flex-1">
@@ -128,12 +129,12 @@ export function ReceiptsTable({
                 />
               </th>
             )}
-            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap">Dateiname</th>
-            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-28">Datum</th>
-            <th className="text-left px-3 py-2 font-medium text-muted-foreground">Beschreibung</th>
-            <th className="text-right px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-32">Betrag</th>
-            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-36">Transaktions-Ref.</th>
-            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-24">Status</th>
+            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap">{t('col.filename')}</th>
+            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-28">{t('col.date')}</th>
+            <th className="text-left px-3 py-2 font-medium text-muted-foreground">{t('col.description')}</th>
+            <th className="text-right px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-32">{t('col.amount')}</th>
+            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-36">{t('col.transactionRef')}</th>
+            <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap w-24">{t('col.status')}</th>
           </tr>
         </thead>
         <tbody>
@@ -172,9 +173,9 @@ export function ReceiptsTable({
                 <td className="px-3 py-2 font-mono text-xs text-foreground max-w-[220px]">
                   <span className="flex items-center gap-1 min-w-0">
                     <span className="truncate" title={r.filename}>{r.filename}</span>
-                    {r.kind && KIND_LABEL[r.kind] && (
-                      <span className="shrink-0 rounded px-1 py-px text-[10px] font-sans bg-muted text-muted-foreground border border-border" title={r.kindRule ? `Regel: ${r.kindRule}` : undefined}>
-                        {KIND_LABEL[r.kind]}
+                    {isNonReceiptKind(r.kind) && (
+                      <span className="shrink-0 rounded px-1 py-px text-[10px] font-sans bg-muted text-muted-foreground border border-border" title={r.kindRule ? t('receipts.kindRule', { rule: r.kindRule }) : undefined}>
+                        {t(`receipts.kind.${r.kind}`)}
                       </span>
                     )}
                     <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" />
@@ -193,10 +194,10 @@ export function ReceiptsTable({
                       {txRefs.length > 0 ? txRefs.join(', ') : '—'}
                     </span>
                     {isDuplicate && !isDupApproved && (
-                      <span title="Mehrfach zugeordnet – nicht genehmigt"><AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" /></span>
+                      <span title={t('receipts.duplicateUnapproved')}><AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" /></span>
                     )}
                     {isDuplicate && isDupApproved && (
-                      <span title="Mehrfachzuordnung genehmigt"><Check className="h-3.5 w-3.5 shrink-0 text-green-500" /></span>
+                      <span title={t('receipts.duplicateApproved')}><Check className="h-3.5 w-3.5 shrink-0 text-green-500" /></span>
                     )}
                   </div>
                 </td>
@@ -219,7 +220,7 @@ function StatusBadge({ linked, duplicate, approved }: { linked: boolean; duplica
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
         <AlertTriangle className="h-3 w-3" />
-        mehrfach
+        {t('receipts.statusDuplicate')}
       </span>
     );
   }
@@ -232,7 +233,7 @@ function StatusBadge({ linked, duplicate, approved }: { linked: boolean; duplica
           : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
       )}
     >
-      {linked ? 'zugeordnet' : 'nicht zugeordnet'}
+      {linked ? t('filter.linked') : t('filter.unlinked')}
     </span>
   );
 }

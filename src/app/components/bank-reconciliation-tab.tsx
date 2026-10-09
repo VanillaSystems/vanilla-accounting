@@ -3,16 +3,15 @@ import type { Index } from '../../types/index.js';
 import { reconcileMonthly } from '../../accounting/index.js';
 import { cn, fmt } from '../lib/utils.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
+import { monthLocale, t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
 }
 
-const MONTHS_DE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-
 function monthLabel(date: string): string {
   const [y, m] = date.split('-');
-  return `${MONTHS_DE[parseInt(m, 10) - 1]} ${y}`;
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(monthLocale(), { month: 'short', year: 'numeric' });
 }
 
 export function BankReconciliationTab({ index }: Props) {
@@ -35,8 +34,7 @@ export function BankReconciliationTab({ index }: Props) {
       <div className="flex flex-col h-full overflow-auto">
         <Header />
         <div className="p-6 text-sm text-muted-foreground">
-          Keine Bankauszüge gefunden. Führe <code className="font-mono">npm run extract-balances</code> aus, um die
-          monatlichen Schlusssaldi aus den PDF-Kontoauszügen einzulesen.
+          {t('recon.none', { command: 'npm run extract-balances' })}
         </div>
       </div>
     );
@@ -69,12 +67,10 @@ export function BankReconciliationTab({ index }: Props) {
             </span>
             <div>
               <div className="text-sm font-semibold text-foreground">
-                {allMatched
-                  ? 'Alle Bankkonten stimmen mit der Buchhaltung überein'
-                  : `${mismatches} Abweichung(en) gefunden`}
+                {allMatched ? t('recon.allMatched') : t('recon.mismatches', { n: mismatches })}
               </div>
               <div className="text-xs text-muted-foreground">
-                {accounts.length} Bilanzkonten · {totalRows} Monatsabschlüsse geprüft gegen die Bank-Kontoauszüge
+                {t('recon.checked', { accounts: accounts.length, months: totalRows })}
               </div>
             </div>
           </div>
@@ -97,18 +93,18 @@ export function BankReconciliationTab({ index }: Props) {
                     : 'bg-destructive/10 text-destructive',
                 )}
               >
-                {acc.allMatched ? 'abgestimmt' : 'Abweichung'}
+                {acc.allMatched ? t('recon.matched') : t('recon.mismatch')}
               </span>
             </div>
 
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="text-left font-medium px-4 py-2">Monat</th>
-                  <th className="text-right font-medium px-4 py-2">Bankauszug</th>
-                  <th className="text-right font-medium px-4 py-2">Unsere Buchhaltung</th>
-                  <th className="text-right font-medium px-4 py-2">Differenz</th>
-                  <th className="text-center font-medium px-4 py-2">Beleg</th>
+                  <th className="text-left font-medium px-4 py-2">{t('col.month')}</th>
+                  <th className="text-right font-medium px-4 py-2">{t('recon.colBank')}</th>
+                  <th className="text-right font-medium px-4 py-2">{t('recon.colBooks')}</th>
+                  <th className="text-right font-medium px-4 py-2">{t('recon.colDifference')}</th>
+                  <th className="text-center font-medium px-4 py-2">{t('col.receipt')}</th>
                   <th className="text-center font-medium px-4 py-2 w-10"></th>
                 </tr>
               </thead>
@@ -161,9 +157,7 @@ export function BankReconciliationTab({ index }: Props) {
         ))}
 
         <p className="text-xs text-muted-foreground">
-          Der Schlusssaldo jedes Monats stammt aus dem PDF-Kontoauszug der Bank (Spalte „Beleg"). „Unsere Buchhaltung"
-          ist der Saldo des Bilanzkontos am Monatsende (Eröffnungssaldo + Buchungen), in Kontowährung. Eine Differenz
-          von 0.00 belegt, dass Buchhaltung und Bankauszug übereinstimmen.
+          {t('recon.explanation')}
         </p>
       </div>
     </div>
@@ -173,8 +167,8 @@ export function BankReconciliationTab({ index }: Props) {
 function Header() {
   return (
     <div className="bg-muted border-b border-border px-3 py-1.5 flex items-center gap-2 shrink-0">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kontenabgleich</span>
-      <span className="text-xs text-muted-foreground">Bankauszüge vs. Buchhaltung — Prüfnachweis</span>
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tab.bankReconciliation')}</span>
+      <span className="text-xs text-muted-foreground">{t('recon.subtitle')}</span>
     </div>
   );
 }

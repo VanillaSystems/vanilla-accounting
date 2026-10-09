@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Maximize2, X, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 interface PdfFrameProps {
   /** iframe source URL for the PDF */
@@ -39,8 +40,8 @@ export function PdfFrame({ src, title, href, className }: PdfFrameProps) {
         type="button"
         onClick={() => setExpanded(true)}
         className="absolute top-2 right-2 p-1.5 rounded bg-background/90 border border-border shadow-sm text-muted-foreground hover:text-foreground hover:bg-accent"
-        title="Vollbild"
-        aria-label="Vollbild öffnen"
+        title={t('pdf.fullscreen')}
+        aria-label={t('pdf.openFullscreen')}
       >
         <Maximize2 className="h-4 w-4" />
       </button>
@@ -57,7 +58,7 @@ export function PdfFrame({ src, title, href, className }: PdfFrameProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                title="In neuem Tab öffnen"
+                title={t('common.openInNewTab')}
               >
                 <ExternalLink className="h-4 w-4" />
               </a>
@@ -65,11 +66,11 @@ export function PdfFrame({ src, title, href, className }: PdfFrameProps) {
                 type="button"
                 onClick={() => setExpanded(false)}
                 className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring"
-                title="Schliessen (Esc)"
-                aria-label="Schliessen"
+                title={t('pdf.closeEsc')}
+                aria-label={t('common.close')}
               >
                 <X className="h-5 w-5" />
-                <span>Schliessen</span>
+                <span>{t('common.close')}</span>
               </button>
             </div>
           </div>

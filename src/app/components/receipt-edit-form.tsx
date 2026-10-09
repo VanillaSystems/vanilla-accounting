@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Check, Wand2 } from 'lucide-react';
 import type { Receipt, ReceiptPatch } from '../../types/index.js';
-import { api } from '../lib/api.js';
+import { api, errorText } from '../lib/api.js';
+import { t } from '../i18n/index.js';
 import { cn } from '../lib/utils.js';
 
 type Draft = { filename: string; date: string; amount: string; currency: string; description: string; remarks: string };
@@ -55,7 +56,7 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
     try {
       set(field)((await call()) ?? '');
     } catch (e) {
-      setError(String(e));
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -68,7 +69,7 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
       const patch = patchOf(receipt, draft);
       onSaved(Object.keys(patch).length > 0 ? await api.patchReceipt(receipt.id, patch) : receipt);
     } catch (e) {
-      setError(String(e));
+      setError(errorText(e));
     } finally {
       setSaving(false);
     }
@@ -77,7 +78,7 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
   return (
     <div className="px-4 pb-3 space-y-2">
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Dateiname</label>
+        <label className="text-xs text-muted-foreground">{t('col.filename')}</label>
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -87,13 +88,13 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
             className="flex-1 border border-border rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 disabled:bg-muted"
             autoFocus
           />
-          <button onClick={() => suggest('filename', setFilenameSuggesting, () => api.suggestFilename(receipt.id))} disabled={filenameSuggesting || saving} title="KI-Vorschlag" className="p-1.5 border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50">
+          <button onClick={() => suggest('filename', setFilenameSuggesting, () => api.suggestFilename(receipt.id))} disabled={filenameSuggesting || saving} title={t('common.aiSuggestion')} className="p-1.5 border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50">
             <Wand2 className={cn('h-3.5 w-3.5', filenameSuggesting && 'animate-pulse')} />
           </button>
         </div>
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Datum</label>
+        <label className="text-xs text-muted-foreground">{t('col.date')}</label>
         <div className="flex items-center gap-2">
           <input
             type="date"
@@ -102,13 +103,13 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
             disabled={dateSuggesting || saving}
             className="border border-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 disabled:bg-muted"
           />
-          <button onClick={() => suggest('date', setDateSuggesting, () => api.suggestDate(receipt.id))} disabled={dateSuggesting || saving} title="KI-Vorschlag" className="p-1.5 border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50">
+          <button onClick={() => suggest('date', setDateSuggesting, () => api.suggestDate(receipt.id))} disabled={dateSuggesting || saving} title={t('common.aiSuggestion')} className="p-1.5 border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50">
             <Wand2 className={cn('h-3.5 w-3.5', dateSuggesting && 'animate-pulse')} />
           </button>
         </div>
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Betrag</label>
+        <label className="text-xs text-muted-foreground">{t('col.amount')}</label>
         <div className="flex items-center gap-2">
           <input
             type="number"
@@ -116,7 +117,7 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
             value={draft.amount}
             onChange={(e) => set('amount')(e.target.value)}
             disabled={saving}
-            placeholder="Betrag…"
+            placeholder={t('form.amountPlaceholder')}
             className="w-28 border border-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 disabled:bg-muted"
           />
           <input
@@ -124,30 +125,30 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
             value={draft.currency}
             onChange={(e) => set('currency')(e.target.value)}
             disabled={saving}
-            placeholder="Währung"
+            placeholder={t('col.currency')}
             maxLength={3}
             className="w-16 border border-border rounded px-2 py-1 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 disabled:bg-muted"
           />
         </div>
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Beschreibung</label>
+        <label className="text-xs text-muted-foreground">{t('col.description')}</label>
         <input
           type="text"
           value={draft.description}
           onChange={(e) => set('description')(e.target.value)}
           disabled={saving}
-          placeholder="Beschreibung…"
+          placeholder={t('transactions.descriptionPlaceholder')}
           className="w-full border border-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50 disabled:bg-muted"
         />
       </div>
       <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Notiz</label>
+        <label className="text-xs text-muted-foreground">{t('col.remarks')}</label>
         <textarea
           value={draft.remarks}
           onChange={(e) => set('remarks')(e.target.value)}
           disabled={saving}
-          placeholder="Notiz…"
+          placeholder={t('transactions.remarksPlaceholder')}
           rows={3}
           className="w-full border border-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-yellow-400 resize-none disabled:opacity-50 disabled:bg-muted"
         />
@@ -155,10 +156,10 @@ export function ReceiptEditForm({ receipt, onSaved, onCancel }: {
       <div className="flex items-center gap-2 pt-1">
         <button onClick={save} disabled={saving || filenameSuggesting || dateSuggesting || !draft.filename.trim()} className="flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/80 disabled:opacity-50">
           <Check className="h-3 w-3" />
-          Speichern
+          {t('common.save')}
         </button>
         <button onClick={onCancel} className="px-2 py-1 text-xs border border-border rounded hover:bg-accent text-muted-foreground">
-          Abbrechen
+          {t('common.cancel')}
         </button>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}

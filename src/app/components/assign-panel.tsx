@@ -3,14 +3,15 @@ import { X, Plus, Wand2, Check, AlertTriangle, ArrowDownLeft, ArrowUpRight } fro
 import type { Index, Receipt, BankTransaction } from '../../../src/types/index.js';
 import { cn, buildTxUrl } from '../lib/utils.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
-import { api } from '../lib/api.js';
+import { api, errorText } from '../lib/api.js';
+import { t } from '../i18n/index.js';
 
 function DirectionBadge({ direction }: { direction: BankTransaction['direction'] }) {
   const isCredit = direction === 'CRDT';
   const Icon = isCredit ? ArrowDownLeft : ArrowUpRight;
   return (
     <span
-      title={isCredit ? 'Gutschrift' : 'Belastung'}
+      title={isCredit ? t('direction.credit') : t('direction.debit')}
       className={cn(
         'shrink-0 inline-flex items-center justify-center h-4 w-4 rounded-sm',
         isCredit
@@ -78,7 +79,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
       setCreateOpen(false);
       setForm({ date: '', description: '', amount: '', currency: 'CHF' });
     } catch (e) {
-      setCreateError(String(e));
+      setCreateError(errorText(e));
     } finally {
       setCreateSaving(false);
     }
@@ -137,9 +138,9 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
     )}>
       {/* Currently linked */}
       <div>
-        <p className="text-xs font-medium text-muted-foreground mb-1.5">Zugeordnete Transaktionen</p>
+        <p className="text-xs font-medium text-muted-foreground mb-1.5">{t('assign.linkedTransactions')}</p>
         {linkedTxs.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">Keine</p>
+          <p className="text-xs text-muted-foreground italic">{t('transactions.noLinkedReceipts')}</p>
         ) : (
           <div className="space-y-1">
             {linkedTxs.map((tx) => (
@@ -152,14 +153,14 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                 <span className="text-muted-foreground tabular-nums shrink-0">{tx.currency} {tx.amount.toFixed(2)}</span>
                 <ReceiptCountBadge
                   count={(receiptCountByRef.get(tx.ref) ?? 1) - 1}
-                  title={`Auch ${(receiptCountByRef.get(tx.ref) ?? 1) - 1} weiteren Belegen zugeordnet`}
+                  title={t('assign.alsoLinkedTo', { n: (receiptCountByRef.get(tx.ref) ?? 1) - 1 })}
                 />
                 <OpenInTabLink href={buildTxUrl(tx.ref)} size="xs" />
                 <button
                   onClick={() => handleRemove(tx.ref)}
                   disabled={busy === tx.ref}
                   className="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 disabled:opacity-40 shrink-0"
-                  title="Zuordnung entfernen"
+                  title={t('assign.remove')}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -181,8 +182,8 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
           }
           <span className="flex-1">
             {isApproved
-              ? 'Mehrfachzuordnung genehmigt'
-              : 'Dieser Beleg ist mehreren Transaktionen zugeordnet – bitte prüfen.'
+              ? t('receipts.duplicateApproved')
+              : t('assign.duplicateWarning')
             }
           </span>
           {!isApproved && onApproveDuplicate && (
@@ -195,7 +196,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
               disabled={approvingDuplicate}
               className="shrink-0 px-2 py-0.5 rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 font-medium"
             >
-              {approvingDuplicate ? 'Wird genehmigt…' : 'Genehmigen'}
+              {approvingDuplicate ? t('assign.approving') : t('assign.approve')}
             </button>
           )}
         </div>
@@ -208,7 +209,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-          placeholder="Transaktion suchen (Ref, Beschreibung, Datum)…"
+          placeholder={t('assign.search')}
           className="w-full border border-border rounded px-2 py-1 text-xs bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           autoFocus
         />
@@ -235,7 +236,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                 <span className="text-muted-foreground tabular-nums shrink-0">{tx.currency} {tx.amount.toFixed(2)}</span>
                 <ReceiptCountBadge
                   count={receiptCountByRef.get(tx.ref) ?? 0}
-                  title={`Bereits ${receiptCountByRef.get(tx.ref) ?? 0} ${(receiptCountByRef.get(tx.ref) ?? 0) === 1 ? 'Beleg' : 'Belegen'} zugeordnet`}
+                  title={t('assign.alreadyLinked', { n: receiptCountByRef.get(tx.ref) ?? 0 })}
                 />
                 <OpenInTabLink href={buildTxUrl(tx.ref)} size="xs" />
               </div>
@@ -243,7 +244,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
           </div>
         )}
         {q && searchResults.length === 0 && (
-          <p className="text-xs text-muted-foreground mt-1">Keine Transaktionen gefunden.</p>
+          <p className="text-xs text-muted-foreground mt-1">{t('transactions.none')}</p>
         )}
       </div>
 
@@ -256,16 +257,16 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
               className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 font-medium"
             >
               <Plus className="h-3.5 w-3.5" />
-              Manuelle Transaktion erstellen
+              {t('assign.createManual')}
             </button>
           ) : (
             <div className="space-y-2">
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-medium text-violet-700">Neue manuelle Transaktion</p>
+                <p className="text-xs font-medium text-violet-700">{t('assign.newManual')}</p>
                 {suggesting && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Wand2 className="h-3 w-3 animate-pulse" />
-                    KI-Vorschlag…
+                    {t('assign.aiSuggesting')}
                   </span>
                 )}
               </div>
@@ -281,7 +282,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   type="text"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="Beschreibung"
+                  placeholder={t('col.description')}
                   disabled={suggesting || createSaving}
                   className="flex-1 min-w-[140px] border border-border rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-violet-400 disabled:opacity-50"
                 />
@@ -289,7 +290,7 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   type="number"
                   value={form.amount}
                   onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                  placeholder="Betrag"
+                  placeholder={t('col.amount')}
                   min="0"
                   step="0.01"
                   disabled={suggesting || createSaving}
@@ -311,13 +312,13 @@ export function AssignPanel({ receipt, index, onAdd, onRemove, onApproveDuplicat
                   className="flex items-center gap-1 px-2 py-1 text-xs bg-violet-700 text-white rounded hover:bg-violet-800 disabled:opacity-50"
                 >
                   <Check className="h-3 w-3" />
-                  {createSaving ? 'Speichern…' : 'Speichern'}
+                  {createSaving ? t('common.saving') : t('common.save')}
                 </button>
                 <button
                   onClick={() => setCreateOpen(false)}
                   className="px-2 py-1 text-xs border border-border rounded hover:bg-accent text-muted-foreground"
                 >
-                  Abbrechen
+                  {t('common.cancel')}
                 </button>
               </div>
               {createError && <p className="text-xs text-red-500">{createError}</p>}

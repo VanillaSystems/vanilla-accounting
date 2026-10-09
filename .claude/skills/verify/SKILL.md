@@ -28,6 +28,8 @@ The sandbox makes **no model calls**. Every model call goes through `src/llm/ask
 
 Two sandboxes can run side by side because each one has its own ports, data, and Vite cache.
 
+`READONLY=1 $S up my-run` starts the API in audit mode, as `npm run start:audit` does: every write answers 403 with `code: "readonly"`, and the UI shows the amber audit bar and hides its edit controls.
+
 ## Doctor
 
 ```bash

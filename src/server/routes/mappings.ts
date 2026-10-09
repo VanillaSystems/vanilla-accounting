@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { CLOSED, assertOpen, refDates, receiptDates, withBooks, RequestError } from '../books.js';
+import { assertOpen, refDates, receiptDates, withBooks, RequestError } from '../books.js';
 
 export const router = Router();
 
@@ -14,7 +14,7 @@ router.post('/api/mapping/add', (req, res) => {
   return withBooks(res, (books) => {
     if (!books.receipts.some((r) => r.id === receiptId)) throw new RequestError(404, 'Receipt not found');
     if (!books.transactions.some((t) => t.ref === transactionRef)) throw new RequestError(404, 'Transaction not found');
-    assertOpen(books, refDates(books, transactionRef), CLOSED.mapping);
+    assertOpen(books, refDates(books, transactionRef), 'mapping');
 
     if (!books.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receiptId)) {
       books.mappings.push({ transactionRef, receiptId });
@@ -28,7 +28,7 @@ router.post('/api/mapping/approve-duplicate', (req, res) => {
   if (!receiptId) throw new RequestError(400, 'receiptId is required');
 
   return withBooks(res, (books) => {
-    assertOpen(books, receiptDates(books, receiptId), CLOSED.mapping);
+    assertOpen(books, receiptDates(books, receiptId), 'mapping');
     books.mappings = books.mappings.map((m) =>
       m.receiptId === receiptId ? { ...m, approvedDuplicate: true } : m,
     );
@@ -39,7 +39,7 @@ router.post('/api/mapping/approve-duplicate', (req, res) => {
 router.post('/api/mapping/remove', (req, res) => {
   const { receiptId, transactionRef } = linkBody(req.body);
   return withBooks(res, (books) => {
-    assertOpen(books, refDates(books, transactionRef), CLOSED.mapping);
+    assertOpen(books, refDates(books, transactionRef), 'mapping');
     books.mappings = books.mappings.filter(
       (m) => !(m.transactionRef === transactionRef && m.receiptId === receiptId),
     );

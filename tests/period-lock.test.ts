@@ -18,9 +18,9 @@ after(() => api?.stop());
 
 type Call = { method: string; path: string; body?: unknown };
 
-async function send({ method, path, body }: Call): Promise<{ status: number; error?: string }> {
+async function send({ method, path, body }: Call): Promise<{ status: number; error?: string; json: Record<string, unknown> }> {
   const { status, json } = await api.send(method, path, body);
-  return { status, error: json.error as string | undefined };
+  return { status, error: json.error as string | undefined, json };
 }
 
 const refused: Array<Call & { status: number }> = [
@@ -48,13 +48,24 @@ const refused: Array<Call & { status: number }> = [
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
 ];
 
+test('status: not in audit mode', async () => {
+  assert.deepEqual((await api.send('GET', '/api/status')).json, { ok: true, readonly: false });
+});
+
 for (const call of refused) {
   test(`refused: ${call.method} ${call.path} ${JSON.stringify(call.body ?? '')} -> ${call.status}, index unchanged`, async () => {
     const before = readFileSync(api.indexPath);
-    const { status, error } = await send(call);
+    const { status, error, json } = await send(call);
     assert.equal(status, call.status, error);
-    if (status === 403) assert.match(error ?? '', /^Periode geschlossen bis 2026-06-30\. /);
-    if (status === 400) assert.match(error ?? '', /Nur manuelle Transaktionen/);
+    if (status === 403) {
+      assert.match(error ?? '', /^Periode geschlossen bis 2026-06-30\. /);
+      assert.equal(json.code, 'periodClosed', 'the UI translates the refusal by its code');
+      assert.equal((json.params as { closedThrough: string }).closedThrough, '2026-06-30');
+    }
+    if (status === 400) {
+      assert.match(error ?? '', /Nur manuelle Transaktionen/);
+      assert.equal(json.code, 'manualOnly');
+    }
     assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
   });
 }

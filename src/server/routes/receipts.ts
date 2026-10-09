@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import type { Receipt, ReceiptPatch } from '../../types/index.js';
 import { ask } from '../../llm/ask.js';
 import { buildDateSuggestPrompt, buildVisionPrompt } from '../../llm/prompts.js';
-import { receiptDir, CLOSED, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { receiptDir, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
@@ -55,7 +55,7 @@ router.delete('/api/receipts/:id', (req, res) => {
   withBooks(res, (books) => {
     const idx = books.receipts.findIndex((r) => r.id === id);
     if (idx === -1) throw new RequestError(404, 'Receipt not found');
-    assertOpen(books, receiptDates(books, id), CLOSED.deleteReceipt);
+    assertOpen(books, receiptDates(books, id), 'deleteReceipt');
 
     const [receipt] = books.receipts.splice(idx, 1);
     pdfPath = join(receiptDir(receipt.location), receipt.filename);
@@ -74,7 +74,7 @@ router.post('/api/vision/extract', async (req, res) => {
   const books = readBooks();
   const receipt = books.receipts.find((r) => r.id === receiptId);
   if (!receipt) throw new RequestError(404, 'Receipt not found');
-  assertOpen(books, receiptDates(books, receiptId), CLOSED.editReceipt);
+  assertOpen(books, receiptDates(books, receiptId), 'editReceipt');
 
   const pdfPath = join(receiptDir(receipt.location), receipt.filename);
   if (!existsSync(pdfPath)) throw new RequestError(404, 'PDF file not found on disk');
@@ -85,7 +85,7 @@ router.post('/api/vision/extract', async (req, res) => {
   withBooks(res, (books) => {
     const receipt = books.receipts.find((r) => r.id === receiptId);
     if (!receipt) throw new RequestError(404, 'Receipt not found');
-    assertOpen(books, receiptDates(books, receiptId), CLOSED.editReceipt);
+    assertOpen(books, receiptDates(books, receiptId), 'editReceipt');
     receipt.extractedText = text;
     receipt.extractionMethod = 'claude';
     receipt.needsVisionReview = undefined;
@@ -121,7 +121,7 @@ router.patch('/api/receipts/:id', (req, res) => {
     withBooks(res, (books) => {
       const idx = books.receipts.findIndex((r) => r.id === id);
       if (idx === -1) throw new RequestError(404, 'Receipt not found');
-      assertOpen(books, receiptDates(books, id), CLOSED.editReceipt);
+      assertOpen(books, receiptDates(books, id), 'editReceipt');
 
       const receipt = books.receipts[idx];
       if (patch.filename !== undefined) undoRename = renameReceiptFile(receipt, patch.filename);
@@ -142,7 +142,7 @@ function renameReceiptFile(receipt: Receipt, filename: string): () => void {
   const to = join(dir, filename);
   // Case-only renames hit the same file on a case-insensitive disk; that is not a clash.
   if (existsSync(to) && filename.toLowerCase() !== receipt.filename.toLowerCase()) {
-    throw new RequestError(409, `Datei ${filename} existiert bereits.`);
+    throw new RequestError(409, `Datei ${filename} existiert bereits.`, { code: 'fileExists', params: { filename } });
   }
   if (!existsSync(from)) return () => {};
   renameSync(from, to);

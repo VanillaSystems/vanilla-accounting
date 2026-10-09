@@ -1,6 +1,7 @@
 import express from 'express';
 import { ClosedPeriodError } from '../books/store.js';
 import { RequestError } from './books.js';
+import type { ApiErrorBody, ApiStatus } from '../types/api-error.js';
 import { router as classify } from './routes/classify.js';
 import { router as scan } from './routes/scan.js';
 import { router as receipts } from './routes/receipts.js';
@@ -20,7 +21,7 @@ export const READONLY = process.env.READONLY === '1';
 if (READONLY) {
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
-      res.status(403).json({ error: 'Nur-Lese-Modus: Änderungen sind während der Prüfung deaktiviert.' });
+      res.status(403).json({ error: 'Nur-Lese-Modus: Änderungen sind während der Prüfung deaktiviert.', code: 'readonly' } satisfies ApiErrorBody);
       return;
     }
     next();
@@ -28,14 +29,16 @@ if (READONLY) {
 }
 
 app.get('/api/status', (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
 app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message });
-  else if (err instanceof RequestError) res.status(err.status).json({ error: err.message });
+  if (err instanceof ClosedPeriodError) {
+    const params = { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}) };
+    res.status(403).json({ error: err.message, code: 'periodClosed', params } satisfies ApiErrorBody);
+  } else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

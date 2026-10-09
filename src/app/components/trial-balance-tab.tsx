@@ -3,6 +3,7 @@ import type { Index } from '../../types/index.js';
 import { computeTrialBalance, computeAccountLedger } from '../../accounting/index.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 export function periodToRange(period: string): { from: string; to: string; year: string } {
   if (period === 'all') {
@@ -57,13 +58,13 @@ export function TrialBalanceTab({ index, period }: Props) {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="bg-muted border-b border-border px-3 py-1.5 flex items-center gap-2 shrink-0">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Saldobilanz</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tab.trialBalance')}</span>
         <span className="text-xs text-muted-foreground tabular-nums">
-          {from} bis {to}
+          {t('common.dateRange', { from, to })}
         </span>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-muted-foreground tabular-nums">
-            {trialBalance.rows.length} Konten
+            {t('trial.accountCount', { n: trialBalance.rows.length })}
           </span>
           <span
             className={cn(
@@ -73,7 +74,7 @@ export function TrialBalanceTab({ index, period }: Props) {
                 : 'bg-destructive/10 text-destructive',
             )}
           >
-            {trialBalance.isBalanced ? 'Ausgeglichen' : 'Nicht ausgeglichen'}
+            {trialBalance.isBalanced ? t('trial.balanced') : t('trial.unbalanced')}
           </span>
         </div>
       </div>
@@ -84,11 +85,11 @@ export function TrialBalanceTab({ index, period }: Props) {
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-muted border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2 text-left font-semibold w-20">Konto</th>
-                <th className="px-3 py-2 text-left font-semibold">Name</th>
-                <th className="px-3 py-2 text-right font-semibold w-28">Soll CHF</th>
-                <th className="px-3 py-2 text-right font-semibold w-28">Haben CHF</th>
-                <th className="px-3 py-2 text-right font-semibold w-28">Saldo CHF</th>
+                <th className="px-3 py-2 text-left font-semibold w-20">{t('col.account')}</th>
+                <th className="px-3 py-2 text-left font-semibold">{t('col.name')}</th>
+                <th className="px-3 py-2 text-right font-semibold w-28">{t('col.debitChf')}</th>
+                <th className="px-3 py-2 text-right font-semibold w-28">{t('col.creditChf')}</th>
+                <th className="px-3 py-2 text-right font-semibold w-28">{t('col.balanceChf')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -130,7 +131,7 @@ export function TrialBalanceTab({ index, period }: Props) {
             <tfoot>
               <tr className="bg-muted border-t-2 border-border font-semibold">
                 <td className="px-3 py-2 text-foreground" colSpan={2}>
-                  Total
+                  {t('common.total')}
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
                   {trialBalance.totalDebits.toFixed(2)}
@@ -157,30 +158,30 @@ export function TrialBalanceTab({ index, period }: Props) {
         <div className="flex-1 flex flex-col overflow-hidden bg-background">
           {!selectedAccount || !ledger ? (
             <div className="flex-1 flex items-center justify-center text-sm text-dim">
-              Konto auswählen für Details
+              {t('trial.selectAccount')}
             </div>
           ) : (
           <>
             <div className="bg-muted border-b border-border px-4 py-2 flex items-center gap-2 shrink-0">
               <span className="font-mono text-sm font-semibold text-foreground">{selectedAccount}</span>
               <span className="text-sm text-foreground">{selectedName}</span>
-              <span className="ml-auto text-xs text-muted-foreground tabular-nums">{ledger.rows.length} Buchungen</span>
+              <span className="ml-auto text-xs text-muted-foreground tabular-nums">{t('common.entryCount', { n: ledger.rows.length })}</span>
             </div>
             <div className="flex-1 overflow-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-muted border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-semibold w-24">Datum</th>
-                    <th className="px-3 py-2 text-left font-semibold">Beschreibung</th>
-                    <th className="px-3 py-2 text-right font-semibold w-24">Soll CHF</th>
-                    <th className="px-3 py-2 text-right font-semibold w-24">Haben CHF</th>
-                    <th className="px-3 py-2 text-right font-semibold w-28">Saldo CHF</th>
+                    <th className="px-3 py-2 text-left font-semibold w-24">{t('col.date')}</th>
+                    <th className="px-3 py-2 text-left font-semibold">{t('col.description')}</th>
+                    <th className="px-3 py-2 text-right font-semibold w-24">{t('col.debitChf')}</th>
+                    <th className="px-3 py-2 text-right font-semibold w-24">{t('col.creditChf')}</th>
+                    <th className="px-3 py-2 text-right font-semibold w-28">{t('col.balanceChf')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
                   <tr className="bg-muted/50">
                     <td className="px-3 py-1.5 text-muted-foreground"></td>
-                    <td className="px-3 py-1.5 text-muted-foreground font-medium">Eröffnungssaldo</td>
+                    <td className="px-3 py-1.5 text-muted-foreground font-medium">{t('ledger.openingBalance')}</td>
                     <td className="px-3 py-1.5"></td>
                     <td className="px-3 py-1.5"></td>
                     <td className="px-3 py-1.5 text-right font-mono tabular-nums font-medium">
@@ -208,7 +209,7 @@ export function TrialBalanceTab({ index, period }: Props) {
                 <tfoot>
                   <tr className="border-t-2 border-border bg-muted/50">
                     <td className="px-3 py-2"></td>
-                    <td className="px-3 py-2 font-medium text-foreground">Schlusssaldo</td>
+                    <td className="px-3 py-2 font-medium text-foreground">{t('ledger.closingBalance')}</td>
                     <td className="px-3 py-2"></td>
                     <td className="px-3 py-2"></td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums font-bold text-foreground">

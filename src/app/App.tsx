@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Calendar } from 'lucide-react';
+import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Calendar, Lock } from 'lucide-react';
 import type { Receipt } from '../../src/types/index.js';
 import { useIndex } from './hooks/use-index.js';
 import { useApiStatus } from './hooks/use-api-status.js';
@@ -25,11 +25,14 @@ import { PdfFrame } from './components/pdf-frame.js';
 import { ReceiptEditForm } from './components/receipt-edit-form.js';
 import { ManualTransactionForm } from './components/manual-transaction-form.js';
 import { cn } from './lib/utils.js';
-import { api, orAlert } from './lib/api.js';
+import { api, orAlert, errorText } from './lib/api.js';
+import { LOCALES, t } from './i18n/index.js';
 
-export default function App() {
+export default function App({ language, onLanguage }: { language: string; onLanguage: (code: string) => void }) {
   const { data: index, loading, error, refresh } = useIndex();
-  const apiOnline = useApiStatus();
+  const { online: apiOnline, readonly } = useApiStatus();
+  /** Edit controls show only when a write could succeed: the API runs and is not in audit mode. */
+  const canEdit = apiOnline && !readonly;
   const restoredRef = useRef(false);
   const skipReceiptClearRef = useRef(false);
 
@@ -47,7 +50,7 @@ export default function App() {
   useEffect(() => {
     setEditOpen(false);
     setDeleteConfirmOpen(false);
-    setAssignOpen(!!selectedReceipt && apiOnline);
+    setAssignOpen(!!selectedReceipt && canEdit);
   }, [selectedReceipt?.id]);
 
   useEffect(() => {
@@ -70,7 +73,7 @@ export default function App() {
       await api.visionExtract(selectedReceipt.id);
       refresh();
     } catch (e) {
-      alert(String(e));
+      alert(errorText(e));
     } finally {
       setVisionExtracting(false);
     }
@@ -115,7 +118,7 @@ export default function App() {
       setSelectedReceipt(null);
       refresh();
     } catch (e) {
-      alert(String(e));
+      alert(errorText(e));
     } finally {
       setDeleteInProgress(false);
     }
@@ -129,10 +132,10 @@ export default function App() {
     setBatchStatus(null);
     try {
       const data = await api.batchRename();
-      setBatchStatus(`Done: ${data.renamed} renamed, ${data.skipped} skipped, ${data.failed} failed`);
+      setBatchStatus(t('receipts.batchRenameDone', data));
       refresh();
     } catch (e) {
-      setBatchStatus(String(e));
+      setBatchStatus(errorText(e));
     } finally {
       setBatchRenaming(false);
     }
@@ -176,17 +179,22 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-muted overflow-hidden">
-      {/* Header */}
+      {readonly && (
+        <div role="status" data-testid="audit-bar" className="shrink-0 flex items-center justify-center gap-2 px-6 py-1.5 text-xs font-medium bg-amber-100 text-amber-900 border-b border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
+          <Lock className="h-3.5 w-3.5 shrink-0" />
+          {t('app.auditBar')}
+        </div>
+      )}
       <header className="bg-background border-b border-border px-6 py-3 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-foreground">Vanilla Accounting</h1>
-          <span className="text-xs text-muted-foreground">Belegverwaltung</span>
+          <span className="text-xs text-muted-foreground">{t('app.subtitle')}</span>
         </div>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{index.receipts.length} Belege</span>
-          <span>{index.transactions.length} Transaktionen</span>
-          <span className="text-amber-600">{unlinkedCount} nicht zugeordnet</span>
-          <div className="flex items-center gap-1.5 ml-2" title="Zeitraum / Quartal wählen">
+          <span>{t('app.receiptCount', { n: index.receipts.length })}</span>
+          <span>{t('app.transactionCount', { n: index.transactions.length })}</span>
+          <span className="text-amber-600">{t('app.unlinkedCount', { n: unlinkedCount })}</span>
+          <div className="flex items-center gap-1.5 ml-2" title={t('app.periodPicker')}>
             <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <select
               value={period}
@@ -194,27 +202,44 @@ export default function App() {
               className="border border-border rounded px-2 py-1 text-xs text-foreground bg-background focus:outline-none focus:ring-1 focus:ring-ring"
             >
               {periodOptions.map((opt) => (
-                <option key={opt} value={opt}>{opt === 'all' ? 'Alle Perioden' : opt.replace('-Q', ' Q')}</option>
+                <option key={opt} value={opt}>{opt === 'all' ? t('app.allPeriods') : opt.replace('-Q', ' Q')}</option>
               ))}
             </select>
           </div>
-          {apiOnline && <span className="text-green-600">● API aktiv</span>}
+          {apiOnline && <span className="text-green-600">● {t('app.apiOnline')}</span>}
+          <div className="flex items-center rounded-md border border-border overflow-hidden" role="group" aria-label={t('app.language')}>
+            {LOCALES.map(({ code, name }) => (
+              <button
+                key={code}
+                onClick={() => onLanguage(code)}
+                title={name}
+                lang={code}
+                aria-pressed={language === code}
+                className={cn(
+                  'px-1.5 py-1 text-[10px] font-medium uppercase border-l border-border first:border-l-0 transition-colors',
+                  language === code ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent',
+                )}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center rounded-md border border-border overflow-hidden">
-            <button onClick={() => setZoom((z) => Math.max(60, z - 10))} title="Verkleinern" className="p-1.5 bg-background text-muted-foreground hover:bg-accent transition-colors">
+            <button onClick={() => setZoom((z) => Math.max(60, z - 10))} title={t('app.zoomOut')} className="p-1.5 bg-background text-muted-foreground hover:bg-accent transition-colors">
               <ZoomOut className="h-3 w-3" />
             </button>
-            <button onClick={() => setZoom(100)} title={`${zoom}% – Zurücksetzen`} className="px-1 text-[10px] tabular-nums bg-background text-muted-foreground hover:bg-accent border-l border-r border-border transition-colors min-w-[2rem] text-center">
+            <button onClick={() => setZoom(100)} title={t('app.zoomReset', { zoom })} className="px-1 text-[10px] tabular-nums bg-background text-muted-foreground hover:bg-accent border-l border-r border-border transition-colors min-w-[2rem] text-center">
               {zoom}%
             </button>
-            <button onClick={() => setZoom((z) => Math.min(200, z + 10))} title="Vergrössern" className="p-1.5 bg-background text-muted-foreground hover:bg-accent transition-colors">
+            <button onClick={() => setZoom((z) => Math.min(200, z + 10))} title={t('app.zoomIn')} className="p-1.5 bg-background text-muted-foreground hover:bg-accent transition-colors">
               <ZoomIn className="h-3 w-3" />
             </button>
           </div>
           <div className="flex items-center rounded-md border border-border overflow-hidden">
             {([
-              { value: 'light' as const, icon: <Sun className="h-3 w-3" />, title: 'Hell' },
-              { value: 'system' as const, icon: <Monitor className="h-3 w-3" />, title: 'System' },
-              { value: 'dark' as const, icon: <Moon className="h-3 w-3" />, title: 'Dunkel' },
+              { value: 'light' as const, icon: <Sun className="h-3 w-3" />, title: t('app.themeLight') },
+              { value: 'system' as const, icon: <Monitor className="h-3 w-3" />, title: t('app.themeSystem') },
+              { value: 'dark' as const, icon: <Moon className="h-3 w-3" />, title: t('app.themeDark') },
             ]).map(({ value, icon, title }) => (
               <button
                 key={value}
@@ -234,16 +259,16 @@ export default function App() {
 
       {loading && (
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          Index wird geladen…
+          {t('app.loading')}
         </div>
       )}
 
       {error && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-2">
-            <p className="text-red-600 font-medium">books.json konnte nicht geladen werden</p>
+            <p className="text-red-600 font-medium">{t('app.loadFailed')}</p>
             <p className="text-sm text-muted-foreground">
-              <code className="bg-muted px-1 py-0.5 rounded font-mono">npm run extract</code> ausführen, dann neu laden.
+              {t('app.loadFailedHint', { command: 'npm run extract' })}
             </p>
             <p className="text-xs text-muted-foreground">{error}</p>
           </div>
@@ -258,11 +283,11 @@ export default function App() {
         >
           {/* Tab bar */}
           <Tabs.List className="bg-background border-b border-border px-6 flex items-center gap-0 shrink-0">
-            <TabTrigger value="receipts">Belege</TabTrigger>
-            <TabTrigger value="transactions">Transaktionen</TabTrigger>
-            <TabTrigger value="bank-statements">Kontoauszüge</TabTrigger>
+            <TabTrigger value="receipts">{t('tab.receipts')}</TabTrigger>
+            <TabTrigger value="transactions">{t('tab.transactions')}</TabTrigger>
+            <TabTrigger value="bank-statements">{t('tab.bankStatements')}</TabTrigger>
             <TabTrigger value="journal-entries">
-              Buchungen
+              {t('tab.journalEntries')}
               {(index.journalEntries?.length ?? 0) > 0 && (
                 <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-1.5 py-0.5 font-medium">
                   {index.journalEntries!.length}
@@ -270,12 +295,12 @@ export default function App() {
               )}
             </TabTrigger>
             <span className="mx-1 text-border">|</span>
-            <TabTrigger value="trial-balance">Saldobilanz</TabTrigger>
-            <TabTrigger value="balance-sheet">Bilanz</TabTrigger>
-            <TabTrigger value="income-statement">Erfolgsrechnung</TabTrigger>
-            <TabTrigger value="vat-report">MWST</TabTrigger>
-            <TabTrigger value="account-ledger">Kontoauszug</TabTrigger>
-            <TabTrigger value="bank-reconciliation">Kontenabgleich</TabTrigger>
+            <TabTrigger value="trial-balance">{t('tab.trialBalance')}</TabTrigger>
+            <TabTrigger value="balance-sheet">{t('tab.balanceSheet')}</TabTrigger>
+            <TabTrigger value="income-statement">{t('tab.incomeStatement')}</TabTrigger>
+            <TabTrigger value="vat-report">{t('tab.vat')}</TabTrigger>
+            <TabTrigger value="account-ledger">{t('tab.accountLedger')}</TabTrigger>
+            <TabTrigger value="bank-reconciliation">{t('tab.bankReconciliation')}</TabTrigger>
           </Tabs.List>
 
           {/* Belege tab */}
@@ -292,46 +317,46 @@ export default function App() {
                       filterMode === f ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent',
                     )}
                   >
-                    {f === 'all' ? 'alle' : f === 'linked' ? 'zugeordnet' : 'nicht zugeordnet'}
+                    {t(`filter.${f}`)}
                   </button>
                 ))}
               </div>
-              <SearchBar value={search} onChange={setSearch} className="w-72" placeholder="Dateiname, Text suchen…" />
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none" title="Dokumente ohne eigene Zahlung ausblenden: Begleitdokumente (z.B. Post-Aufgabebestätigungen), Kontoauszüge, Duplikate, sowie Belege mit Betrag 0 ohne MWST und ohne Zuordnung">
+              <SearchBar value={search} onChange={setSearch} className="w-72" placeholder={t('receipts.search')} />
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none" title={t('receipts.hideNonReceiptsHint')}>
                 <input type="checkbox" checked={hideZero} onChange={(e) => setHideZeroPersist(e.target.checked)} />
-                Nicht-Belege ausblenden ({zeroCount})
+                {t('receipts.hideNonReceipts', { n: zeroCount })}
               </label>
               <div className="ml-auto flex items-center gap-3">
                 {manualBatchStatus && <span className="text-xs text-muted-foreground">{manualBatchStatus}</span>}
                 {batchStatus && <span className="text-xs text-muted-foreground">{batchStatus}</span>}
-                <span className="text-xs text-muted-foreground">{index.receipts.length} Belege</span>
-                {apiOnline && manualBatchIds.size > 0 && (
+                <span className="text-xs text-muted-foreground">{t('app.receiptCount', { n: index.receipts.length })}</span>
+                {canEdit && manualBatchIds.size > 0 && (
                   <>
                     <button
                       onClick={() => setManualBatchIds(new Set())}
                       className="text-xs text-muted-foreground hover:text-foreground underline"
                     >
-                      Auswahl aufheben ({manualBatchIds.size})
+                      {t('receipts.clearSelection', { n: manualBatchIds.size })}
                     </button>
                     <button
                       onClick={() => setManualBatchModalOpen(true)}
                       className="flex items-center gap-1.5 px-3 py-1 text-xs bg-violet-700 text-white rounded hover:bg-violet-800"
-                      title="Für ausgewählte Belege manuelle Transaktionen (Auslagen) erstellen"
+                      title={t('receipts.createManualBatchHint')}
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      Manuelle Transaktionen erstellen ({manualBatchIds.size})
+                      {t('receipts.createManualBatch', { n: manualBatchIds.size })}
                     </button>
                   </>
                 )}
-                {apiOnline && (
+                {canEdit && (
                   <button
                     onClick={batchRename}
                     disabled={batchRenaming}
                     className="flex items-center gap-1.5 px-3 py-1 text-xs border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50"
-                    title="Dateinamen für alle unbenannten Belege generieren und anwenden"
+                    title={t('receipts.batchRenameHint')}
                   >
                     <Wand2 className="h-3.5 w-3.5" />
-                    {batchRenaming ? 'Umbenennen…' : 'Stapelumbenennung'}
+                    {batchRenaming ? t('receipts.batchRenaming') : t('receipts.batchRename')}
                   </button>
                 )}
               </div>
@@ -364,44 +389,44 @@ export default function App() {
                         {selectedReceipt.filename}
                       </span>
                       <div className="flex items-center gap-1">
-                        {apiOnline && selectedReceipt.needsVisionReview && (
+                        {canEdit && selectedReceipt.needsVisionReview && (
                           <button
                             onClick={runVisionExtract}
                             disabled={visionExtracting}
                             className="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                            title="Text mit KI-Bilderkennung extrahieren (sendet die Seite an Claude)"
+                            title={t('receipts.visionHint')}
                           >
                             <ScanLine className="h-3.5 w-3.5" />
-                            {visionExtracting ? 'Extrahieren…' : 'KI-Texterkennung'}
+                            {visionExtracting ? t('receipts.visionRunning') : t('receipts.vision')}
                           </button>
                         )}
-                        {apiOnline && (
+                        {canEdit && (
                           <button
                             onClick={() => setEditOpen((o) => !o)}
                             className={cn('p-1 rounded text-muted-foreground hover:text-foreground', editOpen ? 'bg-blue-100 text-blue-700 hover:text-blue-800' : 'hover:bg-accent')}
-                            title="Beleg bearbeiten"
+                            title={t('receipts.edit')}
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
                         )}
-                        {apiOnline && (
-                          <button onClick={() => setDeleteConfirmOpen(true)} className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600" title="Beleg löschen">
+                        {canEdit && (
+                          <button onClick={() => setDeleteConfirmOpen(true)} className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600" title={t('receipts.delete')}>
                             <Trash2 className="h-4 w-4" />
                           </button>
                         )}
-                        {apiOnline && (
+                        {canEdit && (
                           <button
                             onClick={() => setAssignOpen((o) => !o)}
                             className={cn('p-1 rounded text-muted-foreground hover:text-foreground', assignOpen ? 'bg-blue-100 text-blue-700 hover:text-blue-800' : 'hover:bg-accent')}
-                            title="Transaktion zuordnen"
+                            title={t('receipts.assign')}
                           >
                             <Link2 className="h-4 w-4" />
                           </button>
                         )}
-                        <a href={`/api/receipts/${selectedReceipt.id}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title="In neuem Tab öffnen">
+                        <a href={`/api/receipts/${selectedReceipt.id}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title={t('common.openInNewTab')}>
                           <ExternalLink className="h-4 w-4" />
                         </a>
-                        <button onClick={() => setSelectedReceipt(null)} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+                        <button onClick={() => setSelectedReceipt(null)} title={t('common.close')} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
                           <X className="h-4 w-4" />
                         </button>
                       </div>
@@ -429,7 +454,7 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {assignOpen && apiOnline && (
+                  {assignOpen && canEdit && (
                     <AssignPanel
                       key={selectedReceipt.id}
                       receipt={selectedReceipt}
@@ -474,14 +499,14 @@ export default function App() {
                       filterMode === f ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent',
                     )}
                   >
-                    {f === 'all' ? 'alle' : f === 'linked' ? 'zugeordnet' : 'nicht zugeordnet'}
+                    {t(`filter.${f}`)}
                   </button>
                 ))}
               </div>
-              <SearchBar value={search} onChange={setSearch} className="w-72" placeholder="Ref, Beschreibung suchen…" />
+              <SearchBar value={search} onChange={setSearch} className="w-72" placeholder={t('transactions.search')} />
               <div className="ml-auto flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">{index.transactions.length} Transaktionen</span>
-                {apiOnline && (
+                <span className="text-xs text-muted-foreground">{t('app.transactionCount', { n: index.transactions.length })}</span>
+                {canEdit && (
                   <button
                     onClick={() => setManualTx(manualTx ? null : { receiptId: selectedReceipt?.id })}
                     className={cn(
@@ -490,7 +515,7 @@ export default function App() {
                     )}
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    Manuelle Transaktion
+                    {t('transactions.manual')}
                   </button>
                 )}
               </div>
@@ -523,8 +548,8 @@ export default function App() {
               right={selectedTxRef && (
                 <>
                   <div className="flex items-center justify-between px-4 py-2 border-b bg-muted shrink-0">
-                    <span className="text-sm font-medium text-foreground">Transaktionsdetail</span>
-                    <button onClick={() => setSelectedTxRef(null)} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+                    <span className="text-sm font-medium text-foreground">{t('transactions.detail')}</span>
+                    <button onClick={() => setSelectedTxRef(null)} title={t('common.close')} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
                       <X className="h-4 w-4" />
                     </button>
                   </div>
@@ -532,7 +557,7 @@ export default function App() {
                     key={selectedTxRef}
                     txRef={selectedTxRef}
                     index={index}
-                    apiOnline={apiOnline}
+                    canEdit={canEdit}
                     onAddReceipt={async (receiptId) => {
                       await orAlert(api.addMapping({ receiptId, transactionRef: selectedTxRef }));
                       refresh();
@@ -582,7 +607,7 @@ export default function App() {
             value="journal-entries"
             className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
           >
-            <JournalEntriesTab index={index} period={period} onRefresh={refresh} apiOnline={apiOnline} />
+            <JournalEntriesTab index={index} period={period} onRefresh={refresh} canEdit={canEdit} />
           </Tabs.Content>
 
           {/* Saldobilanz tab */}
@@ -653,9 +678,9 @@ export default function App() {
       {deleteConfirmOpen && selectedReceipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !deleteInProgress && setDeleteConfirmOpen(false)}>
           <div className="bg-background rounded-lg shadow-xl border border-border p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-sm font-semibold text-foreground mb-1">Beleg löschen?</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-1">{t('receipts.deleteConfirmTitle')}</h2>
             <p className="text-xs text-muted-foreground mb-1">
-              Die Datei wird unwiderruflich vom Datenträger gelöscht und aus dem Index entfernt.
+              {t('receipts.deleteConfirmText')}
             </p>
             <p className="text-xs font-mono bg-muted border border-border rounded px-2 py-1 text-foreground truncate mb-4" title={selectedReceipt.filename}>
               {selectedReceipt.filename}
@@ -666,7 +691,7 @@ export default function App() {
                 disabled={deleteInProgress}
                 className="px-3 py-1.5 text-xs border border-border rounded hover:bg-accent text-muted-foreground disabled:opacity-50"
               >
-                Abbrechen
+                {t('common.cancel')}
               </button>
               <button
                 onClick={deleteReceipt}
@@ -674,7 +699,7 @@ export default function App() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
               >
                 <Trash2 className="h-3 w-3" />
-                {deleteInProgress ? 'Löschen…' : 'Löschen'}
+                {deleteInProgress ? t('common.deleting') : t('common.delete')}
               </button>
             </div>
           </div>

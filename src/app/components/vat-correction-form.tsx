@@ -3,6 +3,7 @@ import { derivePeriod } from '../../accounting/periods.js';
 import { roundCHF, taxOf, TAX_RATE_ROWS, type ReturnFigures, type TaxRateRow, type ZifferEffect } from '../../accounting/index.js';
 import { cn, fmt } from '../lib/utils.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
+import { accountingName, t } from '../i18n/index.js';
 
 interface Line {
   ziffer: string;
@@ -21,61 +22,61 @@ const plain = (ziffer: string, label: string, opts: Partial<Line> = {}): Line =>
 
 const rateLines = (row: TaxRateRow): Line[] => {
   const turnover = (f: ReturnFigures) => f.ziffern[row.ziffer] ?? 0;
-  const basis = row.kind === 'supply' ? 'brutto' : 'netto';
+  const name = accountingName(row.name);
   const optional = row.superseded;
   return [
-    { ziffer: row.ziffer, label: `${row.name} ${row.rate} %: Leistungen (${basis})`, value: turnover, optional },
-    { ziffer: row.ziffer, label: `${row.name} ${row.rate} %: Steuer`, value: (f) => roundCHF(taxOf(row, turnover(f))), optional, tax: true },
+    { ziffer: row.ziffer, label: t(row.kind === 'supply' ? 'form0535.rateSuppliesGross' : 'form0535.rateSuppliesNet', { name, rate: row.rate }), value: turnover, optional },
+    { ziffer: row.ziffer, label: t('form0535.rateTax', { name, rate: row.rate }), value: (f) => roundCHF(taxOf(row, turnover(f))), optional, tax: true },
   ];
 };
 
-/** Form 0535 (Korrekturabrechnung, effektive Methode), in the ESTV form's order. */
-const SECTIONS: { title: string; lines: Line[] }[] = [
+/** Form 0535 (Korrekturabrechnung, effektive Methode), in the ESTV form's order and the UI's language. */
+const sections = (): { title: string; lines: Line[] }[] => [
   {
-    title: 'I. Umsatz',
+    title: t('vat.sectionTurnover'),
     lines: [
-      plain('200', 'Total der vereinbarten bzw. vereinnahmten Entgelte'),
-      plain('205', 'In Ziffer 200 enthaltene Entgelte aus ausgenommenen Leistungen, für die optiert wird'),
-      plain('220', 'Von der Steuer befreite Leistungen (u.a. Exporte, Art. 23)'),
-      plain('221', 'Leistungen im Ausland'),
-      plain('225', 'Übertragung im Meldeverfahren (Art. 38)'),
-      plain('230', 'Von der Steuer ausgenommene Inlandleistungen (Art. 21)'),
-      plain('235', 'Entgeltsminderungen wie Skonti, Rabatte'),
-      plain('280', 'Diverses'),
-      plain('289', 'Total Ziff. 220 bis 280', { total: true }),
-      plain('299', 'Steuerbarer Gesamtumsatz (Ziff. 200 abzüglich Ziff. 289)', { total: true }),
+      plain('200', t('form0535.z200')),
+      plain('205', t('form0535.z205')),
+      plain('220', t('form0535.z220')),
+      plain('221', t('form0535.z221')),
+      plain('225', t('form0535.z225')),
+      plain('230', t('form0535.z230')),
+      plain('235', t('form0535.z235')),
+      plain('280', t('form0535.z280')),
+      plain('289', t('form0535.z289'), { total: true }),
+      plain('299', t('form0535.z299'), { total: true }),
     ],
   },
   {
-    title: 'II. Steuerberechnung',
+    title: t('vat.sectionTax'),
     lines: [
       ...TAX_RATE_ROWS.flatMap(rateLines),
-      plain('399', 'Total geschuldete Steuer', { total: true }),
+      plain('399', t('form0535.z399'), { total: true }),
     ],
   },
   {
-    title: 'Vorsteuer',
+    title: t('vat.sectionInputTax'),
     lines: [
-      plain('400', 'Vorsteuer auf Material- und Dienstleistungsaufwand'),
-      plain('405', 'Vorsteuer auf Investitionen und übrigem Betriebsaufwand'),
-      plain('410', 'Einlageentsteuerung (Art. 32)'),
-      plain('415', 'Vorsteuerkorrekturen: gemischte Verwendung, Eigenverbrauch (–)'),
-      plain('420', 'Vorsteuerkürzungen (–)'),
-      plain('479', 'Total Ziff. 400 bis 420', { total: true }),
+      plain('400', t('form0535.z400')),
+      plain('405', t('form0535.z405')),
+      plain('410', t('form0535.z410')),
+      plain('415', t('form0535.z415')),
+      plain('420', t('form0535.z420')),
+      plain('479', t('form0535.z479'), { total: true }),
     ],
   },
   {
-    title: 'Abrechnung',
+    title: t('vat.sectionSettlement'),
     lines: [
-      plain('500', 'Zu bezahlender Betrag', { total: true }),
-      plain('510', 'Guthaben der steuerpflichtigen Person', { total: true }),
+      plain('500', t('form0535.z500'), { total: true }),
+      plain('510', t('form0535.z510'), { total: true }),
     ],
   },
   {
-    title: 'III. Andere Mittelflüsse (Art. 18 Abs. 2)',
+    title: t('vat.sectionOtherFlows'),
     lines: [
-      plain('900', 'Subventionen, Tourismusabgaben, Entsorgungsbeiträge u.ä.'),
-      plain('910', 'Spenden, Dividenden, Schadenersatz u.ä.'),
+      plain('900', t('form0535.z900')),
+      plain('910', t('form0535.z910')),
     ],
   },
 ];
@@ -90,7 +91,7 @@ export interface EffectLine {
 /** The form lines an effect changes, in the form's order and wording; derived totals left out. */
 export function effectLines(period: ReturnFigures['period'], effect: ZifferEffect): EffectLine[] {
   const f: ReturnFigures = { period, ziffern: effect };
-  return SECTIONS.flatMap((s) => s.lines)
+  return sections().flatMap((s) => s.lines)
     .filter((line) => !line.total)
     .map((line) => ({ ziffer: line.ziffer, label: line.label, amount: line.value(f), tax: !!line.tax }))
     .filter((l) => l.amount !== 0);
@@ -115,29 +116,29 @@ export function CorrectionForm({ filed, corrected, selected, onSelect, children 
     <div className="vat-print max-w-3xl mx-auto">
       <div className="flex justify-between gap-4 border-2 border-foreground rounded px-3 py-2 mb-4">
         <div>
-          <div className="font-bold text-foreground">Korrekturabrechnung (effektive Methode)</div>
-          <div className="text-xs text-muted-foreground">Formular 0535. Diese Abrechnung ersetzt die bereits eingereichte Abrechnung.</div>
+          <div className="font-bold text-foreground">{t('form0535.title')}</div>
+          <div className="text-xs text-muted-foreground">{t('form0535.subtitle')}</div>
         </div>
         <div className="text-xs text-muted-foreground text-right tabular-nums">
-          <div>MWST-Nr: {uid} MWST</div>
-          <div>Abrechnungsperiode: {filed.period}</div>
-          <div>von/bis: {dmy(from)} – {dmy(to)}</div>
-          <div>bisher deklarierter Steuerbetrag: <span className="font-semibold text-foreground">CHF {declaredTax.toFixed(2)}</span></div>
+          <div>{t('form0535.vatNumber', { uid })}</div>
+          <div>{t('form0535.period', { period: filed.period })}</div>
+          <div>{t('form0535.fromTo', { from: dmy(from), to: dmy(to) })}</div>
+          <div>{t('form0535.declaredTax')} <span className="font-semibold text-foreground">CHF {declaredTax.toFixed(2)}</span></div>
         </div>
       </div>
 
       <table className="w-full table-fixed text-sm border border-border">
         <thead>
           <tr className="text-xs text-muted-foreground border-b border-border bg-muted">
-            <th className="px-2 py-1 text-left w-12">Ziffer</th>
-            <th className="px-2 py-1 text-left">Bezeichnung</th>
-            <th className="px-2 py-1 text-right w-28">bisher eingereicht</th>
-            <th className="px-2 py-1 text-right w-32">korrigiert (eintragen)</th>
-            <th className="px-2 py-1 text-right w-24">Differenz</th>
+            <th className="px-2 py-1 text-left w-12">{t('vat.colZiffer')}</th>
+            <th className="px-2 py-1 text-left">{t('form0535.colLabel')}</th>
+            <th className="px-2 py-1 text-right w-28">{t('form0535.colFiled')}</th>
+            <th className="px-2 py-1 text-right w-32">{t('form0535.colCorrected')}</th>
+            <th className="px-2 py-1 text-right w-24">{t('recon.colDifference')}</th>
           </tr>
         </thead>
         <tbody>
-          {SECTIONS.map((section) => (
+          {sections().map((section) => (
             <Fragment key={section.title}>
               <tr className="bg-muted">
                 <td colSpan={5} className="px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{section.title}</td>
@@ -176,8 +177,7 @@ export function CorrectionForm({ filed, corrected, selected, onSelect, children 
         </tbody>
       </table>
       <p className="text-xs text-muted-foreground mt-2">
-        «korrigiert» ist aus den heutigen Buchungen berechnet: die Buchungen der Periode und die Korrekturbuchungen mit corrects = {filed.period}.
-        Geänderte Ziffern sind hervorgehoben. Ziffer anklicken für die Korrekturfälle und Korrekturbuchungen dazu.
+        {t('form0535.explanation', { period: filed.period })}
       </p>
       {children}
     </div>

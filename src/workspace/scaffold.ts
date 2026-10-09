@@ -29,6 +29,8 @@ export interface InitInput {
   uid: Uid;
   owner: string;
   business?: string;
+  /** The UI language (appLanguages()); German when absent. */
+  language?: string;
   preset: Preset;
   answers: SupportedAnswers;
   banks: { bank: string; currency: string; account: string; iban?: Iban }[];
@@ -83,6 +85,7 @@ function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): stri
       uid: input.uid,
       owner: input.owner,
       ...(input.business ? { business: input.business } : {}),
+      ...(input.language ? { language: input.language } : {}),
       legalForm,
       vat: { registered: true, method: 'effective', reporting: 'received', period: 'quarterly' },
     },

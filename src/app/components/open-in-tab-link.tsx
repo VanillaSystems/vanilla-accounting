@@ -1,5 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 interface OpenInTabLinkProps {
   href: string;
@@ -10,7 +11,7 @@ interface OpenInTabLinkProps {
 
 /** Small "open detail view in new tab" icon link. Stops click propagation so it
  *  doesn't trigger a parent row's in-place select handler. */
-export function OpenInTabLink({ href, className, size = 'sm', title = 'In neuem Tab öffnen' }: OpenInTabLinkProps) {
+export function OpenInTabLink({ href, className, size = 'sm', title = t('common.openInNewTab') }: OpenInTabLinkProps) {
   return (
     <a
       href={href}

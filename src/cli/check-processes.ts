@@ -347,9 +347,10 @@ if (existsSync(ws.paths.books) && counterparties.length) {
 }
 
 // Second homes growing back: counterparty names in code. src/knowledge is the loader of their one home.
+// The UI dictionaries are prose in four languages: Italian "tutti" (all) is not the marketplace.
 const codeHits: string[] = [];
 const sources = readdirSync(join(APP_ROOT, 'src'), { recursive: true, encoding: 'utf8' })
-  .filter((f) => /\.tsx?$/.test(f) && !f.startsWith(`knowledge${sep}`))
+  .filter((f) => /\.tsx?$/.test(f) && !f.startsWith(`knowledge${sep}`) && !f.startsWith(join('app', 'i18n', 'locales')))
   .sort();
 for (const f of sources) {
   // Code may name an authority (the ESTV's XML, the BAZG's rates): that is the law, not a vendor rule.

@@ -4,10 +4,11 @@ import { caseEffect, reconcileCases, roundCHF, type ReturnFigures } from '../../
 import { effectLines, type EffectLine } from './vat-correction-form.js';
 import { EntryDetail } from './vat-entry-table.js';
 import { cn, fmt } from '../lib/utils.js';
+import { t } from '../i18n/index.js';
 
 const signed = (n: number) => `${n > 0 ? '+' : ''}${fmt(n)}`;
 const tone = (n: number) => n < 0 && 'text-red-600 dark:text-red-400';
-const short = (l: EffectLine) => `${l.ziffer}${l.tax ? ' Steuer' : ''}`;
+const short = (l: EffectLine) => (l.tax ? t('cases.zifferTax', { ziffer: l.ziffer }) : l.ziffer);
 
 /**
  * Why a filed quarter is corrected, case by case: what was wrong, the fix, the entries
@@ -51,13 +52,13 @@ export function CorrectionCases({ cases, entries, receipts, filed, corrected, zi
     <div className={cn(print ? 'mt-8' : 'p-4')}>
       <div className="flex items-baseline gap-3 mb-2">
         <h3 className="text-sm font-bold text-foreground">
-          {print ? 'Begründung der Korrekturen' : 'Korrekturfälle'}
-          {ziffer ? `, Ziffer ${ziffer}` : ''}: {shown.length} von {mine.length}
+          {print ? t('cases.printTitle') : t('cases.title')}
+          {ziffer ? `, ${t('vat.ziffer', { ziffer })}` : ''}: {t('cases.shownOf', { shown: shown.length, total: mine.length })}
         </h3>
         {!print && shown.length > 0 && (
           <button type="button" className="ml-auto text-xs px-2 py-0.5 rounded border border-border hover:bg-accent"
             onClick={() => setOpen(allOpen ? new Set() : new Set(shown.map((m) => m.c.id)))}>
-            {allOpen ? 'alle zuklappen' : 'alle aufklappen'}
+            {allOpen ? t('cases.collapseAll') : t('cases.expandAll')}
           </button>
         )}
       </div>
@@ -75,32 +76,32 @@ export function CorrectionCases({ cases, entries, receipts, filed, corrected, zi
                 {!print && <span className="text-xs text-muted-foreground w-3">{expanded ? '▾' : '▸'}</span>}
                 <span className="font-semibold text-sm text-foreground flex-1">{c.title}</span>
                 <span className="text-xs font-mono tabular-nums text-muted-foreground text-right">
-                  {lines.length === 0 ? 'keine Wirkung auf die Abrechnung'
+                  {lines.length === 0 ? t('cases.noEffectShort')
                     : lines.map((l) => <span key={l.label} className={cn('ml-2', tone(l.amount))}>{short(l)} {signed(l.amount)}</span>)}
                 </span>
               </button>
               {expanded && (
                 <div className="border-t border-border text-sm">
                   <dl className="px-3 py-2 space-y-1">
-                    <div><dt className="inline font-semibold">Was war falsch: </dt><dd className="inline">{c.wrong}</dd></div>
-                    <div><dt className="inline font-semibold">Korrektur: </dt><dd className="inline">{c.fix}</dd></div>
+                    <div><dt className="inline font-semibold">{t('cases.wrong')} </dt><dd className="inline">{c.wrong}</dd></div>
+                    <div><dt className="inline font-semibold">{t('cases.fix')} </dt><dd className="inline">{c.fix}</dd></div>
                     {c.source && (
                       <div className="text-xs text-muted-foreground">
-                        <dt className="inline">Quelle: </dt>
+                        <dt className="inline">{t('cases.source')} </dt>
                         <dd className="inline font-mono">
                           {receipt ? <a className="underline hover:text-foreground" href={`/receipts?receipt=${receipt.id}`}>{c.source}</a> : c.source}
                         </dd>
                       </div>
                     )}
                   </dl>
-                  <EntryDetail entries={pick(c.originalEntryIds)} title="Vorher (wie eingereicht)" />
-                  <EntryDetail entries={pick(c.correctionEntryIds)} title="Korrekturbuchungen" />
+                  <EntryDetail entries={pick(c.originalEntryIds)} title={t('cases.before')} />
+                  <EntryDetail entries={pick(c.correctionEntryIds)} title={t('cases.correctionEntries')} />
                   <div className="border-t border-border">
                     <div className="px-4 py-2 bg-muted text-xs font-semibold text-muted-foreground">
-                      Wirkung auf die Korrekturabrechnung{c.correctionEntryIds.length ? '' : ' (Vorher-Buchungen neu deklariert)'}
+                      {c.correctionEntryIds.length ? t('cases.effect') : t('cases.effectRedeclared')}
                     </div>
                     {lines.length === 0 ? (
-                      <div className="px-4 py-2 text-muted-foreground">Keine: die Korrektur ändert nur die Buchhaltung, keine Ziffer.</div>
+                      <div className="px-4 py-2 text-muted-foreground">{t('cases.noEffect')}</div>
                     ) : (
                       <table className="w-full text-sm">
                         <tbody className="divide-y divide-border/50">
@@ -132,21 +133,21 @@ function Reconciliation({ count, reconciliation: { unexplained, orphans } }: {
   if (unexplained.length === 0 && orphans.length === 0) {
     return (
       <div data-reconciliation="ok" className="px-3 py-2 text-xs rounded border border-border bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200">
-        Abgleich: die {count} Fälle erklären die ganze Differenz zwischen «bisher eingereicht» und «korrigiert», auf jeder Ziffer.
+        {t('cases.reconciled', { n: count })}
       </div>
     );
   }
   return (
     <div data-reconciliation="unexplained" className="px-3 py-2 text-xs rounded border border-border bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 space-y-1">
-      {unexplained.length > 0 && <div className="font-semibold">Nicht erklärte Differenz:</div>}
+      {unexplained.length > 0 && <div className="font-semibold">{t('cases.unexplained')}</div>}
       {unexplained.map((u) => (
         <div key={u.ziffer} className="font-mono tabular-nums">
-          Ziffer {u.ziffer}: Differenz {signed(u.difference)}, durch Fälle erklärt {signed(u.explained)}, offen {signed(roundCHF(u.difference - u.explained))}
+          {t('cases.unexplainedLine', { ziffer: u.ziffer, difference: signed(u.difference), explained: signed(u.explained), open: signed(roundCHF(u.difference - u.explained)) })}
         </div>
       ))}
       {orphans.length > 0 && (
         <div>
-          <div className="font-semibold">Korrekturbuchungen ohne Fall: {orphans.length}</div>
+          <div className="font-semibold">{t('cases.orphans', { n: orphans.length })}</div>
           {orphans.map((e) => <div key={e.id} className="font-mono">{e.id} {e.date} {e.description}</div>)}
         </div>
       )}
