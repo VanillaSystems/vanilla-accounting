@@ -46,6 +46,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/journal-entries/jc', status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
+  { method: 'POST', path: '/api/year-close/2026/entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1520', amount: 100, description: 'rückdatiert' }, status: 403 },
 ];
 
 test('status: not in audit mode', async () => {
@@ -98,6 +99,8 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => !i.transactions.some((t) => t.ref === 'M2026-002') && !i.mappings.some((m) => m.transactionRef === 'M2026-002') },
   { method: 'DELETE', path: '/api/journal-entries/jo',
     check: (i) => !i.journalEntries!.some((j) => j.id === 'jo') },
+  { method: 'POST', path: '/api/year-close/2026/entries', body: { date: '2026-08-31', accountDebit: '6800', accountCredit: '1520', amount: 100, description: 'Abschreibung' },
+    check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'M2026-004' && j.date === '2026-08-31' && j.origin === 'manual') },
 ];
 
 for (const call of allowed) {

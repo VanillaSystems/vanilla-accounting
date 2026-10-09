@@ -4,7 +4,7 @@ import { ALL, localToday, parsePeriod, type Period } from '../../accounting/peri
 
 export type FilterMode = 'all' | 'linked' | 'unlinked';
 
-const VALID_TABS = ['receipts', 'transactions', 'bank-statements', 'journal-entries', 'trial-balance', 'balance-sheet', 'income-statement', 'vat-report', 'account-ledger', 'bank-reconciliation'];
+const VALID_TABS = ['receipts', 'transactions', 'bank-statements', 'journal-entries', 'trial-balance', 'balance-sheet', 'income-statement', 'vat-report', 'account-ledger', 'bank-reconciliation', 'year-close'];
 
 /** Query keys that belong to one tab's selection: dropped when the tab changes. */
 const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx', 'account'];

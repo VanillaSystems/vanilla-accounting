@@ -11,6 +11,7 @@ router.patch('/api/journal-entries/:id', (req, res) => {
     const entry = books.journalEntries.find((je) => je.id === id);
     if (!entry) throw new RequestError(404, 'Journal entry not found');
     assertOpen(books, [entry.date, updates.date], 'editEntry');
+    if (entry.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
 
     if (updates.date !== undefined) entry.date = updates.date;
     if (updates.accountDebit !== undefined) entry.accountDebit = updates.accountDebit;
