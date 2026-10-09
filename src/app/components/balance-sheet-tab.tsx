@@ -6,6 +6,7 @@ import { getAccountMap } from '../lib/accounts.js';
 import { cn, formatDate } from '../lib/utils.js';
 import { accountingName, t } from '../i18n/index.js';
 import { useUrlParam } from '../hooks/use-url-state.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { SplitPane } from './split-pane.js';
 import { AccountPanel, accountRowProps } from './account-panel.js';
 
@@ -31,6 +32,10 @@ export function BalanceSheetTab({ index, period }: Props) {
     () => computeBalanceSheet(entries, asOfDate, openingBalances, accountNames),
     [entries, asOfDate, openingBalances, accountNames],
   );
+
+  // Assets first, then liabilities: the order of the rows on screen.
+  const accountRows = [...bs.assets, ...bs.liabilities].flatMap((section) => section.rows.flatMap((row) => row.account || []));
+  useAutoSelectFirst(accountRows, account, setAccount);
 
   const hasData = bs.assets.some(s => s.rows.length > 0) || bs.liabilities.some(s => s.rows.length > 0);
 

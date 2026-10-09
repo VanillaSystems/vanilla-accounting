@@ -6,6 +6,7 @@ import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
 import { useUrlParam } from '../hooks/use-url-state.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { SplitPane } from './split-pane.js';
 import { AccountPanel, accountRowProps } from './account-panel.js';
 
@@ -30,6 +31,7 @@ export function TrialBalanceTab({ index, period }: Props) {
   }, [entries, from, to, openingBalances, accountNames]);
 
   const totalBalance = trialBalance.totalDebits - trialBalance.totalCredits;
+  useAutoSelectFirst(trialBalance.rows.map((r) => r.account), selectedAccount, setSelectedAccount);
 
 
   return (
