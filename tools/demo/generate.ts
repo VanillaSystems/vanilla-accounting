@@ -227,7 +227,14 @@ function build(demo: Demo, seed: number): Tree {
   const draft = book(demo, sc.payments);
   const q1 = figuresFromBooks(draft.entries, demo.filed.period, []);
   if (q1.payable <= 0) throw new Error(`${demo.dir}: Q1 must have tax to pay, got ${q1.payable}`);
-  const { booked, entries, keys } = book(demo, [...sc.payments, sc.taxPayment(q1.payable)]);
+  // The Korrekturabrechnung: Q1 as today's books declare it, corrections included, less what was filed.
+  const corrections: JournalEntry[] = sc.manual.filter((m) => m.corrects).map((m) => ({
+    id: m.key, transactionRef: m.key, date: m.date, accountDebit: m.debit, accountCredit: m.credit, amount: m.amount,
+    ...(m.vatCode ? { vatCode: m.vatCode } : {}), description: m.text, corrects: m.corrects,
+  }));
+  const difference = r2(figuresFromBooks([...draft.entries, ...corrections], demo.filed.period, []).payable - q1.payable);
+  const correctionPayment = sc.correctionPayment && difference !== 0 ? [sc.correctionPayment(difference)] : [];
+  const { booked, entries, keys } = book(demo, [...sc.payments, sc.taxPayment(q1.payable), ...correctionPayment]);
 
   const privately = booked.filter((b) => b.payment.bank === PAID_PRIVATELY).length;
   const manualEntries = sc.manual.map((m, i) => ({ ...m, ref: `M${YEAR}-${String(privately + i + 1).padStart(3, '0')}` }));
@@ -235,7 +242,7 @@ function build(demo: Demo, seed: number): Tree {
     const id = hashId(m.ref);
     keys.set(m.key, id);
     entries.push({
-      id, transactionRef: m.ref, date: m.date, accountDebit: m.debit, accountCredit: m.credit, amount: m.amount, vatCode: m.vatCode,
+      id, transactionRef: m.ref, date: m.date, accountDebit: m.debit, accountCredit: m.credit, amount: m.amount, ...(m.vatCode ? { vatCode: m.vatCode } : {}),
       description: m.text.replace(/\{id:([\w-]+)\}/g, (_, k: string) => keys.get(k) ?? `{unknown key ${k}}`),
       ...(m.corrects ? { corrects: m.corrects } : {}),
     });

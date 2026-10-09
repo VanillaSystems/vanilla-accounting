@@ -17,13 +17,13 @@
       </Acct>
       <Bal>
         <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">34729.83</Amt>
+        <Amt Ccy="CHF">32743.53</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-04-01</Dt></Dt>
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">31220.79</Amt>
+        <Amt Ccy="CHF">26762.19</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-06-30</Dt></Dt>
       </Bal>
@@ -122,7 +122,7 @@
         <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">7150.00</Amt>
+        <Amt Ccy="CHF">7812.10</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
@@ -132,7 +132,7 @@
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
-            <Amt Ccy="CHF">7150.00</Amt>
+            <Amt Ccy="CHF">7812.10</Amt>
             <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
             <RmtInf><Ustrd>Lohn April 2026</Ustrd></RmtInf>
             <AddtlTxInf>Nettolohn April 2026</AddtlTxInf>
@@ -273,7 +273,7 @@
         <AddtlNtryInf>Zahlung Muster Akademie</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">7150.00</Amt>
+        <Amt Ccy="CHF">7812.10</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
@@ -283,7 +283,7 @@
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
-            <Amt Ccy="CHF">7150.00</Amt>
+            <Amt Ccy="CHF">7812.10</Amt>
             <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
             <RmtInf><Ustrd>Lohn Mai 2026</Ustrd></RmtInf>
             <AddtlTxInf>Nettolohn Mai 2026</AddtlTxInf>
@@ -386,13 +386,32 @@
         <AddtlNtryInf>Debitkarte SAMPLE LABS INC SEATTLE</AddtlNtryInf>
       </Ntry>
       <Ntry>
+        <Amt Ccy="CHF">486.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-15</Dt></BookgDt>
+        <ValDt><Dt>2026-06-15</Dt></ValDt>
+        <AcctSvcrRef>90000000044</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">486.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Eidg. Steuerverwaltung ESTV</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000535246813579120269</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>MWST Korrekturabrechnung 1. Quartal 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Eidg. Steuerverwaltung ESTV</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
         <Amt Ccy="CHF">87.90</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-18</Dt></BookgDt>
         <ValDt><Dt>2026-06-18</Dt></ValDt>
-        <AcctSvcrRef>90000000044</AcctSvcrRef>
+        <AcctSvcrRef>90000000045</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -411,7 +430,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-22</Dt></BookgDt>
         <ValDt><Dt>2026-06-22</Dt></ValDt>
-        <AcctSvcrRef>90000000045</AcctSvcrRef>
+        <AcctSvcrRef>90000000046</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -424,17 +443,17 @@
         <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">7150.00</Amt>
+        <Amt Ccy="CHF">7812.10</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-25</Dt></BookgDt>
         <ValDt><Dt>2026-06-25</Dt></ValDt>
-        <AcctSvcrRef>90000000046</AcctSvcrRef>
+        <AcctSvcrRef>90000000047</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
-            <Amt Ccy="CHF">7150.00</Amt>
+            <Amt Ccy="CHF">7812.10</Amt>
             <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
             <RmtInf><Ustrd>Lohn Juni 2026</Ustrd></RmtInf>
             <AddtlTxInf>Nettolohn Juni 2026</AddtlTxInf>
@@ -449,7 +468,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-26</Dt></BookgDt>
         <ValDt><Dt>2026-06-26</Dt></ValDt>
-        <AcctSvcrRef>90000000047</AcctSvcrRef>
+        <AcctSvcrRef>90000000048</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -468,7 +487,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-29</Dt></BookgDt>
         <ValDt><Dt>2026-06-29</Dt></ValDt>
-        <AcctSvcrRef>90000000048</AcctSvcrRef>
+        <AcctSvcrRef>90000000049</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -487,7 +506,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-30</Dt></BookgDt>
         <ValDt><Dt>2026-06-30</Dt></ValDt>
-        <AcctSvcrRef>90000000049</AcctSvcrRef>
+        <AcctSvcrRef>90000000050</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>

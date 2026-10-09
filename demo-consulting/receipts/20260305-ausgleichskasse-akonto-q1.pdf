@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 571 >>
+<< /Length 585 >>
 stream
 BT
 /F1 10 Tf
@@ -29,9 +29,9 @@ T* () Tj
 T* (Akontorechnung AK-2026-Q1) Tj
 T* (Datum: 05.03.2026) Tj
 T* () Tj
-T* (AHV/IV/EO 10.6% auf Lohnsumme Q1: CHF 2’735.40) Tj
+T* (AHV/IV/EO 10.6% auf Lohnsumme Q1 von 25’800.00: CHF 2’734.80) Tj
 T* (ALV 2.2% auf Lohnsumme Q1: CHF 567.60) Tj
-T* (Familienausgleichskasse und Verwaltungskosten: CHF 309.60) Tj
+T* (Familienausgleichskasse und Verwaltungskosten: CHF 310.20) Tj
 T* () Tj
 T* (Total CHF 3’612.60) Tj
 T* (Keine Schweizer MWST ausgewiesen) Tj
@@ -51,5 +51,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-959
+973
 %%EOF

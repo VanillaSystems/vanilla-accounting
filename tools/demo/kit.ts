@@ -56,7 +56,7 @@ export interface Payment { bank: string; date: string; text: string; parts: Part
  * leg's entry id. Its ref is M<year>-nnn, numbered after the payments paid privately, in list order.
  */
 export interface ManualEntry {
-  date: string; debit: string; credit: string; amount: number; vatCode: string;
+  date: string; debit: string; credit: string; amount: number; vatCode?: string;
   text: string; currency?: 'EUR'; corrects?: QuarterKey; key: string; doc?: Doc;
 }
 
@@ -67,6 +67,8 @@ export interface Scenario {
   correctionCases: CorrectionCase[];
   /** The bank payment of a filed quarter's tax, once its figure is known. */
   taxPayment(payable: number): Payment;
+  /** The bank payment of the filed quarter's Korrekturabrechnung (0535): what the corrections add to its tax. */
+  correctionPayment?(difference: number): Payment;
 }
 
 /** One demo workspace: who the company is, its chart and banks, and its year as a Scenario. */

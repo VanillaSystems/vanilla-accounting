@@ -23,7 +23,7 @@
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">34729.83</Amt>
+        <Amt Ccy="CHF">32743.53</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-03-31</Dt></Dt>
       </Bal>
@@ -141,7 +141,7 @@
         <AddtlNtryInf>Zahlung Muster Versicherungen AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">7150.00</Amt>
+        <Amt Ccy="CHF">7812.10</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
@@ -151,7 +151,7 @@
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
-            <Amt Ccy="CHF">7150.00</Amt>
+            <Amt Ccy="CHF">7812.10</Amt>
             <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
             <RmtInf><Ustrd>Lohn Januar 2026</Ustrd></RmtInf>
             <AddtlTxInf>Nettolohn Januar 2026</AddtlTxInf>
@@ -272,7 +272,7 @@
         <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">7150.00</Amt>
+        <Amt Ccy="CHF">7812.10</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
@@ -282,7 +282,7 @@
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
-            <Amt Ccy="CHF">7150.00</Amt>
+            <Amt Ccy="CHF">7812.10</Amt>
             <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
             <RmtInf><Ustrd>Lohn Februar 2026</Ustrd></RmtInf>
             <AddtlTxInf>Nettolohn Februar 2026</AddtlTxInf>
@@ -404,7 +404,7 @@
         <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">7150.00</Amt>
+        <Amt Ccy="CHF">7812.10</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
@@ -414,7 +414,7 @@
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
-            <Amt Ccy="CHF">7150.00</Amt>
+            <Amt Ccy="CHF">7812.10</Amt>
             <RltdPties><Cdtr><Pty><Nm>LUKAS BEISPIEL</Nm></Pty></Cdtr></RltdPties>
             <RmtInf><Ustrd>Lohn März 2026</Ustrd></RmtInf>
             <AddtlTxInf>Nettolohn März 2026</AddtlTxInf>

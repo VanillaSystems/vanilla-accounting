@@ -26,7 +26,7 @@ const BANKS: Record<'raiffeisen' | 'wise-eur', StatementBank> = {
     iban: 'CH5880808000000000002', institution: 'Raiffeisenbank Bern-Muster', opening: 42000,
   },
   'wise-eur': {
-    bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR',
+    bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise EUR',
     iban: 'BE00967000000002', institution: 'Wise Europe SA', opening: 2500,
   },
 };
@@ -37,13 +37,14 @@ const OPENING_OTHER: Record<string, number> = { '1520': 1800, '2800': 20000 };
 /** KMU-Kontenrahmen numbers; 2451 is the owner's current account the app's processes name. */
 const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
   ['1020', 'Bank Raiffeisen'],
-  ['1023', 'Wise EUR'],
+  ['1021', 'Wise EUR'],
   ['1170', 'Vorsteuer Material und Dienstleistungen'],
   ['1171', 'Vorsteuer Investitionen und Betriebsaufwand'],
   ['1520', 'Büromaschinen, Informatik'],
   ['2000', 'Verbindlichkeiten aus Lieferungen und Leistungen'],
   ['2200', 'Geschuldete MWST'],
   ['2201', 'Abrechnungskonto MWST'],
+  ['2270', 'Sozialversicherungen und Vorsorgeeinrichtungen'],
   ['2451', 'Kontokorrent Gesellschafter'],
   ['2800', 'Stammkapital'],
   ['2970', 'Gewinnvortrag'],
@@ -84,6 +85,19 @@ const VENDORS = {
   estv: { name: 'Eidg. Steuerverwaltung ESTV', address: ['Schwarztorstrasse 50', '3003 Bern'], bankName: 'Eidg. Steuerverwaltung ESTV' },
 } satisfies Record<string, Vendor>;
 
+/**
+ * The owner's monthly salary. Employee deductions: AHV/IV/EO 5.3%, ALV 1.1%, and half of the BVG
+ * premium. The Ausgleichskasse bills both halves of AHV/IV/EO/ALV plus the FAK as a quarterly Akonto.
+ */
+const GROSS_SALARY = 8600;
+const BVG_QUARTER = 1425;
+const BVG_EMPLOYEE = r2(BVG_QUARTER / 2 / 3);
+const AHV_EMPLOYEE = r2(GROSS_SALARY * 0.053 + GROSS_SALARY * 0.011);
+const EMPLOYEE_DEDUCTIONS = r2(AHV_EMPLOYEE + BVG_EMPLOYEE);
+const NET_SALARY = r2(GROSS_SALARY - EMPLOYEE_DEDUCTIONS);
+const AHV_EMPLOYEE_QUARTER = r2(3 * AHV_EMPLOYEE);
+const AHV_AKONTO = 3612.6;
+
 const invoice = invoicesFor(COMPANY);
 /** The company as the issuer of its own invoices. */
 const SELF: Vendor = { name: COMPANY.name, address: COMPANY.address, uid: COMPANY.uid, bankName: '' };
@@ -95,6 +109,7 @@ function scenario(seed: number): Scenario {
   const between = (lo: number, hi: number) => Math.round((lo + rnd() * (hi - lo)) * 20) / 20;
 
   const payments: Payment[] = [];
+  const manual: ManualEntry[] = [];
   const phone: { date: string; gross: number }[] = [];
   /** What the owner paid privately in each month, refunded at its end. */
   const outlays = new Map<number, number>();
@@ -149,15 +164,21 @@ function scenario(seed: number): Scenario {
       vatCode: 'V81', text: `Beispiel Treuhand, Beratungsmandat ${month}`, ...(m === 3 ? { key: 'treuhand-march', bookedAs: 'V0-E' as const } : {}),
     });
 
-    // Salary: the owner is the company's only employee. Only the payments are booked here (net pay,
-    // the social-insurance invoices); the payroll itself is calculated outside the books.
+    // Salary: the owner is the company's only employee. The gross salary is the expense on 5000:
+    // the bank pays the net, the employee's deductions wait on 2270 until the Ausgleichskasse and
+    // the pension fund are paid (examples/cases/salary-payment.yaml).
+    const payday = bankDay(isoDate(2026, m, 25));
     payments.push({
-      bank: 'raiffeisen', date: bankDay(isoDate(2026, m, 25)), text: `Lohnzahlung ${COMPANY.owner}`,
+      bank: 'raiffeisen', date: payday, text: `Lohnzahlung ${COMPANY.owner}`,
       parts: [{
         counterparty: COMPANY.owner.toUpperCase(), reference: `Lohn ${month}`, text: `Nettolohn ${month}`,
-        legs: [{ account: '5000', amount: -7150, text: `Nettolohn ${month}, ${COMPANY.owner}` }],
-        noReceipt: `Nettolohn ${month} gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST`,
+        legs: [{ account: '5000', amount: -NET_SALARY, text: `Lohn ${month} netto, ${COMPANY.owner}` }],
+        noReceipt: `Lohn ${month} gemäss Lohnabrechnung: brutto ${chf(GROSS_SALARY)}, netto ${chf(NET_SALARY)}; Lohn ist kein Entgelt im Sinne der MWST`,
       }],
+    });
+    manual.push({
+      date: payday, debit: '5000', credit: '2270', amount: EMPLOYEE_DEDUCTIONS, key: `salary-deductions-${mm}`,
+      text: `Lohn ${month} Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), ${COMPANY.owner}`,
     });
 
     // Coworking desk, billed monthly with MWST.
@@ -246,21 +267,24 @@ function scenario(seed: number): Scenario {
     }
 
     // Social insurance: the Ausgleichskasse's Akontorechnung each quarter (AHV/IV/EO/ALV, employer
-    // and employee share together, as the net pay already left the employee's share in the company).
+    // and employee share together). The employee's share clears 2270, the employer's is the expense.
     if (m % 3 === 0) {
       const ahvDate = bankDay(isoDate(2026, m, 26));
       payments.push({
         bank: 'raiffeisen', date: ahvDate, text: 'Zahlung Ausgleichskasse Muster',
         parts: [{
           counterparty: VENDORS.ausgleichskasse.bankName, reference: qrReference(`7700${YEAR}${quarter}`), text: `Akonto AHV Q${quarter} ${YEAR}`,
-          legs: [{ account: '5700', amount: -3612.6, text: `Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q${quarter} ${YEAR}` }],
+          legs: [
+            { account: '2270', amount: -AHV_EMPLOYEE_QUARTER, text: `Ausgleichskasse, Beiträge Arbeitnehmer Q${quarter} ${YEAR}` },
+            { account: '5700', amount: -r2(AHV_AKONTO - AHV_EMPLOYEE_QUARTER), text: `Ausgleichskasse, Beiträge Arbeitgeber Q${quarter} ${YEAR}` },
+          ],
           doc: invoice({
             file: `${YEAR}${mm}05-ausgleichskasse-akonto-q${quarter}`, vendor: VENDORS.ausgleichskasse, date: isoDate(2026, m, 5),
             title: 'Akontorechnung', number: `AK-${YEAR}-Q${quarter}`, description: `Ausgleichskasse, Akonto Q${quarter} ${YEAR}`, currency: 'CHF',
             items: [
-              { text: `AHV/IV/EO 10.6% auf Lohnsumme Q${quarter}`, gross: 2735.4, rate: 0 },
+              { text: `AHV/IV/EO 10.6% auf Lohnsumme Q${quarter} von ${chf(3 * GROSS_SALARY)}`, gross: 2734.8, rate: 0 },
               { text: `ALV 2.2% auf Lohnsumme Q${quarter}`, gross: 567.6, rate: 0 },
-              { text: 'Familienausgleichskasse und Verwaltungskosten', gross: 309.6, rate: 0 },
+              { text: 'Familienausgleichskasse und Verwaltungskosten', gross: 310.2, rate: 0 },
             ],
             footer: ['Sozialversicherungsbeiträge unterliegen nicht der MWST'],
           }),
@@ -275,11 +299,14 @@ function scenario(seed: number): Scenario {
         bank: 'raiffeisen', date: bvgDate, text: 'Zahlung Muster Sammelstiftung BVG',
         parts: [{
           counterparty: VENDORS.vorsorge.bankName, reference: qrReference(`5720${YEAR}${quarter}`), text: `BVG-Beitrag Q${quarter} ${YEAR}`,
-          legs: [{ account: '5720', amount: -1425, text: `Muster Sammelstiftung, BVG-Beiträge Q${quarter} ${YEAR}` }],
+          legs: [
+            { account: '2270', amount: -3 * BVG_EMPLOYEE, text: `Muster Sammelstiftung, BVG Arbeitnehmer Q${quarter} ${YEAR}` },
+            { account: '5720', amount: -r2(BVG_QUARTER - 3 * BVG_EMPLOYEE), text: `Muster Sammelstiftung, BVG Arbeitgeber Q${quarter} ${YEAR}` },
+          ],
           doc: invoice({
             file: `${YEAR}${mm}02-muster-sammelstiftung-bvg-q${quarter}`, vendor: VENDORS.vorsorge, date: isoDate(2026, m, 2),
             title: 'Beitragsrechnung', number: `BVG-${YEAR}-Q${quarter}`, description: `Muster Sammelstiftung, BVG Q${quarter} ${YEAR}`, currency: 'CHF',
-            items: [{ text: `Spar- und Risikobeiträge Q${quarter}, Arbeitgeber und Arbeitnehmer`, gross: 1425, rate: 0 }],
+            items: [{ text: `Spar- und Risikobeiträge Q${quarter}, Arbeitgeber und Arbeitnehmer`, gross: BVG_QUARTER, rate: 0 }],
             footer: ['Vorsorgebeiträge unterliegen nicht der MWST'],
           }),
         }],
@@ -407,7 +434,7 @@ function scenario(seed: number): Scenario {
   const q2Phone = r2(phone.filter((p) => p.date >= '2026-04-01' && p.date <= '2026-06-30').reduce((s, p) => s + p.gross, 0));
   const privateShare = r2(q2Phone * 0.2);
   const march = 6486;
-  const manual: ManualEntry[] = [
+  manual.push(
     {
       date: '2026-04-14', debit: '3400', credit: '3400', amount: march, vatCode: '-V0-E', corrects: '2026-Q1', key: 'treuhand-storno',
       text: 'Stornobuchung zu Buchung {id:treuhand-march} (Q1): Beispiel Treuhand Rechnung 2026-031 war als Leistung im Ausland (V0-E) gebucht',
@@ -420,7 +447,7 @@ function scenario(seed: number): Scenario {
       date: '2026-06-30', debit: '2451', credit: '6510', amount: privateShare, vatCode: 'K81-B', key: 'private-phone',
       text: `Eigenverbrauch: Privatanteil Mobiltelefon Q2 2026, 20% von CHF ${chf(q2Phone)} (${COMPANY.owner})`,
     },
-  ];
+  );
 
   const tax = taxIn(march, 8.1);
   const correctionCases: CorrectionCase[] = [{
@@ -444,6 +471,15 @@ function scenario(seed: number): Scenario {
         counterparty: VENDORS.estv.bankName, reference: qrReference(`461${COMPANY.uid.replace(/\D/g, '')}12026`), text: 'MWST 1. Quartal 2026',
         legs: [{ account: '2201', amount: -payable, text: 'ESTV, MWST-Abrechnung Q1 2026' }],
         noReceipt: 'MWST-Abrechnung Q1 2026, filings/2026/mwst-ech0217-2026-Q1.xml',
+      }],
+    }),
+    // The Korrekturabrechnung (form 0535) of Q1 declares the rebooked Treuhand invoice; the ESTV bills the difference.
+    correctionPayment: (difference) => ({
+      bank: 'raiffeisen', date: '2026-06-15', text: 'Zahlung Eidg. Steuerverwaltung ESTV',
+      parts: [{
+        counterparty: VENDORS.estv.bankName, reference: qrReference(`535${COMPANY.uid.replace(/\D/g, '')}12026`), text: 'MWST Korrekturabrechnung 1. Quartal 2026',
+        legs: [{ account: '2201', amount: -difference, text: 'ESTV, Korrekturabrechnung (0535) Q1 2026' }],
+        noReceipt: 'Korrekturabrechnung Q1 2026: Differenz laut Formular 0535 (MWST-Tab, Korrekturabrechnung)',
       }],
     }),
   };

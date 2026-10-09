@@ -26,7 +26,7 @@
    "transactionRef": "CARD-7000001",
    "date": "2026-01-12",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung Januar 2026",
@@ -47,10 +47,19 @@
    "id": "407739fc9d32a1c9",
    "transactionRef": "90000000003",
    "date": "2026-01-15",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 712.5,
+   "description": "Muster Sammelstiftung, BVG Arbeitnehmer Q1 2026"
+  },
+  {
+   "id": "4b24193e8b3f5c31",
+   "transactionRef": "90000000003",
+   "date": "2026-01-15",
    "accountDebit": "5720",
    "accountCredit": "1020",
-   "amount": 1425,
-   "description": "Muster Sammelstiftung, BVG-Beiträge Q1 2026"
+   "amount": 712.5,
+   "description": "Muster Sammelstiftung, BVG Arbeitgeber Q1 2026"
   },
   {
    "id": "d9ca56afa980744c",
@@ -96,8 +105,17 @@
    "date": "2026-01-26",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn Januar 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn Januar 2026 netto, Lukas Beispiel"
+  },
+  {
+   "id": "277a7cc9c995bac2",
+   "transactionRef": "M2026-015",
+   "date": "2026-01-26",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn Januar 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
   },
   {
    "id": "8f7617ef74112b9c",
@@ -122,7 +140,7 @@
    "id": "d98d8a2196f5b83a",
    "transactionRef": "TRANSFER-8000001",
    "date": "2026-02-02",
-   "accountDebit": "1023",
+   "accountDebit": "1021",
    "accountCredit": "3400",
    "amount": 3800,
    "vatCode": "V0-E",
@@ -145,7 +163,7 @@
    "transactionRef": "CARD-7000002",
    "date": "2026-02-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung Februar 2026",
@@ -208,8 +226,17 @@
    "date": "2026-02-25",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn Februar 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn Februar 2026 netto, Lukas Beispiel"
+  },
+  {
+   "id": "2c0186a7adb8dd51",
+   "transactionRef": "M2026-016",
+   "date": "2026-02-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn Februar 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
   },
   {
    "id": "f26716c1b0d7dce7",
@@ -255,7 +282,7 @@
    "transactionRef": "CARD-7000003",
    "date": "2026-03-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung März 2026",
@@ -308,17 +335,35 @@
    "date": "2026-03-25",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn März 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn März 2026 netto, Lukas Beispiel"
+  },
+  {
+   "id": "e1d235c3897c2758",
+   "transactionRef": "M2026-017",
+   "date": "2026-03-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn März 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
   },
   {
    "id": "be79fbaa19281a28",
    "transactionRef": "90000000022",
    "date": "2026-03-26",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1651.2,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q1 2026"
+  },
+  {
+   "id": "fe9f1aa0981643fd",
+   "transactionRef": "90000000022",
+   "date": "2026-03-26",
    "accountDebit": "5700",
    "accountCredit": "1020",
-   "amount": 3612.6,
-   "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q1 2026"
+   "amount": 1961.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q1 2026"
   },
   {
    "id": "4cefe3d6364871ca",
@@ -363,7 +408,7 @@
    "transactionRef": "CARD-7000004",
    "date": "2026-04-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung April 2026",
@@ -381,8 +426,8 @@
    "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch April 2026)"
   },
   {
-   "id": "277a7cc9c995bac2",
-   "transactionRef": "M2026-015",
+   "id": "e73c59bcdd480405",
+   "transactionRef": "M2026-024",
    "date": "2026-04-14",
    "accountDebit": "3400",
    "accountCredit": "3400",
@@ -392,8 +437,8 @@
    "corrects": "2026-Q1"
   },
   {
-   "id": "2c0186a7adb8dd51",
-   "transactionRef": "M2026-016",
+   "id": "19c8cc952c19fb57",
+   "transactionRef": "M2026-025",
    "date": "2026-04-14",
    "accountDebit": "3400",
    "accountCredit": "3400",
@@ -403,13 +448,22 @@
    "corrects": "2026-Q1"
   },
   {
-   "id": "dd65c91e02798c86",
+   "id": "27db9e5c61673560",
    "transactionRef": "90000000027",
    "date": "2026-04-15",
    "accountDebit": "5720",
    "accountCredit": "1020",
-   "amount": 1425,
-   "description": "Muster Sammelstiftung, BVG-Beiträge Q2 2026"
+   "amount": 712.5,
+   "description": "Muster Sammelstiftung, BVG Arbeitgeber Q2 2026"
+  },
+  {
+   "id": "dd65c91e02798c86",
+   "transactionRef": "90000000027",
+   "date": "2026-04-15",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 712.5,
+   "description": "Muster Sammelstiftung, BVG Arbeitnehmer Q2 2026"
   },
   {
    "id": "e7525e69bc60defd",
@@ -437,8 +491,17 @@
    "date": "2026-04-27",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn April 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn April 2026 netto, Lukas Beispiel"
+  },
+  {
+   "id": "013f219e8737b650",
+   "transactionRef": "M2026-018",
+   "date": "2026-04-27",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn April 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
   },
   {
    "id": "0cf15ff866cb4b68",
@@ -453,7 +516,7 @@
    "id": "95ecf31aef2632a9",
    "transactionRef": "TRANSFER-8000002",
    "date": "2026-04-29",
-   "accountDebit": "1023",
+   "accountDebit": "1021",
    "accountCredit": "3400",
    "amount": 3800,
    "vatCode": "V0-E",
@@ -486,7 +549,7 @@
    "transactionRef": "CARD-7000005",
    "date": "2026-05-11",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung Mai 2026",
@@ -559,8 +622,17 @@
    "date": "2026-05-25",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn Mai 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn Mai 2026 netto, Lukas Beispiel"
+  },
+  {
+   "id": "3a261a3f35eba832",
+   "transactionRef": "M2026-019",
+   "date": "2026-05-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn Mai 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
   },
   {
    "id": "0b35a5e2f155aba4",
@@ -625,7 +697,7 @@
    "transactionRef": "CARD-7000006",
    "date": "2026-06-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung Juni 2026",
@@ -645,6 +717,15 @@
   {
    "id": "ab182932d537f7ff",
    "transactionRef": "90000000044",
+   "date": "2026-06-15",
+   "accountDebit": "2201",
+   "accountCredit": "1020",
+   "amount": 486,
+   "description": "ESTV, Korrekturabrechnung (0535) Q1 2026"
+  },
+  {
+   "id": "d134b5cb2aefe43c",
+   "transactionRef": "90000000045",
    "date": "2026-06-18",
    "accountDebit": "6510",
    "accountCredit": "1020",
@@ -653,8 +734,8 @@
    "description": "Muster Telecom, Mobile-Abo Juni 2026"
   },
   {
-   "id": "d134b5cb2aefe43c",
-   "transactionRef": "90000000045",
+   "id": "ec15a424fe8da881",
+   "transactionRef": "90000000046",
    "date": "2026-06-22",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -663,26 +744,44 @@
    "description": "Beispiel Treuhand, Beratungsmandat Juni 2026"
   },
   {
-   "id": "ec15a424fe8da881",
-   "transactionRef": "90000000046",
+   "id": "a35b34e4f215b649",
+   "transactionRef": "90000000047",
    "date": "2026-06-25",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn Juni 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn Juni 2026 netto, Lukas Beispiel"
   },
   {
-   "id": "a35b34e4f215b649",
-   "transactionRef": "90000000047",
+   "id": "8000da90ef650c4b",
+   "transactionRef": "M2026-020",
+   "date": "2026-06-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn Juni 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
+  },
+  {
+   "id": "b6e3026341aa0b3a",
+   "transactionRef": "90000000048",
    "date": "2026-06-26",
    "accountDebit": "5700",
    "accountCredit": "1020",
-   "amount": 3612.6,
-   "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q2 2026"
+   "amount": 1961.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q2 2026"
   },
   {
    "id": "bec9823f547deb8c",
    "transactionRef": "90000000048",
+   "date": "2026-06-26",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1651.2,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q2 2026"
+  },
+  {
+   "id": "13ce8ebaa2feed1d",
+   "transactionRef": "90000000049",
    "date": "2026-06-29",
    "accountDebit": "2451",
    "accountCredit": "1020",
@@ -690,8 +789,8 @@
    "description": "Spesenrückerstattung Juni 2026, Lukas Beispiel"
   },
   {
-   "id": "13ce8ebaa2feed1d",
-   "transactionRef": "90000000049",
+   "id": "fc8f59188c3974ce",
+   "transactionRef": "90000000050",
    "date": "2026-06-30",
    "accountDebit": "6940",
    "accountCredit": "1020",
@@ -699,8 +798,8 @@
    "description": "Raiffeisen, Kontoführung Q2"
   },
   {
-   "id": "e1d235c3897c2758",
-   "transactionRef": "M2026-017",
+   "id": "586b769dea045d84",
+   "transactionRef": "M2026-026",
    "date": "2026-06-30",
    "accountDebit": "2451",
    "accountCredit": "6510",
@@ -709,8 +808,8 @@
    "description": "Eigenverbrauch: Privatanteil Mobiltelefon Q2 2026, 20% von CHF 303.95 (Lukas Beispiel)"
   },
   {
-   "id": "fc8f59188c3974ce",
-   "transactionRef": "90000000050",
+   "id": "fe35aade6ffcb9c4",
+   "transactionRef": "90000000051",
    "date": "2026-07-01",
    "accountDebit": "6000",
    "accountCredit": "1020",
@@ -719,8 +818,8 @@
    "description": "Muster Coworking, Fixdesk Juli 2026"
   },
   {
-   "id": "fe35aade6ffcb9c4",
-   "transactionRef": "90000000051",
+   "id": "f20c49f966d7fa29",
+   "transactionRef": "90000000052",
    "date": "2026-07-07",
    "accountDebit": "6570",
    "accountCredit": "1020",
@@ -733,7 +832,7 @@
    "transactionRef": "CARD-7000007",
    "date": "2026-07-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung Juli 2026",
@@ -751,17 +850,26 @@
    "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Juli 2026)"
   },
   {
-   "id": "f20c49f966d7fa29",
-   "transactionRef": "90000000052",
+   "id": "0ded262aaa3c8940",
+   "transactionRef": "90000000053",
+   "date": "2026-07-15",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 712.5,
+   "description": "Muster Sammelstiftung, BVG Arbeitnehmer Q3 2026"
+  },
+  {
+   "id": "81c23ad966df01ff",
+   "transactionRef": "90000000053",
    "date": "2026-07-15",
    "accountDebit": "5720",
    "accountCredit": "1020",
-   "amount": 1425,
-   "description": "Muster Sammelstiftung, BVG-Beiträge Q3 2026"
+   "amount": 712.5,
+   "description": "Muster Sammelstiftung, BVG Arbeitgeber Q3 2026"
   },
   {
-   "id": "0ded262aaa3c8940",
-   "transactionRef": "90000000053",
+   "id": "cb81d1072a39749c",
+   "transactionRef": "90000000054",
    "date": "2026-07-20",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -770,8 +878,8 @@
    "description": "Beispiel Treuhand, Beratungsmandat Juli 2026"
   },
   {
-   "id": "cb81d1072a39749c",
-   "transactionRef": "90000000054",
+   "id": "738c01da7cc7001c",
+   "transactionRef": "90000000055",
    "date": "2026-07-20",
    "accountDebit": "6510",
    "accountCredit": "1020",
@@ -780,17 +888,26 @@
    "description": "Muster Telecom, Mobile-Abo Juli 2026"
   },
   {
-   "id": "738c01da7cc7001c",
-   "transactionRef": "90000000055",
+   "id": "bd99dc7f1fd46934",
+   "transactionRef": "90000000056",
    "date": "2026-07-27",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn Juli 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn Juli 2026 netto, Lukas Beispiel"
   },
   {
-   "id": "bd99dc7f1fd46934",
-   "transactionRef": "90000000056",
+   "id": "4aaa0c9fc59f06a7",
+   "transactionRef": "M2026-021",
+   "date": "2026-07-27",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn Juli 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
+  },
+  {
+   "id": "4be8575d9926d3db",
+   "transactionRef": "90000000057",
    "date": "2026-07-28",
    "accountDebit": "2451",
    "accountCredit": "1020",
@@ -801,7 +918,7 @@
    "id": "08e30341b84e4a29",
    "transactionRef": "TRANSFER-8000003",
    "date": "2026-07-28",
-   "accountDebit": "1023",
+   "accountDebit": "1021",
    "accountCredit": "3400",
    "amount": 3800,
    "vatCode": "V0-E",
@@ -810,8 +927,8 @@
    "exchangeRate": 0.93835
   },
   {
-   "id": "4be8575d9926d3db",
-   "transactionRef": "90000000057",
+   "id": "3f83d2653b0cdfc4",
+   "transactionRef": "90000000058",
    "date": "2026-07-31",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -820,8 +937,8 @@
    "description": "Muster Logistik, Umsetzung Lagersteuerung, Phase 2"
   },
   {
-   "id": "3f83d2653b0cdfc4",
-   "transactionRef": "90000000058",
+   "id": "a0252c5543ee84ca",
+   "transactionRef": "90000000059",
    "date": "2026-08-03",
    "accountDebit": "6000",
    "accountCredit": "1020",
@@ -830,8 +947,8 @@
    "description": "Muster Coworking, Fixdesk August 2026"
   },
   {
-   "id": "a0252c5543ee84ca",
-   "transactionRef": "90000000059",
+   "id": "2e100442f7d8fd3a",
+   "transactionRef": "90000000060",
    "date": "2026-08-07",
    "accountDebit": "6570",
    "accountCredit": "1020",
@@ -844,7 +961,7 @@
    "transactionRef": "CARD-7000008",
    "date": "2026-08-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung August 2026",
@@ -872,8 +989,8 @@
    "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (August 2026)"
   },
   {
-   "id": "2e100442f7d8fd3a",
-   "transactionRef": "90000000060",
+   "id": "1d41695834ab1bb3",
+   "transactionRef": "90000000061",
    "date": "2026-08-18",
    "accountDebit": "6510",
    "accountCredit": "1020",
@@ -882,8 +999,8 @@
    "description": "Muster Telecom, Mobile-Abo August 2026"
   },
   {
-   "id": "1d41695834ab1bb3",
-   "transactionRef": "90000000061",
+   "id": "3a00c8c9167d4ff1",
+   "transactionRef": "90000000062",
    "date": "2026-08-19",
    "accountDebit": "6640",
    "accountCredit": "1020",
@@ -892,8 +1009,8 @@
    "description": "Parkhaus Beispiel, Kundenbesuch (Beleg fehlt)"
   },
   {
-   "id": "3a00c8c9167d4ff1",
-   "transactionRef": "90000000062",
+   "id": "de9bbad101f334c4",
+   "transactionRef": "90000000063",
    "date": "2026-08-20",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -902,17 +1019,26 @@
    "description": "Beispiel Treuhand, Beratungsmandat August 2026"
   },
   {
-   "id": "de9bbad101f334c4",
-   "transactionRef": "90000000063",
+   "id": "73e73f5d28c34372",
+   "transactionRef": "90000000064",
    "date": "2026-08-25",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn August 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn August 2026 netto, Lukas Beispiel"
   },
   {
-   "id": "73e73f5d28c34372",
-   "transactionRef": "90000000064",
+   "id": "6ffe633423ac4e16",
+   "transactionRef": "M2026-022",
+   "date": "2026-08-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn August 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
+  },
+  {
+   "id": "aee3a9aa151a75a6",
+   "transactionRef": "90000000065",
    "date": "2026-08-28",
    "accountDebit": "2451",
    "accountCredit": "1020",
@@ -920,8 +1046,8 @@
    "description": "Spesenrückerstattung August 2026, Lukas Beispiel"
   },
   {
-   "id": "aee3a9aa151a75a6",
-   "transactionRef": "90000000065",
+   "id": "6c1d0331543f4975",
+   "transactionRef": "90000000066",
    "date": "2026-09-01",
    "accountDebit": "6000",
    "accountCredit": "1020",
@@ -930,8 +1056,8 @@
    "description": "Muster Coworking, Fixdesk September 2026"
   },
   {
-   "id": "6c1d0331543f4975",
-   "transactionRef": "90000000066",
+   "id": "4516305e8009d720",
+   "transactionRef": "90000000067",
    "date": "2026-09-01",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -940,8 +1066,8 @@
    "description": "Example Analytics, Code-Review (Leistung im Ausland)"
   },
   {
-   "id": "4516305e8009d720",
-   "transactionRef": "90000000067",
+   "id": "0697c066928fbcb1",
+   "transactionRef": "90000000068",
    "date": "2026-09-07",
    "accountDebit": "6570",
    "accountCredit": "1020",
@@ -954,7 +1080,7 @@
    "transactionRef": "CARD-7000009",
    "date": "2026-09-10",
    "accountDebit": "6570",
-   "accountCredit": "1023",
+   "accountCredit": "1021",
    "amount": 32.43,
    "vatCode": "I81",
    "description": "Beispiel Software, Projektplanung September 2026",
@@ -972,8 +1098,8 @@
    "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch September 2026)"
   },
   {
-   "id": "0697c066928fbcb1",
-   "transactionRef": "90000000068",
+   "id": "8194a068c1be023e",
+   "transactionRef": "90000000069",
    "date": "2026-09-18",
    "accountDebit": "6510",
    "accountCredit": "1020",
@@ -982,8 +1108,8 @@
    "description": "Muster Telecom, Mobile-Abo September 2026"
   },
   {
-   "id": "8194a068c1be023e",
-   "transactionRef": "90000000069",
+   "id": "5220d6f058f4049b",
+   "transactionRef": "90000000070",
    "date": "2026-09-21",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -992,26 +1118,44 @@
    "description": "Beispiel Treuhand, Beratungsmandat September 2026"
   },
   {
-   "id": "5220d6f058f4049b",
-   "transactionRef": "90000000070",
+   "id": "41f24a41ee040c67",
+   "transactionRef": "90000000071",
    "date": "2026-09-25",
    "accountDebit": "5000",
    "accountCredit": "1020",
-   "amount": 7150,
-   "description": "Nettolohn September 2026, Lukas Beispiel"
+   "amount": 7812.1,
+   "description": "Lohn September 2026 netto, Lukas Beispiel"
   },
   {
-   "id": "41f24a41ee040c67",
-   "transactionRef": "90000000071",
-   "date": "2026-09-28",
-   "accountDebit": "5700",
-   "accountCredit": "1020",
-   "amount": 3612.6,
-   "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q3 2026"
+   "id": "5ad4012b119ab21e",
+   "transactionRef": "M2026-023",
+   "date": "2026-09-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 787.9,
+   "description": "Lohn September 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"
   },
   {
    "id": "82132cf4492e0b89",
    "transactionRef": "90000000072",
+   "date": "2026-09-28",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1651.2,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q3 2026"
+  },
+  {
+   "id": "b7079c34e41daf84",
+   "transactionRef": "90000000072",
+   "date": "2026-09-28",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 1961.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q3 2026"
+  },
+  {
+   "id": "46a79516892745b1",
+   "transactionRef": "90000000073",
    "date": "2026-09-28",
    "accountDebit": "2451",
    "accountCredit": "1020",
@@ -1019,8 +1163,8 @@
    "description": "Spesenrückerstattung September 2026, Lukas Beispiel"
   },
   {
-   "id": "46a79516892745b1",
-   "transactionRef": "90000000073",
+   "id": "7d7f179e367ed078",
+   "transactionRef": "90000000074",
    "date": "2026-09-30",
    "accountDebit": "6940",
    "accountCredit": "1020",
@@ -1033,7 +1177,7 @@
   "openingBalances": {
    "2026": {
     "1020": 42000,
-    "1023": 2345.85,
+    "1021": 2345.85,
     "1520": 1800,
     "2800": 20000,
     "2970": 26145.85
@@ -1041,7 +1185,7 @@
   },
   "openingBalancesNative": {
    "2026": {
-    "1023": {
+    "1021": {
      "amount": 2500,
      "currency": "EUR"
     }
@@ -1059,8 +1203,8 @@
      "d05230c47dd4c418"
     ],
     "correctionEntryIds": [
-     "277a7cc9c995bac2",
-     "2c0186a7adb8dd51"
+     "e73c59bcdd480405",
+     "19c8cc952c19fb57"
     ],
     "source": "receipts/20260302-muster-consulting-rechnung-2026-031.pdf"
    }
