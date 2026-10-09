@@ -37,6 +37,11 @@ function isVatAmountCode(code: string | undefined): boolean {
   return clean.endsWith('-2');
 }
 
+/** Where Vorsteuer on Investitionen und Betriebsaufwand (Ziffer 405) is booked: operating expense, or a fixed asset of the Anlagevermögen. */
+function isInvestmentOrExpense(account: string): boolean {
+  return /^[56]/.test(account) || (account >= '1500' && account <= '1799');
+}
+
 export function validateJournalEntries(
   entries: JournalEntry[],
   validAccounts: Set<string>,
@@ -102,9 +107,8 @@ export function validateJournalEntries(
       }
 
       if (prefix === 'I' && !vatAmountEntry) {
-        const hasExpenseAccount = /^[56]/.test(entry.accountDebit) || /^[56]/.test(entry.accountCredit);
-        if (!hasExpenseAccount) {
-          issues.push({ severity: 'warning', entryId: entry.id, field: 'vatCode', message: 'I-Code ohne Aufwandkonto (5xxx/6xxx)' });
+        if (!isInvestmentOrExpense(entry.accountDebit) && !isInvestmentOrExpense(entry.accountCredit)) {
+          issues.push({ severity: 'warning', entryId: entry.id, field: 'vatCode', message: 'I-Code ohne Aufwand- oder Anlagekonto (5xxx/6xxx, 1500–1799)' });
         }
       }
 
