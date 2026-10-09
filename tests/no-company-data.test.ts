@@ -1,5 +1,5 @@
 /**
- * Nothing the app ships for testing (tests/, demo/) may carry the real company's data: its name,
+ * Nothing the app ships for testing (tests/, the demo workspaces) may carry the real company's data: its name,
  * UID, IBANs, receipt ids or transaction refs. The secrets are read from the company workspace
  * at run time, so this file names none of them. Skipped where there is no such workspace (the
  * public repo).
@@ -10,9 +10,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { APP_ROOT, identityIn, type Workspace } from '../src/workspace/workspace.js';
-import { companyWorkspace, DEMO_ROOT } from './support/workspace.js';
+import { companyWorkspace, DEMO_ROOTS } from './support/workspace.js';
 
-const SCANNED = [join(APP_ROOT, 'tests'), DEMO_ROOT];
+const SCANNED = [join(APP_ROOT, 'tests'), ...DEMO_ROOTS];
 const IBAN = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g;
 
 function filesUnder(dir: string): string[] {
@@ -39,7 +39,7 @@ function secretsOf(ws: Workspace): Map<string, string> {
 
 const ws = companyWorkspace();
 
-test('tests/ and demo/ carry none of the company workspace\'s identifiers', { skip: ws ? false : 'no company workspace in this checkout' }, () => {
+test('tests/ and the demos carry none of the company workspace\'s identifiers', { skip: ws ? false : 'no company workspace in this checkout' }, () => {
   const secrets = secretsOf(ws!);
   assert.ok(secrets.size > 0, 'the company books list receipts and transactions');
   const found: string[] = [];
