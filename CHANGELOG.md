@@ -12,6 +12,18 @@ Two markers flag an entry you must read before you update:
   shows the difference; check it, then accept it with `npm run test:books:update`.
 - **⚠ action**: you must do something by hand, as the entry says.
 
+## [Unreleased]
+
+### Added
+
+- Audit export: `npm run build:audit -- <folder>` writes a read-only copy of the books that
+  runs from any static file server, without Node.js or the API. Search, filters, every report
+  and the receipt PDFs work in it; the audit bar names the snapshot's date, books schema and app
+  version. Its `manifest.json` holds the SHA-256 of every file and the seals of the filed
+  quarters, and `npm run verify-audit -- <folder>` checks it later. Real books on a public URL
+  publish them: `docs/audit-export.md` says how to hand an export over or host it behind access
+  protection.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

@@ -75,6 +75,18 @@ receipts and the first VAT return, and lists what Vanilla Accounting does not do
 To update, run `npm run update`. `CHANGELOG.md` lists what each version changed, and
 `docs/releasing.md` explains the version numbers.
 
+## Audit export
+
+`npm run build:audit -- <folder>` writes a read-only copy of your books that needs no Node.js
+and no API: the app, `books.json`, every receipt and statement PDF, the filed returns and a
+`manifest.json` with the SHA-256 of every file. Search, filters and every report work in it.
+Zip it and hand it to your Treuhänder or auditor, who serves it with `npx serve <folder>`;
+`npm run verify-audit -- <folder>` checks it against its manifest later.
+
+**Real books on a public URL publish them.** Host an export of your books only behind access
+protection. The demo exports can be hosted openly. `docs/audit-export.md` explains how to make,
+hand over and host an export.
+
 ## Rules that never bend
 
 A filed quarter never changes. Corrections are booked in the next open quarter and declared on
