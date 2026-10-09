@@ -53,7 +53,7 @@ function changedFields(after: Index): string[] {
       }
     }
   }
-  const rest = (i: Index) => ({ ...i, receipts: undefined, transactions: undefined });
+  const rest = (i: Index) => ({ ...i, schema: undefined, receipts: undefined, transactions: undefined });
   assert.deepEqual(rest(after), rest(fixture), 'mappings, entries and config are untouched');
   return out.sort();
 }

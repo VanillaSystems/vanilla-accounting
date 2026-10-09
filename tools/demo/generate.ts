@@ -21,6 +21,8 @@ import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/parsers/ca
 import { bankKind } from '../../src/workspace/banks.js';
 import { figuresFromBooks } from '../../src/accounting/return-figures.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
+import { sealOf } from '../../src/books/seal.js';
+import { BOOKS_SCHEMA } from '../../src/workspace/schema.js';
 import { camt053Xml, type CamtEntry } from './camt053.js';
 import { textPdf } from './pdf.js';
 import { chf, PAID_PRIVATELY, uidChecksumValid, YEAR, type Demo, type Doc, type Payment, type StatementBank } from './kit.js';
@@ -297,6 +299,7 @@ function build(demo: Demo, seed: number): Tree {
   const liabilityTotal = r2(Object.values(liabilities).reduce((s, v) => s + v, 0));
 
   const books: Index = {
+    schema: BOOKS_SCHEMA,
     receipts: receipts.sort((a, b) => a.filename.localeCompare(b.filename)),
     transactions,
     mappings,
@@ -317,6 +320,7 @@ function build(demo: Demo, seed: number): Tree {
   tree.set(`filings/${YEAR}/mwst-ech0217-${demo.filed.period}.xml`, filedReturn(demo, asFiled));
 
   tree.set('books.json', json(books));
+  tree.set(`filings/${YEAR}/seal-${demo.filed.period.slice(5)}.json`, json(sealOf(books, demo.filed.period, demo.filed.generationTime.slice(0, 10))));
   tree.set('accounts.json', json(demo.accounts.map(([number, name]) => ({ number, name }))));
   tree.set('belege.workspace.yaml', manifest(demo));
   for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`knowledge/${file}`, yaml);

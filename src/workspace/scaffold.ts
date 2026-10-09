@@ -9,7 +9,8 @@ import { stringify } from 'yaml';
 import { bankKind, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import type { Preset, SupportedAnswers } from './setup.js';
-import { MANIFEST_FILE, WORKSPACE_SCHEMA, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
+import { WORKSPACE_SCHEMA } from './schema.js';
+import { MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
 
 /** The chart's bank accounts per currency (reference/charts/ch-kmu.yaml); a further account takes the next free number. */
 const BANK_BY_CURRENCY: Record<string, string> = { CHF: '1020', EUR: '1021', USD: '1022' };

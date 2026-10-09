@@ -1,6 +1,6 @@
 {
   "name": "vanilla-accounting",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "start": "concurrently --names \"vite,api\" --prefix-colors \"cyan,green\" \"vite\" \"tsx src/server/main.ts\"",
@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",
+    "update": "tsx src/cli/update.ts",
     "extract": "tsx src/cli/extract.ts",
     "extract-vat": "tsx src/cli/extract-vat.ts",
     "match": "tsx src/cli/match.ts",
@@ -30,6 +31,7 @@
     "restamp-fx": "tsx src/cli/restamp-fx-rates.ts",
     "reconcile-balances": "tsx src/cli/reconcile-balances.ts",
     "check-closed": "tsx src/cli/check-closed-period.ts",
+    "seal": "tsx src/cli/seal.ts",
     "board": "tsx src/cli/import-board.ts",
     "extract-balances": "tsx src/cli/extract-statement-balances.ts",
     "check-processes": "tsx src/cli/check-processes.ts",

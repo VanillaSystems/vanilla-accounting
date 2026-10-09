@@ -59,7 +59,11 @@ Shopify billing:
 
 Tests (golden master):
 - `npm test` runs the golden master (tests/vat-golden.test.ts) on each demo workspace (expected files in tests/golden/demo/ and tests/golden/demo-consulting/): Ziffern per period, Ziffer line assignment, return figures, filed-return parsing, correction-case reconciliation, and the eCH-0217 XML. `npm run test:books` runs the same test on your own workspace's frozen books (`<workspace>/golden/`, see tests/support/golden.ts), which protects its filed quarters; run it too when you keep real books. Before committing any change under src/accounting, src/cli/vat-*, or the MWST tab logic, `npm test` must be green (and `test:books` where a workspace exists). A failure means the code changed a figure.
-- Only when a figure change is intended: `npm run test:update` (demo) and/or `npm run test:books:update` (company), review the diff, and say why in the commit.
+- Only when a figure change is intended: `npm run test:update` (demo) and/or `npm run test:books:update` (company), review the diff, and say why in the commit, and add a CHANGELOG.md entry marked **⚠ figures** (docs/releasing.md).
+
+Versions and data format:
+- SemVer, 0.x until the public release; the rules, the changelog and how to cut a release: docs/releasing.md. Every user-visible change gets a CHANGELOG.md entry under the next version.
+- books.json and belege.workspace.yaml carry `schema`; src/workspace/schema.ts lists both versions and their forward-only migration ladders. Changing either format means a new version and a ladder step, never a shape change without one. `npm run update` writes migrated files back.
 
 VAT filing (MWST-Abrechnung):
 - `npm run vat-report [-- <period> --detail]` prints the ESTV Ziffern per quarter of the current year, plus H1; `--detail` shows the transactions behind each figure.
@@ -71,6 +75,7 @@ Period close (Periodensperre):
 - `config.closedThrough` in books.json locks all journal entries dated on or before that date. Which quarters are filed, and when, is in the workspace's notes.
 - NEVER modify, delete, or add journal entries dated inside a closed period — not via the UI/API (returns 403), not via CLI scripts, and not via ad-hoc node scripts editing books.json. This applies to Claude too.
 - Corrections to closed periods are booked as NEW correction entries dated in the open period (Stornobuchung/Korrekturbuchung referencing the original entry id in the description). Set `corrects: "YYYY-Qn"` on it: its VAT is declared in that quarter's Korrekturabrechnung (form 0535), which the MWST tab shows for every filed quarter (bisher eingereicht / korrigiert / Differenz), never in the open quarter's return.
+- Seals: `npm run seal -- <YYYY-Qn> --close` moves `closedThrough` to a filed quarter's end and writes `filings/<year>/seal-<Qn>.json`, a hash of every entry, transaction and mapping dated on or before it (src/books/seal.ts). `loadBooks` checks every seal; books whose sealed part changed load read-only (`saveBooks` throws `SealBrokenError`). Never edit, delete or rewrite a seal; restore the books from git instead.
 - Enforcement: every API route (src/server/routes/) that writes the index does it inside `withBooks` (src/server/books.ts: load, `mutateJournal`, `saveBooks`) and calls `assertOpen` first (403, proven in tests/period-lock.test.ts); `classify` skips closed-period transactions (`--force` keeps closed-period entries); `restamp-fx` skips closed-period entries. CLI and collect scripts read and write the index only through src/books/store.ts: `loadBooks`/`saveBooks` (atomic write), `periodLock(books).isClosed`, and every mutation inside `mutateJournal`, which throws if a closed entry, closed transaction or mapping to a closed transaction changed (tests/books-store.test.ts). Any new code path that mutates journal entries, transactions, mappings or receipts must do the same (an API route: `withBooks`, `assertOpen` and a row in tests/period-lock.test.ts).
 
 UI theming (src/app/):

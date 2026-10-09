@@ -1,22 +1,48 @@
 /**
- * The one owner of the workspace's books.json: load, save, and golden rule 1 (AGENTS.md),
- * nothing dated on or before config.closedThrough ever changes.
+ * The one owner of the workspace's books.json: load, save, its schema (src/workspace/schema.ts),
+ * and golden rule 1 (AGENTS.md), nothing dated on or before config.closedThrough ever changes:
+ * mutateJournal while the app runs, the seals of the filed quarters (src/books/seal.ts) on load.
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { AccountingConfig, Index, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
+import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
+import { checkSeals, closedPart, type SealReport } from './seal.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
 
 export class ClosedPeriodError extends Error {}
+/** A filed quarter's seal no longer matches the books: they read, but are never written. */
+export class SealBrokenError extends ClosedPeriodError {}
 
 /** Keys loadBooks filled in, so saveBooks leaves them off the disk again while still empty. */
 const filledDefaults = new WeakMap<Books, Array<'journalEntries' | 'config'>>();
+const seals = new WeakMap<Books, SealReport>();
+const warned = new Set<string>();
 
+/**
+ * The books at the current schema (older ones are migrated in memory, a newer one is refused),
+ * with every seal checked. A broken seal is printed once per process, and saveBooks refuses them.
+ */
 export function loadBooks(ws: Workspace): Books {
   const path = ws.paths.books;
   if (!existsSync(path)) throw new Error(`No ${path} found. Run \`npm run extract\` first.`);
-  return withDefaults(JSON.parse(readFileSync(path, 'utf8')));
+  const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, path), BOOKS_SCHEMA, BOOKS_MIGRATIONS, path, (d) => structuredClone(d));
+  const books = withDefaults({ ...current, schema: BOOKS_SCHEMA } as unknown as Index);
+  const report = checkSeals(ws, books);
+  seals.set(books, report);
+  for (const c of report.checks) {
+    if (c.status !== 'broken' || warned.has(c.file)) continue;
+    warned.add(c.file);
+    console.error(`\n!!! SEAL BROKEN: ${c.quarter} is filed, but ${c.problem}.\n!!! ${c.file}\n!!! The books open read-only. Restore books.json from git; npm run check-closed shows what changed.\n`);
+  }
+  return books;
+}
+
+/** The seal check loadBooks ran on these books. */
+export function sealsOf(books: Books): SealReport {
+  return seals.get(books) ?? { checks: [], unsealed: [] };
 }
 
 /** The books before the first `npm run extract`. */
@@ -32,9 +58,12 @@ function withDefaults(index: Index): Books {
 }
 
 export function saveBooks(ws: Workspace, books: Books): void {
+  const broken = sealsOf(books).checks.find((c) => c.status === 'broken');
+  if (broken) throw new SealBrokenError(`Siegel ${broken.quarter} gebrochen, nichts gespeichert: ${broken.problem}. Restore books.json from git.`);
   guards.get(books)?.();
   const filled = filledDefaults.get(books) ?? [];
-  const onDisk: Index = { ...books };
+  const { schema: _, ...rest } = books;
+  const onDisk: Index = { schema: BOOKS_SCHEMA, ...rest };
   if (filled.includes('journalEntries') && books.journalEntries.length === 0) delete onDisk.journalEntries;
   if (filled.includes('config') && Object.keys(books.config).length === 0) delete onDisk.config;
   const path = ws.paths.books;
@@ -72,13 +101,13 @@ const guards = new WeakMap<Books, () => void>();
 export function mutateJournal<T>(books: Books, fn: (books: Books) => Promise<T>): Promise<T>;
 export function mutateJournal<T>(books: Books, fn: (books: Books) => T): T;
 export function mutateJournal<T>(books: Books, fn: (books: Books) => T | Promise<T>): T | Promise<T> {
-  const before = closedPart(books, periodLock(books));
+  const before = { closedThrough: periodLock(books).closedThrough, ...closedPart(books, periodLock(books).closedThrough) };
   const check = () => {
     const lock = periodLock(books);
     if (lock.closedThrough !== before.closedThrough) {
       throw new ClosedPeriodError(`config.closedThrough changed from ${before.closedThrough} to ${lock.closedThrough}.`);
     }
-    const after = closedPart(books, lock);
+    const after = closedPart(books, lock.closedThrough);
     const changed = (['entries', 'transactions', 'mappings'] as const).flatMap((k) => diff(k, before[k], after[k]));
     if (changed.length) {
       throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}: ${changed.join('; ')}`);
@@ -103,31 +132,6 @@ export function mutateJournal<T>(books: Books, fn: (books: Books) => T | Promise
     done();
   }
   return result;
-}
-
-interface ClosedPart {
-  closedThrough: string | undefined;
-  entries: Map<string, string[]>;
-  transactions: Map<string, string[]>;
-  mappings: Map<string, string[]>;
-}
-
-/** The closed records, each grouped under its id and serialized, so a reorder is not a change. */
-function closedPart(books: Books, lock: PeriodLock): ClosedPart {
-  const group = <X>(xs: X[], key: (x: X) => string) => {
-    const m = new Map<string, string[]>();
-    for (const x of xs) m.set(key(x), [...(m.get(key(x)) ?? []), JSON.stringify(x)].sort());
-    return m;
-  };
-  const transactions = books.transactions.filter((t) => lock.isClosed(t.date));
-  const entries = books.journalEntries.filter((e) => lock.isClosed(e.date));
-  const closedRefs = new Set([...transactions.map((t) => t.ref), ...entries.map((e) => e.transactionRef)]);
-  return {
-    closedThrough: lock.closedThrough,
-    entries: group(entries, (e) => e.id),
-    transactions: group(transactions, (t) => t.ref),
-    mappings: group(books.mappings.filter((m) => closedRefs.has(m.transactionRef)), (m) => `${m.transactionRef} ↔ ${m.receiptId}`),
-  };
 }
 
 function diff(kind: string, before: Map<string, string[]>, after: Map<string, string[]>): string[] {

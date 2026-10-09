@@ -72,6 +72,9 @@ npm start
 `docs/getting-started.md` walks through the questions, the first bank statement, the first
 receipts and the first VAT return, and lists what Vanilla Accounting does not do yet.
 
+To update, run `npm run update`. `CHANGELOG.md` lists what each version changed, and
+`docs/releasing.md` explains the version numbers.
+
 ## Rules that never bend
 
 A filed quarter never changes. Corrections are booked in the next open quarter and declared on

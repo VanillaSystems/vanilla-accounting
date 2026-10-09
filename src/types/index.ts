@@ -163,6 +163,8 @@ export interface StatementClosingBalance {
 }
 
 export interface Index {
+  /** The format of books.json (src/workspace/schema.ts BOOKS_SCHEMA); absent in books from before it: 1. */
+  schema?: number;
   receipts: Receipt[];
   transactions: BankTransaction[];
   mappings: Mapping[];

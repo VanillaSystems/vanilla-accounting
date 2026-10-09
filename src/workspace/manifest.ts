@@ -3,8 +3,9 @@
  * The boundary: everything is checked here, so the rest of the app trusts the types.
  */
 import { readFileSync, existsSync } from 'node:fs';
-import { parse } from 'yaml';
-import { WORKSPACE_SCHEMA, WorkspaceError, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
+import { parseDocument } from 'yaml';
+import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
+import { WorkspaceError, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
 import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
 import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
 
@@ -13,9 +14,15 @@ const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatReg
 export function readManifest(path: string): { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile } {
   if (!existsSync(path)) throw new WorkspaceError(`${path} not found.`);
   const fail = (msg: string): never => { throw new WorkspaceError(`${path}: ${msg}`); };
-  const raw = parse(readFileSync(path, 'utf8')) as Record<string, unknown> | null;
-  if (!raw || typeof raw !== 'object') return fail('not a YAML mapping');
-  if (raw.schema !== WORKSPACE_SCHEMA) fail(`schema must be ${WORKSPACE_SCHEMA} (found ${String(raw.schema)})`);
+  const doc = parseDocument(readFileSync(path, 'utf8'));
+  const found = doc.toJS() as Record<string, unknown> | null;
+  if (!found || typeof found !== 'object' || Array.isArray(found)) return fail('not a YAML mapping');
+  let raw: Record<string, unknown>;
+  try {
+    raw = climb(doc, schemaOf(found.schema, path), WORKSPACE_SCHEMA, MANIFEST_MIGRATIONS, path, (d) => d.clone()).toJS();
+  } catch (e) {
+    throw new WorkspaceError((e as Error).message);
+  }
 
   const c = (raw.company ?? {}) as Record<string, unknown>;
   const text = (v: unknown, where: string): string => (typeof v === 'string' && v.trim() ? v : fail(`${where} must be a non-empty text`));

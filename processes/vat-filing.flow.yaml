@@ -122,14 +122,15 @@ steps:
     duration: 5m
 
   - id: lock
-    name: Move config.closedThrough to the quarter end
+    name: Move config.closedThrough to the quarter end and seal the quarter
     produces: closedThrough
     expect: >
       once the period is locked, no entry dated on or before that date ever
       changes again. A correction is a new entry in the open period that names
-      the original.
+      the original. filings/<year>/seal-<Qn>.json holds the quarter's seal, which
+      every load of the books checks.
     icon: lock
-    note: every entry on or before that date is frozen
+    note: npm run seal -- <YYYY-Qn> --close
     needs: [archive]
     phase: lock
     duration: 1m

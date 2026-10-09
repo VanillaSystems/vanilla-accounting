@@ -22,7 +22,7 @@ The examples use the third quarter, `2026-Q3`. Put in your own quarter.
 | 7 | [Reconcile and balance](#7-reconcile-and-balance) | `npm run reconcile-balances` | 30 minutes |
 | 8 | [Check the VAT report](#8-check-the-vat-report) | the MWST tab | 30 minutes |
 | 9 | [File with the ESTV](#9-file-with-the-estv) | `npm run vat-xml` | 15 minutes |
-| 10 | [Close the period](#10-close-the-period) | `closedThrough` | 5 minutes |
+| 10 | [Close the period](#10-close-the-period) | `npm run seal -- 2026-Q3 --close` | 5 minutes |
 | 11 | [Corrections later](#11-corrections-later) | a correction entry, form 0535 | when needed |
 
 At any time, `npm run board -- 2026-Q3` shows what the quarter is still missing, and
@@ -217,12 +217,24 @@ Once the return is filed, the quarter never changes again. This is the first rul
 
 1. Copy the XML you filed into `filings/<year>/` of the workspace. Never generate a filed
    return again.
-2. Set `config.closedThrough` in `books.json` to the last day of the quarter, for example
-   `"closedThrough": "2026-09-30"`. From then on, the app, the commands and Claude refuse to
-   change any entry dated on or before that day.
+2. Close and seal the quarter:
+
+   ```sh
+   npm run seal -- 2026-Q3 --close
+   ```
+
+   This sets `config.closedThrough` in `books.json` to the last day of the quarter
+   (`2026-09-30`). From then on, the app, the commands and Claude refuse to change any entry
+   dated on or before that day. It also writes `filings/2026/seal-Q3.json`, a fingerprint of
+   every entry, transaction and receipt link of the closed period. Each time the books load,
+   the app checks the fingerprint. If anything sealed has changed, even by a hand edit, the
+   books open read-only and `npm run doctor` says so.
 3. Commit the workspace (`git commit`), so the filed state is on record.
 4. Run `npm run check-closed`. It proves that nothing in the closed period differs from the
    committed state.
+
+A quarter you closed before seals existed: `npm run seal -- 2026-Q2` seals it as it is now.
+`npm run doctor` lists the closed quarters that have no seal yet.
 
 For agents: [`vat-filing.flow.yaml`](../processes/vat-filing.flow.yaml), steps `archive`,
 `lock` and `prove`.
