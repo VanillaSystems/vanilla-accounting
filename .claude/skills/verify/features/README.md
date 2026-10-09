@@ -12,7 +12,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Driving conventions
 
-- Navigate by URL (`/<period>/<tab>?receipt=&tx=`) to reach a state, then act through the UI.
+- Navigate by URL (`/<lang>/<period>/<tab>?receipt=&tx=`) to reach a state, then act through the UI.
 - Prefer `data-rowid`, ARIA roles and names from `$B snapshot -i`, `title=` attributes, and placeholders over positions.
 - Choose fixture records from the sandbox index with `jq` at run time. IDs change when data is reclassified, so never hard-code one from an old run.
 - One mutation per proof. Run `$S diff` right after it, so the diff shows only that mutation.
@@ -41,4 +41,4 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 
 - Scan PWA (`/scan`), which needs a camera. Its upload endpoint is `POST /api/upload` (`Content-Type: application/pdf`) and writes to `$SB/beleg-import/`. The iOS app (`ios/`) uses the same endpoint.
 - The reports `Saldobilanz`, `Bilanz`, `Erfolgsrechnung`, `Kontoauszug`, `Kontenabgleich`, and `Kontoauszüge` are read-only views.
-- `Kontoauszug` (`/<period>/account-ledger?account=<nr>&je=<id>&receipt=<id>`): the `Belege` column counts the receipts mapped to each entry's `transactionRef`; clicking a row (`tr[data-rowid="<entry id>"]`) opens the right pane with the receipt list (or `Keine Belege`) and the first PDF in an `iframe`. Headless screenshots show the iframe blank; prove the PDF with `curl -sI $API/api/receipts/<id>` (`application/pdf`).
+- `Kontoauszug` (`/<lang>/<period>/account-ledger?account=<nr>&je=<id>&receipt=<id>`): the account is picked in the combobox `[data-testid=account-combobox]` (type a number prefix or part of the name, Enter): the `Belege` column counts the receipts mapped to each entry's `transactionRef`; clicking a row (`tr[data-rowid="<entry id>"]`) opens the right pane with the receipt list (or `Keine Belege`) and the first PDF in an `iframe`. Headless screenshots show the iframe blank; prove the PDF with `curl -sI $API/api/receipts/<id>` (`application/pdf`).

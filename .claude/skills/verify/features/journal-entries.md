@@ -13,8 +13,8 @@ The Buchungen tab lists every journal entry per period. A user can double-click 
 
 ## How to get to it (user POV)
 
-- Choose the `Buchungen <n>` tab, or open `/<period>/journal-entries`.
-- Pick the period in the header `<select>` (`2026 Q2`, …). It has no label of its own; its wrapper has `title="Zeitraum / Quartal wählen"`.
+- Choose the `Buchungen <n>` tab, or open `/<lang>/<period>/journal-entries`.
+- Pick the period with the header button `[data-testid=period-picker]` (`title="Zeitraum / Quartal wählen"`): a preset, a quarter, or typed start and end dates, then `Anwenden`. Or put the token in the URL.
 
 ## Driving it with browse + sandbox.sh
 

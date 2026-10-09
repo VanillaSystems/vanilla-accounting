@@ -16,6 +16,25 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Periods: the header's period button opens a picker with presets (today, yesterday, last 7/30/90/365
+  days, last week/month/quarter/12 months/year, week/month/quarter/year to date), the quarters and
+  years of the books (filed ones with a lock), and a two-month calendar with typed start and end
+  dates. A month (`2026-09`) and any date range (`2026-10-01..2026-10-09`) work like a quarter.
+  Relative presets stay relative in a bookmark: "quarter to date" is always the current quarter.
+  The MWST tab shows a return only for a quarter, half-year or year; for any other range it offers
+  the quarters the range touches. The Bilanz states its date ("per 30.06.2026"), the
+  Kontenabgleich lists the month ends inside the range.
+- The language is part of every link: `/fr/2026-Q3/vat-report`, and `#/fr/2026-Q3/vat-report` in
+  an audit export. A shared link opens in its language; old links without one still work.
+- Bilanz, Erfolgsrechnung and Saldobilanz: a click on an account opens its entries beside the
+  statement, with opening and closing balance and a link to the full Kontoauszug. The account is
+  in the link (`?account=1020`).
+- Every entry, transaction and receipt listed in a side panel links to its own view: the MWST
+  Ziffer list, the Korrekturabrechnung and its correction cases, the Kontoauszug, the transaction
+  detail (now with its journal entries) and each month of the Kontenabgleich.
+- Kontoauszug: the account field is a search box. Type a number ("40" finds 4000 to 4099) or part
+  of the name ("büro", "mwst"); a tick shows the chart's accounts without entries too.
+
 - Audit export: `npm run build:audit -- <folder>` writes a read-only copy of the books that
   runs from any static file server, without Node.js or the API. Search, filters, every report
   and the receipt PDFs work in it; the audit bar names the snapshot's date, books schema and app
@@ -23,6 +42,12 @@ Two markers flag an entry you must read before you update:
   quarters, and `npm run verify-audit -- <folder>` checks it later. Real books on a public URL
   publish them: `docs/audit-export.md` says how to hand an export over or host it behind access
   protection.
+
+### Fixed
+
+- **⚠ figures** Saldobilanz and Kontoauszug of a period that starts after 1 January (a quarter,
+  the last 30 days) open with the balance on the period's first day, not with the 1 January
+  opening balance. Only these two views change; VAT figures, returns and `test:books` do not.
 
 ## [0.2.0] - 2026-10-09
 
