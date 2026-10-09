@@ -6,6 +6,7 @@ import { txHref } from '../lib/location.js';
 import { inPeriod, type Period } from '../../accounting/periods.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 
 const COLUMNS = [
   ['ref', 'col.ref', 'text-left'],
@@ -29,7 +30,7 @@ interface TransactionsTableProps {
   period: Period;
   onSelectReceipt: (r: Receipt) => void;
   selectedTxRef: string | null;
-  onSelectTx: (ref: string) => void;
+  onSelectTx: (ref: string | null) => void;
 }
 
 export function TransactionsTable({
@@ -108,6 +109,7 @@ export function TransactionsTable({
       return true;
     })
     .sort((a, b) => a.date.localeCompare(b.date));
+  useAutoSelectFirst(rows.map((tx) => tx.ref), selectedTxRef, onSelectTx);
 
   if (rows.length === 0) {
     return (

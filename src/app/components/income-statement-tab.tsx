@@ -7,6 +7,7 @@ import { accountingName, t } from '../i18n/index.js';
 import type { IncomeStatementSection } from '../../accounting/income-statement.js';
 import type { Period } from '../../accounting/periods.js';
 import { useUrlParam } from '../hooks/use-url-state.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { SplitPane } from './split-pane.js';
 import { AccountPanel, accountRowProps } from './account-panel.js';
 
@@ -82,6 +83,8 @@ export function IncomeStatementTab({ index, period }: Props) {
 
   const [account, setAccount] = useUrlParam('account');
   const sel: Selection = { selected: account, onSelect: setAccount };
+  const sections = [statement.revenue, statement.costOfGoods, statement.operatingExpenses, statement.otherIncome, statement.otherExpenses, statement.extraordinaryItems];
+  useAutoSelectFirst(sections.flatMap((section) => section.rows.map((row) => row.account)), account, setAccount);
 
   return (
     <SplitPane

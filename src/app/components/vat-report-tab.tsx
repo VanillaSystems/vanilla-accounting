@@ -12,6 +12,8 @@ import { api } from '../lib/api.js';
 import { accountingName, t } from '../i18n/index.js';
 import { derivePeriod, localToday, parsePeriod, vatPeriodOf, type Period } from '../../accounting/periods.js';
 import { Lock } from 'lucide-react';
+import { useUrlParam } from '../hooks/use-url-state.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 
 interface Props {
   index: Index;
@@ -32,6 +34,10 @@ const feeds = (ziffer: string) => UNDECLARED_ZIFFER_CODES[ziffer] ?? ((code: str
   const info = parseVatCode(code);
   return !!info && sourceZiffern(info).includes(ziffer);
 });
+
+/** The clickable Ziffern of the return form around its rate rows, in the order the form shows them. */
+const ZIFFERN_BEFORE_RATES = ['200', '205', '220', '221', '225', '230', '235', '280'];
+const ZIFFERN_AFTER_RATES = ['400', '405', '410', '415', '420', '900', '910'];
 
 /** Clickable row */
 function Row({ ziffer, label, amount, indent, bold, large, className, selected, onClick }: {
@@ -181,7 +187,7 @@ function VatReturn({ index, period }: { index: Index; period: string }) {
   const report = useMemo(() => computeVatReport(entries, period, adjustments), [entries, period, adjustments]);
   const closedThrough = index.config?.closedThrough;
   const filed = !!closedThrough && to <= closedThrough;
-  const [selectedZiffer, setSelectedZiffer] = useState<string | null>(null);
+  const [selectedZiffer, setSelectedZiffer] = useUrlParam('ziffer');
 
   const filtered = useMemo(() => entriesForReturn(entries, period), [entries, period]);
 
@@ -215,6 +221,14 @@ function VatReturn({ index, period }: { index: Index; period: string }) {
   const sel = (ziffer: string) => selectedZiffer === ziffer;
 
   const rateRows = report.rates.filter((r) => !r.row.superseded || r.base !== 0 || r.tax !== 0);
+  const valuedRates = rateRows.filter((r) => r.base !== 0 || r.tax !== 0);
+  const valuedZiffern = [
+    ...ZIFFERN_BEFORE_RATES.filter((n) => z(n) !== 0),
+    ...valuedRates.filter((r) => r.row.kind === 'supply').map((r) => r.row.ziffer),
+    ...valuedRates.filter((r) => r.row.kind === 'acquisition').map((r) => r.row.ziffer),
+    ...ZIFFERN_AFTER_RATES.filter((n) => z(n) !== 0),
+  ];
+  useAutoSelectFirst(valuedZiffern, selectedZiffer, setSelectedZiffer, !correcting);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

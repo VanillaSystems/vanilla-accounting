@@ -8,6 +8,7 @@ import { PdfFrame } from './pdf-frame.js';
 import { accountTitle } from '../lib/accounts.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { SplitPane } from './split-pane.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { api, orAlert, sources } from '../lib/api.js';
 import { receiptHref, setView, txHref, viewParams, viewPath } from '../lib/location.js';
 import { t } from '../i18n/index.js';
@@ -207,6 +208,12 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
     const receiptIds = txReceiptIds.get(rowTxRef(row)) ?? [];
     setSelectedReceiptId(receiptIds[0] ?? null);
   }
+
+  useAutoSelectFirst(filtered.map((r) => r.rowId), selectedRowId, (rowId) => {
+    const row = filtered.find((r) => r.rowId === rowId);
+    if (row) selectRow(row);
+    else { setSelectedRowId(null); setSelectedReceiptId(null); }
+  });
 
   // Auto-select first receipt when row is selected but no receipt is (e.g. URL restore)
   useEffect(() => {

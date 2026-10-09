@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { buildViewPath, setView, splitViewPath, viewParams, viewPath } from '../lib/location.js';
 import { ALL, localToday, parsePeriod, type Period } from '../../accounting/periods.js';
 
@@ -7,7 +7,7 @@ export type FilterMode = 'all' | 'linked' | 'unlinked';
 const VALID_TABS = ['receipts', 'transactions', 'bank-statements', 'journal-entries', 'trial-balance', 'balance-sheet', 'income-statement', 'vat-report', 'account-ledger', 'bank-reconciliation'];
 
 /** Query keys that belong to one tab's selection: dropped when the tab changes. */
-const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx', 'account'];
+const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx', 'account', 'statement', 'ziffer'];
 
 /** /<lang>/<period>/<tab>, /<lang>/<tab> and the older /<period>/<tab> and /<tab>. */
 function parsePath(): { tab: string; period: string } {
@@ -74,7 +74,7 @@ export function useUrlState({ loading, language, receiptId, txRef }: { loading: 
 }
 
 /** One query parameter a tab keeps itself (?account=…), read once and written back on change. */
-export function useUrlParam(name: string): [string | null, (value: string | null) => void] {
+export function useUrlParam(name: string): [string | null, Dispatch<SetStateAction<string | null>>] {
   const [value, setValue] = useState(() => viewParams().get(name));
   useEffect(() => {
     const params = viewParams();

@@ -8,6 +8,7 @@ import type { Period } from '../../accounting/periods.js';
 import { PdfFrame } from './pdf-frame.js';
 import { AccountCombobox } from './account-combobox.js';
 import { SplitPane } from './split-pane.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
 import { FxChf } from './fx-amount.js';
@@ -92,6 +93,11 @@ export function AccountLedgerTab({ index, period }: Props) {
     if (!selectedAccount) return null;
     return computeAccountLedger(journalEntries, selectedAccount, from, to, openingBalance);
   }, [journalEntries, selectedAccount, from, to, openingBalance]);
+
+  useAutoSelectFirst(ledger?.rows.map((r) => r.entryId) ?? [], selectedEntryId, (entryId) => {
+    if (entryId) selectEntry(entryId);
+    else { setSelectedEntryId(null); setSelectedReceiptId(null); }
+  }, !!selectedAccount);
 
   const closingBalance = ledger
     ? ledger.rows.length > 0

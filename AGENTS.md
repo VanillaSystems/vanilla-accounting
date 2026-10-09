@@ -85,6 +85,7 @@ UI texts (src/app/):
 UI links (src/app/):
 - Every object listed in a sidebar or panel links to its detail view. Build the link with the helpers in src/app/lib/location.ts (`entryHref`, `txHref`, `receiptHref`, `accountHref`, or `EntryLinks` in components/open-in-tab-link.tsx): they keep the language and a period that holds the object's date, and work in the static export.
 - List + detail views use `SplitPane`: the right column is always there (a placeholder until a row is selected), so selecting a row never moves the layout.
+- With nothing selected, a list + detail view selects its first visible row (a URL selection wins). Use `useAutoSelectFirst` (src/app/hooks/use-auto-select-first.ts).
 - The URL is /<lang>/<period>/<tab>?…; every period token is parsed by src/accounting/periods.ts (`parsePeriod`). A tab receives a resolved `Period`, never a token string.
 
 UI theming (src/app/):

@@ -6,6 +6,7 @@ import { receiptHref } from '../lib/location.js';
 import { inPeriod, type Period } from '../../accounting/periods.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 
 /** The kinds of document that are not a receipt of their own, each with a badge. */
 const NON_RECEIPT_KINDS = ['supporting', 'statement', 'noise', 'duplicate'] as const;
@@ -28,7 +29,7 @@ interface ReceiptsTableProps {
   /** Hide documents that need no payment (see isNonReceipt). */
   hideZero?: boolean;
   period: Period;
-  onSelectReceipt: (r: Receipt) => void;
+  onSelectReceipt: (r: Receipt | null) => void;
   selectedId: string | null;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -98,6 +99,7 @@ export function ReceiptsTable({
       const db = b.date ?? dateFromFilename(b.filename) ?? b.indexedAt;
       return da.localeCompare(db);
     });
+  useAutoSelectFirst(rows.map((r) => r.id), selectedId, (id) => onSelectReceipt(rows.find((r) => r.id === id) ?? null));
 
   return (
     <div className="flex flex-col overflow-hidden h-full">

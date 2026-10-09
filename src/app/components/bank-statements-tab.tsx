@@ -2,7 +2,8 @@ import { ExternalLink, X } from 'lucide-react';
 import type { Index, BankStatement } from '../../../src/types/index.js';
 import { cn } from '../lib/utils.js';
 import { PdfFrame } from './pdf-frame.js';
-import { useState } from 'react';
+import { useUrlParam } from '../hooks/use-url-state.js';
+import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { SplitPane } from './split-pane.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { monthLocale, t } from '../i18n/index.js';
@@ -51,6 +52,9 @@ function columnsFor(statements: readonly BankStatement[], accounts: readonly Sta
   return [...new Set([...accounts.map((a) => `${a.bank} ${a.currency}`), ...statements.map((s) => columnOf(s, accounts))])];
 }
 
+/** A statement's id in the URL (?statement=): file names are unique per bank. */
+const statementKey = (s: BankStatement) => `${s.bank}/${s.filename}`;
+
 function monthLabel(fromDate: string) {
   const [year, month] = fromDate.split('-');
   const d = new Date(Number(year), Number(month) - 1, 1);
@@ -60,19 +64,6 @@ function monthLabel(fromDate: string) {
 export function BankStatementsTab({ index }: BankStatementsTabProps) {
   // The owner's `manual` accounts have no bank statements.
   const accounts = (useWorkspace()?.bankAccounts ?? []).filter((a) => a.bank !== 'manual');
-  const [preview, setPreview] = useState<BankStatement | null>(() => {
-    if (index.bankStatements.length === 0) return null;
-    return [...index.bankStatements].sort((a, b) => b.fromDate.localeCompare(a.fromDate))[0];
-  });
-
-  if (index.bankStatements.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-40 text-sm text-muted-foreground w-full">
-        {t('statements.none', { command: 'npm run extract' })}
-      </div>
-    );
-  }
-
   // Build month → account → statement lookup
   const months = Array.from(
     new Set(index.bankStatements.map((s) => s.fromDate.slice(0, 7)))
@@ -85,6 +76,21 @@ export function BankStatementsTab({ index }: BankStatementsTabProps) {
     const month = s.fromDate.slice(0, 7);
     if (!grid.has(month)) grid.set(month, new Map());
     grid.get(month)!.set(columnOf(s, accounts), s);
+  }
+
+  // The statements in reading order: month by month, each month's columns left to right.
+  const ordered = months.flatMap((month) => columns.flatMap((acc) => grid.get(month)!.get(acc) ?? []));
+  const [previewKey, setPreviewKey] = useUrlParam('statement');
+  const preview = ordered.find((s) => statementKey(s) === previewKey) ?? null;
+  const setPreview = (s: BankStatement | null) => setPreviewKey(s && statementKey(s));
+  useAutoSelectFirst(ordered.map(statementKey), previewKey, setPreviewKey);
+
+  if (index.bankStatements.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-40 text-sm text-muted-foreground w-full">
+        {t('statements.none', { command: 'npm run extract' })}
+      </div>
+    );
   }
 
   return (
