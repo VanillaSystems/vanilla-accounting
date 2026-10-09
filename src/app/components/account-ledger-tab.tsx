@@ -10,6 +10,7 @@ import { AccountCombobox } from './account-combobox.js';
 import { SplitPane } from './split-pane.js';
 import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
+import { FxChf } from './fx-amount.js';
 import { sources } from '../lib/api.js';
 import { receiptHref, setView, viewParams, viewPath } from '../lib/location.js';
 
@@ -180,10 +181,10 @@ export function AccountLedgerTab({ index, period }: Props) {
                   )}
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
-                  {row.debit != null ? fmt(row.debit) : ''}
+                  {row.debit != null && <FxChf entry={entryById.get(row.entryId)}>{fmt(row.debit)}</FxChf>}
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
-                  {row.credit != null ? fmt(row.credit) : ''}
+                  {row.credit != null && <FxChf entry={entryById.get(row.entryId)}>{fmt(row.credit)}</FxChf>}
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
                   {fmt(row.balance)}
