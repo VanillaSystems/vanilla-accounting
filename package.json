@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",
+    "update": "tsx src/cli/update.ts",
     "extract": "tsx src/cli/extract.ts",
     "extract-vat": "tsx src/cli/extract-vat.ts",
     "match": "tsx src/cli/match.ts",

@@ -1,0 +1,136 @@
+/**
+ * npm run update (src/cli/update.ts), end to end and offline: a clone of this checkout follows a
+ * local bare repo as its origin, and opens a copy of the demo workspace from before the schema,
+ * with the demo's golden master. `npm ci` is stubbed (it would download); npm run is real.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { APP_ROOT } from '../src/workspace/workspace.js';
+import { DEMO_ROOT } from './support/workspace.js';
+
+const tmp = mkdtempSync(join(tmpdir(), 'update-'));
+const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', stdio: 'pipe' });
+
+// Upstream: this checkout's files as one commit, served by a bare repo.
+const seed = join(tmp, 'seed');
+for (const f of git(APP_ROOT, 'ls-files', '-co', '--exclude-standard').split('\n').filter(Boolean)) {
+  if (!existsSync(join(APP_ROOT, f))) continue;
+  mkdirSync(dirname(join(seed, f)), { recursive: true });
+  cpSync(join(APP_ROOT, f), join(seed, f));
+}
+git(seed, 'init', '-q', '-b', 'main');
+git(seed, 'add', '-A');
+git(seed, 'commit', '-qm', 'v0.2.0');
+const origin = join(tmp, 'origin.git');
+execFileSync('git', ['clone', '-q', '--bare', seed, origin]);
+git(seed, 'remote', 'add', 'origin', origin);
+
+// The adopter's copy, with node_modules of its own that links each package of this checkout's.
+const app = join(tmp, 'app');
+execFileSync('git', ['clone', '-q', origin, app]);
+mkdirSync(join(app, 'node_modules'));
+for (const p of readdirSync(join(APP_ROOT, 'node_modules'))) symlinkSync(join(APP_ROOT, 'node_modules', p), join(app, 'node_modules', p));
+
+// A workspace from before the schema: no `schema` in books.json nor in the manifest.
+const ws = join(tmp, 'ws');
+cpSync(DEMO_ROOT, ws, { recursive: true });
+cpSync(join(APP_ROOT, 'tests/golden/demo'), join(ws, 'golden'), { recursive: true });
+const { schema: _schema, ...unversioned } = JSON.parse(readFileSync(join(ws, 'books.json'), 'utf8'));
+writeFileSync(join(ws, 'books.json'), JSON.stringify(unversioned, null, 2));
+writeFileSync(join(ws, 'belege.workspace.yaml'), readFileSync(join(ws, 'belege.workspace.yaml'), 'utf8').replace(/^schema: 1\n/m, ''));
+
+// Tools doctor looks for, and an npm whose `ci` only logs.
+const bin = join(tmp, 'bin');
+const npmLog = join(tmp, 'npm-ci.log');
+const realNpm = execFileSync('which', ['npm'], { encoding: 'utf8' }).trim();
+mkdirSync(bin);
+for (const [name, body] of Object.entries({
+  claude: 'echo "2.0.0 (Claude Code)"',
+  pdftotext: 'echo "pdftotext version 24"',
+  convert: 'echo "Version: ImageMagick 7"',
+  npm: `if [ "$1" = ci ]; then echo ci >> "${npmLog}"; exit 0; fi\nexec "${realNpm}" "$@"`,
+})) {
+  writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+  chmodSync(join(bin, name), 0o755);
+}
+
+function update() {
+  // Without NODE_TEST_CONTEXT: under it, the nested node --test of test:books would skip every file and pass.
+  const { NODE_TEST_CONTEXT: _, ...env } = process.env;
+  const r = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/update.ts'], {
+    cwd: app, encoding: 'utf8',
+    env: { ...env, VANILLA_WORKSPACE: ws, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: '' },
+  });
+  return { status: r.status, out: r.stdout + r.stderr };
+}
+
+/** A new upstream commit: `edit` on the seed, then pushed. */
+function release(message: string, edit: () => void) {
+  edit();
+  git(seed, 'commit', '-qam', message);
+  git(seed, 'push', '-q', 'origin', 'main');
+}
+const ciCalls = () => (existsSync(npmLog) ? readFileSync(npmLog, 'utf8').split('\n').filter(Boolean).length : 0);
+const read = (f: string) => readFileSync(join(ws, f), 'utf8');
+
+test('update pulls a release, prints its changelog, writes the workspace at the new schema with backups', () => {
+  release('v0.2.1', () => {
+    const pkg = join(seed, 'package.json');
+    writeFileSync(pkg, readFileSync(pkg, 'utf8').replace(/"version": "[^"]+"/, '"version": "0.2.1"'));
+    const log = join(seed, 'CHANGELOG.md');
+    writeFileSync(log, readFileSync(log, 'utf8').replace(/^## \[/m, '## [0.2.1] - 2026-10-10\n\n### Fixed\n\n- A stand-in fix.\n\n## ['));
+  });
+  const r = update();
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /version 0\.2\.0 → 0\.2\.1/);
+  assert.match(r.out, /A stand-in fix/);
+  assert.match(r.out, /books\.json: schema \(none\) → 1, backup data\/backups\/books\.json\.schema-none/);
+  assert.match(r.out, /belege\.workspace\.yaml: schema \(none\) → 1/);
+  assert.match(r.out, /^# pass [1-9]\d*$/m, 'the golden master ran its tests');
+  assert.match(r.out, /✓ npm run test:books/);
+  assert.match(r.out, /Up to date\./);
+  assert.equal(ciCalls(), 0, 'the lockfile did not change');
+  assert.equal(JSON.parse(read('books.json')).schema, 1);
+  assert.match(read('belege.workspace.yaml'), /^schema: 1\n/);
+  assert.deepEqual(JSON.parse(read('data/backups/books.json.schema-none')), unversioned);
+});
+
+test('a second run changes nothing', () => {
+  const before = [read('books.json'), read('belege.workspace.yaml')];
+  const r = update();
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /nothing new/);
+  assert.match(r.out, /up to date/);
+  assert.deepEqual([read('books.json'), read('belege.workspace.yaml')], before);
+});
+
+test('a changed lockfile runs npm ci once', () => {
+  release('lockfile', () => {
+    const lock = join(seed, 'package-lock.json');
+    writeFileSync(lock, readFileSync(lock, 'utf8') + '\n');
+  });
+  assert.equal(update().status, 0);
+  assert.equal(ciCalls(), 1);
+  assert.equal(update().status, 0);
+  assert.equal(ciCalls(), 1, 'the rerun finds the install current');
+});
+
+test('a moved figure stops the update with what to do', () => {
+  const golden = join(ws, 'golden');
+  const file = readdirSync(golden).find((f) => f.startsWith('figures-'))!;
+  writeFileSync(join(golden, file), readFileSync(join(golden, file), 'utf8').replace(/\d+\.\d\d/, '0.01'));
+  const r = update();
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /✗ npm run test:books[^\n]*figure differs[\s\S]*filed quarter's figure must never move/);
+});
+
+test('an uncommitted change in the app stops the update before the pull', () => {
+  writeFileSync(join(app, 'src', 'local-change.ts'), '');
+  const r = update();
+  assert.equal(r.status, 1);
+  assert.match(r.out, /✗ No uncommitted change in the app[\s\S]*src\/local-change\.ts[\s\S]*git stash/);
+});
