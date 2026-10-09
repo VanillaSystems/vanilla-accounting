@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { buildViewPath, setView, splitViewPath, viewParams, viewPath } from '../lib/location.js';
 import { ALL, localToday, parsePeriod, type Period } from '../../accounting/periods.js';
 
@@ -7,7 +7,7 @@ export type FilterMode = 'all' | 'linked' | 'unlinked';
 const VALID_TABS = ['receipts', 'transactions', 'bank-statements', 'journal-entries', 'trial-balance', 'balance-sheet', 'income-statement', 'vat-report', 'account-ledger', 'bank-reconciliation'];
 
 /** Query keys that belong to one tab's selection: dropped when the tab changes. */
-const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx'];
+const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx', 'account'];
 
 /** /<lang>/<period>/<tab>, /<lang>/<tab> and the older /<period>/<tab> and /<tab>. */
 function parsePath(): { tab: string; period: string } {
@@ -43,17 +43,21 @@ export function useUrlState({ loading, language, receiptId, txRef }: { loading: 
   const [filterMode, setFilterMode] = useState(initial.filterMode);
   const [search, setSearch] = useState(initial.search);
   const period: Period = useMemo(() => parsePeriod(periodToken, localToday()) ?? ALL, [periodToken]);
-  const shownTab = useRef(tab);
+
+  /** A tab's own selection (je=, account=) is left behind before the next tab reads the URL. */
+  function selectTab(next: string) {
+    if (next === tab) return;
+    const params = viewParams();
+    for (const key of TAB_SELECTION) params.delete(key);
+    setView(viewPath(), params);
+    setTab(next);
+  }
 
   // Skipped while loading, so the original URL survives until the selection is restored from it.
-  // Keys a tab writes itself (account=, je=) stay, unless the tab changed.
+  // Keys a tab writes itself (account=, je=) stay.
   useEffect(() => {
     if (loading) return;
     const params = viewParams();
-    if (shownTab.current !== tab) {
-      shownTab.current = tab;
-      for (const key of TAB_SELECTION) params.delete(key);
-    }
     const own: Array<[string, string | null]> = [['filter', filterMode === 'all' ? null : filterMode], ['q', search || null]];
     if (tab === 'receipts' || tab === 'transactions') own.push(['receipt', receiptId], ['tx', txRef]);
     for (const [key, value] of own) {
@@ -64,7 +68,19 @@ export function useUrlState({ loading, language, receiptId, txRef }: { loading: 
   }, [loading, language, tab, period.token, filterMode, search, receiptId, txRef]);
 
   return {
-    tab, setTab, period, setPeriod, filterMode, setFilterMode, search, setSearch,
+    tab, setTab: selectTab, period, setPeriod, filterMode, setFilterMode, search, setSearch,
     initialSelection: { receiptId: initial.receiptId, txRef: initial.txRef },
   };
+}
+
+/** One query parameter a tab keeps itself (?account=…), read once and written back on change. */
+export function useUrlParam(name: string): [string | null, (value: string | null) => void] {
+  const [value, setValue] = useState(() => viewParams().get(name));
+  useEffect(() => {
+    const params = viewParams();
+    if (value) params.set(name, value);
+    else params.delete(name);
+    setView(viewPath(), params);
+  }, [name, value]);
+  return [value, setValue];
 }

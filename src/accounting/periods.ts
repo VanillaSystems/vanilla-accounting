@@ -144,6 +144,16 @@ export function parseSwissDate(text: string): IsoDate | null {
 /** Undated items show in every period. */
 export const inPeriod = (p: Period, date: IsoDate | undefined): boolean => !date || (date >= p.from && date <= p.to);
 
+/**
+ * The period a link to an item dated `date` opens in: the current one when it holds the date,
+ * else the date's quarter. Undated items open in 'all'.
+ */
+export function periodContaining(date: IsoDate | undefined, current: Period): string {
+  if (!date) return 'all';
+  if (inPeriod(current, date)) return current.token;
+  return `${date.slice(0, 4)}-Q${quarterOf(Number(date.slice(5, 7)))}`;
+}
+
 /** Today in the local time zone, YYYY-MM-DD. */
 export function localToday(now = new Date()): IsoDate {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;

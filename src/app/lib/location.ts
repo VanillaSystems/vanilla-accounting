@@ -1,5 +1,6 @@
 import { STATIC_EXPORT } from './api.js';
 import { LOCALES, language } from '../i18n/index.js';
+import { periodContaining, type Period } from '../../accounting/periods.js';
 
 /**
  * The view's path and query (/<lang>/<period>/<tab>?q=…). With the API they are the URL's own path
@@ -41,11 +42,21 @@ export function viewHref(tab: string, params: Record<string, string>, period = '
   return STATIC_EXPORT ? `#${view}` : view;
 }
 
-/** A receipt's detail view, in the period 'all' so it is always visible. */
-export const receiptHref = (id: string) => viewHref('receipts', { receipt: id });
+/**
+ * Links to one item's detail view. Given the item's date and the current period, the link keeps
+ * the period when it holds the date, else opens the date's quarter; without them, 'all'.
+ */
+export const receiptHref = (id: string, date?: string, current?: Period) =>
+  viewHref('receipts', { receipt: id }, current ? periodContaining(date, current) : 'all');
 
-/** A transaction's detail view, in the period 'all' so it is always visible. */
-export const txHref = (ref: string) => viewHref('transactions', { tx: ref });
+export const txHref = (ref: string, date?: string, current?: Period) =>
+  viewHref('transactions', { tx: ref }, current ? periodContaining(date, current) : 'all');
+
+export const entryHref = (id: string, date: string | undefined, current: Period) =>
+  viewHref('journal-entries', { je: id }, periodContaining(date, current));
+
+/** An account's Kontoauszug for the period. */
+export const accountHref = (account: string, current: Period) => viewHref('account-ledger', { account }, current.token);
 
 /** The language the URL named when the page loaded: it wins over a stored or configured one. */
 export const URL_LANGUAGE_AT_LOAD: string | undefined = splitViewPath(viewPath()).lang;

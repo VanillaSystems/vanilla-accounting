@@ -137,3 +137,13 @@ test('parseSwissDate: typed dd.mm.yyyy, with or without leading zeros; no imposs
   assert.equal(parseSwissDate('29.02.2028'), '2028-02-29');
   for (const bad of ['29.02.2026', '2026-10-09', '9/10/2026', '32.01.2026', '1.13.2026', '']) assert.equal(parseSwissDate(bad), null, bad);
 });
+
+test('periodContaining: a link keeps the current period when it holds the date, else the quarter', async () => {
+  const { periodContaining } = await import('../src/accounting/periods.js');
+  const qtd = parsePeriod('qtd', '2026-10-09')!;
+  assert.equal(periodContaining('2026-10-02', qtd), 'qtd');
+  assert.equal(periodContaining('2026-05-31', qtd), '2026-Q2');
+  assert.equal(periodContaining('2025-12-31', parsePeriod('2026', '2026-10-09')!), '2025-Q4');
+  assert.equal(periodContaining('2026-01-01', parsePeriod('all', '2026-10-09')!), 'all');
+  assert.equal(periodContaining(undefined, qtd), 'all');
+});

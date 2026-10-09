@@ -5,6 +5,9 @@ import { localToday, type Period } from '../../accounting/periods.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cn, formatDate } from '../lib/utils.js';
 import { accountingName, t } from '../i18n/index.js';
+import { useUrlParam } from '../hooks/use-url-state.js';
+import { SplitPane } from './split-pane.js';
+import { AccountPanel, accountRowProps } from './account-panel.js';
 
 interface Props {
   index: Index;
@@ -17,6 +20,7 @@ function fmt(n: number): string {
 
 export function BalanceSheetTab({ index, period }: Props) {
   const asOfDate = period.kind === 'all' ? localToday() : period.to;
+  const [account, setAccount] = useUrlParam('account');
 
   const year = asOfDate.slice(0, 4);
   const openingBalances = index.config?.openingBalances?.[year] ?? {};
@@ -49,7 +53,7 @@ export function BalanceSheetTab({ index, period }: Props) {
           <table className="w-full text-sm mt-1">
             <tbody>
               {section.rows.map((row) => (
-                <tr key={row.account} className="border-b border-border/50">
+                <tr key={row.account || row.name} {...(row.account ? accountRowProps(row.account, account, setAccount, 'border-b border-border/50') : { className: 'border-b border-border/50' })}>
                   <td className="py-1 px-3 text-muted-foreground w-16 font-mono text-xs">{row.account}</td>
                   <td className="py-1 px-1">{row.account ? row.name : accountingName(row.name)}</td>
                   <td className="py-1 px-3 text-right font-mono tabular-nums whitespace-nowrap">
@@ -67,8 +71,20 @@ export function BalanceSheetTab({ index, period }: Props) {
   }
 
   return (
-    <div className="flex flex-col flex-1 overflow-auto p-6">
-      <p className="text-sm text-muted-foreground mb-4" data-testid="balance-as-of">{t('balance.asOf', { date: formatDate(asOfDate) })}</p>
+    <SplitPane
+      storageKey="statement-account"
+      defaultLeft={55}
+      className="flex-1"
+      leftClassName="overflow-auto"
+      right={account && (
+        <AccountPanel index={index} account={account} from={`${year}-01-01`} to={asOfDate} period={period} onClose={() => setAccount(null)} />
+      )}
+      left={
+    <div className="flex flex-col p-6">
+      <p className="text-sm text-muted-foreground mb-4" data-testid="balance-as-of">
+        {t('balance.asOf', { date: formatDate(asOfDate) })}
+        <span className="ml-3 text-xs text-dim">{t('accountPanel.hint')}</span>
+      </p>
       <div className="grid grid-cols-2 gap-8 flex-1">
         {/* Assets */}
         <div>
@@ -109,5 +125,7 @@ export function BalanceSheetTab({ index, period }: Props) {
         </div>
       </div>
     </div>
+      }
+    />
   );
 }
