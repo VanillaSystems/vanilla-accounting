@@ -16,7 +16,7 @@ company that sells goods through a webshop.
   rate of its date, the lines match the bank transaction, a single-leg row has a `-2` code, a
   correction is dated after the quarter it corrects, and the declared Ziffern are what the
   engine computes. Every error message names the fix, including the Ziffern to write.
-- `tests/casebook.test.ts` books every case into a copy of the demo workspace and checks that
+- `tests/casebook.test.ts` books every case into a copy of each shipped demo workspace and checks that
   the VAT return of its quarter moves by exactly the declared Ziffern.
 
 ## How the classifier uses it

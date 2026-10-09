@@ -30,11 +30,12 @@ law:
   - MWSTG Art. 10 Abs. 1 (only an independent business is taxable; employment is no supply)
   - AHVG Art. 14 Abs. 1 (the employer withholds the employee's contributions)
 why: >
-  A salary is no supply, so it carries no VAT code and moves no Ziffer. The gross salary is the
-  expense: the net goes out of the bank, the withheld part waits on 2270 until the Ausgleichskasse
-  and the pension fund are paid.
+  The gross salary is the expense on 5000. The net goes out of the bank; the employee's
+  deductions wait on 2270 until the Ausgleichskasse and pension fund payments clear them, and
+  the employer's own share is booked on 57xx with those payments. A salary is no supply: no VAT
+  code, no Ziffer.
 pitfalls:
-  - Book the gross salary, not only the net payment; otherwise 2270 never balances and the salary statement (Lohnausweis) does not match the books.
+  - Booking only the net payment on 5000 gives the same VAT return, but the books then do not reconcile with the Lohnausweis or the Ausgleichskasse statement.
   - No I0 on a salary. I0 is for purchases without Swiss MWST, a salary is not a purchase.
 signals:
   kind: employee

@@ -21,7 +21,7 @@ import {
 } from '../src/knowledge/cases.js';
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
-import { DEMO_ROOT } from './support/workspace.js';
+import { DEMO_ROOT, DEMO_ROOTS } from './support/workspace.js';
 import { inventoryMarkdown, minePatterns } from '../tools/cases/mine.js';
 
 const cases = loadCases();
@@ -44,9 +44,9 @@ test('every case fits the prompt budget', () => {
   for (const c of cases) assert.ok(caseTokens(c) <= CASE_TOKEN_LIMIT, `${c.id}: ~${caseTokens(c)} tokens`);
 });
 
-test('booked into the demo books, each case adds exactly its declared Ziffern to its quarter', () => {
+for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').pop()}, each case adds exactly its declared Ziffern to its quarter`, () => {
   const dir = mkdtempSync(join(tmpdir(), 'belege-casebook-'));
-  cpSync(DEMO_ROOT, dir, { recursive: true });
+  cpSync(demo, dir, { recursive: true });
   const books = loadBooks(workspaceAt(dir));
   const base = books.journalEntries.slice();
   const adjustments = books.config.vatAdjustments ?? [];
