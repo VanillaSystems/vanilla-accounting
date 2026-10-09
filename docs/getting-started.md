@@ -190,9 +190,27 @@ npm run vat-xml -- 2026-Q3
 ```
 
 This writes an eCH-0217 XML. Import it in the ESTV portal ("MWST abrechnen"), check, and
-submit. Then copy the XML into `filings/<year>/` and set `config.closedThrough` in
-`books.json` to the last day of the quarter. From then on, that quarter never changes:
-corrections are booked in the next open quarter (see the app's `AGENTS.md`, golden rule 1).
+submit. Then copy the XML into `filings/<year>/` and close the quarter:
+
+```sh
+npm run seal -- 2026-Q3 --close
+```
+
+This sets `config.closedThrough` in `books.json` to the last day of the quarter and seals it.
+From then on, that quarter never changes: corrections are booked in the next open quarter (see
+the app's `AGENTS.md`, golden rule 1).
+
+## 8. Update the app
+
+```sh
+npm run update
+```
+
+This pulls the newest version, installs changed dependencies, brings your workspace files to
+the new format (with a backup in `data/backups/`), and runs `npm run doctor` and
+`npm run test:books`. It stops at the first problem and says how to fix it. Read what it prints
+from `CHANGELOG.md`: an entry marked **⚠ figures** changes a figure of an open quarter, and one
+marked **⚠ action** needs something from you. Commit your workspace afterwards.
 
 ## Limits
 
