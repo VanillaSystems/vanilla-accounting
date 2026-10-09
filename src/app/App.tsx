@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
-import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Lock } from 'lucide-react';
+import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Lock, ClipboardCheck, MessageSquarePlus } from 'lucide-react';
 import type { Receipt } from '../../src/types/index.js';
 import { useIndex } from './hooks/use-index.js';
 import { useApiStatus } from './hooks/use-api-status.js';
@@ -28,12 +28,22 @@ import { ManualTransactionForm } from './components/manual-transaction-form.js';
 import { cn, formatDate } from './lib/utils.js';
 import { api, orAlert, errorText, sources } from './lib/api.js';
 import { LOCALES, t } from './i18n/index.js';
+import { useReview } from './lib/review.js';
+import { ReviewAsk } from './components/review-ask.js';
+import { ReviewTab } from './components/review-tab.js';
+import { LogTab } from './components/log-tab.js';
+import { ReviewsTab } from './components/reviews-tab.js';
 
 export default function App({ language, onLanguage }: { language: string; onLanguage: (code: string) => void }) {
   const { data: index, loading, error, refresh } = useIndex();
   const { online: apiOnline, readonly, snapshot } = useApiStatus();
-  /** Edit controls show only when a write could succeed: the API runs and is not in audit mode. */
-  const canEdit = apiOnline && !readonly;
+  /** A review package: every edit becomes a correction of the Treuhänder's copy (lib/review.ts). */
+  const review = useReview();
+  /** Edit controls show only when a write could succeed: the API runs and is not in audit mode, or a review records it. */
+  const canEdit = (apiOnline && !readonly) || !!review;
+  /** The owner's own work (models, files, receipts): only with the API, never in a review. */
+  const canProcess = apiOnline && !readonly;
+  useEffect(() => review?.subscribe(refresh), [review, refresh]);
   const restoredRef = useRef(false);
   const skipReceiptClearRef = useRef(false);
 
@@ -174,7 +184,15 @@ export default function App({ language, onLanguage }: { language: string; onLang
 
   return (
     <div className="h-screen flex flex-col bg-muted overflow-hidden">
-      {readonly && (
+      {review && (
+        <div role="status" data-testid="review-bar" className="shrink-0 flex items-center justify-center gap-3 px-6 py-1.5 text-xs font-medium bg-blue-100 text-blue-900 border-b border-blue-300 dark:bg-blue-950 dark:text-blue-200 dark:border-blue-800">
+          <ClipboardCheck className="h-3.5 w-3.5 shrink-0" />
+          {t('review.bar', { name: review.state.reviewer.name, period: review.state.base.period, date: formatDate(review.state.base.createdAt.slice(0, 10)) })}
+          <span className="font-normal">· {t('review.barCount', { n: review.state.corrections.length })}</span>
+          <button onClick={() => setTab('review')} className="underline hover:no-underline">{t('review.open')}</button>
+        </div>
+      )}
+      {readonly && !review && (
         <div role="status" data-testid="audit-bar" className="shrink-0 flex items-center justify-center gap-2 px-6 py-1.5 text-xs font-medium bg-amber-100 text-amber-900 border-b border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
           <Lock className="h-3.5 w-3.5 shrink-0" />
           {t('app.auditBar')}
@@ -298,6 +316,15 @@ export default function App({ language, onLanguage }: { language: string; onLang
             <TabTrigger value="vat-report">{t('tab.vat')}</TabTrigger>
             <TabTrigger value="account-ledger">{t('tab.accountLedger')}</TabTrigger>
             <TabTrigger value="bank-reconciliation">{t('tab.bankReconciliation')}</TabTrigger>
+            <span className="mx-1 text-border">|</span>
+            <TabTrigger value="log">{t('tab.log')}</TabTrigger>
+            {canProcess && <TabTrigger value="reviews">{t('tab.reviews')}</TabTrigger>}
+            {review && (
+              <TabTrigger value="review">
+                {t('tab.review')}
+                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-1.5 py-0.5 font-medium">{review.state.corrections.length}</span>
+              </TabTrigger>
+            )}
           </Tabs.List>
 
           {/* Belege tab */}
@@ -327,7 +354,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                 {manualBatchStatus && <span className="text-xs text-muted-foreground">{manualBatchStatus}</span>}
                 {batchStatus && <span className="text-xs text-muted-foreground">{batchStatus}</span>}
                 <span className="text-xs text-muted-foreground">{t('app.receiptCount', { n: index.receipts.length })}</span>
-                {canEdit && manualBatchIds.size > 0 && (
+                {canProcess && manualBatchIds.size > 0 && (
                   <>
                     <button
                       onClick={() => setManualBatchIds(new Set())}
@@ -345,7 +372,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                     </button>
                   </>
                 )}
-                {canEdit && (
+                {canProcess && (
                   <button
                     onClick={batchRename}
                     disabled={batchRenaming}
@@ -386,7 +413,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                         {selectedReceipt.filename}
                       </span>
                       <div className="flex items-center gap-1">
-                        {canEdit && selectedReceipt.needsVisionReview && (
+                        {canProcess && selectedReceipt.needsVisionReview && (
                           <button
                             onClick={runVisionExtract}
                             disabled={visionExtracting}
@@ -397,7 +424,12 @@ export default function App({ language, onLanguage }: { language: string; onLang
                             {visionExtracting ? t('receipts.visionRunning') : t('receipts.vision')}
                           </button>
                         )}
-                        {canEdit && (
+                        {review && (
+                          <button onClick={() => void review.comment({ kind: 'receipt', id: selectedReceipt.id })} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title={t('review.commentButton')} data-testid="comment-receipt">
+                            <MessageSquarePlus className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canProcess && (
                           <button
                             onClick={() => setEditOpen((o) => !o)}
                             className={cn('p-1 rounded text-muted-foreground hover:text-foreground', editOpen ? 'bg-blue-100 text-blue-700 hover:text-blue-800' : 'hover:bg-accent')}
@@ -406,7 +438,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                             <Pencil className="h-4 w-4" />
                           </button>
                         )}
-                        {canEdit && (
+                        {canProcess && (
                           <button onClick={() => setDeleteConfirmOpen(true)} className="p-1 rounded hover:bg-red-100 text-muted-foreground hover:text-red-600" title={t('receipts.delete')}>
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -469,7 +501,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                         await orAlert(api.approveDuplicate(selectedReceipt.id));
                         refresh();
                       }}
-                      onCreateManual={async (date, description, amount, currency) => {
+                      onCreateManual={!canProcess ? undefined : async (date, description, amount, currency) => {
                         const ref = await api.createManualTransaction({ date, description, amount, currency });
                         await orAlert(api.addMapping({ receiptId: selectedReceipt.id, transactionRef: ref }));
                         refresh();
@@ -503,7 +535,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
               <SearchBar value={search} onChange={setSearch} className="w-72" placeholder={t('transactions.search')} />
               <div className="ml-auto flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">{t('app.transactionCount', { n: index.transactions.length })}</span>
-                {canEdit && (
+                {canProcess && (
                   <button
                     onClick={() => setManualTx(manualTx ? null : { receiptId: selectedReceipt?.id })}
                     className={cn(
@@ -565,17 +597,17 @@ export default function App({ language, onLanguage }: { language: string; onLang
                     }}
                     onSelectReceipt={setSelectedReceipt}
                     selectedReceiptId={selectedReceipt?.id ?? null}
-                    onDelete={async () => {
+                    onDelete={!canProcess ? undefined : async () => {
                       if (!(await orAlert(api.deleteTransaction(selectedTxRef)))) return;
                       setSelectedTxRef(null);
                       refresh();
                     }}
                     onSetDescription={async (description) => {
-                      await api.patchTransaction(selectedTxRef, { description });
+                      await orAlert(api.patchTransaction(selectedTxRef, { description }));
                       refresh();
                     }}
                     onSetRemarks={async (remarks) => {
-                      await api.patchTransaction(selectedTxRef, { remarks });
+                      await orAlert(api.patchTransaction(selectedTxRef, { remarks }));
                       refresh();
                     }}
                     onSetNoReceiptNeeded={async (noReceiptNeeded) => {
@@ -604,7 +636,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
             value="journal-entries"
             className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
           >
-            <JournalEntriesTab index={index} period={period} onRefresh={refresh} canEdit={canEdit} />
+            <JournalEntriesTab index={index} period={period} onRefresh={refresh} canEdit={canEdit} canProcess={canProcess} />
           </Tabs.Content>
 
           {/* Saldobilanz tab */}
@@ -654,8 +686,24 @@ export default function App({ language, onLanguage }: { language: string; onLang
           >
             <BankReconciliationTab index={index} period={period} />
           </Tabs.Content>
+
+          <Tabs.Content value="log" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
+            <LogTab index={index} />
+          </Tabs.Content>
+          {canProcess && (
+            <Tabs.Content value="reviews" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
+              <ReviewsTab index={index} onRefresh={refresh} />
+            </Tabs.Content>
+          )}
+          {review && (
+            <Tabs.Content value="review" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
+              <ReviewTab />
+            </Tabs.Content>
+          )}
         </Tabs.Root>
       )}
+
+      <ReviewAsk />
 
       {/* Manual transaction batch modal */}
       {manualBatchModalOpen && (

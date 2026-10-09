@@ -10,6 +10,7 @@ import { router as transactions } from './routes/transactions.js';
 import { router as mappings } from './routes/mappings.js';
 import { router as journal } from './routes/journal.js';
 import { router as config } from './routes/config.js';
+import { router as reviews } from './routes/reviews.js';
 import { router as files } from './files.js';
 
 export const app = express();
@@ -24,7 +25,8 @@ app.use((req, res, next) => {
   if (LOOPBACK.test(req.socket.remoteAddress ?? '') || NETWORK_PATHS.has(req.path)) return next();
   res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
 });
-app.use(express.json());
+// A Treuhänder's review file carries every record he changed, before and after.
+app.use(express.json({ limit: '50mb' }));
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
 // whole app without risk of accidental edits/deletes or triggering paid LLM calls.
@@ -43,7 +45,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify);
+app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, reviews);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

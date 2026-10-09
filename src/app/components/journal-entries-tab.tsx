@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Check, X, ExternalLink, ChevronRight, FileText } from 'lucide-react';
+import { Sparkles, Check, X, ExternalLink, ChevronRight, FileText, Pencil, MessageSquarePlus, Plus } from 'lucide-react';
 import type { Index, JournalEntry, Receipt } from '../../types/index.js';
 import { SearchBar } from './search-bar.js';
 import { cn, formatDate } from '../lib/utils.js';
@@ -11,13 +11,17 @@ import { SplitPane } from './split-pane.js';
 import { api, orAlert, sources } from '../lib/api.js';
 import { receiptHref, setView, txHref, viewParams, viewPath } from '../lib/location.js';
 import { t } from '../i18n/index.js';
+import { useReview } from '../lib/review.js';
+import { EntryForm } from './entry-form.js';
 
 interface Props {
   index: Index;
   period: Period;
   onRefresh: () => void;
-  /** Show the controls that write: the API runs and is not in audit mode. */
+  /** Show the controls that write: the API runs and is not in audit mode, or a review records them. */
   canEdit: boolean;
+  /** Show the owner's own actions (classify with a model): only with the API. */
+  canProcess: boolean;
 }
 
 interface EditState {
@@ -34,7 +38,9 @@ function rowTxRef(row: Row): string {
   return row.txRef;
 }
 
-export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) {
+export function JournalEntriesTab({ index, period, onRefresh, canEdit, canProcess }: Props) {
+  const review = useReview();
+  const [form, setForm] = useState<{ entry?: JournalEntry } | null>(null);
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'classified' | 'unclassified'>('all');
   const [editState, setEditState] = useState<EditState | null>(null);
@@ -50,7 +56,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
     return params.get('receipt') ?? null;
   });
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
-    const defaults: Record<string, number> = { datum: 90, beschreibung: 200, soll: 160, haben: 160, betrag: 90, whg: 44, mwst: 60, actions: 52 };
+    const defaults: Record<string, number> = { datum: 90, beschreibung: 200, soll: 160, haben: 160, betrag: 90, whg: 44, mwst: 60, actions: 72 };
     try {
       const raw = localStorage.getItem('je-col-widths');
       if (raw) return { ...defaults, ...JSON.parse(raw) };
@@ -247,7 +253,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
 
   async function deleteEntry(je: JournalEntry, date: string) {
     const amount = `${je.exchangeCurrency ?? 'CHF'} ${je.amount.toFixed(2)}`;
-    if (!confirm(t('journal.deleteConfirm', { date, amount, description: je.description ?? '' }))) return;
+    if (!review && !confirm(t('journal.deleteConfirm', { date, amount, description: je.description ?? '' }))) return;
     if (await orAlert(api.deleteJournalEntry(je.id))) onRefresh();
   }
 
@@ -318,7 +324,12 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
           ))}
         </div>
         <SearchBar value={search} onChange={setSearch} className="w-64" placeholder={t('common.search')} />
-        <div className="ml-auto text-xs text-muted-foreground tabular-nums">
+        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+          {review && (
+            <button onClick={() => setForm({})} data-testid="journal-new-entry" className="flex items-center gap-1 px-2.5 py-1 border border-border rounded bg-background hover:bg-accent text-muted-foreground">
+              <Plus className="h-3.5 w-3.5" />{t('entryForm.newTitle')}
+            </button>
+          )}
           {t('journal.rowCount', { n: filtered.length })}
         </div>
       </div>
@@ -391,7 +402,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                       <td className="px-3 py-2 text-center text-muted-foreground">{tx.currency}</td>
                       <td className="px-3 py-2 text-dim">—</td>
                       <td className="px-2 py-2 text-center">
-                        {canEdit && (
+                        {canProcess && (
                           <button
                             onClick={(e) => { e.stopPropagation(); classifyTransaction(tx.ref); }}
                             disabled={classifyingRef === tx.ref}
@@ -437,14 +448,26 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                     <td className="px-2 py-2 text-center">
                       {canEdit && (
                         <div className="flex items-center justify-center gap-0">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); classifyTransaction(je.transactionRef); }}
-                            disabled={classifyingRef === je.transactionRef}
-                            className="p-0.5 text-muted-foreground hover:text-amber-600 disabled:opacity-40"
-                            title={t('journal.reclassify')}
-                          >
-                            <Sparkles className="h-3 w-3" />
-                          </button>
+                          {canProcess && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); classifyTransaction(je.transactionRef); }}
+                              disabled={classifyingRef === je.transactionRef}
+                              className="p-0.5 text-muted-foreground hover:text-amber-600 disabled:opacity-40"
+                              title={t('journal.reclassify')}
+                            >
+                              <Sparkles className="h-3 w-3" />
+                            </button>
+                          )}
+                          {review && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); setForm({ entry: je }); }} className="p-0.5 text-muted-foreground hover:text-foreground" title={t('entryForm.editTitle')} data-action="edit">
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); void review.comment({ kind: 'entry', id: je.id }); }} className="p-0.5 text-muted-foreground hover:text-foreground" title={t('review.commentButton')} data-action="comment">
+                                <MessageSquarePlus className="h-3 w-3" />
+                              </button>
+                            </>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteEntry(je, row.txDate); }}
                             className="p-0.5 text-muted-foreground hover:text-destructive"
@@ -608,6 +631,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
           )
         }
       />
+      {form && <EntryForm entry={form.entry} onClose={() => setForm(null)} />}
     </div>
   );
 }

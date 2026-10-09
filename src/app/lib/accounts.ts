@@ -23,7 +23,14 @@ export function getAccounts(): Account[] {
   return accountsCache ?? [];
 }
 
+let chartNames: Record<string, string> = {};
+
+/** Names of the SME chart's accounts, for an account a review books that accounts.json lacks yet. */
+export function setChartNames(chart: Account[]): void {
+  chartNames = Object.fromEntries(chart.map((a) => [a.number, a.name]));
+}
+
 export function accountTitle(code: string): string {
-  const map = getAccountMap();
-  return map[code] ? `${code} ${map[code]}` : code;
+  const name = getAccountMap()[code] ?? chartNames[code];
+  return name ? `${code} ${name}` : code;
 }

@@ -9,7 +9,7 @@ import { copyFileSync, cpSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBooks, mutateJournal, sealsOf, type Books } from '../src/books/store.js';
 import { ClosedPeriodError } from '../src/books/lock.js';
-import { git, setWriter } from '../src/books/history.js';
+import { git, history, setWriter } from '../src/books/history.js';
 import { applyChange } from '../src/books/changes.js';
 import { IntentError, quartersOf, seededIds, vatEffect, type Intent } from '../src/review/corrections.js';
 import { comment, record, replay, reviewFile, signOff, startReview, undo, type ReviewState } from '../src/review/session.js';
@@ -76,6 +76,9 @@ test('the review package refuses what the owner refuses, and turns a filed entry
   const base = loadBooks(ws);
   const { state, books } = makeReview(base, 'HEAD');
   assert.equal(state.corrections.length, 11);
+
+  const split = state.corrections.find((c) => c.kind === 'splitEntry')!;
+  assert.deepEqual(split.changes.map((c) => (c.after as { vatCode?: string }).vatCode), ['I81', undefined], 'a split line has its own VAT code, not the original one');
 
   const q1 = state.corrections.find((c) => c.reason === 'Q1: Beleg ohne MWST')!;
   assert.equal(q1.corrects, '2026-Q1');
@@ -155,6 +158,9 @@ test('merge: the accepted corrections through mutateJournal, a merge commit keep
     const parents = git(ws.paths.root, ['log', '-1', '--format=%P|%an|%s']).trim();
     assert.equal(parents, `${head} ${git(ws.paths.root, ['rev-parse', branch]).trim()}|Lukas Beispiel|Merged ${branch} by Lukas Beispiel (10 übernommen, 1 abgelehnt)`);
     assert.match(git(ws.paths.root, ['log', '--format=%an|%s']), /Anna Muster\|Beleg zeigt keine MWST/);
+    const [merge] = history(ws, { limit: 1 });
+    assert.equal(merge.parents.length, 2, 'the Protokoll shows the merge commit');
+    assert.ok(merge.changes.length >= 10);
     assert.equal(git(ws.paths.root, ['status', '--porcelain']).trim(), '');
 
     const after = loadBooks(ws);

@@ -15,7 +15,8 @@ import '@fontsource/jetbrains-mono/700.css';
 import './index.css';
 import App from './App.js';
 import { useLanguage } from './hooks/use-display-prefs.js';
-import { STATIC_EXPORT } from './lib/api.js';
+import { api, STATIC_EXPORT } from './lib/api.js';
+import { startReviewSession } from './lib/review.js';
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
 function Root() {
@@ -27,8 +28,17 @@ function Root() {
 // app reads its view once at load, as it does from a server path.
 if (STATIC_EXPORT) window.addEventListener('hashchange', () => window.location.reload());
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Root />
-  </StrictMode>,
-);
+// A review package (npm run review) edits a copy of the books: its corrections load before the first render.
+async function start() {
+  if (STATIC_EXPORT) {
+    const snapshot = await api.status().then((s) => s.snapshot, () => undefined);
+    if (snapshot?.review) await startReviewSession(snapshot);
+  }
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <Root />
+    </StrictMode>,
+  );
+}
+
+void start();

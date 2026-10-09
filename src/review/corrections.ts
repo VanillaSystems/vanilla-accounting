@@ -183,7 +183,8 @@ export function planIntent(books: BooksLike, intent: Intent, ids: Ids = randomId
       if (sum !== cents(before.amount)) {
         throw new IntentError(`Die Zeilen ergeben ${(sum / 100).toFixed(2)}, die Buchung ${before.amount.toFixed(2)}.`);
       }
-      const lines = intent.lines.map((l): JournalEntry => clean({ ...before, ...l, origin: 'manual' }));
+      // A line's own VAT code and text, never the original's: a split line without a code has none.
+      const lines = intent.lines.map((l): JournalEntry => clean({ ...before, vatCode: undefined, description: undefined, ...l, origin: 'manual' }));
       if (lock.isClosed(before.date)) {
         const { entries, corrects } = correctionEntries(books, before, lines, ids);
         return { kind: 'splitEntry', changes: entries.map(added), corrects };

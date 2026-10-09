@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Index } from '../../types/index.js';
-import { setAccounts } from '../lib/accounts.js';
+import { setAccounts, setChartNames } from '../lib/accounts.js';
 import { api } from '../lib/api.js';
 
 const EMPTY: Index = { receipts: [], transactions: [], mappings: [], bankStatements: [] };
@@ -15,8 +15,10 @@ export function useIndex() {
     Promise.all([
       api.books(),
       api.accounts().catch(() => []),
-    ]).then(([json, accounts]) => {
+      api.chart().catch(() => []),
+    ]).then(([json, accounts, chart]) => {
       setAccounts(accounts);
+      setChartNames(chart);
       setData(json);
       setLoading(false);
     }).catch((e: Error) => {

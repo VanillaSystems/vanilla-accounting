@@ -23,7 +23,7 @@ async function send({ method, path, body }: Call): Promise<{ status: number; err
   return { status, error: json.error as string | undefined, json };
 }
 
-const refused: Array<Call & { status: number }> = [
+const refused: Array<Call & { status: number; error?: RegExp }> = [
   { method: 'PATCH', path: '/api/transactions/C1', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { remarks: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { noReceiptNeeded: true }, status: 403 },
@@ -46,6 +46,9 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/journal-entries/jc', status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
+  // A review merge writes the books only through src/review/git.ts (mutateJournal); without a git workspace there is nothing to merge.
+  { method: 'POST', path: '/api/reviews/decide', body: { branch: 'review/x', accept: 'all' }, status: 400, error: /kein git-Repository/ },
+  { method: 'POST', path: '/api/reviews/import', body: { format: 'other' }, status: 400, error: /Keine gültige Prüfungsdatei/ },
 ];
 
 test('status: not in audit mode', async () => {
@@ -62,7 +65,8 @@ for (const call of refused) {
       assert.equal(json.code, 'periodClosed', 'the UI translates the refusal by its code');
       assert.equal((json.params as { closedThrough: string }).closedThrough, '2026-06-30');
     }
-    if (status === 400) {
+    if (status === 400 && call.error) assert.match(error ?? '', call.error);
+    else if (status === 400) {
       assert.match(error ?? '', /Nur manuelle Transaktionen/);
       assert.equal(json.code, 'manualOnly');
     }

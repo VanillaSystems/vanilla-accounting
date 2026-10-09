@@ -11,6 +11,8 @@ import { accountsOf, filedReturnsOf, receiptDirOf, workspaceInfo } from '../work
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
+import { history } from '../books/history.js';
+import { chartAccountsOf, decidedReviews } from '../review/package.js';
 import { hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 
 export class ExportError extends Error {}
@@ -19,7 +21,7 @@ export class ExportError extends Error {}
  * Builds the export into `outDir`. An earlier export there is replaced; any other non-empty
  * folder is refused, so a wrong path never deletes someone's files.
  */
-export async function buildAuditExport(ws: Workspace, outDir: string, createdAt = new Date().toISOString()): Promise<ExportManifest> {
+export async function buildAuditExport(ws: Workspace, outDir: string, createdAt = new Date().toISOString(), review?: AuditSnapshot['review']): Promise<ExportManifest> {
   const out = resolve(outDir);
   if (existsSync(out) && readdirSync(out).length && !existsSync(join(out, MANIFEST))) {
     throw new ExportError(`${out} is not empty and holds no audit export: choose an empty or new folder.`);
@@ -32,13 +34,16 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const books = loadBooks(ws);
   const write = (path: string, data: unknown) => writeOut(out, path, JSON.stringify(data));
   const raw = JSON.parse(readFileSync(ws.paths.books, 'utf8')) as { schema?: unknown };
-  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.books), appVersion: appVersion() };
+  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.books), appVersion: appVersion(), ...(review ? { review } : {}) };
 
   copyOut(out, EXPORT_FILES.books(), ws.paths.books);
   write(EXPORT_FILES.status(), { ok: true, readonly: true, snapshot } satisfies ApiStatus);
   write(EXPORT_FILES.accounts(), accountsOf(ws));
   write(EXPORT_FILES.workspace(), workspaceInfo(ws));
   for (const year of yearsOf(ws, books)) write(EXPORT_FILES.filedReturns(year), filedReturnsOf(ws, year));
+  write(EXPORT_FILES.log(), history(ws, { limit: 2000 }));
+  write(EXPORT_FILES.chart(), chartAccountsOf(ws));
+  write(EXPORT_FILES.reviewDecisions(), decidedReviews(ws));
 
   const missing: string[] = [];
   for (const r of books.receipts) {

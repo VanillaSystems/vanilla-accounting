@@ -11,6 +11,12 @@ export interface Sources {
   filedReturns(year: string): string;
   receipt(id: string): string;
   statement(bank: string, filename: string): string;
+  /** The books' change log (src/books/history.ts). */
+  log(): string;
+  /** The review package's own files: the chart offered beside accounts.json, and the owner's earlier decisions. */
+  chart(): string;
+  reviewDecisions(): string;
+  manifest(): string;
 }
 
 export const API_SOURCES: Sources = {
@@ -21,6 +27,10 @@ export const API_SOURCES: Sources = {
   filedReturns: (year) => `/api/vat/filed?year=${year}`,
   receipt: (id) => `/api/receipts/${id}`,
   statement: (bank, filename) => `/bank-statements/${bank}/${encodeURIComponent(filename)}`,
+  log: () => '/api/log',
+  chart: () => '/api/chart',
+  reviewDecisions: () => '/api/reviews/decisions',
+  manifest: () => '/manifest.json',
 };
 
 /** Paths relative to the export's index.html, so it runs under any base path and from a zip. */
@@ -32,6 +42,10 @@ export const EXPORT_FILES: Sources = {
   filedReturns: (year) => `data/vat-filed-${year}.json`,
   receipt: (id) => `receipts/${id}.pdf`,
   statement: (bank, filename) => `bank-statements/${bank}/${filename}`,
+  log: () => 'data/log.json',
+  chart: () => 'data/chart.json',
+  reviewDecisions: () => 'data/review-decisions.json',
+  manifest: () => 'manifest.json',
 };
 
 const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
@@ -45,6 +59,10 @@ export const EXPORT_SOURCES: Sources = {
   filedReturns: (year) => encodePath(EXPORT_FILES.filedReturns(year)),
   receipt: (id) => encodePath(EXPORT_FILES.receipt(id)),
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
+  log: () => encodePath(EXPORT_FILES.log()),
+  chart: () => encodePath(EXPORT_FILES.chart()),
+  reviewDecisions: () => encodePath(EXPORT_FILES.reviewDecisions()),
+  manifest: () => encodePath(EXPORT_FILES.manifest()),
 };
 
 /** What the export's api/status.json adds to the API's status: when and from what it was made. */
@@ -52,4 +70,12 @@ export interface AuditSnapshot {
   createdAt: string;
   booksSchema: number;
   appVersion: string;
+  /** A review package (npm run review): the UI edits a copy of the books and records corrections. */
+  review?: {
+    reviewer: { name: string; email?: string };
+    /** The period the owner asks to review, e.g. 2026-Q3. */
+    period: string;
+    /** The workspace's git commit the package was built from. */
+    commit?: string;
+  };
 }

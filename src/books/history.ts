@@ -122,7 +122,8 @@ export function history(ws: Workspace, opts: { limit?: number; rev?: string } = 
   const SEP = '\x1f';
   let out: string;
   try {
-    out = git(root, ['log', `-n${opts.limit ?? 200}`, `--format=%H${SEP}%P${SEP}%an${SEP}%ae${SEP}%aI${SEP}%B%x1e`, opts.rev ?? 'HEAD', '--', relative(root, ws.paths.books)]);
+    // --full-history keeps a review's merge commit: its books equal the branch tip's, so plain path limiting would drop it.
+    out = git(root, ['log', '--full-history', `-n${opts.limit ?? 200}`, `--format=%H${SEP}%P${SEP}%an${SEP}%ae${SEP}%aI${SEP}%B%x1e`, opts.rev ?? 'HEAD', '--', relative(root, ws.paths.books)]);
   } catch {
     return [];
   }
@@ -139,5 +140,5 @@ export function history(ws: Workspace, opts: { limit?: number; rev?: string } = 
       writeFileSync(cache, JSON.stringify(changes));
     }
     return { hash, parents: parents.split(' ').filter(Boolean), at, author: { name, email }, message: message.trim(), changes };
-  });
+  }).filter((c) => c.changes.length > 0);
 }
