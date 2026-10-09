@@ -10,6 +10,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBooks } from '../books/store.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { readBankStatements } from '../workspace/bank-statements.js';
 import { loadMailConfig } from '../collect/mail-config.js';
 
 const ws = openWorkspace();
@@ -47,10 +48,11 @@ for (const a of ws.bankAccounts) {
   if (a.bank === 'manual') continue;
   currenciesByBank.set(a.bank, [...(currenciesByBank.get(a.bank) ?? []), a.currency]);
 }
+const statementFiles = readBankStatements(ws);
 for (const [bank, currencies] of currenciesByBank) {
   const label = `${bank} ${currencies.join('/')}`;
   const files = ls(join(ws.paths.statements, bank));
-  const xml = files.filter((f) => f.startsWith('uuid_') && f.endsWith('.xml'));
+  const xml = [...new Set(statementFiles.filter((f) => f.status === 'read' && f.account.bank === bank).map((f) => f.file))];
   const pdfs = files.filter((f) => f.endsWith('.pdf') && months.some((m) => {
     const [y, mo] = m.split('-');
     return f.includes(`${y}-${mo}`) || f.includes(`.${mo}.${y}`);

@@ -1,19 +1,23 @@
 /**
  * Characterization of the camt053 parser. Every bank transaction and ref in the books comes
  * from here. The fixtures under tests/fixtures/camt053/ are synthetic statements in the shape
- * Raiffeisen and Wise export (batch with child TxDtls, QR references, Wise DtTm and fee lines).
+ * Raiffeisen and Wise export (batch with child TxDtls, QR references, Wise DtTm and fee lines);
+ * tests/bank-statements.test.ts reads the UBS, PostFinance and cantonal bank shapes.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BankTransaction } from '../src/types/index.js';
-import { parseCamt053, assignUniqueRefs } from '../src/parsers/camt053.js';
+import { assignUniqueRefs, readCamt, transactionsOf } from '../src/parsers/camt053.js';
+import type { StatementKind } from '../src/workspace/banks.js';
 
 const RAIFFEISEN = 'uuid_camt053_001_08_raiffeisen.xml';
 const WISE_USD = 'uuid_statement_wise_USD.xml';
 const read = (name: string) => readFileSync(join(import.meta.dirname, 'fixtures/camt053', name), 'utf8');
-const parseFile = (name: string): BankTransaction[] => parseCamt053(read(name), name);
+const parse = (xml: string, bank = 'Raiffeisen', statements: StatementKind = 'camt053'): BankTransaction[] =>
+  readCamt(xml).statements.flatMap((s) => transactionsOf(s, { bank, statements }));
+const parseFile = (name: string): BankTransaction[] => (name.includes('wise') ? parse(read(name), 'Wise', 'wise') : parse(read(name)));
 
 function ntry(inner: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -72,23 +76,30 @@ test('Wise entries: AcctSvcrRef, DtTm date, native currency, fee type', () => {
   assert.equal(txs.filter((t) => t.type === 'wise-fee').length, 2);
 });
 
-test('files without the uuid_ prefix are skipped; a filename is optional', () => {
-  const xml = read(WISE_USD);
-  assert.deepEqual(parseCamt053(xml, 'statement_wise_USD.xml'), []);
-  assert.equal(parseCamt053(xml).length, 6);
-  assert.deepEqual(parseCamt053('<Document/>', 'uuid_empty.xml'), []);
+test('only a camt.053 holds statements; a notification or report is recognised, not read', () => {
+  assert.equal(readCamt(read(WISE_USD)).statements.length, 1);
+  assert.deepEqual(readCamt('<Document><BkToCstmrDbtCdtNtfctn><Ntfctn/></BkToCstmrDbtCdtNtfctn></Document>'), { message: 'camt.054', statements: [] });
+  assert.deepEqual(readCamt('<Document><BkToCstmrAcctRpt><Rpt/></BkToCstmrAcctRpt></Document>'), { message: 'camt.052', statements: [] });
+  assert.deepEqual(readCamt('<Document/>'), { message: 'other', statements: [] });
 });
 
-test('synthetic entry: ref falls back to BkTxCd, bank to the ref prefix, long digits stay strings', () => {
-  const xml = `<?xml version="1.0"?><Document><BkToCstmrStmt><Stmt>
+test('synthetic entry: a Wise ref falls back to BkTxCd, any other bank numbers the entry; long digits stay strings', () => {
+  const xml = `<?xml version="1.0"?><Document><BkToCstmrStmt><Stmt><Id>S-1</Id>
 <Ntry><Amt Ccy="EUR">12.50</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-07-03</Dt></BookgDt>
 <BkTxCd><Prtry><Cd>WEUR000001</Cd></Prtry></BkTxCd><AddtlNtryInf>Entry text</AddtlNtryInf>
 <NtryDtls><TxDtls><AddtlTxInf>Detail text</AddtlTxInf><RmtInf><Strd><CdtrRefInf><Ref>210000000003139471430009017</Ref></CdtrRefInf></Strd></RmtInf></TxDtls></NtryDtls></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
-  assert.deepEqual(parseCamt053(xml, 'uuid_x.xml'), [{
+  assert.deepEqual(parse(xml, 'Wise', 'wise'), [{
     ref: 'WEUR000001', bank: 'Wise', date: '2026-07-03', amount: 12.5, currency: 'EUR', direction: 'CRDT',
     description: 'Detail text', reference: '210000000003139471430009017',
   }]);
+  assert.equal(parse(xml, 'UBS')[0].ref, 'S-1#1', 'a transaction code is no id: the entry is numbered in its statement');
+});
+
+test('a fee line is tagged on a wise account only', () => {
+  const xml = read(WISE_USD);
+  assert.equal(parse(xml, 'Wise', 'wise').filter((t) => t.type === 'wise-fee').length, 2);
+  assert.equal(parse(xml, 'Other', 'camt053').filter((t) => t.type === 'wise-fee').length, 0);
 });
 
 test('synthetic batch: debit parts name the creditor, credit parts the debtor', () => {
@@ -97,7 +108,7 @@ test('synthetic batch: debit parts name the creditor, credit parts the debtor', 
   const entry = (dir: 'DBIT' | 'CRDT', side: 'Cdtr' | 'Dbtr') =>
     `<Ntry><AcctSvcrRef>R-${dir}</AcctSvcrRef><Amt Ccy="CHF">30.00</Amt><CdtDbtInd>${dir}</CdtDbtInd><BookgDt><Dt>2026-07-10</Dt></BookgDt>
 <AddtlNtryInf>Batch</AddtlNtryInf><NtryDtls>${detail('10.00', 'Alpha AG', side)}${detail('20.00', 'Beta GmbH', side)}</NtryDtls></Ntry>`;
-  const [debit, credit] = parseCamt053(ntry(entry('DBIT', 'Cdtr') + entry('CRDT', 'Dbtr')), 'uuid_x.xml');
+  const [debit, credit] = parse(ntry(entry('DBIT', 'Cdtr') + entry('CRDT', 'Dbtr')));
   const expectedParts = [
     { amount: 10, currency: 'CHF', counterparty: 'Alpha AG', reference: 'inv 10.00' },
     { amount: 20, currency: 'CHF', counterparty: 'Beta GmbH', reference: 'inv 20.00' },

@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../../src/types/index.js';
-import { parseCamt053, assignUniqueRefs } from '../../src/parsers/camt053.js';
+import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/parsers/camt053.js';
 import { bankKind } from '../../src/workspace/banks.js';
 import { figuresFromBooks } from '../../src/accounting/return-figures.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
@@ -262,7 +262,10 @@ function build(demo: Demo, seed: number): Tree {
   // The bank transactions are what our own parser reads from the statements just written.
   const viaBank = booked.filter((b) => b.payment.bank !== PAID_PRIVATELY);
   const parsed: BankTransaction[] = assignUniqueRefs([...tree].filter(([path]) => path.endsWith('.xml') && path.startsWith('bank-statements/'))
-    .flatMap(([path, xml]) => parseCamt053(String(xml), path.split('/').pop())));
+    .flatMap(([path, xml]) => {
+      const bank = path.split('/')[1];
+      return readCamt(String(xml)).statements.flatMap((s) => transactionsOf(s, { bank, statements: bankKind(bank).statements! }));
+    }));
   if (parsed.length !== viaBank.length) throw new Error(`parser read ${parsed.length} transactions, ${viaBank.length} were written`);
   // Paid privately: the manual transaction the app records for an Auslage.
   const paidPrivately: BankTransaction[] = booked.filter((b) => b.payment.bank === PAID_PRIVATELY).map((b) => ({

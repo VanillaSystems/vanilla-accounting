@@ -1,5 +1,61 @@
+/**
+ * ISO 20022 camt.053 bank statements, as every Swiss bank exports them (SIX Swiss Payment
+ * Standards). `readCamt` reads the statements of a file with the account they are for; which
+ * ledger account that is, the manifest decides (src/accounting/bank-accounts.ts), and
+ * `transactionsOf` then turns each entry into a BankTransaction.
+ *
+ * Shapes the banks differ in, all read here: the entry reference (AcctSvcrRef, NtryRef, or only
+ * on the TxDtls), one or several NtryDtls with or without a Btch, remittance as Ustrd lines or a
+ * Strd creditor reference (QR, SCOR), the counterparty as Cdtr/Nm or Cdtr/Pty/Nm, Dt or DtTm.
+ */
+import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 import type { BankTransaction } from '../types/index.js';
+import type { StatementKind } from '../workspace/banks.js';
+
+/** The ISO 20022 cash-management message a file holds: only camt.053 is a statement. */
+export type CamtMessage = 'camt.053' | 'camt.052' | 'camt.054' | 'other';
+
+/** fast-xml-parser's view of an element: the XML is the boundary, so fields stay untyped until read. */
+type Node = Record<string, any>;
+
+/** One <Stmt>: the account it is for, its balances and entries, not yet tied to a ledger account. */
+export interface CamtStatement {
+  /** Stmt/Id; a statement without one is identified by its content. */
+  id: string;
+  iban?: string;
+  currency: string;
+  node: Node;
+}
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  removeNSPrefix: true,
+  isArray: (name) => ['Stmt', 'Ntry', 'NtryDtls', 'TxDtls', 'Bal', 'Ustrd', 'Strd'].includes(name),
+  // QR / creditor references are 27-digit strings; parsed as numbers they become 3.03e+26.
+  numberParseOptions: { hex: false, leadingZeros: false, skipLike: /^\d{16,}$/ },
+});
+
+const MESSAGES: [string, CamtMessage][] = [
+  ['BkToCstmrStmt', 'camt.053'], ['BkToCstmrAcctRpt', 'camt.052'], ['BkToCstmrDbtCdtNtfctn', 'camt.054'],
+];
+
+export function readCamt(xml: string): { message: CamtMessage; statements: CamtStatement[] } {
+  const doc: Node | undefined = parser.parse(xml)?.Document;
+  const message = MESSAGES.find(([el]) => doc?.[el] !== undefined)?.[1] ?? 'other';
+  if (message !== 'camt.053') return { message, statements: [] };
+  const stmts: Node[] = doc!.BkToCstmrStmt.Stmt ?? [];
+  return {
+    message,
+    statements: stmts.map((node, i) => ({
+      id: node.Id !== undefined ? String(node.Id) : `${createHash('sha256').update(xml).digest('hex').slice(0, 16)}#${i + 1}`,
+      ...(node.Acct?.Id?.IBAN ? { iban: String(node.Acct.Id.IBAN) } : {}),
+      currency: String(node.Acct?.Ccy ?? node.Ntry?.[0]?.Amt?.['@_Ccy'] ?? node.Bal?.[0]?.Amt?.['@_Ccy'] ?? 'CHF'),
+      node,
+    })),
+  };
+}
 
 function getAmt(amtEl: any): { amount: number; currency: string } {
   if (amtEl === null || amtEl === undefined) return { amount: 0, currency: 'CHF' };
@@ -12,99 +68,82 @@ function getAmt(amtEl: any): { amount: number; currency: string } {
   return { amount: parseFloat(String(amtEl)), currency: 'CHF' };
 }
 
-function getDate(bookgDt: any): string {
-  if (!bookgDt) return '';
-  const raw = bookgDt.Dt ?? bookgDt.DtTm ?? '';
+function getDate(dt: any): string {
+  if (!dt) return '';
+  const raw = dt.Dt ?? dt.DtTm ?? '';
   return String(raw).substring(0, 10);
 }
 
-function deriveBankFromRef(ref: string): 'Raiffeisen' | 'Wise' {
-  return ref.startsWith('W') ? 'Wise' : 'Raiffeisen';
+/** Remittance text: Ustrd lines joined. */
+function ustrd(rmtInf: Node | undefined): string | undefined {
+  const lines: unknown[] | undefined = rmtInf?.Ustrd;
+  return lines?.length ? lines.map(String).join(' ') : undefined;
 }
 
-// Reference number prefixes vary by export batch (older Wise exports use "WEUR..."/"WCHF...",
-// newer ones use "CARD-"/"TRANSFER-"/"FEE-"), so the ref alone isn't a reliable signal.
-// The statement's institution name (Stmt.Acct.Svcr.FinInstnId.Nm) is stable across exports —
-// prefer that, and only fall back to the ref-prefix guess if it's missing.
-function deriveBankFromStatement(stmt: any, ref: string): 'Raiffeisen' | 'Wise' {
-  const institution = String(stmt?.Acct?.Svcr?.FinInstnId?.Nm ?? '');
-  if (/wise/i.test(institution)) return 'Wise';
-  if (/raiffeisen/i.test(institution)) return 'Raiffeisen';
-  return deriveBankFromRef(ref);
+/** The structured creditor reference (QR or SCOR), else the remittance text. */
+function remittanceRef(rmtInf: Node | undefined): unknown {
+  const strd = (rmtInf?.Strd as Node[] | undefined)?.find((s) => s?.CdtrRefInf?.Ref !== undefined);
+  return strd?.CdtrRefInf.Ref ?? ustrd(rmtInf);
 }
 
-export function parseCamt053(xml: string, filename?: string): BankTransaction[] {
-  // Only process uuid_-prefixed files
-  if (filename && !filename.startsWith('uuid_')) return [];
+/**
+ * The entry's stable id. Wise names its transaction (CARD-…, TRANSFER-…) in BkTxCd/Prtry/Cd and
+ * often leaves AcctSvcrRef out. Other banks give AcctSvcrRef or NtryRef on the entry, or only
+ * on its TxDtls; an entry without any is numbered within its statement.
+ */
+function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId: string, n: number): string {
+  if (kind === 'wise') return String(entry.AcctSvcrRef ?? entry.BkTxCd?.Prtry?.Cd ?? '');
+  const ref = entry.AcctSvcrRef ?? entry.NtryRef ?? (txDtls.length === 1 ? txDtls[0].Refs?.AcctSvcrRef : undefined);
+  return ref !== undefined && String(ref).trim() ? String(ref).trim() : `${statementId}#${n}`;
+}
 
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: '@_',
-    isArray: (name) => ['Ntry', 'TxDtls'].includes(name),
-    // QR / creditor references are 27-digit strings; parsed as numbers they become 3.03e+26.
-    numberParseOptions: { hex: false, leadingZeros: false, skipLike: /^\d{16,}$/ },
-  });
-  const parsed = parser.parse(xml);
-
-  const stmt = parsed.Document?.BkToCstmrStmt?.Stmt;
-  if (!stmt) return [];
-  const deriveBank = (ref: string) => deriveBankFromStatement(stmt, ref);
-
-  const entries: any[] = stmt.Ntry ?? [];
-  const transactions: BankTransaction[] = [];
-
-  for (const entry of entries) {
+/** The bank transactions of a statement, booked on the ledger account of `bank` (a manifest label). */
+export function transactionsOf(statement: CamtStatement, account: { bank: string; statements: StatementKind }): BankTransaction[] {
+  const entries: Node[] = statement.node.Ntry ?? [];
+  return entries.map((entry, i): BankTransaction => {
     const { amount, currency } = getAmt(entry.Amt);
     const direction = String(entry.CdtDbtInd ?? 'DBIT') as 'CRDT' | 'DBIT';
-    const date = getDate(entry.BookgDt);
-    const ref = String(entry.AcctSvcrRef ?? entry.BkTxCd?.Prtry?.Cd ?? '');
+    const date = getDate(entry.BookgDt) || getDate(entry.ValDt);
 
     // Each statement entry (Ntry) is exactly one booked balance movement, so it
     // becomes exactly one transaction — keyed by the stable entry-level
-    // AcctSvcrRef and carrying the entry-level amount. Nested TxDtls are only
+    // reference and carrying the entry-level amount. Nested TxDtls are only
     // per-invoice *detail* of that single booking (e.g. a Sammelzahlung /
     // batch payment covering several invoices, or Wise grouping several card
     // charges): splitting them into separate transactions would double-count
     // the balance and derive unstable refs (child EndToEndId is often
     // NOTPROVIDED). Receipts that belong to a grouped payment are attached via
     // multiple mappings to this one transaction instead.
-    //
-    // When there is a single detail record, prefer its remittance text — it is
-    // usually more specific than the entry-level AddtlNtryInf.
-    const ntryDtls = entry.NtryDtls;
-    const txDtlsArr: any[] = ntryDtls
-      ? Array.isArray(ntryDtls.TxDtls)
-        ? ntryDtls.TxDtls
-        : ntryDtls.TxDtls
-        ? [ntryDtls.TxDtls]
-        : []
-      : [];
+    const txDtlsArr: Node[] = ((entry.NtryDtls ?? []) as Node[]).flatMap((d) => d?.TxDtls ?? []);
+    const ref = entryRef(entry, txDtlsArr, account.statements, statement.id, i + 1);
+    const counterpartyOf = (d: Node) => {
+      const side = direction === 'DBIT' ? d.RltdPties?.Cdtr : d.RltdPties?.Dbtr;
+      return String(side?.Pty?.Nm ?? side?.Nm ?? '');
+    };
 
     // A batch keeps its parts, so each payment inside it can be matched and booked.
     const parts = txDtlsArr.length > 1
       ? txDtlsArr.map((d) => {
-          const side = direction === 'DBIT' ? d.RltdPties?.Cdtr : d.RltdPties?.Dbtr;
-          const ref = d.RmtInf?.Strd?.CdtrRefInf?.Ref ?? d.RmtInf?.Ustrd;
+          const ref = remittanceRef(d.RmtInf);
           return {
             ...getAmt(d.Amt ?? d.AmtDtls?.TxAmt?.Amt),
-            counterparty: String(side?.Pty?.Nm ?? side?.Nm ?? ''),
+            counterparty: counterpartyOf(d),
             ...(ref !== undefined ? { reference: String(ref) } : {}),
           };
         })
       : undefined;
 
+    // When there is a single detail record, prefer its remittance text — it is
+    // usually more specific than the entry-level AddtlNtryInf.
     const single = txDtlsArr.length === 1 ? txDtlsArr[0] : undefined;
-    const reference = single ? (single.RmtInf?.Strd?.CdtrRefInf?.Ref ?? single.RmtInf?.Ustrd) : undefined;
-
+    const reference = single ? remittanceRef(single.RmtInf) : undefined;
     let description = String(entry.AddtlNtryInf ?? '');
-    if (txDtlsArr.length === 1) {
-      const only = txDtlsArr[0];
-      description = String(only.RmtInf?.Ustrd ?? only.AddtlTxInf ?? description);
-    }
+    if (single) description = String(ustrd(single.RmtInf) ?? single.AddtlTxInf ?? description);
+    if (!description.trim() && single) description = counterpartyOf(single);
 
-    transactions.push({
+    return {
       ref,
-      bank: deriveBank(ref),
+      bank: account.bank,
       date,
       amount,
       currency,
@@ -112,11 +151,9 @@ export function parseCamt053(xml: string, filename?: string): BankTransaction[] 
       description,
       ...(parts ? { parts } : {}),
       ...(reference !== undefined && String(reference).trim() ? { reference: String(reference).trim() } : {}),
-      ...(description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
-    });
-  }
-
-  return transactions;
+      ...(account.statements === 'wise' && description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
+    };
+  });
 }
 
 // A single card ref can carry more than one booking: a charge and its later
