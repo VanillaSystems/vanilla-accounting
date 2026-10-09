@@ -5,6 +5,7 @@ import { cn } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
 import type { Period } from '../../accounting/periods.js';
 import { EntryLinks } from './open-in-tab-link.js';
+import { ForeignAmount } from './fx-amount.js';
 
 /** The journal entries behind a VAT figure, each with its CHF and tax signed as it counts. */
 export function EntryDetail({ entries, title, period }: { entries: JournalEntry[]; title: string; /** The period links keep when it holds an entry. */ period?: Period }) {
@@ -34,7 +35,7 @@ export function EntryDetail({ entries, title, period }: { entries: JournalEntry[
             <th className="px-3 py-1 text-left w-16">{t('col.vat')}</th>
             <th className="px-3 py-1 text-left w-14">{t('col.debit')}</th>
             <th className="px-3 py-1 text-left w-14">{t('col.credit')}</th>
-            <th className="px-3 py-1 text-right w-28">{t('col.amount')}</th>
+            <th className="px-3 py-1 text-right w-32">{t('col.amount')}</th>
             <th className="px-3 py-1 text-right w-24">CHF</th>
             <th className="px-3 py-1 text-right w-20">{t('vat.colTaxChf')}</th>
             <th className="w-12 print:hidden" />
@@ -49,7 +50,7 @@ export function EntryDetail({ entries, title, period }: { entries: JournalEntry[
               <td className="px-3 py-1 font-mono text-xs" title={accountTitle(e.accountDebit)}>{e.accountDebit}</td>
               <td className="px-3 py-1 font-mono text-xs" title={accountTitle(e.accountCredit)}>{e.accountCredit}</td>
               <td className="px-3 py-1 text-right font-mono tabular-nums text-muted-foreground truncate">
-                {e.exchangeCurrency ? `${e.exchangeCurrency} ${e.amount.toFixed(2)}` : e.amount.toFixed(2)}
+                <ForeignAmount entry={e} />
               </td>
               <td className={signed(chf)}>{chf.toFixed(2)}</td>
               <td className={signed(tax)}>{tax.toFixed(2)}</td>

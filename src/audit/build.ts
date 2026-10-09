@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join, relative, resolve } from 'node:path';
 import { build } from 'vite';
 import { loadBooks, sealsOf } from '../books/store.js';
+import { readEstvRateTable } from '../accounting/fx-rates.js';
 import type { ApiStatus } from '../types/api-error.js';
 import { accountsOf, filedReturnsOf, receiptDirOf, workspaceInfo } from '../workspace/reads.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
@@ -39,6 +40,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   write(EXPORT_FILES.accounts(), accountsOf(ws));
   write(EXPORT_FILES.workspace(), workspaceInfo(ws));
   for (const year of yearsOf(ws, books)) write(EXPORT_FILES.filedReturns(year), filedReturnsOf(ws, year));
+  write(EXPORT_FILES.fxRates(), readEstvRateTable());
 
   const missing: string[] = [];
   for (const r of books.receipts) {

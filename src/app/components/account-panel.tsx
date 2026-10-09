@@ -8,6 +8,7 @@ import { accountHref } from '../lib/location.js';
 import { cn, fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
 import { EntryLinks } from './open-in-tab-link.js';
+import { FxChf } from './fx-amount.js';
 
 /** The receipts of each transaction ref: mappings link receipts to transactions, entries reach them through their ref. */
 export function useReceiptsByTxRef(index: Index): Map<string, Receipt[]> {
@@ -45,7 +46,8 @@ export function AccountPanel({ index, account, from, to, period, onClose, moveme
     const opening = movementsOnly ? 0 : openingBalancesAt(entries, from, index.config?.openingBalances)[account] ?? 0;
     return computeAccountLedger(entries, account, from, to, opening);
   }, [entries, account, from, to, index.config?.openingBalances, movementsOnly]);
-  const refOf = useMemo(() => new Map(entries.map((e) => [e.id, e.transactionRef])), [entries]);
+  const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const refOf = (id: string) => entryById.get(id)?.transactionRef;
   const closing = ledger.rows.at(-1)?.balance ?? ledger.openingBalance;
 
   return (
@@ -88,7 +90,7 @@ export function AccountPanel({ index, account, from, to, period, onClose, moveme
               <td />
             </tr>
             {ledger.rows.map((row) => {
-              const count = receiptsByTxRef.get(refOf.get(row.entryId) ?? '')?.length ?? 0;
+              const count = receiptsByTxRef.get(refOf(row.entryId) ?? '')?.length ?? 0;
               return (
                 <tr key={row.entryId} data-rowid={row.entryId} className="hover:bg-accent transition-colors">
                   <td className="px-3 py-1.5 tabular-nums text-muted-foreground">{formatDate(row.date)}</td>
@@ -102,11 +104,11 @@ export function AccountPanel({ index, account, from, to, period, onClose, moveme
                       </span>
                     ) : <span className="text-dim">—</span>}
                   </td>
-                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">{row.debit != null ? fmt(row.debit) : ''}</td>
-                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">{row.credit != null ? fmt(row.credit) : ''}</td>
+                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">{row.debit != null && <FxChf entry={entryById.get(row.entryId)}>{fmt(row.debit)}</FxChf>}</td>
+                  <td className="px-3 py-1.5 text-right font-mono tabular-nums">{row.credit != null && <FxChf entry={entryById.get(row.entryId)}>{fmt(row.credit)}</FxChf>}</td>
                   <td className="px-3 py-1.5 text-right font-mono tabular-nums">{fmt(row.balance)}</td>
                   <td className="pr-2">
-                    <EntryLinks entry={{ id: row.entryId, date: row.date, transactionRef: refOf.get(row.entryId) }} period={period} />
+                    <EntryLinks entry={{ id: row.entryId, date: row.date, transactionRef: refOf(row.entryId) }} period={period} />
                   </td>
                 </tr>
               );

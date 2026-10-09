@@ -20,6 +20,7 @@ import { join } from 'path';
 import type { JournalEntry } from '../types/index.js';
 import { loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
+import { paymentDateOf } from '../accounting/fx-conversion.js';
 import { REFERENCE_DIR, openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
@@ -67,7 +68,7 @@ function main() {
 
   for (const e of entries) {
     const cur = e.exchangeCurrency!;
-    const payDate = txDate.get(e.transactionRef) ?? txDate.get(e.transactionRef.split('~')[0]) ?? e.date;
+    const payDate = paymentDateOf(e, txDate);
     const newRate = fx.daily(cur, payDate);
     if (newRate === undefined) { unresolved.push(e); continue; }
 

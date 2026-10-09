@@ -37,7 +37,7 @@ that holds other files. It replaces an earlier export in the same folder.
 | --- | --- |
 | `index.html`, `assets/` | The app, built in audit mode. All paths are relative. |
 | `books.json` | Your `books.json`, byte for byte. |
-| `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year. |
+| `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year, the ESTV exchange rates the foreign entries are checked against. |
 | `receipts/<id>.pdf` | Every receipt in the books, named by its id. |
 | `bank-statements/<bank>/` | Every bank statement PDF in the books. |
 | `manifest.json` | The SHA-256 and size of every other file, and the seals of the filed quarters at the time of the export. |
