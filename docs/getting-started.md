@@ -78,7 +78,8 @@ words on what the company does. Then these questions, in this order:
 
 Last, your bank accounts, one at a time: Raiffeisen, UBS, PostFinance, ZKB, another cantonal
 or regional bank, Wise (one account per currency), PayPal, or a credit card. The wizard
-suggests a ledger account for each (1020, 1021, … for money; 2101, … for a card). It also asks
+suggests a ledger account for each: 1020 for CHF, 1021 for EUR, 1022 for USD, then the next
+free number; 2101 for a card. It also asks
 where the books go at year-end, such as Banana or your Treuhand.
 
 The workspace gets:

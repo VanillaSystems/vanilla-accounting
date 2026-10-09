@@ -6,6 +6,10 @@
 # of expense) it is shown on. `profiles` limits an account to a business profile (services,
 # goods); `legalForms` limits it to a legal form; `names` renames it for a legal form. An account
 # without them is in every chart. Read by src/workspace/chart.ts, which checks every rule here.
+#
+# The one chart of the app: a new workspace starts from it, and every line of the casebook
+# (examples/cases/) books on one of its accounts (npm run check-processes). Bank accounts by
+# currency: 1020 CHF, 1021 EUR, 1022 USD; a further bank account takes the next free number.
 schema: 1
 name: Kontenrahmen KMU
 
@@ -45,7 +49,9 @@ lines:
 accounts:
   # 1 Aktiven: Umlaufvermögen
   - { number: "1000", name: Kasse, type: asset, line: fluessige-mittel }
-  - { number: "1020", name: Bankguthaben, type: asset, line: fluessige-mittel }
+  - { number: "1020", name: Bankguthaben CHF, type: asset, line: fluessige-mittel }
+  - { number: "1021", name: Bankguthaben EUR, type: asset, line: fluessige-mittel }
+  - { number: "1022", name: Bankguthaben USD, type: asset, line: fluessige-mittel }
   - { number: "1060", name: Wertschriften, type: asset, line: fluessige-mittel }
   - { number: "1090", name: Transferkonto, type: asset, line: fluessige-mittel }
   - { number: "1093", name: Guthaben Zahlungsanbieter (Shopify, Stripe), type: asset, line: fluessige-mittel, profiles: [goods] }
@@ -119,7 +125,9 @@ accounts:
   - { number: "4400", name: Aufwand für bezogene Dienstleistungen, type: expense, line: materialaufwand }
   - { number: "4500", name: Energieaufwand zur Leistungserstellung, type: expense, line: materialaufwand, profiles: [goods] }
   - { number: "4900", name: Aufwandminderungen, type: expense, line: materialaufwand, profiles: [goods] }
-  - { number: "4070", name: Frachten und Zölle (Einkauf), type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4020", name: Zölle, type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4030", name: Einfuhrsteuer (MWST bei der Einfuhr), type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4040", name: Vorlageprovision, Verzollungsspesen, type: expense, line: materialaufwand, profiles: [goods] }
 
   # 5 Personalaufwand
   - { number: "5000", name: Lohnaufwand, type: expense, line: personalaufwand }
@@ -128,10 +136,10 @@ accounts:
   - { number: "5720", name: Vorsorgeeinrichtungen (BVG), type: expense, line: personalaufwand }
   - { number: "5730", name: Unfallversicherung (UVG), type: expense, line: personalaufwand }
   - { number: "5740", name: Krankentaggeldversicherung, type: expense, line: personalaufwand }
-  - { number: "5800", name: Übriger Personalaufwand, type: expense, line: personalaufwand }
   - { number: "5810", name: Aus- und Weiterbildung, type: expense, line: personalaufwand }
   - { number: "5820", name: Spesenentschädigung effektiv, type: expense, line: personalaufwand }
   - { number: "5830", name: Spesenentschädigung pauschal, type: expense, line: personalaufwand }
+  - { number: "5880", name: Sonstiger Personalaufwand, type: expense, line: personalaufwand }
   - { number: "5900", name: Leistungen Dritter (Temporärpersonal), type: expense, line: personalaufwand }
 
   # 6 Übriger betrieblicher Aufwand, Abschreibungen, Finanzerfolg
@@ -145,8 +153,7 @@ accounts:
   - { number: "6300", name: Sachversicherungen, type: expense, line: uebriger-aufwand }
   - { number: "6360", name: Abgaben, Gebühren, Bewilligungen, type: expense, line: uebriger-aufwand }
   - { number: "6400", name: Energie- und Entsorgungsaufwand, type: expense, line: uebriger-aufwand }
-  - { number: "6500", name: Verwaltungsaufwand, type: expense, line: uebriger-aufwand }
-  - { number: "6503", name: Büromaterial, type: expense, line: uebriger-aufwand }
+  - { number: "6500", name: Büromaterial, Verwaltungsaufwand, type: expense, line: uebriger-aufwand }
   - { number: "6510", name: Telefon, Internet, type: expense, line: uebriger-aufwand }
   - { number: "6513", name: Porti, type: expense, line: uebriger-aufwand }
   - { number: "6520", name: Beiträge, Spenden, type: expense, line: uebriger-aufwand }

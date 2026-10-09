@@ -91,7 +91,7 @@ test('validation catches a case that drifted from the engine or breaks a booking
   const correction = byId('correction-private-purchase');
   assert.match(validate({ ...correction, date: '2026-02-10' }).join('\n'), /dated in a later, open quarter/);
   assert.match(validate({ ...c, rules: ['no-such-rule'] }).join('\n'), /rule "no-such-rule" is in no processes/);
-  assert.match(validate({ ...c, lines: [{ ...c.lines[0], debit: '6999' }] }).join('\n'), /account 6999 is not in examples\/kmu-chart.yaml/);
+  assert.match(validate({ ...c, lines: [{ ...c.lines[0], debit: '6999' }] }).join('\n'), /account 6999 is not in reference\/charts\/ch-kmu.yaml/);
 });
 
 // ─── Selection ────────────────────────────────────────────────────────────────

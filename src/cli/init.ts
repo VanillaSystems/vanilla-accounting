@@ -125,7 +125,7 @@ async function askBanks(): Promise<InitInput['banks']> {
     for (const spec of flags.bank) {
       const [name, currency = 'CHF', account] = spec.split(':').map((s) => s.trim());
       const bank = canonical(name);
-      add(bank, currency.toUpperCase(), account ?? suggestAccount(bank, taken));
+      add(bank, currency.toUpperCase(), account ?? suggestAccount(bank, currency.toUpperCase(), taken));
     }
   } else if (interactive) {
     const names = [...Object.keys(BANKS).slice(0, 4), 'other cantonal or regional bank', ...Object.keys(BANKS).slice(4)];
@@ -139,7 +139,7 @@ async function askBanks(): Promise<InitInput['banks']> {
       const bank = listed === names[4] ? (await rl!.question('    Name of the bank (e.g. BEKB) > ')).trim() : listed;
       if (!bank) continue;
       const currency = ((await rl!.question('    Currency [CHF] > ')).trim() || 'CHF').toUpperCase();
-      const suggested = suggestAccount(bank, taken);
+      const suggested = suggestAccount(bank, currency, taken);
       const account = (await rl!.question(`    Ledger account [${suggested}] > `)).trim() || suggested;
       try { add(bank, currency, account); } catch (e) { console.log(`    ${(e as Error).message}`); }
     }

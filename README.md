@@ -13,9 +13,11 @@ Belege runs the books of Vanilla Systems GmbH, and is built by Ken Steiner.
   `src/cli/`.
 - **A workspace** is one company's data: `belege.workspace.yaml` (who the company is and which
   ledger account each bank books on), `books.json`, `receipts/`, `bank-statements/`, `filings/`.
-  The app never stores company data, and a workspace contains no code. Booking with Claude also
-  reads the prior year's Banana export from `history/`: `<name>.Konten.txt` (chart of accounts)
-  and `<name>.Buchungen-sample.tsv` (example entries); the newest `<name>` wins.
+  The app never stores company data, and a workspace contains no code. Booking with Claude reads
+  the chart from `accounts.json`, or from the prior year's Banana export in `history/` when there
+  is one: `<name>.Konten.txt` (chart of accounts) and `<name>.Buchungen-sample.tsv` (example
+  entries); the newest `<name>` wins. A company with little history of its own gets examples
+  from the casebook (`examples/cases/`).
 - **The processes** in `processes/` say who does what each quarter and which rules decide each
   step. `processes/README.md` explains them.
 - **The demos** are complete workspaces of made-up companies, January to September 2026, with

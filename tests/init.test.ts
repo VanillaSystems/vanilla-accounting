@@ -31,10 +31,10 @@ function stubTools(): string {
 
 const GIT_ID = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' };
 
-function cli(script: string, args: string[], path?: string) {
+function cli(script: string, args: string[], path?: string, env: Record<string, string> = {}) {
   const r = spawnSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli', script), ...args], {
     cwd: APP_ROOT, input: '', encoding: 'utf8',
-    env: { ...process.env, ...GIT_ID, BELEGE_WORKSPACE: '', ...(path ? { PATH: `${path}:${process.env.PATH}` } : {}) },
+    env: { ...process.env, ...GIT_ID, BELEGE_WORKSPACE: '', ...(path ? { PATH: `${path}:${process.env.PATH}` } : {}), ...env },
   });
   return { code: r.status, out: r.stdout + r.stderr };
 }
@@ -91,7 +91,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
     'UBS CHF 1020 camt053', 'Wise EUR 1021 camt053', 'manual CHF 2451 -',
   ]);
   const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string; type: string }[];
-  assert.deepEqual(accounts.filter((a) => ['1020', '1021', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Kontokorrent Gesellschafter']);
+  assert.deepEqual(accounts.filter((a) => ['1020', '1021', '1022', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Bankguthaben USD', 'Kontokorrent Gesellschafter']);
   assert.deepEqual(JSON.parse(readFileSync(ws.paths.books, 'utf8')).config, {}, 'no closedThrough');
   for (const d of [ws.paths.receipts, ws.paths.inbox, ws.paths.filings, join(ws.paths.statements, 'UBS'), join(ws.paths.statements, 'Wise'), join(dir, 'policy'), join(dir, 'counterparties')]) {
     assert.ok(existsSync(d), d);
@@ -185,4 +185,24 @@ test('getting-started.md documents every init question, in the order the wizard 
   const at = QUESTION_ORDER.map((k) => guide.indexOf(`**${QUESTIONS[k].ask}`));
   QUESTION_ORDER.forEach((k, i) => assert.ok(at[i] >= 0, `the guide names "${QUESTIONS[k].ask}"`));
   assert.deepEqual(at, [...at].sort((a, b) => a - b), 'same order as QUESTION_ORDER');
+});
+
+test('a new workspace books its first transaction: no prior-year export, the chart from accounts.json, the casebook as examples', () => {
+  const base = tmp();
+  const dir = join(base, 'books');
+  assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
+  const booksPath = join(dir, 'books.json');
+  const books = JSON.parse(readFileSync(booksPath, 'utf8'));
+  books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo' });
+  writeFileSync(booksPath, JSON.stringify(books));
+
+  const prompts = join(base, 'prompts.txt');
+  const r = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { BELEGE_WORKSPACE: dir, CLAUDE_STUB_PROMPTS: prompts });
+  assert.equal(r.code, 0, r.out);
+  const entries = JSON.parse(readFileSync(booksPath, 'utf8')).journalEntries as { transactionRef: string; accountDebit: string; accountCredit: string; amount: number }[];
+  assert.deepEqual(entries.map((e) => [e.transactionRef, e.accountDebit, e.accountCredit, e.amount]), [['TX-1', '6570', '1020', 50]]);
+  const prompt = readFileSync(prompts, 'utf8');
+  assert.match(prompt, /## Chart of Accounts[\s\S]*\n1020\tUBS CHF\n/);
+  assert.match(prompt, /## Casebook: invented examples/);
+  rmSync(base, { recursive: true, force: true });
 });
