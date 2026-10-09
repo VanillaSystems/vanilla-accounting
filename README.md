@@ -15,8 +15,11 @@ GmbH and of the webshop behind it, [bananaoptics.com](https://bananaoptics.com).
 Treuhänder (accountant) reviews the books. It has produced the company's VAT returns filed with
 the ESTV in 2026, and it prepares the year-end close, updated when the year turns.
 
-This is the author's own tool, shared as is under AGPL-3.0: check every return before you file
-it; it is not tax advice.
+> **Free to use, at your own risk.** Vanilla Accounting is provided free of charge under the
+> AGPL-3.0, as is, without any warranty. The author takes no responsibility or liability for the
+> software, for your books, or for any VAT return or other filing made with it. It is not tax or
+> legal advice: check every figure and every return yourself, or have your Treuhänder check it,
+> before you file. See [Licence and disclaimer](#licence-and-disclaimer).
 
 ## How it is organized
 
@@ -95,6 +98,18 @@ written here. To run it before every push:
 git config core.hooksPath tools/hooks
 ```
 
-## Licence
+## Licence and disclaimer
 
 GNU Affero General Public License v3.0. See `LICENSE`.
+
+You may use, change and share Vanilla Accounting under the terms of that licence. It is provided
+for free and **as is, without warranty of any kind** (AGPL-3.0, sections 15 and 16). You use it at
+your own risk. The author accepts no responsibility or liability for any damage, loss, wrong
+booking, tax assessment, penalty or late payment that results from using it. You remain
+responsible for your books and for every filing with the ESTV or any other authority.
+
+*Deutsch:* Vanilla Accounting ist kostenlos und wird ohne jede Gewährleistung zur Verfügung
+gestellt („as is“, AGPL-3.0). Die Nutzung erfolgt auf eigenes Risiko. Der Autor übernimmt keine
+Verantwortung und keine Haftung für die Software, für Ihre Buchhaltung oder für Abrechnungen und
+Eingaben, die damit erstellt werden. Prüfen Sie jede Abrechnung selbst oder durch Ihren
+Treuhänder, bevor Sie sie einreichen.
