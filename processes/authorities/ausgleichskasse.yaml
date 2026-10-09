@@ -1,0 +1,21 @@
+# The compensation fund (Ausgleichskasse) an employer is affiliated with: AHV/IV/EO, ALV and
+# family allowances. Which fund, and its bank text, is the company's: knowledge/authorities/.
+
+id: ausgleichskasse
+name: Ausgleichskasse (AHV compensation fund)
+match:
+  tx: [ "ausgleichskasse", "sozialversicherungsanstalt" ]
+
+facts:
+  - id: shares
+    fact: AHV/IV/EO and ALV contributions are paid half by the employee and half by the employer; the employer withholds the employee's half from the salary and pays both
+    source: AHVG Art. 14 Abs. 1
+  - id: akonto
+    fact: during the year the employer pays provisional contributions (Akontobeiträge) on the expected salary sum, monthly, or quarterly when the annual salary sum is at most CHF 200,000
+    source: AHVV Art. 34; AHVV Art. 35
+  - id: akonto-due
+    fact: contributions are due at the end of each payment period and are paid within 10 days
+    source: AHVV Art. 34
+  - id: salary-report
+    fact: after the year ends, the employer reports each employee's salary (Lohnbescheinigung) by 30 January; the fund then bills or refunds the difference to the Akonto payments
+    source: AHVV Art. 36

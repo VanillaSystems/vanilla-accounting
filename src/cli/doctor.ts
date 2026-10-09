@@ -5,7 +5,7 @@
  * npm run init), the mailboxes of mail.yaml (their keys in the app's .env; `--mail` also logs in
  * to each, nothing fetched) and how many open transactions route to no knowledge file. Prints one
  * line per check and the fix for each ✗; exit code 1 on any ✗.
- * `--workspace <dir>` checks that folder instead of the one BELEGE_WORKSPACE names.
+ * `--workspace <dir>` checks that folder instead of the one VANILLA_WORKSPACE names.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -189,7 +189,7 @@ async function main(): Promise<number> {
   try {
     ws = values.workspace ? workspaceAt(values.workspace) : openWorkspace();
   } catch (e) {
-    results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set BELEGE_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
+    results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set VANILLA_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
   }
   if (ws) results.push(...workspaceChecks(ws), ...knowledgeCheck(ws), ...await mailChecks(ws, values.mail === true));
 

@@ -119,15 +119,75 @@ const MAIL_YAML = `# Mailboxes receipts are collected from (npm run collect). Un
 # linkReceiptDomains: []         # senders that send receipts as a link
 `;
 
+/** Commented templates, one per knowledge folder. A file starting with _ is never read as knowledge. */
+const KNOWLEDGE_TEMPLATES: [string, string][] = [
+  ['knowledge/suppliers/_example.yaml', `# A supplier: one file per business you buy from, named <id>.yaml (copy this file).
+# The app ships public files for common suppliers in its processes/suppliers/; a file here with
+# the same id adds your accounts and rules to it (then leave out name and match).
+#
+# id: muster-druck                # = the file name
+# name: Muster Druck AG
+# match:                          # how a receipt or bank line is recognised, strongest first
+#   uid: []                      # its Swiss UID (CHE-…), only if no other business prints it
+#   tx: ["muster druck"]          # part of the bank text
+#   file: ['^\\d{8}-muster-druck'] # archived file name
+# accounts: ["6600"]              # the only accounts its entries may use
+# roles: [customer]               # only if it is also a customer or an authority
+# steps:
+#   booking.guide.yaml#classify:
+#     rules:
+#       - id: muster-druck-flyer
+#         when: a Muster Druck invoice for flyers
+#         then: 6600 Werbung, I81 when the invoice shows Swiss MWST
+#         source: decision 2026-01-15, owner
+`],
+  ['knowledge/customers/_example.yaml', `# A customer: one file per business that pays you and needs its own rules (copy this file).
+#
+# id: beispiel-kunde
+# name: Beispiel Kunde AG
+# match:
+#   tx: ["beispiel kunde"]
+# accounts: ["3400"]
+# steps:
+#   booking.guide.yaml#classify:
+#     rules:
+#       - id: beispiel-kunde-retainer
+#         when: the monthly payment of Beispiel Kunde AG
+#         then: 3400 Ertrag Beratung, V81 (a Swiss customer)
+#         source: decision 2026-01-15, owner
+`],
+  ['knowledge/authorities/_example.yaml', `# An authority: the app ships public files for the ESTV, the Ausgleichskasse, the cantonal
+# tax office and the BAZG in its processes/authorities/. A file here with the same id adds your
+# accounts and rules, e.g. your own Ausgleichskasse's bank text:
+#
+# id: ausgleichskasse
+# match:
+#   tx: ["sva zuerich"]
+# accounts: ["2270", "5700"]
+`],
+  ['knowledge/rules/_example.guide.yaml', `# Your company's rules for one process, next to the app's processes/<process>.guide.yaml.
+# Name the file like the app's guide (booking.guide.yaml) and use its step ids.
+#
+# steps:
+#   classify:
+#     rules:
+#       - id: own-coffee
+#         when: coffee for the office
+#         then: 6500 Büromaterial, I81 when the receipt shows Swiss MWST
+#         source: decision 2026-01-15, owner
+#     precedents: []
+`],
+];
+
 function agentsMd(input: InitInput, appRel: string): string {
   return `# ${input.name}: books (private workspace)
 
-This folder holds the books, not the code. It is a Belege workspace: \`belege.workspace.yaml\`
+This folder holds the books, not the code. It is a Vanilla Accounting workspace: \`belege.workspace.yaml\`
 (who the company is, how it works, which ledger account each bank books on), \`accounts.json\`
 (chart of accounts), \`books.json\`, \`receipts/\`, \`bank-statements/\`, \`filings/\`, plus the
-company's own knowledge: \`counterparties/\`, \`policy/\`, \`mail.yaml\`.
+company's own knowledge: \`knowledge/\` (suppliers, customers, authorities, rules), \`mail.yaml\`.
 
-The app is at \`${appRel}\`. Its \`.env\` sets \`BELEGE_WORKSPACE\` to this folder, so every
+The app is at \`${appRel}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
 command run there works on these books:
 
     cd ${appRel} && npm start          # UI on http://localhost:5173
@@ -139,7 +199,7 @@ corrections are booked in the open quarter with \`corrects:\` and declared on a 
 What goes where:
 - Code, generic process rules, public vendor facts: the app.
 - Anything naming this company's accounts, amounts, customers, suppliers or the owner's
-  decisions: here (counterparties/, policy/, this file).
+  decisions: here (knowledge/, this file).
 
 Company notes:
 - (add what an agent should know about this company)
@@ -150,12 +210,13 @@ export function planWorkspace(input: InitInput, chart: Chart, root: string, appR
   const bankAccounts = bankAccountsOf(input);
   const accounts = accountsOf(input, chart);
   const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => `bank-statements/${b.bank}`))];
-  const kept = ['receipts', 'filings', 'counterparties', 'policy', ...statementDirs];
+  const kept = ['receipts', 'filings', ...statementDirs];
   const appRel = relative(root, appRoot) || '.';
   return {
     dirs: [...kept, 'beleg-import', 'data'],
     files: [
       ...kept.map((d): [string, string] => [`${d}/.gitkeep`, '']),
+      ...KNOWLEDGE_TEMPLATES,
       ['accounts.json', JSON.stringify(accounts, null, 2) + '\n'],
       ['books.json', JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], config: {} }, null, 2) + '\n'],
       ['mail.yaml', MAIL_YAML],

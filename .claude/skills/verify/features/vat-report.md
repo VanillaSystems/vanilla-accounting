@@ -9,7 +9,7 @@ The MWST tab renders the ESTV Ziffern (200 to 510, plus 900 and 910) for the sel
 - `vat-cli` runs `src/cli/vat-report.ts <period> [--detail]`, which must match the UI.
 - `vat-0535` is the switch "Abrechnung | Korrekturabrechnung (0535)", shown for a quarter that has a filed return (`GET /api/vat/filed?year=YYYY` parses `filings/<year>/`). The form compares «bisher eingereicht» with «korrigiert» (today's books plus entries tagged `corrects: "<quarter>"`), highlights changed Ziffern, and lists the correction entries for a clicked Ziffer. The sandbox copies `filings/`.
 - `vat-0535-cases` is the right panel of the 0535 view: one card per `config.correctionCases` entry of the quarter (`[data-case="<id>"]`, click the card's button to expand), filtered to the cases that change a clicked Ziffer. `[data-reconciliation]` is `ok` when the cases explain the whole 0535 difference, `unexplained` otherwise, naming the Ziffer and amount and any `corrects` entry in no case. On the demo every filed quarter's cases reconcile (`ok`); a workspace may keep its own expected counts in its docs. To see the warning, empty one case's `correctionEntryIds` in the sandbox index. Each card exists twice in the DOM (a print-only copy inside `.vat-print`), so select the visible one with `offsetParent`. `$B pdf` prints the form, then every case expanded.
-- `vat-xml` runs `src/cli/vat-ech0217.ts`, which writes the eCH-0217 XML. Run it on the sandbox only (`BELEGE_WORKSPACE="$SB"`), so that no file is written into the real workspace.
+- `vat-xml` runs `src/cli/vat-ech0217.ts`, which writes the eCH-0217 XML. Run it on the sandbox only (`VANILLA_WORKSPACE="$SB"`), so that no file is written into the real workspace.
 
 ## How to get to it (user POV)
 
@@ -23,7 +23,7 @@ Preconditions:
 - The doctor passes.
 
 - **UI figures.** Run `$B newtab "$UI/$CLOSED_Q/vat-report"`, `$B wait --networkidle`, then `$B text > $EVIDENCE/vat-report/ui.txt`. The text contains `MWST-Abrechnung $CLOSED_FROM bis $CT` (demo: `2026-01-01 bis 2026-03-31`), and Ziffern 200, 299, 399, 479 and 500 carry figures (the demo's quarters all owe tax; on a workspace with a credit it is 510 instead).
-- **CLI figures.** Run `BELEGE_WORKSPACE="$SB" node --import tsx src/cli/vat-report.ts "$CLOSED_Q" | tee $EVIDENCE/vat-report/cli.txt`. The exit code is `0`, and Ziffern 200 to 510 equal the UI values.
+- **CLI figures.** Run `VANILLA_WORKSPACE="$SB" node --import tsx src/cli/vat-report.ts "$CLOSED_Q" | tee $EVIDENCE/vat-report/cli.txt`. The exit code is `0`, and Ziffern 200 to 510 equal the UI values.
 - **Detail.** Click a Ziffer row such as `400`. The detail table appears in the right-hand column; its Total `Steuer CHF` equals the Ziffer. Take a screenshot.
 - **Korrekturabrechnung.** On `$UI/$CLOSED_Q/vat-report`, click `Korrekturabrechnung (0535)`. Rows are `.vat-print tr[data-ziffer]`; a changed row has an amber class. A rate Ziffer (303, 313, 343, 383, and 302/312/342/382 when non-zero) has two rows with the same `data-ziffer`, Leistungen then Steuer, so use `querySelectorAll`. `Drucken` appears only in this view. To show a correction, tag an entry in the sandbox index only (`"corrects": "<$CLOSED_Q>"` on an `$OPEN_Q` entry), reload, and check that its tax moves from the open quarter's return to the closed quarter's «korrigiert» column. `$B pdf` prints the form alone.
 - **Proof.** Save `ui.txt`, `cli.txt`, and a screenshot. Report any Ziffer that differs between them.

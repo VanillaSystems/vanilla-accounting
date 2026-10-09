@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Disposable Belege instance for verification: API + Vite UI against a CLONE of the books.
+# Disposable Vanilla Accounting instance for verification: API + Vite UI against a CLONE of the books.
 #
 #   sandbox.sh up [run-id]     clone data, start API + UI on free ports, print env
 #   sandbox.sh doctor [run-id] read-only health + isolation check
@@ -48,10 +48,10 @@ cmd_up() {
   # The sandbox dir IS the workspace clone, on the fixed layout of src/workspace/workspace.ts.
   # APFS clonefile (cp -c): copy-on-write, so a large receipts tree costs nothing until written.
   # Filings are copied, not linked, so nothing can write the real ones. No code is copied: the API
-  # and Vite run the repo's working tree, and BELEGE_WORKSPACE points the API here.
+  # and Vite run the repo's working tree, and VANILLA_WORKSPACE points the API here.
   for f in belege.workspace.yaml books.json accounts.json; do cp -c "$WS_SRC/$f" "$SB/$f"; done
   for d in receipts bank-statements filings; do cp -cR "$WS_SRC/$d" "$SB/$d"; done
-  for d in history counterparties policy; do if [[ -d "$WS_SRC/$d" ]]; then cp -cR "$WS_SRC/$d" "$SB/$d"; fi; done
+  for d in history knowledge; do if [[ -d "$WS_SRC/$d" ]]; then cp -cR "$WS_SRC/$d" "$SB/$d"; fi; done
   if [[ -d "$WS_SRC/beleg-import" ]]; then cp -cR "$WS_SRC/beleg-import" "$SB/beleg-import"; else mkdir "$SB/beleg-import"; fi
   cp -c "$SB/books.json" "$SB/index.snapshot.json"
   # No model calls: src/llm/ask.ts spawns `claude`, and the API finds this refusing shim first.
@@ -77,8 +77,8 @@ export default {
 };
 EOF
 
-  # API: BELEGE_WORKSPACE names the sandbox, and cwd = the sandbox so no .env of the repo is loaded.
-  (cd "$SB" && BELEGE_WORKSPACE="$SB" PATH="$SB/bin:$PATH" PORT="$API_PORT" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
+  # API: VANILLA_WORKSPACE names the sandbox, and cwd = the sandbox so no .env of the repo is loaded.
+  (cd "$SB" && VANILLA_WORKSPACE="$SB" PATH="$SB/bin:$PATH" PORT="$API_PORT" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
   echo $! >"$SB/api.pid"
   # UI: cwd = repo so Tailwind's relative content globs resolve; data comes through the API proxy.
   (cd "$REPO" && exec node "$REPO/node_modules/vite/bin/vite.js" --config "$VITE_CONFIG" </dev/null >"$SB/ui.log" 2>&1) &
@@ -147,7 +147,7 @@ cmd_doctor() {
   check "UI serves the sandbox receipts"          "served receipts"
   check "UI serves the sandbox bank statements"   "served bank-statements"
   check "real workspace books untouched since up" "[[ \"\$(shasum -a 256 $WS_SRC/books.json | cut -d' ' -f1)\" == $REAL_INDEX_SHA ]]"
-  check "api opened the sandbox workspace"        "ps eww -p $API_PID | grep -q 'BELEGE_WORKSPACE=$SB '"
+  check "api opened the sandbox workspace"        "ps eww -p $API_PID | grep -q 'VANILLA_WORKSPACE=$SB '"
   check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude 2>/dev/null"
   echo "closedThrough: $(curl -sf "$API/api/config" | jq -r '.closedThrough // "none"')"
   echo "UI=$UI  API=$API  EVIDENCE=$EVIDENCE"

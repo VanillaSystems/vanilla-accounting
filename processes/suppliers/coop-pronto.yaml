@@ -1,5 +1,5 @@
 # Vendor facts about Coop Pronto, true for every customer. A company's accounts
-# and booking rules for it live in its workspace (counterparties/coop-pronto.yaml).
+# and booking rules for it live in its workspace (knowledge/suppliers/coop-pronto.yaml).
 #
 # Not matched by UID: CHE-116.311.185 is the Coop group's and is also printed
 # on other Coop group retailers' receipts (the lint refuses it). CHE-312.150.257 is Coop Pronto's own.

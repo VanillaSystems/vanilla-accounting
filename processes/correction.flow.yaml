@@ -64,6 +64,7 @@ steps:
 
   - id: korrektur
     name: File a Korrekturabrechnung with the ESTV
+    facts: [ estv#correction ]
     kind: human
     produces: filings
     needs: [next_return.korrekturabrechnung]

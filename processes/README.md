@@ -20,7 +20,7 @@ safe for anyone.
 
 ## Three kinds of file, and why
 
-Every process has two files, and every counterparty with particulars has one:
+Every process has two files, and every business with particulars has one:
 
 - **`<process>.flow.yaml`** is the shape: the steps, who does each one, the
   order, and the gates. It changes only when the *process* changes. A new
@@ -29,13 +29,24 @@ Every process has two files, and every counterparty with particulars has one:
   judgment, the rules that decide it, in order, and what the human has already
   decided. It changes every time we learn something. That is what it is for.
 
-- **`counterparties/<id>.yaml`** (vendor facts in `processes/counterparties/`,
-  the company's part in `counterparties/`, see the two layers below) holds
-  everything true about one counterparty and nobody else, such as Coop Pronto, FedEx or Shopify. That covers how to
-  recognise it (`match:`), whether it bundles invoices into one payment
-  (`grouped:`), which accounts it books to (`accounts:`), and its rules for
-  each step it touches. Each step's rules sit under the step's exact address:
-  `steps: { "booking.guide.yaml#classify": { rules: [...] } }`.
+- **`<role>/<id>.yaml`** holds everything true about one business and
+  nobody else, such as Coop Pronto, FedEx, Shopify or the ESTV. `<role>` is
+  the folder of its main role: `suppliers/` (Lieferanten: vendors, Shopify,
+  Stripe, banks, payment services), `customers/` (Kunden) or `authorities/`
+  (Behörden: ESTV, Ausgleichskasse, cantonal tax office, BAZG, the BVG
+  foundation, the UVG insurer). A business with a second role lists it under
+  `roles:` (e.g. `roles: [customer]`); it still has one file. The app's files
+  are in `processes/<role>/`, the company's part in `knowledge/<role>/` (see the
+  two layers below). A file covers how to recognise the business (`match:`),
+  whether it bundles invoices into one payment (`grouped:`), which accounts it
+  books to (`accounts:`), and its rules for each step it touches. Each step's
+  rules sit under the step's exact address:
+  `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's
+  file also lists `facts:` of the law (periods, deadlines, forms), each with
+  its `source:`. A flow step names the facts it depends on as
+  `facts: [ estv#payment-deadline ]` instead of repeating them: the flow keeps
+  the how and the order, the authority's file the facts, and the lint
+  checks that every named fact exists.
 
 ## Two layers: the app and the company
 
@@ -45,9 +56,15 @@ lives in two layers, merged once when it is read (`src/knowledge/layers.ts`):
 | Layer | File | Holds |
 |---|---|---|
 | App | `processes/<process>.guide.yaml` | rules true for any Swiss company |
-| App | `processes/counterparties/<id>.yaml` | vendor facts true for every customer: `name`, `match`, `grouped`, documents, vendor rules |
-| Company | `policy/<process>.guide.yaml` | this company's rules and precedents for a step |
-| Company | `counterparties/<id>.yaml` | the binding of a vendor: `accounts`, company rules, precedents, extra signals; or a whole private supplier |
+| App | `processes/<role>/<id>.yaml` | facts of one business true for every company: `name`, `match`, `grouped`, documents, `facts`, rules |
+| Company | `knowledge/rules/<process>.guide.yaml` | this company's rules and precedents for a step |
+| Company | `knowledge/<role>/<id>.yaml` | the binding of an app file: `accounts`, company rules, precedents, extra signals; or a whole private business |
+
+A business has one file per layer, in the same `<role>` folder in both
+(the loader refuses an id in two folders). A file whose name starts with `_`
+is a template (`npm run init` writes `_example.yaml` into each folder) and is
+never read. A workspace from before this layout (`counterparties/`,
+`policy/`) is refused until `npm run migrate-workspace` has moved it.
 
 Every field has one owner. A company file adds signals, documents and rules
 after the app's; it never redeclares `name` or `grouped` and never replaces a
@@ -58,13 +75,14 @@ long number or amount to the cent, and no name of a private supplier.
 A flow step points at its guide section with
 `with: { guide: <process>.guide.yaml#<step-id>, model, batch }`. An agent
 working one item of a step reads the step's section in both layers, the
-section of **that item's** counterparty for the same address in both layers,
+section of **that item's** business for the same address in both layers,
 and nothing else. A FedEx batch never carries Coop Pronto's rules.
 
 **Where does a new rule go?** Ask: *would it still be true for a company we
 have never seen?* If yes, it goes in the step's guide. If it is true for every
-customer of one vendor, it goes in the vendor's file. If it is true for us
-only, it goes in `counterparties/<id>.yaml` or `policy/<process>.guide.yaml`,
+company dealing with one business, it goes in that business's file. If it is
+true for us only, it goes in `knowledge/<role>/<id>.yaml` or
+`knowledge/rules/<process>.guide.yaml`,
 and so does every precedent. The lint enforces this: a guide rule whose `when`
 or `then` names a registered counterparty is an error, and the error names the
 file to move it to.
@@ -162,8 +180,9 @@ library or a leftover.
 | Kind of knowledge | Home |
 |---|---|
 | A rule that decides a step, true for any company | `<process>.guide.yaml` |
-| A rule or fact true for one vendor | `processes/counterparties/<id>.yaml`, or `counterparties/<id>.yaml` when it is about our books |
-| A rule or decision true for this company only | `policy/<process>.guide.yaml` |
+| A rule or fact true for one business | `processes/<role>/<id>.yaml`, or `knowledge/<role>/<id>.yaml` when it is about our books |
+| A period, deadline or form of an authority | `processes/authorities/<id>.yaml` under `facts:` |
+| A rule or decision true for this company only | `knowledge/rules/<process>.guide.yaml` |
 | How to click through a vendor portal | `docs/runbooks/receipt-collection.md` (private suppliers and our mailboxes: `docs/company/receipt-collection.md`), linked from a rule's `procedure:` |
 | What a term means | `CONTEXT.md` |
 | A decision with long-lived consequences | `docs/adr/` |

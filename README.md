@@ -1,11 +1,22 @@
-# Belege
+# Vanilla Accounting
 
-Bookkeeping for a Swiss GmbH on cash-basis VAT (effective method). Belege imports bank
-statements, collects receipts, matches each receipt to its bank transaction, books the journal
-entries with Claude, and writes the quarterly VAT return as the eCH-0217 XML that the ESTV
-"MWST abrechnen" portal imports.
+Bookkeeping for a Swiss GmbH on cash-basis VAT (effective method). Vanilla Accounting imports
+bank statements, collects receipts, matches each receipt to its bank transaction, books the
+journal entries with Claude, and writes the quarterly VAT return as the eCH-0217 XML that the
+ESTV "MWST abrechnen" portal imports.
 
-Belege runs the books of Vanilla Systems GmbH, and is built by Ken Steiner.
+## Who built this
+
+Vanilla Accounting is built by Ken Steiner, vibe-coded with Claude Code. Ken is a former SAP
+staff engineer and holds a Master of Science in Computer Science from Georgia Tech, with a focus
+on artificial intelligence. He has run his own company, Vanilla Systems GmbH, since 2018 and has
+done its accounting himself from the start. The software runs the real books of Vanilla Systems
+GmbH and of the webshop behind it, [bananaoptics.com](https://bananaoptics.com). A professional
+Treuhänder (accountant) reviews the books. It has produced the company's VAT returns filed with
+the ESTV in 2026, and it prepares the year-end close, updated when the year turns.
+
+This is the author's own tool, shared as is under AGPL-3.0: check every return before you file
+it; it is not tax advice.
 
 ## How it is organized
 
@@ -19,7 +30,10 @@ Belege runs the books of Vanilla Systems GmbH, and is built by Ken Steiner.
   entries); the newest `<name>` wins. A company with little history of its own gets examples
   from the casebook (`examples/cases/`).
 - **The processes** in `processes/` say who does what each quarter and which rules decide each
-  step. `processes/README.md` explains them.
+  step. Facts about one business sit in one file each, in the folder of its role:
+  `processes/suppliers/`, `processes/customers/` and `processes/authorities/` (ESTV,
+  Ausgleichskasse, cantonal tax office, BAZG). A workspace adds its own in `knowledge/`.
+  `processes/README.md` explains them.
 - **The demos** are complete workspaces of made-up companies, January to September 2026, with
   Q1 filed and corrected:
   - `demo/`: Muster Kaffee GmbH, a coffee roaster with a café and a webshop (reduced rates,
@@ -39,7 +53,7 @@ To look around first, open the demo company:
 
 ```sh
 npm install
-BELEGE_WORKSPACE=demo npm start             # or BELEGE_WORKSPACE=demo-consulting
+VANILLA_WORKSPACE=demo npm start             # or VANILLA_WORKSPACE=demo-consulting
 ```
 
 Open http://localhost:5173.
@@ -53,7 +67,7 @@ npm start
 ```
 
 `docs/getting-started.md` walks through the questions, the first bank statement, the first
-receipts and the first VAT return, and lists what Belege does not do yet.
+receipts and the first VAT return, and lists what Vanilla Accounting does not do yet.
 
 ## Rules that never bend
 

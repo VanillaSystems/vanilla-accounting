@@ -1,5 +1,5 @@
 /**
- * The banks Belege knows: where each one's ledger account is suggested and how its statements
+ * The banks Vanilla Accounting knows: where each one's ledger account is suggested and how its statements
  * are imported. A bank not listed (a cantonal or regional bank) imports camt.053 like the
  * listed ones. Init, the manifest reader and doctor all read this table.
  */
@@ -23,7 +23,7 @@ export interface BankKind {
 }
 
 const camt = (tested: boolean): BankKind => ({ range: 'bank', statements: 'camt053', tested });
-const UNTESTED = 'Belege reads the camt.053 of any Swiss bank; real files of this bank were not imported yet. Import your first statement and check its transactions and closing balance in the Bank tab.';
+const UNTESTED = 'Vanilla Accounting reads the camt.053 of any Swiss bank; real files of this bank were not imported yet. Import your first statement and check its transactions and closing balance in the Bank tab.';
 
 export const BANKS: Record<string, BankKind> = {
   Raiffeisen: camt(true),

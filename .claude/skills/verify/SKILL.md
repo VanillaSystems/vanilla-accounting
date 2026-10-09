@@ -1,11 +1,11 @@
 ---
 name: verify
-description: Launch and drive the Belege bookkeeping app (React UI on Vite + Express API on a workspace's books.json) in a disposable sandbox that clones the workspace, then prove UI, API, and CLI behavior with screenshots, dialogs, and an index diff. Use whenever a change to src/app, src/server, or src/cli needs to be shown working in the real app, or to check what a click actually writes to the books.
+description: Launch and drive the Vanilla Accounting bookkeeping app (React UI on Vite + Express API on a workspace's books.json) in a disposable sandbox that clones the workspace, then prove UI, API, and CLI behavior with screenshots, dialogs, and an index diff. Use whenever a change to src/app, src/server, or src/cli needs to be shown working in the real app, or to check what a click actually writes to the books.
 ---
 
-# Verify Belege
+# Verify Vanilla Accounting
 
-Belege is a single-page React app (Vite) backed by an Express API (`src/server/main.ts` starts it; `api.ts` assembles the routes in `src/server/routes/`). The API opens a workspace (`src/workspace/workspace.ts`: `BELEGE_WORKSPACE`, else the first directory from the cwd upward that holds a `belege.workspace.yaml`), reads and writes ONE file there, `books.json`, plus the `receipts/` and `beleg-import/` folders, and serves `/books.json`, `/receipts/*` and `/bank-statements/*` to the UI. That workspace can be a company's real books, with quarters already filed with the ESTV. **Never verify against the user's running instance or the real workspace.** Always use the sandbox below.
+Belege is a single-page React app (Vite) backed by an Express API (`src/server/main.ts` starts it; `api.ts` assembles the routes in `src/server/routes/`). The API opens a workspace (`src/workspace/workspace.ts`: `VANILLA_WORKSPACE`, else the first directory from the cwd upward that holds a `belege.workspace.yaml`), reads and writes ONE file there, `books.json`, plus the `receipts/` and `beleg-import/` folders, and serves `/books.json`, `/receipts/*` and `/bank-statements/*` to the UI. That workspace can be a company's real books, with quarters already filed with the ESTV. **Never verify against the user's running instance or the real workspace.** Always use the sandbox below.
 
 All commands run from the repo root. `S=.claude/skills/verify/sandbox.sh` and `B=$(command -v browse)` are the shorthands used here and in `features/`.
 
@@ -18,8 +18,8 @@ $S up my-run            # run-id optional; default v<timestamp>
 
 `up` does the following, in about 2 s:
 
-- It clones (APFS copy-on-write) the workspace layout into `$TMPDIR/belege-verify/<run>/`, which then is a workspace of its own: `belege.workspace.yaml`, `books.json`, `accounts.json`, `receipts/`, `bank-statements/`, `beleg-import/`, `history/`, `counterparties/`, `policy/`, and `filings/` (the filed VAT returns the MWST tab's Korrekturabrechnung reads). The source is `$VERIFY_WORKSPACE`, default the repo root when it holds a `belege.workspace.yaml`, else `demo/` (set it to your workspace to verify against your own books).
-- No code is copied or linked. The API runs the repo's working tree with `BELEGE_WORKSPACE` set to the sandbox (and `cwd` there, so no repo `.env` is loaded), so every read and write lands in the clone. Vite runs from the repo and proxies `/api`, `/scan`, `/books.json`, `/receipts/*` and `/bank-statements/*` to the sandbox API, so the UI loads the cloned books and PDFs.
+- It clones (APFS copy-on-write) the workspace layout into `$TMPDIR/belege-verify/<run>/`, which then is a workspace of its own: `belege.workspace.yaml`, `books.json`, `accounts.json`, `receipts/`, `bank-statements/`, `beleg-import/`, `history/`, `knowledge/`, and `filings/` (the filed VAT returns the MWST tab's Korrekturabrechnung reads). The source is `$VERIFY_WORKSPACE`, default the repo root when it holds a `belege.workspace.yaml`, else `demo/` (set it to your workspace to verify against your own books).
+- No code is copied or linked. The API runs the repo's working tree with `VANILLA_WORKSPACE` set to the sandbox (and `cwd` there, so no repo `.env` is loaded), so every read and write lands in the clone. Vite runs from the repo and proxies `/api`, `/scan`, `/books.json`, `/receipts/*` and `/bank-statements/*` to the sandbox API, so the UI loads the cloned books and PDFs.
 - It picks free ports starting at 3556 for the API and 5273 for the UI. It never uses 3456 or 5173, which belong to the user's `npm start`.
 
 It is ready when it prints `ready`, followed by the env block (`UI`, `API`, `EVIDENCE`, PIDs, and the period lock `CT`, `CLOSED_Q`, `CLOSED_FROM`, `OPEN_Q`, `OPEN_FROM` that the recipes use). Load that env with `source $TMPDIR/belege-verify/<run>/env`.
@@ -34,7 +34,7 @@ Two sandboxes can run side by side because each one has its own ports, data, and
 $S doctor my-run
 ```
 
-The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID, that the API's cwd and `BELEGE_WORKSPACE` are the sandbox, and that the API finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and proxies `/api` to this sandbox, that the UI serves the sandbox books (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books.json is unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
+The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, and that the API finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and proxies `/api` to this sandbox, that the UI serves the sandbox books (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books.json is unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
 
 ## Drive
 
@@ -62,13 +62,13 @@ These are the stable handles. They come from the source, not from coordinates.
 
 **API:** `curl -s "$API/api/config"` and similar. Use it for side-effect checks and preconditions, never as a stand-in for the UI path you are verifying.
 
-**CLI:** run the scripts from the repo with `BELEGE_WORKSPACE` set to the sandbox, so that they read and write the clone:
+**CLI:** run the scripts from the repo with `VANILLA_WORKSPACE` set to the sandbox, so that they read and write the clone:
 
 ```bash
-BELEGE_WORKSPACE="$SB" node --import tsx src/cli/vat-report.ts "$CLOSED_Q"
+VANILLA_WORKSPACE="$SB" node --import tsx src/cli/vat-report.ts "$CLOSED_Q"
 ```
 
-Never run `npm run <script>` without `BELEGE_WORKSPACE="$SB"` during verification. That run uses the real data.
+Never run `npm run <script>` without `VANILLA_WORKSPACE="$SB"` during verification. That run uses the real data.
 
 ## Evidence
 

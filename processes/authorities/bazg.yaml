@@ -1,0 +1,24 @@
+# The Federal Office for Customs and Border Security: import VAT on goods. A courier usually
+# clears the goods and passes the import VAT on in its own bill (see processes/suppliers/).
+
+id: bazg
+name: Bundesamt für Zoll und Grenzsicherheit (BAZG)
+match:
+  tx: [ "bazg", "bundesamt für zoll" ]
+
+facts:
+  - id: import-vat
+    fact: the BAZG levies the import tax on goods brought into Switzerland
+    source: MWSTG Art. 62 Abs. 1
+  - id: rates
+    fact: import tax uses the domestic rates (8.1% standard, 2.6% reduced)
+    source: MWSTG Art. 25
+  - id: deduction
+    fact: a VAT-registered company deducts the import tax it paid as input tax (Ziffer 400)
+    source: MWSTG Art. 28 Abs. 1 lit. c
+  - id: evv
+    fact: the proof of import tax is the electronic assessment decision (Veranlagungsverfügung MWST, eVV) that names the company as importer, not the courier's bill
+    source: owner decision 2026-10-08
+  - id: evv-download
+    fact: an eVV is downloaded at e-dec-web.ezv.admin.ch/edecZugangscodeGui with the Zollanmeldungsnummer and Zugangscode printed on the courier bill (a CAPTCHA, so a person submits; the zip holds the signed PDF)
+    source: owner decision 2026-10-08

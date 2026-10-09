@@ -113,7 +113,7 @@ export function workspaceAt(root: string): Workspace {
 
 /**
  * Resolution, first hit wins:
- *   1. BELEGE_WORKSPACE ("demo" or "demo-<name>" means that demo under APP_ROOT, a leading ~ is
+ *   1. VANILLA_WORKSPACE (or the deprecated BELEGE_WORKSPACE; "demo" or "demo-<name>" means that demo under APP_ROOT, a leading ~ is
  *      the home directory), from
  *      the environment or else from the app's own .env (an empty value skips both)
  *   2. walking up from the cwd to the first directory holding a belege.workspace.yaml
@@ -128,11 +128,11 @@ let opened: Workspace | undefined;
 export const DEMO_NAME = /^demo(-[a-z0-9]+)*$/;
 
 function locate(): string {
-  const env = process.env.BELEGE_WORKSPACE ?? workspaceFromAppEnv();
+  const env = workspaceVar(process.env) ?? workspaceFromAppEnv();
   if (env) {
     const root = DEMO_NAME.test(env) ? join(APP_ROOT, env) : resolve(env.replace(/^~(?=$|\/)/, homedir()));
     if (!existsSync(join(root, MANIFEST_FILE))) {
-      throw new WorkspaceError(`BELEGE_WORKSPACE=${env}: no ${MANIFEST_FILE} in ${root}.`);
+      throw new WorkspaceError(`VANILLA_WORKSPACE=${env}: no ${MANIFEST_FILE} in ${root}.`);
     }
     return realpathSync(root);
   }
@@ -141,14 +141,21 @@ function locate(): string {
     if (dirname(dir) === dir) break;
   }
   throw new WorkspaceError(
-    `No workspace: set BELEGE_WORKSPACE to a directory holding ${MANIFEST_FILE}, or run from inside one.`,
+    `No workspace: set VANILLA_WORKSPACE to a directory holding ${MANIFEST_FILE}, or run from inside one.`,
   );
 }
 
-/** BELEGE_WORKSPACE as the app's .env sets it, so every npm script finds the books without exporting it. */
+/** VANILLA_WORKSPACE as the app's .env sets it, so every npm script finds the books without exporting it. */
 function workspaceFromAppEnv(): string | undefined {
   const file = join(APP_ROOT, '.env');
-  return existsSync(file) ? parseEnv(readFileSync(file, 'utf8')).BELEGE_WORKSPACE : undefined;
+  return existsSync(file) ? workspaceVar(parseEnv(readFileSync(file, 'utf8'))) : undefined;
+}
+
+/** VANILLA_WORKSPACE of one source, else its deprecated name BELEGE_WORKSPACE (with a note). */
+function workspaceVar(vars: Record<string, string | undefined>): string | undefined {
+  if (vars.VANILLA_WORKSPACE !== undefined || vars.BELEGE_WORKSPACE === undefined) return vars.VANILLA_WORKSPACE;
+  console.error('Note: BELEGE_WORKSPACE is deprecated; rename it to VANILLA_WORKSPACE (in the app\'s .env or your shell).');
+  return vars.BELEGE_WORKSPACE;
 }
 
 /**

@@ -73,7 +73,7 @@ export interface Scenario {
 
 /** One demo workspace: who the company is, its chart and banks, and its year as a Scenario. */
 export interface Demo {
-  /** The directory under the app root, which is also its BELEGE_WORKSPACE shortcut. */
+  /** The directory under the app root, which is also its VANILLA_WORKSPACE shortcut. */
   dir: string;
   company: Company;
   closedThrough: string;
@@ -85,8 +85,8 @@ export interface Demo {
   openingOther: Record<string, number>;
   accounts: ReadonlyArray<readonly [string, string]>;
   vendors: Record<string, Vendor>;
-  /** counterparties/<file>: the workspace's own bindings. */
-  counterparties: Record<string, string>;
+  /** knowledge/<role>/<file>: the workspace's own business files (bindings and private ones). */
+  knowledge: Record<string, string>;
   scenario(seed: number): Scenario;
 }
 

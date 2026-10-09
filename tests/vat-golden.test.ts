@@ -74,7 +74,7 @@ test('eCH-0217 XML for the open quarter (the file uploaded to the ESTV)', () => 
     symlinkSync(join(APP_ROOT, 'node_modules'), join(dir, 'node_modules'));
     writeFileSync(paths.books, JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], ...books }));
     execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), OPEN, join(dir, 'open.xml')], {
-      cwd: dir, env: { ...process.env, BELEGE_WORKSPACE: dir }, stdio: 'pipe',
+      cwd: dir, env: { ...process.env, VANILLA_WORKSPACE: dir }, stdio: 'pipe',
     });
     const xml = readFileSync(join(dir, 'open.xml'), 'utf8').replace(/<eCH-0217:generationTime>[^<]*</, '<eCH-0217:generationTime>X<');
     golden(`xml-${OPEN}`, { xml });

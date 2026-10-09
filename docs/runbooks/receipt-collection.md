@@ -175,7 +175,7 @@ provider's app-password page is: [mail-setup.md](../mail-setup.md).
 
 Before collecting:
 1. Open the provider's app-password page (Google: https://myaccount.google.com/apppasswords)
-2. Name it "vanilla-accounting"
+2. Name it "vanilla-accounting-collect"
 3. Copy the generated password
 4. Add it to the **app's** `.env` (the app folder, where `npm` runs; dotenv reads it from
    there, a workspace `.env` is not read): `<ENV>_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx` (the
@@ -184,7 +184,7 @@ Before collecting:
 
 After collecting:
 1. Open the same app-password page
-2. Delete the "vanilla-accounting" app password
+2. Delete the "vanilla-accounting-collect" app password
 3. Remove or blank the password in the app's `.env`
 
 **Claude: always remind the user to revoke the app password after the collection run completes.**
@@ -197,7 +197,7 @@ Explicit date range via `--quarter` shorthand:
 
 ## Code Location
 
-Utility functions in `src/collect/` of the app:
+Utility functions in `src/collect/` within the app repo:
 - `imap.ts` — IMAP connection, email fetch, quarter parsing
 - `mail-config.ts` — the workspace's `mail.yaml`: mailboxes and sender classification (skip / include / ambiguous)
 - Attachment extraction from email
@@ -318,7 +318,7 @@ Structurally the same split as a FedEx Zollrechnung, but with traps of its own. 
 input tax, M81/I81, exactly as with a Tax Invoice. Page 3, the hover popover with "VAT: … included",
 proves that Alibaba (CHE-447.613.666) charged the tax. MWSTG Art. 81 Abs. 3 says input tax may not
 depend on one specific kind of document. Private items are still not claimed. Record the decision
-as a rule in the workspace's `counterparties/aliexpress.yaml`.
+as a rule in the workspace's `knowledge/suppliers/aliexpress.yaml`.
 
 **Decision rule — per order:**
 1. Try to obtain the **Tax Invoice** PDF. Whatever you download, VERIFY it contains `Tax Invoice` + `CHE-447.613.666` + a tax amount before filing. If it says "Order Summary" / has no CHE number, it is the invalid artifact — discard it, do not file it.
@@ -596,7 +596,7 @@ All three Shopify document types can be fetched programmatically via the Shopify
   (golden rule 1). The chat PDF keeps the real date.
 - Booking: goods or samples to the material account (M0), equipment over ~CHF 150 to an asset
   account (I0), all credited to the owner's account; which accounts is the workspace's
-  counterparties/tutti.yaml. tutti is always paid by the owner first.
+  knowledge/suppliers/tutti.yaml. tutti is always paid by the owner first.
 - Pickup with no price talk = bought at the listing price. If the listing is gone, the price
   is nowhere, so ask the owner.
 
@@ -687,7 +687,7 @@ Google Ads and Google's consumer subscriptions send no PDF anywhere.
 
 ## Matching Notes
 
-- `npm run match` (`src/cli/match.ts`) is the primary path. It calls the model once per receipt through `src/llm/ask.ts`, the one way belege calls a model (ADR 0002); each call is logged in `data/llm-ledger.jsonl` under step `evidence.guide.yaml#ai`. The `MATCH_LLM=codex` switch is gone.
+- `npm run match` (`src/cli/match.ts`) is the primary path. It calls the model once per receipt through `src/llm/ask.ts`, the one way the app calls a model (ADR 0002); each call is logged in `data/llm-ledger.jsonl` under step `evidence.guide.yaml#ai`. The `MATCH_LLM=codex` switch is gone.
 - Transaction matching requires camt053 bank statements for the quarter. Without them, receipts get renamed/archived but stay unlinked (confidence-based filename still applied).
 - **Grouped vendors (AliExpress, Amazon, FedEx) bundle several receipts into one bank transaction** — a single receipt's amount can be a small fraction of the transaction total (e.g. two small AliExpress orders landing in one Wise card charge alongside other same-day orders). `match.ts` detects these vendors by keyword in the receipt text and matches by vendor-name-in-description instead of amount proximity for them; the ordinary ±30% amount filter only applies to non-grouped vendors. If a grouped-vendor receipt still comes back unlinked, check by hand whether it's part of a transaction another receipt from the same day already claims (sum the receipt amounts and compare to the transaction total) rather than assuming the LLM just failed.
 

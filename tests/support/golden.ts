@@ -4,7 +4,7 @@
  * figure, never that someone booked something.
  *
  *   npm test             each demo workspace; its set is tests/golden/<demo>/ (synthetic, public)
- *   npm run test:books   the configured workspace (BELEGE_WORKSPACE, .env, or the cwd); its set is
+ *   npm run test:books   the configured workspace (VANILLA_WORKSPACE, .env, or the cwd); its set is
  *                        <workspace>/golden/, which belongs to the company, not to the app
  *
  * Intended change of figures: `npm run test:update` (demo) or `npm run test:books:update`, review

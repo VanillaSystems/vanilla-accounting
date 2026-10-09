@@ -1,0 +1,31 @@
+# The Federal Tax Administration as the VAT authority: periods, deadlines, forms.
+# The flows say how and in which order (vat-filing.flow.yaml, correction.flow.yaml);
+# their steps name these facts in `facts:` instead of repeating them.
+
+id: estv
+name: Eidgenössische Steuerverwaltung (ESTV)
+match:
+  tx: [ "eidg. steuerverwaltung", "eidgenössische steuerverwaltung", "eidgenoessische steuerverwaltung" ]
+
+facts:
+  - id: period
+    fact: on the effective method, one VAT return per calendar quarter
+    source: MWSTG Art. 35 Abs. 1 lit. a
+  - id: return-deadline
+    fact: the return is due within 60 days after the end of the quarter
+    source: MWSTG Art. 71 Abs. 1
+  - id: payment-deadline
+    fact: the tax payable is due within 60 days after the end of the quarter; a late payment bears default interest without a reminder
+    source: MWSTG Art. 86 Abs. 1; MWSTG Art. 87 Abs. 1
+  - id: refund
+    fact: a credit (more input tax than tax payable) is paid out to the company; from the 61st day after the return arrives, the ESTV owes remuneration interest on it
+    source: MWSTG Art. 88
+  - id: eportal
+    fact: the return is filed in the ESTV ePortal ("MWST abrechnen"), which imports the eCH-0217 E-MWST XML
+    source: docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf
+  - id: correction
+    fact: an error in a filed return of the current tax period is corrected with a Korrekturabrechnung (form 0535), never by changing the filed return
+    source: MWSTG Art. 72 Abs. 1
+  - id: finalisation
+    fact: the year's returns are reconciled with the annual accounts (Finalisierung, form 0550 Jahresabstimmung) within 180 days after the end of the financial year; a difference is declared then
+    source: MWSTG Art. 72 Abs. 2

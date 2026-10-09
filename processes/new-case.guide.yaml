@@ -55,7 +55,7 @@ steps:
     rules:
       - id: nc-home
         when: always
-        then: "ask: would the answer still be true for a company we have never seen? yes → the step guide. True for every customer of this vendor → processes/counterparties/<id>.yaml under the same step address. True for us only → counterparties/<id>.yaml (about one vendor) or policy/<process>.guide.yaml (not about one vendor); a precedent always goes there. No file yet → create it from the item’s own signals (merchant, UID, filename) with this rule as its first; a supplier that must stay private gets only counterparties/<id>.yaml"
+        then: "ask: would the answer still be true for a company we have never seen? yes → the step guide. True for every company dealing with this business → processes/<suppliers|customers|authorities>/<id>.yaml under the same step address. True for us only → knowledge/<suppliers|customers|authorities>/<id>.yaml (about one business) or knowledge/rules/<process>.guide.yaml (not about one business); a precedent always goes there. No file yet → create it in the folder of its main role, from the item’s own signals (merchant, UID, filename), with this rule as its first; a business that must stay private gets only its knowledge/ file"
         source: docs/adr/0002-counterparty-knowledge-and-lean-calls.md
       - id: nc-rule-shape
         when: always

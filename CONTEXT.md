@@ -1,4 +1,4 @@
-# Belege — Domain Glossary
+# Vanilla Accounting: domain glossary
 
 ## Receipt
 A PDF file that serves as supporting evidence for one or more bank transactions. Receipts may be computer-generated (Shopify, Wise invoices) or scanned/photographed. Each Receipt has a `location`: `staged` (in `beleg-import/`, awaiting processing) or `archived` (in `receipts/`, processed).
@@ -13,7 +13,7 @@ A confirmed link between a Receipt and a BankTransaction. Many-to-many: one Rece
 The staging folder `beleg-import/` where new receipts arrive — either manually on the laptop (downloaded PDFs) or uploaded from the iOS app via `POST /api/upload`. Files here are unprocessed. After `extract` + `match`, they are renamed and moved to `receipts/`.
 
 ## Workspace
-The directory holding one company's data: `belege.workspace.yaml` (who the company is, which ledger account each bank books on), `books.json`, `receipts/`, `beleg-import/`, `bank-statements/`, `filings/`, `accounts.json`, `history/` (prior-year books) and `data/` (gitignored). The layout is fixed (`src/workspace/workspace.ts`). Every CLI and the API open it with `openWorkspace()`: `BELEGE_WORKSPACE`, else the first directory from the cwd upward that holds a manifest. The app's own files (`processes/`, `reference/`) are found from the code, never from the cwd.
+The directory holding one company's data: `belege.workspace.yaml` (who the company is, which ledger account each bank books on), `books.json`, `receipts/`, `beleg-import/`, `bank-statements/`, `filings/`, `accounts.json`, `history/` (prior-year books) and `data/` (gitignored). The layout is fixed (`src/workspace/workspace.ts`). Every CLI and the API open it with `openWorkspace()`: `VANILLA_WORKSPACE`, else the first directory from the cwd upward that holds a manifest. The app's own files (`processes/`, `reference/`) are found from the code, never from the cwd.
 
 ## Profile
 How the company works, as `npm run init` asked it: legal form and VAT setup on `company`, the rest (what it sells, employees, private payments, payouts) in the manifest's `profile` block. The questions, their supported answers and why the others stop are one table, `src/workspace/setup.ts`. The profile picks the accounts of the chart a workspace starts from (`reference/charts/ch-kmu.yaml`, each account with a `type` and its `line` in the balance sheet or income statement per OR 959a/959b).
@@ -35,3 +35,6 @@ The official Swiss foreign-exchange **sell** rate (Devisenkurs *Verkauf*) publis
 
 ## Exchange Difference (Kursdifferenz)
 The unrealized foreign-exchange gain or loss on a foreign-currency bank account, arising because its transactions are booked at varying daily rates while its native balance is fixed. Surfaced only at year-end by revaluing the account's CHF book value against the 31.12 rate; booked to a Kursgewinn/-verlust account. Independent of native-currency bank reconciliation, which compares balances in the account's own currency.
+
+## Counterparty (Lieferant, Kunde, Behörde)
+A business the company deals with that has particulars worth writing down: how to recognise its receipts and bank lines, its accounts, its rules per step. Its main role decides the folder of its one file: a **supplier** (Lieferant: vendors, Shopify, Stripe, banks, payment services), a **customer** (Kunde) or an **authority** (Behörde: ESTV, Ausgleichskasse, cantonal tax office, BAZG, BVG foundation, UVG insurer). `roles:` lists any further role. The app ships public files under `processes/<suppliers|customers|authorities>/`; a workspace adds its own under `knowledge/<same folder>/` (`src/knowledge/layers.ts`, processes/README.md).

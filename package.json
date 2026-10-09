@@ -1,5 +1,5 @@
 {
-  "name": "belaege",
+  "name": "vanilla-accounting",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -33,6 +33,7 @@
     "board": "tsx src/cli/import-board.ts",
     "extract-balances": "tsx src/cli/extract-statement-balances.ts",
     "check-processes": "tsx src/cli/check-processes.ts",
+    "migrate-workspace": "tsx src/cli/migrate-workspace.ts",
     "check-public": "tsx src/cli/check-public.ts",
     "export-public": "tsx src/cli/export-public.ts",
     "llm-usage": "tsx src/cli/llm-usage.ts",
@@ -42,9 +43,9 @@
     "demo:generate": "tsx tools/demo/generate.ts",
     "tutti": "tsx src/collect/tutti.ts",
     "pretest": "tsc --noEmit",
-    "test": "BELEGE_WORKSPACE=demo node --import tsx --test \"tests/**/*.test.ts\" && BELEGE_WORKSPACE=demo-consulting node --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
-    "test:update": "BELEGE_WORKSPACE=demo UPDATE_GOLDEN=1 node --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts && BELEGE_WORKSPACE=demo-consulting UPDATE_GOLDEN=1 node --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
-    "test:freeze": "BELEGE_WORKSPACE=demo tsx tests/support/freeze-books.ts && BELEGE_WORKSPACE=demo-consulting tsx tests/support/freeze-books.ts",
+    "test": "VANILLA_WORKSPACE=demo node --import tsx --test \"tests/**/*.test.ts\" && VANILLA_WORKSPACE=demo-consulting node --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
+    "test:update": "VANILLA_WORKSPACE=demo UPDATE_GOLDEN=1 node --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts && VANILLA_WORKSPACE=demo-consulting UPDATE_GOLDEN=1 node --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
+    "test:freeze": "VANILLA_WORKSPACE=demo tsx tests/support/freeze-books.ts && VANILLA_WORKSPACE=demo-consulting tsx tests/support/freeze-books.ts",
     "test:books": "node --env-file-if-exists=.env --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
     "test:books:update": "UPDATE_GOLDEN=1 node --env-file-if-exists=.env --import tsx --test tests/vat-golden.test.ts tests/classify-force.test.ts",
     "test:books:freeze": "tsx --env-file-if-exists=.env tests/support/freeze-books.ts",

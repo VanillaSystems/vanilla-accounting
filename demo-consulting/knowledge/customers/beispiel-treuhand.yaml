@@ -1,4 +1,4 @@
-# A private client: no public vendor file, so this binding is the whole counterparty.
+# A private client: no public file, so this one is the whole business.
 id: beispiel-treuhand
 name: Beispiel Treuhand AG
 match:

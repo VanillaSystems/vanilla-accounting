@@ -3,7 +3,7 @@
 This guide takes you from an empty folder to your first VAT return. It is for the owner of a
 small Swiss company who keeps the books alone: technical, but not an accountant.
 
-Belege fits a company that is registered for VAT on the effective method, taxed on the cash
+Vanilla Accounting fits a company that is registered for VAT on the effective method, taxed on the cash
 basis (vereinnahmte Entgelte), files quarterly, and keeps a calendar fiscal year. A GmbH or an
 AG is fully supported. Read [Limits](#limits) before you start.
 
@@ -14,14 +14,14 @@ You need:
 - **Node.js 22** or newer. On macOS: `brew install node`.
 - **pdftotext**, from poppler. It reads the text of your receipts. On macOS:
   `brew install poppler`. On Linux: `apt install poppler-utils`.
-- **Claude Code** with a Claude subscription (Pro or Max). Belege calls the `claude` command to
+- **Claude Code** with a Claude subscription (Pro or Max). Vanilla Accounting calls the `claude` command to
   read receipts, match them to payments and book them. Install it with
   `npm install -g @anthropic-ai/claude-code`, then run `claude` once and log in.
 
 Then clone this repository and install the app:
 
 ```sh
-cd belege       # the folder you cloned it into
+cd vanilla-accounting  # the folder you cloned it into
 npm install
 ```
 
@@ -58,7 +58,7 @@ words on what the company does. Then these questions, in this order:
 3. **VAT method.** Effective (you pay the VAT you charged minus the input tax on your costs).
    The Saldosteuersatz method is not supported yet. If you choose it, the wizard stops.
 4. **VAT basis.** Vereinnahmt (cash): VAT is due when the money moves. Vereinbart (invoice) is
-   not supported yet, because Belege books from the bank statement and keeps no open invoices.
+   not supported yet, because Vanilla Accounting books from the bank statement and keeps no open invoices.
 5. **VAT reporting period.** Quarterly. Half-yearly and monthly returns are not supported yet.
 6. **Fiscal year.** The calendar year. Another fiscal year is not supported yet.
 7. **Starting point.** A new company starts with empty books. If you switch from other
@@ -67,7 +67,7 @@ words on what the company does. Then these questions, in this order:
 8. **What you sell.** Services, goods, or both. This picks the accounts of your chart.
 9. **Customers abroad?** A service to a customer abroad is usually declared without Swiss VAT.
 10. **Do you import goods?** Imports come with customs and import VAT invoices.
-11. **Employees.** None, the owner only, or staff. Belege books the salary and the AHV, BVG and
+11. **Employees.** None, the owner only, or staff. Vanilla Accounting books the salary and the AHV, BVG and
     UVG payments. Your payroll provider or Treuhand does the payroll itself.
 12. **Does the owner pay business costs privately?** Then those receipts are booked on a current
     account with the owner (2451 Kontokorrent; 2850 Privat for an Einzelfirma).
@@ -96,7 +96,7 @@ The workspace gets:
 | `beleg-import/` | Where new receipts arrive |
 | `receipts/` | Receipts after they are read and matched |
 | `filings/` | Your VAT returns as filed |
-| `counterparties/`, `policy/` | What Belege learns about your suppliers and your decisions |
+| `knowledge/` | What the app learns about your suppliers (`suppliers/`), customers (`customers/`), authorities (`authorities/`) and your own rules (`rules/`); each folder starts with a commented `_example.yaml` |
 | `mail.yaml` | Mailboxes to collect receipts from (optional, commented template) |
 | `AGENTS.md` | Notes for Claude about your company |
 
@@ -124,7 +124,7 @@ to fix it. A ! line is a note that does not stop you.
 
 ## 4. Import your first bank statement
 
-Belege reads bank statements in the ISO 20022 format **camt.053**, an XML file that Swiss
+Vanilla Accounting reads bank statements in the ISO 20022 format **camt.053**, an XML file that Swiss
 banks offer since the switch to ISO 20022 payments. It is the statement
 (Kontoauszug), with the bank's opening and closing balance. In your e-banking, look for the
 account statement or the account export and choose camt.053. Some banks call it ISO 20022,
@@ -198,9 +198,9 @@ corrections are booked in the next open quarter (see the app's `AGENTS.md`, gold
 
 - **VAT:** effective method, cash basis, quarterly returns only. No Saldosteuersatz, no
   vereinbarte Entgelte, no books without VAT, no fiscal year other than the calendar year.
-- **Payroll:** Belege books salary and social security payments. It does not calculate
+- **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement.
-- **Invoicing:** Belege does not write invoices or track open ones. A sale is booked when its
+- **Invoicing:** Vanilla Accounting does not write invoices or track open ones. A sale is booked when its
   payment arrives.
 - **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and
   Wise; for another bank, check the first statement's transactions and closing balance. camt.054

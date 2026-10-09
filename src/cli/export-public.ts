@@ -21,7 +21,7 @@ const rel = relative(APP_ROOT, out);
 if (!rel.startsWith('..') && !isAbsolute(rel)) fail(`${out} is inside the app repo; export outside it.`);
 
 const got = secretsOrWhyNot();
-if ('why' in got) fail(`no secrets to check against (${got.why}). Set BELEGE_WORKSPACE to the real workspace.`);
+if ('why' in got) fail(`no secrets to check against (${got.why}). Set VANILLA_WORKSPACE to the real workspace.`);
 
 if (existsSync(out)) {
   const entries = readdirSync(out).filter((e) => e !== '.git');

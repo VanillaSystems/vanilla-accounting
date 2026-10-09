@@ -9,8 +9,8 @@ import { knowledgeGaps } from '../src/knowledge/gaps.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 
 const counterparties = [
-  compileCounterparty({ id: 'post', name: 'Post', match: { tx: ['post cH'] } }, { binding: 'post.yaml' }),
-  compileCounterparty({ id: 'acme', name: 'Acme', match: { uid: ['CHE-153.004.184'] } }, { binding: 'acme.yaml' }),
+  compileCounterparty({ id: 'post', name: 'Post', match: { tx: ['post cH'] } }, { binding: 'post.yaml' }, 'supplier'),
+  compileCounterparty({ id: 'acme', name: 'Acme', match: { uid: ['CHE-153.004.184'] } }, { binding: 'acme.yaml' }, 'supplier'),
 ];
 
 const tx = (ref: string, description: string, more: Partial<BankTransaction> = {}): BankTransaction => ({

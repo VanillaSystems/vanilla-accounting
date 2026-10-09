@@ -62,6 +62,7 @@ steps:
 
   - id: signoff
     name: The accountant signs off the annual accounts
+    facts: [ estv#finalisation, steuerverwaltung#tax-return, ausgleichskasse#salary-report ]
     with: { guide: year-close.guide.yaml#signoff }
     icon: signature
     kind: human

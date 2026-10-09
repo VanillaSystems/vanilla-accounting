@@ -4,7 +4,7 @@ Status: accepted for the process layer (2026-10-07). Code (`decide()`, lean call
 
 ## Problem
 
-Every model call in belege carried everything. `claude -p` runs from the repo,
+Every model call in the app carried everything. `claude -p` runs from the repo,
 so each call loaded Claude Code's system prompt, tool schemas, CLAUDE.md,
 AGENTS.md, auto-memory, hook injections and skill listings before the prompt
 began. On top of that, every classify batch carried rules for every vendor
@@ -28,7 +28,9 @@ it requires an API key, so it is not used.
 
 ## Decision
 
-1. **One file per counterparty with particulars:** `processes/counterparties/<id>.yaml`.
+1. **One file per counterparty with particulars:** `processes/counterparties/<id>.yaml`
+   (since 2026-10-09 `processes/<suppliers|customers|authorities>/<id>.yaml`, and
+   the company's part in `knowledge/`; see processes/README.md).
    It holds `match` (signals), `grouped`, `accounts`, and rules per step under the
    step's exact `with.guide` address. Guides keep only rules that hold for any
    company. The placement test: *would it still be true for a company we have
