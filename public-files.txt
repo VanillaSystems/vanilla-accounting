@@ -40,6 +40,7 @@ docs/audit-export.md
 docs/releasing.md
 docs/mail-setup.md
 docs/quarter-workflow.md
+docs/year-end.md
 docs/adr/**
 docs/casebook.md
 docs/i18n.md
