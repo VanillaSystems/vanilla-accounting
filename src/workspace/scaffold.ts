@@ -37,11 +37,16 @@ export function bankKind(bank: string): BankKind {
   return BANKS[bank] ?? { ...camt(false), note: UNTESTED };
 }
 
-const RANGE_START = { bank: 1020, card: 2101 } as const;
+/** The chart's bank accounts per currency (reference/charts/ch-kmu.yaml); a further account takes the next free number. */
+const BANK_BY_CURRENCY: Record<string, string> = { CHF: '1020', EUR: '1021', USD: '1022' };
+const NEXT_FREE = { bank: 1023, card: 2101 } as const;
 
-/** The first free ledger account of the bank's range: 1020, 1021, ... for money, 2101, ... for cards. */
-export function suggestAccount(bank: string, taken: ReadonlySet<string>): string {
-  for (let n = RANGE_START[bankKind(bank).range]; ; n++) if (!taken.has(String(n))) return String(n);
+/** The ledger account a new bank account books on: the chart's for its currency while free, else the next free one. */
+export function suggestAccount(bank: string, currency: string, taken: ReadonlySet<string>): string {
+  const range = bankKind(bank).range;
+  const preferred = range === 'bank' ? BANK_BY_CURRENCY[currency] : undefined;
+  if (preferred && !taken.has(preferred)) return preferred;
+  for (let n = NEXT_FREE[range]; ; n++) if (!taken.has(String(n))) return String(n);
 }
 
 export interface InitInput {
@@ -79,7 +84,7 @@ export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
 /** The chart of the profile and legal form, plus what the answers need, with the bank accounts named after their bank. */
 export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   const { sells, legalForm, payouts, imports } = input.answers;
-  const extra = new Set([...(payouts === 'yes' ? ['1093', '6580'] : []), ...(imports === 'yes' ? ['4070'] : [])]);
+  const extra = new Set([...(payouts === 'yes' ? ['1093', '6580'] : []), ...(imports === 'yes' ? ['4020', '4030', '4040'] : [])]);
   const base = chartFor(chart, sells, legalForm);
   const byNumber = new Map(base.map((a) => [a.number, a]));
   for (const a of chartFor(chart, 'both', legalForm)) if (extra.has(a.number)) byNumber.set(a.number, a);
@@ -171,17 +176,14 @@ export function planWorkspace(input: InitInput, chart: Chart, root: string, appR
   const bankAccounts = bankAccountsOf(input);
   const accounts = accountsOf(input, chart);
   const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => `bank-statements/${b.bank}`))];
-  const kept = ['receipts', 'filings', 'counterparties', 'policy', 'history', ...statementDirs];
+  const kept = ['receipts', 'filings', 'counterparties', 'policy', ...statementDirs];
   const appRel = relative(root, appRoot) || '.';
   return {
     dirs: [...kept, 'beleg-import', 'data'],
     files: [
-      ...kept.filter((d) => d !== 'history').map((d): [string, string] => [`${d}/.gitkeep`, '']),
+      ...kept.map((d): [string, string] => [`${d}/.gitkeep`, '']),
       ['accounts.json', JSON.stringify(accounts, null, 2) + '\n'],
       ['books.json', JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], config: {} }, null, 2) + '\n'],
-      // classify reads the newest <name>.Konten.txt in history/; a Banana export of a real prior year sorts after this one.
-      ['history/0000-kontenrahmen.Konten.txt', ['Konto\tBeschreibung', ...accounts.map((a) => `${a.number}\t${a.name}`)].join('\n') + '\n'],
-      ['history/0000-kontenrahmen.Buchungen-sample.tsv', 'Date\tDescription\tAccountDebit\tAccountCredit\tAmount\tExchangeCurrency\tVatCode\n'],
       ['mail.yaml', MAIL_YAML],
       ['AGENTS.md', agentsMd(input, appRel)],
       ['CLAUDE.md', '@AGENTS.md\n'],

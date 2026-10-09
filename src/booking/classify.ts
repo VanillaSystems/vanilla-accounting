@@ -100,25 +100,35 @@ function casesForBatch(books: Books, batch: BankTransaction[], casebook: readonl
 
 /**
  * The newest Banana export in history/: `<name>.Konten.txt` (chart of accounts) beside
- * `<name>.Buchungen-sample.tsv` (example entries). Returns `<name>`.
+ * `<name>.Buchungen-sample.tsv` (example entries). Returns `<name>`, or undefined for a company
+ * without a prior year in Banana.
  */
-function priorYearExport(historyDir: string): string {
+function priorYearExport(historyDir: string): string | undefined {
   const charts = existsSync(historyDir) ? readdirSync(historyDir).filter((f) => f.endsWith('.Konten.txt')).sort() : [];
-  if (charts.length === 0) {
-    throw new Error(`classify needs a prior-year chart in ${historyDir}: <name>.Konten.txt and <name>.Buchungen-sample.tsv`);
-  }
-  return charts[charts.length - 1].slice(0, -'.Konten.txt'.length);
+  return charts.at(-1)?.slice(0, -'.Konten.txt'.length);
 }
 
-/** The company (manifest), its prior-year chart and entries (workspace history/), and the app's VAT codes. */
+/** accounts.json (npm run init writes it) in the Konten.txt layout, for a company without a prior-year export. */
+function chartFromAccounts(ws: Workspace): string {
+  if (!existsSync(ws.paths.accounts)) {
+    throw new Error(`classify needs a chart of accounts: ${ws.paths.accounts} (npm run init writes it), or a prior-year Banana export in ${ws.paths.history} (<name>.Konten.txt and <name>.Buchungen-sample.tsv)`);
+  }
+  const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string }[];
+  return ['Konto\tBeschreibung', ...accounts.map((a) => `${a.number}\t${a.name}`)].join('\n');
+}
+
+/**
+ * The company (manifest), its chart and example entries (the prior-year export in history/, else
+ * accounts.json and no examples of its own: the casebook stands in), and the app's VAT codes.
+ */
 export function loadClassifyContext(ws: Workspace): ClassifyContext {
   const read = (dir: string, file: string) => readFileSync(join(dir, file), 'utf8');
   const prior = priorYearExport(ws.paths.history);
   return {
     companyName: ws.company.name,
     bankAccounts: ws.bankAccounts,
-    chartOfAccounts: read(ws.paths.history, `${prior}.Konten.txt`),
-    historicEntries: read(ws.paths.history, `${prior}.Buchungen-sample.tsv`),
+    chartOfAccounts: prior ? read(ws.paths.history, `${prior}.Konten.txt`) : chartFromAccounts(ws),
+    historicEntries: prior ? read(ws.paths.history, `${prior}.Buchungen-sample.tsv`) : '',
     vatCodes: read(REFERENCE_DIR, 'MWST-codes.txt'),
     casebook: loadCases(),
   };

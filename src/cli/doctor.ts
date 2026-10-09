@@ -102,10 +102,10 @@ function workspaceChecks(ws: Workspace): Result[] {
     }
   }
 
-  const charts = existsSync(ws.paths.history) ? readdirSync(ws.paths.history).filter((f) => f.endsWith('.Konten.txt')) : [];
-  results.push(charts.length
-    ? ok(`history/ has a chart for booking (${charts.sort().at(-1)})`)
-    : fail('history/ has no <name>.Konten.txt: booking with Claude needs the chart', 'Run npm run init in a new folder and copy its history/, or put your Banana export (<name>.Konten.txt and <name>.Buchungen-sample.tsv) there.'));
+  const charts = existsSync(ws.paths.history) ? readdirSync(ws.paths.history).filter((f) => f.endsWith('.Konten.txt')).sort() : [];
+  results.push(ok(charts.length
+    ? `Booking reads the prior-year export ${charts.at(-1)} in history/`
+    : 'Booking reads accounts.json and the casebook (no prior-year export in history/)'));
   return results;
 }
 

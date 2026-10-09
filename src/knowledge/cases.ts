@@ -16,10 +16,10 @@ import { parseVatCode } from '../accounting/vat-report.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { BankTransaction, JournalEntry, QuarterKey, Receipt } from '../types/index.js';
 import { APP_ROOT } from '../workspace/workspace.js';
+import { loadChart } from '../workspace/chart.js';
 
 export const CASES_DIR = join(APP_ROOT, 'examples', 'cases');
 /** The KMU accounts the casebook books on (Kontenrahmen KMU), number → name. */
-export const CASE_CHART_FILE = join(APP_ROOT, 'examples', 'kmu-chart.yaml');
 
 /** Who is on the other side. Selection infers some of these from a transaction's structure. */
 export const COUNTERPARTY_KINDS = [
@@ -172,10 +172,9 @@ export function loadCases(dir: string = CASES_DIR): BookingCase[] {
     .sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id));
 }
 
-/** The casebook's chart: account number → name. */
-export function loadCaseChart(file: string = CASE_CHART_FILE): Map<string, string> {
-  const raw = parse(readFileSync(file, 'utf8')) as { accounts?: Record<string, string> };
-  return new Map(Object.entries(raw.accounts ?? {}).map(([n, name]) => [String(n), name]));
+/** The casebook's chart, the app's one KMU chart (reference/charts/ch-kmu.yaml): account number → name. */
+export function loadCaseChart(): Map<string, string> {
+  return new Map(loadChart().accounts.map((a) => [a.number, a.name]));
 }
 
 // ─── The case as journal entries, and its effect on the return ───────────────
@@ -233,7 +232,7 @@ export function validateCase(c: BookingCase, ctx: { chart: ReadonlyMap<string, s
 
   c.lines.forEach((l, i) => {
     const at = `lines[${i + 1}]`;
-    for (const a of [l.debit, l.credit]) if (a && !ctx.chart.has(a)) err(`${at}: account ${a} is not in examples/kmu-chart.yaml — add it there or use a KMU account`);
+    for (const a of [l.debit, l.credit]) if (a && !ctx.chart.has(a)) err(`${at}: account ${a} is not in reference/charts/ch-kmu.yaml — use a KMU account or add it there`);
     const info = l.vatCode ? parseVatCode(l.vatCode) : null;
     if (l.vatCode && !info) err(`${at}: VAT code ${l.vatCode} is not one the engine knows (reference/MWST-codes.txt)`);
     if (!l.debit && !l.credit) err(`${at}: both accounts are empty`);
