@@ -4,7 +4,7 @@
 A PDF file that serves as supporting evidence for one or more bank transactions. Receipts may be computer-generated (Shopify, Wise invoices) or scanned/photographed. Each Receipt has a `location`: `staged` (in `beleg-import/`, awaiting processing) or `archived` (in `receipts/`, processed).
 
 ## BankTransaction
-A single entry from a camt053 XML bank statement (any bank the workspace lists; Raiffeisen and Wise exports are tested). Has a unique `ref` (AcctSvcrRef), date, description, amount, currency, direction (CRDT/DBIT), and bank. The `ref` for Raiffeisen is a numeric string; for Wise it starts with W (e.g. `WEUR000042`).
+A single entry from a camt053 XML bank statement (any Swiss bank; Raiffeisen and Wise exports are tested on real files). Has a unique `ref`, date, description, amount, currency, direction (CRDT/DBIT), and `bank`: the manifest's label of the bank account the statement lands on (by its IBAN, else its folder; `src/accounting/bank-accounts.ts`). The `ref` is the entry's AcctSvcrRef, else its NtryRef, else the AcctSvcrRef of its one TxDtls, else `<statement id>#<n>`; for a `wise` account it is the Wise transaction id (e.g. `WEUR000042`, `CARD-…`).
 
 ## Mapping
 A confirmed link between a Receipt and a BankTransaction. Many-to-many: one Receipt can support multiple BankTransactions (e.g. Wise multi-currency splits where one purchase debits multiple accounts), and one BankTransaction can have multiple supporting Receipts (e.g. FedEx freight invoice + customs invoice).
