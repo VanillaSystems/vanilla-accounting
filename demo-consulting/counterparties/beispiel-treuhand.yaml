@@ -1,0 +1,16 @@
+# A private client: no public vendor file, so this binding is the whole counterparty.
+id: beispiel-treuhand
+name: Beispiel Treuhand AG
+match:
+  tx: ["beispiel treuhand"]
+  uid: ["CHE-318.642.975"]
+accounts: ["3400"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-treuhand-retainer
+        when: the monthly payment of Beispiel Treuhand AG for the consulting retainer
+        then: '3400 Ertrag Beratung, V81 (a Swiss client: the service is taxed in Switzerland, never V0-E)'
+        source: correction 2026-Q1-treuhand-inland, decision 2026-04-14
+    precedents: []

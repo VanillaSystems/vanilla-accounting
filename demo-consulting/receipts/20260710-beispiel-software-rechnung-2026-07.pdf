@@ -1,0 +1,55 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 502 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Beispiel Software GmbH) Tj
+T* (Musterallee 21) Tj
+T* (10115 Berlin) Tj
+T* (Deutschland) Tj
+T* (CHE-579.246.813 MWST) Tj
+T* () Tj
+T* (Muster Consulting GmbH) Tj
+T* (Beispielgasse 8) Tj
+T* (3011 Bern) Tj
+T* () Tj
+T* (Rechnung BS-2026-0777) Tj
+T* (Datum: 10.07.2026) Tj
+T* () Tj
+T* (Projektplanung Pro, Juli 2026: EUR 32.43) Tj
+T* () Tj
+T* (Total EUR 32.43) Tj
+T* (MWST 8.1% auf EUR 30.00: EUR 2.43) Tj
+T* () Tj
+T* (Schweizer MWST gemäss Registrierung CHE-579.246.813) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+890
+%%EOF

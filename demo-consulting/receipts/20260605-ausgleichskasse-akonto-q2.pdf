@@ -1,0 +1,55 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 571 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Ausgleichskasse Muster) Tj
+T* (Postfach) Tj
+T* (3001 Bern) Tj
+T* () Tj
+T* (Muster Consulting GmbH) Tj
+T* (Beispielgasse 8) Tj
+T* (3011 Bern) Tj
+T* () Tj
+T* (Akontorechnung AK-2026-Q2) Tj
+T* (Datum: 05.06.2026) Tj
+T* () Tj
+T* (AHV/IV/EO 10.6% auf Lohnsumme Q2: CHF 2’735.40) Tj
+T* (ALV 2.2% auf Lohnsumme Q2: CHF 567.60) Tj
+T* (Familienausgleichskasse und Verwaltungskosten: CHF 309.60) Tj
+T* () Tj
+T* (Total CHF 3’612.60) Tj
+T* (Keine Schweizer MWST ausgewiesen) Tj
+T* () Tj
+T* (Sozialversicherungsbeiträge unterliegen nicht der MWST) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+959
+%%EOF

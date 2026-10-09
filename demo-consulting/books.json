@@ -1,0 +1,4477 @@
+{
+  "receipts": [
+    {
+      "id": "f54a3fea1c67e536",
+      "filename": "20260101-muster-coworking-2026-01.pdf",
+      "originalFilename": "20260101-muster-coworking-2026-01.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-01\nDatum: 01.01.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, Januar 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1005,
+      "indexedAt": "2026-01-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-01",
+      "description": "Muster Coworking, Fixdesk Januar 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-01-01T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "725335ead2805ad7",
+      "filename": "20260102-muster-consulting-rechnung-2026-011.pdf",
+      "originalFilename": "20260102-muster-consulting-rechnung-2026-011.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-011\nDatum: 02.01.2026\n\nBeratungsmandat IT-Sicherheit, Januar 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1041,
+      "indexedAt": "2026-01-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-02",
+      "description": "Rechnung 2026-011 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-01-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "d216610a1f69a7f3",
+      "filename": "20260102-muster-sammelstiftung-bvg-q1.pdf",
+      "originalFilename": "20260102-muster-sammelstiftung-bvg-q1.pdf",
+      "extractedText": "Muster Sammelstiftung BVG\nVorsorgeplatz 1\n4002 Basel\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nBeitragsrechnung BVG-2026-Q1\nDatum: 02.01.2026\n\nSpar- und Risikobeiträge Q1, Arbeitgeber und Arbeitnehmer: CHF 1’425.00\n\nTotal CHF 1’425.00\nKeine Schweizer MWST ausgewiesen\n\nVorsorgebeiträge unterliegen nicht der MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1058,
+      "indexedAt": "2026-01-15T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-02",
+      "description": "Muster Sammelstiftung, BVG Q1 2026",
+      "amount": 1425,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-01-15T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "9843b0deca7f0044",
+      "filename": "20260105-muster-telecom-2026-01.pdf",
+      "originalFilename": "20260105-muster-telecom-2026-01.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202601\nDatum: 05.01.2026\n\nMobile-Abo unlimitiert, Januar 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 32.55\n\nTotal CHF 101.55\nMWST 8.1% auf CHF 93.94: CHF 7.61",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1023,
+      "indexedAt": "2026-01-19T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-05",
+      "description": "Muster Telecom, Mobile-Abo Januar 2026",
+      "amount": 101.55,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 93.94,
+          "vat": 7.61,
+          "gross": 101.55
+        }
+      ],
+      "vatExtractedAt": "2026-01-19T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "d973b13cd26c01ff",
+      "filename": "20260105-muster-versicherungen-praemie-2026.pdf",
+      "originalFilename": "20260105-muster-versicherungen-praemie-2026.pdf",
+      "extractedText": "Muster Versicherungen AG\nPolicenweg 7\n8004 Zürich\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nPrämienrechnung PR-2026-5501\nDatum: 05.01.2026\n\nUnfallversicherung UVG 2026: CHF 486.00\nKrankentaggeld KTG 2026: CHF 912.00\n\nTotal CHF 1’398.00\nKeine Schweizer MWST ausgewiesen\n\nVersicherungsprämien sind von der MWST ausgenommen (Art. 21 Abs. 2 Ziff. 18 MWSTG)",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1108,
+      "indexedAt": "2026-01-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-05",
+      "description": "Muster Versicherungen, UVG und KTG 2026",
+      "amount": 1398,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-01-20T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "4cde81d0deeee3f4",
+      "filename": "20260107-sample-labs-invoice-2026-01.pdf",
+      "originalFilename": "20260107-sample-labs-invoice-2026-01.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202601-311\nDatum: 07.01.2026\n\nTeam plan, Januar 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1062,
+      "indexedAt": "2026-01-07T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-07",
+      "description": "Sample Labs, code hosting Januar 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-01-07T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "1c024156f5d41e2e",
+      "filename": "20260109-muster-consulting-rechnung-2026-013.pdf",
+      "originalFilename": "20260109-muster-consulting-rechnung-2026-013.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nMuster Maschinenbau GmbH\nBeispielstrasse 3\n80331 München\nDeutschland\n\nRechnung 2026-013\nDatum: 09.01.2026\n\nSicherheitsaudit Fernwartung, Quartalspauschale: EUR 3’800.00\n\nTotal EUR 3’800.00\nOhne MWST\n\nLeistungsort beim Empfänger (Art. 8 Abs. 1 MWSTG): ohne Schweizer MWST\nReverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1161,
+      "indexedAt": "2026-02-02T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-09",
+      "description": "Rechnung 2026-013 an Muster Maschinenbau GmbH",
+      "amount": 3800,
+      "currency": "EUR",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-02-02T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "9bc1858abc823722",
+      "filename": "20260112-beispiel-software-rechnung-2026-01.pdf",
+      "originalFilename": "20260112-beispiel-software-rechnung-2026-01.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0177\nDatum: 12.01.2026\n\nProjektplanung Pro, Januar 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1075,
+      "indexedAt": "2026-01-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-12",
+      "description": "Beispiel Software, Projektplanung Januar 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-01-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "d43bfd49d2385db8",
+      "filename": "20260112-sbb-billett.pdf",
+      "originalFilename": "20260112-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260112-4471\nDatum: 12.01.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 38.15\n\nTotal CHF 38.15\nMWST 8.1% auf CHF 35.29: CHF 2.86",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-01-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-01-12",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 38.15,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 35.29,
+          "vat": 2.86,
+          "gross": 38.15
+        }
+      ],
+      "vatExtractedAt": "2026-01-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "9f21972f93faafe9",
+      "filename": "20260202-muster-consulting-rechnung-2026-021.pdf",
+      "originalFilename": "20260202-muster-consulting-rechnung-2026-021.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-021\nDatum: 02.02.2026\n\nBeratungsmandat IT-Sicherheit, Februar 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1042,
+      "indexedAt": "2026-02-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-02",
+      "description": "Rechnung 2026-021 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-02-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "359354e85c44b386",
+      "filename": "20260202-muster-coworking-2026-02.pdf",
+      "originalFilename": "20260202-muster-coworking-2026-02.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-02\nDatum: 01.02.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, Februar 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1006,
+      "indexedAt": "2026-02-02T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-01",
+      "description": "Muster Coworking, Fixdesk Februar 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-02-02T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "1e2c185545f8f94c",
+      "filename": "20260205-muster-telecom-2026-02.pdf",
+      "originalFilename": "20260205-muster-telecom-2026-02.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202602\nDatum: 05.02.2026\n\nMobile-Abo unlimitiert, Februar 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 29.75\n\nTotal CHF 98.75\nMWST 8.1% auf CHF 91.35: CHF 7.40",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1023,
+      "indexedAt": "2026-02-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-05",
+      "description": "Muster Telecom, Mobile-Abo Februar 2026",
+      "amount": 98.75,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 91.35,
+          "vat": 7.4,
+          "gross": 98.75
+        }
+      ],
+      "vatExtractedAt": "2026-02-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "726b28f057e498a4",
+      "filename": "20260206-muster-consulting-rechnung-2026-022.pdf",
+      "originalFilename": "20260206-muster-consulting-rechnung-2026-022.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nMuster Logistik AG\nIndustrieweg 12\n3052 Zollikofen\n\nRechnung 2026-022\nDatum: 06.02.2026\n\nKonzept Lagersteuerung: CHF 5’695.68\n\nTotal CHF 5’695.68\nMWST 8.1% auf CHF 5’268.90: CHF 426.78\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1025,
+      "indexedAt": "2026-03-09T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-06",
+      "description": "Rechnung 2026-022 an Muster Logistik AG",
+      "amount": 5695.68,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 5268.9,
+          "vat": 426.78,
+          "gross": 5695.68
+        }
+      ],
+      "vatExtractedAt": "2026-03-09T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "6a056195f036e00a",
+      "filename": "20260209-sample-labs-invoice-2026-02.pdf",
+      "originalFilename": "20260209-sample-labs-invoice-2026-02.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202602-311\nDatum: 09.02.2026\n\nTeam plan, Februar 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1063,
+      "indexedAt": "2026-02-09T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-09",
+      "description": "Sample Labs, code hosting Februar 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-02-09T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "d2fa697ad337cfdc",
+      "filename": "20260210-beispiel-software-rechnung-2026-02.pdf",
+      "originalFilename": "20260210-beispiel-software-rechnung-2026-02.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0277\nDatum: 10.02.2026\n\nProjektplanung Pro, Februar 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1076,
+      "indexedAt": "2026-02-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-10",
+      "description": "Beispiel Software, Projektplanung Februar 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-02-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "42a03bc92da698c7",
+      "filename": "20260212-sbb-billett.pdf",
+      "originalFilename": "20260212-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260212-4471\nDatum: 12.02.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 94.90\n\nTotal CHF 94.90\nMWST 8.1% auf CHF 87.79: CHF 7.11",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-02-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-12",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 94.9,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 87.79,
+          "vat": 7.11,
+          "gross": 94.9
+        }
+      ],
+      "vatExtractedAt": "2026-02-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "82b16ca1fa237410",
+      "filename": "20260216-digitec-galaxus-laptop.pdf",
+      "originalFilename": "20260216-digitec-galaxus-laptop.pdf",
+      "extractedText": "Digitec Galaxus AG\nPfingstweidstrasse 60b\n8005 Zürich\nCHE-109.049.266 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung 118455012\nDatum: 16.02.2026\n\nLaptop 14\", 32 GB, 1 TB: CHF 2’199.00\nUSB-C Dockingstation: CHF 150.00\n\nTotal CHF 2’349.00\nMWST 8.1% auf CHF 2’172.99: CHF 176.01",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1030,
+      "indexedAt": "2026-02-16T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-16",
+      "description": "Digitec Galaxus, Laptop",
+      "amount": 2349,
+      "currency": "CHF",
+      "vatId": "CHE-109.049.266",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 2172.99,
+          "vat": 176.01,
+          "gross": 2349
+        }
+      ],
+      "vatExtractedAt": "2026-02-16T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "7b076840f4b2b901",
+      "filename": "20260216-restaurant-beispielhof.pdf",
+      "originalFilename": "20260216-restaurant-beispielhof.pdf",
+      "extractedText": "Restaurant Beispielhof\nMarktgasse 9\n3011 Bern\nCHE-192.837.465 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260216-27\nDatum: 16.02.2026\n\n2 Mittagsmenüs und Getränke: CHF 165.70\n\nTotal CHF 165.70\nMWST 8.1% auf CHF 153.28: CHF 12.42\n\nBewirtung: Geschäftsessen mit Muster Logistik AG, Projekt Lagersteuerung",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1070,
+      "indexedAt": "2026-02-16T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-02-16",
+      "description": "Restaurant Beispielhof, Geschäftsessen",
+      "amount": 165.7,
+      "currency": "CHF",
+      "vatId": "CHE-192.837.465",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 153.28,
+          "vat": 12.42,
+          "gross": 165.7
+        }
+      ],
+      "vatExtractedAt": "2026-02-16T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "16609bdd23ef313b",
+      "filename": "20260302-muster-consulting-rechnung-2026-031.pdf",
+      "originalFilename": "20260302-muster-consulting-rechnung-2026-031.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-031\nDatum: 02.03.2026\n\nBeratungsmandat IT-Sicherheit, März 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1039,
+      "indexedAt": "2026-03-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-02",
+      "description": "Rechnung 2026-031 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-03-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "4ec4d0bc6b189bf1",
+      "filename": "20260302-muster-coworking-2026-03.pdf",
+      "originalFilename": "20260302-muster-coworking-2026-03.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-03\nDatum: 01.03.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, März 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1003,
+      "indexedAt": "2026-03-02T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-01",
+      "description": "Muster Coworking, Fixdesk März 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-03-02T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "de4979629c582b6e",
+      "filename": "20260305-ausgleichskasse-akonto-q1.pdf",
+      "originalFilename": "20260305-ausgleichskasse-akonto-q1.pdf",
+      "extractedText": "Ausgleichskasse Muster\nPostfach\n3001 Bern\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nAkontorechnung AK-2026-Q1\nDatum: 05.03.2026\n\nAHV/IV/EO 10.6% auf Lohnsumme Q1: CHF 2’735.40\nALV 2.2% auf Lohnsumme Q1: CHF 567.60\nFamilienausgleichskasse und Verwaltungskosten: CHF 309.60\n\nTotal CHF 3’612.60\nKeine Schweizer MWST ausgewiesen\n\nSozialversicherungsbeiträge unterliegen nicht der MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1142,
+      "indexedAt": "2026-03-26T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-05",
+      "description": "Ausgleichskasse, Akonto Q1 2026",
+      "amount": 3612.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-03-26T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "0fa0040d831d5c22",
+      "filename": "20260305-muster-telecom-2026-03.pdf",
+      "originalFilename": "20260305-muster-telecom-2026-03.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202603\nDatum: 05.03.2026\n\nMobile-Abo unlimitiert, März 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 22.85\n\nTotal CHF 91.85\nMWST 8.1% auf CHF 84.97: CHF 6.88",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1020,
+      "indexedAt": "2026-03-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-05",
+      "description": "Muster Telecom, Mobile-Abo März 2026",
+      "amount": 91.85,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 84.97,
+          "vat": 6.88,
+          "gross": 91.85
+        }
+      ],
+      "vatExtractedAt": "2026-03-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "ee7098f4255cbf9e",
+      "filename": "20260309-sample-labs-invoice-2026-03.pdf",
+      "originalFilename": "20260309-sample-labs-invoice-2026-03.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202603-311\nDatum: 09.03.2026\n\nTeam plan, März 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1060,
+      "indexedAt": "2026-03-09T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-09",
+      "description": "Sample Labs, code hosting März 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-03-09T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "a7741402fbcdf554",
+      "filename": "20260310-beispiel-software-rechnung-2026-03.pdf",
+      "originalFilename": "20260310-beispiel-software-rechnung-2026-03.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0377\nDatum: 10.03.2026\n\nProjektplanung Pro, März 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1073,
+      "indexedAt": "2026-03-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-10",
+      "description": "Beispiel Software, Projektplanung März 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-03-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "946a1506caea95bf",
+      "filename": "20260311-buchhandlung-muster.pdf",
+      "originalFilename": "20260311-buchhandlung-muster.pdf",
+      "extractedText": "Buchhandlung Muster\nSpitalgasse 5\n3011 Bern\nCHE-283.746.519 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260311-12\nDatum: 11.03.2026\n\nFachbuch Netzwerksicherheit: CHF 89.00\n\nTotal CHF 89.00\nMWST 2.6% auf CHF 86.74: CHF 2.26",
+      "extractionMethod": "pdftotext",
+      "fileSize": 974,
+      "indexedAt": "2026-03-11T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-11",
+      "description": "Buchhandlung Muster, Fachbuch Netzwerksicherheit",
+      "amount": 89,
+      "currency": "CHF",
+      "vatId": "CHE-283.746.519",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 2.6,
+          "net": 86.74,
+          "vat": 2.26,
+          "gross": 89
+        }
+      ],
+      "vatExtractedAt": "2026-03-11T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "4fad47f7256c1a55",
+      "filename": "20260312-sbb-billett.pdf",
+      "originalFilename": "20260312-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260312-4471\nDatum: 12.03.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 73.55\n\nTotal CHF 73.55\nMWST 8.1% auf CHF 68.04: CHF 5.51",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-03-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-12",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 73.55,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 68.04,
+          "vat": 5.51,
+          "gross": 73.55
+        }
+      ],
+      "vatExtractedAt": "2026-03-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "3f747f3940d34a22",
+      "filename": "20260324-muster-consulting-rechnung-2026-032.pdf",
+      "originalFilename": "20260324-muster-consulting-rechnung-2026-032.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nMuster Logistik AG\nIndustrieweg 12\n3052 Zollikofen\n\nRechnung 2026-032\nDatum: 24.03.2026\n\nUmsetzung Lagersteuerung, Phase 1: CHF 4’798.88\n\nTotal CHF 4’798.88\nMWST 8.1% auf CHF 4’439.30: CHF 359.58\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1036,
+      "indexedAt": "2026-05-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-03-24",
+      "description": "Rechnung 2026-032 an Muster Logistik AG",
+      "amount": 4798.88,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 4439.3,
+          "vat": 359.58,
+          "gross": 4798.88
+        }
+      ],
+      "vatExtractedAt": "2026-05-12T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "2eb2717429a59dc3",
+      "filename": "20260401-muster-coworking-2026-04.pdf",
+      "originalFilename": "20260401-muster-coworking-2026-04.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-04\nDatum: 01.04.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, April 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1004,
+      "indexedAt": "2026-04-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-01",
+      "description": "Muster Coworking, Fixdesk April 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-04-01T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "297a78addae68791",
+      "filename": "20260402-muster-consulting-rechnung-2026-041.pdf",
+      "originalFilename": "20260402-muster-consulting-rechnung-2026-041.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-041\nDatum: 02.04.2026\n\nBeratungsmandat IT-Sicherheit, April 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1040,
+      "indexedAt": "2026-04-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-02",
+      "description": "Rechnung 2026-041 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-04-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "6f6708780c80e2bd",
+      "filename": "20260402-muster-sammelstiftung-bvg-q2.pdf",
+      "originalFilename": "20260402-muster-sammelstiftung-bvg-q2.pdf",
+      "extractedText": "Muster Sammelstiftung BVG\nVorsorgeplatz 1\n4002 Basel\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nBeitragsrechnung BVG-2026-Q2\nDatum: 02.04.2026\n\nSpar- und Risikobeiträge Q2, Arbeitgeber und Arbeitnehmer: CHF 1’425.00\n\nTotal CHF 1’425.00\nKeine Schweizer MWST ausgewiesen\n\nVorsorgebeiträge unterliegen nicht der MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1058,
+      "indexedAt": "2026-04-15T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-02",
+      "description": "Muster Sammelstiftung, BVG Q2 2026",
+      "amount": 1425,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-04-15T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "091a6767fd5ddba4",
+      "filename": "20260405-muster-telecom-2026-04.pdf",
+      "originalFilename": "20260405-muster-telecom-2026-04.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202604\nDatum: 05.04.2026\n\nMobile-Abo unlimitiert, April 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 35.20\n\nTotal CHF 104.20\nMWST 8.1% auf CHF 96.39: CHF 7.81",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1022,
+      "indexedAt": "2026-04-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-05",
+      "description": "Muster Telecom, Mobile-Abo April 2026",
+      "amount": 104.2,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 96.39,
+          "vat": 7.81,
+          "gross": 104.2
+        }
+      ],
+      "vatExtractedAt": "2026-04-20T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "052310e3c99d8c10",
+      "filename": "20260407-sample-labs-invoice-2026-04.pdf",
+      "originalFilename": "20260407-sample-labs-invoice-2026-04.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202604-311\nDatum: 07.04.2026\n\nTeam plan, April 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1061,
+      "indexedAt": "2026-04-07T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-07",
+      "description": "Sample Labs, code hosting April 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-04-07T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "76442a143d233843",
+      "filename": "20260408-muster-consulting-rechnung-2026-043.pdf",
+      "originalFilename": "20260408-muster-consulting-rechnung-2026-043.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nMuster Maschinenbau GmbH\nBeispielstrasse 3\n80331 München\nDeutschland\n\nRechnung 2026-043\nDatum: 08.04.2026\n\nSicherheitsaudit Fernwartung, Quartalspauschale: EUR 3’800.00\n\nTotal EUR 3’800.00\nOhne MWST\n\nLeistungsort beim Empfänger (Art. 8 Abs. 1 MWSTG): ohne Schweizer MWST\nReverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1161,
+      "indexedAt": "2026-04-29T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-08",
+      "description": "Rechnung 2026-043 an Muster Maschinenbau GmbH",
+      "amount": 3800,
+      "currency": "EUR",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-04-29T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "aa2554db2206bc06",
+      "filename": "20260410-beispiel-software-rechnung-2026-04.pdf",
+      "originalFilename": "20260410-beispiel-software-rechnung-2026-04.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0477\nDatum: 10.04.2026\n\nProjektplanung Pro, April 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1074,
+      "indexedAt": "2026-04-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-10",
+      "description": "Beispiel Software, Projektplanung April 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-04-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "6bc0731f3cd83f40",
+      "filename": "20260413-sbb-billett.pdf",
+      "originalFilename": "20260413-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260413-4471\nDatum: 13.04.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 62.70\n\nTotal CHF 62.70\nMWST 8.1% auf CHF 58.00: CHF 4.70",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-04-13T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-04-13",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 62.7,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 58,
+          "vat": 4.7,
+          "gross": 62.7
+        }
+      ],
+      "vatExtractedAt": "2026-04-13T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "81ee5ad1c32a5df8",
+      "filename": "20260501-muster-coworking-2026-05.pdf",
+      "originalFilename": "20260501-muster-coworking-2026-05.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-05\nDatum: 01.05.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, Mai 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1002,
+      "indexedAt": "2026-05-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-01",
+      "description": "Muster Coworking, Fixdesk Mai 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-05-01T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "477169b565db9da7",
+      "filename": "20260504-muster-akademie-kurs.pdf",
+      "originalFilename": "20260504-muster-akademie-kurs.pdf",
+      "extractedText": "Muster Akademie\nSchulweg 4\n3012 Bern\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung KURS-2026-118\nDatum: 04.05.2026\n\nKurs Cloud Security, 3 Tage: CHF 1’200.00\n\nTotal CHF 1’200.00\nKeine Schweizer MWST ausgewiesen\n\nBildungsleistung, von der MWST ausgenommen (Art. 21 Abs. 2 Ziff. 11 MWSTG)",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1039,
+      "indexedAt": "2026-05-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-04",
+      "description": "Muster Akademie, Kurs Cloud Security",
+      "amount": 1200,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-05-20T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "94c86cf8041a3325",
+      "filename": "20260504-muster-consulting-rechnung-2026-051.pdf",
+      "originalFilename": "20260504-muster-consulting-rechnung-2026-051.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-051\nDatum: 04.05.2026\n\nBeratungsmandat IT-Sicherheit, Mai 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1038,
+      "indexedAt": "2026-05-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-04",
+      "description": "Rechnung 2026-051 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-05-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "da88b4e00daa73b7",
+      "filename": "20260504-muster-consulting-rechnung-2026-054.pdf",
+      "originalFilename": "20260504-muster-consulting-rechnung-2026-054.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nExample Analytics Inc.\n500 Sample Avenue\nAustin, TX 78701\nUSA\n\nRechnung 2026-054\nDatum: 04.05.2026\n\nCode review and threat model: CHF 3’108.45\n\nTotal CHF 3’108.45\nOhne MWST\n\nLeistungsort beim Empfänger (Art. 8 Abs. 1 MWSTG): ohne Schweizer MWST\nReverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1135,
+      "indexedAt": "2026-06-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-04",
+      "description": "Rechnung 2026-054 an Example Analytics Inc.",
+      "amount": 3108.45,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-06-01T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "9c831714f92fdb57",
+      "filename": "20260505-muster-telecom-2026-05.pdf",
+      "originalFilename": "20260505-muster-telecom-2026-05.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202605\nDatum: 05.05.2026\n\nMobile-Abo unlimitiert, Mai 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 42.85\n\nTotal CHF 111.85\nMWST 8.1% auf CHF 103.47: CHF 8.38",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1021,
+      "indexedAt": "2026-05-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-05",
+      "description": "Muster Telecom, Mobile-Abo Mai 2026",
+      "amount": 111.85,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 103.47,
+          "vat": 8.38,
+          "gross": 111.85
+        }
+      ],
+      "vatExtractedAt": "2026-05-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "222fa40ca6eb451b",
+      "filename": "20260507-sample-labs-invoice-2026-05.pdf",
+      "originalFilename": "20260507-sample-labs-invoice-2026-05.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202605-311\nDatum: 07.05.2026\n\nTeam plan, Mai 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1059,
+      "indexedAt": "2026-05-07T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-07",
+      "description": "Sample Labs, code hosting Mai 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-05-07T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "c1c38945e0a72415",
+      "filename": "20260511-beispiel-software-rechnung-2026-05.pdf",
+      "originalFilename": "20260511-beispiel-software-rechnung-2026-05.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0577\nDatum: 11.05.2026\n\nProjektplanung Pro, Mai 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1072,
+      "indexedAt": "2026-05-11T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-11",
+      "description": "Beispiel Software, Projektplanung Mai 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-05-11T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "a65393489476bd6a",
+      "filename": "20260512-sbb-billett.pdf",
+      "originalFilename": "20260512-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260512-4471\nDatum: 12.05.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 64.40\n\nTotal CHF 64.40\nMWST 8.1% auf CHF 59.57: CHF 4.83",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-05-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-12",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 64.4,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 59.57,
+          "vat": 4.83,
+          "gross": 64.4
+        }
+      ],
+      "vatExtractedAt": "2026-05-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "df3b9689026f2294",
+      "filename": "20260518-restaurant-beispielhof.pdf",
+      "originalFilename": "20260518-restaurant-beispielhof.pdf",
+      "extractedText": "Restaurant Beispielhof\nMarktgasse 9\n3011 Bern\nCHE-192.837.465 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260518-27\nDatum: 18.05.2026\n\n2 Mittagsmenüs und Getränke: CHF 131.20\n\nTotal CHF 131.20\nMWST 8.1% auf CHF 121.37: CHF 9.83\n\nBewirtung: Geschäftsessen mit Muster Logistik AG, Projekt Lagersteuerung",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1069,
+      "indexedAt": "2026-05-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-05-18",
+      "description": "Restaurant Beispielhof, Geschäftsessen",
+      "amount": 131.2,
+      "currency": "CHF",
+      "vatId": "CHE-192.837.465",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 121.37,
+          "vat": 9.83,
+          "gross": 131.2
+        }
+      ],
+      "vatExtractedAt": "2026-05-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "857f9aada9e6ad94",
+      "filename": "20260601-muster-coworking-2026-06.pdf",
+      "originalFilename": "20260601-muster-coworking-2026-06.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-06\nDatum: 01.06.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, Juni 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1003,
+      "indexedAt": "2026-06-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-01",
+      "description": "Muster Coworking, Fixdesk Juni 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-06-01T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "2b0d651afd59620d",
+      "filename": "20260602-muster-consulting-rechnung-2026-061.pdf",
+      "originalFilename": "20260602-muster-consulting-rechnung-2026-061.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-061\nDatum: 02.06.2026\n\nBeratungsmandat IT-Sicherheit, Juni 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1039,
+      "indexedAt": "2026-06-22T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-02",
+      "description": "Rechnung 2026-061 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-06-22T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "b9d0f43433b86bad",
+      "filename": "20260605-ausgleichskasse-akonto-q2.pdf",
+      "originalFilename": "20260605-ausgleichskasse-akonto-q2.pdf",
+      "extractedText": "Ausgleichskasse Muster\nPostfach\n3001 Bern\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nAkontorechnung AK-2026-Q2\nDatum: 05.06.2026\n\nAHV/IV/EO 10.6% auf Lohnsumme Q2: CHF 2’735.40\nALV 2.2% auf Lohnsumme Q2: CHF 567.60\nFamilienausgleichskasse und Verwaltungskosten: CHF 309.60\n\nTotal CHF 3’612.60\nKeine Schweizer MWST ausgewiesen\n\nSozialversicherungsbeiträge unterliegen nicht der MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1142,
+      "indexedAt": "2026-06-26T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-05",
+      "description": "Ausgleichskasse, Akonto Q2 2026",
+      "amount": 3612.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-06-26T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "fb57ffa9ed50a2f5",
+      "filename": "20260605-muster-telecom-2026-06.pdf",
+      "originalFilename": "20260605-muster-telecom-2026-06.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202606\nDatum: 05.06.2026\n\nMobile-Abo unlimitiert, Juni 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 18.90\n\nTotal CHF 87.90\nMWST 8.1% auf CHF 81.31: CHF 6.59",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1020,
+      "indexedAt": "2026-06-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-05",
+      "description": "Muster Telecom, Mobile-Abo Juni 2026",
+      "amount": 87.9,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 81.31,
+          "vat": 6.59,
+          "gross": 87.9
+        }
+      ],
+      "vatExtractedAt": "2026-06-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "b019521d89f9f2ad",
+      "filename": "20260608-sample-labs-invoice-2026-06.pdf",
+      "originalFilename": "20260608-sample-labs-invoice-2026-06.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202606-311\nDatum: 08.06.2026\n\nTeam plan, Juni 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1060,
+      "indexedAt": "2026-06-08T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-08",
+      "description": "Sample Labs, code hosting Juni 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-06-08T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "1ffcf261835c2d95",
+      "filename": "20260609-buchhandlung-muster.pdf",
+      "originalFilename": "20260609-buchhandlung-muster.pdf",
+      "extractedText": "Buchhandlung Muster\nSpitalgasse 5\n3011 Bern\nCHE-283.746.519 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260609-12\nDatum: 09.06.2026\n\nFachbuch Cloud-Architektur: CHF 64.50\n\nTotal CHF 64.50\nMWST 2.6% auf CHF 62.87: CHF 1.63",
+      "extractionMethod": "pdftotext",
+      "fileSize": 973,
+      "indexedAt": "2026-06-09T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-09",
+      "description": "Buchhandlung Muster, Fachbuch Cloud-Architektur",
+      "amount": 64.5,
+      "currency": "CHF",
+      "vatId": "CHE-283.746.519",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 2.6,
+          "net": 62.87,
+          "vat": 1.63,
+          "gross": 64.5
+        }
+      ],
+      "vatExtractedAt": "2026-06-09T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "498fe56f39648f1c",
+      "filename": "20260610-beispiel-software-rechnung-2026-06.pdf",
+      "originalFilename": "20260610-beispiel-software-rechnung-2026-06.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0677\nDatum: 10.06.2026\n\nProjektplanung Pro, Juni 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1073,
+      "indexedAt": "2026-06-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-10",
+      "description": "Beispiel Software, Projektplanung Juni 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-06-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "963d7bbfb7048d67",
+      "filename": "20260612-sbb-billett.pdf",
+      "originalFilename": "20260612-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260612-4471\nDatum: 12.06.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 61.40\n\nTotal CHF 61.40\nMWST 8.1% auf CHF 56.80: CHF 4.60",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-06-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-06-12",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 61.4,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 56.8,
+          "vat": 4.6,
+          "gross": 61.4
+        }
+      ],
+      "vatExtractedAt": "2026-06-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "6674c8f5ccd352be",
+      "filename": "20260701-muster-coworking-2026-07.pdf",
+      "originalFilename": "20260701-muster-coworking-2026-07.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-07\nDatum: 01.07.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, Juli 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1003,
+      "indexedAt": "2026-07-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-01",
+      "description": "Muster Coworking, Fixdesk Juli 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-07-01T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "d4f93bdeabf0b26c",
+      "filename": "20260702-muster-consulting-rechnung-2026-071.pdf",
+      "originalFilename": "20260702-muster-consulting-rechnung-2026-071.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-071\nDatum: 02.07.2026\n\nBeratungsmandat IT-Sicherheit, Juli 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1039,
+      "indexedAt": "2026-07-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-02",
+      "description": "Rechnung 2026-071 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-07-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "72110769ee88ea1b",
+      "filename": "20260702-muster-sammelstiftung-bvg-q3.pdf",
+      "originalFilename": "20260702-muster-sammelstiftung-bvg-q3.pdf",
+      "extractedText": "Muster Sammelstiftung BVG\nVorsorgeplatz 1\n4002 Basel\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nBeitragsrechnung BVG-2026-Q3\nDatum: 02.07.2026\n\nSpar- und Risikobeiträge Q3, Arbeitgeber und Arbeitnehmer: CHF 1’425.00\n\nTotal CHF 1’425.00\nKeine Schweizer MWST ausgewiesen\n\nVorsorgebeiträge unterliegen nicht der MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1058,
+      "indexedAt": "2026-07-15T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-02",
+      "description": "Muster Sammelstiftung, BVG Q3 2026",
+      "amount": 1425,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-07-15T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "ed572509816591ba",
+      "filename": "20260703-muster-consulting-rechnung-2026-072.pdf",
+      "originalFilename": "20260703-muster-consulting-rechnung-2026-072.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nMuster Logistik AG\nIndustrieweg 12\n3052 Zollikofen\n\nRechnung 2026-072\nDatum: 03.07.2026\n\nUmsetzung Lagersteuerung, Phase 2: CHF 7’127.41\n\nTotal CHF 7’127.41\nMWST 8.1% auf CHF 6’593.35: CHF 534.06\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1036,
+      "indexedAt": "2026-07-31T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-03",
+      "description": "Rechnung 2026-072 an Muster Logistik AG",
+      "amount": 7127.41,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6593.35,
+          "vat": 534.06,
+          "gross": 7127.41
+        }
+      ],
+      "vatExtractedAt": "2026-07-31T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "5cc32c10a949c967",
+      "filename": "20260705-muster-telecom-2026-07.pdf",
+      "originalFilename": "20260705-muster-telecom-2026-07.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202607\nDatum: 05.07.2026\n\nMobile-Abo unlimitiert, Juli 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 21.95\n\nTotal CHF 90.95\nMWST 8.1% auf CHF 84.14: CHF 6.81",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1020,
+      "indexedAt": "2026-07-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-05",
+      "description": "Muster Telecom, Mobile-Abo Juli 2026",
+      "amount": 90.95,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 84.14,
+          "vat": 6.81,
+          "gross": 90.95
+        }
+      ],
+      "vatExtractedAt": "2026-07-20T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "18371182c4e9dbdf",
+      "filename": "20260707-muster-consulting-rechnung-2026-073.pdf",
+      "originalFilename": "20260707-muster-consulting-rechnung-2026-073.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nMuster Maschinenbau GmbH\nBeispielstrasse 3\n80331 München\nDeutschland\n\nRechnung 2026-073\nDatum: 07.07.2026\n\nSicherheitsaudit Fernwartung, Quartalspauschale: EUR 3’800.00\n\nTotal EUR 3’800.00\nOhne MWST\n\nLeistungsort beim Empfänger (Art. 8 Abs. 1 MWSTG): ohne Schweizer MWST\nReverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1161,
+      "indexedAt": "2026-07-28T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-07",
+      "description": "Rechnung 2026-073 an Muster Maschinenbau GmbH",
+      "amount": 3800,
+      "currency": "EUR",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-07-28T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "1743effdb4a9de1c",
+      "filename": "20260707-sample-labs-invoice-2026-07.pdf",
+      "originalFilename": "20260707-sample-labs-invoice-2026-07.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202607-311\nDatum: 07.07.2026\n\nTeam plan, Juli 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1060,
+      "indexedAt": "2026-07-07T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-07",
+      "description": "Sample Labs, code hosting Juli 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-07-07T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "470c02ea449df5c8",
+      "filename": "20260710-beispiel-software-rechnung-2026-07.pdf",
+      "originalFilename": "20260710-beispiel-software-rechnung-2026-07.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0777\nDatum: 10.07.2026\n\nProjektplanung Pro, Juli 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1073,
+      "indexedAt": "2026-07-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-10",
+      "description": "Beispiel Software, Projektplanung Juli 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-07-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "7b53ae1e6bb6ddc6",
+      "filename": "20260713-sbb-billett.pdf",
+      "originalFilename": "20260713-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260713-4471\nDatum: 13.07.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 46.95\n\nTotal CHF 46.95\nMWST 8.1% auf CHF 43.43: CHF 3.52",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-07-13T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-13",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 46.95,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 43.43,
+          "vat": 3.52,
+          "gross": 46.95
+        }
+      ],
+      "vatExtractedAt": "2026-07-13T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "258d9785babcaa68",
+      "filename": "20260803-muster-consulting-rechnung-2026-081.pdf",
+      "originalFilename": "20260803-muster-consulting-rechnung-2026-081.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-081\nDatum: 03.08.2026\n\nBeratungsmandat IT-Sicherheit, August 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1041,
+      "indexedAt": "2026-08-20T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-03",
+      "description": "Rechnung 2026-081 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-08-20T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "a89526964f0049d7",
+      "filename": "20260803-muster-consulting-rechnung-2026-084.pdf",
+      "originalFilename": "20260803-muster-consulting-rechnung-2026-084.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nExample Analytics Inc.\n500 Sample Avenue\nAustin, TX 78701\nUSA\n\nRechnung 2026-084\nDatum: 03.08.2026\n\nCode review and threat model: CHF 3’358.40\n\nTotal CHF 3’358.40\nOhne MWST\n\nLeistungsort beim Empfänger (Art. 8 Abs. 1 MWSTG): ohne Schweizer MWST\nReverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1135,
+      "indexedAt": "2026-09-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-03",
+      "description": "Rechnung 2026-084 an Example Analytics Inc.",
+      "amount": 3358.4,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-09-01T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "2ef8324fa967fef9",
+      "filename": "20260803-muster-coworking-2026-08.pdf",
+      "originalFilename": "20260803-muster-coworking-2026-08.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-08\nDatum: 01.08.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, August 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1005,
+      "indexedAt": "2026-08-03T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-01",
+      "description": "Muster Coworking, Fixdesk August 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-08-03T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "1f3dd921a35f6038",
+      "filename": "20260805-muster-telecom-2026-08.pdf",
+      "originalFilename": "20260805-muster-telecom-2026-08.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202608\nDatum: 05.08.2026\n\nMobile-Abo unlimitiert, August 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 28.70\n\nTotal CHF 97.70\nMWST 8.1% auf CHF 90.38: CHF 7.32",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1022,
+      "indexedAt": "2026-08-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-05",
+      "description": "Muster Telecom, Mobile-Abo August 2026",
+      "amount": 97.7,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 90.38,
+          "vat": 7.32,
+          "gross": 97.7
+        }
+      ],
+      "vatExtractedAt": "2026-08-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "91b9d325789b80fe",
+      "filename": "20260807-sample-labs-invoice-2026-08.pdf",
+      "originalFilename": "20260807-sample-labs-invoice-2026-08.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202608-311\nDatum: 07.08.2026\n\nTeam plan, August 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1062,
+      "indexedAt": "2026-08-07T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-07",
+      "description": "Sample Labs, code hosting August 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-08-07T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "02fccc97775a7367",
+      "filename": "20260810-beispiel-software-rechnung-2026-08.pdf",
+      "originalFilename": "20260810-beispiel-software-rechnung-2026-08.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0877\nDatum: 10.08.2026\n\nProjektplanung Pro, August 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1075,
+      "indexedAt": "2026-08-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-10",
+      "description": "Beispiel Software, Projektplanung August 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-08-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "1442885df635de54",
+      "filename": "20260812-sbb-billett.pdf",
+      "originalFilename": "20260812-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260812-4471\nDatum: 12.08.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 41.90\n\nTotal CHF 41.90\nMWST 8.1% auf CHF 38.76: CHF 3.14",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-08-12T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-12",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 41.9,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 38.76,
+          "vat": 3.14,
+          "gross": 41.9
+        }
+      ],
+      "vatExtractedAt": "2026-08-12T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "35621c79d3a15503",
+      "filename": "20260817-restaurant-beispielhof.pdf",
+      "originalFilename": "20260817-restaurant-beispielhof.pdf",
+      "extractedText": "Restaurant Beispielhof\nMarktgasse 9\n3011 Bern\nCHE-192.837.465 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260817-27\nDatum: 17.08.2026\n\n2 Mittagsmenüs und Getränke: CHF 124.40\n\nTotal CHF 124.40\nMWST 8.1% auf CHF 115.08: CHF 9.32\n\nBewirtung: Geschäftsessen mit Muster Logistik AG, Projekt Lagersteuerung",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1069,
+      "indexedAt": "2026-08-17T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-08-17",
+      "description": "Restaurant Beispielhof, Geschäftsessen",
+      "amount": 124.4,
+      "currency": "CHF",
+      "vatId": "CHE-192.837.465",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 115.08,
+          "vat": 9.32,
+          "gross": 124.4
+        }
+      ],
+      "vatExtractedAt": "2026-08-17T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "14897eef79613abf",
+      "filename": "20260901-muster-coworking-2026-09.pdf",
+      "originalFilename": "20260901-muster-coworking-2026-09.pdf",
+      "extractedText": "Muster Coworking AG\nWerkhofgasse 2\n3011 Bern\nCHE-135.792.468 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung CW-2026-09\nDatum: 01.09.2026\n\nFixdesk inkl. Internet und Sitzungszimmer, September 2026: CHF 450.00\n\nTotal CHF 450.00\nMWST 8.1% auf CHF 416.28: CHF 33.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-09-01T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-01",
+      "description": "Muster Coworking, Fixdesk September 2026",
+      "amount": 450,
+      "currency": "CHF",
+      "vatId": "CHE-135.792.468",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 416.28,
+          "vat": 33.72,
+          "gross": 450
+        }
+      ],
+      "vatExtractedAt": "2026-09-01T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "13d73feccf4c82f1",
+      "filename": "20260902-muster-consulting-rechnung-2026-091.pdf",
+      "originalFilename": "20260902-muster-consulting-rechnung-2026-091.pdf",
+      "extractedText": "Muster Consulting GmbH\nBeispielgasse 8\n3011 Bern\nCHE-246.813.579 MWST\n\nBeispiel Treuhand AG\nSeestrasse 40\n8002 Zürich\n\nRechnung 2026-091\nDatum: 02.09.2026\n\nBeratungsmandat IT-Sicherheit, September 2026: CHF 6’486.00\n\nTotal CHF 6’486.00\nMWST 8.1% auf CHF 6’000.00: CHF 486.00\n\nZahlbar innert 30 Tagen",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1044,
+      "indexedAt": "2026-09-21T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-02",
+      "description": "Rechnung 2026-091 an Beispiel Treuhand AG",
+      "amount": 6486,
+      "currency": "CHF",
+      "vatId": "CHE-246.813.579",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 6000,
+          "vat": 486,
+          "gross": 6486
+        }
+      ],
+      "vatExtractedAt": "2026-09-21T18:00:00.000Z",
+      "kind": "sales-record"
+    },
+    {
+      "id": "68f59aa1ed0b92de",
+      "filename": "20260905-ausgleichskasse-akonto-q3.pdf",
+      "originalFilename": "20260905-ausgleichskasse-akonto-q3.pdf",
+      "extractedText": "Ausgleichskasse Muster\nPostfach\n3001 Bern\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nAkontorechnung AK-2026-Q3\nDatum: 05.09.2026\n\nAHV/IV/EO 10.6% auf Lohnsumme Q3: CHF 2’735.40\nALV 2.2% auf Lohnsumme Q3: CHF 567.60\nFamilienausgleichskasse und Verwaltungskosten: CHF 309.60\n\nTotal CHF 3’612.60\nKeine Schweizer MWST ausgewiesen\n\nSozialversicherungsbeiträge unterliegen nicht der MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1142,
+      "indexedAt": "2026-09-28T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-05",
+      "description": "Ausgleichskasse, Akonto Q3 2026",
+      "amount": 3612.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-09-28T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "7f4fb51725f99597",
+      "filename": "20260905-muster-telecom-2026-09.pdf",
+      "originalFilename": "20260905-muster-telecom-2026-09.pdf",
+      "extractedText": "Muster Telecom AG\nFunkweg 1\n3000 Bern\nCHE-864.209.753 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung MT-202609\nDatum: 05.09.2026\n\nMobile-Abo unlimitiert, September 2026: CHF 69.00\nRoaming und Zusatzleistungen: CHF 36.50\n\nTotal CHF 105.50\nMWST 8.1% auf CHF 97.59: CHF 7.91",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1026,
+      "indexedAt": "2026-09-18T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-05",
+      "description": "Muster Telecom, Mobile-Abo September 2026",
+      "amount": 105.5,
+      "currency": "CHF",
+      "vatId": "CHE-864.209.753",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 97.59,
+          "vat": 7.91,
+          "gross": 105.5
+        }
+      ],
+      "vatExtractedAt": "2026-09-18T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "479c1b49ba53f5e1",
+      "filename": "20260907-sample-labs-invoice-2026-09.pdf",
+      "originalFilename": "20260907-sample-labs-invoice-2026-09.pdf",
+      "extractedText": "Sample Labs Inc.\n1 Example Plaza\nSeattle, WA 98101\nUSA\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nInvoice SL-202609-311\nDatum: 07.09.2026\n\nTeam plan, September 2026: CHF 24.60\n\nTotal CHF 24.60\nKeine Schweizer MWST ausgewiesen\n\nCharged in CHF to your card. Reverse charge: VAT to be accounted for by the recipient",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1065,
+      "indexedAt": "2026-09-07T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-07",
+      "description": "Sample Labs, code hosting September 2026",
+      "amount": 24.6,
+      "currency": "CHF",
+      "hasSwissVat": false,
+      "vatSummary": [],
+      "vatExtractedAt": "2026-09-07T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "47b140515899d16a",
+      "filename": "20260910-beispiel-software-rechnung-2026-09.pdf",
+      "originalFilename": "20260910-beispiel-software-rechnung-2026-09.pdf",
+      "extractedText": "Beispiel Software GmbH\nMusterallee 21\n10115 Berlin\nDeutschland\nCHE-579.246.813 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nRechnung BS-2026-0977\nDatum: 10.09.2026\n\nProjektplanung Pro, September 2026: EUR 32.43\n\nTotal EUR 32.43\nMWST 8.1% auf EUR 30.00: EUR 2.43\n\nSchweizer MWST gemäss Registrierung CHE-579.246.813",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1078,
+      "indexedAt": "2026-09-10T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-10",
+      "description": "Beispiel Software, Projektplanung September 2026",
+      "amount": 32.43,
+      "currency": "EUR",
+      "vatId": "CHE-579.246.813",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 30,
+          "vat": 2.43,
+          "gross": 32.43
+        }
+      ],
+      "vatExtractedAt": "2026-09-10T18:00:00.000Z",
+      "kind": "invoice"
+    },
+    {
+      "id": "c1c542d528b53d23",
+      "filename": "20260914-sbb-billett.pdf",
+      "originalFilename": "20260914-sbb-billett.pdf",
+      "extractedText": "Schweizerische Bundesbahnen SBB\nHilfikerstrasse 1\n3000 Bern 65\nCHE-102.909.703 MWST\n\nMuster Consulting GmbH\nBeispielgasse 8\n3011 Bern\n\nQuittung 20260914-4471\nDatum: 14.09.2026\n\nBillett Bern–Zürich HB retour, 2. Klasse: CHF 54.60\n\nTotal CHF 54.60\nMWST 8.1% auf CHF 50.51: CHF 4.09",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1008,
+      "indexedAt": "2026-09-14T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-09-14",
+      "description": "SBB, Billett Bern–Zürich retour",
+      "amount": 54.6,
+      "currency": "CHF",
+      "vatId": "CHE-102.909.703",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 50.51,
+          "vat": 4.09,
+          "gross": 54.6
+        }
+      ],
+      "vatExtractedAt": "2026-09-14T18:00:00.000Z",
+      "kind": "invoice"
+    }
+  ],
+  "transactions": [
+    {
+      "ref": "90000000001",
+      "bank": "Raiffeisen",
+      "date": "2026-01-01",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-01",
+      "reference": "000000000000000030112026011"
+    },
+    {
+      "ref": "90000000002",
+      "bank": "Raiffeisen",
+      "date": "2026-01-07",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000001",
+      "bank": "Wise",
+      "date": "2026-01-12",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-001",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-01-12",
+      "amount": 38.15,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000003",
+      "bank": "Raiffeisen",
+      "date": "2026-01-15",
+      "amount": 1425,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "BVG-Beitrag Q1 2026",
+      "reference": "000000000000000005720202616"
+    },
+    {
+      "ref": "90000000004",
+      "bank": "Raiffeisen",
+      "date": "2026-01-19",
+      "amount": 101.55,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202601",
+      "reference": "000000000000000086422026013"
+    },
+    {
+      "ref": "90000000005",
+      "bank": "Raiffeisen",
+      "date": "2026-01-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-011",
+      "reference": "Rechnung 2026-011"
+    },
+    {
+      "ref": "90000000006",
+      "bank": "Raiffeisen",
+      "date": "2026-01-20",
+      "amount": 1398,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Prämienrechnung 2026",
+      "reference": "000000000000000000573020265"
+    },
+    {
+      "ref": "90000000007",
+      "bank": "Raiffeisen",
+      "date": "2026-01-26",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn Januar 2026",
+      "reference": "Lohn Januar 2026",
+      "remarks": "Nettolohn Januar 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000008",
+      "bank": "Raiffeisen",
+      "date": "2026-01-28",
+      "amount": 38.15,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen Januar 2026",
+      "reference": "Spesen Januar 2026",
+      "remarks": "Spesenabrechnung Januar 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000009",
+      "bank": "Raiffeisen",
+      "date": "2026-02-02",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-02",
+      "reference": "000000000000000030112026026"
+    },
+    {
+      "ref": "TRANSFER-8000001",
+      "bank": "Wise",
+      "date": "2026-02-02",
+      "amount": 3800,
+      "currency": "EUR",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-013",
+      "reference": "Rechnung 2026-013"
+    },
+    {
+      "ref": "90000000010",
+      "bank": "Raiffeisen",
+      "date": "2026-02-09",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000002",
+      "bank": "Wise",
+      "date": "2026-02-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-002",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-02-12",
+      "amount": 94.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000011",
+      "bank": "Raiffeisen",
+      "date": "2026-02-16",
+      "amount": 2349,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Digitec Galaxus AG Zuerich"
+    },
+    {
+      "ref": "M2026-003",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-02-16",
+      "amount": 165.7,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Restaurant Beispielhof"
+    },
+    {
+      "ref": "90000000012",
+      "bank": "Raiffeisen",
+      "date": "2026-02-18",
+      "amount": 98.75,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202602",
+      "reference": "000000000000000086422026029"
+    },
+    {
+      "ref": "90000000013",
+      "bank": "Raiffeisen",
+      "date": "2026-02-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-021",
+      "reference": "Rechnung 2026-021"
+    },
+    {
+      "ref": "90000000014",
+      "bank": "Raiffeisen",
+      "date": "2026-02-25",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn Februar 2026",
+      "reference": "Lohn Februar 2026",
+      "remarks": "Nettolohn Februar 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000015",
+      "bank": "Raiffeisen",
+      "date": "2026-03-02",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-03",
+      "reference": "000000000000000030112026034"
+    },
+    {
+      "ref": "90000000016",
+      "bank": "Raiffeisen",
+      "date": "2026-03-02",
+      "amount": 260.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen Februar 2026",
+      "reference": "Spesen Februar 2026",
+      "remarks": "Spesenabrechnung Februar 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000017",
+      "bank": "Raiffeisen",
+      "date": "2026-03-09",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "90000000018",
+      "bank": "Raiffeisen",
+      "date": "2026-03-09",
+      "amount": 5695.68,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-022",
+      "reference": "Rechnung 2026-022"
+    },
+    {
+      "ref": "CARD-7000003",
+      "bank": "Wise",
+      "date": "2026-03-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-004",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-03-11",
+      "amount": 89,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Buchhandlung Muster"
+    },
+    {
+      "ref": "M2026-005",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-03-12",
+      "amount": 73.55,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000019",
+      "bank": "Raiffeisen",
+      "date": "2026-03-18",
+      "amount": 91.85,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202603",
+      "reference": "000000000000000086422026037"
+    },
+    {
+      "ref": "90000000020",
+      "bank": "Raiffeisen",
+      "date": "2026-03-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-031",
+      "reference": "Rechnung 2026-031"
+    },
+    {
+      "ref": "90000000021",
+      "bank": "Raiffeisen",
+      "date": "2026-03-25",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn März 2026",
+      "reference": "Lohn März 2026",
+      "remarks": "Nettolohn März 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000022",
+      "bank": "Raiffeisen",
+      "date": "2026-03-26",
+      "amount": 3612.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Akonto AHV Q1 2026",
+      "reference": "000000000000000007700202615"
+    },
+    {
+      "ref": "90000000023",
+      "bank": "Raiffeisen",
+      "date": "2026-03-30",
+      "amount": 162.55,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen März 2026",
+      "reference": "Spesen März 2026",
+      "remarks": "Spesenabrechnung März 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000024",
+      "bank": "Raiffeisen",
+      "date": "2026-03-31",
+      "amount": 12,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Kontoführung 1. Quartal",
+      "remarks": "Bankspesen laut Kontoauszug",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000025",
+      "bank": "Raiffeisen",
+      "date": "2026-04-01",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-04",
+      "reference": "000000000000000030112026042"
+    },
+    {
+      "ref": "90000000026",
+      "bank": "Raiffeisen",
+      "date": "2026-04-07",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000004",
+      "bank": "Wise",
+      "date": "2026-04-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-006",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-04-13",
+      "amount": 62.7,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000027",
+      "bank": "Raiffeisen",
+      "date": "2026-04-15",
+      "amount": 1425,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "BVG-Beitrag Q2 2026",
+      "reference": "000000000000000005720202624"
+    },
+    {
+      "ref": "90000000028",
+      "bank": "Raiffeisen",
+      "date": "2026-04-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-041",
+      "reference": "Rechnung 2026-041"
+    },
+    {
+      "ref": "90000000029",
+      "bank": "Raiffeisen",
+      "date": "2026-04-20",
+      "amount": 104.2,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202604",
+      "reference": "000000000000000086422026045"
+    },
+    {
+      "ref": "90000000030",
+      "bank": "Raiffeisen",
+      "date": "2026-04-27",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn April 2026",
+      "reference": "Lohn April 2026",
+      "remarks": "Nettolohn April 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000031",
+      "bank": "Raiffeisen",
+      "date": "2026-04-28",
+      "amount": 62.7,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen April 2026",
+      "reference": "Spesen April 2026",
+      "remarks": "Spesenabrechnung April 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "TRANSFER-8000002",
+      "bank": "Wise",
+      "date": "2026-04-29",
+      "amount": 3800,
+      "currency": "EUR",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-043",
+      "reference": "Rechnung 2026-043"
+    },
+    {
+      "ref": "90000000032",
+      "bank": "Raiffeisen",
+      "date": "2026-05-01",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-05",
+      "reference": "000000000000000030112026058"
+    },
+    {
+      "ref": "90000000033",
+      "bank": "Raiffeisen",
+      "date": "2026-05-07",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000005",
+      "bank": "Wise",
+      "date": "2026-05-11",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "90000000034",
+      "bank": "Raiffeisen",
+      "date": "2026-05-12",
+      "amount": 4798.88,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-032",
+      "reference": "Rechnung 2026-032"
+    },
+    {
+      "ref": "M2026-007",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-05-12",
+      "amount": 64.4,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000035",
+      "bank": "Raiffeisen",
+      "date": "2026-05-18",
+      "amount": 111.85,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202605",
+      "reference": "000000000000000086422026050"
+    },
+    {
+      "ref": "M2026-008",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-05-18",
+      "amount": 131.2,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Restaurant Beispielhof"
+    },
+    {
+      "ref": "90000000036",
+      "bank": "Raiffeisen",
+      "date": "2026-05-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-051",
+      "reference": "Rechnung 2026-051"
+    },
+    {
+      "ref": "90000000037",
+      "bank": "Raiffeisen",
+      "date": "2026-05-20",
+      "amount": 1200,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung KURS-2026-118",
+      "reference": "000000000000000581020260513"
+    },
+    {
+      "ref": "90000000038",
+      "bank": "Raiffeisen",
+      "date": "2026-05-25",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn Mai 2026",
+      "reference": "Lohn Mai 2026",
+      "remarks": "Nettolohn Mai 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000039",
+      "bank": "Raiffeisen",
+      "date": "2026-05-27",
+      "amount": 1062.82,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "MWST 1. Quartal 2026",
+      "reference": "000000000461246813579120264",
+      "remarks": "MWST-Abrechnung Q1 2026, filings/2026/mwst-ech0217-2026-Q1.xml",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000040",
+      "bank": "Raiffeisen",
+      "date": "2026-05-28",
+      "amount": 195.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen Mai 2026",
+      "reference": "Spesen Mai 2026",
+      "remarks": "Spesenabrechnung Mai 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000041",
+      "bank": "Raiffeisen",
+      "date": "2026-06-01",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-06",
+      "reference": "000000000000000030112026063"
+    },
+    {
+      "ref": "90000000042",
+      "bank": "Raiffeisen",
+      "date": "2026-06-01",
+      "amount": 3108.45,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-054",
+      "reference": "Rechnung 2026-054"
+    },
+    {
+      "ref": "90000000043",
+      "bank": "Raiffeisen",
+      "date": "2026-06-08",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "M2026-009",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-06-09",
+      "amount": 64.5,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Buchhandlung Muster"
+    },
+    {
+      "ref": "CARD-7000006",
+      "bank": "Wise",
+      "date": "2026-06-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-010",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-06-12",
+      "amount": 61.4,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000044",
+      "bank": "Raiffeisen",
+      "date": "2026-06-18",
+      "amount": 87.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202606",
+      "reference": "000000000000000086422026061"
+    },
+    {
+      "ref": "90000000045",
+      "bank": "Raiffeisen",
+      "date": "2026-06-22",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-061",
+      "reference": "Rechnung 2026-061"
+    },
+    {
+      "ref": "90000000046",
+      "bank": "Raiffeisen",
+      "date": "2026-06-25",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn Juni 2026",
+      "reference": "Lohn Juni 2026",
+      "remarks": "Nettolohn Juni 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000047",
+      "bank": "Raiffeisen",
+      "date": "2026-06-26",
+      "amount": 3612.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Akonto AHV Q2 2026",
+      "reference": "000000000000000007700202620"
+    },
+    {
+      "ref": "90000000048",
+      "bank": "Raiffeisen",
+      "date": "2026-06-29",
+      "amount": 125.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen Juni 2026",
+      "reference": "Spesen Juni 2026",
+      "remarks": "Spesenabrechnung Juni 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000049",
+      "bank": "Raiffeisen",
+      "date": "2026-06-30",
+      "amount": 12,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Kontoführung 2. Quartal",
+      "remarks": "Bankspesen laut Kontoauszug",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000050",
+      "bank": "Raiffeisen",
+      "date": "2026-07-01",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-07",
+      "reference": "000000000000000030112026079"
+    },
+    {
+      "ref": "90000000051",
+      "bank": "Raiffeisen",
+      "date": "2026-07-07",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000007",
+      "bank": "Wise",
+      "date": "2026-07-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-011",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-07-13",
+      "amount": 46.95,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000052",
+      "bank": "Raiffeisen",
+      "date": "2026-07-15",
+      "amount": 1425,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "BVG-Beitrag Q3 2026",
+      "reference": "000000000000000005720202632"
+    },
+    {
+      "ref": "90000000053",
+      "bank": "Raiffeisen",
+      "date": "2026-07-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-071",
+      "reference": "Rechnung 2026-071"
+    },
+    {
+      "ref": "90000000054",
+      "bank": "Raiffeisen",
+      "date": "2026-07-20",
+      "amount": 90.95,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202607",
+      "reference": "000000000000000086422026076"
+    },
+    {
+      "ref": "90000000055",
+      "bank": "Raiffeisen",
+      "date": "2026-07-27",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn Juli 2026",
+      "reference": "Lohn Juli 2026",
+      "remarks": "Nettolohn Juli 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000056",
+      "bank": "Raiffeisen",
+      "date": "2026-07-28",
+      "amount": 46.95,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen Juli 2026",
+      "reference": "Spesen Juli 2026",
+      "remarks": "Spesenabrechnung Juli 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "TRANSFER-8000003",
+      "bank": "Wise",
+      "date": "2026-07-28",
+      "amount": 3800,
+      "currency": "EUR",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-073",
+      "reference": "Rechnung 2026-073"
+    },
+    {
+      "ref": "90000000057",
+      "bank": "Raiffeisen",
+      "date": "2026-07-31",
+      "amount": 7127.41,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-072",
+      "reference": "Rechnung 2026-072"
+    },
+    {
+      "ref": "90000000058",
+      "bank": "Raiffeisen",
+      "date": "2026-08-03",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-08",
+      "reference": "000000000000000030112026087"
+    },
+    {
+      "ref": "90000000059",
+      "bank": "Raiffeisen",
+      "date": "2026-08-07",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000008",
+      "bank": "Wise",
+      "date": "2026-08-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-012",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-08-12",
+      "amount": 41.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "M2026-013",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-08-17",
+      "amount": 124.4,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Restaurant Beispielhof"
+    },
+    {
+      "ref": "90000000060",
+      "bank": "Raiffeisen",
+      "date": "2026-08-18",
+      "amount": 97.7,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202608",
+      "reference": "000000000000000086422026084"
+    },
+    {
+      "ref": "90000000061",
+      "bank": "Raiffeisen",
+      "date": "2026-08-19",
+      "amount": 24,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "PARKHAUS BEISPIEL BERN"
+    },
+    {
+      "ref": "90000000062",
+      "bank": "Raiffeisen",
+      "date": "2026-08-20",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-081",
+      "reference": "Rechnung 2026-081"
+    },
+    {
+      "ref": "90000000063",
+      "bank": "Raiffeisen",
+      "date": "2026-08-25",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn August 2026",
+      "reference": "Lohn August 2026",
+      "remarks": "Nettolohn August 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000064",
+      "bank": "Raiffeisen",
+      "date": "2026-08-28",
+      "amount": 166.3,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen August 2026",
+      "reference": "Spesen August 2026",
+      "remarks": "Spesenabrechnung August 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000065",
+      "bank": "Raiffeisen",
+      "date": "2026-09-01",
+      "amount": 450,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung CW-2026-09",
+      "reference": "000000000000000030112026095"
+    },
+    {
+      "ref": "90000000066",
+      "bank": "Raiffeisen",
+      "date": "2026-09-01",
+      "amount": 3358.4,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-084",
+      "reference": "Rechnung 2026-084"
+    },
+    {
+      "ref": "90000000067",
+      "bank": "Raiffeisen",
+      "date": "2026-09-07",
+      "amount": 24.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "SAMPLE LABS INC SEATTLE"
+    },
+    {
+      "ref": "CARD-7000009",
+      "bank": "Wise",
+      "date": "2026-09-10",
+      "amount": 32.43,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+    },
+    {
+      "ref": "M2026-014",
+      "bank": "manual",
+      "source": "manual",
+      "date": "2026-09-14",
+      "amount": 54.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Auslage Lukas Beispiel: Schweizerische Bundesbahnen SBB"
+    },
+    {
+      "ref": "90000000068",
+      "bank": "Raiffeisen",
+      "date": "2026-09-18",
+      "amount": 105.5,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Rechnung MT-202609",
+      "reference": "000000000000000086422026092"
+    },
+    {
+      "ref": "90000000069",
+      "bank": "Raiffeisen",
+      "date": "2026-09-21",
+      "amount": 6486,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-091",
+      "reference": "Rechnung 2026-091"
+    },
+    {
+      "ref": "90000000070",
+      "bank": "Raiffeisen",
+      "date": "2026-09-25",
+      "amount": 7150,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Lohn September 2026",
+      "reference": "Lohn September 2026",
+      "remarks": "Nettolohn September 2026 gemäss Lohnabrechnung; Lohn ist kein Entgelt im Sinne der MWST",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000071",
+      "bank": "Raiffeisen",
+      "date": "2026-09-28",
+      "amount": 3612.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Akonto AHV Q3 2026",
+      "reference": "000000000000000007700202631"
+    },
+    {
+      "ref": "90000000072",
+      "bank": "Raiffeisen",
+      "date": "2026-09-28",
+      "amount": 54.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Spesen September 2026",
+      "reference": "Spesen September 2026",
+      "remarks": "Spesenabrechnung September 2026: die Belege hängen an den einzelnen Auslagen",
+      "noReceiptNeeded": true
+    },
+    {
+      "ref": "90000000073",
+      "bank": "Raiffeisen",
+      "date": "2026-09-30",
+      "amount": 12,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Kontoführung 3. Quartal",
+      "remarks": "Bankspesen laut Kontoauszug",
+      "noReceiptNeeded": true
+    }
+  ],
+  "mappings": [
+    {
+      "transactionRef": "90000000001",
+      "receiptId": "f54a3fea1c67e536"
+    },
+    {
+      "transactionRef": "90000000002",
+      "receiptId": "4cde81d0deeee3f4"
+    },
+    {
+      "transactionRef": "CARD-7000001",
+      "receiptId": "9bc1858abc823722"
+    },
+    {
+      "transactionRef": "M2026-001",
+      "receiptId": "d43bfd49d2385db8"
+    },
+    {
+      "transactionRef": "90000000003",
+      "receiptId": "d216610a1f69a7f3"
+    },
+    {
+      "transactionRef": "90000000004",
+      "receiptId": "9843b0deca7f0044"
+    },
+    {
+      "transactionRef": "90000000005",
+      "receiptId": "725335ead2805ad7"
+    },
+    {
+      "transactionRef": "90000000006",
+      "receiptId": "d973b13cd26c01ff"
+    },
+    {
+      "transactionRef": "90000000009",
+      "receiptId": "359354e85c44b386"
+    },
+    {
+      "transactionRef": "TRANSFER-8000001",
+      "receiptId": "1c024156f5d41e2e"
+    },
+    {
+      "transactionRef": "90000000010",
+      "receiptId": "6a056195f036e00a"
+    },
+    {
+      "transactionRef": "CARD-7000002",
+      "receiptId": "d2fa697ad337cfdc"
+    },
+    {
+      "transactionRef": "M2026-002",
+      "receiptId": "42a03bc92da698c7"
+    },
+    {
+      "transactionRef": "M2026-003",
+      "receiptId": "7b076840f4b2b901"
+    },
+    {
+      "transactionRef": "90000000011",
+      "receiptId": "82b16ca1fa237410"
+    },
+    {
+      "transactionRef": "90000000012",
+      "receiptId": "1e2c185545f8f94c"
+    },
+    {
+      "transactionRef": "90000000013",
+      "receiptId": "9f21972f93faafe9"
+    },
+    {
+      "transactionRef": "90000000015",
+      "receiptId": "4ec4d0bc6b189bf1"
+    },
+    {
+      "transactionRef": "90000000017",
+      "receiptId": "ee7098f4255cbf9e"
+    },
+    {
+      "transactionRef": "90000000018",
+      "receiptId": "726b28f057e498a4"
+    },
+    {
+      "transactionRef": "CARD-7000003",
+      "receiptId": "a7741402fbcdf554"
+    },
+    {
+      "transactionRef": "M2026-004",
+      "receiptId": "946a1506caea95bf"
+    },
+    {
+      "transactionRef": "M2026-005",
+      "receiptId": "4fad47f7256c1a55"
+    },
+    {
+      "transactionRef": "90000000019",
+      "receiptId": "0fa0040d831d5c22"
+    },
+    {
+      "transactionRef": "90000000020",
+      "receiptId": "16609bdd23ef313b"
+    },
+    {
+      "transactionRef": "90000000022",
+      "receiptId": "de4979629c582b6e"
+    },
+    {
+      "transactionRef": "90000000025",
+      "receiptId": "2eb2717429a59dc3"
+    },
+    {
+      "transactionRef": "90000000026",
+      "receiptId": "052310e3c99d8c10"
+    },
+    {
+      "transactionRef": "CARD-7000004",
+      "receiptId": "aa2554db2206bc06"
+    },
+    {
+      "transactionRef": "M2026-006",
+      "receiptId": "6bc0731f3cd83f40"
+    },
+    {
+      "transactionRef": "90000000027",
+      "receiptId": "6f6708780c80e2bd"
+    },
+    {
+      "transactionRef": "90000000028",
+      "receiptId": "297a78addae68791"
+    },
+    {
+      "transactionRef": "90000000029",
+      "receiptId": "091a6767fd5ddba4"
+    },
+    {
+      "transactionRef": "TRANSFER-8000002",
+      "receiptId": "76442a143d233843"
+    },
+    {
+      "transactionRef": "90000000032",
+      "receiptId": "81ee5ad1c32a5df8"
+    },
+    {
+      "transactionRef": "90000000033",
+      "receiptId": "222fa40ca6eb451b"
+    },
+    {
+      "transactionRef": "CARD-7000005",
+      "receiptId": "c1c38945e0a72415"
+    },
+    {
+      "transactionRef": "M2026-007",
+      "receiptId": "a65393489476bd6a"
+    },
+    {
+      "transactionRef": "90000000034",
+      "receiptId": "3f747f3940d34a22"
+    },
+    {
+      "transactionRef": "90000000035",
+      "receiptId": "9c831714f92fdb57"
+    },
+    {
+      "transactionRef": "M2026-008",
+      "receiptId": "df3b9689026f2294"
+    },
+    {
+      "transactionRef": "90000000036",
+      "receiptId": "94c86cf8041a3325"
+    },
+    {
+      "transactionRef": "90000000037",
+      "receiptId": "477169b565db9da7"
+    },
+    {
+      "transactionRef": "90000000041",
+      "receiptId": "857f9aada9e6ad94"
+    },
+    {
+      "transactionRef": "90000000042",
+      "receiptId": "da88b4e00daa73b7"
+    },
+    {
+      "transactionRef": "90000000043",
+      "receiptId": "b019521d89f9f2ad"
+    },
+    {
+      "transactionRef": "M2026-009",
+      "receiptId": "1ffcf261835c2d95"
+    },
+    {
+      "transactionRef": "CARD-7000006",
+      "receiptId": "498fe56f39648f1c"
+    },
+    {
+      "transactionRef": "M2026-010",
+      "receiptId": "963d7bbfb7048d67"
+    },
+    {
+      "transactionRef": "90000000044",
+      "receiptId": "fb57ffa9ed50a2f5"
+    },
+    {
+      "transactionRef": "90000000045",
+      "receiptId": "2b0d651afd59620d"
+    },
+    {
+      "transactionRef": "90000000047",
+      "receiptId": "b9d0f43433b86bad"
+    },
+    {
+      "transactionRef": "90000000050",
+      "receiptId": "6674c8f5ccd352be"
+    },
+    {
+      "transactionRef": "90000000051",
+      "receiptId": "1743effdb4a9de1c"
+    },
+    {
+      "transactionRef": "CARD-7000007",
+      "receiptId": "470c02ea449df5c8"
+    },
+    {
+      "transactionRef": "M2026-011",
+      "receiptId": "7b53ae1e6bb6ddc6"
+    },
+    {
+      "transactionRef": "90000000052",
+      "receiptId": "72110769ee88ea1b"
+    },
+    {
+      "transactionRef": "90000000053",
+      "receiptId": "d4f93bdeabf0b26c"
+    },
+    {
+      "transactionRef": "90000000054",
+      "receiptId": "5cc32c10a949c967"
+    },
+    {
+      "transactionRef": "TRANSFER-8000003",
+      "receiptId": "18371182c4e9dbdf"
+    },
+    {
+      "transactionRef": "90000000057",
+      "receiptId": "ed572509816591ba"
+    },
+    {
+      "transactionRef": "90000000058",
+      "receiptId": "2ef8324fa967fef9"
+    },
+    {
+      "transactionRef": "90000000059",
+      "receiptId": "91b9d325789b80fe"
+    },
+    {
+      "transactionRef": "CARD-7000008",
+      "receiptId": "02fccc97775a7367"
+    },
+    {
+      "transactionRef": "M2026-012",
+      "receiptId": "1442885df635de54"
+    },
+    {
+      "transactionRef": "M2026-013",
+      "receiptId": "35621c79d3a15503"
+    },
+    {
+      "transactionRef": "90000000060",
+      "receiptId": "1f3dd921a35f6038"
+    },
+    {
+      "transactionRef": "90000000062",
+      "receiptId": "258d9785babcaa68"
+    },
+    {
+      "transactionRef": "90000000065",
+      "receiptId": "14897eef79613abf"
+    },
+    {
+      "transactionRef": "90000000066",
+      "receiptId": "a89526964f0049d7"
+    },
+    {
+      "transactionRef": "90000000067",
+      "receiptId": "479c1b49ba53f5e1"
+    },
+    {
+      "transactionRef": "CARD-7000009",
+      "receiptId": "47b140515899d16a"
+    },
+    {
+      "transactionRef": "M2026-014",
+      "receiptId": "c1c542d528b53d23"
+    },
+    {
+      "transactionRef": "90000000068",
+      "receiptId": "7f4fb51725f99597"
+    },
+    {
+      "transactionRef": "90000000069",
+      "receiptId": "13d73feccf4c82f1"
+    },
+    {
+      "transactionRef": "90000000071",
+      "receiptId": "68f59aa1ed0b92de"
+    }
+  ],
+  "bankStatements": [
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.01.2026 - 31.01.2026 - CH5880808000000000002 - 2026-01-31.pdf",
+      "fromDate": "2026-01-01",
+      "toDate": "2026-01-31"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-01-01_2026-01-31.pdf",
+      "fromDate": "2026-01-01",
+      "toDate": "2026-01-31",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.02.2026 - 28.02.2026 - CH5880808000000000002 - 2026-02-28.pdf",
+      "fromDate": "2026-02-01",
+      "toDate": "2026-02-28"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-02-01_2026-02-28.pdf",
+      "fromDate": "2026-02-01",
+      "toDate": "2026-02-28",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.03.2026 - 31.03.2026 - CH5880808000000000002 - 2026-03-31.pdf",
+      "fromDate": "2026-03-01",
+      "toDate": "2026-03-31"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-03-01_2026-03-31.pdf",
+      "fromDate": "2026-03-01",
+      "toDate": "2026-03-31",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.04.2026 - 30.04.2026 - CH5880808000000000002 - 2026-04-30.pdf",
+      "fromDate": "2026-04-01",
+      "toDate": "2026-04-30"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-04-01_2026-04-30.pdf",
+      "fromDate": "2026-04-01",
+      "toDate": "2026-04-30",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.05.2026 - 31.05.2026 - CH5880808000000000002 - 2026-05-31.pdf",
+      "fromDate": "2026-05-01",
+      "toDate": "2026-05-31"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-05-01_2026-05-31.pdf",
+      "fromDate": "2026-05-01",
+      "toDate": "2026-05-31",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.06.2026 - 30.06.2026 - CH5880808000000000002 - 2026-06-30.pdf",
+      "fromDate": "2026-06-01",
+      "toDate": "2026-06-30"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-06-01_2026-06-30.pdf",
+      "fromDate": "2026-06-01",
+      "toDate": "2026-06-30",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.07.2026 - 31.07.2026 - CH5880808000000000002 - 2026-07-31.pdf",
+      "fromDate": "2026-07-01",
+      "toDate": "2026-07-31"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-07-01_2026-07-31.pdf",
+      "fromDate": "2026-07-01",
+      "toDate": "2026-07-31",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.08.2026 - 31.08.2026 - CH5880808000000000002 - 2026-08-31.pdf",
+      "fromDate": "2026-08-01",
+      "toDate": "2026-08-31"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-08-01_2026-08-31.pdf",
+      "fromDate": "2026-08-01",
+      "toDate": "2026-08-31",
+      "currency": "EUR"
+    },
+    {
+      "bank": "Raiffeisen",
+      "filename": "Kontoauszug 01.09.2026 - 30.09.2026 - CH5880808000000000002 - 2026-09-30.pdf",
+      "fromDate": "2026-09-01",
+      "toDate": "2026-09-30"
+    },
+    {
+      "bank": "Wise",
+      "filename": "statement_10000001_EUR_2026-09-01_2026-09-30.pdf",
+      "fromDate": "2026-09-01",
+      "toDate": "2026-09-30",
+      "currency": "EUR"
+    }
+  ],
+  "journalEntries": [
+    {
+      "id": "3c5d5f06b3dd3400",
+      "transactionRef": "90000000001",
+      "date": "2026-01-01",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk Januar 2026"
+    },
+    {
+      "id": "d9c2e3f88f681295",
+      "transactionRef": "90000000002",
+      "date": "2026-01-07",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting Januar 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "a1892e1bf94a77ea",
+      "transactionRef": "CARD-7000001",
+      "date": "2026-01-12",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung Januar 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.94096
+    },
+    {
+      "id": "b85aaab24928203d",
+      "transactionRef": "M2026-001",
+      "date": "2026-01-12",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 38.15,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Januar 2026)"
+    },
+    {
+      "id": "407739fc9d32a1c9",
+      "transactionRef": "90000000003",
+      "date": "2026-01-15",
+      "accountDebit": "5720",
+      "accountCredit": "1020",
+      "amount": 1425,
+      "description": "Muster Sammelstiftung, BVG-Beiträge Q1 2026"
+    },
+    {
+      "id": "d9ca56afa980744c",
+      "transactionRef": "90000000004",
+      "date": "2026-01-19",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 101.55,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo Januar 2026"
+    },
+    {
+      "id": "735bda20ff7593b7",
+      "transactionRef": "90000000005",
+      "date": "2026-01-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat Januar 2026"
+    },
+    {
+      "id": "7592ad33ec4c2b9d",
+      "transactionRef": "90000000006",
+      "date": "2026-01-20",
+      "accountDebit": "5730",
+      "accountCredit": "1020",
+      "amount": 486,
+      "description": "Muster Versicherungen, UVG-Prämie 2026"
+    },
+    {
+      "id": "8393db4ef92dee57",
+      "transactionRef": "90000000006",
+      "date": "2026-01-20",
+      "accountDebit": "5740",
+      "accountCredit": "1020",
+      "amount": 912,
+      "description": "Muster Versicherungen, KTG-Prämie 2026"
+    },
+    {
+      "id": "c9c976536f024ca5",
+      "transactionRef": "90000000007",
+      "date": "2026-01-26",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn Januar 2026, Lukas Beispiel"
+    },
+    {
+      "id": "8f7617ef74112b9c",
+      "transactionRef": "90000000008",
+      "date": "2026-01-28",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 38.15,
+      "description": "Spesenrückerstattung Januar 2026, Lukas Beispiel"
+    },
+    {
+      "id": "936052b8cd6eb9fa",
+      "transactionRef": "90000000009",
+      "date": "2026-02-02",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk Februar 2026"
+    },
+    {
+      "id": "d98d8a2196f5b83a",
+      "transactionRef": "TRANSFER-8000001",
+      "date": "2026-02-02",
+      "accountDebit": "1023",
+      "accountCredit": "3400",
+      "amount": 3800,
+      "vatCode": "V0-E",
+      "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.92532
+    },
+    {
+      "id": "3dfefc8da253a062",
+      "transactionRef": "90000000010",
+      "date": "2026-02-09",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting Februar 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "5b6ad748e1718215",
+      "transactionRef": "CARD-7000002",
+      "date": "2026-02-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung Februar 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.92663
+    },
+    {
+      "id": "695617fe09217f26",
+      "transactionRef": "M2026-002",
+      "date": "2026-02-12",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 94.9,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Februar 2026)"
+    },
+    {
+      "id": "a91520075efdd675",
+      "transactionRef": "90000000011",
+      "date": "2026-02-16",
+      "accountDebit": "1520",
+      "accountCredit": "1020",
+      "amount": 2349,
+      "vatCode": "I81",
+      "description": "Digitec Galaxus, Laptop 14\" (aktiviert)"
+    },
+    {
+      "id": "b14e365af14be8eb",
+      "transactionRef": "M2026-003",
+      "date": "2026-02-16",
+      "accountDebit": "6641",
+      "accountCredit": "2451",
+      "amount": 165.7,
+      "vatCode": "I81",
+      "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (Februar 2026)"
+    },
+    {
+      "id": "635f0b815578c5f4",
+      "transactionRef": "90000000012",
+      "date": "2026-02-18",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 98.75,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo Februar 2026"
+    },
+    {
+      "id": "25a6e2f7ffd5f002",
+      "transactionRef": "90000000013",
+      "date": "2026-02-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat Februar 2026"
+    },
+    {
+      "id": "6d385a56041c9217",
+      "transactionRef": "90000000014",
+      "date": "2026-02-25",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn Februar 2026, Lukas Beispiel"
+    },
+    {
+      "id": "f26716c1b0d7dce7",
+      "transactionRef": "90000000015",
+      "date": "2026-03-02",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk März 2026"
+    },
+    {
+      "id": "e12b32a16cd8b10b",
+      "transactionRef": "90000000016",
+      "date": "2026-03-02",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 260.6,
+      "description": "Spesenrückerstattung Februar 2026, Lukas Beispiel"
+    },
+    {
+      "id": "beb46de0da819eda",
+      "transactionRef": "90000000017",
+      "date": "2026-03-09",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting März 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "ede413d44965c34b",
+      "transactionRef": "90000000018",
+      "date": "2026-03-09",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 5695.68,
+      "vatCode": "V81",
+      "description": "Muster Logistik, Konzept Lagersteuerung"
+    },
+    {
+      "id": "992666e1780b8b82",
+      "transactionRef": "CARD-7000003",
+      "date": "2026-03-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung März 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.90956
+    },
+    {
+      "id": "f192c42579ed2380",
+      "transactionRef": "M2026-004",
+      "date": "2026-03-11",
+      "accountDebit": "6500",
+      "accountCredit": "2451",
+      "amount": 89,
+      "vatCode": "I26",
+      "description": "Buchhandlung Muster, Fachbuch Netzwerksicherheit"
+    },
+    {
+      "id": "51f3678405755ab5",
+      "transactionRef": "M2026-005",
+      "date": "2026-03-12",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 73.55,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch März 2026)"
+    },
+    {
+      "id": "c2c2906d5a08c35e",
+      "transactionRef": "90000000019",
+      "date": "2026-03-18",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 91.85,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo März 2026"
+    },
+    {
+      "id": "d05230c47dd4c418",
+      "transactionRef": "90000000020",
+      "date": "2026-03-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V0-E",
+      "description": "Beispiel Treuhand, Beratungsmandat März 2026"
+    },
+    {
+      "id": "b7993a933f2b6101",
+      "transactionRef": "90000000021",
+      "date": "2026-03-25",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn März 2026, Lukas Beispiel"
+    },
+    {
+      "id": "be79fbaa19281a28",
+      "transactionRef": "90000000022",
+      "date": "2026-03-26",
+      "accountDebit": "5700",
+      "accountCredit": "1020",
+      "amount": 3612.6,
+      "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q1 2026"
+    },
+    {
+      "id": "4cefe3d6364871ca",
+      "transactionRef": "90000000023",
+      "date": "2026-03-30",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 162.55,
+      "description": "Spesenrückerstattung März 2026, Lukas Beispiel"
+    },
+    {
+      "id": "e70d8e4ecb23ae77",
+      "transactionRef": "90000000024",
+      "date": "2026-03-31",
+      "accountDebit": "6940",
+      "accountCredit": "1020",
+      "amount": 12,
+      "description": "Raiffeisen, Kontoführung Q1"
+    },
+    {
+      "id": "16afc4222abc1991",
+      "transactionRef": "90000000025",
+      "date": "2026-04-01",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk April 2026"
+    },
+    {
+      "id": "a4f51b563f758893",
+      "transactionRef": "90000000026",
+      "date": "2026-04-07",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting April 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "3fd94c93052d2e50",
+      "transactionRef": "CARD-7000004",
+      "date": "2026-04-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung April 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.93222
+    },
+    {
+      "id": "63f20b8b18b5466b",
+      "transactionRef": "M2026-006",
+      "date": "2026-04-13",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 62.7,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch April 2026)"
+    },
+    {
+      "id": "277a7cc9c995bac2",
+      "transactionRef": "M2026-015",
+      "date": "2026-04-14",
+      "accountDebit": "3400",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "-V0-E",
+      "description": "Stornobuchung zu Buchung d05230c47dd4c418 (Q1): Beispiel Treuhand Rechnung 2026-031 war als Leistung im Ausland (V0-E) gebucht",
+      "corrects": "2026-Q1"
+    },
+    {
+      "id": "2c0186a7adb8dd51",
+      "transactionRef": "M2026-016",
+      "date": "2026-04-14",
+      "accountDebit": "3400",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Korrekturbuchung zu Buchung d05230c47dd4c418 (Q1): Beispiel Treuhand Rechnung 2026-031 ist eine Inlandleistung, 8.1% MWST",
+      "corrects": "2026-Q1"
+    },
+    {
+      "id": "dd65c91e02798c86",
+      "transactionRef": "90000000027",
+      "date": "2026-04-15",
+      "accountDebit": "5720",
+      "accountCredit": "1020",
+      "amount": 1425,
+      "description": "Muster Sammelstiftung, BVG-Beiträge Q2 2026"
+    },
+    {
+      "id": "e7525e69bc60defd",
+      "transactionRef": "90000000028",
+      "date": "2026-04-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat April 2026"
+    },
+    {
+      "id": "db29fd20d9cf2827",
+      "transactionRef": "90000000029",
+      "date": "2026-04-20",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 104.2,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo April 2026"
+    },
+    {
+      "id": "83557dd9ede17684",
+      "transactionRef": "90000000030",
+      "date": "2026-04-27",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn April 2026, Lukas Beispiel"
+    },
+    {
+      "id": "0cf15ff866cb4b68",
+      "transactionRef": "90000000031",
+      "date": "2026-04-28",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 62.7,
+      "description": "Spesenrückerstattung April 2026, Lukas Beispiel"
+    },
+    {
+      "id": "95ecf31aef2632a9",
+      "transactionRef": "TRANSFER-8000002",
+      "date": "2026-04-29",
+      "accountDebit": "1023",
+      "accountCredit": "3400",
+      "amount": 3800,
+      "vatCode": "V0-E",
+      "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.93055
+    },
+    {
+      "id": "aef1a9e8719e3c1c",
+      "transactionRef": "90000000032",
+      "date": "2026-05-01",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk Mai 2026"
+    },
+    {
+      "id": "98f9457060a1c8f7",
+      "transactionRef": "90000000033",
+      "date": "2026-05-07",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting Mai 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "f8f2ab28235126d6",
+      "transactionRef": "CARD-7000005",
+      "date": "2026-05-11",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung Mai 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.92468
+    },
+    {
+      "id": "228b371788a00e7f",
+      "transactionRef": "90000000034",
+      "date": "2026-05-12",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 4798.88,
+      "vatCode": "V81",
+      "description": "Muster Logistik, Umsetzung Lagersteuerung, Phase 1"
+    },
+    {
+      "id": "8b2f339b4c42dd82",
+      "transactionRef": "M2026-007",
+      "date": "2026-05-12",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 64.4,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Mai 2026)"
+    },
+    {
+      "id": "3565426d22e5adf7",
+      "transactionRef": "90000000035",
+      "date": "2026-05-18",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 111.85,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo Mai 2026"
+    },
+    {
+      "id": "e5804ddea05eeabb",
+      "transactionRef": "M2026-008",
+      "date": "2026-05-18",
+      "accountDebit": "6641",
+      "accountCredit": "2451",
+      "amount": 131.2,
+      "vatCode": "I81",
+      "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (Mai 2026)"
+    },
+    {
+      "id": "b91b2d9477a0716f",
+      "transactionRef": "90000000036",
+      "date": "2026-05-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat Mai 2026"
+    },
+    {
+      "id": "dbedf1b643cd6e91",
+      "transactionRef": "90000000037",
+      "date": "2026-05-20",
+      "accountDebit": "5810",
+      "accountCredit": "1020",
+      "amount": 1200,
+      "vatCode": "I0",
+      "description": "Muster Akademie, Kurs Cloud Security (von der MWST ausgenommen)"
+    },
+    {
+      "id": "c19d1fdf340a4a48",
+      "transactionRef": "90000000038",
+      "date": "2026-05-25",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn Mai 2026, Lukas Beispiel"
+    },
+    {
+      "id": "0b35a5e2f155aba4",
+      "transactionRef": "90000000039",
+      "date": "2026-05-27",
+      "accountDebit": "2201",
+      "accountCredit": "1020",
+      "amount": 1062.82,
+      "description": "ESTV, MWST-Abrechnung Q1 2026"
+    },
+    {
+      "id": "5104621e655f3498",
+      "transactionRef": "90000000040",
+      "date": "2026-05-28",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 195.6,
+      "description": "Spesenrückerstattung Mai 2026, Lukas Beispiel"
+    },
+    {
+      "id": "b9a7cba1c428824f",
+      "transactionRef": "90000000041",
+      "date": "2026-06-01",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk Juni 2026"
+    },
+    {
+      "id": "c600692da0ad15d3",
+      "transactionRef": "90000000042",
+      "date": "2026-06-01",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 3108.45,
+      "vatCode": "V0-E",
+      "description": "Example Analytics, Code-Review (Leistung im Ausland)"
+    },
+    {
+      "id": "fa97142ba4558bb4",
+      "transactionRef": "90000000043",
+      "date": "2026-06-08",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting Juni 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "e914164bb4fc574d",
+      "transactionRef": "M2026-009",
+      "date": "2026-06-09",
+      "accountDebit": "6500",
+      "accountCredit": "2451",
+      "amount": 64.5,
+      "vatCode": "I26",
+      "description": "Buchhandlung Muster, Fachbuch Cloud-Architektur"
+    },
+    {
+      "id": "9dacd043ada2dd03",
+      "transactionRef": "CARD-7000006",
+      "date": "2026-06-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung Juni 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.92935
+    },
+    {
+      "id": "680d7c35bef765c4",
+      "transactionRef": "M2026-010",
+      "date": "2026-06-12",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 61.4,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Juni 2026)"
+    },
+    {
+      "id": "ab182932d537f7ff",
+      "transactionRef": "90000000044",
+      "date": "2026-06-18",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 87.9,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo Juni 2026"
+    },
+    {
+      "id": "d134b5cb2aefe43c",
+      "transactionRef": "90000000045",
+      "date": "2026-06-22",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat Juni 2026"
+    },
+    {
+      "id": "ec15a424fe8da881",
+      "transactionRef": "90000000046",
+      "date": "2026-06-25",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn Juni 2026, Lukas Beispiel"
+    },
+    {
+      "id": "a35b34e4f215b649",
+      "transactionRef": "90000000047",
+      "date": "2026-06-26",
+      "accountDebit": "5700",
+      "accountCredit": "1020",
+      "amount": 3612.6,
+      "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q2 2026"
+    },
+    {
+      "id": "bec9823f547deb8c",
+      "transactionRef": "90000000048",
+      "date": "2026-06-29",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 125.9,
+      "description": "Spesenrückerstattung Juni 2026, Lukas Beispiel"
+    },
+    {
+      "id": "13ce8ebaa2feed1d",
+      "transactionRef": "90000000049",
+      "date": "2026-06-30",
+      "accountDebit": "6940",
+      "accountCredit": "1020",
+      "amount": 12,
+      "description": "Raiffeisen, Kontoführung Q2"
+    },
+    {
+      "id": "e1d235c3897c2758",
+      "transactionRef": "M2026-017",
+      "date": "2026-06-30",
+      "accountDebit": "2451",
+      "accountCredit": "6510",
+      "amount": 60.79,
+      "vatCode": "K81-B",
+      "description": "Eigenverbrauch: Privatanteil Mobiltelefon Q2 2026, 20% von CHF 303.95 (Lukas Beispiel)"
+    },
+    {
+      "id": "fc8f59188c3974ce",
+      "transactionRef": "90000000050",
+      "date": "2026-07-01",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk Juli 2026"
+    },
+    {
+      "id": "fe35aade6ffcb9c4",
+      "transactionRef": "90000000051",
+      "date": "2026-07-07",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting Juli 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "6b9883e5de54cf19",
+      "transactionRef": "CARD-7000007",
+      "date": "2026-07-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung Juli 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.9317
+    },
+    {
+      "id": "10ced974a52c0855",
+      "transactionRef": "M2026-011",
+      "date": "2026-07-13",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 46.95,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch Juli 2026)"
+    },
+    {
+      "id": "f20c49f966d7fa29",
+      "transactionRef": "90000000052",
+      "date": "2026-07-15",
+      "accountDebit": "5720",
+      "accountCredit": "1020",
+      "amount": 1425,
+      "description": "Muster Sammelstiftung, BVG-Beiträge Q3 2026"
+    },
+    {
+      "id": "0ded262aaa3c8940",
+      "transactionRef": "90000000053",
+      "date": "2026-07-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat Juli 2026"
+    },
+    {
+      "id": "cb81d1072a39749c",
+      "transactionRef": "90000000054",
+      "date": "2026-07-20",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 90.95,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo Juli 2026"
+    },
+    {
+      "id": "738c01da7cc7001c",
+      "transactionRef": "90000000055",
+      "date": "2026-07-27",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn Juli 2026, Lukas Beispiel"
+    },
+    {
+      "id": "bd99dc7f1fd46934",
+      "transactionRef": "90000000056",
+      "date": "2026-07-28",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 46.95,
+      "description": "Spesenrückerstattung Juli 2026, Lukas Beispiel"
+    },
+    {
+      "id": "08e30341b84e4a29",
+      "transactionRef": "TRANSFER-8000003",
+      "date": "2026-07-28",
+      "accountDebit": "1023",
+      "accountCredit": "3400",
+      "amount": 3800,
+      "vatCode": "V0-E",
+      "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.93835
+    },
+    {
+      "id": "4be8575d9926d3db",
+      "transactionRef": "90000000057",
+      "date": "2026-07-31",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 7127.41,
+      "vatCode": "V81",
+      "description": "Muster Logistik, Umsetzung Lagersteuerung, Phase 2"
+    },
+    {
+      "id": "3f83d2653b0cdfc4",
+      "transactionRef": "90000000058",
+      "date": "2026-08-03",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk August 2026"
+    },
+    {
+      "id": "a0252c5543ee84ca",
+      "transactionRef": "90000000059",
+      "date": "2026-08-07",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting August 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "fc468693720cd04e",
+      "transactionRef": "CARD-7000008",
+      "date": "2026-08-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung August 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.94558
+    },
+    {
+      "id": "0e0eecec014a1e11",
+      "transactionRef": "M2026-012",
+      "date": "2026-08-12",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 41.9,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch August 2026)"
+    },
+    {
+      "id": "d7d2c4a90f8e495c",
+      "transactionRef": "M2026-013",
+      "date": "2026-08-17",
+      "accountDebit": "6641",
+      "accountCredit": "2451",
+      "amount": 124.4,
+      "vatCode": "I81",
+      "description": "Restaurant Beispielhof, Geschäftsessen mit Kunde (August 2026)"
+    },
+    {
+      "id": "2e100442f7d8fd3a",
+      "transactionRef": "90000000060",
+      "date": "2026-08-18",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 97.7,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo August 2026"
+    },
+    {
+      "id": "1d41695834ab1bb3",
+      "transactionRef": "90000000061",
+      "date": "2026-08-19",
+      "accountDebit": "6640",
+      "accountCredit": "1020",
+      "amount": 24,
+      "vatCode": "I0",
+      "description": "Parkhaus Beispiel, Kundenbesuch (Beleg fehlt)"
+    },
+    {
+      "id": "3a00c8c9167d4ff1",
+      "transactionRef": "90000000062",
+      "date": "2026-08-20",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat August 2026"
+    },
+    {
+      "id": "de9bbad101f334c4",
+      "transactionRef": "90000000063",
+      "date": "2026-08-25",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn August 2026, Lukas Beispiel"
+    },
+    {
+      "id": "73e73f5d28c34372",
+      "transactionRef": "90000000064",
+      "date": "2026-08-28",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 166.3,
+      "description": "Spesenrückerstattung August 2026, Lukas Beispiel"
+    },
+    {
+      "id": "aee3a9aa151a75a6",
+      "transactionRef": "90000000065",
+      "date": "2026-09-01",
+      "accountDebit": "6000",
+      "accountCredit": "1020",
+      "amount": 450,
+      "vatCode": "I81",
+      "description": "Muster Coworking, Fixdesk September 2026"
+    },
+    {
+      "id": "6c1d0331543f4975",
+      "transactionRef": "90000000066",
+      "date": "2026-09-01",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 3358.4,
+      "vatCode": "V0-E",
+      "description": "Example Analytics, Code-Review (Leistung im Ausland)"
+    },
+    {
+      "id": "4516305e8009d720",
+      "transactionRef": "90000000067",
+      "date": "2026-09-07",
+      "accountDebit": "6570",
+      "accountCredit": "1020",
+      "amount": 24.6,
+      "vatCode": "B81-1",
+      "description": "Sample Labs, Code-Hosting September 2026 (Bezugsteuer)"
+    },
+    {
+      "id": "944bbf3466ff6fe3",
+      "transactionRef": "CARD-7000009",
+      "date": "2026-09-10",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 32.43,
+      "vatCode": "I81",
+      "description": "Beispiel Software, Projektplanung September 2026",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.95045
+    },
+    {
+      "id": "daa3cab7c38d97c4",
+      "transactionRef": "M2026-014",
+      "date": "2026-09-14",
+      "accountDebit": "6640",
+      "accountCredit": "2451",
+      "amount": 54.6,
+      "vatCode": "I81",
+      "description": "SBB, Billett Bern–Zürich retour (Kundenbesuch September 2026)"
+    },
+    {
+      "id": "0697c066928fbcb1",
+      "transactionRef": "90000000068",
+      "date": "2026-09-18",
+      "accountDebit": "6510",
+      "accountCredit": "1020",
+      "amount": 105.5,
+      "vatCode": "I81",
+      "description": "Muster Telecom, Mobile-Abo September 2026"
+    },
+    {
+      "id": "8194a068c1be023e",
+      "transactionRef": "90000000069",
+      "date": "2026-09-21",
+      "accountDebit": "1020",
+      "accountCredit": "3400",
+      "amount": 6486,
+      "vatCode": "V81",
+      "description": "Beispiel Treuhand, Beratungsmandat September 2026"
+    },
+    {
+      "id": "5220d6f058f4049b",
+      "transactionRef": "90000000070",
+      "date": "2026-09-25",
+      "accountDebit": "5000",
+      "accountCredit": "1020",
+      "amount": 7150,
+      "description": "Nettolohn September 2026, Lukas Beispiel"
+    },
+    {
+      "id": "41f24a41ee040c67",
+      "transactionRef": "90000000071",
+      "date": "2026-09-28",
+      "accountDebit": "5700",
+      "accountCredit": "1020",
+      "amount": 3612.6,
+      "description": "Ausgleichskasse, Akontobeiträge AHV/IV/EO/ALV Q3 2026"
+    },
+    {
+      "id": "82132cf4492e0b89",
+      "transactionRef": "90000000072",
+      "date": "2026-09-28",
+      "accountDebit": "2451",
+      "accountCredit": "1020",
+      "amount": 54.6,
+      "description": "Spesenrückerstattung September 2026, Lukas Beispiel"
+    },
+    {
+      "id": "46a79516892745b1",
+      "transactionRef": "90000000073",
+      "date": "2026-09-30",
+      "accountDebit": "6940",
+      "accountCredit": "1020",
+      "amount": 12,
+      "description": "Raiffeisen, Kontoführung Q3"
+    }
+  ],
+  "config": {
+    "closedThrough": "2026-03-31",
+    "openingBalances": {
+      "2026": {
+        "1020": 42000,
+        "1023": 2345.85,
+        "1520": 1800,
+        "2800": 20000,
+        "2970": 26145.85
+      }
+    },
+    "openingBalancesNative": {
+      "2026": {
+        "1023": {
+          "amount": 2500,
+          "currency": "EUR"
+        }
+      }
+    },
+    "vatAdjustments": [],
+    "correctionCases": [
+      {
+        "id": "2026-Q1-treuhand-inland",
+        "period": "2026-Q1",
+        "title": "Inlandleistung Beispiel Treuhand als Auslandleistung deklariert",
+        "wrong": "Die Zahlung der Beispiel Treuhand AG (Zürich) für die Rechnung 2026-031 lief mit V0-E (Ziffer 221) statt V81: CHF 6’486.00 ohne Steuer deklariert.",
+        "fix": "Storno -V0-E und Neubuchung V81 über je CHF 6’486.00 vom 14.04.2026 mit corrects 2026-Q1, Steuer CHF 486.00 nachdeklariert; die Buchung vom März bleibt wie eingereicht.",
+        "originalEntryIds": [
+          "d05230c47dd4c418"
+        ],
+        "correctionEntryIds": [
+          "277a7cc9c995bac2",
+          "2c0186a7adb8dd51"
+        ],
+        "source": "receipts/20260302-muster-consulting-rechnung-2026-031.pdf"
+      }
+    ]
+  },
+  "statementBalances": [
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-01-31",
+      "amount": 37898.7,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.01.2026 - 31.01.2026 - CH5880808000000000002 - 2026-01-31.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-01-31",
+      "amount": 2467.57,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-01-01_2026-01-31.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-02-28",
+      "amount": 34312.35,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.02.2026 - 28.02.2026 - CH5880808000000000002 - 2026-02-28.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-02-28",
+      "amount": 6235.14,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-02-01_2026-02-28.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-03-31",
+      "amount": 34729.83,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.03.2026 - 31.03.2026 - CH5880808000000000002 - 2026-03-31.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-03-31",
+      "amount": 6202.71,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-03-01_2026-03-31.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-04-30",
+      "amount": 31999.33,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.04.2026 - 30.04.2026 - CH5880808000000000002 - 2026-04-30.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-04-30",
+      "amount": 9970.28,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-04-01_2026-04-30.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-05-31",
+      "amount": 33089.34,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.05.2026 - 31.05.2026 - CH5880808000000000002 - 2026-05-31.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-05-31",
+      "amount": 9937.85,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-05-01_2026-05-31.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-06-30",
+      "amount": 31220.79,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.06.2026 - 30.06.2026 - CH5880808000000000002 - 2026-06-30.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-06-30",
+      "amount": 9905.42,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-06-01_2026-06-30.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-07-31",
+      "amount": 35646.7,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.07.2026 - 31.07.2026 - CH5880808000000000002 - 2026-07-31.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-07-31",
+      "amount": 13672.99,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-07-01_2026-07-31.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-08-31",
+      "amount": 34220.1,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.08.2026 - 31.08.2026 - CH5880808000000000002 - 2026-08-31.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-08-31",
+      "amount": 13640.56,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-08-01_2026-08-31.pdf"
+    },
+    {
+      "account": "1020",
+      "bank": "Raiffeisen",
+      "currency": "CHF",
+      "date": "2026-09-30",
+      "amount": 32655.2,
+      "source": "pdf",
+      "sourceFile": "Kontoauszug 01.09.2026 - 30.09.2026 - CH5880808000000000002 - 2026-09-30.pdf"
+    },
+    {
+      "account": "1023",
+      "bank": "Wise",
+      "currency": "EUR",
+      "date": "2026-09-30",
+      "amount": 13608.13,
+      "source": "pdf",
+      "sourceFile": "statement_10000001_EUR_2026-09-01_2026-09-30.pdf"
+    }
+  ]
+}

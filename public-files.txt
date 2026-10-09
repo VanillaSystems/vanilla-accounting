@@ -1,6 +1,7 @@
 # What the public app repo may contain. Default deny: a tracked file is public only when a line
 # here matches its path. `*` stays inside one directory, `**` crosses directories, {a,b} is either.
-# A binary file (PDF, image) is public only when a line names its exact path, or under demo/.
+# A binary file (PDF, image) is public only when a line names its exact path, or under a demo
+# workspace (demo/, demo-<name>/).
 # Read by src/publish/leak-guard.ts (npm run check-public, npm run export-public).
 #
 # Private, never listed: the workspace (see README), and any file not matched below.
@@ -26,9 +27,11 @@ tests/**
 processes/**
 reference/**
 demo/**
+demo-consulting/**
 tools/demo/**
 tools/cases/**
 examples/**
+demo-consulting/**
 tools/hooks/**
 
 docs/adr/**

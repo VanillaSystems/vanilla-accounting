@@ -3,7 +3,7 @@
  * their bank transactions, and the expected figures. A failure therefore means the CODE changed a
  * figure, never that someone booked something.
  *
- *   npm test             the demo workspace; its set is tests/golden/demo/ (synthetic, public)
+ *   npm test             each demo workspace; its set is tests/golden/<demo>/ (synthetic, public)
  *   npm run test:books   the configured workspace (BELEGE_WORKSPACE, .env, or the cwd); its set is
  *                        <workspace>/golden/, which belongs to the company, not to the app
  *
@@ -13,10 +13,10 @@
  */
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import type { CorrectionCase, JournalEntry, VatAdjustment } from '../../src/types/index.js';
 import { APP_ROOT, openWorkspace, type Workspace } from '../../src/workspace/workspace.js';
-import { DEMO_ROOT } from './workspace.js';
+import { DEMO_ROOTS } from './workspace.js';
 
 export interface FrozenBooks {
   journalEntries: JournalEntry[];
@@ -32,9 +32,10 @@ export interface GoldenSet {
   expect(name: string, actual: unknown): void;
 }
 
-/** The demo's set ships with the app; any other workspace keeps its own. */
+/** A demo's set ships with the app; any other workspace keeps its own. */
 function goldenDir(ws: Workspace): string {
-  return ws.paths.root === realpathSync(DEMO_ROOT) ? join(APP_ROOT, 'tests/golden/demo') : join(ws.paths.root, 'golden');
+  const demo = DEMO_ROOTS.find((d) => realpathSync(d) === ws.paths.root);
+  return demo ? join(APP_ROOT, 'tests/golden', basename(demo)) : join(ws.paths.root, 'golden');
 }
 
 export function goldenSet(): GoldenSet {
