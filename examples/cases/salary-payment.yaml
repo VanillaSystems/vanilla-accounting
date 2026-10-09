@@ -25,7 +25,7 @@ lines:
   - { debit: "5000", credit: "2270", amount: 760, description: "A. Beispiel, Lohn Aug 2026 Abzüge AN" }
 ziffern: {}
 payable: 0
-rules: []
+rules: [cls-salary]
 law:
   - MWSTG Art. 10 Abs. 1 (only an independent business is taxable; employment is no supply)
   - AHVG Art. 14 Abs. 1 (the employer withholds the employee's contributions)

@@ -49,6 +49,32 @@ steps:
           one entry per debited account leg; the charge currency first, then other foreign currencies, CHF last
         why: that is how Wise funds a card payment
         source: AGENTS.md § Special cases
+      - id: cls-salary
+        status: proposed
+        when: a salary paid to an employee (the owner too, when employed by the company)
+        then: "the GROSS salary on 5000: D 5000 / C bank for the net, D 5000 / C 2270 for the employee's deductions on the payslip. No VAT code"
+        why: the books reconcile with the Lohnausweis and the Ausgleichskasse only on the gross
+        source: AHVG Art. 14 Abs. 1; MWSTG Art. 10 Abs. 1
+      - id: cls-social-insurance
+        status: proposed
+        when: a payment to the Ausgleichskasse, the pension fund (BVG) or the UVG/KTG insurer
+        then: "the employee's withheld share clears 2270; the employer's share: 5700 AHV/IV/EO/ALV (FAK 5710), 5720 BVG, 5730 UVG, 5740 KTG. Contributions: no code; an insurer's invoice: I0 (exempt)"
+        source: AHVG Art. 14 Abs. 1; BVG Art. 66 Abs. 1; MWSTG Art. 21 Abs. 2 Ziff. 18
+      - id: cls-vat-payment
+        status: proposed
+        when: a VAT payment to (or refund from) the ESTV, for a return or a Korrekturabrechnung (0535)
+        then: "D 2201 / C bank (a refund the other way), no VAT code: a code would declare the tax twice"
+        source: MWSTG Art. 86 Abs. 1
+      - id: cls-owner-account
+        status: proposed
+        when: an owner's loan or deposit, its repayment, or the refund of the owner's outlays
+        then: "2451 Kontokorrent Gesellschafter (GmbH, AG) or 2850 Privat (Einzelfirma), no VAT code; the outlays carry their codes on their own entries"
+        source: MWSTG Art. 18 Abs. 2 lit. e
+      - id: cls-direct-tax
+        status: proposed
+        when: a payment of direct taxes (Staats- und Gemeindesteuern, direkte Bundessteuer)
+        then: "GmbH, AG: 8900, no VAT code. Einzelfirma: the owner's income tax is private, 2850"
+        source: OR 959b Abs. 2 Ziff. 10; MWSTG Art. 18 Abs. 1
       - id: cls-flag-low-confidence
         status: proposed
         when: the accounts or the code are a guess the evidence does not support
@@ -102,6 +128,12 @@ steps:
         then: a_purchase, with the original purchase's code inverted (-I81, -I0)
         why: a refund inverts the original VAT code
         source: AGENTS.md § VAT code rules
+      - id: sid-sale-refund
+        status: proposed
+        when: a DBIT that pays back all or part of an earlier sale to a customer
+        then: a_sale, on the sale's revenue account, with the original sale's code inverted (-V81, -V0)
+        why: a reduced consideration reduces the tax owed, in the quarter the money goes back
+        source: MWSTG Art. 41 Abs. 1; AGENTS.md § Special cases (-V81)
       - id: sid-sale
         when: CRDT from a sales platform's payout or another customer payment
         then: a_sale
@@ -155,12 +187,19 @@ steps:
     goal: The output-tax code, from the order — the payout does not know the customer.
     reads: [ "the order page's Taxes line", the delivery country ]
     rules:
+      - id: sv-service-abroad
+        status: proposed
+        when: the payment of the company's own invoice for a SERVICE (not goods) to a recipient with its seat abroad
+        then: >
+          V0-E: no Swiss tax, declared in Ziffer 200 and deducted again in Ziffer 221 (Leistungen im Ausland). The invoice says the place of supply is the recipient's ('Leistungsort beim Empfänger'). Not V0 (export, Ziffer 220), which is for goods. A service the law places elsewhere (real estate, passenger transport, restaurant, events: Art. 8 Abs. 2) → new_case
+        why: the place of a service is the recipient's seat, so Swiss MWST does not apply
+        source: MWSTG Art. 8 Abs. 1; ESTV form 0550 Ziffer 221
       - id: sv-order-tax
         when: always
         then: "the code follows the tax the order or invoice itself states: Swiss 8.1% → swiss (V81); no Swiss tax and delivered abroad → export (V0) with the country as the recorded reason; anything else → new_case"
         source: booking.flow.yaml sale_vat expect
     ask_human_when:
-      - a sale that is not a Shopify order (a private sale of equipment, a B2B invoice)
+      - a sale with no order or invoice of its own (a private sale of equipment)
     precedents: []
 
   private:

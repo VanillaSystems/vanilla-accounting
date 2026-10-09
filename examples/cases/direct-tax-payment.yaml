@@ -21,7 +21,7 @@ lines:
   - { debit: "8900", credit: "1020", amount: 1800, description: "Steueramt Musterkanton, Staats- und Gemeindesteuern 2026" }
 ziffern: {}
 payable: 0
-rules: []
+rules: [cls-direct-tax]
 law:
   - MWSTG Art. 18 Abs. 1 (a tax is no supply)
 why: >

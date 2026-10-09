@@ -21,7 +21,7 @@ lines:
   - { debit: "2201", credit: "1020", amount: 1250, description: "ESTV, MWST Q2 2026" }
 ziffern: {}
 payable: 0
-rules: []
+rules: [cls-vat-payment]
 law:
   - MWSTG Art. 86 Abs. 1 (payment within 60 days after the period)
 why: >

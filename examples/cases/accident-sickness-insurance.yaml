@@ -24,7 +24,7 @@ lines:
   - { debit: "5740", credit: "1020", amount: 700, vatCode: I0, description: "Musterversicherung, Krankentaggeld 2026" }
 ziffern: {}
 payable: 0
-rules: [pv-otherwise]
+rules: [cls-social-insurance, pv-otherwise]
 law:
   - MWSTG Art. 21 Abs. 2 Ziff. 18 (insurance is exempt)
   - UVG Art. 91 (the employee may carry the non-occupational accident premium)
