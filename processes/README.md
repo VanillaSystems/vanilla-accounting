@@ -41,7 +41,12 @@ Every process has two files, and every business with particulars has one:
   whether it bundles invoices into one payment (`grouped:`), which accounts it
   books to (`accounts:`), and its rules for each step it touches. Each step's
   rules sit under the step's exact address:
-  `steps: { "booking.guide.yaml#classify": { rules: [...] } }`.
+  `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's
+  file also lists `facts:` of the law (periods, deadlines, forms), each with
+  its `source:`. A flow step names the facts it depends on as
+  `facts: [ estv#payment-deadline ]` instead of repeating them: the flow keeps
+  the how and the order, the authority's file the facts, and the lint
+  checks that every named fact exists.
 
 ## Two layers: the app and the company
 
@@ -176,6 +181,7 @@ library or a leftover.
 |---|---|
 | A rule that decides a step, true for any company | `<process>.guide.yaml` |
 | A rule or fact true for one business | `processes/<role>/<id>.yaml`, or `knowledge/<role>/<id>.yaml` when it is about our books |
+| A period, deadline or form of an authority | `processes/authorities/<id>.yaml` under `facts:` |
 | A rule or decision true for this company only | `knowledge/rules/<process>.guide.yaml` |
 | How to click through a vendor portal | `docs/runbooks/receipt-collection.md` (private suppliers and our mailboxes: `docs/company/receipt-collection.md`), linked from a rule's `procedure:` |
 | What a term means | `CONTEXT.md` |

@@ -40,6 +40,13 @@ export interface DocumentType {
   text: RegExp[];
 }
 
+/** A fact of the law or of an authority's practice (a period, a deadline, a form), with where it is written. */
+export interface Fact {
+  id: string;
+  fact: string;
+  source: string;
+}
+
 export interface Counterparty {
   id: string;
   name: string;
@@ -53,6 +60,8 @@ export interface Counterparty {
   /** When present, the only accounts an entry for this counterparty may use. */
   accounts?: string[];
   documents: DocumentType[];
+  /** What a flow step names in its `facts:` as <id>#<fact id>, so the flow never repeats it. */
+  facts: Fact[];
   /** Raw per-step sections, keyed by the exact `with.guide` string of a flow step. */
   steps: Record<string, unknown>;
   /** The files it was merged from: vendor facts (app layer) and the company's binding (workspace layer). */
@@ -137,6 +146,7 @@ export type RawCounterparty = {
   id?: string; name?: string; grouped?: boolean; accounts?: string[]; roles?: string[];
   match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
   documents?: { id?: string; kind?: string; text?: string[] }[];
+  facts?: Partial<Fact>[];
 };
 
 /** Validate one counterparty after its layers are merged. Throws naming the file and the fix. */
@@ -162,8 +172,12 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     if (!d.text?.length) fail(`documents ${d.id}: text needs at least one pattern`);
     return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')) };
   });
+  const facts = (raw.facts ?? []).map((f, i) => {
+    for (const k of ['id', 'fact', 'source'] as const) if (!f[k]) fail(`facts[${i}] needs ${k}`);
+    return f as Fact;
+  });
   return {
-    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, documents,
+    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, documents, facts,
     accounts: raw.accounts, steps: raw.steps ?? {}, origin,
   };
 }

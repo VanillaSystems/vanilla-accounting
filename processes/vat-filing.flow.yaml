@@ -17,6 +17,7 @@ steps:
   - id: booked
     name: The quarter is booked
     kind: start
+    facts: [ estv#period ]
     phase: compute
     duration: day 0
 
@@ -82,6 +83,7 @@ steps:
     icon: send
     kind: human
     note: MWST abrechnen
+    facts: [ estv#eportal, estv#return-deadline ]
     needs: [xml.valid]
     phase: file
     duration: 20m
@@ -97,13 +99,15 @@ steps:
     name: Pay the ESTV
     icon: hand-coins
     kind: human
+    facts: [ estv#payment-deadline ]
     needs: [direction.payable]
     phase: file
-    duration: within 30 days
+    duration: 15m
 
   - id: await_credit
     name: Wait for the ESTV to refund the input tax
     kind: wait
+    facts: [ estv#refund ]
     needs: [direction.credit]
     phase: file
     duration: weeks

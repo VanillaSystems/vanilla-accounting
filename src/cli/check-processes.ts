@@ -37,7 +37,7 @@ const SECTION_TOKEN_WARN = 900;
 
 type Step = {
   id: string; kind?: string; by?: string; needs?: string[]; outcomes?: string[];
-  uses?: string; process?: string; phase?: string;
+  uses?: string; process?: string; phase?: string; facts?: string[];
   with?: { guide?: string; model?: string; escalate?: string; batch?: number };
 };
 type Flow = { id: string; phases?: string[]; steps: Step[] };
@@ -103,6 +103,10 @@ for (const file of readdirSync(DIR).filter((f) => f.endsWith('.flow.yaml')).sort
       }
     }
     if (s.process && !existsSync(join(DIR, s.process))) err(`${s.id}: process "${s.process}" does not exist`);
+    for (const ref of s.facts ?? []) {
+      const [id, fact] = ref.split('#');
+      if (!counterparties.find((c) => c.id === id)?.facts.some((f) => f.id === fact)) err(`${s.id}: facts "${ref}" names no fact — use <id>#<fact id> of a file in processes/authorities/ (or another role folder)`);
+    }
 
     // Engine inputs: who runs an AI step, and how many items per call.
     for (const k of ['model', 'escalate'] as const) {
@@ -219,11 +223,14 @@ for (const file of readdirSync(DIR).filter((f) => f.endsWith('.guide.yaml')).sor
   }
 }
 
-/** One home per fact: a rule that is about one counterparty lives in its file. */
+/**
+ * One home per fact: a rule that is about one counterparty lives in its file. An authority is
+ * exempt: its process is the law every company follows, so the generic guides name it.
+ */
 function checkOneHome(file: string, section: string, body: Section, err: (m: string) => void) {
   for (const rule of [...(body.gates ?? []), ...(body.rules ?? [])]) {
     const text = `${rule.when ?? ''} ${rule.then ?? ''}`;
-    for (const cp of counterparties) {
+    for (const cp of counterparties.filter((c) => c.role !== 'authority')) {
       const hit = mentionIn(text, namesOf(cp));
       if (hit) err(`${section}/${rule.id}: names "${hit}" — move it to ${fileOf(cp)} under "${file}#${section}" (mentions in why: are fine)`);
     }
@@ -287,6 +294,7 @@ for (const f of counterpartyFiles) {
     const home = homeOf('workspace', f.role, f.body.id!);
     for (const d of (f.body.documents ?? []) as (Rule & { id?: string })[]) checkAppLayer(`documents ${d.id}`, { rules: [{ ...d, when: '', then: '' }] }, err, home);
     for (const [ref, raw] of Object.entries(f.body.steps ?? {})) checkAppLayer(`steps."${ref}"`, raw as Section, err, home);
+    for (const fact of f.body.facts ?? []) checkAppLayer(`facts ${fact.id}`, { rules: [{ id: fact.id, when: '', then: fact.fact, source: fact.source }] }, err, home);
   }
   for (const [ref, raw] of Object.entries(f.body.steps ?? {})) {
     if (!stepRefs.has(ref)) err(`steps."${ref}" is not the with.guide of any flow step — use the exact string, e.g. "booking.guide.yaml#classify"`);
@@ -344,7 +352,8 @@ const sources = readdirSync(join(APP_ROOT, 'src'), { recursive: true, encoding: 
   .filter((f) => /\.tsx?$/.test(f) && !f.startsWith(`knowledge${sep}`))
   .sort();
 for (const f of sources) {
-  const named = counterpartiesNamedIn(readFileSync(join(APP_ROOT, 'src', f), 'utf8'), f, counterparties);
+  // Code may name an authority (the ESTV's XML, the BAZG's rates): that is the law, not a vendor rule.
+  const named = counterpartiesNamedIn(readFileSync(join(APP_ROOT, 'src', f), 'utf8'), f, counterparties.filter((c) => c.role !== 'authority'));
   if (named.length) codeHits.push(`src/${f.split(sep).join('/')} (${named.join(', ')})`);
 }
 if (codeHits.length) warnings.push(`counterparty knowledge still hardcoded in ${codeHits.length} file(s), to move behind decide(): ${codeHits.join('; ')}`);

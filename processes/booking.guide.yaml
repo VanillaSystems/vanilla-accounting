@@ -167,7 +167,7 @@ steps:
         source: AGENTS.md § VAT code rules
       - id: pv-import-vat-evv
         when: a courier bill passes on Swiss IMPORT VAT for goods imported for the company, and the BAZG Veranlagungsverfügung MWST (eVV) names the company as importer
-        then: "book the import VAT on 4030 without code, then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it — e-dec-web.ezv.admin.ch/edecZugangscodeGui with the Zollanmeldungsnummer and Zugangscode printed on the courier bill (CAPTCHA: the owner submits; the zip contains the signed PDF)"
+        then: "book the import VAT on 4030 without code, then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it (how: processes/authorities/bazg.yaml#evv-download)"
         why: "the courier bill is not proof of import VAT; the eVV is (UPS bill page 3 says so)"
         source: owner decision 2026-10-08
       - id: pv-bezugsteuer

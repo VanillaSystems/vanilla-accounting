@@ -8,6 +8,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { mergeCounterparty, companySpecific, loadKnowledge } from '../src/knowledge/layers.js';
+import { identify } from '../src/knowledge/counterparties.js';
+import { APP_ROOT } from '../src/workspace/workspace.js';
+import { DEMO_ROOT } from './support/workspace.js';
 
 const files = { vendor: 'processes/suppliers/acme.yaml', binding: 'knowledge/suppliers/acme.yaml' };
 const vendor = {
@@ -95,4 +98,21 @@ test('the app layer refuses one company’s items', () => {
   assert.match(companySpecific({ id: 'x', when: 'w', then: 't', source: 'memory — blank PDF captures' })!, /source .* is not generic/);
   assert.match(companySpecific({ id: 'x', when: 'w', then: 't', why: 'Q3 2026, CHF 12.34 output tax missed', source: 'definition' })!, /why names an amount/);
   assert.match(companySpecific({ id: 'x', when: 'transfer reference 1000000001', then: 't', source: 'definition' })!, /when names a long number/);
+});
+
+test('a payment to an authority routes to its app file, and each tells its facts', () => {
+  const { counterparties } = loadKnowledge(APP_ROOT, DEMO_ROOT);
+  const route = (merchant: string) => {
+    const r = identify({ uids: [], domains: [], merchant, filenames: [] }, counterparties);
+    return r.kind === 'known' ? r.counterparty : r.kind;
+  };
+  assert.equal(route('Eidg. Steuerverwaltung ESTV, Hauptabteilung MWST'), 'estv');
+  assert.equal(route('Kantonale Steuerverwaltung Musterkanton'), 'steuerverwaltung');
+  assert.equal(route('Ausgleichskasse Musterkanton'), 'ausgleichskasse');
+  assert.equal(route('BAZG Bern'), 'bazg');
+  for (const id of ['estv', 'ausgleichskasse', 'steuerverwaltung', 'bazg']) {
+    const cp = counterparties.find((c) => c.id === id)!;
+    assert.equal(cp.role, 'authority', id);
+    assert.ok(cp.facts.length > 0 && cp.facts.every((f) => f.source), `${id} has sourced facts`);
+  }
 });

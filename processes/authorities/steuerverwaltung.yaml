@@ -1,0 +1,24 @@
+# The cantonal tax office: the profit and capital tax of a GmbH, and the direct federal tax it
+# collects for the Confederation. Which canton, and its bank text, is the company's.
+
+id: steuerverwaltung
+name: Kantonale Steuerverwaltung (cantonal tax office)
+match:
+  tx: [ "kantonale steuerverwaltung", "steueramt" ]
+
+facts:
+  - id: federal-tax
+    fact: the canton assesses and collects the direct federal tax together with its own taxes
+    source: DBG Art. 2
+  - id: federal-rate
+    fact: the direct federal tax on the profit of a GmbH or AG is 8.5% of the net profit
+    source: DBG Art. 68
+  - id: tax-return
+    fact: a legal entity files one tax return per business year, with its signed annual accounts attached
+    source: DBG Art. 125 Abs. 2
+  - id: federal-due
+    fact: the direct federal tax of a year falls due on 1 March of the following year and is paid within 30 days
+    source: DBG Art. 161 Abs. 1; DBG Art. 163 Abs. 1
+  - id: instalments
+    fact: cantonal and communal taxes are billed provisionally in instalments during the year; due dates, interest and discounts are set by each canton's own tax law
+    source: StHG Art. 1 Abs. 3

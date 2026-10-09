@@ -98,15 +98,18 @@ export function mergeCounterparty(
     if (sigs.length) match[t] = sigs;
   }
   const documents = [...(vendor.documents ?? []), ...(binding.documents ?? [])];
-  const dup = documents.find((d, i) => documents.findIndex((e) => e.id === d.id) !== i);
-  if (dup) fail(files.binding, `documents ${dup.id} is also in ${files.vendor} — a document type has one owner`);
+  const facts = [...(vendor.facts ?? []), ...(binding.facts ?? [])];
+  for (const [what, list] of [['documents', documents], ['facts', facts]] as const) {
+    const dup = list.find((d, i) => list.findIndex((e) => e.id === d.id) !== i);
+    if (dup) fail(files.binding, `${what} ${dup.id} is also in ${files.vendor} — each has one owner`);
+  }
   const steps: Record<string, unknown> = { ...vendor.steps };
   for (const [ref, section] of Object.entries(binding.steps ?? {})) {
     steps[ref] = mergeSection(vendor.steps?.[ref] as Section | undefined, section as Section);
   }
   return compileCounterparty({
     id: vendor.id, name: vendor.name, grouped: vendor.grouped, accounts: binding.accounts,
-    roles: [...new Set([...(vendor.roles ?? []), ...(binding.roles ?? [])])], match, documents, steps,
+    roles: [...new Set([...(vendor.roles ?? []), ...(binding.roles ?? [])])], match, documents, facts, steps,
   }, files, role);
 }
 
