@@ -18,7 +18,15 @@ Belege runs the books of Vanilla Systems GmbH, and is built by Ken Steiner.
   and `<name>.Buchungen-sample.tsv` (example entries); the newest `<name>` wins.
 - **The processes** in `processes/` say who does what each quarter and which rules decide each
   step. `processes/README.md` explains them.
-- **The demo** in `demo/` is a complete workspace of a made-up company, Muster Kaffee GmbH.
+- **The demos** are complete workspaces of made-up companies, January to September 2026, with
+  Q1 filed and corrected:
+  - `demo/`: Muster Kaffee GmbH, a coffee roaster with a café and a webshop (reduced rates,
+    card takings, a Sammelzahlung).
+  - `demo-consulting/`: Muster Consulting GmbH, a one-person IT consultancy. The owner pays
+    himself a salary, bills Swiss clients (8.1%) and foreign clients (Ziffer 221), gets his
+    private outlays back each month, and declares a private share of his phone.
+
+  `npm run demo:generate` writes both from `tools/demo/`. Do not edit them by hand.
 
 ## Quick start
 
@@ -27,7 +35,7 @@ Claude Code CLI (`claude`).
 
 ```sh
 npm install
-BELEGE_WORKSPACE=demo npm start
+BELEGE_WORKSPACE=demo npm start             # or BELEGE_WORKSPACE=demo-consulting
 ```
 
 Open http://localhost:5173. To work on your own books, set `BELEGE_WORKSPACE` in `.env` (or the environment) to a directory
@@ -45,7 +53,7 @@ person and every agent follows.
 npm test
 ```
 
-`npm test` type-checks the code, runs the golden master of the VAT figures on the demo
+`npm test` type-checks the code, runs the golden master of the VAT figures on each demo
 workspace, and runs the structural half of the leak guard.
 
 ## Leak guard

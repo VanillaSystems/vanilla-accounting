@@ -1,0 +1,16 @@
+# A foreign software service without Swiss MWST.
+id: sample-labs
+name: Sample Labs Inc.
+match:
+  tx: ["sample labs"]
+  file: ['^\\d{8}-sample-labs']
+accounts: ["6570"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-sample-labs-bezugsteuer
+        when: the monthly Sample Labs card charge
+        then: '6570 Informatik, Software, B81-1 (Bezugsteuer: a service from abroad without Swiss MWST)'
+        source: decision 2026-01-10
+    precedents: []

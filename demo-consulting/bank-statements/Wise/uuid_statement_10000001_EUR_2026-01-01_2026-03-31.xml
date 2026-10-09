@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>MSG-STM-WISE-2026-01</MsgId>
+      <CreDtTm>2026-04-01T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>STM-WISE-2026-01</Id>
+      <CreDtTm>2026-04-01T06:00:00</CreDtTm>
+      <FrToDt><FrDtTm>2026-01-01T00:00:00</FrDtTm><ToDtTm>2026-03-31T23:59:59</ToDtTm></FrToDt>
+      <Acct>
+        <Id><IBAN>BE00967000000002</IBAN></Id>
+        <Ccy>EUR</Ccy>
+        <Ownr><Nm>Muster Consulting GmbH</Nm></Ownr>
+        <Svcr><FinInstnId><Nm>Wise Europe SA</Nm></FinInstnId></Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">2500.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-01-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">6202.71</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-03-31</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="EUR">32.43</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-12</Dt></BookgDt>
+        <ValDt><Dt>2026-01-12</Dt></ValDt>
+        <AcctSvcrRef>CARD-7000001</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="EUR">32.43</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL SOFTWARE BERLIN</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Card transaction of 32.43 EUR issued by Beispiel Software BERLIN</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Card transaction of 32.43 EUR issued by Beispiel Software BERLIN</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">3800.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-02</Dt></BookgDt>
+        <ValDt><Dt>2026-02-02</Dt></ValDt>
+        <AcctSvcrRef>TRANSFER-8000001</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="EUR">3800.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>MUSTER MASCHINENBAU GMBH</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-013</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-013</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Received money from MUSTER MASCHINENBAU GMBH</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">32.43</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-10</Dt></BookgDt>
+        <ValDt><Dt>2026-02-10</Dt></ValDt>
+        <AcctSvcrRef>CARD-7000002</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="EUR">32.43</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL SOFTWARE BERLIN</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Card transaction of 32.43 EUR issued by Beispiel Software BERLIN</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Card transaction of 32.43 EUR issued by Beispiel Software BERLIN</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">32.43</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-10</Dt></BookgDt>
+        <ValDt><Dt>2026-03-10</Dt></ValDt>
+        <AcctSvcrRef>CARD-7000003</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="EUR">32.43</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL SOFTWARE BERLIN</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Card transaction of 32.43 EUR issued by Beispiel Software BERLIN</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Card transaction of 32.43 EUR issued by Beispiel Software BERLIN</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>
