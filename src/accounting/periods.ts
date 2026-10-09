@@ -133,6 +133,14 @@ export function vatPeriodOf(p: Period): string | null {
   return /^\d{4}(-[QH]\d)?$/.test(token) ? token : null;
 }
 
+/** A date typed the Swiss way, "9.10.2026" or "09.10.2026"; null when it is no real day. */
+export function parseSwissDate(text: string): IsoDate | null {
+  const m = text.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (!m) return null;
+  const day = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return isIsoDate(day) ? day : null;
+}
+
 /** Undated items show in every period. */
 export const inPeriod = (p: Period, date: IsoDate | undefined): boolean => !date || (date >= p.from && date <= p.to);
 

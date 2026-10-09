@@ -1,5 +1,6 @@
 import type { JournalEntry } from '../types/index.js';
 import { toRappen, fromRappen, roundCHF } from './rappen.js';
+import { addDays } from './periods.js';
 
 export interface AccountBalance {
   account: string;
@@ -106,4 +107,22 @@ export function computeAccountBalance(
     creditTotal: 0,
     balance: openingBalance,
   };
+}
+
+/**
+ * Each account's balance when `from` begins: the opening balances of `from`'s year plus that
+ * year's entries before `from`. A range that starts mid-year (a quarter, the last 30 days) so
+ * carries the year's earlier movements instead of starting again from 1 January. Before the
+ * first year with opening balances (the period 'all'), the books start at that year's openings.
+ */
+export function openingBalancesAt(
+  entries: JournalEntry[],
+  from: string,
+  openingByYear: Record<string, Record<string, number>> = {},
+): Record<string, number> {
+  const year = from.slice(0, 4);
+  const first = Object.keys(openingByYear).sort()[0];
+  if (first && year < first) return openingByYear[first];
+  const balances = computeBalances(entries, `${year}-01-01`, addDays(from, -1), openingByYear[year] ?? {});
+  return Object.fromEntries(balances.map((b) => [b.account, b.balance]));
 }

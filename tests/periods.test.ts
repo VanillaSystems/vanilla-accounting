@@ -117,3 +117,23 @@ test('inPeriod: inclusive at both ends; undated items show everywhere', () => {
   assert.deepEqual(['2026-09-30', '2026-10-01', '2026-10-09', '2026-10-10'].map((d) => inPeriod(p, d)), [false, true, true, false]);
   assert.equal(inPeriod(p, undefined), true);
 });
+
+test('openingBalancesAt: a range that starts mid-year carries the year so far', async () => {
+  const { openingBalancesAt } = await import('../src/accounting/ledger.js');
+  const e = (id: string, date: string, debit: string, credit: string, amount: number) =>
+    ({ id, date, accountDebit: debit, accountCredit: credit, amount, description: id }) as never;
+  const entries = [e('a', '2026-02-10', '1020', '3200', 100), e('b', '2026-07-05', '6500', '1020', 30), e('c', '2026-07-20', '1020', '3200', 5)];
+  const openings = { '2026': { '1020': 1000 } };
+  assert.deepEqual(openingBalancesAt(entries, '2026-01-01', openings), { '1020': 1000 });
+  assert.deepEqual(openingBalancesAt(entries, '2026-07-01', openings), { '1020': 1100, '3200': 100 });
+  assert.deepEqual(openingBalancesAt(entries, '2026-07-10', openings), { '1020': 1070, '3200': 100, '6500': 30 });
+  assert.deepEqual(openingBalancesAt(entries, '0000-01-01', openings), { '1020': 1000 }, "the period 'all' starts at the first openings");
+});
+
+test('parseSwissDate: typed dd.mm.yyyy, with or without leading zeros; no impossible days', async () => {
+  const { parseSwissDate } = await import('../src/accounting/periods.js');
+  assert.equal(parseSwissDate('09.10.2026'), '2026-10-09');
+  assert.equal(parseSwissDate(' 9.1.2026 '), '2026-01-09');
+  assert.equal(parseSwissDate('29.02.2028'), '2028-02-29');
+  for (const bad of ['29.02.2026', '2026-10-09', '9/10/2026', '32.01.2026', '1.13.2026', '']) assert.equal(parseSwissDate(bad), null, bad);
+});
