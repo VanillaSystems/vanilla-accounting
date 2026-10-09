@@ -1,16 +1,17 @@
 /**
  * npm run doctor: is everything in place to keep the books? Checks the tools (Node, pdftotext,
  * the claude CLI and its login, without a model call) and the workspace (manifest, books.json,
- * folders, chart, bank accounts, the answers of npm run init). Prints one line per check and the
- * fix for each ✗; exit code 1 on any ✗. `--workspace <dir>` checks that folder instead of the
- * one BELEGE_WORKSPACE names.
+ * folders, chart, bank accounts, which bank account each statement lands on, the answers of
+ * npm run init). Prints one line per check and the fix for each ✗; exit code 1 on any ✗.
+ * `--workspace <dir>` checks that folder instead of the one BELEGE_WORKSPACE names.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadBooks } from '../books/store.js';
-import { bankKind } from '../workspace/scaffold.js';
+import { bankKind, parseIban } from '../workspace/banks.js';
+import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
 
 type Result =
@@ -82,14 +83,25 @@ function workspaceChecks(ws: Workspace): Result[] {
     results.push(fail(`accounts.json does not read (${(e as Error).message.split('\n')[0]})`, 'Restore it from git, or copy the chart from a new workspace made by npm run init.'));
   }
   const numbers = new Set(accounts.map((a) => a.number));
+  const statements = readBankStatements(ws);
   for (const b of ws.bankAccounts) {
     const label = `${b.bank} ${b.currency} books on ${b.account}`;
     if (!numbers.has(b.account)) { results.push(fail(`${label}, which is not in accounts.json`, `Add { "number": "${b.account}", "name": "${b.label}" } to accounts.json, or fix the account in belege.workspace.yaml.`)); continue; }
-    if (b.statements && !existsSync(resolve(ws.paths.statements, b.bank))) { results.push(fail(`${label}: bank-statements/${b.bank}/ missing`, `mkdir "${resolve(ws.paths.statements, b.bank)}" and put its camt.053 files there.`)); continue; }
-    const ignored = b.statements ? readdirSync(resolve(ws.paths.statements, b.bank)).filter((f) => f.endsWith('.xml') && !f.startsWith('uuid_')) : [];
-    if (ignored.length) { results.push(fail(`${label}: ${ignored.length} XML file(s) in bank-statements/${b.bank}/ are not read`, `The import reads files named uuid_*.xml only: rename ${ignored[0]} to uuid_${ignored[0]}.`)); continue; }
-    const note = b.bank === 'manual' ? undefined : bankKind(b.bank).note;
-    results.push(note ? warn(label, note) : ok(label));
+    if (b.statements && !b.iban && !existsSync(resolve(ws.paths.statements, b.bank))) { results.push(fail(`${label}: bank-statements/${b.bank}/ missing`, `mkdir "${resolve(ws.paths.statements, b.bank)}" and put its camt.053 files there.`)); continue; }
+    const mine = statements.filter((f): f is Extract<StatementFile, { status: 'read' }> => f.status === 'read' && f.account === b);
+    const iban = mine.map((f) => f.statement.iban && parseIban(f.statement.iban)).find((i) => i);
+    if (b.statements && !b.iban && iban) {
+      results.push(warn(`${label}: ${mine.length} statement(s) read from bank-statements/${b.bank}/, for IBAN ${iban}`, `add iban: ${iban} to ${b.bank} ${b.currency} in belege.workspace.yaml, so its statements land here wherever the file is`));
+      continue;
+    }
+    const note = bankKind(b.bank).note;
+    const read = b.statements ? `, ${mine.length} statement(s) read` : '';
+    results.push(note ? warn(label + read, note) : ok(label + read));
+  }
+  for (const f of statements) {
+    if (f.status === 'unmatched') results.push(fail(`bank-statements/${f.file} belongs to no bank account`, f.problem));
+    if (f.status === 'skipped') results.push(warn(`bank-statements/${f.file} is not read`, f.reason));
+    if (f.status === 'duplicate') results.push(warn(`bank-statements/${f.file} is not read`, `statement ${f.statement.id} is the same as in ${f.of}; delete one of the two`));
   }
 
   if (profile) {

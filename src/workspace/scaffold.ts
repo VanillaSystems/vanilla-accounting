@@ -6,36 +6,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { stringify } from 'yaml';
+import { bankKind, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import type { Preset, SupportedAnswers } from './setup.js';
 import { MANIFEST_FILE, WORKSPACE_SCHEMA, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
-
-/** Where money is kept. `range` is where its ledger account is suggested; `statements` how it is imported. */
-interface BankKind {
-  range: 'bank' | 'card';
-  statements?: 'camt053';
-  /** Statement import proven on real files. */
-  tested: boolean;
-  note?: string;
-}
-
-const camt = (tested: boolean): BankKind => ({ range: 'bank', statements: 'camt053', tested });
-const UNTESTED = 'Belege is tested with Raiffeisen and Wise camt.053 files. Import your first statement and check its transactions in the Bank tab.';
-
-export const BANKS: Record<string, BankKind> = {
-  Raiffeisen: camt(true),
-  UBS: { ...camt(false), note: UNTESTED },
-  PostFinance: { ...camt(false), note: UNTESTED },
-  ZKB: { ...camt(false), note: UNTESTED },
-  Wise: camt(true),
-  PayPal: { range: 'bank', tested: false, note: 'PayPal statements are not imported yet: its payments are booked by hand.' },
-  Kreditkarte: { range: 'card', tested: false, note: 'Credit card statements are not imported yet: book the monthly card bill by hand, or pay with a Wise card.' },
-};
-
-/** Any other bank (a cantonal or regional bank) imports camt.053 like the listed ones. */
-export function bankKind(bank: string): BankKind {
-  return BANKS[bank] ?? { ...camt(false), note: UNTESTED };
-}
 
 /** The chart's bank accounts per currency (reference/charts/ch-kmu.yaml); a further account takes the next free number. */
 const BANK_BY_CURRENCY: Record<string, string> = { CHF: '1020', EUR: '1021', USD: '1022' };
@@ -56,7 +30,7 @@ export interface InitInput {
   business?: string;
   preset: Preset;
   answers: SupportedAnswers;
-  banks: { bank: string; currency: string; account: string }[];
+  banks: { bank: string; currency: string; account: string; iban?: Iban }[];
   exportTo?: string;
 }
 
@@ -76,7 +50,7 @@ function ownerAccount(input: InitInput): LedgerBankAccount {
 export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
   const banks = input.banks.map((b): LedgerBankAccount => {
     const { statements } = bankKind(b.bank);
-    return { bank: b.bank, currency: b.currency, account: b.account, label: `${b.bank} ${b.currency}`, ...(statements ? { statements } : {}) };
+    return { bank: b.bank, currency: b.currency, account: b.account, label: `${b.bank} ${b.currency}`, ...(statements ? { statements } : {}), ...(b.iban ? { iban: b.iban } : {}) };
   });
   return input.answers.ownerPaysPrivately === 'yes' ? [...banks, ownerAccount(input)] : banks;
 }

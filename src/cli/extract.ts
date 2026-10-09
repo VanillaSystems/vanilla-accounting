@@ -2,8 +2,9 @@
  * npm run extract
  *
  * Scans beleg-import/ (staged) and receipts/ (archived) for PDFs, extracts text
- * via pdftotext (fallback: tesseract), parses uuid_-prefixed camt053 XML files
- * into transactions[], then writes books.json.
+ * via pdftotext (fallback: tesseract), parses the camt053 statements under bank-statements/
+ * (src/workspace/bank-statements.ts) into transactions[], then writes books.json. A statement
+ * no bank account of belege.workspace.yaml takes stops the run before anything is written.
  *
  * PNG/JPG files dropped into beleg-import/ are converted to PDF (via ImageMagick's
  * `convert`) before scanning; the original image is deleted after conversion.
@@ -20,13 +21,14 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { parseCamt053, assignUniqueRefs } from '../parsers/camt053.js';
+import { assignUniqueRefs, transactionsOf } from '../parsers/camt053.js';
 import { ask } from '../llm/ask.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import { wiseReferences } from '../parsers/wise-statement-pdf.js';
 import type { Receipt, BankTransaction, BankStatement, Index, Mapping } from '../types/index.js';
 import { emptyBooks, loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { readBankStatements } from '../workspace/bank-statements.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -87,24 +89,18 @@ const BANK_STATEMENTS_DIR = ws.paths.statements;
 // ─── Transactions from camt053 XML ──────────────────────────────────────────
 
 function loadTransactions(): BankTransaction[] {
-  const all: BankTransaction[] = [];
-  if (!existsSync(BANK_STATEMENTS_DIR)) return all;
-
-  for (const dir of readdirSync(BANK_STATEMENTS_DIR)) {
-    const subdir = join(BANK_STATEMENTS_DIR, dir);
-    try {
-      for (const file of readdirSync(subdir)) {
-        if (!file.startsWith('uuid_') || !file.endsWith('.xml')) continue;
-        try {
-          const xml = readFileSync(join(subdir, file), 'utf8');
-          all.push(...parseCamt053(xml, file));
-        } catch (e) {
-          console.warn(`  warn: ${file}: ${e}`);
-        }
-      }
-    } catch {}
+  const files = readBankStatements(ws);
+  for (const f of files) {
+    if (f.status === 'duplicate') console.log(`  skip ${f.file}: statement ${f.statement.id} is already read from ${f.of}`);
+    if (f.status === 'skipped') console.log(`  skip ${f.file}: ${f.reason}`);
   }
-  return all;
+  const unmatched = files.filter((f) => f.status === 'unmatched');
+  if (unmatched.length) {
+    console.error(`⛔ ${unmatched.length} bank statement(s) belong to no bank account; nothing was written.`);
+    for (const f of unmatched) console.error(`  bank-statements/${f.file}: ${f.problem}`);
+    process.exit(1);
+  }
+  return files.flatMap((f) => (f.status === 'read' ? transactionsOf(f.statement, f.account) : []));
 }
 
 /**
@@ -141,29 +137,17 @@ function parseWiseDates(filename: string): {
   return { currency: m[1], fromDate: m[2], toDate: m[3] };
 }
 
+/** The monthly statement PDFs in each bank's folder, named the way Raiffeisen or Wise name them. */
 function loadBankStatements(): BankStatement[] {
   const statements: BankStatement[] = [];
-
-  const raiffeisenDir = join(BANK_STATEMENTS_DIR, 'Raiffeisen');
-  if (existsSync(raiffeisenDir)) {
-    for (const file of readdirSync(raiffeisenDir).filter((f) => f.endsWith('.pdf'))) {
-      const parsed = parseRaiffeisenDate(file);
-      if (parsed) {
-        statements.push({ bank: 'Raiffeisen', filename: file, ...parsed });
-      }
+  for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements).map((a) => a.bank))) {
+    const dir = join(BANK_STATEMENTS_DIR, bank);
+    if (!existsSync(dir)) continue;
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.pdf'))) {
+      const parsed = parseRaiffeisenDate(file) ?? parseWiseDates(file);
+      if (parsed) statements.push({ bank, filename: file, ...parsed });
     }
   }
-
-  const wiseDir = join(BANK_STATEMENTS_DIR, 'Wise');
-  if (existsSync(wiseDir)) {
-    for (const file of readdirSync(wiseDir).filter((f) => f.endsWith('.pdf'))) {
-      const parsed = parseWiseDates(file);
-      if (parsed) {
-        statements.push({ bank: 'Wise', filename: file, ...parsed });
-      }
-    }
-  }
-
   return statements.sort((a, b) => a.fromDate.localeCompare(b.fromDate));
 }
 
@@ -253,7 +237,7 @@ export interface Scan {
   receipts: Receipt[];
   /** Transactions parsed from the camt053 files, refs already unique. */
   bankTransactions: BankTransaction[];
-  /** Wise transaction id → transfer reference, from the monthly statement PDFs. */
+  /** Wise transaction id → transfer reference, from the monthly statement PDFs of the `wise` accounts. */
   wiseRefs: Map<string, string>;
   bankStatements: BankStatement[];
 }
@@ -302,9 +286,10 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
 
   const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual].map((t) => {
     const out = { ...t };
-    // Wise drops transfer references from camt053; its monthly PDFs keep them.
+    // Wise drops transfer references from camt053; its monthly PDFs keep them. The map holds
+    // Wise transaction ids only (CARD-…, TRANSFER-…), read from the folders of `wise` accounts.
     const fromPdf = scan.wiseRefs.get(t.ref.split('~')[0]);
-    if (out.bank === 'Wise' && fromPdf && !out.reference) out.reference = fromPdf;
+    if (fromPdf && !out.reference) out.reference = fromPdf;
     // A closed transaction stays exactly as filed, so batch parts and references are only
     // attached in open periods.
     if (isClosed(out)) { delete out.parts; delete out.reference; }
@@ -334,6 +319,8 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
 async function main() {
   // Load existing index to preserve mappings and already-extracted data
   const index = existsSync(ws.paths.books) ? loadBooks(ws) : emptyBooks();
+  // First: a statement that belongs to no bank account stops the run before receipts are read.
+  const parsed = loadTransactions();
 
   const existingById = new Map(index.receipts.map((r) => [r.id, r]));
 
@@ -448,8 +435,9 @@ async function main() {
 
   // Wise drops transfer references from camt053; its monthly PDFs keep them.
   const wiseRefs = new Map<string, string>();
-  const wiseDir = join(BANK_STATEMENTS_DIR, 'Wise');
-  if (existsSync(wiseDir)) {
+  for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements === 'wise').map((a) => a.bank))) {
+    const wiseDir = join(BANK_STATEMENTS_DIR, bank);
+    if (!existsSync(wiseDir)) continue;
     for (const f of readdirSync(wiseDir).filter((x) => x.endsWith('.pdf'))) {
       try {
         const { stdout } = await execFileAsync('pdftotext', ['-raw', join(wiseDir, f), '-']);
@@ -458,7 +446,6 @@ async function main() {
     }
   }
 
-  const parsed = loadTransactions();
   const { kept, before } = withinBooks(parsed, index.config);
   if (kept.length < parsed.length) {
     console.log(`  skipped ${parsed.length - kept.length} bank transaction(s) dated before ${before}, when the books open (config.openingBalances)`);

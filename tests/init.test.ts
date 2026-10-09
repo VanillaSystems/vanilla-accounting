@@ -14,6 +14,7 @@ import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/cha
 import { QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
 import { APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt } from '../src/workspace/workspace.js';
+import { testIban, withTestIbans } from './support/iban.js';
 
 // A UID with a wrong check digit, written in parts so the leak guard does not take it for a real one.
 const TYPO_UID = ['CHE-153', '004', '185'].join('.');
@@ -88,7 +89,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   assert.equal(ws.profile?.sells, 'services');
   assert.equal(ws.profile?.ownerPaysPrivately, 'yes');
   assert.deepEqual(ws.bankAccounts.map((a) => `${a.bank} ${a.currency} ${a.account} ${a.statements ?? '-'}`), [
-    'UBS CHF 1020 camt053', 'Wise EUR 1021 camt053', 'manual CHF 2451 -',
+    'UBS CHF 1020 camt053', 'Wise EUR 1021 wise', 'manual CHF 2451 -',
   ]);
   const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string; type: string }[];
   assert.deepEqual(accounts.filter((a) => ['1020', '1021', '1022', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Bankguthaben USD', 'Kontokorrent Gesellschafter']);
@@ -131,6 +132,19 @@ test('init keeps a BELEGE_WORKSPACE that points elsewhere unless told to replace
   rmSync(base, { recursive: true, force: true });
 });
 
+test('init takes an IBAN per bank and refuses one with wrong check digits', () => {
+  const base = tmp();
+  const withIban = cli('init.ts', consultant(join(base, 'a'), join(base, 'app.env'), '--bank', `PostFinance:CHF::${testIban('09000000000000002').replace(/(.{4})(?!$)/g, '$1 ')}`));
+  assert.equal(withIban.code, 0, withIban.out);
+  assert.deepEqual(workspaceAt(join(base, 'a')).bankAccounts.find((a) => a.bank === 'PostFinance'),
+    { bank: 'PostFinance', currency: 'CHF', account: '1023', label: 'PostFinance CHF', statements: 'camt053', iban: testIban('09000000000000002') });
+  const typo = cli('init.ts', consultant(join(base, 'b'), join(base, 'app.env'), '--bank', 'PostFinance:CHF::CH00 0900 0000 0000 0000 2'));
+  assert.equal(typo.code, 1);
+  assert.match(typo.out, /Bank PostFinance: "CH00 0900 0000 0000 0000 2" is not an IBAN/);
+  assert.ok(!existsSync(join(base, 'b')), 'nothing written');
+  rmSync(base, { recursive: true, force: true });
+});
+
 test('an answer the app does not support yet stops with its explanation and writes nothing', () => {
   const base = tmp();
   const cases: [string[], RegExp][] = [
@@ -167,10 +181,18 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   assert.match(doctor.out, /✗ Wise EUR books on 1029, which is not in accounts\.json\n {4}fix: Add \{ "number": "1029"/);
 
   writeFileSync(manifestPath, manifest);
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'camt053_export.xml'), '<Document/>');
-  const skipped = cli('doctor.ts', ['--workspace', dir], bin);
-  assert.equal(skipped.code, 1);
-  assert.match(skipped.out, /rename camt053_export\.xml to uuid_camt053_export\.xml/);
+  writeFileSync(join(dir, 'bank-statements', 'UBS', 'export.xml'), '<Document/>');
+  const fixture = (name: string) => withTestIbans(readFileSync(join(import.meta.dirname, 'fixtures/camt053', name), 'utf8'));
+  writeFileSync(join(dir, 'bank-statements', 'UBS', 'Kontoauszug Juli.xml'), fixture('ubs_camt053_001_04.xml'));
+  const named = cli('doctor.ts', ['--workspace', dir], bin);
+  assert.equal(named.code, 0, named.out);
+  assert.ok(named.out.includes(`! UBS CHF books on 1020: 1 statement(s) read from bank-statements/UBS/, for IBAN ${testIban('00230000000000001')}: add iban: ${testIban('00230000000000001')}`), named.out);
+  assert.match(named.out, /! bank-statements\/UBS\/export\.xml is not read: not a camt\.053 bank statement/);
+  writeFileSync(join(dir, 'bank-statements', 'UBS', 'pf.xml'), fixture('postfinance_camt053_001_08.xml'));
+  const foreign = cli('doctor.ts', ['--workspace', dir], bin);
+  assert.equal(foreign.code, 1);
+  assert.match(foreign.out, /✗ bank-statements\/UBS\/pf\.xml belongs to no bank account\n {4}fix: bank-statements\/UBS\/ holds statements of two CHF accounts/);
+  assert.ok(foreign.out.includes(`✗ bank-statements/UBS/pf.xml belongs to no bank account\n    fix: statement of IBAN ${testIban('09000000000000003')} in EUR in bank-statements/UBS/ matches no bank account`), foreign.out);
 
   const raw = parse(manifest);
   raw.profile.sells = 'shoes';

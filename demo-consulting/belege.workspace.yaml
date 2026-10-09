@@ -7,5 +7,5 @@ company:
   vat: { method: effective, reporting: received }
 bankAccounts:
   - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053 }
-  - { bank: Wise, currency: EUR, account: "1021", label: Wise EUR, statements: camt053 }
+  - { bank: Wise, currency: EUR, account: "1021", label: Wise EUR, statements: wise }
   - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent Lukas Beispiel }

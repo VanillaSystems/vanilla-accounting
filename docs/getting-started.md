@@ -79,8 +79,11 @@ words on what the company does. Then these questions, in this order:
 Last, your bank accounts, one at a time: Raiffeisen, UBS, PostFinance, ZKB, another cantonal
 or regional bank, Wise (one account per currency), PayPal, or a credit card. The wizard
 suggests a ledger account for each: 1020 for CHF, 1021 for EUR, 1022 for USD, then the next
-free number; 2101 for a card. It also asks
-where the books go at year-end, such as Banana or your Treuhand.
+free number; 2101 for a card. It also asks for the account's IBAN. The IBAN is optional: press
+Enter to skip it, and `npm run doctor` shows it to you once the first statement is imported.
+Last it asks where the books go at year-end, such as Banana or your Treuhand. In the flag form a
+bank is `<bank>:<currency>[:<ledger account>[:<IBAN>]]`, for example `--bank "UBS:CHF::<IBAN>"`
+(an empty ledger account takes the suggested one).
 
 The workspace gets:
 
@@ -115,19 +118,44 @@ npm run doctor
 ```
 
 It checks the tools (Node.js, pdftotext, the `claude` command and its login) and the workspace
-(the manifest, `books.json`, the folders, that every bank account is in the chart). Each line
-starts with ✓ or ✗. A ✗ line says how to fix it. A ! line is a note that does not stop you.
+(the manifest, `books.json`, the folders, that every bank account is in the chart, and which
+bank account each statement file lands on). Each line starts with ✓ or ✗. A ✗ line says how
+to fix it. A ! line is a note that does not stop you.
 
 ## 4. Import your first bank statement
 
-Belege reads bank statements in the ISO 20022 format **camt.053** (an XML file). In your
-e-banking, look for the statement export and choose camt.053 (some banks call it XML or ISO
-20022). At Wise, download a statement and choose the camt.053 format.
+Belege reads bank statements in the ISO 20022 format **camt.053**, an XML file that Swiss
+banks offer since the switch to ISO 20022 payments. It is the statement
+(Kontoauszug), with the bank's opening and closing balance. In your e-banking, look for the
+account statement or the account export and choose camt.053. Some banks call it ISO 20022,
+XML, or "elektronischer Kontoauszug". Some banks deliver camt.053 only after you switch it on
+once in the e-banking settings, sometimes for a fee; if you cannot find it, ask your bank for
+"camt.053". At Wise, open the account in each currency, download a statement, and choose the
+camt.053 format.
+
+Which banks: the import is tested with Raiffeisen and Wise statements, and with statements in
+the shapes UBS, PostFinance and the cantonal banks export (the tests read synthetic ones).
+Any other bank's camt.053 reads the same way.
 
 Save each file in `bank-statements/<bank>/` of your workspace, for example
-`bank-statements/UBS/`. The import reads only files whose name starts with `uuid_`. A
-Raiffeisen export already does. Rename any other file: put `uuid_` in front of its name.
-`npm run doctor` flags a file the import would skip.
+`bank-statements/UBS/`. The file name does not matter, and a subfolder is fine. Each statement
+lands on a bank account of `belege.workspace.yaml`:
+
+1. The account with the statement's IBAN and currency, when you entered the IBAN. Then the
+   folder does not matter.
+2. Otherwise, the account whose bank is the folder name, in the statement's currency.
+
+A statement that matches no account stops the import before anything is written, and
+`npm run doctor` says which account to add. Two statements of different IBANs in one folder and
+currency stop it too: give each account its own bank name and IBAN, for example
+`bank: UBS Sparkonto`. The same statement saved twice is read once.
+
+Download camt.053, not camt.054 or camt.052. A camt.054 is a booking notification (Avis) and a
+camt.052 an intraday report. Their bookings come again in the camt.053, so the import skips
+them, and `npm run doctor` names each skipped file.
+
+After the first import, check the Bank tab: the transactions, and that the closing balance
+matches your bank (`npm run reconcile-balances`).
 
 ## 5. Add receipts
 
@@ -174,9 +202,9 @@ corrections are booked in the next open quarter (see the app's `AGENTS.md`, gold
   payroll, the Lohnausweis or the AHV statement.
 - **Invoicing:** Belege does not write invoices or track open ones. A sale is booked when its
   payment arrives.
-- **Banks:** the camt.053 import is tested with Raiffeisen and Wise. Other banks' camt.053
-  should import; check the first statement's transactions in the app. PayPal and credit card
-  statements are not imported: book those by hand.
+- **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and
+  Wise; for another bank, check the first statement's transactions and closing balance. camt.054
+  notifications and PayPal and credit card statements are not imported: book those by hand.
 - **Year-end:** the closing, the revaluation of foreign currency accounts and the annual
   report are guided (processes/year-close.flow.yaml), but your Treuhand or your accounting
   software does the annual accounts.

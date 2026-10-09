@@ -1,29 +1,23 @@
 /**
- * Extracts opening/closing balance snapshots from camt053 bank statement XML.
+ * Extracts opening/closing balance snapshots from a camt053 statement.
  *
- * Both Raiffeisen and Wise export camt053, each with `<Bal>` blocks carrying an
- * OPBD (opening booked) and CLBD (closing booked) balance, an amount + currency,
- * a credit/debit indicator, and a date. These are the bank's authoritative
- * period-end balances — the source of truth to reconcile our ledger against.
+ * Every camt053 has `<Bal>` blocks carrying an OPBD (opening booked) and CLBD
+ * (closing booked) balance, an amount + currency, a credit/debit indicator, and a
+ * date. These are the bank's authoritative period-end balances — the source of
+ * truth to reconcile our ledger against.
  */
 
-import { XMLParser } from 'fast-xml-parser';
+import type { CamtStatement } from './camt053.js';
 
 export interface BalanceSnapshot {
-  bank: 'Raiffeisen' | 'Wise';
+  /** The manifest's bank label of the ledger account the statement lands on. */
+  bank: string;
   iban: string;
   currency: string;
   type: 'OPBD' | 'CLBD'; // opening / closing booked balance
   date: string; // effective YYYY-MM-DD (normalized for midnight boundary timestamps)
   amount: number; // signed into natural direction (positive = money in the account)
   sourceFile: string;
-}
-
-function bankFromInstitution(name: string, iban: string): 'Raiffeisen' | 'Wise' {
-  if (/wise/i.test(name)) return 'Wise';
-  if (/raiffeisen/i.test(name)) return 'Raiffeisen';
-  // Wise IBANs are Belgian (BE) / bank-issued; Raiffeisen is CH80808.
-  return /^CH\d{2}80808/i.test(iban) ? 'Raiffeisen' : 'Wise';
 }
 
 /**
@@ -48,21 +42,10 @@ function normalizeBalanceDate(dtEl: any): string {
   return datePart;
 }
 
-export function parseStatementBalances(xml: string, sourceFile: string): BalanceSnapshot[] {
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: '@_',
-    isArray: (name) => ['Bal'].includes(name),
-  });
-  const parsed = parser.parse(xml);
-  const stmt = parsed?.Document?.BkToCstmrStmt?.Stmt;
-  if (!stmt) return [];
-
-  const iban = String(stmt?.Acct?.Id?.IBAN ?? '');
+export function parseStatementBalances(statement: CamtStatement, bank: string, sourceFile: string): BalanceSnapshot[] {
+  const stmt = statement.node;
+  const iban = statement.iban ?? '';
   const acctCcy = String(stmt?.Acct?.Ccy ?? '');
-  const institution = String(stmt?.Acct?.Svcr?.FinInstnId?.Nm ?? '');
-  const bank = bankFromInstitution(institution, iban);
-
   const bals: any[] = stmt?.Bal ?? [];
   const snapshots: BalanceSnapshot[] = [];
   for (const bal of bals) {

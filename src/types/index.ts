@@ -64,7 +64,8 @@ export interface Mapping {
 }
 
 export interface BankStatement {
-  bank: 'Raiffeisen' | 'Wise';
+  /** The manifest's bank label (belege.workspace.yaml bankAccounts). */
+  bank: string;
   filename: string;
   fromDate: string;
   toDate: string;
@@ -153,7 +154,7 @@ export interface VatAdjustment {
 // source of truth for monthly reconciliation against the ledger (Bilanzkonten).
 export interface StatementClosingBalance {
   account: string; // ledger account (1021..1024)
-  bank: 'Raiffeisen' | 'Wise';
+  bank: string;
   currency: string; // the account's own currency
   date: string; // statement period end (month-end), YYYY-MM-DD
   amount: number; // closing balance in the account's own currency, natural sign
@@ -183,7 +184,8 @@ export interface BankTransactionPart {
 
 export interface BankTransaction {
   ref: string;
-  bank: 'Raiffeisen' | 'Wise' | 'manual';
+  /** The manifest's label of the bank account it moved on (belege.workspace.yaml bankAccounts); `manual` when paid privately. */
+  bank: string;
   date: string;
   amount: number;
   currency: string;

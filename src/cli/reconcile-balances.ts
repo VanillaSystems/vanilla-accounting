@@ -7,18 +7,17 @@
  *   --as-of DATE  reconcile as of this date (default: latest available closing date)
  *   --all         reconcile at every available statement closing date
  *
- * Statement XML is read from bank-statements/<Bank>/uuid_*.xml.
+ * The statements are every camt053 under bank-statements/ (src/workspace/bank-statements.ts),
+ * each on the ledger account belege.workspace.yaml routes it to.
  */
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { loadBooks } from '../books/store.js';
 import { parseStatementBalances, BalanceSnapshot } from '../parsers/statement-balances.js';
 import { reconcileBankBalances, closingDates, ReconcileRow } from '../accounting/reconcile-bank.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { readBankStatements } from '../workspace/bank-statements.js';
 
 const ws = openWorkspace();
-const STATEMENTS_DIR = ws.paths.statements;
 
 function parseArgs(): { asOf?: string; all: boolean } {
   const args = process.argv.slice(2);
@@ -32,23 +31,9 @@ function parseArgs(): { asOf?: string; all: boolean } {
 }
 
 function loadSnapshots(): BalanceSnapshot[] {
-  if (!existsSync(STATEMENTS_DIR)) return [];
-  const snapshots: BalanceSnapshot[] = [];
-  for (const bank of readdirSync(STATEMENTS_DIR)) {
-    const dir = join(STATEMENTS_DIR, bank);
-    let files: string[];
-    try {
-      files = readdirSync(dir);
-    } catch {
-      continue; // not a directory
-    }
-    for (const file of files) {
-      if (!file.startsWith('uuid_') || !file.endsWith('.xml')) continue;
-      const xml = readFileSync(join(dir, file), 'utf8');
-      snapshots.push(...parseStatementBalances(xml, file));
-    }
-  }
-  return snapshots;
+  const files = readBankStatements(ws);
+  for (const f of files) if (f.status === 'unmatched') console.warn(`  skip ${f.file}: ${f.problem}`);
+  return files.flatMap((f) => (f.status === 'read' ? parseStatementBalances(f.statement, f.account.bank, f.file) : []));
 }
 
 function fmt(n: number, currency: string): string {
