@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
+import type { LegalForm, Preset, QuestionKey, SupportedAnswers } from './setup.js';
 
 declare const brand: unique symbol;
 type Brand<T, B> = T & { readonly [brand]: B };
@@ -27,9 +28,20 @@ export interface Company {
   owner: string;
   /** What the company does, in a few words: context for prompts that judge business vs. private. */
   business?: string;
-  /** Cash basis on the effective method: the only combination the engine supports. */
+  legalForm?: LegalForm;
+  /** Registered, effective method, cash basis, quarterly: the only setup the engine supports. */
   vat: { method: 'effective'; reporting: 'received' };
 }
+
+/** The questions of the company's VAT setup live on Company.vat; the rest of the answers here. */
+export type ProfileKey = Exclude<QuestionKey, 'legalForm' | 'vatRegistered' | 'vatMethod' | 'basis' | 'period'>;
+
+/** How the company works, as `npm run init` asked it (src/workspace/setup.ts): context for doctor and agents. */
+export type WorkspaceProfile = Pick<SupportedAnswers, ProfileKey> & {
+  preset: Preset;
+  /** Where the books go at year-end: accounting software or a Treuhand. */
+  exportTo?: string;
+};
 
 /** A ledger account money moves through, keyed by the `bank` + `currency` of a BankTransaction. */
 export interface LedgerBankAccount {
@@ -62,6 +74,8 @@ export interface WorkspacePaths {
 export interface Workspace {
   readonly company: Company;
   readonly bankAccounts: readonly LedgerBankAccount[];
+  /** Absent in a workspace set up before `npm run init` existed. */
+  readonly profile?: WorkspaceProfile;
   readonly paths: WorkspacePaths;
 }
 

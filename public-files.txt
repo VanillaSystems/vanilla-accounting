@@ -34,6 +34,7 @@ examples/**
 demo-consulting/**
 tools/hooks/**
 
+docs/getting-started.md
 docs/adr/**
 docs/casebook.md
 docs/runbooks/**

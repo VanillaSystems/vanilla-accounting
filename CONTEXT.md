@@ -15,6 +15,9 @@ The staging folder `beleg-import/` where new receipts arrive — either manually
 ## Workspace
 The directory holding one company's data: `belege.workspace.yaml` (who the company is, which ledger account each bank books on), `books.json`, `receipts/`, `beleg-import/`, `bank-statements/`, `filings/`, `accounts.json`, `history/` (prior-year books) and `data/` (gitignored). The layout is fixed (`src/workspace/workspace.ts`). Every CLI and the API open it with `openWorkspace()`: `BELEGE_WORKSPACE`, else the first directory from the cwd upward that holds a manifest. The app's own files (`processes/`, `reference/`) are found from the code, never from the cwd.
 
+## Profile
+How the company works, as `npm run init` asked it: legal form and VAT setup on `company`, the rest (what it sells, employees, private payments, payouts) in the manifest's `profile` block. The questions, their supported answers and why the others stop are one table, `src/workspace/setup.ts`. The profile picks the accounts of the chart a workspace starts from (`reference/charts/ch-kmu.yaml`, each account with a `type` and its `line` in the balance sheet or income statement per OR 959a/959b).
+
 ## Index
 The single shared data file `books.json` at the workspace root (see **Workspace**). Written by CLI scripts, read by the React app and mutated by the local API server.
 

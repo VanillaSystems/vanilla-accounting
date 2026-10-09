@@ -1,0 +1,232 @@
+/**
+ * npm run init: set up a workspace for a company's books. Asks the questions of
+ * src/workspace/setup.ts (a preset prefills them), the company's identity and its bank accounts,
+ * then writes the folder (src/workspace/scaffold.ts), commits it to a new git repository and
+ * points the app's .env at it. Every question also has a flag, so it runs without a terminal:
+ *
+ *   npm run init -- --preset consultant --dir ../my-books --name "Beispiel GmbH" \
+ *     --uid <UID> --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
+ *
+ * Rerun on a finished workspace changes nothing. Exit code 2: an answer the app does not support yet.
+ */
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { createInterface, type Interface } from 'node:readline/promises';
+import { parseArgs } from 'node:util';
+import { loadChart } from '../workspace/chart.js';
+import { applyPlan, BANKS, bankKind, planWorkspace, suggestAccount, type InitInput } from '../workspace/scaffold.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, isSupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { parseUid } from '../workspace/uid.js';
+import { APP_ROOT, MANIFEST_FILE, workspaceAt } from '../workspace/workspace.js';
+
+const flagOf = (key: QuestionKey) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+
+const { values: flags } = parseArgs({
+  options: {
+    dir: { type: 'string' }, name: { type: 'string' }, uid: { type: 'string' }, owner: { type: 'string' },
+    about: { type: 'string' }, preset: { type: 'string' }, bank: { type: 'string', multiple: true },
+    'export-to': { type: 'string' },
+    'app-env': { type: 'string' }, 'no-env': { type: 'boolean' }, 'set-env': { type: 'boolean' },
+    yes: { type: 'boolean', short: 'y' },
+    ...Object.fromEntries(QUESTION_ORDER.map((k) => [flagOf(k), { type: 'string' as const }])),
+  },
+}) as { values: Record<string, string | string[] | boolean | undefined> };
+
+/** Stops the wizard with a message; `code` 2 marks an answer the app does not support yet. */
+class Stop extends Error {
+  constructor(message: string, readonly code = 1) { super(message); }
+}
+
+const interactive = process.stdin.isTTY === true && !flags.yes;
+let rl: Interface | undefined;
+
+/** The flag's value, else the person's answer (Enter takes the default), else the default. */
+async function answer(flag: string, prompt: string, fallback?: string): Promise<string> {
+  const given = flags[flag];
+  if (typeof given === 'string') return given.trim();
+  if (interactive) {
+    rl ??= createInterface({ input: process.stdin, output: process.stdout });
+    const typed = (await rl.question(`${prompt}${fallback ? ` [${fallback}]` : ''} > `)).trim();
+    if (typed) return typed;
+  }
+  if (fallback !== undefined) return fallback;
+  throw new Stop(`Missing --${flag} (${prompt.trim()}). Run npm run init in a terminal to be asked, or pass the flag.`);
+}
+
+async function text(flag: string, prompt: string, check?: (v: string) => string | undefined, fallback?: string): Promise<string> {
+  for (;;) {
+    const v = await answer(flag, prompt, fallback);
+    const problem = v ? check?.(v) : 'An answer is needed.';
+    if (!problem) return v;
+    if (!interactive) throw new Stop(`--${flag}: ${problem}`);
+    console.log(`  ${problem}`);
+  }
+}
+
+async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Promise<string[]> {
+  const q = QUESTIONS[key];
+  const multi = 'multi' in q;
+  const options = q.options as readonly { value: string; label: string }[];
+  if (interactive) {
+    console.log(`\n${n}/${QUESTION_ORDER.length} ${q.ask}\n    ${q.why}`);
+    console.log('    ' + options.map((o, i) => `${i + 1}) ${o.label}`).join('   ') + (multi ? '   (several: 1,2; none: -)' : ''));
+  }
+  const prefilled = preset[key] as string | string[] | undefined;
+  const fallback = prefilled === undefined ? undefined : multi ? ([] as string[]).concat(prefilled).join(',') || '-' : String(prefilled);
+  for (;;) {
+    const raw = await answer(flagOf(key), interactive ? '   ' : q.ask, fallback);
+    const picked = (multi ? raw.split(',') : [raw]).map((s) => s.trim()).filter((s) => s && s !== '-' && s !== 'none')
+      .map((s) => (/^\d+$/.test(s) ? options[Number(s) - 1]?.value : options.find((o) => o.value.toLowerCase() === s.toLowerCase())?.value) ?? `?${s}`);
+    const bad = picked.find((v) => v.startsWith('?'));
+    if (!bad && (multi || picked.length === 1)) return picked;
+    const problem = `"${bad?.slice(1) ?? raw}" is not one of ${options.map((o) => o.value).join(', ')}.`;
+    if (!interactive) throw new Stop(`--${flagOf(key)}: ${problem}`);
+    console.log(`    ${problem}`);
+  }
+}
+
+async function askAnswers(preset: Preset): Promise<Answers> {
+  const prefill: Partial<Answers> = PRESETS[preset].answers;
+  const answers: Record<string, string | string[]> = {};
+  for (const [i, key] of QUESTION_ORDER.entries()) {
+    const picked = await choose(key, i + 1, prefill);
+    answers[key] = 'multi' in QUESTIONS[key] ? picked : picked[0];
+    for (const v of picked) {
+      const option = optionOf(key, v);
+      if (option?.unsupported) throw new Stop(`${QUESTIONS[key].ask}: ${option.label}.\n${option.unsupported}`, 2);
+      if (option?.caveat) console.log(`    Note: ${option.caveat}`);
+    }
+  }
+  return answers as Answers;
+}
+
+const CURRENCY = /^[A-Z]{3}$/;
+
+async function askBanks(): Promise<InitInput['banks']> {
+  const taken = new Set<string>();
+  const banks: InitInput['banks'] = [];
+  const add = (bank: string, currency: string, account: string) => {
+    if (!CURRENCY.test(currency)) throw new Stop(`Bank ${bank}: currency "${currency}" must be a 3-letter code like CHF or EUR.`);
+    const range = bankKind(bank).range;
+    if (!/^\d{4}$/.test(account) || account[0] !== (range === 'card' ? '2' : '1')) {
+      throw new Stop(`Bank ${bank}: ledger account "${account}" must be 4 digits in class ${range === 'card' ? 2 : 1}.`);
+    }
+    if (taken.has(account)) throw new Stop(`Bank ${bank}: ledger account ${account} is used twice.`);
+    if (banks.some((b) => b.bank === bank && b.currency === currency)) throw new Stop(`${bank} ${currency} is listed twice.`);
+    taken.add(account);
+    banks.push({ bank, currency, account });
+    const note = bankKind(bank).note;
+    console.log(`    ${bank} ${currency} on ledger account ${account}${note ? `. Note: ${note}` : ''}`);
+  };
+  const canonical = (name: string) => Object.keys(BANKS).find((b) => b.toLowerCase() === name.toLowerCase()) ?? name;
+
+  if (Array.isArray(flags.bank)) {
+    for (const spec of flags.bank) {
+      const [name, currency = 'CHF', account] = spec.split(':').map((s) => s.trim());
+      const bank = canonical(name);
+      add(bank, currency.toUpperCase(), account ?? suggestAccount(bank, taken));
+    }
+  } else if (interactive) {
+    const names = [...Object.keys(BANKS).slice(0, 4), 'other cantonal or regional bank', ...Object.keys(BANKS).slice(4)];
+    console.log(`\nBank accounts, one at a time (a Wise account per currency). Enter on an empty line when done.`);
+    console.log('    ' + names.map((n, i) => `${i + 1}) ${n}`).join('   '));
+    for (;;) {
+      const pick = (await rl!.question('    Bank > ')).trim();
+      if (!pick) { if (banks.length) break; console.log('    At least one bank account is needed.'); continue; }
+      const listed = /^\d+$/.test(pick) ? names[Number(pick) - 1] : canonical(pick);
+      if (!listed) continue;
+      const bank = listed === names[4] ? (await rl!.question('    Name of the bank (e.g. BEKB) > ')).trim() : listed;
+      if (!bank) continue;
+      const currency = ((await rl!.question('    Currency [CHF] > ')).trim() || 'CHF').toUpperCase();
+      const suggested = suggestAccount(bank, taken);
+      const account = (await rl!.question(`    Ledger account [${suggested}] > `)).trim() || suggested;
+      try { add(bank, currency, account); } catch (e) { console.log(`    ${(e as Error).message}`); }
+    }
+  }
+  if (banks.length === 0) throw new Stop('At least one bank account is needed: --bank <bank>:<currency>[:<ledger account>], e.g. --bank UBS:CHF.');
+  return banks;
+}
+
+/** Points the app's .env at the workspace. Another value stays unless the person (or --set-env) says to replace it. */
+async function pointEnvAt(envFile: string, root: string): Promise<string> {
+  const content = existsSync(envFile) ? readFileSync(envFile, 'utf8') : '';
+  const line = `BELEGE_WORKSPACE=${root}`;
+  const current = /^BELEGE_WORKSPACE=(.*)$/m.exec(content);
+  if (current?.[1].trim() === root) return `${envFile} already points at this workspace.`;
+  if (current) {
+    const replace = flags['set-env'] === true
+      || (interactive && /^y/i.test(await rl!.question(`\n${envFile} points at ${current[1]}. Point it at ${root} instead? [y/N] > `)));
+    if (!replace) return `${envFile} still points at ${current[1]}. To use the new books: BELEGE_WORKSPACE=${root} npm start`;
+    writeFileSync(envFile, content.replace(current[0], line));
+    return `${envFile} now points at ${root}.`;
+  }
+  writeFileSync(envFile, content + (content && !content.endsWith('\n') ? '\n' : '') + line + '\n');
+  return `${envFile} points at ${root}.`;
+}
+
+function gitInit(root: string): string {
+  if (existsSync(join(root, '.git'))) return 'Git repository exists: nothing committed.';
+  try {
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+    git('init', '-q');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'Workspace set up with npm run init');
+    return 'Committed the workspace to a new git repository.';
+  } catch (e) {
+    return `git did not run (${(e as Error).message.split('\n')[0]}). Run git init and commit the folder yourself: it keeps every change to the books traceable.`;
+  }
+}
+
+async function main(): Promise<string> {
+  if (interactive) console.log('Belege: set up the books of a company. Enter takes the value in [brackets].\n');
+  const presetPrompt = interactive
+    ? `Which fits best? ${PRESET_NAMES.map((p, i) => `${i + 1}) ${PRESETS[p].label}`).join('   ')}\n`
+    : 'Preset';
+  const presetRaw = await answer('preset', presetPrompt, interactive ? '1' : undefined);
+  const preset = (/^\d+$/.test(presetRaw) ? PRESET_NAMES[Number(presetRaw) - 1] : presetRaw) as Preset;
+  if (!PRESET_NAMES.includes(preset)) throw new Stop(`--preset must be one of ${PRESET_NAMES.join(', ')}.`);
+  const presetStop = firstUnsupported(PRESETS[preset].answers as Answers);
+  if (presetStop) throw new Stop(`${PRESETS[preset].label}: ${presetStop.option.unsupported}`, 2);
+
+  const name = await text('name', 'Company name (as in the commercial register)');
+  const slug = name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const root = resolve(await text('dir', 'Folder for the books', undefined, interactive ? join(APP_ROOT, '..', `${slug}-books`) : undefined));
+
+  let message: string;
+  if (existsSync(join(root, MANIFEST_FILE))) {
+    workspaceAt(root);
+    message = `${root} is already a workspace: nothing to change.`;
+  } else {
+    const uidText = await text('uid', 'UID (CHE-###.###.###, from uid.admin.ch)', (v) => { const r = parseUid(v); return 'error' in r ? r.error : undefined; });
+    const uid = (parseUid(uidText) as { uid: InitInput['uid'] }).uid;
+    const owner = await text('owner', 'Owner (managing director)');
+    const about = await answer('about', 'What the company does, in a few words (helps booking; optional)', '');
+    const answers = await askAnswers(preset);
+    if (!isSupported(answers)) throw new Stop(firstUnsupported(answers)!.option.unsupported!, 2);
+    const banks = await askBanks();
+    const exportTo = await answer('export-to', '\nWhere do the books go at year-end (accounting software or Treuhand; optional)', '');
+
+    const input: InitInput = { name, uid, owner, ...(about ? { business: about } : {}), preset, answers, banks, ...(exportTo ? { exportTo } : {}) };
+    const applied = applyPlan(root, planWorkspace(input, loadChart(), root, APP_ROOT));
+    workspaceAt(root);
+    message = [
+      `Created ${applied.created.length} files and folders in ${root}.`,
+      ...applied.differing.map((p) => `Kept your ${p}: it differs from what init would write.`),
+      gitInit(root),
+    ].join('\n');
+  }
+
+  if (flags['no-env'] !== true) {
+    message += '\n' + await pointEnvAt(typeof flags['app-env'] === 'string' ? resolve(flags['app-env']) : join(APP_ROOT, '.env'), root);
+  }
+  return message + '\n\nNext: npm run doctor, then docs/getting-started.md (first bank statement, first receipts).';
+}
+
+main()
+  .then((message) => { console.log(`\n${message}`); })
+  .catch((e: unknown) => {
+    console.error(`\n${e instanceof Error ? e.message : String(e)}`);
+    process.exitCode = e instanceof Stop ? e.code : 1;
+  })
+  .finally(() => rl?.close());

@@ -1,0 +1,188 @@
+/**
+ * npm run init and npm run doctor: a workspace made without a terminal opens, passes doctor, and a
+ * rerun changes nothing; an answer the app does not support stops with its explanation; the UID
+ * check digit and the chart's rules are checked.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parse } from 'yaml';
+import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
+import { QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
+import { parseUid } from '../src/workspace/uid.js';
+import { APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt } from '../src/workspace/workspace.js';
+
+// A UID with a wrong check digit, written in parts so the leak guard does not take it for a real one.
+const TYPO_UID = ['CHE-153', '004', '185'].join('.');
+const tmp = () => mkdtempSync(join(tmpdir(), 'belege-init-'));
+
+/** A PATH whose claude and pdftotext answer like logged-in, installed tools, without a model call. */
+function stubTools(): string {
+  const bin = tmp();
+  writeFileSync(join(bin, 'claude'), '#!/bin/sh\nif [ "$1" = auth ]; then echo \'{"loggedIn":true}\'; else echo "9.9.9 (Claude Code)"; fi\n');
+  writeFileSync(join(bin, 'pdftotext'), '#!/bin/sh\necho "pdftotext version 99" >&2\n');
+  chmodSync(join(bin, 'claude'), 0o755);
+  chmodSync(join(bin, 'pdftotext'), 0o755);
+  return bin;
+}
+
+const GIT_ID = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' };
+
+function cli(script: string, args: string[], path?: string) {
+  const r = spawnSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli', script), ...args], {
+    cwd: APP_ROOT, input: '', encoding: 'utf8',
+    env: { ...process.env, ...GIT_ID, BELEGE_WORKSPACE: '', ...(path ? { PATH: `${path}:${process.env.PATH}` } : {}) },
+  });
+  return { code: r.status, out: r.stdout + r.stderr };
+}
+
+const consultant = (dir: string, envFile: string, ...more: string[]) => [
+  '--preset', 'consultant', '--dir', dir, '--name', 'Beispiel Beratung GmbH', '--uid', 'CHE-153.004.184',
+  '--owner', 'Erika Beispiel', '--bank', 'UBS:CHF', '--bank', 'Wise:EUR', '--app-env', envFile, '--yes', ...more,
+];
+
+test('UID: canonical form from spacing and suffix; a wrong check digit or shape is refused', () => {
+  assert.deepEqual(parseUid('CHE-153.004.184'), { uid: 'CHE-153.004.184' });
+  assert.deepEqual(parseUid('che 153 004 184 MWST'), { uid: 'CHE-153.004.184' });
+  assert.deepEqual(parseUid('CHE447613666'), { uid: 'CHE-447.613.666' });
+  assert.match((parseUid(TYPO_UID) as { error: string }).error, /wrong check digit/);
+  assert.match((parseUid('153.004.184') as { error: string }).error, /not a UID/);
+});
+
+test('chart: profile and legal form pick the accounts; a rule broken in the file fails at load', () => {
+  const chart = loadChart();
+  const numbers = (accounts: { number: string }[]) => new Set(accounts.map((a) => a.number));
+  const services = numbers(chartFor(chart, 'services', 'GmbH'));
+  const goods = numbers(chartFor(chart, 'goods', 'GmbH'));
+  assert.ok(services.has('3400') && services.has('5000') && services.has('5720') && services.has('6570') && services.has('2451'));
+  assert.ok(!services.has('3200') && !services.has('1200') && !services.has('2850'));
+  assert.ok(goods.has('3200') && goods.has('1200') && goods.has('1093') && !goods.has('1280'));
+  const einzelfirma = chartFor(chart, 'both', 'Einzelfirma');
+  assert.equal(einzelfirma.find((a) => a.number === '2800')?.name, 'Eigenkapital');
+  assert.ok(numbers(einzelfirma).has('2850') && !numbers(einzelfirma).has('2451') && !numbers(einzelfirma).has('8900'));
+  assert.equal(chartFor(chart, 'services', 'AG').find((a) => a.number === '2800')?.name, 'Aktienkapital');
+  for (const a of chartFor(chart, 'both', 'GmbH')) assert.ok(chart.lines[a.line], `${a.number} has a known line`);
+
+  const dir = tmp();
+  const bad = readFileSync(KMU_CHART, 'utf8').replace('{ number: "3400", name: Dienstleistungserlöse, type: revenue', '{ number: "3400", name: Dienstleistungserlöse, type: asset');
+  writeFileSync(join(dir, 'chart.yaml'), bad);
+  assert.throws(() => loadChart(join(dir, 'chart.yaml')), (e: Error) => e instanceof ChartError && /3400: a asset account must be in class 1/.test(e.message));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('init without a terminal: the workspace opens, doctor passes, a rerun changes nothing', () => {
+  const base = tmp();
+  const dir = join(base, 'books');
+  const envFile = join(base, 'app.env');
+  const bin = stubTools();
+
+  const first = cli('init.ts', consultant(dir, envFile));
+  assert.equal(first.code, 0, first.out);
+
+  const ws = workspaceAt(dir);
+  assert.equal(ws.company.uid, 'CHE-153.004.184');
+  assert.equal(ws.company.legalForm, 'GmbH');
+  assert.equal(ws.profile?.sells, 'services');
+  assert.equal(ws.profile?.ownerPaysPrivately, 'yes');
+  assert.deepEqual(ws.bankAccounts.map((a) => `${a.bank} ${a.currency} ${a.account} ${a.statements ?? '-'}`), [
+    'UBS CHF 1020 camt053', 'Wise EUR 1021 camt053', 'manual CHF 2451 -',
+  ]);
+  const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string; type: string }[];
+  assert.deepEqual(accounts.filter((a) => ['1020', '1021', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Kontokorrent Gesellschafter']);
+  assert.deepEqual(JSON.parse(readFileSync(ws.paths.books, 'utf8')).config, {}, 'no closedThrough');
+  for (const d of [ws.paths.receipts, ws.paths.inbox, ws.paths.filings, join(ws.paths.statements, 'UBS'), join(ws.paths.statements, 'Wise'), join(dir, 'policy'), join(dir, 'counterparties')]) {
+    assert.ok(existsSync(d), d);
+  }
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /AGENTS\.md \(golden rule 1/);
+  assert.equal(readFileSync(envFile, 'utf8'), `BELEGE_WORKSPACE=${dir}\n`);
+  const log = spawnSync('git', ['log', '--oneline'], { cwd: dir, encoding: 'utf8' }).stdout.trim().split('\n');
+  assert.equal(log.length, 1, 'one first commit');
+
+  const doctor = cli('doctor.ts', ['--workspace', dir], bin);
+  assert.equal(doctor.code, 0, doctor.out);
+  assert.match(doctor.out, /✓ claude is logged in/);
+  assert.doesNotMatch(doctor.out, /✗/);
+
+  const manifestBefore = statSync(ws.paths.manifest).mtimeMs;
+  const again = cli('init.ts', consultant(dir, envFile));
+  assert.equal(again.code, 0, again.out);
+  assert.match(again.out, /already a workspace: nothing to change/);
+  assert.match(again.out, /already points at this workspace/);
+  assert.equal(statSync(ws.paths.manifest).mtimeMs, manifestBefore);
+  assert.equal(spawnSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }).stdout, '', 'nothing changed');
+
+  rmSync(base, { recursive: true, force: true });
+  rmSync(bin, { recursive: true, force: true });
+});
+
+test('init keeps a BELEGE_WORKSPACE that points elsewhere unless told to replace it', () => {
+  const base = tmp();
+  const envFile = join(base, 'app.env');
+  writeFileSync(envFile, 'OTHER=1\nBELEGE_WORKSPACE=../older-books\n');
+  const kept = cli('init.ts', consultant(join(base, 'a'), envFile));
+  assert.equal(kept.code, 0, kept.out);
+  assert.match(kept.out, /still points at \.\.\/older-books/);
+  assert.equal(readFileSync(envFile, 'utf8'), 'OTHER=1\nBELEGE_WORKSPACE=../older-books\n');
+  assert.equal(cli('init.ts', consultant(join(base, 'b'), envFile, '--set-env')).code, 0);
+  assert.equal(readFileSync(envFile, 'utf8'), `OTHER=1\nBELEGE_WORKSPACE=${join(base, 'b')}\n`);
+  rmSync(base, { recursive: true, force: true });
+});
+
+test('an answer the app does not support yet stops with its explanation and writes nothing', () => {
+  const base = tmp();
+  const cases: [string[], RegExp][] = [
+    [['--preset', 'freelancer'], /Books without VAT are not supported yet/],
+    [['--vat-method', 'saldo'], /Saldosteuersatz method is not supported yet/],
+    [['--basis', 'agreed'], /Vereinbarte Entgelte are not supported yet/],
+    [['--period', 'monthly'], /Monthly returns are not supported yet/],
+    [['--fiscal-year', 'other'], /calendar year is not supported yet/],
+  ];
+  for (const [flags, why] of cases) {
+    const dir = join(base, flags[1]);
+    const r = cli('init.ts', [...consultant(dir, join(base, 'app.env')), ...flags]);
+    assert.equal(r.code, 2, r.out);
+    assert.match(r.out, why);
+    assert.ok(!existsSync(dir), `${flags.join(' ')} wrote nothing`);
+  }
+  const typo = cli('init.ts', ['--preset', 'consultant', '--dir', join(base, 'x'), '--name', 'X GmbH', '--uid', TYPO_UID, '--no-env', '--yes']);
+  assert.equal(typo.code, 1);
+  assert.match(typo.out, /wrong check digit/);
+  rmSync(base, { recursive: true, force: true });
+});
+
+test('doctor names the fix when a bank books on an account the chart lacks; the manifest refuses an unsupported profile', () => {
+  const base = tmp();
+  const dir = join(base, 'books');
+  const bin = stubTools();
+  assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
+  const manifestPath = join(dir, MANIFEST_FILE);
+  const manifest = readFileSync(manifestPath, 'utf8');
+
+  writeFileSync(manifestPath, manifest.replace('account: "1021"', 'account: "1029"'));
+  const doctor = cli('doctor.ts', ['--workspace', dir], bin);
+  assert.equal(doctor.code, 1);
+  assert.match(doctor.out, /✗ Wise EUR books on 1029, which is not in accounts\.json\n {4}fix: Add \{ "number": "1029"/);
+
+  writeFileSync(manifestPath, manifest);
+  writeFileSync(join(dir, 'bank-statements', 'UBS', 'camt053_export.xml'), '<Document/>');
+  const skipped = cli('doctor.ts', ['--workspace', dir], bin);
+  assert.equal(skipped.code, 1);
+  assert.match(skipped.out, /rename camt053_export\.xml to uuid_camt053_export\.xml/);
+
+  const raw = parse(manifest);
+  raw.profile.sells = 'shoes';
+  writeFileSync(manifestPath, JSON.stringify(raw));
+  assert.throws(() => workspaceAt(dir), (e: Error) => e instanceof WorkspaceError && /profile\.sells must be one of services, goods, both/.test(e.message));
+  rmSync(base, { recursive: true, force: true });
+  rmSync(bin, { recursive: true, force: true });
+});
+
+test('getting-started.md documents every init question, in the order the wizard asks', () => {
+  const guide = readFileSync(join(APP_ROOT, 'docs', 'getting-started.md'), 'utf8');
+  const at = QUESTION_ORDER.map((k) => guide.indexOf(`**${QUESTIONS[k].ask}`));
+  QUESTION_ORDER.forEach((k, i) => assert.ok(at[i] >= 0, `the guide names "${QUESTIONS[k].ask}"`));
+  assert.deepEqual(at, [...at].sort((a, b) => a - b), 'same order as QUESTION_ORDER');
+});
