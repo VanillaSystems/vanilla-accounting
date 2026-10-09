@@ -1,7 +1,9 @@
 # Automated Receipt Collection
 
 Quarterly VAT accounting requires gathering receipts from email and vendor portals.
-This document describes the design decisions for automating that process.
+This document describes the design decisions for automating that process. To set up a
+mailbox for the first time (mail.yaml, app passwords, the app's .env), follow
+[Set up a mailbox for receipt collection](../mail-setup.md).
 
 ## Vendor Quick Index
 
@@ -75,7 +77,8 @@ The user is present to handle 2FA, CAPTCHAs, and login prompts as needed.
 
 ### 1. Fetch email summaries
 
-Run the IMAP fetch across the workspace's mailboxes (`mail.yaml`) for the target quarter:
+Check that every mailbox logs in (`npm run doctor -- --mail`), then run the IMAP fetch across
+the workspace's mailboxes (`mail.yaml`) for the target quarter:
 
 ```
 npx tsx src/collect/test-imap.ts 2026-Q3   # the quarter; default: the current one
@@ -167,18 +170,22 @@ Vendors to cover (non-exhaustive; the login of each is in the workspace runbook)
 
 ## App-Specific Password Setup (Gmail, iCloud and similar)
 
-**SECURITY: Create before each collection run, revoke immediately after.**
+**SECURITY: Create before each collection run, revoke immediately after.** Where each
+provider's app-password page is: [mail-setup.md](../mail-setup.md).
 
 Before collecting:
 1. Open the provider's app-password page (Google: https://myaccount.google.com/apppasswords)
-2. Name it "belege-collect"
+2. Name it "vanilla-accounting"
 3. Copy the generated password
-4. Add to the workspace `.env`: `<ENV>_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx` (the `env` prefix of that mailbox in mail.yaml)
+4. Add it to the **app's** `.env` (the app folder, where `npm` runs; dotenv reads it from
+   there, a workspace `.env` is not read): `<ENV>_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx` (the
+   `env` prefix of that mailbox in mail.yaml)
+5. `npm run doctor -- --mail`: every mailbox shows ✓ logs in
 
 After collecting:
 1. Open the same app-password page
-2. Delete the "belege-collect" app password
-3. Remove or blank the password in `.env`
+2. Delete the "vanilla-accounting" app password
+3. Remove or blank the password in the app's `.env`
 
 **Claude: always remind the user to revoke the app password after the collection run completes.**
 
@@ -190,7 +197,7 @@ Explicit date range via `--quarter` shorthand:
 
 ## Code Location
 
-Utility functions in `src/collect/` within the belege repo:
+Utility functions in `src/collect/` of the app:
 - `imap.ts` — IMAP connection, email fetch, quarter parsing
 - `mail-config.ts` — the workspace's `mail.yaml`: mailboxes and sender classification (skip / include / ambiguous)
 - Attachment extraction from email
