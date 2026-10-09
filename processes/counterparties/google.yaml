@@ -1,0 +1,15 @@
+id: google
+name: Google
+match:
+  tx: [ "google" ]
+  uid: [ "CHE-426.708.309" ]
+  file: [ '^\d{8}-google-' ]
+
+steps:
+  receipt-collection.guide.yaml#scrape:
+    rules:
+      - id: col-google-cloud
+        when: Google Cloud
+        then: collect every monthly invoice, zero-balance ones too
+        source: docs/runbooks/receipt-collection.md § Google Cloud
+    precedents: []

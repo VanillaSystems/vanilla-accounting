@@ -1,0 +1,24 @@
+{
+  "receipts": [
+    { "id": "rc", "filename": "closed.pdf", "originalFilename": "closed.pdf", "extractedText": "Beleg Mai", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-05-11T00:00:00Z", "location": "archived", "date": "2026-05-10", "amount": 10, "currency": "CHF" },
+    { "id": "ro", "filename": "open.pdf", "originalFilename": "open.pdf", "extractedText": "Beleg August", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-11T00:00:00Z", "location": "archived", "date": "2026-08-10", "amount": 20, "currency": "CHF" },
+    { "id": "rm", "filename": "manual.pdf", "originalFilename": "manual.pdf", "extractedText": "Beleg manuell", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-16T00:00:00Z", "location": "archived" }
+  ],
+  "transactions": [
+    { "ref": "C1", "bank": "Raiffeisen", "date": "2026-05-10", "amount": 10, "currency": "CHF", "direction": "DBIT", "description": "Bank Mai" },
+    { "ref": "O1", "bank": "Raiffeisen", "date": "2026-08-10", "amount": 20, "currency": "CHF", "direction": "DBIT", "description": "Bank August" },
+    { "ref": "M2026-001", "bank": "manual", "source": "manual", "date": "2026-06-01", "amount": 5, "currency": "CHF", "direction": "DBIT", "description": "Manuell Juni" },
+    { "ref": "M2026-002", "bank": "manual", "source": "manual", "date": "2026-08-15", "amount": 7, "currency": "CHF", "direction": "DBIT", "description": "Manuell August" }
+  ],
+  "mappings": [
+    { "transactionRef": "C1", "receiptId": "rc" },
+    { "transactionRef": "O1", "receiptId": "ro" },
+    { "transactionRef": "M2026-002", "receiptId": "rm" }
+  ],
+  "bankStatements": [],
+  "journalEntries": [
+    { "id": "jc", "transactionRef": "C1", "date": "2026-05-10", "accountDebit": "6500", "accountCredit": "1021", "amount": 10, "vatCode": "I81" },
+    { "id": "jo", "transactionRef": "O1", "date": "2026-08-10", "accountDebit": "6500", "accountCredit": "1021", "amount": 20, "vatCode": "I81" }
+  ],
+  "config": { "closedThrough": "2026-06-30" }
+}

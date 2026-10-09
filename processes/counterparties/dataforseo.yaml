@@ -1,0 +1,18 @@
+id: dataforseo
+name: DataForSEO (via FastSpring)
+match:
+  tx: [ "dataforseo" ]
+  domain: [ "dataforseo.com" ]
+  file: [ '^\d{8}-dataforseo-' ]
+grouped: false
+
+steps:
+
+  booking.guide.yaml#purchase_vat:
+    rules:
+      - id: dataforseo-vat
+        status: proposed
+        when: the FastSpring invoice is in hand
+        then: Swiss MWST 8.1% with a CHE number on it → I81; no Swiss MWST → B81-1 (Bezugsteuer, a foreign online service); until the invoice exists → I0
+        source: booking.guide.yaml#purchase_vat pv-bezugsteuer (owner 2026-10-08)
+    precedents: []

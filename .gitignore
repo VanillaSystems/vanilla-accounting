@@ -1,0 +1,21 @@
+.env
+node_modules
+dist
+beleg-import/
+data/
+.gstack/
+ios/Belege.xcodeproj/
+ios/Team.local.xcconfig
+.llm-concurrency.json
+
+# Generated VAT filing artifacts at repo root (regenerate via npm run vat-xml / vat-report-html).
+# As-filed snapshots are committed under filings/<year>/ — those are NOT ignored.
+/mwst-ech0217-*.xml
+/mwst-report-*.html
+/vat-filing-*.html
+
+# macOS
+.DS_Store
+
+# Verification evidence from .claude/skills/verify
+.verify/

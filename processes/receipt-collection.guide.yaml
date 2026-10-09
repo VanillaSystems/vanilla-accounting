@@ -1,0 +1,108 @@
+# Knowledge for receipt-collection.flow.yaml. Vendor rules here say WHAT counts
+# as the receipt; the runbook says HOW to click through each portal
+# (procedure:). A vendor not listed here that turns out to have a quirk goes
+# through the scrape step's new_case exit and gets a rule here.
+
+process: receipt-collection
+
+steps:
+  gmail_browser:
+    goal: Collect the quarter's Gmail receipts through a signed-in browser session when IMAP fails.
+    rules:
+      - id: col-gmail-browser
+        when: always
+        then: follow the runbook's Aside procedure; save files, never summaries
+        procedure: docs/runbooks/receipt-collection.md § Browser Automation via Aside
+        source: docs/runbooks/receipt-collection.md
+    precedents: []
+
+  classify_senders:
+    goal: Sort senders newly seen this quarter into business, private, ambiguous.
+    rules:
+      - id: col-domains
+        when: always
+        then: the workspace's mail.yaml is the list; a mailbox not marked mixed is all business
+        source: docs/runbooks/receipt-collection.md § Decisions Log
+    precedents: []
+
+  triage:
+    goal: Keep receipts, drop noise that arrives alongside them.
+    rules:
+      - id: col-noise
+        when: a mail whose attachment is a brochure, newsletter, offer or return-label paperwork
+        then: noise — do not stage
+        source: docs/runbooks/receipt-collection.md § DHL Express
+    precedents: []
+
+  fetch_link:
+    goal: Download the real invoice behind a link, not the summary in the mail.
+    rules:
+      - id: col-stripe
+        when: Stripe-billed vendors (OpenAI, Anthropic, others)
+        then: click through to "Download invoice"; the card summary is not the invoice
+        procedure: docs/runbooks/receipt-collection.md § Stripe (general), § OpenAI / ChatGPT
+        source: docs/runbooks/receipt-collection.md
+    precedents: []
+
+  print_body:
+    goal: Turn an email body that is the only record into a PDF with content.
+    rules:
+      - id: col-wait-load
+        when: always
+        then: wait for the page to finish loading; a file under about 2 KB is a blank print
+        source: docs/runbooks/receipt-collection.md § 4. Download receipts
+    precedents: []
+
+  scrape:
+    goal: Get each portal vendor's VALID proof document for every order in the quarter.
+    rules:
+      - id: col-proof-document
+        when: always
+        then: the counterparty's rule for this step names the document that is valid proof; with no counterparty rule, collect what the portal calls the invoice and let proves_vat judge it
+        source: AGENTS.md § Receipt collection
+    precedents: []
+
+  recollect:
+    goal: Collect a vendor again whose files never reached this disk.
+    rules:
+      - id: col-fresh-session
+        when: the earlier session was reaped
+        then: start a fresh session; a reaped one cannot be resumed
+        source: docs/runbooks/receipt-collection.md § Browser Automation via Aside
+    precedents: []
+
+  reprint:
+    goal: Capture a blank print again, fully loaded.
+    rules:
+      - id: col-reprint
+        when: always
+        then: reload, wait for network idle, print again; check pdftotext returns text before staging
+        source: docs/runbooks/receipt-collection.md § 4. Download receipts
+    precedents: []
+
+  fallback:
+    goal: Use the vendor's documented fallback when the valid proof document is not available.
+    rules:
+      - id: col-fallback
+        when: always
+        then: use the counterparty's documented fallback; a counterparty with none → new_case
+        source: AGENTS.md § Receipt collection
+    precedents: []
+
+  vendor_rules:
+    goal: Check, before calling the quarter collected, that every listed vendor's rule was followed.
+    rules:
+      - id: col-self-check
+        when: always
+        then: for each vendor with a rule in this guide, the staged files are the document the rule names, not just "a PDF"
+        source: AGENTS.md § Receipt collection
+    precedents: []
+
+  write_runbook:
+    goal: Write a newly found vendor quirk down in the same session.
+    rules:
+      - id: col-two-homes
+        when: always
+        then: what counts as the receipt → a rule in this guide; how to click to it → the runbook section, linked from the rule
+        source: processes/README.md § Where else knowledge lives
+    precedents: []

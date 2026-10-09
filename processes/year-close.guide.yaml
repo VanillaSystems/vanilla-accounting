@@ -1,0 +1,49 @@
+# Knowledge for year-close.flow.yaml.
+
+process: year-close
+
+steps:
+  revalue:
+    goal: Revalue the EUR and USD accounts at the 31.12 ESTV rate.
+    rules:
+      - id: yc-kursdifferenz
+        when: always
+        then: the native balance × the 31.12 ESTV sell rate, minus the CHF book value, is the Kursdifferenz
+        source: CONTEXT.md § Exchange Difference; docs/adr/0001-foreign-currency-conversion.md
+    precedents: []
+
+  find:
+    goal: Find why Aktiven and Passiven differ — and fix the cause, never absorb it.
+    rules:
+      - id: yc-no-plug
+        when: always
+        then: a difference is explained by entries, not booked to a rounding account
+        source: year-close.flow.yaml discharge
+    precedents: []
+
+  signoff:
+    goal: The accountant signs off, or asks.
+    rules:
+      - id: yc-pack
+        when: always
+        then: Bilanz, Erfolgsrechnung and Kontenblätter from the UI tabs
+        source: year-close.flow.yaml reports step
+    precedents: []
+
+  answer:
+    goal: Answer the accountant's questions from the books, with the entries.
+    rules:
+      - id: yc-answer-with-entries
+        when: always
+        then: cite entry ids and receipts; if an answer changes a figure, it is a correction, not an edit
+        source: AGENTS.md § Period close
+    precedents: []
+
+  explain:
+    goal: Explain an opening-balance difference instead of plugging it.
+    rules:
+      - id: yc-fx-gap
+        when: a small P&L cross-check gap after year-end FX
+        then: trace it to the revaluation entries
+        source: year-close.flow.yaml
+    precedents: []

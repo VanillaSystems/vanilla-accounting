@@ -1,0 +1,6 @@
+#!/bin/sh
+# Refuses a push while the leak guard finds company data in the app's public files.
+# Install once per clone: git config core.hooksPath tools/hooks
+# The secrets come from the workspace (BELEGE_WORKSPACE, or the repo itself while it is one);
+# without a real workspace only the structural half runs, and says so.
+exec npm run --silent check-public

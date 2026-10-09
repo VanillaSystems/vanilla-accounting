@@ -1,0 +1,46 @@
+# Knowledge for correction.flow.yaml.
+
+process: correction
+
+steps:
+  worth:
+    goal: Decide what the correction changes, so the right paperwork follows.
+    rules:
+      - id: cor-return-only
+        when: the journal entries were right, but a filed return left their tax out or counted it wrong (e.g. a calculation bug)
+        then: "nothing is booked; the quarter's Korrekturabrechnung (0535, MWST tab) recomputes it from today's books and shows the difference. Booking it again would count the tax twice in the books."
+        why: "e.g. input tax booked in the journal but left out of the return because the report ignored -2 codes"
+        source: AGENTS.md golden rule 1; decision 2026-10-07, owner
+      - id: cor-vat
+        when: the difference changes any VAT Ziffer of a filed return
+        then: vat
+        source: AGENTS.md § Period close
+      - id: cor-accounts
+        when: only accounts change (no VAT code or VAT amount moves)
+        then: accounts_only
+        source: AGENTS.md § Period close
+      - id: cor-nothing
+        when: the closed entries already match the filed baseline after restore
+        then: nothing
+        source: definition
+    precedents: []
+
+  storno:
+    goal: Book the difference as new entries in the open period.
+    rules:
+      - id: cor-shape
+        when: always
+        then: >
+          dated in the open period; description starts "Korrektur zu <entry id>"; reverse the wrong entry and book the right one, or book only the difference when that is clearer
+        source: AGENTS.md § Period close
+    precedents: []
+
+  next_return:
+    goal: Decide where the corrected VAT is declared.
+    rules:
+      - id: cor-korrekturabrechnung
+        when: a correction of a filed quarter within the same tax year
+        then: "korrekturabrechnung — set corrects: \"YYYY-Qn\" on the correction entry; the MWST tab's Korrekturabrechnung (0535) of that quarter shows the complete corrected figures to enter in the ESTV portal; the open quarter's return does not contain it"
+        why: "ESTV: «Für Korrektionen einzelner Monats-, Quartals- oder Semesterabrechnungen während der Steuerperiode ist die Korrekturabrechnung zu verwenden.» (Art. 72 MWSTG); after the year: Jahresabstimmung (form 0550)"
+        source: owner decision 2026-10-08
+    precedents: []

@@ -1,0 +1,180 @@
+# Pairing receipts with transactions, until every transaction in the quarter is
+# settled: it has receipts that add up to it, a rule that exempts it, or a
+# recorded reason no receipt exists.
+#
+# This used to be a side effect of intake: `match` looked at a receipt once, on
+# its way from beleg-import/ to receipts/, and never again. A receipt that
+# arrived before its bank statement, or that the model was unsure about, was
+# archived unlinked and forgotten. A quarter could end with hundreds of unlinked
+# receipts and transactions with no evidence, while many of those receipts had
+# exactly one transaction with the same amount within ten days.
+#
+# So this process is re-runnable and never one-shot. It reads the whole quarter
+# each time, derives every state from the index, and asks a person only what it
+# cannot decide, once. A person's answer is never overwritten by a machine.
+#
+# States it works with (src/types/index.ts):
+#   receipt.kind         invoice | sales-record | supporting | statement | noise | duplicate
+#                        (set at intake; only invoice and sales-record need a transaction)
+#   receipt.paidPrivately  an Auslage, so it gets a manual transaction, not a bank one
+#   mapping.by           rule | llm | human, plus the rule name or the confidence
+#   transaction.noReceipt  { reason, by }: a person decided no receipt will exist
+#   evidence state       settled | partial | missing, derived per transaction:
+#                        settled  = exempt by rule, or noReceipt, or mapped receipts
+#                                   that cover the amount (Wise original currency counts)
+#                        partial  = mapped, but the receipts fall short of the amount
+#                        missing  = nothing yet
+#   proposals            candidates the machine found but would not apply,
+#                        and pairs a person rejected (never proposed again)
+#
+# Planned: npm:evidence does not exist yet. It replaces the linking half of
+# npm:match; the renaming half moves to npm:archive (see receipt-intake).
+
+id: evidence
+name: Settle the evidence
+noun: transaction
+discharge: >
+  every transaction in the quarter is settled — covered by its receipts, exempt
+  by a rule, or carrying a recorded reason no receipt exists — and every
+  invoice or sales record in the quarter supports a transaction or is marked as
+  paid privately
+
+phases: [rules, ai, people, check]
+
+steps:
+  - id: ready
+    name: Statements imported, receipts archived
+    kind: start
+    note: both, because a match needs both sides
+    phase: rules
+    duration: day 0
+
+  - id: rules
+    name: Apply the fixed rules
+    with: { guide: evidence.guide.yaml#rules }
+    icon: list-checks
+    uses: npm:evidence
+    produces: mappings
+    expect: >
+      a rule links only when exactly one candidate fits. Two equally good
+      candidates are a question for the AI or a person, never a coin toss.
+    note: >
+      exempt (Wise fees, own-account transfers, ESTV, AHV, salary, interest);
+      unique amount ± 10 days; Wise original-currency amount; Shopify order →
+      payout; Post Aufgabebestätigung → that month's Post invoice; duplicates
+    needs: [ready, auslage, chase.recollected, rerun, new_case]
+    phase: rules
+    duration: 10s
+
+  - id: ai
+    name: Ask the AI about what is left
+    with: { guide: evidence.guide.yaml#ai, model: sonnet, batch: 1 }
+    icon: sparkles
+    kind: agent
+    uses: npm:evidence
+    note: >
+      both directions — receipt → candidate transactions and transaction →
+      candidate receipts; grouped vendors (AliExpress, Amazon, FedEx) as sums
+    outcomes: [confident, unsure, new_case]
+    needs: [rules]
+    phase: ai
+    duration: 1 – 10m
+
+  - id: applied
+    name: Link it, marked as the AI's
+    produces: mappings
+    note: "mapping.by = llm, with the confidence"
+    needs: [ai.confident]
+    phase: ai
+
+  - id: proposed
+    name: Keep the candidates as a proposal
+    produces: proposals
+    note: the reason it was unsure, and the top candidates with scores
+    needs: [ai.unsure]
+    phase: ai
+
+  - id: coverage
+    name: Do the receipts add up to the payment?
+    with: { guide: evidence.guide.yaml#coverage }
+    icon: scale
+    uses: npm:evidence
+    note: per transaction, in its own currency; grouped payments are a sum
+    outcomes: [settled, partial, missing]
+    needs: [applied, proposed]
+    phase: check
+
+  - id: queue
+    name: Answer the open items in the Offen tab
+    with: { guide: evidence.guide.yaml#queue }
+    icon: list-todo
+    kind: human
+    expect: >
+      every answer is stored where the next run sees it, so no question is asked
+      twice — a rejected pair stays rejected, a reason stays recorded.
+    note: >
+      per item, one click — link a candidate, not a receipt, duplicate of,
+      supporting document of, paid privately, private, no receipt exists
+      (reason), or chase it
+    outcomes: [answered, paid_privately, chase]
+    needs: [coverage.partial, coverage.missing, unmatched.open]
+    phase: people
+    duration: 1 – 2 min each
+
+  - id: auslage
+    name: Create the manual transaction for an Auslage
+    icon: wallet
+    produces: transactions
+    note: "a manual transaction (M2026-…) dated on the receipt, linked to it"
+    needs: [queue.paid_privately]
+    phase: people
+    duration: 2s
+
+  - id: chase
+    name: Get the missing receipt
+    kind: human
+    process: receipt-collection.flow.yaml
+    note: then intake; the next run picks it up by itself
+    outcomes: [recollected]
+    needs: [queue.chase]
+    phase: people
+    duration: days
+
+  - id: unmatched
+    name: Is any invoice or sales record still unlinked?
+    with: { guide: evidence.guide.yaml#unmatched }
+    uses: npm:evidence
+    note: receipts that support no transaction and are not marked
+    outcomes: [none, open]
+    needs: [coverage.settled, queue.answered]
+    phase: check
+
+  - id: settled_check
+    name: Is every transaction in the quarter settled?
+    icon: search-check
+    uses: npm:evidence
+    note: "npm run evidence -- --check 2026-Q3, exit 0 only when it is"
+    outcomes: [settled, open]
+    needs: [unmatched.none]
+    phase: check
+    duration: 5s
+
+  - id: rerun
+    name: Run the rules again over the answers
+    note: an answer can settle other items — a duplicate, a supporting document
+    needs: [settled_check.open]
+    phase: check
+
+  - id: done
+    name: The quarter's evidence is settled
+    kind: end
+    needs: [settled_check.settled]
+    phase: check
+    duration: done
+
+  - id: new_case
+    name: Decide the case no rule covers
+    process: new-case.flow.yaml
+    note: a situation the guide does not know — a new vendor pattern, a new kind of payment
+    needs: [ai.new_case]
+    phase: ai

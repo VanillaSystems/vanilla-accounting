@@ -1,0 +1,92 @@
+# Knowledge for new-case.flow.yaml — how a case is framed, decided and written down.
+
+process: new-case
+
+steps:
+  frame:
+    goal: >
+      Turn a stuck item into a question the owner can answer in a minute: the item, the step that stopped, the rules that came close and why each did not fit, and two to four options with what each would book.
+    rules:
+      - id: nc-options
+        when: always
+        then: >
+          options are concrete outcomes of the stuck step (a code, an account, a link), each with its consequence in CHF where there is one; one of them may be "ask the tax advisor"
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+      - id: nc-batch
+        when: several stuck items share the same missing rule
+        then: one question for all of them, listing the items
+        why: the answer is one rule, so it should be one question
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []
+
+  who:
+    goal: Decide whether the owner can settle it or the tax advisor must.
+    rules:
+      - id: nc-advisor-law
+        when: the answer depends on how Swiss or foreign VAT law treats the case (IOSS, deemed supplier, place of supply)
+        then: advisor
+        source: docs/runbooks/receipt-collection.md § Shopify order pages (EU VAT question)
+      - id: nc-owner
+        when: otherwise — a fact about the business (private or not, what a document is, which account)
+        then: owner
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []
+
+  generalises:
+    goal: Decide whether the answer becomes a rule or stays a precedent.
+    rules:
+      - id: nc-rule-if-testable
+        when: the answer can be stated as a condition an agent can check on other items
+        then: rule
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+      - id: nc-precedent
+        when: the answer depends on facts only this item has
+        then: precedent
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []
+
+  write_rule:
+    goal: Write the rule into the guide of the step that raised the case, above anything it overrides.
+    rules:
+      - id: nc-home
+        when: always
+        then: "ask: would the answer still be true for a company we have never seen? yes → the step guide. True for every customer of this vendor → processes/counterparties/<id>.yaml under the same step address. True for us only → counterparties/<id>.yaml (about one vendor) or policy/<process>.guide.yaml (not about one vendor); a precedent always goes there. No file yet → create it from the item’s own signals (merchant, UID, filename) with this rule as its first; a supplier that must stay private gets only counterparties/<id>.yaml"
+        source: docs/adr/0002-counterparty-knowledge-and-lean-calls.md
+      - id: nc-rule-shape
+        when: always
+        then: "id (step prefix + slug), when, then, why, source: 'decision <date>, <owner|advisor>'; no status once decided"
+        source: processes/README.md § The contract
+      - id: nc-open-while-waiting
+        when: the advisor has not answered yet
+        then: write the rule now with status open, so other items like it park instead of asking again
+        source: processes/README.md § How a step decides
+      - id: nc-routing-answer
+        when: the case was an ambiguous or wrong routing — the answer names which company it was
+        then: "tighten or add a signal in the counterparty’s match: block — no rule is needed; run check-processes, which proves it on the index"
+        source: docs/adr/0002-counterparty-knowledge-and-lean-calls.md
+    precedents: []
+
+  write_precedent:
+    goal: Record the item, the decision and who made it, under the step's precedents.
+    rules:
+      - id: nc-precedent-shape
+        when: always
+        then: "{ id, date, item (receipt id or transaction ref), decision, by }"
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []
+
+  fix_guide:
+    goal: Make npm run check-processes pass again without weakening any rule.
+    rules:
+      - id: nc-fix-not-delete
+        when: a rule fails the check for a missing field
+        then: fill the field from the decision just made; never delete a rule to pass
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []

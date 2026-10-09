@@ -1,0 +1,134 @@
+# The whole quarter, at the altitude you think about it.
+#
+# Each of the middle steps is its own file in this directory. This one exists
+# to say what order they go in and where a quarter actually stalls.
+#
+# It stalled at matching. Intake used to pair receipts with transactions while
+# the bank import ran alongside it, so a receipt often looked for a transaction
+# that was not imported yet, and nothing looked again. Pairing is now its own
+# step, after both sides are in, and it can run as often as it likes.
+
+id: quarter-close
+name: Close the quarter
+noun: quarter
+discharge: >
+  the quarter's VAT return is filed with the ESTV, every bank transaction in
+  it carries journal entries, and the period is locked
+
+phases: [take-stock, assemble, book, file]
+
+steps:
+  - id: quarter_ends
+    name: A quarter ends
+    kind: start
+    note: Q1–Q4, Swiss VAT, cash basis
+    phase: take-stock
+    duration: day 0
+
+  - id: board
+    name: See what the quarter is missing
+    icon: search
+    uses: npm:board
+    note: derived from disk + the index, so it cannot drift; counts per evidence state
+    needs: [quarter_ends]
+    phase: take-stock
+    duration: 1m
+
+  - id: collect
+    name: Collect receipts
+    icon: inbox
+    kind: agent
+    process: receipt-collection.flow.yaml
+    note: email, portals and paper
+    needs: [board]
+    phase: assemble
+    duration: 1 – 3 days
+
+  - id: intake
+    name: Archive them
+    icon: archive
+    process: receipt-intake.flow.yaml
+    note: compress, extract, match
+    needs: [collect]
+    phase: assemble
+    duration: hours
+
+  - id: banks
+    name: Import bank statements
+    icon: import
+    process: bank-import.flow.yaml
+    note: camt053 and the statement PDFs
+    needs: [board]
+    phase: assemble
+    duration: 1 – 2 hours
+
+  - id: evidence
+    name: Pair receipts with transactions
+    icon: link
+    process: evidence.flow.yaml
+    note: rules, then the AI, then the Offen tab; chases what is missing
+    needs: [intake, banks]
+    phase: book
+    duration: hours – days
+
+  - id: booking
+    name: Book transactions
+    icon: file-pen
+    process: booking.flow.yaml
+    note: at least one entry per settled transaction
+    needs: [evidence]
+    phase: book
+    duration: hours
+
+  - id: review_rules
+    name: Confirm what the quarter taught
+    icon: book-check
+    kind: human
+    uses: npm:check-processes
+    with: { guide: quarter-close.guide.yaml#review_rules }
+    produces: guideRules
+    expect: >
+      no proposed rule that touched this quarter's figures is still unconfirmed,
+      and no open question parks an item in it — before anything is filed.
+    note: proposed rules confirmed or replaced; open questions answered
+    needs: [booking]
+    phase: file
+    duration: 15 – 60m
+
+  - id: filing
+    name: File the VAT return
+    icon: file-up
+    process: vat-filing.flow.yaml
+    note: eCH-0217, the ESTV, then the lock
+    needs: [review_rules]
+    phase: file
+    duration: 1 – 2 weeks
+
+  - id: last_quarter
+    name: Was that the year's last quarter?
+    outcomes: [more_to_come, year_complete]
+    needs: [filing]
+    phase: file
+
+  - id: quarter_done
+    name: Quarter closed
+    kind: end
+    needs: [last_quarter.more_to_come]
+    phase: file
+    duration: done
+
+  - id: year
+    name: Close the year
+    icon: book-check
+    process: year-close.flow.yaml
+    note: revalue, sign off, carry forward
+    needs: [last_quarter.year_complete]
+    phase: file
+    duration: weeks
+
+  - id: year_done
+    name: Year closed
+    kind: end
+    needs: [year]
+    phase: file
+    duration: done

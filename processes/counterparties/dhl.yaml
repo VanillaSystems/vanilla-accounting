@@ -1,0 +1,23 @@
+id: dhl
+name: DHL Express
+match:
+  tx: [ "dhl express" ]
+  uid: [ "CHE-116.304.564", "CHE-105.901.000" ]
+  file: [ '^\d{8}-dhl-' ]
+
+steps:
+  receipt-collection.guide.yaml#triage:
+    rules:
+      - id: col-brochures
+        when: DHL KMU-advisor mails
+        then: noise — the attachments are marketing brochures, not receipts
+        source: docs/runbooks/receipt-collection.md § DHL Express
+    precedents: []
+
+  receipt-intake.guide.yaml#vat_facts:
+    rules:
+      - id: dhl-two-codes
+        when: a DHL Zollrechnung
+        then: two MWST groups on one invoice — Z = 0% pass-through import VAT, E = 8.1% on DHL's own fees; the UID is in the footer, the header field is blank
+        source: docs/runbooks/receipt-collection.md § DHL Express
+    precedents: []

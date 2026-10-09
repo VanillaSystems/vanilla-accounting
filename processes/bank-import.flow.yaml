@@ -1,0 +1,113 @@
+# The bank side. Nothing downstream can be trusted until every account's
+# ledger balance equals the balance the bank itself reports.
+
+id: bank-import
+name: Import bank statements
+noun: statement
+discharge: >
+  every bank account's ledger balance equals the bank's own closing balance
+  at every month end in the quarter, in the account's own currency
+
+phases: [await, import, reconcile]
+
+steps:
+  - id: quarter_ends
+    name: The quarter is over
+    kind: start
+    phase: await
+    duration: day 0
+
+  - id: wait_published
+    name: Wait for every account's month to publish
+    kind: wait
+    note: Wise lags a few days
+    needs: [quarter_ends]
+    phase: await
+    duration: 1 – 5 days
+
+  - id: download_camt
+    name: Download the camt053 XML from each bank
+    icon: download
+    kind: human
+    note: monthly files — one year-to-date export loses the month ends between
+    needs: [wait_published, investigate.refetch]
+    phase: import
+    duration: 15m
+
+  - id: download_pdf
+    name: Download the monthly statement PDFs
+    icon: file-down
+    kind: human
+    note: Raiffeisen and Wise, one per account per month
+    needs: [wait_published]
+    phase: import
+    duration: 15m
+
+  - id: import_camt
+    name: Parse the statements into transactions
+    produces: transactions
+    expect: >
+      every statement entry keeps the bank's own entry-level reference, so
+      journal entries and mappings stay attached to the transaction they were
+      written against.
+    uses: npm:extract
+    note: one transaction per Ntry, keyed by the entry-level AcctSvcrRef
+    outcomes: [refs_stable, refs_moved]
+    needs: [download_camt]
+    phase: import
+    duration: 30s
+
+  - id: relink
+    name: Re-point the orphaned entries and mappings
+    with: { guide: bank-import.guide.yaml#relink }
+    kind: human
+    note: a changed ref silently detaches journal entries from their transaction
+    needs: [import_camt.refs_moved]
+    phase: import
+    duration: 1h
+
+  - id: import_balances
+    name: Read the month-end closing balances off the PDFs
+    produces: statementBalances
+    icon: file-search
+    uses: npm:extract-balances
+    note: Raiffeisen Saldo, Wise closing line
+    needs: [download_pdf]
+    phase: import
+    duration: 30s
+
+  - id: reconcile
+    name: Compare ledger to bank, per account, in its own currency
+    icon: scale
+    uses: npm:reconcile-balances
+    note: opening balance plus native movements
+    needs: [import_camt.refs_stable, relink, import_balances]
+    phase: reconcile
+    duration: 10s
+
+  - id: monthly
+    name: Does every month end match to the cent?
+    expect: >
+      every account's ledger balance equals the bank's own closing balance at
+      every month end, in that account's own currency.
+    note: the Kontenabgleich tab is the auditor-facing proof
+    outcomes: [balanced, differs]
+    needs: [reconcile]
+    phase: reconcile
+
+  - id: investigate
+    name: Find what is missing or doubled
+    with: { guide: bank-import.guide.yaml#investigate }
+    kind: human
+    note: a gap usually means a missing camt export, not a wrong booking
+    outcomes: [refetch]
+    needs: [monthly.differs]
+    phase: reconcile
+    duration: 1 – 4h
+
+  - id: trusted
+    name: The bank side is trustworthy
+    kind: end
+    needs: [monthly.balanced]
+    phase: reconcile
+    duration: done

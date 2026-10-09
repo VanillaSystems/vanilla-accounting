@@ -1,0 +1,85 @@
+# A change that would touch a closed period.
+#
+# Two processes used to describe this separately — booking (an entry whose
+# evidence changed after the lock) and vat-filing (check-closed found a moved
+# figure) — each with its own "book a correction" box. It is one procedure, so
+# it lives once, here.
+
+id: correction
+name: Correct a closed period
+noun: correction
+discharge: >
+  the closed entry is unchanged, a correction entry in the open period carries
+  the difference and names the original entry id, and the effect on the filed
+  return is known
+
+phases: [assess, book, report]
+
+steps:
+  - id: found
+    name: Something in a closed period is wrong
+    kind: start
+    note: a stale entry, a moved figure, or a late receipt
+    phase: assess
+    duration: day 0
+
+  - id: restore
+    name: Put the closed entries back as filed
+    icon: undo
+    uses: npm:check-closed
+    note: the committed baseline in filings/ is the truth for a closed period
+    needs: [found]
+    phase: assess
+    duration: 1m
+
+  - id: worth
+    name: What does the correction change?
+    with: { guide: correction.guide.yaml#worth }
+    by: human
+    outcomes: [vat, accounts_only, nothing, new_case]
+    needs: [restore, new_case]
+    phase: assess
+
+  - id: storno
+    name: Book the correction in the open period
+    icon: file-pen
+    kind: agent
+    produces: journalEntries
+    with: { guide: correction.guide.yaml#storno }
+    expect: >
+      the correction is dated in the open period, its description names the
+      original entry id, and together with the original it gives what should
+      have been booked.
+    needs: [worth.vat, worth.accounts_only]
+    phase: book
+    duration: 10 – 30m
+
+  - id: next_return
+    name: Does it go into the next return, or a Korrekturabrechnung?
+    with: { guide: correction.guide.yaml#next_return }
+    by: human
+    outcomes: [next_return, korrekturabrechnung, none]
+    needs: [storno]
+    phase: report
+
+  - id: korrektur
+    name: File a Korrekturabrechnung with the ESTV
+    kind: human
+    produces: filings
+    needs: [next_return.korrekturabrechnung]
+    phase: report
+    duration: 1h
+
+  - id: new_case
+    name: Decide the case
+    process: new-case.flow.yaml
+    note: e.g. whether a late receipt reopens a filed figure at all
+    needs: [worth.new_case]
+    phase: assess
+
+  - id: done
+    name: Corrected without touching the closed period
+    kind: end
+    needs: [next_return.next_return, next_return.none, korrektur, worth.nothing]
+    phase: report
+    duration: done

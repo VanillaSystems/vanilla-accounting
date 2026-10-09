@@ -1,0 +1,136 @@
+# The learning loop.
+#
+# Every decision step in every other process has a `new_case` exit, and it ends
+# up here. The point is not to answer the case — any session can do that in
+# chat — but to make sure the answer is written where the next agent will read
+# it, so the same question is never asked again. A quarter is quieter than the
+# last one by exactly the number of times this process ran to the end.
+
+id: new-case
+name: Decide a case no rule covers
+noun: case
+discharge: >
+  the case is decided by a person, the decision is written into the guide of
+  the step that raised it — as a rule if it generalises, as a precedent if not —
+  and the item it stopped is back in its process
+
+phases: [frame, decide, record]
+
+steps:
+  - id: raised
+    name: A step meets a case its guide does not cover
+    kind: start
+    note: only that item stops; the rest of the quarter goes on
+    phase: frame
+    duration: day 0
+
+  - id: frame
+    name: Write the case up as a question with options
+    kind: agent
+    produces: openCase
+    with: { guide: new-case.guide.yaml#frame }
+    expect: >
+      the person is shown the item, the step, the rules that came close and why
+      they did not fit, and two to four concrete options with what each would
+      book — never an open "what should I do?".
+    needs: [raised]
+    phase: frame
+    duration: 1m
+
+  - id: who
+    name: Can the owner decide it, or does it need the tax advisor?
+    by: human
+    with: { guide: new-case.guide.yaml#who }
+    outcomes: [owner, advisor]
+    needs: [frame]
+    phase: decide
+
+  - id: owner_decides
+    name: The owner picks an option
+    kind: human
+    produces: decision
+    note: in the Offen tab, or in the session that raised it
+    needs: [who.owner]
+    phase: decide
+    duration: minutes
+
+  - id: ask_advisor
+    name: Send the question to the tax advisor
+    kind: human
+    produces: advisorQuestion
+    note: the framed question, as it stands
+    needs: [who.advisor]
+    phase: decide
+    duration: 10m
+
+  - id: await_advisor
+    name: Wait for the advisor's answer
+    kind: wait
+    note: >
+      the guide gets a rule with status open meanwhile, so every agent that
+      meets the same case parks it here too instead of asking again
+    outcomes: [answered]
+    needs: [ask_advisor]
+    phase: decide
+    duration: days – weeks
+
+  - id: generalises
+    name: Does the answer hold for every case like it?
+    by: human
+    with: { guide: new-case.guide.yaml#generalises }
+    outcomes: [rule, precedent]
+    needs: [owner_decides, await_advisor.answered]
+    phase: record
+
+  - id: write_rule
+    name: Add the rule to the step's guide
+    with: { guide: new-case.guide.yaml#write_rule }
+    kind: agent
+    produces: guideRule
+    expect: >
+      the rule has an id, a when an agent can test, a then, a why, and a source
+      naming the person and the date. It sits above any rule it overrides.
+    note: same session — never left for later
+    needs: [generalises.rule]
+    phase: record
+    duration: 5m
+
+  - id: write_precedent
+    name: Add the precedent to the step's guide
+    with: { guide: new-case.guide.yaml#write_precedent }
+    kind: agent
+    produces: guidePrecedent
+    note: the item, the decision and who made it
+    needs: [generalises.precedent]
+    phase: record
+    duration: 2m
+
+  - id: other_items
+    name: Re-run the step over everything it had parked
+    note: the new rule may settle other items without asking
+    needs: [write_rule, write_precedent]
+    phase: record
+    duration: 1m
+
+  - id: check
+    name: Are the guides still consistent?
+    icon: search-check
+    uses: npm:check-processes
+    outcomes: [valid, invalid]
+    needs: [other_items, fix_guide]
+    phase: record
+    duration: 5s
+
+  - id: fix_guide
+    name: Fix what the check names
+    with: { guide: new-case.guide.yaml#fix_guide }
+    kind: agent
+    needs: [check.invalid]
+    phase: record
+
+  - id: resumed
+    name: The item is back in its process
+    kind: end
+    needs: [check.valid]
+    phase: record
+    duration: done

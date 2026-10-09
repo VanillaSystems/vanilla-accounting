@@ -1,0 +1,25 @@
+id: swiss-post
+name: Post CH
+match:
+  tx: [ "post ch" ]
+  uid: [ "CHE-116.302.542" ]
+  file: [ '^\d{8}-post-' ]
+
+steps:
+
+  receipt-collection.guide.yaml#triage:
+    rules:
+      - id: col-post-smime
+        when: Swiss Post mails
+        then: skip the S/MIME attachments, keep the Kundendoppel PDFs
+        source: docs/runbooks/receipt-collection.md § Swiss Post
+    precedents: []
+
+  evidence.guide.yaml#rules:
+    rules:
+      - id: ev-supporting-post
+        when: an Aufgabebestätigung (kind supporting)
+        then: link it to that month's Post CH invoice receipt, not to a bank transaction
+        why: the monthly Post invoice is what the bank pays
+        source: decision 2026-10-07, owner
+    precedents: []

@@ -1,0 +1,100 @@
+		Erläuterungen
+		V  = Umsatz Verkauf (200)
+		VS = Skonto Verkauf und Dienstleistungen (235)
+		B = Bezugsteuer  (38x)
+		M = Material- und Dienstleistungsaufwand (400)
+		I = Investitionen und übrigem Betriebsaufwand (405)
+		K = Korrekturen und Kürzungen  (410, 415, 420)
+		Z = Nicht-Entgelte (910)
+
+		MwSt/USt-Codes-Informationen  (nicht bearbeiten)
+		id=vatcodes-chd-2024.20230614
+		Letzte Aktualisierung: 14.06.2023
+
+		Umsatzsteuer (Schuld)
+	V0	Von der Steuer befreite Leistungen, u.a. Exporte (220)	1.1	200;220	Yes
+	V0-E	Leistungen im Ausland (221)	1.1	200;221	Yes
+	V0-T	Übertragung im Meldeverfahren (225)	1.1	200;225	Yes
+	V0-N	Nicht steuerbare Leistungen (230)	1.1	200;230	Yes
+		Entgeltminderungen siehe Skonti
+	V0-D	Diverses (280)	1.1	200;280	Yes
+	V77	Verkauf und Dienstleistungen 7.7%	1.1	200;302	Yes		7.70
+	V81	Verkauf und Dienstleistungen 8.1%	1.1	200;303	Yes		8.10
+	V77-B	Verkauf und Dienstleistungen 7.7% (optiert)	1.1	200;205;302	Yes		7.70
+	V81-B	Verkauf und Dienstleistungen 8.1% (optiert)	1.1	200;205;303	Yes		8.10
+	V25-N	Verkauf und Dienstleistungen 2.5%	1.1	200;312	Yes		2.50
+	V26	Verkauf und Dienstleistungen 2.6%	1.1	200;313	Yes		2.60
+	V37	Verkauf und Dienstleistungen 3.7%	1.1	200;342	Yes		3.70
+	V38	Verkauf und Dienstleistungen 3.8%	1.1	200;343	Yes		3.80
+	VS77	Skonto Verkauf und Dienstleistungen  7.7%	1.1	235;302			7.70
+	VS81	Skonto Verkauf und Dienstleistungen  8.1%	1.1	235;303			8.10
+	VS25-N	Skonto Verkauf und Dienstleistungen  2.5%	1.1	235;312			2.50
+	VS26	Skonto Verkauf und Dienstleistungen  2.6%	1.1	235;313			2.60
+	VS37	Skonto Verkauf und Dienstleistungen 3.7%	1.1	235;342			3.70
+	VS38	Skonto Verkauf und Dienstleistungen 3.8%	1.1	235;343			3.80
+
+1.1		Steuerbarer Gesamtumsatz (299)	1
+
+	F1	1. Saldosteuersatz 2024	1.F	200;323	Yes			Yes
+	F2	2. Saldosteuersatz 2024	1.F	200;333	Yes			Yes
+	FS1	Skonto Verkauf und Dienstleistungen 1. Saldosteuersatz 2024	1.F	235;323				Yes
+	FS2	Skonto Verkauf und Dienstleistungen 2. Saldosteuersatz 2024	1.F	235;333				Yes
+	F3	1. Saldosteuersatz 2018	1.F	200;322	Yes			Yes
+	F4	2. Saldosteuersatz 2018	1.F	200;332	Yes			Yes
+	FS3	Skonto Verkauf und Dienstleistungen 1. Saldosteuersatz 2018	1.F	235;322				Yes
+	FS4	Skonto Verkauf und Dienstleistungen 2. Saldosteuersatz 2018	1.F	235;332				Yes
+1.F		Total Saldosteuersatz (322-333)	1
+
+	B77	Bezugsteuer 7.7%  (inklusive MwSt/USt)	1.2	382	Yes		7.70
+	B77-1	Bezugsteuer 7.7%  (exklusive MwSt/USt)	1.2	382	Yes	1	7.70
+	B77-2	Bezugsteuer 7.7%  (MwSt/USt-Betrag)	1.2	382	Yes	2	7.70
+	B81	Bezugsteuer 8.1%  (inklusive MwSt/USt)	1.2	383	Yes		8.10
+	B81-1	Bezugsteuer 8.1%  (exklusive MwSt/USt)	1.2	383	Yes	1	8.10
+	B81-2	Bezugsteuer 8.1%  (MwSt/USt-Betrag)	1.2	383	Yes	2	8.10
+1.2		Total Bezugsteuer (382-383)	1
+1		Total geschuldete Steuer (399)	T
+
+		Vorsteuer (Guthaben)
+	M0	Befreite Material- und Dienstleistungsaufwand 	2	xxx
+	I0	Befreite Investition und Betriebsaufwand 	2	xxx
+	M77	Material- und Dienstleistungsaufwand 7.7%  (inklusive MwSt/USt)	2	400			7.70
+	M77-1	Material- und Dienstleistungsaufwand 7.7%  (exklusive MwSt/USt)	2	400		1	7.70
+	M77-2	Material- und Dienstleistungsaufwand 7.7%  (MwSt/USt-Betrag)	2	400		2	7.70
+	M81	Material- und Dienstleistungsaufwand 8.1%  (inklusive MwSt/USt)	2	400			8.10
+	M81-1	Material- und Dienstleistungsaufwand 8.1%  (exklusive MwSt/USt)	2	400		1	8.10
+	M81-2	Material- und Dienstleistungsaufwand 8.1%  (MwSt/USt-Betrag)	2	400		2	8.10
+	M25	Material- und Dienstleistungsaufwand 2.5%	2	400			2.50
+	M26	Material- und Dienstleistungsaufwand 2.6%	2	400			2.60
+	M37	Material- und Dienstleistungsaufwand 3.7%	2	400			3.70
+	M38	Material- und Dienstleistungsaufwand 3.8%	2	400			3.80
+
+		Investition und Betriebsaufwand
+	I77	Investition und Betriebsaufwand 7.7%	2	405			7.70
+	I77-1	Investition und Betriebsaufwand 7.7% (exklusive MwSt/USt)	2	405		1	7.70
+	I77-2	Investition und Betriebsaufwand 7.7%  (MwSt/USt-Betrag)	2	405		2	7.70
+	I81	Investition und Betriebsaufwand 8.1%	2	405			8.10
+	I81-1	Investition und Betriebsaufwand 8.1% (exklusive MwSt/USt)	2	405		1	8.10
+	I81-2	Investition und Betriebsaufwand 8.1%  (MwSt/USt-Betrag)	2	405		2	8.10
+	I25	Investition und Betriebsaufwand 2.5%	2	405			2.50
+	I26	Investition und Betriebsaufwand 2.6%	2	405			2.60
+	I37	Investition und Betriebsaufwand 3.7%	2	405			3.70
+	I38	Investition und Betriebsaufwand 3.8%	2	405			3.80
+
+		Korrekturen und Kürzungen
+	K77-A	Einlageentsteuerung  7.7% (410)	2	410			7.70
+	K81-A	Einlageentsteuerung  8.1% (410)	2	410			8.10
+	K77-B	Vorsteuerkorrekturen 7.7% (415)	2	415	Yes		7.70
+	K81-B	Vorsteuerkorrekturen 8.1% (415)	2	415	Yes		8.10
+	K77-C	Vorsteuerkürzungen 7.7% (420)	2	420	Yes		7.70
+	K81-C	Vorsteuerkürzungen 8.1% (420)	2	420	Yes		8.10
+	F1050	Steueranrechnung gemäss Formular Nr. 1050	2	470		2
+	F1055	Steueranrechnung gemäss Formular Nr. 1055	2	471		2
+
+2		Total Vorsteuer (479)	T
+T		Total zu bezahlen (500) oder Guthaben (510)	TT
+
+		Andere Mittelflüsse
+	Z0-A	Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs-und Wasserwerkbeiträge (Bst. a-c)	Z	900	Yes
+	Z0	Spenden, Dividenden, Schadenersatz usw.	Z	910
+Z		Nicht-Entgelte	TT
+TT		Total der Kontrolle

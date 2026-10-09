@@ -1,0 +1,70 @@
+# Shopify is both a supplier (app and payment fees) and the sales platform:
+# its payouts arrive as "Received money from Stripe Payments UK Ltd with
+# reference Shopify …", so the Stripe payout merchant routes here.
+
+id: shopify
+name: Shopify
+match:
+  tx: [ "shopify", "stripe payments uk" ]
+  uid: [ "CHE-153.004.184" ]
+  file: [ '^\d{8}-shopify' ]
+
+steps:
+  receipt-collection.guide.yaml#scrape:
+    rules:
+      - id: col-shopify
+        when: Shopify
+        then: three scrapes — order pages, monthly billing statements, Payments invoices ("Tax forms")
+        procedure: docs/runbooks/receipt-collection.md § Shopify
+        source: AGENTS.md § Shopify billing
+    precedents: []
+
+  receipt-intake.guide.yaml#kind:
+    rules:
+      - id: kind-shopify-order
+        when: a Shopify order page
+        then: sales_record
+        source: docs/runbooks/receipt-collection.md § Shopify order pages
+    precedents: []
+
+  evidence.guide.yaml#rules:
+    rules:
+      - id: ev-shopify-order
+        when: a sales-record order page
+        then: link it to the payout it names ("was added to your <date> payout")
+        source: docs/runbooks/receipt-collection.md § Shopify order pages
+    precedents: []
+
+  booking.guide.yaml#purchase_vat:
+    rules:
+      - id: pv-shopify-fees
+        when: Webshop Gebühren
+        then: >
+          the fee entries stay at the payout; the month's Vorsteuer is one single-leg entry — empty Soll / C 6580 / M81-2, amount = fees × 8.1 / 108.1
+        why: the proof is the monthly Shopify bill, not the payout
+        source: docs/runbooks/booking-patterns.md § Shopify
+    precedents: []
+
+  booking.guide.yaml#sale_vat:
+    rules:
+      - id: sv-delivery-decides
+        when: always
+        then: the DELIVERY (shipping) address decides Swiss or export — never the billing address. If the order’s Taxes line disagrees with the delivery country (Swiss MwSt on a delivery abroad, or no Swiss MwSt on a delivery to Switzerland), new_case
+        why: "an order billed to an address abroad but delivered in Switzerland carries Swiss VAT, correctly"
+        source: decision 2026-10-07, owner
+      - id: sv-swiss
+        when: "the order page's Taxes line reads MwSt 8.1% (Swiss delivery)"
+        then: swiss — V81
+        source: docs/runbooks/receipt-collection.md § Shopify order pages
+      - id: sv-export
+        when: the order page has no Taxes line (rest of world)
+        then: export — V0, with the delivery country as the recorded reason
+        source: docs/runbooks/receipt-collection.md § Shopify order pages
+      - id: sv-eu-vat
+        status: open
+        when: "the Taxes line names an EU VAT (e.g. DE MwSt 19%)"
+        then: >
+          new_case — park the order. Known so far: zero-rated for Swiss purposes, and the EU VAT in the gross is not revenue. Which account carries it, and whether Shopify remits it as deemed supplier under IOSS, is with the tax advisor.
+        why: booking the gross as Swiss-taxable turnover overstates turnover and misstates the return
+        source: docs/runbooks/receipt-collection.md § Shopify order pages (found 2026-10-01)
+    precedents: []

@@ -1,0 +1,45 @@
+# Not matched by UID: CHE-447.613.666 is Alibaba's and is also printed on
+# alibaba.com receipts.
+
+id: aliexpress
+name: AliExpress
+match:
+  tx: [ "aliexpress" ]
+  file: [ '^\d{8}-aliexpress-', '_payment\.pdf$' ]
+grouped: true
+
+steps:
+  receipt-collection.guide.yaml#scrape:
+    rules:
+      - id: col-aliexpress
+        when: AliExpress
+        then: the "Tax Invoice" PDF ({orderId}_payment.pdf, CHE-447.613.666, explicit 8.1%); never the "Receipt" button's Order Summary
+        procedure: docs/runbooks/receipt-collection.md § AliExpress
+        source: AGENTS.md § Receipt collection
+    precedents: []
+
+  receipt-collection.guide.yaml#fallback:
+    rules:
+      - id: col-aliexpress-screenshots
+        when: an AliExpress order without a downloadable Tax Invoice
+        then: the documented 3-page screenshot capture
+        procedure: docs/runbooks/receipt-collection.md § AliExpress
+        source: AGENTS.md § Receipt collection
+    precedents: []
+
+  receipt-intake.guide.yaml#kind:
+    rules:
+      - id: kind-aliexpress-summary
+        when: an AliExpress "Order Summary" (no CHE number, no tax line)
+        then: supporting — it proves the order, not the tax; the Tax Invoice or the screenshot fallback is the invoice
+        source: AGENTS.md § Receipt collection
+    precedents: []
+
+  booking.guide.yaml#purchase_vat:
+    rules:
+      - id: pv-aliexpress-summary
+        when: the linked AliExpress document is an Order Summary, not a Tax Invoice
+        then: zero_rated
+        why: only the Tax Invoice (CHE-447.613.666, explicit 8.1%) proves the tax
+        source: AGENTS.md § Receipt collection
+    precedents: []

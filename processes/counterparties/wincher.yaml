@@ -1,0 +1,5 @@
+id: wincher
+name: Wincher (SEO rank tracking)
+match:
+  domain: [ "wincher.com" ]
+  file: [ 'wincher' ]

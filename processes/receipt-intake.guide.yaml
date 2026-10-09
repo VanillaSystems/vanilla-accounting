@@ -1,0 +1,59 @@
+# Knowledge for receipt-intake.flow.yaml.
+
+process: receipt-intake
+
+steps:
+  vision:
+    goal: Get readable text out of a scanned or image-only PDF, so its VAT facts can be read like any other.
+    rules:
+      - id: vis-downscale-first
+        when: the file was not yet compressed
+        then: compress before reading — a later rewrite changes the SHA-256 id and orphans its mappings
+        source: docs/runbooks/receipt-collection.md § 7. Phone scan PDFs (iOS app)
+    precedents: []
+
+  kind:
+    goal: >
+      Say what the document is, once, so the evidence process knows whether it owes a transaction. Only invoice and sales-record do.
+    reads: [ extracted text, VAT facts, filename, the email or portal it came from ]
+    rules:
+      - id: kind-statement
+        when: a Wise or Raiffeisen monthly statement
+        then: statement
+        source: AGENTS.md § Special cases (Wise statements carry the original foreign amount)
+      - id: kind-return-label
+        when: return labels, customs paperwork without amounts, Retourenbelege
+        then: supporting
+        source: docs/runbooks/receipt-collection.md § Webshops that attach a return slip
+      - id: kind-brochure
+        when: marketing brochures, reports, sponsorship offers, newsletters
+        then: noise
+        source: docs/runbooks/receipt-collection.md § DHL Express (KMU-advisor brochures)
+      - id: kind-duplicate
+        when: same vendor, same invoice number or same amount and date as an archived receipt
+        then: duplicate
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+      - id: kind-invoice
+        when: a document that asks for or confirms a payment, with an amount
+        then: invoice
+        source: definition
+    precedents: []
+  vat_facts:
+    goal: Read the VAT facts printed on the receipt — vatId, currency, total, hasSwissVat, vatSummary, lineItems — and decide nothing else.
+    reads:
+      - the extracted text (up to 8000 chars)
+    rules:
+      - id: vat-swiss-only
+        when: always
+        then: hasSwissVat is true only for a POSITIVE Swiss rate (8.1, 2.6, 3.8; historically 7.7, 2.5, 3.7); a foreign rate or a 0%-only receipt is false, even with a CHE number on it
+        source: src/llm/prompts.ts buildReceiptVatPrompt (moved here 2026-10-07)
+      - id: vat-printed-only
+        when: always
+        then: one vatSummary group per rate printed in the MWST block, numbers as printed; never infer VAT from the vendor or its country
+        source: src/llm/prompts.ts buildReceiptVatPrompt
+      - id: vat-line-items
+        when: the receipt itemizes purchases under different rates or clearly different expense kinds
+        then: add lineItems { description, gross, ratePercent }; otherwise omit them
+        source: src/llm/prompts.ts buildReceiptVatPrompt
+    precedents: []

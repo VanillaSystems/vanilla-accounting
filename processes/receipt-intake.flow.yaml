@@ -1,0 +1,146 @@
+# From a file somebody dropped in beleg-import/ to an archived receipt that
+# knows what kind of document it is. Pairing it with a transaction is not done
+# here any more: that needs the bank side too, and it has to be retried as both
+# sides fill in. See evidence.flow.yaml.
+#
+# The order here is not arbitrary: a receipt's id is the SHA-256 of its bytes,
+# so anything that rewrites the file has to happen before `extract` sees it.
+
+id: receipt-intake
+name: Archive receipts
+noun: file
+discharge: >
+  every file in beleg-import/ is archived under receipts/ with its text, its
+  VAT facts, a descriptive name and its kind — invoice, sales record,
+  supporting document, statement, noise or duplicate
+
+phases: [normalise, extract, file]
+
+steps:
+  - id: arrived
+    name: A file sits in beleg-import/
+    kind: start
+    note: laptop download, iOS upload, or a browser session
+    phase: normalise
+    duration: day 0
+
+  - id: is_pdf
+    name: Is it a PDF?
+    outcomes: [pdf, image]
+    needs: [arrived]
+    phase: normalise
+
+  - id: convert
+    name: Convert the image to PDF
+    note: ImageMagick; the original is deleted
+    needs: [is_pdf.image]
+    phase: normalise
+    duration: 2s
+
+  - id: size
+    name: Bigger than about 2 MB?
+    note: phone scans arrive at 2 – 5 MB
+    outcomes: [small, large]
+    needs: [is_pdf.pdf, convert]
+    phase: normalise
+
+  - id: compress
+    name: Downsample to 150 DPI
+    expect: >
+      compression happens before extract, always. A receipt's id is the
+      SHA-256 of its bytes, so rewriting the file afterwards orphans every
+      mapping that pointed at it.
+    icon: shrink
+    note: Ghostscript, about 57% smaller — do this BEFORE extract
+    needs: [size.large]
+    phase: normalise
+    duration: 5s
+
+  - id: extract
+    name: Extract the text
+    produces: receipts
+    icon: scan-text
+    uses: npm:extract
+    note: pdftotext, tesseract fallback, SHA-256 dedup
+    outcomes: [text, no_text, duplicate]
+    needs: [size.small, compress]
+    phase: extract
+    duration: 1 – 10m
+
+  - id: already
+    name: Already archived, skipped
+    kind: end
+    note: same SHA-256 as a file in receipts/
+    needs: [extract.duplicate]
+    phase: extract
+    duration: done
+
+  - id: vision
+    name: Read it with vision instead
+    with: { guide: receipt-intake.guide.yaml#vision, model: sonnet, batch: 1 }
+    kind: agent
+    note: POST /api/vision/extract — then the VAT facts like any other
+    needs: [extract.no_text]
+    phase: extract
+
+  - id: vat_facts
+    name: Read the VAT facts off the text
+    kind: agent
+    with: { guide: receipt-intake.guide.yaml#vat_facts, model: sonnet, batch: 1 }
+    icon: file-search
+    uses: npm:extract-vat
+    note: vatId, hasSwissVat, vatSummary, lineItems
+    needs: [extract.text, vision]
+    phase: extract
+    duration: 1 – 5m
+
+  # Most unlinked receipts were never going to match one bank
+  # transaction: Shopify order pages are sales records behind a payout, Post
+  # Aufgabebestätigungen are line items of the monthly Post invoice, and some
+  # were brochures. Saying what a document is, once, here, is what lets the
+  # evidence process know which ones still owe it a transaction.
+  - id: kind
+    name: What kind of document is it?
+    with: { guide: receipt-intake.guide.yaml#kind, model: sonnet, batch: 10 }
+    icon: tags
+    kind: agent
+    uses: npm:archive
+    expect: >
+      every archived receipt carries a kind. Only an invoice or a sales record
+      has to support a transaction; the others are settled by saying so.
+    note: from the text and the VAT facts; a person corrects it in the Offen tab
+    outcomes: [invoice, sales_record, supporting, statement, noise, duplicate, new_case]
+    needs: [vat_facts, new_case]
+    phase: file
+    duration: 1 – 5m
+
+  - id: duplicate_of
+    name: Point it at the receipt it repeats
+    note: same invoice, different bytes — two downloads of one Anthropic bill
+    needs: [kind.duplicate]
+    phase: file
+
+  - id: archive
+    name: Name it and move it into receipts/
+    produces: receipts
+    icon: archive
+    uses: npm:archive
+    note: "date-vendor-what.pdf; the id does not change, it is the hash of the bytes"
+    needs: [kind.invoice, kind.sales_record, kind.supporting, kind.statement, kind.noise, duplicate_of]
+    phase: file
+    duration: 1 – 5m
+
+  - id: archived
+    name: Receipt archived and typed
+    kind: end
+    note: evidence.flow.yaml pairs it with its transaction
+    needs: [archive]
+    phase: file
+    duration: done
+
+  - id: new_case
+    name: Decide the case no rule covers
+    process: new-case.flow.yaml
+    note: a document the guide cannot type
+    needs: [kind.new_case]
+    phase: file

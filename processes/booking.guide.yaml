@@ -1,0 +1,219 @@
+# Knowledge for booking.flow.yaml, one section per step.
+#
+# An agent executing a step reads its section and decides by: rules (first match
+# wins) → precedents → ask_human_when → otherwise the step's new_case exit.
+# Rules with `status: open` are questions waiting for an answer: an item they
+# match is parked in new-case, not booked by guesswork.
+#
+# Add knowledge here, not in the flow and not in chat. See processes/README.md.
+
+process: booking
+
+steps:
+  classify:
+    goal: >
+      Turn one settled transaction into the journal entries that describe it, with accounts from the chart of accounts (history/), the VAT code its evidence supports, and the ESTV sell rate of the payment date for foreign amounts.
+    reads:
+      - the transaction (date, amount, currency, direction, description)
+      - its linked receipts with their VAT facts (hasSwissVat, vatSummary, lineItems)
+      - its noReceipt reason, if it has one
+      - history/ (chart of accounts, 2025 reference entries) and reference/MWST-codes.txt (VAT codes)
+    gates:
+      - id: cls-closed
+        when: the transaction is dated on or before config.closedThrough
+        then: do not book; correction.flow.yaml owns it
+        why: Periodensperre
+        source: AGENTS.md § Period close
+        test: closed-period
+      - id: cls-unsettled
+        when: the transaction's evidence state is not settled
+        then: do not book; it stays in the Offen tab
+        why: booking on missing evidence gives up input tax silently
+        source: decision 2026-10-07, owner
+        test: unsettled
+    rules:
+      - id: cls-fx
+        when: the transaction is not in CHF
+        then: >
+          convert at the ESTV daily SELL rate of the transaction's date (the payment date), via src/accounting/fx-rates.ts; on a day without a rate, the last published one
+        why: MWSTG Art. 24, cash basis
+        source: docs/adr/0001-foreign-currency-conversion.md
+      - id: cls-expense-vs-asset
+        when: a purchase under about CHF 150
+        then: expense it (6xxx), do not capitalise (1xxx)
+        why: not worth an asset record
+        source: AGENTS.md § VAT code rules
+      - id: cls-wise-split
+        when: a Wise card charge took money from several currency accounts
+        then: >
+          one entry per debited account leg; the charge currency first, then other foreign currencies, CHF last
+        why: that is how Wise funds a card payment
+        source: AGENTS.md § Special cases
+      - id: cls-flag-low-confidence
+        status: proposed
+        when: the accounts or the code are a guess the evidence does not support
+        then: book nothing; flag it with the reason, so it reaches manual_entry
+        why: a flagged item costs a minute; a wrong code costs a correction later
+        source: proposed 2026-10-07 by Claude — confirm or replace
+    ask_human_when:
+      - the amount is above CHF 1000 and the account is not one used for this vendor before
+    precedents: []
+
+  shape:
+    goal: Decide whether one journal entry describes the transaction, or one per receipt.
+    reads: [ the transaction, its linked receipts ]
+    rules:
+      - id: shp-several-invoices
+        when: "two or more linked receipts are invoices with their own amounts (a counterparty marked grouped: true)"
+        then: needs_split
+        why: AliExpress, Amazon and FedEx group several invoices into one payment
+        source: AGENTS.md § Special cases
+      - id: shp-zollrechnung
+        when: a courier's Zollrechnung (customs invoice)
+        then: needs_split into Zölle (4020), ausl. MWST (4030), Zahlungsabwicklungsspesen / Vorlageprovision (4040)
+        why: three different things on one invoice (FedEx, DHL, Post all issue them)
+        source: docs/runbooks/receipt-collection.md § FedEx, § DHL Express
+      - id: shp-one
+        when: otherwise
+        then: one_entry
+        source: definition
+    precedents: []
+
+  split:
+    goal: One entry per linked invoice or order, summing to the transaction amount.
+    reads: [ the linked receipts' amounts, VAT facts and line items ]
+    rules:
+      - id: spl-sum
+        status: proposed
+        when: always
+        then: the entries sum to the transaction amount in its currency; a difference (rounding, FX, a platform's deduction) is its own entry, never spread across the others
+        source: proposed 2026-10-07 by Claude — confirm or replace
+    precedents: []
+
+  side:
+    goal: Purchase or sale decides which evidence sets the VAT code.
+    rules:
+      - id: sid-direction
+        when: direction is DBIT and it is not a refund of a sale
+        then: a_purchase
+        source: definition
+      - id: sid-refund
+        when: a CRDT that reverses an earlier purchase (vendor refund)
+        then: a_purchase, with the original purchase's code inverted (-I81, -I0)
+        why: a refund inverts the original VAT code
+        source: AGENTS.md § VAT code rules
+      - id: sid-sale
+        when: CRDT from a sales platform's payout or another customer payment
+        then: a_sale
+        source: definition
+    precedents: []
+
+  purchase_vat:
+    goal: The input-tax code the receipt itself supports.
+    reads: [ receipt.hasSwissVat, receipt.vatSummary, receipt.vatId, the receipt text ]
+    gates:
+      - id: pv-no-receipt
+        when: no linked receipt (noReceipt reason, or exempt by rule)
+        then: zero_rated — I0, or M0 for goods
+        why: no receipt, no deduction
+        source: AGENTS.md § VAT code rules
+        test: no-receipt
+      - id: pv-che-but-zero
+        when: the receipt shows a CHE number but the rate charged is 0%
+        then: zero_rated
+        why: a UID is not proof that MWST was charged (thomann.de)
+        source: docs/runbooks/receipt-collection.md § Trap
+    rules:
+      - id: pv-prefix-from-account
+        when: always
+        then: "the letter follows the account, not the vendor: 4xxx (material, goods, their freight and customs) → M; investments and operating costs (1xxx assets, 5xxx–6xxx) → I"
+        why: FedEx 4xxx entries were booked I0 and M0 for the same kind of position
+        source: src/llm/prompts.ts CLASSIFY_INSTRUCTIONS § 7a
+      - id: pv-charged
+        when: the receipt shows Swiss MWST with an explicit amount at 8.1%
+        then: charged — M81 for goods and material, I81 for investments and operating costs
+        source: AGENTS.md § VAT code rules
+      - id: pv-import-vat-evv
+        when: a courier bill passes on Swiss IMPORT VAT for goods imported for the company, and the BAZG Veranlagungsverfügung MWST (eVV) names the company as importer
+        then: "book the import VAT on 4030 without code, then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it — e-dec-web.ezv.admin.ch/edecZugangscodeGui with the Zollanmeldungsnummer and Zugangscode printed on the courier bill (CAPTCHA: the owner submits; the zip contains the signed PDF)"
+        why: "the courier bill is not proof of import VAT; the eVV is (UPS bill page 3 says so)"
+        source: owner decision 2026-10-08
+      - id: pv-bezugsteuer
+        when: a SERVICE (advertising, consulting, software/online service) from a supplier based abroad that is not in the Swiss VAT register and charges no Swiss MWST
+        then: "B81-1 on the expense entry (amount = the net paid): Ziffer 383 declares 8.1%, and the same entry deducts it again at 405 — net 0 for business use. From the first franc: NO CHF 10,000 threshold for us"
+        why: "MWSTG Art. 45 Abs. 1 lit. a (foreign service, place = recipient's seat per Art. 8 Abs. 1) + Abs. 2 lit. a (a VAT-registered recipient owes it, no threshold — the CHF 10,000 of lit. b is only for recipients NOT registered) + Art. 28 Abs. 1 lit. b (deductible as input tax). eCH-0217 acquisitionTax, always net. Not subject: goods (import VAT instead), services exempt under Art. 21 such as payment processing / Stripe fees (Art. 45a), and foreign suppliers registered in CH that invoice 8.1% themselves (Shopify, Google Commerce, OpenAI → I81)"
+        source: owner decision 2026-10-08
+      - id: pv-otherwise
+        when: otherwise
+        then: zero_rated
+        source: AGENTS.md § VAT code rules
+    ask_human_when:
+      - the receipt shows a reduced rate (2.6%) or a special rate (3.8%)
+    precedents: []
+
+  sale_vat:
+    goal: The output-tax code, from the order — the payout does not know the customer.
+    reads: [ "the order page's Taxes line", the delivery country ]
+    rules:
+      - id: sv-order-tax
+        when: always
+        then: "the code follows the tax the order or invoice itself states: Swiss 8.1% → swiss (V81); no Swiss tax and delivered abroad → export (V0) with the country as the recorded reason; anything else → new_case"
+        source: booking.flow.yaml sale_vat expect
+    ask_human_when:
+      - a sale that is not a Shopify order (a private sale of equipment, a B2B invoice)
+    precedents: []
+
+  private:
+    goal: Whether part of the expense is private, so the input tax on that part is given back.
+    rules:
+      - id: prv-known
+        when: the item or vendor is listed as partly private in precedents
+        then: partly_private, at the recorded share
+        source: processes/README.md § How a step decides
+    ask_human_when:
+      - devices or subscriptions a person could also use privately, not yet in precedents
+    precedents: []
+
+  eigenverbrauch:
+    goal: Give back the input tax on the private share.
+    rules:
+      - id: eig-entry
+        when: always
+        then: "D 2451 / C <expense account>, VAT code K81-B (Ziffer 415), matched by entry id"
+        source: reference/MWST-codes.txt (K81-B, Ziffer 415)
+    precedents: []
+
+  fix_codes:
+    goal: Make a booked code agree with the receipt facts the audit reports against.
+    rules:
+      - id: fix-receipt-wins
+        when: the audit says code and receipt facts disagree
+        then: the receipt wins; rebook through the step's rules above, not by hand
+        source: AGENTS.md § VAT code rules
+    ask_human_when:
+      - the receipt facts themselves look wrong (re-run extract-vat first)
+    precedents: []
+
+  find_imbalance:
+    goal: Find why the books do not balance, without plugging the difference.
+    rules:
+      - id: imb-fx-legs
+        when: the difference sits on a Wise foreign-currency account
+        then: look for a currency-split leg booked once instead of per account
+        source: AGENTS.md § Special cases (Wise currency splits)
+      - id: imb-duplicates
+        when: the difference equals one transaction amount
+        then: look for a transaction booked twice (re-imported ref, manual + bank)
+        source: definition
+    precedents: []
+
+  manual_entry:
+    goal: Book what classify flagged, using the flag's reason.
+    rules:
+      - id: man-record
+        status: proposed
+        when: always
+        then: >
+          if the reason will recur (a vendor, an account, a pattern), it goes through new-case so it becomes a rule — a manual entry that teaches nothing will be manual again next quarter
+        source: proposed 2026-10-07 by Claude — confirm or replace
+    precedents: []

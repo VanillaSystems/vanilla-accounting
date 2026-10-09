@@ -1,0 +1,109 @@
+import type { JournalEntry } from '../types/index.js';
+import { toRappen, fromRappen, roundCHF } from './rappen.js';
+
+export interface AccountBalance {
+  account: string;
+  debitTotal: number;
+  creditTotal: number;
+  balance: number;
+}
+
+/**
+ * Compute CHF amount for a journal entry.
+ * If exchangeCurrency is set, amount is in foreign currency — multiply by exchangeRate to get CHF.
+ * If no exchangeCurrency, amount is already CHF.
+ */
+export function chfAmount(entry: JournalEntry): number {
+  if (entry.exchangeCurrency && entry.exchangeRate) {
+    return roundCHF(entry.amount * entry.exchangeRate);
+  }
+  return entry.amount;
+}
+
+/**
+ * Determine if an account has a "debit normal" balance.
+ * Swiss KMU Kontenrahmen:
+ * 1xxx = Assets (debit normal)
+ * 2xxx = Liabilities + Equity (credit normal)
+ * 3xxx = Revenue (credit normal)
+ * 4xxx-8xxx = Expenses (debit normal)
+ */
+export function isDebitNormal(account: string): boolean {
+  const prefix = parseInt(account.charAt(0));
+  if (prefix === 1) return true;
+  if (prefix === 2) return false;
+  if (prefix === 3) return false;
+  return true;
+}
+
+/**
+ * Compute balances for all accounts from journal entries within a date range.
+ */
+export function computeBalances(
+  entries: JournalEntry[],
+  from: string,
+  to: string,
+  openingBalances: Record<string, number> = {},
+): AccountBalance[] {
+  const filtered = entries.filter(e => {
+    const date = e.date;
+    if (!date) return false;
+    return date >= from && date <= to;
+  });
+
+  const debits = new Map<string, number>();
+  const credits = new Map<string, number>();
+
+  for (const entry of filtered) {
+    const amountRappen = toRappen(chfAmount(entry));
+    debits.set(entry.accountDebit, (debits.get(entry.accountDebit) ?? 0) + amountRappen);
+    credits.set(entry.accountCredit, (credits.get(entry.accountCredit) ?? 0) + amountRappen);
+  }
+
+  const allAccounts = new Set<string>();
+  debits.forEach((_, key) => allAccounts.add(key));
+  credits.forEach((_, key) => allAccounts.add(key));
+  for (const key of Object.keys(openingBalances)) allAccounts.add(key);
+
+  const result: AccountBalance[] = [];
+  for (const account of Array.from(allAccounts).sort()) {
+    const debitTotalRappen = debits.get(account) ?? 0;
+    const creditTotalRappen = credits.get(account) ?? 0;
+    const openingRappen = toRappen(openingBalances[account] ?? 0);
+
+    let balanceRappen: number;
+    if (isDebitNormal(account)) {
+      balanceRappen = openingRappen + debitTotalRappen - creditTotalRappen;
+    } else {
+      balanceRappen = openingRappen + creditTotalRappen - debitTotalRappen;
+    }
+
+    result.push({
+      account,
+      debitTotal: fromRappen(debitTotalRappen),
+      creditTotal: fromRappen(creditTotalRappen),
+      balance: fromRappen(balanceRappen),
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Compute balance for a single account.
+ */
+export function computeAccountBalance(
+  entries: JournalEntry[],
+  account: string,
+  from: string,
+  to: string,
+  openingBalance: number = 0,
+): AccountBalance {
+  const balances = computeBalances(entries, from, to, { [account]: openingBalance });
+  return balances.find(b => b.account === account) ?? {
+    account,
+    debitTotal: 0,
+    creditTotal: 0,
+    balance: openingBalance,
+  };
+}

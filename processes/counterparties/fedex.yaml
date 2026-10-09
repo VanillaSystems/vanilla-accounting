@@ -1,0 +1,51 @@
+# Vendor facts about FedEx, true for every customer. The customs split itself
+# (a Zollrechnung into 4020 / 4030 / 4040) is generic — any courier's
+# Zollrechnung — and lives in booking.guide.yaml#shape.
+#
+# Not matched by UID: CHE-105.998.554 is also printed on the BAZG's
+# Veranlagungsverfügungen and Ausfuhr documents, which are not FedEx's.
+
+id: fedex
+name: FedEx Express
+match:
+  tx: [ "fedex" ]
+  domain: [ "fedex.com" ]
+  file: [ '^\d{8}-fedex-' ]
+grouped: true
+
+steps:
+  receipt-collection.guide.yaml#triage:
+    rules:
+      - id: fdx-inline-pdf
+        when: a mail from billch@fedex.com
+        then: fetch the full message source — the invoice PDF is inline and IMAP bodyStructure does not list it
+        source: docs/runbooks/receipt-collection.md § FedEx
+      - id: fdx-marketing
+        when: a mail from message.fedex.com
+        then: noise — do not stage
+        source: docs/runbooks/receipt-collection.md § FedEx
+    precedents: []
+
+  receipt-collection.guide.yaml#scrape:
+    rules:
+      - id: col-fedex
+        when: FedEx in the quarter
+        then: both Zollrechnung and Frachtrechnung, plus every BillingOnline "Zahlungsreferenz" mail
+        procedure: docs/runbooks/receipt-collection.md § FedEx
+        source: docs/runbooks/receipt-collection.md § FedEx
+    precedents: []
+
+  receipt-intake.guide.yaml#kind:
+    rules:
+      - id: fdx-zahlungsreferenz
+        when: a "FedEx Billing Online - Zahlungsreferenz" mail
+        then: supporting — it lists the invoice numbers one card charge pays
+        source: docs/runbooks/receipt-collection.md § FedEx
+    precedents: []
+
+  evidence.guide.yaml#ai:
+    rules:
+      - id: fdx-zahlungsreferenz-first
+        when: a Zahlungsreferenz mail lists the invoice's number
+        then: link the invoice to the charge that mail names; confident without amount reasoning
+        source: docs/runbooks/receipt-collection.md § FedEx

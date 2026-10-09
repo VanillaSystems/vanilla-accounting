@@ -1,0 +1,29 @@
+id: amazon
+name: Amazon
+match:
+  tx: [ "amazon", "amzn" ]
+  uid: [ "CHE-269.567.571" ]
+  file: [ '^\d{8}-amazon-' ]
+grouped: true
+
+steps:
+  receipt-collection.guide.yaml#scrape:
+    rules:
+      - id: col-amazon
+        when: Amazon.de
+        then: the per-seller Rechnung (CHE-269.567.571); not the Order Summary print page
+        procedure: docs/runbooks/receipt-collection.md § Amazon.de
+        source: docs/runbooks/receipt-collection.md § Amazon.de
+      - id: col-amazon-latency
+        when: an order in the last days of the quarter whose invoices do not cover it
+        then: re-check a few days into the next quarter before declaring a gap
+        source: docs/runbooks/receipt-collection.md § Amazon invoice latency
+    precedents: []
+
+  evidence.guide.yaml#ai:
+    rules:
+      - id: ai-amazon-latency
+        when: an order near the quarter end whose invoices do not cover the charge
+        then: unsure, reason "invoices not yet exposed" — re-check a few days into the next quarter
+        source: docs/runbooks/receipt-collection.md § Amazon invoice latency
+    precedents: []

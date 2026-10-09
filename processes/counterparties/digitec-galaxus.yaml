@@ -1,0 +1,16 @@
+id: digitec-galaxus
+name: Digitec Galaxus
+match:
+  tx: [ "digitec galaxus" ]
+  uid: [ "CHE-109.049.266" ]
+  file: [ '(digitec|galaxus)' ]
+
+steps:
+  receipt-collection.guide.yaml#scrape:
+    rules:
+      - id: col-digitec
+        when: Digitec or Galaxus
+        then: check both platforms (shared login)
+        procedure: docs/runbooks/receipt-collection.md § Digitec / Galaxus
+        source: docs/runbooks/receipt-collection.md § Digitec / Galaxus
+    precedents: []

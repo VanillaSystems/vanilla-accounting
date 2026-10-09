@@ -1,0 +1,56 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 620 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Muster Kaffee GmbH) Tj
+T* (Musterstrasse 1) Tj
+T* (8000 Zürich) Tj
+T* (CHE-123.456.789 MWST) Tj
+T* () Tj
+T* (Muster Kaffee GmbH) Tj
+T* (Musterstrasse 1) Tj
+T* (8000 Zürich) Tj
+T* () Tj
+T* (Kassenbericht 2026-06) Tj
+T* (Datum: 28.06.2026) Tj
+T* () Tj
+T* (Café \(Konsumation vor Ort\) 8.1%: CHF 10’930.40) Tj
+T* (Kaffeebohnen über die Gasse 2.6%: CHF 1’631.40) Tj
+T* () Tj
+T* (Total CHF 12’561.80) Tj
+T* (MWST 8.1% auf CHF 10’111.38: CHF 819.02) Tj
+T* (MWST 2.6% auf CHF 1’590.06: CHF 41.34) Tj
+T* () Tj
+T* (Kartenzahlungen, abgerechnet durch Muster Payments AG, Kommission CHF 150.74) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1008
+%%EOF

@@ -1,0 +1,85 @@
+# Belege
+
+Belege is the app; one company's books are a workspace (`belege.workspace.yaml`, `books.json`,
+receipts, statements, filings), opened by `BELEGE_WORKSPACE` or found from the cwd. The bundled
+demo workspace is `demo/` (`BELEGE_WORKSPACE=demo`). These rules hold for any workspace. A
+workspace may add its own notes in `docs/company/AGENTS.md`: read that file too when it exists.
+
+Never write a workspace's identity (company name, UID, owner), bank ids, amounts or item
+numbers of its books, or a private supplier into app files. `npm run check-public` finds them
+(src/publish/leak-guard.ts); public-files.txt lists what the public app repo may contain.
+
+# Golden rules
+
+1. **A filed quarter is set in stone.** Once a quarter's VAT return is filed with the ESTV, that quarter and every quarter before it can never change again. Their journal entries, their figures, and their returns (`filings/<year>/`) stay exactly as filed. This holds for the UI, the API, CLI scripts, ad-hoc scripts and Claude alike. `config.closedThrough` marks the line. Every correction is booked in the next quarter that is still open, and declared with a Korrekturabrechnung (ESTV form 0535) of the quarter it corrects:
+   - **The books were wrong:** book a correction entry (Stornobuchung or Korrekturbuchung) dated in the open quarter, with `corrects: "YYYY-Qn"` set to the quarter it corrects. Its description names the original entry id. The tag keeps it out of the open quarter's return and puts it into that quarter's 0535 (MWST tab → Korrekturabrechnung; rule: `entriesForReturn` in src/accounting/declarations.ts).
+   - **The books were right, but a filed return was wrong** (e.g. a calculation bug left booked tax out): do NOT book anything again. The 0535 recomputes the quarter from today's books with today's engine, so the difference shows up there by itself. A `config.vatAdjustments` line is only for a VAT event of the open quarter that refers to a filed entry (e.g. import VAT refunded now on a filed import). Booking it again would count the tax twice in the books.
+   - Never regenerate, re-export or "fix" a filed return. `npm run vat-xml` refuses filed periods.
+
+Processes (read first for any quarter work):
+- The quarter's work is defined in processes/*.flow.yaml (who does what, in which order), processes/*.guide.yaml (rules true for any company) and processes/counterparties/<id>.yaml (vendor facts true for every customer: Coop Pronto, FedEx, Shopify, …). The workspace's own knowledge is a second layer: counterparties/<id>.yaml (accounts, company rules and precedents per vendor, and the private suppliers) and policy/<process>.guide.yaml (company rules and precedents per step). See processes/README.md.
+- For an item, read only the step's section in both layers (processes/<process>.guide.yaml and policy/<process>.guide.yaml) and its own counterparty's section in both layers — never every vendor's rules.
+- Before executing a step that has `with: { guide: ... }`, read that guide section. Decide by its rules, then its precedents. If neither covers the case, take the step's new_case exit — do not guess and do not ask in chat without recording the answer.
+- Every human answer goes back into the guide in the same session (new-case.flow.yaml). Run `npm run check-processes` after editing any flow or guide.
+
+Special cases:
+
+- camt053 contains transactions, where some of them are grouped. they have child transactions. A Sammelzahlung with several parts stays one transaction (tests/camt053.test.ts).
+- charges to Wise credit card and be split into multiple accounts. it will first take the currency of the payment until that is exhausted, then take more money from other foreign currencies and last from the base currency account which is CHF
+- companies like Aliexpress, Amazon, fedex group multiple receipts into one payment/transaction
+- Cash basis taxation is used
+- Wise monthly PDF bank statements show the original foreign currency amount for cross-currency charges (e.g. a USD charge deducted from the Wise EUR account shows the USD amount in the PDF). This foreign currency amount does not appear anywhere else and is the key for matching receipts denominated in that foreign currency to the correct journal entry.
+- a regularly VAT taxed Swiss sales tax code is V81. If there is a refund, then its with a minus => -V81
+
+Foreign-currency conversion:
+- Book every foreign entry in CHF using the official ESTV daily SELL rate (Devisenkurs Verkauf) valid on the PAYMENT date (the underlying BankTransaction's date), per MWSTG Art. 24 on cash basis. NOT a flat annual rate. See docs/adr/0001-foreign-currency-conversion.md.
+- Rates live in reference/estv-daily-rates-2026.json (refresh/extend with `npm run fetch-rates`). `classify` stamps the correct rate on new entries; `npm run restamp-fx` backfills/normalizes existing ones. Both go through src/accounting/fx-rates.ts — never re-introduce a flat per-currency rate for booking.
+- reference/wechselkurse.txt (flat EUR 0.91/USD 0.78) is legacy: a last-resort fallback only, and still fine for match.ts receipt↔transaction proximity ranking.
+- Consequence: the EUR/USD bank accounts need a year-end exchange-difference (Kursdifferenz) revaluation against the 31.12 rate.
+
+Receipt collection / vendor scraping:
+- Before doing any receipt-collection, email-fetch, or webshop-scraping work, read docs/runbooks/receipt-collection.md first — check the Vendor Quick Index at the top for the vendor you're handling.
+- Before filing a receipt for any vendor listed in that index, verify the artifact matches what the procedure requires, not just "a PDF exists". Example: for AliExpress only the Alibaba **"Tax Invoice"** PDF (shows CHE-447.613.666 MWST + an explicit 8.1% tax amount; saved `{orderId}_payment.pdf`) is valid VAT proof, and it is only downloadable for some orders. The order-detail **"Receipt" button downloads an "Order Summary"** (`{orderId}.pdf`, API `...taxation.nonTax.receipt...`) with NO CHE number and NO tax amount — it looks official but is NOT valid proof; filing it silently loses the VAT deduction. When no Tax Invoice is available, fall back to the documented 3-page screenshot capture. Always verify a downloaded PDF actually says `Tax Invoice` + `CHE-447.613.666` before filing.
+- If a vendor is NOT in the Vendor Quick Index and turns out to have a non-obvious quirk (no invoice, hidden VAT, unusual login flow, multi-order splitting, etc.), that is new procedural knowledge. STOP, tell the user what you found, and add a section (plus an index entry) to docs/runbooks/receipt-collection.md in the same session (a private supplier, or this company's mailboxes: docs/company/receipt-collection.md) — do not let a worked-out procedure live only in chat history.
+- Before reporting a collection session as done, self-check: did every vendor with a documented procedure actually follow it (not just "something got downloaded")? Did every newly discovered quirk get written back to the runbook? If either answer is no, say so explicitly instead of reporting the session as clean.
+
+VAT code rules:
+- A VAT code with a rate (I81, M81, V81) may ONLY be used when the receipt explicitly shows Swiss MWST was charged. Always check the receipt — the receipt is the source of truth. Do not assume based on vendor country — foreign vendors (Amazon.de, Google, Anthropic) can be registered for Swiss MWST and charge 8.1%.
+- No receipt = no VAT refund = use I0/M0/V0.
+- Exception: Coop Pronto receipts with bad OCR can be assumed I81 (always charges 8.1% MWST).
+- Refunds invert the original VAT code: if the original was I81, the refund is -I81. If original was I0, refund is -I0.
+- I-codes are for investment/operating expenses, M-codes for materials/goods, V-codes for sales revenue.
+- Items under ~CHF 150 should be expensed (6xxx accounts), not capitalized (1xxx asset accounts).
+- Bezugsteuer (MWSTG Art. 45): a SERVICE from a foreign supplier that charges no Swiss MWST (Google Ads, consultants abroad, online services) is booked B81-1 — Ziffer 383 declares 8.1%, the same entry deducts it at 405, net 0. As a VAT-registered company we owe it from the first franc; the CHF 10,000 threshold (Art. 45 Abs. 2 lit. b) only applies to recipients NOT registered. Not for goods (import VAT), not for exempt services like Stripe fees (Art. 45a). Rule: processes/booking.guide.yaml#purchase_vat pv-bezugsteuer.
+
+Shopify billing:
+- Shopify is registered for Swiss MWST and charges 8.1% on their fees (Webshop Gebühren). The per-order payout PDFs do NOT show the MWST — the proof is in Shopify's monthly billing statements (Settings → Billing → Bills in Shopify Admin). These monthly bills must be downloaded and filed as receipts to justify I81 on Webshop Gebühren entries.
+- The monthly Vorsteuer on those fees is booked as a single-leg correction (empty Soll / C 6580 / M81-2), NOT a two-legged entry against 2451. See docs/runbooks/booking-patterns.md.
+
+Tests (golden master):
+- `npm test` runs the golden master (tests/vat-golden.test.ts) on the demo workspace (expected files in tests/golden/demo/): Ziffern per period, Ziffer line assignment, return figures, filed-return parsing, correction-case reconciliation, and the eCH-0217 XML. `npm run test:books` runs the same test on your own workspace's frozen books (`<workspace>/golden/`, see tests/support/golden.ts), which protects its filed quarters; run it too when you keep real books. Before committing any change under src/accounting, src/cli/vat-*, or the MWST tab logic, `npm test` must be green (and `test:books` where a workspace exists). A failure means the code changed a figure.
+- Only when a figure change is intended: `npm run test:update` (demo) and/or `npm run test:books:update` (company), review the diff, and say why in the commit.
+
+VAT filing (MWST-Abrechnung):
+- `npm run vat-report [-- <period> --detail]` prints the ESTV Ziffern per quarter of the current year, plus H1; `--detail` shows the transactions behind each figure.
+- `npm run vat-report-html -- <out.html>` renders a printable filing summary with per-Ziffer breakdown.
+- `npm run vat-xml -- <YYYY-Qn> [out.xml]` emits (company UID and name from belege.workspace.yaml) an eCH-0217 E-MWST v2.0.0 XML for the ESTV "MWST abrechnen" import. Effective method, gross (grossOrNet=2), formOfReporting=2 (vereinnahmt/cash basis). payableTax is computed the eCH way (tax on rate-total turnover, not per-entry sum) — can differ from the UI by a Rappen; the XML is authoritative. Validates against the official XSD. Spec: docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf.
+- As-filed returns are archived under `filings/<year>/` — never regenerate those in place; root-level generated copies stay gitignored.
+
+Period close (Periodensperre):
+- `config.closedThrough` in books.json locks all journal entries dated on or before that date. Which quarters are filed, and when, is in the workspace's notes.
+- NEVER modify, delete, or add journal entries dated inside a closed period — not via the UI/API (returns 403), not via CLI scripts, and not via ad-hoc node scripts editing books.json. This applies to Claude too.
+- Corrections to closed periods are booked as NEW correction entries dated in the open period (Stornobuchung/Korrekturbuchung referencing the original entry id in the description). Set `corrects: "YYYY-Qn"` on it: its VAT is declared in that quarter's Korrekturabrechnung (form 0535), which the MWST tab shows for every filed quarter (bisher eingereicht / korrigiert / Differenz), never in the open quarter's return.
+- Enforcement: every API route (src/server/routes/) that writes the index does it inside `withBooks` (src/server/books.ts: load, `mutateJournal`, `saveBooks`) and calls `assertOpen` first (403, proven in tests/period-lock.test.ts); `classify` skips closed-period transactions (`--force` keeps closed-period entries); `restamp-fx` skips closed-period entries. CLI and collect scripts read and write the index only through src/books/store.ts: `loadBooks`/`saveBooks` (atomic write), `periodLock(books).isClosed`, and every mutation inside `mutateJournal`, which throws if a closed entry, closed transaction or mapping to a closed transaction changed (tests/books-store.test.ts). Any new code path that mutates journal entries, transactions, mappings or receipts must do the same (an API route: `withBooks`, `assertOpen` and a row in tests/period-lock.test.ts).
+
+UI theming (src/app/):
+- Uses CSS custom properties for light/dark mode (see index.css and tailwind.config.js).
+- NEVER use hardcoded Tailwind gray colors (bg-white, bg-gray-50, text-gray-700, border-gray-200, etc.) in components. Use semantic tokens instead:
+  - Backgrounds: `bg-background`, `bg-muted`, `bg-accent`, `bg-primary`
+  - Text: `text-foreground`, `text-muted-foreground`, `text-dim`
+  - Borders: `border-border`, `border-input`
+  - Focus: `focus:ring-ring`
+  - Destructive: `text-destructive`, `bg-destructive`
+  - Active buttons: `bg-primary text-primary-foreground`
+  - Hover: `hover:bg-accent`, `hover:text-foreground`
+- Non-gray accent colors (blue, amber, green, red, violet) for semantic states are fine with dark: prefixes (e.g. `bg-blue-50 dark:bg-blue-950`).

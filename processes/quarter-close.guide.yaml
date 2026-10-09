@@ -1,0 +1,26 @@
+# Knowledge for quarter-close.flow.yaml.
+
+process: quarter-close
+
+steps:
+  review_rules:
+    goal: >
+      Before filing, look at every rule the quarter added or relied on that is
+      not yet settled: confirm or replace each proposed rule, and get every open
+      question that parks an item in this quarter answered.
+    reads: ["npm run check-processes — the counts", "the guides — rules with status: proposed or open"]
+    rules:
+      - id: qc-confirm
+        when: a proposed rule is right
+        then: remove its status and set source to "decision <date>, owner"
+        source: processes/README.md § How a step decides
+      - id: qc-replace
+        when: a proposed rule is wrong
+        then: rewrite it, then re-run the step it belongs to over the quarter
+        source: processes/README.md § How a step decides
+      - id: qc-open-blocks
+        when: an open question parks an item in this quarter
+        then: the quarter is not filed until it is answered
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []

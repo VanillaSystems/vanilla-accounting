@@ -1,0 +1,51 @@
+import { createHash } from 'node:crypto';
+import type { JournalEntry } from '../types/index.js';
+
+/**
+ * The entries `classify --force` may remove so it can book their transactions again.
+ *
+ * The decision is per transaction, because classify rebooks only a transaction left with
+ * no entry at all: removing part of a transaction's entries would lose them for good.
+ * A transaction is rebooked only when every entry on it is classify's own work in the
+ * open period. One entry that is closed, carries `corrects`, or belongs to another tool
+ * keeps the whole transaction as it is. Entries with no bank or manual transaction behind
+ * them (SHOPIFY-<n> sales, M-ref Eigenverbrauch, 0535 corrections) are never classify's,
+ * since classify can only book a transaction it can see.
+ */
+export function entriesForceMayRemove(
+  entries: readonly JournalEntry[],
+  transactionRefs: ReadonlySet<string>,
+  closedThrough: string | undefined,
+): JournalEntry[] {
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of entries) {
+    const group = byRef.get(e.transactionRef);
+    if (group) group.push(e);
+    else byRef.set(e.transactionRef, [e]);
+  }
+  const removable: JournalEntry[] = [];
+  for (const [ref, group] of byRef) {
+    if (!transactionRefs.has(ref)) continue;
+    if (isRebookShopifyPayout(ref, group)) continue;
+    if (group.every((e) => isClassifyOpenEntry(e, closedThrough))) removable.push(...group);
+  }
+  return removable;
+}
+
+function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined): boolean {
+  if (closedThrough && e.date <= closedThrough) return false;
+  if (e.corrects) return false;
+  // Entries booked before `origin` existed carry none; on a real transaction they are
+  // classify's or the API classify route's, as far as the books can tell.
+  return e.origin === undefined || e.origin === 'classify';
+}
+
+/**
+ * rebook-shopify replaces a Stripe payout's entries with per-order sales and gives the
+ * payout leg the id sha256("payout|<ref>"). Rebooking such a payout through classify
+ * would bring back the aggregated V0 revenue it replaced.
+ */
+function isRebookShopifyPayout(ref: string, group: readonly JournalEntry[]): boolean {
+  const payoutId = createHash('sha256').update(`payout|${ref}`).digest('hex').substring(0, 16);
+  return group.some((e) => e.id === payoutId);
+}

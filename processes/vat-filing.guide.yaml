@@ -1,0 +1,31 @@
+# Knowledge for vat-filing.flow.yaml.
+
+process: vat-filing
+
+steps:
+  accountant:
+    goal: The accountant approves the Ziffern, or asks about specific figures.
+    rules:
+      - id: vat-review-pack
+        when: always
+        then: send the vat-report-html summary; every figure there is traceable with --detail
+        source: AGENTS.md § VAT filing
+    precedents: []
+
+  drill:
+    goal: Answer a question about a figure with the entries behind it.
+    rules:
+      - id: vat-detail
+        when: always
+        then: npm run vat-report -- <period> --detail, filtered to the Ziffer asked about
+        source: AGENTS.md § VAT filing
+    precedents: []
+
+  fix_xml:
+    goal: Make the eCH-0217 XML validate without changing a filed figure.
+    rules:
+      - id: vat-xml-authoritative
+        when: the XML and the UI differ by a Rappen
+        then: the XML is right (tax on the rate total, eCH way); do not adjust it to match the UI
+        source: AGENTS.md § VAT filing
+    precedents: []

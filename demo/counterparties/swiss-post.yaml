@@ -1,0 +1,12 @@
+# Binding of the public vendor processes/counterparties/swiss-post.yaml to Muster Kaffee's chart.
+id: swiss-post
+accounts: ["6513"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-post-parcels
+        when: the monthly Post CH invoice for webshop parcels
+        then: '6513 Porti und Versand, I81; description "Post CH, Pakete Webshop <Monat>"'
+        source: decision 2026-01-20
+    precedents: []

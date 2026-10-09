@@ -1,0 +1,7 @@
+id: vistaprint
+name: VistaPrint
+match:
+  tx: [ "vistaprint" ]
+  domain: [ "vistaprint.ch", "t.vistaprint.ch" ]
+  file: [ '^\d{8}-vistaprint-' ]
+grouped: false

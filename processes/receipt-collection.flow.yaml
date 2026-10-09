@@ -1,0 +1,256 @@
+# Assembling a quarter's receipts.
+#
+# The messiest process in this business, and the one that loses real money
+# when a step is skipped. Every check on this sheet exists because something
+# went wrong once: see docs/runbooks/receipt-collection.md for the detail.
+
+id: receipt-collection
+name: Collect receipts
+noun: receipt
+discharge: >
+  every business expense and sale in the quarter has a receipt staged in
+  beleg-import/ that actually proves what it claims, or a recorded reason
+  no receipt exists
+
+phases: [gather, verify, wrap-up]
+
+steps:
+  - id: quarter_chosen
+    name: A quarter to collect
+    kind: start
+    note: --quarter 2026-Q3
+    phase: gather
+    duration: day 0
+
+  - id: mint_password
+    name: Mint a Gmail app password
+    icon: key
+    kind: human
+    note: browser login is not IMAP access
+    needs: [quarter_chosen]
+    phase: gather
+    duration: 2m
+
+  - id: phone_scan
+    name: Scan the paper receipts with the phone
+    icon: scan-line
+    kind: human
+    note: iOS app → POST /api/upload
+    needs: [quarter_chosen]
+    phase: gather
+    duration: 30m
+
+  - id: fetch_email
+    name: Fetch email summaries from every mailbox in mail.yaml
+    icon: inbox
+    uses: npm:collect
+    note: every mailbox in the workspace's mail.yaml, over IMAP
+    outcomes: [fetched, login_fails]
+    needs: [mint_password]
+    phase: gather
+    duration: 5m
+
+  - id: gmail_browser
+    name: Collect Gmail through a browser session instead
+    with: { guide: receipt-collection.guide.yaml#gmail_browser }
+    icon: app-window
+    kind: agent
+    note: when the app password is stale
+    needs: [fetch_email.login_fails]
+    phase: gather
+
+  - id: classify_senders
+    name: Sort senders into business, private, ambiguous
+    with: { guide: receipt-collection.guide.yaml#classify_senders }
+    kind: agent
+    note: the workspace's mail.yaml
+    needs: [fetch_email.fetched]
+    phase: gather
+    duration: 10m
+
+  - id: confirm_senders
+    name: Confirm the senders newly seen this quarter
+    kind: human
+    note: write them back into mail.yaml
+    needs: [classify_senders]
+    phase: gather
+    duration: 10m
+
+  - id: triage
+    name: Receipt, or noise?
+    with: { guide: receipt-collection.guide.yaml#triage }
+    kind: agent
+    note: marketing brochures arrive attached to real invoices
+    needs: [confirm_senders, gmail_browser]
+    phase: gather
+
+  - id: route
+    name: How does this one arrive?
+    outcomes: [attachment, link, email_body, portal_only]
+    needs: [triage]
+    phase: gather
+
+  - id: save_attachment
+    name: Save the attached PDF
+    icon: download
+    note: FedEx attaches inline — invisible to bodyStructure
+    needs: [route.attachment]
+    phase: gather
+
+  - id: fetch_link
+    name: Open the link and download the PDF
+    with: { guide: receipt-collection.guide.yaml#fetch_link }
+    icon: file-down
+    kind: agent
+    note: Stripe, OpenAI — the card summary is not the invoice
+    needs: [route.link]
+    phase: gather
+
+  - id: print_body
+    name: Print the email body to PDF
+    with: { guide: receipt-collection.guide.yaml#print_body }
+    icon: printer
+    kind: agent
+    note: wait for the page to finish loading
+    needs: [route.email_body]
+    phase: gather
+
+  - id: scrape
+    name: Scrape the vendor portal
+    with: { guide: receipt-collection.guide.yaml#scrape }
+    icon: mouse-pointer-click
+    kind: agent
+    note: one session per vendor, run in parallel
+    outcomes: [scraped, needs_auth, new_case]
+    needs: [route.portal_only, recollect.retry, wait_auth.signed_in, new_case]
+    phase: gather
+    duration: 10 – 40m
+
+  - id: wait_auth
+    name: Wait for a 2FA code or a login
+    kind: wait
+    note: a reaped session cannot be resumed — start a fresh one
+    outcomes: [signed_in]
+    needs: [scrape.needs_auth]
+    phase: gather
+    duration: minutes
+
+  - id: copy_out
+    name: Copy the artifacts out of the session sandbox
+    note: a session cannot write into this repo
+    needs: [scrape.scraped]
+    phase: gather
+
+  - id: on_disk
+    name: Is the file really on disk?
+    expect: >
+      a vendor counted as collected has its file on this filesystem. An agent
+      reporting that it saved something is not evidence that it did.
+    note: "'the agent said it saved it' is not evidence"
+    outcomes: [on_disk, sandbox_only]
+    needs: [copy_out]
+    phase: gather
+
+  - id: recollect
+    name: Collect that vendor again
+    with: { guide: receipt-collection.guide.yaml#recollect }
+    kind: agent
+    outcomes: [retry, new_case]
+    needs: [on_disk.sandbox_only]
+    phase: gather
+
+  - id: staged
+    name: The file lands in beleg-import/
+    produces: staged-receipts
+    needs: [save_attachment, fetch_link, print_body, on_disk.on_disk, phone_scan, reprint.restaged, fallback.restaged]
+    phase: gather
+
+  - id: readable
+    name: Does pdftotext return text?
+    note: under ~2 KB a page is a blank print
+    outcomes: [has_text, blank]
+    needs: [staged]
+    phase: verify
+
+  - id: reprint
+    name: Capture it again, fully loaded
+    with: { guide: receipt-collection.guide.yaml#reprint }
+    kind: agent
+    note: a blank print is under ~2 KB per page
+    outcomes: [restaged, new_case]
+    needs: [readable.blank]
+    phase: verify
+
+  - id: proves_vat
+    name: Does the artifact prove Swiss MWST?
+    expect: >
+      a receipt filed as proof actually shows a CHE number and an explicit tax
+      amount. An order summary that looks official is not proof, and filing
+      one silently gives up the deduction.
+    note: a CHE number and an explicit 8.1% line
+    outcomes: [valid, wrong_document, none_exists]
+    needs: [readable.has_text]
+    phase: verify
+
+  - id: fallback
+    name: Use the vendor's documented fallback
+    with: { guide: receipt-collection.guide.yaml#fallback }
+    kind: agent
+    note: AliExpress → the three-page screenshot
+    outcomes: [restaged, new_case]
+    needs: [proves_vat.wrong_document]
+    phase: verify
+
+  - id: record_none
+    name: Record that no receipt exists
+    kind: human
+    note: e.g. a shop that mails only an order body — books at I0/M0/V0, no deduction
+    needs: [proves_vat.none_exists]
+    phase: verify
+
+  - id: collected
+    name: Receipt collected
+    needs: [proves_vat.valid, record_none]
+    phase: verify
+
+  - id: vendor_rules
+    name: Did every vendor follow its documented procedure?
+    with: { guide: receipt-collection.guide.yaml#vendor_rules }
+    by: human
+    note: runbook Vendor Quick Index
+    outcomes: [all_followed, new_quirk]
+    needs: [collected]
+    phase: wrap-up
+
+  - id: write_runbook
+    name: Write the new quirk into the guide and the runbook
+    with: { guide: receipt-collection.guide.yaml#write_runbook }
+    icon: square-pen
+    kind: human
+    note: this session — not chat history
+    outcomes: [documented]
+    needs: [vendor_rules.new_quirk]
+    phase: wrap-up
+    duration: 15m
+
+  - id: revoke
+    name: Revoke the Gmail app password
+    icon: ban
+    kind: human
+    needs: [vendor_rules.all_followed, write_runbook.documented]
+    phase: wrap-up
+    duration: 2m
+
+  - id: assembled
+    name: The quarter's receipts are assembled
+    kind: end
+    needs: [revoke]
+    phase: wrap-up
+    duration: done
+
+  - id: new_case
+    name: Decide the case no rule covers
+    process: new-case.flow.yaml
+    note: a portal or document that behaves in a way the guide does not describe
+    needs: [scrape.new_case, recollect.new_case, reprint.new_case, fallback.new_case]
+    phase: gather

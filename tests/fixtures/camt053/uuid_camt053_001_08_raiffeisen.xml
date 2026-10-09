@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+    <BkToCstmrStmt>
+        <GrpHdr>
+            <MsgId>MSG-C053-SYNTHETIC-01</MsgId>
+            <CreDtTm>2026-07-02T21:14:10.346+02:00</CreDtTm>
+        </GrpHdr>
+        <Stmt>
+            <Id>STM-C053-SYNTHETIC-01</Id>
+            <ElctrncSeqNb>6</ElctrncSeqNb>
+            <CreDtTm>2026-07-02T21:14:10.346+02:00</CreDtTm>
+            <FrToDt>
+                <FrDtTm>2026-01-01T00:00:00.000+01:00</FrDtTm>
+                <ToDtTm>2026-07-01T23:59:59.999+02:00</ToDtTm>
+            </FrToDt>
+            <Acct>
+                <Id>
+                    <IBAN>CH4180808000000000001</IBAN>
+                </Id>
+                <Ccy>CHF</Ccy>
+                <Ownr>
+                    <Nm>Muster Kaffee GmbH</Nm>
+                </Ownr>
+                <Svcr>
+                    <FinInstnId>
+                        <Nm>Raiffeisenbank Musterregion</Nm>
+                    </FinInstnId>
+                </Svcr>
+            </Acct>
+            <Bal>
+                <Tp>
+                    <CdOrPrtry>
+                        <Cd>OPBD</Cd>
+                    </CdOrPrtry>
+                </Tp>
+                <Amt Ccy="CHF">10000.00</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <Dt>
+                    <Dt>2026-01-05</Dt>
+                </Dt>
+            </Bal>
+            <Bal>
+                <Tp>
+                    <CdOrPrtry>
+                        <Cd>CLBD</Cd>
+                    </CdOrPrtry>
+                </Tp>
+                <Amt Ccy="CHF">10434.50</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <Dt>
+                    <Dt>2026-06-30</Dt>
+                </Dt>
+            </Bal>
+            <Ntry>
+                <Amt Ccy="CHF">1250</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <RvslInd>false</RvslInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <Dt>2026-01-12</Dt>
+                </BookgDt>
+                <ValDt>
+                    <Dt>2026-01-12</Dt>
+                </ValDt>
+                <AcctSvcrRef>90000000001</AcctSvcrRef>
+                <BkTxCd>
+                    <Domn>
+                        <Cd>PMNT</Cd>
+                        <Fmly>
+                            <Cd>RCDT</Cd>
+                            <SubFmlyCd>AUTT</SubFmlyCd>
+                        </Fmly>
+                    </Domn>
+                </BkTxCd>
+                <NtryDtls>
+                    <TxDtls>
+                        <Amt Ccy="CHF">1250.00</Amt>
+                        <CdtDbtInd>CRDT</CdtDbtInd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Pty>
+                                    <Nm>Cafe Beispiel GmbH</Nm>
+                                </Pty>
+                            </Dbtr>
+                            <Cdtr>
+                                <Pty>
+                                    <Nm>Muster Kaffee GmbH</Nm>
+                                </Pty>
+                            </Cdtr>
+                        </RltdPties>
+                        <AddtlTxInf>Gutschrift Cafe Beispiel GmbH</AddtlTxInf>
+                    </TxDtls>
+                </NtryDtls>
+                <AddtlNtryInf>Gutschrift</AddtlNtryInf>
+            </Ntry>
+            <Ntry>
+                <Amt Ccy="CHF">335</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <RvslInd>false</RvslInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <Dt>2026-01-22</Dt>
+                </BookgDt>
+                <ValDt>
+                    <Dt>2026-01-22</Dt>
+                </ValDt>
+                <AcctSvcrRef>90000000002</AcctSvcrRef>
+                <BkTxCd>
+                    <Domn>
+                        <Cd>PMNT</Cd>
+                        <Fmly>
+                            <Cd>ICDT</Cd>
+                            <SubFmlyCd>AUTT</SubFmlyCd>
+                        </Fmly>
+                    </Domn>
+                </BkTxCd>
+                <NtryDtls>
+                    <TxDtls>
+                        <Refs>
+                            <EndToEndId>NOTPROVIDED</EndToEndId>
+                        </Refs>
+                        <Amt Ccy="CHF">335.00</Amt>
+                        <CdtDbtInd>DBIT</CdtDbtInd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Pty>
+                                    <Nm>Muster Kaffee GmbH</Nm>
+                                </Pty>
+                            </Dbtr>
+                            <Cdtr>
+                                <Pty>
+                                    <Nm>Beispiel Medien AG</Nm>
+                                </Pty>
+                            </Cdtr>
+                        </RltdPties>
+                        <RmtInf>
+                            <Strd>
+                                <CdtrRefInf>
+                                    <Tp>
+                                        <CdOrPrtry>
+                                            <Prtry>QRR</Prtry>
+                                        </CdOrPrtry>
+                                    </Tp>
+                                    <Ref>210000000003139471430009017</Ref>
+                                </CdtrRefInf>
+                            </Strd>
+                        </RmtInf>
+                        <AddtlTxInf>Zahlung Beispiel Medien AG</AddtlTxInf>
+                    </TxDtls>
+                </NtryDtls>
+                <AddtlNtryInf>Zahlung</AddtlNtryInf>
+            </Ntry>
+            <Ntry>
+                <Amt Ccy="CHF">480.5</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <RvslInd>false</RvslInd>
+                <Sts>
+                    <Cd>BOOK</Cd>
+                </Sts>
+                <BookgDt>
+                    <Dt>2026-01-30</Dt>
+                </BookgDt>
+                <ValDt>
+                    <Dt>2026-01-30</Dt>
+                </ValDt>
+                <AcctSvcrRef>90000000003</AcctSvcrRef>
+                <BkTxCd>
+                    <Domn>
+                        <Cd>PMNT</Cd>
+                        <Fmly>
+                            <Cd>ICDT</Cd>
+                            <SubFmlyCd>AUTT</SubFmlyCd>
+                        </Fmly>
+                    </Domn>
+                    <Prtry>
+                        <Cd>1000</Cd>
+                    </Prtry>
+                </BkTxCd>
+                <AmtDtls>
+                    <TxAmt>
+                        <Amt Ccy="CHF">480.50</Amt>
+                    </TxAmt>
+                </AmtDtls>
+                <NtryDtls>
+                    <Btch>
+                        <MsgId>PIA-SYNTHETIC-BATCH</MsgId>
+                        <NbOfTxs>3</NbOfTxs>
+                    </Btch>
+                    <TxDtls>
+                        <Refs>
+                            <EndToEndId>NOTPROVIDED</EndToEndId>
+                        </Refs>
+                        <Amt Ccy="CHF">150.4</Amt>
+                        <CdtDbtInd>DBIT</CdtDbtInd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Pty>
+                                    <Nm>Muster Kaffee GmbH</Nm>
+                                </Pty>
+                            </Dbtr>
+                            <Cdtr>
+                                <Pty>
+                                    <Nm>Beispiel Versicherung AG</Nm>
+                                </Pty>
+                            </Cdtr>
+                        </RltdPties>
+                        <RmtInf>
+                            <Strd>
+                                <CdtrRefInf>
+                                    <Tp>
+                                        <CdOrPrtry>
+                                            <Prtry>QRR</Prtry>
+                                        </CdOrPrtry>
+                                    </Tp>
+                                    <Ref>100000000000000000000000011</Ref>
+                                </CdtrRefInf>
+                            </Strd>
+                        </RmtInf>
+                    </TxDtls>
+                    <TxDtls>
+                        <Refs>
+                            <EndToEndId>NOTPROVIDED</EndToEndId>
+                        </Refs>
+                        <Amt Ccy="CHF">310.25</Amt>
+                        <CdtDbtInd>DBIT</CdtDbtInd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Pty>
+                                    <Nm>Muster Kaffee GmbH</Nm>
+                                </Pty>
+                            </Dbtr>
+                            <Cdtr>
+                                <Pty>
+                                    <Nm>Beispiel Versicherung AG</Nm>
+                                </Pty>
+                            </Cdtr>
+                        </RltdPties>
+                        <RmtInf>
+                            <Strd>
+                                <CdtrRefInf>
+                                    <Tp>
+                                        <CdOrPrtry>
+                                            <Prtry>QRR</Prtry>
+                                        </CdOrPrtry>
+                                    </Tp>
+                                    <Ref>100000000000000000000000022</Ref>
+                                </CdtrRefInf>
+                            </Strd>
+                        </RmtInf>
+                    </TxDtls>
+                    <TxDtls>
+                        <Refs>
+                            <EndToEndId>NOTPROVIDED</EndToEndId>
+                        </Refs>
+                        <Amt Ccy="CHF">19.85</Amt>
+                        <CdtDbtInd>DBIT</CdtDbtInd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Pty>
+                                    <Nm>Muster Kaffee GmbH</Nm>
+                                </Pty>
+                            </Dbtr>
+                            <Cdtr>
+                                <Pty>
+                                    <Nm>Beispiel Telefon AG</Nm>
+                                </Pty>
+                            </Cdtr>
+                        </RltdPties>
+                        <RmtInf>
+                            <Strd>
+                                <CdtrRefInf>
+                                    <Tp>
+                                        <CdOrPrtry>
+                                            <Prtry>QRR</Prtry>
+                                        </CdOrPrtry>
+                                    </Tp>
+                                    <Ref>100000000000000000000000033</Ref>
+                                </CdtrRefInf>
+                            </Strd>
+                        </RmtInf>
+                    </TxDtls>
+                </NtryDtls>
+                <AddtlNtryInf>Sammelzahlung</AddtlNtryInf>
+            </Ntry>
+        </Stmt>
+    </BkToCstmrStmt>
+</Document>

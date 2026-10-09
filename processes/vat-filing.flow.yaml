@@ -1,0 +1,155 @@
+# The Swiss VAT return (MWST-Abrechnung), quarterly, cash basis.
+#
+# The point of the quarter: reclaim the input tax paid to suppliers, hand over
+# the output tax collected from Swiss customers, then freeze the period so the
+# filed figures can never move.
+
+id: vat-filing
+name: File the VAT return
+noun: return
+discharge: >
+  the quarter's return is submitted to the ESTV, the balance is paid or
+  refunded, the return is archived under filings/, and the period is locked
+
+phases: [compute, file, lock]
+
+steps:
+  - id: booked
+    name: The quarter is booked
+    kind: start
+    phase: compute
+    duration: day 0
+
+  - id: figures
+    name: Compute the Ziffern
+    produces: vatReturn
+    icon: calculator
+    uses: npm:vat-report
+    note: the same engine as the MWST tab, so screen and filing agree
+    needs: [booked]
+    phase: compute
+    duration: 5s
+
+  - id: summary
+    name: Render the printable filing summary
+    icon: printer
+    uses: npm:vat-report-html
+    note: per-Ziffer breakdown, every figure traceable to its transactions
+    needs: [figures]
+    phase: compute
+    duration: 5s
+
+  - id: accountant
+    name: The accountant reviews the figures
+    with: { guide: vat-filing.guide.yaml#accountant }
+    kind: human
+    outcomes: [approved, questions]
+    needs: [summary, drill.answered]
+    phase: file
+    duration: 1 – 5 days
+
+  - id: drill
+    name: Show the transactions behind the figure
+    with: { guide: vat-filing.guide.yaml#drill }
+    kind: human
+    note: npm run vat-report -- <period> --detail
+    outcomes: [answered]
+    needs: [accountant.questions]
+    phase: file
+    duration: 30m
+
+  - id: xml
+    name: Generate the eCH-0217 XML
+    icon: file-code
+    uses: npm:vat-xml
+    note: effective method, gross, cash basis, validated against the XSD
+    outcomes: [valid, rejected]
+    needs: [accountant.approved, fix_xml.regenerate]
+    phase: file
+    duration: 5s
+
+  - id: fix_xml
+    name: Fix what the XSD rejected
+    with: { guide: vat-filing.guide.yaml#fix_xml }
+    kind: human
+    outcomes: [regenerate]
+    needs: [xml.rejected]
+    phase: file
+    duration: 30m
+
+  - id: submit
+    name: Import the XML in the ESTV portal and submit
+    icon: send
+    kind: human
+    note: MWST abrechnen
+    needs: [xml.valid]
+    phase: file
+    duration: 20m
+
+  - id: direction
+    name: Payable, or refundable?
+    note: Ziffer 500 against Ziffer 510
+    outcomes: [payable, credit]
+    needs: [submit]
+    phase: file
+
+  - id: pay
+    name: Pay the ESTV
+    icon: hand-coins
+    kind: human
+    needs: [direction.payable]
+    phase: file
+    duration: within 30 days
+
+  - id: await_credit
+    name: Wait for the ESTV to refund the input tax
+    kind: wait
+    needs: [direction.credit]
+    phase: file
+    duration: weeks
+
+  - id: archive
+    name: Archive the return under filings/<year>/
+    produces: filings
+    icon: archive
+    note: never regenerate one in place
+    needs: [pay, await_credit]
+    phase: lock
+    duration: 5m
+
+  - id: lock
+    name: Move config.closedThrough to the quarter end
+    produces: closedThrough
+    expect: >
+      once the period is locked, no entry dated on or before that date ever
+      changes again. A correction is a new entry in the open period that names
+      the original.
+    icon: lock
+    note: every entry on or before that date is frozen
+    needs: [archive]
+    phase: lock
+    duration: 1m
+
+  - id: prove
+    name: Prove the filed figures have not moved
+    icon: search-check
+    uses: npm:check-closed
+    note: compares the working tree against the committed baseline
+    outcomes: [untouched, changed]
+    needs: [lock]
+    phase: lock
+    duration: 5s
+
+  - id: storno
+    name: Correct it in the open period
+    process: correction.flow.yaml
+    note: never an edit to the closed entry
+    needs: [prove.changed]
+    phase: lock
+
+  - id: filed
+    name: The quarter is filed and locked
+    kind: end
+    needs: [prove.untouched, storno]
+    phase: lock
+    duration: done

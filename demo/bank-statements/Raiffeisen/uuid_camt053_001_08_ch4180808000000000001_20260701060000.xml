@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>MSG-STM-RAIFFEISEN-2026-04</MsgId>
+      <CreDtTm>2026-07-01T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>STM-RAIFFEISEN-2026-04</Id>
+      <CreDtTm>2026-07-01T06:00:00</CreDtTm>
+      <FrToDt><FrDtTm>2026-04-01T00:00:00</FrDtTm><ToDtTm>2026-06-30T23:59:59</ToDtTm></FrToDt>
+      <Acct>
+        <Id><IBAN>CH4180808000000000001</IBAN></Id>
+        <Ccy>CHF</Ccy>
+        <Ownr><Nm>Muster Kaffee GmbH</Nm></Ownr>
+        <Svcr><FinInstnId><Nm>Raiffeisenbank Musterdorf</Nm></FinInstnId></Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">40267.07</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-04-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">63846.48</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-06-30</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="CHF">2400.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-02</Dt></BookgDt>
+        <ValDt><Dt>2026-04-02</Dt></ValDt>
+        <AcctSvcrRef>90000000022</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2400.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Liegenschaften Muster AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Miete Ladenlokal Musterstrasse 1, April 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Miete April 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Liegenschaften Muster AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">950.66</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-06</Dt></BookgDt>
+        <ValDt><Dt>2026-04-06</Dt></ValDt>
+        <AcctSvcrRef>90000000023</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">950.66</Amt>
+            <RltdPties><Dbtr><Pty><Nm>Shopify Payments</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Payout 202604</Ustrd></RmtInf>
+            <AddtlTxInf>Shopify Payments Auszahlung 202604</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Shopify Payments</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">79.95</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-14</Dt></BookgDt>
+        <ValDt><Dt>2026-04-14</Dt></ValDt>
+        <AcctSvcrRef>90000000024</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">79.95</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Coop Pronto Musterdorf</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Coop Pronto Musterdorf</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte Coop Pronto Musterdorf</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">116.40</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-20</Dt></BookgDt>
+        <ValDt><Dt>2026-04-20</Dt></ValDt>
+        <AcctSvcrRef>90000000025</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">116.40</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Post CH AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000512604208</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung Post CH April 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Post CH AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2009.95</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-27</Dt></BookgDt>
+        <ValDt><Dt>2026-04-27</Dt></ValDt>
+        <AcctSvcrRef>90000000026</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2009.95</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Gruenkaffee Muster AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000202604103</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung GK-2026-04</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Gruenkaffee Muster AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">11797.91</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-04-28</Dt></BookgDt>
+        <ValDt><Dt>2026-04-28</Dt></ValDt>
+        <AcctSvcrRef>90000000027</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">11797.91</Amt>
+            <RltdPties><Dbtr><Pty><Nm>Muster Payments AG</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Abrechnung Kartenzahlungen April 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Muster Payments AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2400.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-04</Dt></BookgDt>
+        <ValDt><Dt>2026-05-04</Dt></ValDt>
+        <AcctSvcrRef>90000000028</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2400.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Liegenschaften Muster AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Miete Ladenlokal Musterstrasse 1, Mai 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Miete Mai 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Liegenschaften Muster AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">959.40</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-05</Dt></BookgDt>
+        <ValDt><Dt>2026-05-05</Dt></ValDt>
+        <AcctSvcrRef>90000000029</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">959.40</Amt>
+            <RltdPties><Dbtr><Pty><Nm>Shopify Payments</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Payout 202605</Ustrd></RmtInf>
+            <AddtlTxInf>Shopify Payments Auszahlung 202605</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Shopify Payments</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">83.30</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-14</Dt></BookgDt>
+        <ValDt><Dt>2026-05-14</Dt></ValDt>
+        <AcctSvcrRef>90000000030</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">83.30</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Coop Pronto Musterdorf</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Coop Pronto Musterdorf</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte Coop Pronto Musterdorf</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">208.70</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-20</Dt></BookgDt>
+        <ValDt><Dt>2026-05-20</Dt></ValDt>
+        <AcctSvcrRef>90000000031</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">208.70</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Post CH AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000512605203</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung Post CH Mai 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Post CH AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2026.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-25</Dt></BookgDt>
+        <ValDt><Dt>2026-05-25</Dt></ValDt>
+        <AcctSvcrRef>90000000032</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2026.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Gruenkaffee Muster AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000202605104</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung GK-2026-05</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Gruenkaffee Muster AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">12531.59</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-28</Dt></BookgDt>
+        <ValDt><Dt>2026-05-28</Dt></ValDt>
+        <AcctSvcrRef>90000000033</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">12531.59</Amt>
+            <RltdPties><Dbtr><Pty><Nm>Muster Payments AG</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Abrechnung Kartenzahlungen Mai 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Muster Payments AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2081.10</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-05-29</Dt></BookgDt>
+        <ValDt><Dt>2026-05-29</Dt></ValDt>
+        <AcctSvcrRef>90000000034</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2081.10</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Eidg. Steuerverwaltung ESTV</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000461123456789120266</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>MWST 1. Quartal 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Eidg. Steuerverwaltung ESTV</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2400.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-02</Dt></BookgDt>
+        <ValDt><Dt>2026-06-02</Dt></ValDt>
+        <AcctSvcrRef>90000000035</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2400.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Liegenschaften Muster AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Miete Ladenlokal Musterstrasse 1, Juni 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Miete Juni 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Liegenschaften Muster AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1370.14</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-05</Dt></BookgDt>
+        <ValDt><Dt>2026-06-05</Dt></ValDt>
+        <AcctSvcrRef>90000000036</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1370.14</Amt>
+            <RltdPties><Dbtr><Pty><Nm>Shopify Payments</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Payout 202606</Ustrd></RmtInf>
+            <AddtlTxInf>Shopify Payments Auszahlung 202606</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Shopify Payments</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">95.85</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-15</Dt></BookgDt>
+        <ValDt><Dt>2026-06-15</Dt></ValDt>
+        <AcctSvcrRef>90000000037</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">95.85</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Coop Pronto Musterdorf</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Coop Pronto Musterdorf</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte Coop Pronto Musterdorf</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">225.55</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-22</Dt></BookgDt>
+        <ValDt><Dt>2026-06-22</Dt></ValDt>
+        <AcctSvcrRef>90000000038</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">225.55</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Post CH AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000512606206</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung Post CH Juni 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Post CH AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2299.55</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-25</Dt></BookgDt>
+        <ValDt><Dt>2026-06-25</Dt></ValDt>
+        <AcctSvcrRef>90000000039</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2299.55</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Gruenkaffee Muster AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000202606102</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung GK-2026-06</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Gruenkaffee Muster AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">12411.06</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-29</Dt></BookgDt>
+        <ValDt><Dt>2026-06-29</Dt></ValDt>
+        <AcctSvcrRef>90000000040</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">12411.06</Amt>
+            <RltdPties><Dbtr><Pty><Nm>Muster Payments AG</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Abrechnung Kartenzahlungen Juni 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Muster Payments AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">15.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-30</Dt></BookgDt>
+        <ValDt><Dt>2026-06-30</Dt></ValDt>
+        <AcctSvcrRef>90000000041</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">15.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Raiffeisenbank Musterdorf</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Kontoführung 2. Quartal</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Kontoführungsgebühren</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

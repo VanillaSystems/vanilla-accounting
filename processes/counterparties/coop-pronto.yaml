@@ -1,0 +1,31 @@
+# Vendor facts about Coop Pronto, true for every customer. A company's accounts
+# and booking rules for it live in its workspace (counterparties/coop-pronto.yaml).
+#
+# Not matched by UID: CHE-116.311.185 is the Coop group's and is also printed
+# on other Coop group retailers' receipts (the lint refuses it). CHE-312.150.257 is Coop Pronto's own.
+
+id: coop-pronto
+name: Coop Pronto
+match:
+  tx: [ "coop pronto" ]
+  uid: [ "CHE-312.150.257" ]
+  file: [ '^\d{8}-coop-pronto' ]
+
+steps:
+  receipt-intake.guide.yaml#vision:
+    rules:
+      - id: vis-coop-pronto
+        when: a Coop Pronto receipt that stays unreadable
+        then: record hasSwissVat true at 8.1%, and note "assumed, OCR" in remarks
+        why: Coop Pronto always charges 8.1%; the fact belongs on the receipt so booking stays a function of facts
+        source: AGENTS.md § VAT code rules
+    precedents: []
+
+  booking.guide.yaml#purchase_vat:
+    rules:
+      - id: pv-coop-pronto
+        when: a Coop Pronto receipt whose OCR is unreadable
+        then: charged — I81
+        why: Coop Pronto always charges 8.1%
+        source: AGENTS.md § VAT code rules
+    precedents: []

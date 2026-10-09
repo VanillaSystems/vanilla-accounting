@@ -1,0 +1,56 @@
+{
+  "receipts": [
+    {
+      "id": "rw",
+      "filename": "2026-08-12_shop-eu_rechnung.pdf",
+      "originalFilename": "rechnung.pdf",
+      "extractedText": "Shop EU GmbH Rechnung 12.08.2026 Total EUR 50.00 inkl. MWST 8.1% CHE-123.456.789 MWST",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1,
+      "indexedAt": "2026-08-12T00:00:00Z",
+      "location": "archived",
+      "date": "2026-08-12",
+      "amount": 50,
+      "currency": "EUR",
+      "hasSwissVat": true,
+      "vatId": "CHE-123.456.789",
+      "vatSummary": [{ "ratePercent": 8.1, "vat": 3.75, "gross": 50 }]
+    }
+  ],
+  "transactions": [
+    {
+      "ref": "W1",
+      "bank": "Wise",
+      "date": "2026-08-14",
+      "amount": 50,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction Shop EU"
+    },
+    {
+      "ref": "C1",
+      "bank": "Wise",
+      "date": "2026-05-10",
+      "amount": 30,
+      "currency": "EUR",
+      "direction": "DBIT",
+      "description": "Card transaction Mai"
+    }
+  ],
+  "mappings": [{ "transactionRef": "W1", "receiptId": "rw" }],
+  "bankStatements": [],
+  "journalEntries": [
+    {
+      "id": "jw",
+      "transactionRef": "W1",
+      "date": "2026-08-14",
+      "accountDebit": "6570",
+      "accountCredit": "1023",
+      "amount": 50,
+      "vatCode": "I0",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.91
+    }
+  ],
+  "config": { "closedThrough": "2026-06-30" }
+}

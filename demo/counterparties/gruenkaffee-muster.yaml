@@ -1,0 +1,17 @@
+# A private supplier: no public vendor file, so this binding is the whole counterparty.
+id: gruenkaffee-muster
+name: Grünkaffee Muster AG
+match:
+  tx: ["gruenkaffee muster"]
+  uid: ["CHE-999.888.777"]
+  file: ['^\d{8}-gruenkaffee-muster']
+accounts: ["4000"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-gruenkaffee-green-coffee
+        when: a Grünkaffee Muster invoice for green coffee
+        then: '4000 Rohkaffee, M26 (green coffee is food, reduced rate 2.6%); one entry per invoice'
+        source: decision 2026-01-25
+    precedents: []

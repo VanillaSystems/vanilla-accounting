@@ -1,0 +1,127 @@
+# Closing a year and opening the next one.
+#
+# The weakest process of the seven: the year-end revaluation of the foreign
+# currency accounts has no script behind it at all, and an opening can carry a
+# small cross-check difference that is flagged rather than fixed.
+
+id: year-close
+name: Close the year
+noun: year
+discharge: >
+  the year is closed, balanced and signed off, and the new year opens with
+  carried-forward balances where Aktiven equal Passiven
+
+phases: [revalue, close, open]
+
+steps:
+  - id: q4_filed
+    name: The year's last quarter is filed
+    kind: start
+    phase: revalue
+    duration: day 0
+
+  - id: revalue
+    name: Revalue the foreign-currency accounts at the 31.12 rate
+    with: { guide: year-close.guide.yaml#revalue }
+    kind: human
+    note: Kursdifferenz — no script exists for this yet
+    needs: [q4_filed]
+    phase: revalue
+    duration: 1h
+
+  - id: book_diff
+    name: Book the exchange difference to Kursgewinn/-verlust
+    kind: human
+    note: the Wise EUR and USD accounts
+    needs: [revalue]
+    phase: revalue
+    duration: 20m
+
+  - id: reports
+    name: Produce the balance sheet and the income statement
+    icon: file-output
+    note: "the UI tabs: Bilanz, Erfolgsrechnung, Kontenblätter"
+    needs: [book_diff, find.rebook]
+    phase: close
+    duration: 5m
+
+  - id: balanced
+    name: Do Aktiven equal Passiven?
+    outcomes: [balanced, differs]
+    needs: [reports]
+    phase: close
+
+  - id: find
+    name: Find the difference — do not absorb it
+    with: { guide: year-close.guide.yaml#find }
+    kind: human
+    outcomes: [rebook]
+    needs: [balanced.differs]
+    phase: close
+    duration: 1 – 8h
+
+  - id: signoff
+    name: The accountant signs off the annual accounts
+    with: { guide: year-close.guide.yaml#signoff }
+    icon: signature
+    kind: human
+    outcomes: [signed, questions]
+    needs: [balanced.balanced, answer.answered]
+    phase: close
+    duration: 2 – 6 weeks
+
+  - id: answer
+    name: Answer the accountant
+    with: { guide: year-close.guide.yaml#answer }
+    kind: human
+    outcomes: [answered]
+    needs: [signoff.questions]
+    phase: close
+    duration: days
+
+  - id: banana_close
+    name: Close the year in Banana Accounting
+    kind: human
+    note: produces buchhaltung-<year>.Konten.xml
+    needs: [signoff.signed]
+    phase: close
+    duration: 1h
+
+  - id: opening
+    name: Derive the new year's opening balances
+    produces: openingBalances
+    expect: >
+      Aktiven equal Passiven, and any difference is explained rather than
+      plugged into a rounding account.
+    icon: import
+    uses: npm:import-opening
+    note: balance-sheet accounts carry forward, P&L accounts reset to zero
+    outcomes: [ties_out, differs]
+    needs: [banana_close, explain.resolved]
+    phase: open
+    duration: 5m
+
+  - id: explain
+    name: Explain the difference, do not plug it
+    with: { guide: year-close.guide.yaml#explain }
+    kind: human
+    note: a P&L cross-check gap from year-end FX is the usual cause
+    outcomes: [resolved]
+    needs: [opening.differs]
+    phase: open
+    duration: 1 – 4h
+
+  - id: rates
+    name: Fetch the new year's ESTV rates
+    icon: download
+    uses: npm:fetch-rates
+    needs: [opening.ties_out]
+    phase: open
+    duration: 1m
+
+  - id: opened
+    name: The new year is open
+    kind: end
+    needs: [rates]
+    phase: open
+    duration: done

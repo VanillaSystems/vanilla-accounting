@@ -1,0 +1,303 @@
+# Turning bank transactions into journal entries.
+#
+# Every bank transaction becomes at least one journal entry; grouped payments
+# become several. The VAT code is decided here, from the receipt — which is
+# why `extract-vat` is a precondition and not a nice-to-have: books classified
+# without it silently lose the input tax on invoices whose VAT only the facts
+# show.
+#
+# What the code does today: classify books every open transaction that has no
+# entry yet, receipt or not, and never looks at it again. A quarter's
+# transactions can be booked with no receipt, and a receipt that arrives later
+# changes nothing. It stamps origin: classify on what it books.
+#
+# Planned, not built: booking only once evidence.flow.yaml has settled a
+# transaction, and an evidenceKey on every entry so a changed receipt shows up as
+# a stale entry. Until then the `stale` decision is a human's, and the only way to
+# rebook is `npm run classify -- --force`, which removes and rebooks every
+# transaction whose entries are all classify's own open-period work. It keeps
+# closed periods, entries with `corrects`, entries with no bank transaction behind
+# them (SHOPIFY-<n>, M-refs) and rebook-shopify payouts (src/accounting/classify-force.ts).
+
+id: booking
+name: Book transactions
+noun: transaction
+discharge: >
+  every bank transaction in the quarter carries journal entries that balance,
+  with a VAT code the receipt actually supports and the ESTV rate of the day
+  the money moved
+
+phases: [prepare, classify, vat, check]
+
+steps:
+  - id: ready
+    name: Transactions settled by the evidence process
+    kind: start
+    note: per transaction — a settled one can be booked while others are still open
+    phase: prepare
+    duration: day 0
+
+  - id: rates
+    name: Fetch the ESTV daily sell rates
+    icon: download
+    uses: npm:fetch-rates
+    note: reference/estv-daily-rates-2026.json
+    needs: [ready]
+    phase: prepare
+    duration: 1m
+
+  - id: facts_present
+    name: Does every receipt carry its VAT facts?
+    note: classify cannot see MWST that extract-vat never read
+    outcomes: [present, missing]
+    needs: [ready]
+    phase: prepare
+
+  - id: backfill
+    name: Run extract-vat over the gaps
+    kind: action
+    uses: npm:extract-vat
+    needs: [facts_present.missing]
+    phase: prepare
+    duration: 1 – 5m
+
+  - id: stale
+    name: Did the evidence behind any entry change?
+    icon: history
+    expect: >
+      an entry is only as good as the receipts it was booked on. When those
+      change — a receipt linked, unlinked, or its VAT facts re-read — the entry
+      is rebooked in the open period, never left standing.
+    note: >
+      a human's call today; the planned evidenceKey check (entry vs. the
+      transaction's evidence now) is not built
+    outcomes: [unchanged, changed]
+    needs: [rates, facts_present.present, backfill]
+    phase: prepare
+    duration: 5s
+
+  - id: open_period
+    name: Is the entry in the open period?
+    note: config.closedThrough
+    outcomes: [open, closed]
+    needs: [stale.changed]
+    phase: prepare
+
+  - id: unbook
+    name: Remove the stale entries
+    uses: npm:classify
+    note: >
+      classify --force removes every transaction whose entries are all
+      classify's own open-period work, and books them again below. A hand
+      booking or correction on the transaction keeps it; fix those by hand.
+    needs: [open_period.open]
+    phase: prepare
+    duration: 1s
+
+  - id: storno
+    name: Correct it in the open period
+    process: correction.flow.yaml
+    note: never an edit to the closed entry
+    needs: [open_period.closed]
+    phase: prepare
+
+  - id: classify
+    name: Classify each settled transaction into journal entries
+    with: { guide: booking.guide.yaml#classify, model: sonnet, batch: 10 }
+    kind: agent
+    uses: npm:classify
+    produces: journalEntries
+    expect: >
+      only a settled transaction is booked. One with no receipt and no recorded
+      reason is not booked at I0 to make the quarter look complete; it waits in
+      the Offen tab. (Planned: classify does not check this yet and books
+      every open transaction without an entry.)
+    note: >
+      batches of 10, stamps the payment-date rate and origin: classify, skips
+      closed periods; a transaction the model returns no entries for stays
+      unbooked
+    outcomes: [booked, flagged, new_case]
+    needs: [stale.unchanged, unbook, storno, new_case]
+    phase: classify
+    duration: 5 – 20m
+
+  - id: manual_entry
+    name: Book it by hand
+    with: { guide: booking.guide.yaml#manual_entry }
+    kind: human
+    produces: journalEntries
+    note: the flag's reason in the Offen tab, then the Buchungen tab
+    needs: [classify.flagged, find_imbalance.rebook]
+    phase: classify
+    duration: 2 – 10m
+
+  - id: shape
+    name: Is one journal entry enough?
+    by: ai
+    with: { guide: booking.guide.yaml#shape }
+    outcomes: [one_entry, needs_split, new_case]
+    needs: [classify.booked, manual_entry]
+    phase: classify
+
+  - id: split
+    name: Split it into one entry per linked invoice
+    with: { guide: booking.guide.yaml#split }
+    note: >
+      AliExpress, Amazon and FedEx group many receipts into one payment; each
+      linked receipt carries its own amount and VAT facts, so the split follows
+      the mappings
+    needs: [shape.needs_split]
+    phase: classify
+    duration: 1s
+
+  # One question used to serve both taxes here — "does the receipt show MWST?" —
+  # which is the right question for a purchase and meaningless for a sale, where
+  # there is no supplier receipt. Every Shopify order therefore fell through to
+  # V0. Input tax and output tax are decided by different evidence, so they are
+  # different decisions.
+  - id: side
+    name: Money out, or money in?
+    by: ai
+    with: { guide: booking.guide.yaml#side }
+    note: input tax and output tax are decided by different evidence
+    outcomes: [a_purchase, a_sale, new_case]
+    needs: [shape.one_entry, split]
+    phase: vat
+
+  - id: purchase_vat
+    name: Does the receipt show Swiss MWST was charged?
+    by: ai
+    with: { guide: booking.guide.yaml#purchase_vat }
+    icon: file-search
+    note: the receipt decides, never the vendor's country
+    outcomes: [charged, zero_rated, new_case]
+    needs: [side.a_purchase]
+    expect: >
+      a rate code (I81, M81) is used only where the receipt itself shows a CHE
+      number and an explicit tax amount. With no such receipt the code is I0 or
+      M0 and the input tax is given up on purpose, not by accident.
+    phase: vat
+
+  - id: rated
+    name: Book I81 or M81
+    note: "a refund inverts the code: -I81"
+    needs: [purchase_vat.charged]
+    produces: journalEntries
+    phase: vat
+
+  - id: zero
+    name: Book I0 or M0
+    note: no receipt means no deduction
+    needs: [purchase_vat.zero_rated]
+    produces: journalEntries
+    phase: vat
+
+  - id: sale_vat
+    name: Which tax did the order carry?
+    by: ai
+    with: { guide: booking.guide.yaml#sale_vat }
+    icon: globe
+    note: the order page's Taxes line — the payout does not know the customer
+    outcomes: [swiss, export, new_case]
+    needs: [side.a_sale]
+    expect: >
+      every sale's code follows the tax its own order carried, and no sale is
+      V0 without a recorded reason. A regime the guide has no settled rule for
+      (EU VAT collected by Shopify, as of 2026-10) is parked, not guessed.
+    phase: vat
+
+  - id: sale_rated
+    name: Book V81
+    needs: [sale_vat.swiss]
+    produces: journalEntries
+    phase: vat
+
+  - id: sale_zero
+    name: Book V0, and record why
+    note: an export is a fact about the order, not a fallback
+    needs: [sale_vat.export]
+    produces: journalEntries
+    phase: vat
+
+  - id: private
+    name: Any private share?
+    by: ai
+    with: { guide: booking.guide.yaml#private }
+    outcomes: [business_only, partly_private, new_case]
+    needs: [rated, zero, sale_rated, sale_zero]
+    phase: vat
+
+  - id: eigenverbrauch
+    name: Book the Eigenverbrauch correction
+    with: { guide: booking.guide.yaml#eigenverbrauch }
+    kind: human
+    note: D 2451 / C expense, VAT code K..-B
+    needs: [private.partly_private]
+    produces: journalEntries
+    phase: vat
+    duration: 10m
+
+  - id: audit
+    name: Audit every VAT code against the receipt facts
+    icon: search-check
+    uses: npm:reconcile
+    outcomes: [consistent, disagrees]
+    needs: [private.business_only, eigenverbrauch, fix_codes.recheck]
+    phase: check
+    duration: 10s
+
+  - id: fix_codes
+    name: Fix the codes that disagree
+    with: { guide: booking.guide.yaml#fix_codes }
+    kind: human
+    outcomes: [recheck]
+    needs: [audit.disagrees]
+    phase: check
+    duration: 10 – 60m
+
+  - id: restamp
+    name: Restamp the FX rates on the payment date
+    icon: repeat
+    uses: npm:restamp-fx
+    note: the payment date, not the entry date
+    needs: [audit.consistent]
+    phase: check
+    duration: 10s
+
+  - id: balances
+    name: Do the books balance?
+    outcomes: [balanced, off]
+    needs: [restamp]
+    phase: check
+
+  - id: find_imbalance
+    name: Find the imbalance
+    with: { guide: booking.guide.yaml#find_imbalance }
+    kind: human
+    outcomes: [rebook]
+    needs: [balances.off]
+    phase: check
+    duration: 1 – 4h
+
+  - id: export
+    name: Export the TSV for Banana Accounting
+    icon: file-output
+    uses: npm:export
+    produces: bananaTsv
+    needs: [balances.balanced]
+    phase: check
+    duration: 5s
+
+  - id: booked
+    name: The quarter is booked
+    kind: end
+    needs: [export]
+    phase: check
+    duration: done
+
+  - id: new_case
+    name: Decide the case no rule covers
+    process: new-case.flow.yaml
+    note: only that transaction waits; it comes back to classify with the new rule
+    needs: [classify.new_case, shape.new_case, side.new_case, purchase_vat.new_case, sale_vat.new_case, private.new_case]
+    phase: classify

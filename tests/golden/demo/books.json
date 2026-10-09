@@ -1,0 +1,1062 @@
+{
+ "note": "books.json of Muster Kaffee GmbH frozen on 2026-10-09, the golden master's input.",
+ "journalEntries": [
+  {
+   "id": "3c5d5f06b3dd3400",
+   "transactionRef": "90000000001",
+   "date": "2026-01-02",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal Januar 2026"
+  },
+  {
+   "id": "141c6c3b6db5a1ad",
+   "transactionRef": "90000000002",
+   "date": "2026-01-05",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 43.7,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren Januar 2026"
+  },
+  {
+   "id": "d9c2e3f88f681295",
+   "transactionRef": "90000000002",
+   "date": "2026-01-05",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 1227.45,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen Januar 2026"
+  },
+  {
+   "id": "a1892e1bf94a77ea",
+   "transactionRef": "CARD-7000001",
+   "date": "2026-01-05",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo Januar 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.93966
+  },
+  {
+   "id": "407739fc9d32a1c9",
+   "transactionRef": "90000000003",
+   "date": "2026-01-12",
+   "accountDebit": "6570",
+   "accountCredit": "1021",
+   "amount": 179.4,
+   "vatCode": "I81",
+   "description": "Infomaniak, Webhosting 2026"
+  },
+  {
+   "id": "d9ca56afa980744c",
+   "transactionRef": "90000000004",
+   "date": "2026-01-14",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 75.85,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "735bda20ff7593b7",
+   "transactionRef": "90000000005",
+   "date": "2026-01-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 255.25,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop Januar 2026"
+  },
+  {
+   "id": "7592ad33ec4c2b9d",
+   "transactionRef": "90000000006",
+   "date": "2026-01-26",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2879.15,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee Januar 2026"
+  },
+  {
+   "id": "196c81863056ac65",
+   "transactionRef": "90000000007",
+   "date": "2026-01-28",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 1403.3,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz Januar 2026"
+  },
+  {
+   "id": "c9c976536f024ca5",
+   "transactionRef": "90000000007",
+   "date": "2026-01-28",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 10457.45,
+   "vatCode": "V81",
+   "description": "Café, Umsatz Januar 2026"
+  },
+  {
+   "id": "ef06f8dbd5730b85",
+   "transactionRef": "90000000007",
+   "date": "2026-01-28",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 142.33,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission Januar 2026"
+  },
+  {
+   "id": "8f7617ef74112b9c",
+   "transactionRef": "90000000008",
+   "date": "2026-02-02",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal Februar 2026"
+  },
+  {
+   "id": "5b6ad748e1718215",
+   "transactionRef": "CARD-7000002",
+   "date": "2026-02-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo Februar 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.9264
+  },
+  {
+   "id": "73744a7d91436f58",
+   "transactionRef": "90000000009",
+   "date": "2026-02-05",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 40.15,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren Februar 2026"
+  },
+  {
+   "id": "936052b8cd6eb9fa",
+   "transactionRef": "90000000009",
+   "date": "2026-02-05",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 1125.8,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen Februar 2026"
+  },
+  {
+   "id": "3dfefc8da253a062",
+   "transactionRef": "90000000010",
+   "date": "2026-02-09",
+   "accountDebit": "6100",
+   "accountCredit": "1021",
+   "amount": 129,
+   "vatCode": "I0",
+   "description": "Digitec Galaxus, Milchkännchen-Set und Tamper (Beleg fehlt)"
+  },
+  {
+   "id": "a91520075efdd675",
+   "transactionRef": "90000000011",
+   "date": "2026-02-16",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 81.7,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "d98d8a2196f5b83a",
+   "transactionRef": "TRANSFER-8000001",
+   "date": "2026-02-17",
+   "accountDebit": "4210",
+   "accountCredit": "1023",
+   "amount": 1240,
+   "vatCode": "M81",
+   "description": "Torrefazione Esempio, Barista-Zubehör (FT 2026/0188)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92088
+  },
+  {
+   "id": "635f0b815578c5f4",
+   "transactionRef": "90000000012",
+   "date": "2026-02-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 178.3,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop Februar 2026"
+  },
+  {
+   "id": "25a6e2f7ffd5f002",
+   "transactionRef": "90000000013",
+   "date": "2026-02-25",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2894.3,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee Februar 2026"
+  },
+  {
+   "id": "1b0c87c393f5ee57",
+   "transactionRef": "90000000014",
+   "date": "2026-03-02",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 152.05,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission Februar 2026"
+  },
+  {
+   "id": "38c46a343edfbc16",
+   "transactionRef": "90000000014",
+   "date": "2026-03-02",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 2264.9,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz Februar 2026"
+  },
+  {
+   "id": "6d385a56041c9217",
+   "transactionRef": "90000000014",
+   "date": "2026-03-02",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 10406.2,
+   "vatCode": "V81",
+   "description": "Café, Umsatz Februar 2026"
+  },
+  {
+   "id": "f26716c1b0d7dce7",
+   "transactionRef": "90000000015",
+   "date": "2026-03-02",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal März 2026"
+  },
+  {
+   "id": "992666e1780b8b82",
+   "transactionRef": "CARD-7000003",
+   "date": "2026-03-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo März 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.91504
+  },
+  {
+   "id": "108b8a2931522e4d",
+   "transactionRef": "90000000016",
+   "date": "2026-03-05",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 33.78,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren März 2026"
+  },
+  {
+   "id": "e12b32a16cd8b10b",
+   "transactionRef": "90000000016",
+   "date": "2026-03-05",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 947.5,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen März 2026"
+  },
+  {
+   "id": "beb46de0da819eda",
+   "transactionRef": "90000000017",
+   "date": "2026-03-16",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 69.9,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "ede413d44965c34b",
+   "transactionRef": "90000000018",
+   "date": "2026-03-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 183.35,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop März 2026"
+  },
+  {
+   "id": "c2c2906d5a08c35e",
+   "transactionRef": "90000000019",
+   "date": "2026-03-25",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 1969.95,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee März 2026"
+  },
+  {
+   "id": "1b219f9cabb883ef",
+   "transactionRef": "90000000020",
+   "date": "2026-03-30",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 127.02,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission März 2026"
+  },
+  {
+   "id": "3854853f883d62c4",
+   "transactionRef": "90000000020",
+   "date": "2026-03-30",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 1884.5,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz März 2026"
+  },
+  {
+   "id": "d05230c47dd4c418",
+   "transactionRef": "90000000020",
+   "date": "2026-03-30",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 8700.15,
+   "vatCode": "V81",
+   "description": "Café, Umsatz März 2026"
+  },
+  {
+   "id": "b7993a933f2b6101",
+   "transactionRef": "90000000021",
+   "date": "2026-03-31",
+   "accountDebit": "6940",
+   "accountCredit": "1021",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q1"
+  },
+  {
+   "id": "be79fbaa19281a28",
+   "transactionRef": "90000000022",
+   "date": "2026-04-02",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal April 2026"
+  },
+  {
+   "id": "3fd94c93052d2e50",
+   "transactionRef": "CARD-7000004",
+   "date": "2026-04-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo April 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92952
+  },
+  {
+   "id": "44c01743e1c29547",
+   "transactionRef": "90000000023",
+   "date": "2026-04-06",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 35.19,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren April 2026"
+  },
+  {
+   "id": "4cefe3d6364871ca",
+   "transactionRef": "90000000023",
+   "date": "2026-04-06",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 985.85,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen April 2026"
+  },
+  {
+   "id": "e70d8e4ecb23ae77",
+   "transactionRef": "90000000024",
+   "date": "2026-04-14",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 79.95,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "ba3d2cc3bcb68abb",
+   "transactionRef": "M2026-001",
+   "date": "2026-04-15",
+   "accountDebit": "",
+   "accountCredit": "6100",
+   "amount": 9.67,
+   "vatCode": "I81-2",
+   "description": "Korrekturbuchung zu Buchung 3dfefc8da253a062 (Q1): Vorsteuer Digitec Galaxus Rechnung 118203344, Beleg nachgereicht; deklariert mit der Korrekturabrechnung Q1 2026",
+   "corrects": "2026-Q1"
+  },
+  {
+   "id": "16afc4222abc1991",
+   "transactionRef": "90000000025",
+   "date": "2026-04-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 116.4,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop April 2026"
+  },
+  {
+   "id": "a4f51b563f758893",
+   "transactionRef": "90000000026",
+   "date": "2026-04-27",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2009.95,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee April 2026"
+  },
+  {
+   "id": "27db9e5c61673560",
+   "transactionRef": "90000000027",
+   "date": "2026-04-28",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 2320.55,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz April 2026"
+  },
+  {
+   "id": "a0b9d7940ef62299",
+   "transactionRef": "90000000027",
+   "date": "2026-04-28",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 143.29,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission April 2026"
+  },
+  {
+   "id": "dd65c91e02798c86",
+   "transactionRef": "90000000027",
+   "date": "2026-04-28",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 9620.65,
+   "vatCode": "V81",
+   "description": "Café, Umsatz April 2026"
+  },
+  {
+   "id": "e7525e69bc60defd",
+   "transactionRef": "90000000028",
+   "date": "2026-05-04",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal Mai 2026"
+  },
+  {
+   "id": "f8f2ab28235126d6",
+   "transactionRef": "CARD-7000005",
+   "date": "2026-05-04",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo Mai 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.92599
+  },
+  {
+   "id": "0a3125a8bf6eb876",
+   "transactionRef": "90000000029",
+   "date": "2026-05-05",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 35.45,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren Mai 2026"
+  },
+  {
+   "id": "db29fd20d9cf2827",
+   "transactionRef": "90000000029",
+   "date": "2026-05-05",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 994.85,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen Mai 2026"
+  },
+  {
+   "id": "83557dd9ede17684",
+   "transactionRef": "90000000030",
+   "date": "2026-05-14",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 83.3,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "0cf15ff866cb4b68",
+   "transactionRef": "90000000031",
+   "date": "2026-05-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 208.7,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop Mai 2026"
+  },
+  {
+   "id": "aef1a9e8719e3c1c",
+   "transactionRef": "90000000032",
+   "date": "2026-05-25",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2026,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee Mai 2026"
+  },
+  {
+   "id": "98f9457060a1c8f7",
+   "transactionRef": "90000000033",
+   "date": "2026-05-28",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 10325.4,
+   "vatCode": "V81",
+   "description": "Café, Umsatz Mai 2026"
+  },
+  {
+   "id": "aa2f099148d56616",
+   "transactionRef": "90000000033",
+   "date": "2026-05-28",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 152.21,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission Mai 2026"
+  },
+  {
+   "id": "ee608f848b871281",
+   "transactionRef": "90000000033",
+   "date": "2026-05-28",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 2358.4,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz Mai 2026"
+  },
+  {
+   "id": "228b371788a00e7f",
+   "transactionRef": "90000000034",
+   "date": "2026-05-29",
+   "accountDebit": "2201",
+   "accountCredit": "1021",
+   "amount": 2081.1,
+   "description": "ESTV, MWST-Abrechnung Q1 2026"
+  },
+  {
+   "id": "3565426d22e5adf7",
+   "transactionRef": "90000000035",
+   "date": "2026-06-02",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal Juni 2026"
+  },
+  {
+   "id": "9dacd043ada2dd03",
+   "transactionRef": "CARD-7000006",
+   "date": "2026-06-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo Juni 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.9244
+  },
+  {
+   "id": "7f31e6c8e5e60404",
+   "transactionRef": "90000000036",
+   "date": "2026-06-05",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 50.81,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren Juni 2026"
+  },
+  {
+   "id": "b91b2d9477a0716f",
+   "transactionRef": "90000000036",
+   "date": "2026-06-05",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 1420.95,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen Juni 2026"
+  },
+  {
+   "id": "dbedf1b643cd6e91",
+   "transactionRef": "90000000037",
+   "date": "2026-06-15",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 95.85,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "c19d1fdf340a4a48",
+   "transactionRef": "90000000038",
+   "date": "2026-06-22",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 225.55,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop Juni 2026"
+  },
+  {
+   "id": "0b35a5e2f155aba4",
+   "transactionRef": "90000000039",
+   "date": "2026-06-25",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2299.55,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee Juni 2026"
+  },
+  {
+   "id": "5104621e655f3498",
+   "transactionRef": "90000000040",
+   "date": "2026-06-29",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 10930.4,
+   "vatCode": "V81",
+   "description": "Café, Umsatz Juni 2026"
+  },
+  {
+   "id": "6e1cb2e913195e0f",
+   "transactionRef": "90000000040",
+   "date": "2026-06-29",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 150.74,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission Juni 2026"
+  },
+  {
+   "id": "e89cfff62acfd4c9",
+   "transactionRef": "90000000040",
+   "date": "2026-06-29",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 1631.4,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz Juni 2026"
+  },
+  {
+   "id": "b9a7cba1c428824f",
+   "transactionRef": "90000000041",
+   "date": "2026-06-30",
+   "accountDebit": "6940",
+   "accountCredit": "1021",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q2"
+  },
+  {
+   "id": "7ce581fb5c9cd3ff",
+   "transactionRef": "M2026-002",
+   "date": "2026-06-30",
+   "accountDebit": "2451",
+   "accountCredit": "6200",
+   "amount": 77.73,
+   "vatCode": "K81-B",
+   "description": "Eigenverbrauch: Privatanteil Fahrzeug Q2 2026, 30% von CHF 259.10 Treibstoff (Anna Muster)"
+  },
+  {
+   "id": "c600692da0ad15d3",
+   "transactionRef": "90000000042",
+   "date": "2026-07-02",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal Juli 2026"
+  },
+  {
+   "id": "6b9883e5de54cf19",
+   "transactionRef": "CARD-7000007",
+   "date": "2026-07-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo Juli 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.9301
+  },
+  {
+   "id": "0c1853f3cb25a209",
+   "transactionRef": "90000000043",
+   "date": "2026-07-06",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 30.44,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren Juli 2026"
+  },
+  {
+   "id": "fa97142ba4558bb4",
+   "transactionRef": "90000000043",
+   "date": "2026-07-06",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 853.25,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen Juli 2026"
+  },
+  {
+   "id": "ab182932d537f7ff",
+   "transactionRef": "90000000044",
+   "date": "2026-07-14",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 75,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "95ecf31aef2632a9",
+   "transactionRef": "TRANSFER-8000002",
+   "date": "2026-07-14",
+   "accountDebit": "4210",
+   "accountCredit": "1023",
+   "amount": 865.5,
+   "vatCode": "M81",
+   "description": "Torrefazione Esempio, Barista-Zubehör (FT 2026/0911)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.93227
+  },
+  {
+   "id": "d134b5cb2aefe43c",
+   "transactionRef": "90000000045",
+   "date": "2026-07-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 172,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop Juli 2026"
+  },
+  {
+   "id": "ec15a424fe8da881",
+   "transactionRef": "90000000046",
+   "date": "2026-07-27",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2155.65,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee Juli 2026"
+  },
+  {
+   "id": "73d6c70d4e18ca38",
+   "transactionRef": "90000000047",
+   "date": "2026-07-28",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 2308.4,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz Juli 2026"
+  },
+  {
+   "id": "a35b34e4f215b649",
+   "transactionRef": "90000000047",
+   "date": "2026-07-28",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 9061.6,
+   "vatCode": "V81",
+   "description": "Café, Umsatz Juli 2026"
+  },
+  {
+   "id": "f02b5946415e2331",
+   "transactionRef": "90000000047",
+   "date": "2026-07-28",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 136.44,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission Juli 2026"
+  },
+  {
+   "id": "bec9823f547deb8c",
+   "transactionRef": "90000000048",
+   "date": "2026-08-03",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal August 2026"
+  },
+  {
+   "id": "fc468693720cd04e",
+   "transactionRef": "CARD-7000008",
+   "date": "2026-08-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo August 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.9381
+  },
+  {
+   "id": "13ce8ebaa2feed1d",
+   "transactionRef": "90000000049",
+   "date": "2026-08-05",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 1276.35,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen August 2026"
+  },
+  {
+   "id": "cf82c6bb27b628ef",
+   "transactionRef": "90000000049",
+   "date": "2026-08-05",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 45.41,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren August 2026"
+  },
+  {
+   "id": "fc8f59188c3974ce",
+   "transactionRef": "90000000050",
+   "date": "2026-08-14",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 69.35,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "fe35aade6ffcb9c4",
+   "transactionRef": "90000000051",
+   "date": "2026-08-20",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 149.7,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop August 2026"
+  },
+  {
+   "id": "f20c49f966d7fa29",
+   "transactionRef": "90000000052",
+   "date": "2026-08-25",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 1939.95,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee August 2026"
+  },
+  {
+   "id": "0ded262aaa3c8940",
+   "transactionRef": "90000000053",
+   "date": "2026-08-28",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 8747.5,
+   "vatCode": "V81",
+   "description": "Café, Umsatz August 2026"
+  },
+  {
+   "id": "780e6fbe314ba61f",
+   "transactionRef": "90000000053",
+   "date": "2026-08-28",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 132.23,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission August 2026"
+  },
+  {
+   "id": "81c23ad966df01ff",
+   "transactionRef": "90000000053",
+   "date": "2026-08-28",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 2271.35,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz August 2026"
+  },
+  {
+   "id": "944bbf3466ff6fe3",
+   "transactionRef": "CARD-7000009",
+   "date": "2026-09-03",
+   "accountDebit": "6570",
+   "accountCredit": "1023",
+   "amount": 39,
+   "vatCode": "B81-1",
+   "description": "Example Cloud, Kassensystem-Abo September 2026 (Bezugsteuer)",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.95067
+  },
+  {
+   "id": "734fd1a4728f8630",
+   "transactionRef": "90000000054",
+   "date": "2026-09-07",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 33.52,
+   "vatCode": "I0",
+   "description": "Shopify Payments, Gebühren September 2026"
+  },
+  {
+   "id": "cb81d1072a39749c",
+   "transactionRef": "90000000054",
+   "date": "2026-09-07",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 938.5,
+   "vatCode": "V26",
+   "description": "Webshop, Kaffeebohnen September 2026"
+  },
+  {
+   "id": "738c01da7cc7001c",
+   "transactionRef": "90000000055",
+   "date": "2026-09-14",
+   "accountDebit": "6200",
+   "accountCredit": "1021",
+   "amount": 79.25,
+   "vatCode": "I81",
+   "description": "Coop Pronto Musterdorf, Tanken"
+  },
+  {
+   "id": "bd99dc7f1fd46934",
+   "transactionRef": "90000000056",
+   "date": "2026-09-21",
+   "accountDebit": "6513",
+   "accountCredit": "1021",
+   "amount": 217.75,
+   "vatCode": "I81",
+   "description": "Post CH, Pakete Webshop September 2026"
+  },
+  {
+   "id": "4be8575d9926d3db",
+   "transactionRef": "90000000057",
+   "date": "2026-09-28",
+   "accountDebit": "1021",
+   "accountCredit": "3000",
+   "amount": 10440,
+   "vatCode": "V81",
+   "description": "Café, Umsatz September 2026"
+  },
+  {
+   "id": "742de4ec942e68c6",
+   "transactionRef": "90000000057",
+   "date": "2026-09-28",
+   "accountDebit": "1021",
+   "accountCredit": "3200",
+   "amount": 2438.95,
+   "vatCode": "V26",
+   "description": "Kaffeebohnen Laden, Umsatz September 2026"
+  },
+  {
+   "id": "f606653f1f7c360c",
+   "transactionRef": "90000000057",
+   "date": "2026-09-28",
+   "accountDebit": "6840",
+   "accountCredit": "1021",
+   "amount": 154.55,
+   "vatCode": "I0",
+   "description": "Muster Payments, Kommission September 2026"
+  },
+  {
+   "id": "3f83d2653b0cdfc4",
+   "transactionRef": "90000000058",
+   "date": "2026-09-30",
+   "accountDebit": "4000",
+   "accountCredit": "1021",
+   "amount": 2888.3,
+   "vatCode": "M26",
+   "description": "Grünkaffee Muster, Rohkaffee September 2026"
+  },
+  {
+   "id": "67c62855ebd6d454",
+   "transactionRef": "90000000058",
+   "date": "2026-09-30",
+   "accountDebit": "6000",
+   "accountCredit": "1021",
+   "amount": 2400,
+   "vatCode": "I0",
+   "description": "Liegenschaften Muster, Miete Ladenlokal September 2026"
+  },
+  {
+   "id": "a0252c5543ee84ca",
+   "transactionRef": "90000000059",
+   "date": "2026-09-30",
+   "accountDebit": "6940",
+   "accountCredit": "1021",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q3"
+  }
+ ],
+ "config": {
+  "closedThrough": "2026-03-31",
+  "openingBalances": {
+   "2026": {
+    "1021": 18500,
+    "1023": 3753.36,
+    "1510": 12000,
+    "1520": 2500,
+    "2800": 20000,
+    "2970": 16753.36
+   }
+  },
+  "openingBalancesNative": {
+   "2026": {
+    "1023": {
+     "amount": 4000,
+     "currency": "EUR"
+    }
+   }
+  },
+  "vatAdjustments": [],
+  "correctionCases": [
+   {
+    "id": "2026-Q1-digitec-vorsteuer",
+    "period": "2026-Q1",
+    "title": "Vorsteuer Digitec Galaxus nachgeholt",
+    "wrong": "Der Beleg der Digitec-Galaxus-Rechnung 118203344 (CHF 129.00, 8.1% MWST) fehlte beim Einreichen, die Buchung lief ohne Vorsteuer (I0).",
+    "fix": "Korrekturbuchung I81-2 über CHF 9.67 vom 15.04.2026 mit corrects 2026-Q1; die Buchung vom Februar bleibt wie eingereicht.",
+    "originalEntryIds": [
+     "3dfefc8da253a062"
+    ],
+    "correctionEntryIds": [
+     "ba3d2cc3bcb68abb"
+    ],
+    "source": "receipts/20260209-digitec-galaxus-milchkaennchen.pdf"
+   }
+  ]
+ }
+}

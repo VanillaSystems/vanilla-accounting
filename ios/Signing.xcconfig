@@ -1,0 +1,3 @@
+// Your Apple team for code signing: put `DEVELOPMENT_TEAM = <your team id>` into
+// Team.local.xcconfig next to this file (gitignored). Without it, pick the team in Xcode.
+#include? "Team.local.xcconfig"

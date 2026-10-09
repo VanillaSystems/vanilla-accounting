@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Beleg">
+  <link rel="manifest" href="/scan/manifest.json">
+  <title>Beleg scannen</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: env(safe-area-inset-top, 2rem) 1.5rem 2rem;
+    }
+    h1 { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 2rem; color: #e2e8f0; letter-spacing: -0.01em; }
+    #pages {
+      display: flex;
+      gap: 0.625rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      min-height: 4rem;
+      margin-bottom: 1.5rem;
+      width: 100%;
+    }
+    .page-wrapper { position: relative; }
+    .thumb {
+      display: block;
+      width: 70px;
+      height: 95px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 2px solid #334155;
+    }
+    .page-num {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      background: rgba(0,0,0,0.55);
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.9rem 1.5rem;
+      border-radius: 14px;
+      border: none;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      max-width: 300px;
+      margin-bottom: 0.75rem;
+      transition: transform 0.1s, opacity 0.1s;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.85; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+    .btn-camera {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: 2px dashed #475569;
+      padding: 2.5rem 1.5rem;
+      font-size: 1.1rem;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .btn-camera span.icon { font-size: 2.5rem; }
+    .btn-add { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+    .btn-upload { background: #16a34a; color: #fff; }
+    #status {
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      color: #64748b;
+      text-align: center;
+      min-height: 1.25rem;
+    }
+    #status.success { color: #4ade80; }
+    #status.error { color: #f87171; }
+    #camera-input { display: none; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Beleg scannen</h1>
+
+  <div id="pages"></div>
+
+  <input type="file" id="camera-input" accept="image/*" capture="environment">
+
+  <button class="btn btn-camera" id="btn-capture" onclick="capture()">
+    <span class="icon">📷</span>
+    Foto aufnehmen
+  </button>
+
+  <button class="btn btn-add hidden" id="btn-add" onclick="capture()">
+    ➕ Weitere Seite
+  </button>
+
+  <button class="btn btn-upload hidden" id="btn-upload" onclick="upload()">
+    ⬆️ Hochladen
+  </button>
+
+  <div id="status"></div>
+
+  <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script>
+    const pages = [];
+    const input    = document.getElementById('camera-input');
+    const pagesDiv = document.getElementById('pages');
+    const btnCap   = document.getElementById('btn-capture');
+    const btnAdd   = document.getElementById('btn-add');
+    const btnUp    = document.getElementById('btn-upload');
+    const statusEl = document.getElementById('status');
+
+    function capture() {
+      input.value = '';
+      input.click();
+    }
+
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setStatus('Bild wird verarbeitet…');
+      try {
+        const page = await resize(file);
+        pages.push(page);
+        addThumb(page, pages.length);
+        updateUI();
+        setStatus('');
+      } catch (e) {
+        setStatus('Fehler: ' + e, 'error');
+      }
+    });
+
+    function resize(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = ({ target: { result } }) => {
+          const img = new Image();
+          img.onerror = reject;
+          img.onload = () => {
+            const MAX = 1500;
+            const scale = Math.min(1, MAX / img.width);
+            const w = Math.round(img.width  * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width  = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.75), w, h });
+          };
+          img.src = result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function addThumb({ dataUrl }, n) {
+      const wrap = document.createElement('div');
+      wrap.className = 'page-wrapper';
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.className = 'thumb';
+      const label = document.createElement('span');
+      label.className = 'page-num';
+      label.textContent = n;
+      wrap.append(img, label);
+      pagesDiv.appendChild(wrap);
+    }
+
+    function updateUI() {
+      const has = pages.length > 0;
+      btnCap.classList.toggle('hidden', has);
+      btnAdd.classList.toggle('hidden', !has);
+      btnUp.classList.toggle('hidden', !has);
+      btnUp.textContent = `⬆️ Hochladen (${pages.length} ${pages.length === 1 ? 'Seite' : 'Seiten'})`;
+      btnUp.disabled = false;
+    }
+
+    async function upload() {
+      if (!pages.length) return;
+      btnUp.disabled = true;
+      btnAdd.disabled = true;
+      setStatus('PDF wird erstellt…');
+
+      try {
+        if (!window.jspdf) throw new Error('jsPDF nicht geladen — Internetverbindung nötig beim ersten Start.');
+        const { jsPDF } = window.jspdf;
+
+        let doc;
+        for (let i = 0; i < pages.length; i++) {
+          const { dataUrl, w, h } = pages[i];
+          const mmW = +(w / 96 * 25.4).toFixed(2);
+          const mmH = +(h / 96 * 25.4).toFixed(2);
+          if (i === 0) {
+            doc = new jsPDF({ unit: 'mm', format: [mmW, mmH], compress: true });
+          } else {
+            doc.addPage([mmW, mmH]);
+          }
+          doc.addImage(dataUrl, 'JPEG', 0, 0, mmW, mmH);
+        }
+
+        setStatus('Wird hochgeladen…');
+        const blob = doc.output('blob');
+        const res  = await fetch('/api/upload', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/pdf' },
+          body:    blob,
+        });
+
+        if (!res.ok) throw new Error(await res.text());
+        const { filename } = await res.json();
+
+        // Reset
+        pages.length = 0;
+        pagesDiv.innerHTML = '';
+        updateUIEmpty();
+        setStatus('✓ Gespeichert: ' + filename, 'success');
+      } catch (e) {
+        setStatus('Fehler: ' + e.message, 'error');
+        btnUp.disabled = false;
+        btnAdd.disabled = false;
+      }
+    }
+
+    function updateUIEmpty() {
+      btnCap.classList.remove('hidden');
+      btnAdd.classList.add('hidden');
+      btnUp.classList.add('hidden');
+    }
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = type;
+    }
+  </script>
+</body>
+</html>

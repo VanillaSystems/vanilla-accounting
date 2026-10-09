@@ -1,0 +1,27 @@
+# Knowledge for bank-import.flow.yaml.
+
+process: bank-import
+
+steps:
+  relink:
+    goal: Re-attach journal entries and mappings whose transaction ref changed on re-import.
+    rules:
+      - id: bnk-match-old-ref
+        when: an entry or mapping points at a ref that no longer exists
+        then: find the new transaction with the same date, amount and description and re-point it; never delete the entry
+        source: src/cli/restamp-fx-rates.ts (split refs ref~…)
+    precedents: []
+
+  investigate:
+    goal: Explain a month-end gap between ledger and bank, in the account's own currency.
+    rules:
+      - id: bnk-missing-export
+        when: the gap equals a run of transactions in one period
+        then: a camt053 month is missing — download it again (monthly files, not year-to-date)
+        source: src/cli/reconcile-balances.ts
+      - id: bnk-doubled
+        when: the gap equals one transaction amount
+        then: look for the same entry imported twice under two refs
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        status: proposed
+    precedents: []

@@ -1,0 +1,138 @@
+# Knowledge for evidence.flow.yaml, one section per step.
+#
+# Decide by: rules (first match wins) → precedents → ask_human_when → new_case.
+# Add knowledge here, not in the flow and not in chat. See processes/README.md.
+
+process: evidence
+
+steps:
+  rules:
+    goal: >
+      Link what can be linked without judgment, and settle transactions that need no receipt. A rule links only when exactly one candidate fits.
+    reads: [ transactions, receipts with kind and amount, mappings, proposals incl. rejected pairs ]
+    gates:
+      - id: ev-human-wins
+        status: proposed
+        when: a person already linked, unlinked, rejected or marked the item
+        then: leave it exactly as it is
+        why: a person's answer is never overwritten by a machine
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        test: human-answered
+      - id: ev-closed
+        when: the transaction is dated on or before config.closedThrough
+        then: do not touch its mappings
+        source: AGENTS.md § Period close
+        test: closed-period
+      - id: ev-exempt-wise-fee
+        when: "transaction.type is wise-fee, or a FEE-TRANSFER-…/FEE-CARD-… row (\"Wise Charges for: …\")"
+        then: settled, exempt — the Wise statement is the evidence
+        source: definition
+        test: wise-fee
+      - id: ev-exempt-own-transfer
+        status: proposed
+        when: money moves between two of our own accounts (Raiffeisen ↔ Wise, Wise currency ↔ currency)
+        then: settled, exempt — both statements are the evidence
+        source: proposed 2026-10-07 by Claude — confirm or replace
+        test: own-transfer
+    rules:
+      - id: ev-reference
+        status: proposed
+        when: "the receipt prints the payment reference of exactly one open transaction: the whole reference, a 16+ digit QR reference anywhere, or a 6+ digit invoice number standing on its own (Wise transfer references come from the monthly statement PDF, the Wise camt053 drops them)"
+        then: link it, whatever the amount or currency; fee rows, statements and credit notes against outgoing payments never qualify. An existing link the reference contradicts is reported, and moved only when the amount agrees too
+        why: "a payment in another currency than its invoice, and an invoice linked to the wrong payment, are found only this way"
+        source: proposed 2026-10-08 by Claude — confirm or replace
+      - id: ev-card-hold
+        status: proposed
+        when: "one card ref has a debit and a credit of the same merchant within a few days (split into ref~date-DBIT/CRDT legs): a pay-at-pump or deposit pre-authorisation"
+        then: "if debit − credit equals the receipt (in the original currency the description prints), link the receipt to BOTH legs. If the credit equals the debit (a hold released in full), settle both legs with noReceipt: hold and release, net 0"
+        why: "a pay-at-pump station reserves an amount first and refunds the unused part, so one fill-up is two or three bank rows"
+        source: proposed 2026-10-08 by Claude — confirm or replace
+      - id: ev-exempt-authorities
+        status: proposed
+        when: payment to or from the ESTV, AHV/SVA, the tax office, or salary
+        then: "settled, exempt — the authority's or the payroll document is filed separately. ESTV: link its invoice or reminder if one exists; a VAT refund or payment equals a filed return's payableTax in filings/<year>/ (negative = credit refunded) — name that file in the noReceipt reason"
+        why: "a VAT refund or payment is the payableTax of one filed return"
+        source: proposed 2026-10-07 by Claude — confirm or replace
+      - id: ev-exempt-bank-fees
+        status: proposed
+        when: our own bank's account fee or quarterly close row (Raiffeisen "Gebührenbelastung Kontoführung", "Abschlussbetreffnis", often CHF 0.00)
+        then: settled, exempt — the bank's monthly statement PDF is the evidence; book 6940 Bankspesen without a VAT code
+        source: proposed 2026-10-08 by Claude — confirm or replace
+      - id: ev-wise-original-amount
+        when: a receipt in a currency other than the Wise account that paid it
+        then: match on the original-currency amount shown on the Wise monthly statement
+        why: that amount appears nowhere else
+        source: AGENTS.md § Special cases
+      - id: ev-unique-amount
+        status: proposed
+        when: exactly one transaction has the same amount and currency within 10 days of the receipt date, and no other receipt claims it
+        then: link it
+        source: proposed 2026-10-07 by Claude — confirm or replace
+      - id: ev-duplicate
+        status: proposed
+        when: two receipts of the same vendor, amount and date, or the same invoice number
+        then: mark the later one duplicate of the earlier
+        source: proposed 2026-10-07 by Claude — confirm or replace
+    precedents: []
+
+  ai:
+    goal: For what the rules left open, find the candidates and say how sure it is.
+    reads: [ the item, its 20 nearest candidates by date and amount, the vendor's guide rules ]
+    rules:
+      - id: ai-grouped
+        when: "the counterparty is marked grouped: true"
+        then: "match as a set: all of the counterparty's invoices and charges in the month at once, each charge equal to the sum of the invoices assigned to it; confident only when every sum matches"
+        why: AliExpress, Amazon and FedEx bundle several invoices into one charge
+        source: docs/runbooks/receipt-collection.md § Matching Notes
+      - id: ai-threshold
+        when: always
+        then: confident at 0.8 or above, and only if no rejected pair is involved; otherwise unsure with the top 3 candidates and the reason
+        source: src/cli/match.ts MAPPING_THRESHOLD
+    precedents: []
+
+  coverage:
+    goal: Whether the linked receipts add up to the transaction.
+    rules:
+      - id: cov-tolerance
+        status: proposed
+        when: the receipts sum to the amount within 1% or CHF 1, in the transaction's currency
+        then: settled
+        source: proposed 2026-10-07 by Claude — confirm or replace
+      - id: cov-fx
+        status: proposed
+        when: receipts and transaction are in different currencies
+        then: compare via the Wise statement's original amount, else at the ESTV rate of the payment date with 3% tolerance
+        source: proposed 2026-10-07 by Claude — confirm or replace
+    precedents: []
+
+  queue:
+    goal: >
+      A person answers what the machine could not. Each answer is one of a fixed set and is stored where the next run reads it.
+    answers:
+      link: link the shown candidate (mapping.by = human)
+      reject: this candidate is wrong (stored; never proposed again)
+      noise: not a receipt (receipt.kind = noise)
+      duplicate: duplicate of another receipt
+      supporting: supporting document of another receipt
+      paid_privately: an Auslage → a manual transaction is created and linked
+      private: private, not business — no booking
+      no_receipt: no receipt will exist — the reason is required and becomes the evidence (books at the 0-code)
+      chase: a receipt should exist — goes to collection
+    rules:
+      - id: q-recurring
+        status: proposed
+        when: the same answer for the same vendor a second time
+        then: propose a rule for this guide through new-case
+        why: the third time should not reach a person
+        source: proposed 2026-10-07 by Claude — confirm or replace
+    precedents: []
+
+  unmatched:
+    goal: Every invoice or sales record supports a transaction or is marked.
+    rules:
+      - id: um-small-no-tx
+        when: a small receipt (Coop, petrol, parking) with no card transaction
+        then: offer paid_privately first
+        why: usually Auslagen
+        source: decision 2026-10-07, owner
+    precedents: []
