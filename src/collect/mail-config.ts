@@ -1,7 +1,8 @@
 /**
  * The workspace's mail.yaml: which mailboxes receipts are collected from, and how the senders of
  * a mailbox that mixes business and private mail are sorted. One company's facts, so they live in
- * its workspace; credentials stay in the workspace .env (<env>_IMAP_USER, <env>_IMAP_PASSWORD).
+ * its workspace. Credentials are secrets, so they stay out of it: in the app's .env, which dotenv
+ * reads from the app folder (<env>_IMAP_USER, <env>_IMAP_PASSWORD). See docs/mail-setup.md.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
@@ -11,7 +12,7 @@ export interface Mailbox {
   label: string;
   /** The address, for the status board. */
   address: string;
-  /** Prefix of the .env keys: <env>_IMAP_HOST, _PORT, _USER, _PASSWORD. */
+  /** Prefix of the app .env keys: <env>_IMAP_USER, _PASSWORD (required), _HOST, _PORT (optional). */
   env: string;
   host: string;
   /** Collect only mail sent to this address (an alias sharing one login). */
@@ -30,9 +31,28 @@ export interface MailConfig {
   linkReceiptDomains: Set<string>;
 }
 
+/** A mailbox with what IMAP needs to log in, or the .env keys still missing. */
+export type MailboxLogin =
+  | { status: 'ready'; host: string; port: number; user: string; password: string }
+  | { status: 'missing'; keys: string[] };
+
+/** The login of a mailbox from the app's environment: host and port fall back to mail.yaml and 993. */
+export function loginOf(m: Mailbox, env: NodeJS.ProcessEnv): MailboxLogin {
+  const [user, password] = [env[`${m.env}_IMAP_USER`], env[`${m.env}_IMAP_PASSWORD`]];
+  if (!user || !password) {
+    return { status: 'missing', keys: [!user && `${m.env}_IMAP_USER`, !password && `${m.env}_IMAP_PASSWORD`].filter((k): k is string => !!k) };
+  }
+  return { status: 'ready', host: env[`${m.env}_IMAP_HOST`] || m.host, port: parseInt(env[`${m.env}_IMAP_PORT`] || '993'), user, password };
+}
+
+/** mail.yaml names mailboxes. The template npm run init writes is all comments, so it does not. */
+export function mailConfigured(ws: Workspace): boolean {
+  return existsSync(ws.paths.mail) && (parse(readFileSync(ws.paths.mail, 'utf8')) as { mailboxes?: unknown } | null)?.mailboxes != null;
+}
+
 export function loadMailConfig(ws: Workspace): MailConfig {
   const path = ws.paths.mail;
-  if (!existsSync(path)) throw new Error(`${path} not found: receipt collection needs the workspace's mailboxes (see docs/runbooks/receipt-collection.md).`);
+  if (!existsSync(path)) throw new Error(`${path} not found: receipt collection needs the workspace's mailboxes (see docs/mail-setup.md).`);
   const raw = (parse(readFileSync(path, 'utf8')) ?? {}) as Record<string, unknown>;
   const fail = (msg: string): never => { throw new Error(`${path}: ${msg}`); };
   const list = (k: string): string[] => {

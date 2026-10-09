@@ -38,6 +38,7 @@
     "llm-usage": "tsx src/cli/llm-usage.ts",
     "extract-shopify-orders": "tsx src/cli/extract-shopify-orders.ts",
     "evidence": "tsx src/cli/evidence.ts",
+    "gaps": "tsx src/cli/gaps.ts",
     "demo:generate": "tsx tools/demo/generate.ts",
     "tutti": "tsx src/collect/tutti.ts",
     "pretest": "tsc --noEmit",

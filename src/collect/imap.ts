@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ImapFlow, type SearchObject } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import type { MailConfig } from './mail-config.js';
+import { loginOf, type MailConfig } from './mail-config.js';
 
 export interface EmailAccount {
   label: string;
@@ -34,27 +34,37 @@ export interface EmailFull {
   attachments: { filename: string; contentType: string; content: Buffer }[];
 }
 
-/** The workspace's mailboxes (mail.yaml) with their credentials from .env. */
+/** The workspace's mailboxes (mail.yaml) with their credentials from the app's .env. Throws naming the missing keys. */
 export function mailAccounts(cfg: MailConfig): (EmailAccount & { mixed: boolean })[] {
-  return cfg.mailboxes.map((m) => ({
-    label: m.label,
-    host: process.env[`${m.env}_IMAP_HOST`] || m.host,
-    port: parseInt(process.env[`${m.env}_IMAP_PORT`] || '993'),
-    user: process.env[`${m.env}_IMAP_USER`]!,
-    password: process.env[`${m.env}_IMAP_PASSWORD`]!,
-    ...(m.filterTo ? { filterTo: m.filterTo } : {}),
-    mixed: m.mixed,
-  }));
+  return cfg.mailboxes.map((m) => {
+    const login = loginOf(m, process.env);
+    if (login.status === 'missing') throw new Error(`${m.label}: add ${login.keys.join(' and ')} to the app's .env (docs/mail-setup.md).`);
+    const { status: _, ...credentials } = login;
+    return { label: m.label, ...credentials, ...(m.filterTo ? { filterTo: m.filterTo } : {}), mixed: m.mixed };
+  });
 }
 
-function createClient(account: EmailAccount): ImapFlow {
+function createClient(account: EmailAccount, timeouts: { connectionTimeout?: number; greetingTimeout?: number } = {}): ImapFlow {
   return new ImapFlow({
     host: account.host,
     port: account.port,
     secure: true,
     auth: { user: account.user, pass: account.password },
     logger: false,
+    ...timeouts,
   });
+}
+
+/** Log in and out again, nothing fetched: proves host, port and password. Rejects with the server's answer. */
+export async function checkLogin(account: EmailAccount): Promise<void> {
+  const client = createClient(account, { connectionTimeout: 20_000, greetingTimeout: 20_000 });
+  try {
+    await client.connect();
+  } catch (e) {
+    client.close(); // a server keeps the connection open after a refused LOGIN
+    throw e;
+  }
+  await client.logout();
 }
 
 function hasAttachmentsInStructure(structure: any): boolean {
