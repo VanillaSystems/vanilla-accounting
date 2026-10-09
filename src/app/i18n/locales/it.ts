@@ -72,6 +72,7 @@ export default {
 
     'app.subtitle': 'Gestione dei giustificativi',
     'app.auditBar': 'Modalità revisione · sola lettura — le modifiche sono disattivate',
+    'app.snapshot': 'Istantanea del {date} · schema dei libri {schema} · app v{version}',
     'app.receiptCount': { one: '{n} giustificativo', other: '{n} giustificativi' },
     'app.transactionCount': { one: '{n} transazione', other: '{n} transazioni' },
     'app.unlinkedCount': { one: '{n} non attribuito', other: '{n} non attribuiti' },

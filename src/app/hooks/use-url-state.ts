@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { setView, viewParams, viewPath } from '../lib/location.js';
 
 export type FilterMode = 'all' | 'linked' | 'unlinked';
 
@@ -7,7 +8,7 @@ const VALID_TABS = ['receipts', 'transactions', 'bank-statements', 'journal-entr
 const isPeriod = (s: string) => /^\d{4}(-Q\d)?$/.test(s);
 
 function parsePath(): { tab: string; period: string } {
-  const parts = window.location.pathname.split('/').filter(Boolean);
+  const parts = viewPath().split('/').filter(Boolean);
   if (parts.length === 0) return { tab: 'receipts', period: 'all' };
   if (isPeriod(parts[0])) {
     return {
@@ -29,7 +30,7 @@ function buildPath(tab: string, period: string): string {
  */
 export function useUrlState({ loading, receiptId, txRef }: { loading: boolean; receiptId: string | null; txRef: string | null }) {
   const [initial] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = viewParams();
     const f = params.get('filter');
     return {
       ...parsePath(),
@@ -52,9 +53,7 @@ export function useUrlState({ loading, receiptId, txRef }: { loading: boolean; r
     if (search) params.set('q', search);
     if (receiptId) params.set('receipt', receiptId);
     if (txRef) params.set('tx', txRef);
-    const qs = params.toString();
-    const path = buildPath(tab, period);
-    history.replaceState(null, '', qs ? `${path}?${qs}` : path);
+    setView(buildPath(tab, period), params);
   }, [loading, tab, period, filterMode, search, receiptId, txRef]);
 
   return {

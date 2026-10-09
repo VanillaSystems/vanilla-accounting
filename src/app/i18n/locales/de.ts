@@ -69,6 +69,7 @@ export const messages = {
 
   'app.subtitle': 'Belegverwaltung',
   'app.auditBar': 'Prüfmodus · nur Lesen — Änderungen sind deaktiviert',
+  'app.snapshot': 'Stand vom {date} · Buchhaltungsdaten Schema {schema} · App v{version}',
   'app.receiptCount': { one: '{n} Beleg', other: '{n} Belege' },
   'app.transactionCount': { one: '{n} Transaktion', other: '{n} Transaktionen' },
   'app.unlinkedCount': { one: '{n} nicht zugeordnet', other: '{n} nicht zugeordnet' },

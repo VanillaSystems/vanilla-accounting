@@ -7,7 +7,8 @@ import { PdfFrame } from './pdf-frame.js';
 import { accountTitle } from '../lib/accounts.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { SplitPane } from './split-pane.js';
-import { api, orAlert } from '../lib/api.js';
+import { api, orAlert, sources } from '../lib/api.js';
+import { setView, viewParams, viewPath } from '../lib/location.js';
 import { t } from '../i18n/index.js';
 
 interface Props {
@@ -39,12 +40,12 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
   const [saving, setSaving] = useState(false);
   const [classifyingRef, setClassifyingRef] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = viewParams();
     const utx = params.get('utx');
     return params.get('je') ?? (utx ? `u:${utx}` : null);
   });
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = viewParams();
     return params.get('receipt') ?? null;
   });
   const [colWidths, setColWidths] = useState<Record<string, number>>(() => {
@@ -163,7 +164,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
   const selectedTx = selectedTxRef ? txByRef.get(selectedTxRef) : null;
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = viewParams();
     params.delete('je');
     params.delete('utx');
     params.delete('receipt');
@@ -172,11 +173,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
       else params.set('utx', selectedRow.txRef);
     }
     if (selectedReceiptId) params.set('receipt', selectedReceiptId);
-    const qs = params.toString();
-    const newUrl = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-    if (newUrl !== `${window.location.pathname}${window.location.search}`) {
-      history.replaceState(null, '', newUrl);
-    }
+    setView(viewPath(), params);
   }, [selectedRow, selectedReceiptId]);
 
   const handleKeyDown = useCallback(
@@ -589,7 +586,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                         </span>
                       )}
                       <a
-                        href={`/api/receipts/${r.id}`}
+                        href={sources.receipt(r.id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -609,7 +606,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
             {selectedReceiptId ? (
               <PdfFrame
                 key={selectedReceiptId}
-                src={`/api/receipts/${selectedReceiptId}`}
+                src={sources.receipt(selectedReceiptId)}
                 title={t('journal.receiptPreview')}
               />
             ) : (

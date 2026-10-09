@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { SplitPane } from './split-pane.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { monthLocale, t } from '../i18n/index.js';
+import { sources } from '../lib/api.js';
 
 interface BankStatementsTabProps {
   index: Index;
@@ -156,7 +157,7 @@ export function BankStatementsTab({ index }: BankStatementsTabProps) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <a
-                href={`/bank-statements/${preview.bank}/${encodeURIComponent(preview.filename)}`}
+                href={sources.statement(preview.bank, preview.filename)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
@@ -174,7 +175,7 @@ export function BankStatementsTab({ index }: BankStatementsTabProps) {
             </div>
           </div>
           <PdfFrame
-            src={`/bank-statements/${preview.bank}/${encodeURIComponent(preview.filename)}`}
+            src={sources.statement(preview.bank, preview.filename)}
             title={preview.filename}
           />
         </>

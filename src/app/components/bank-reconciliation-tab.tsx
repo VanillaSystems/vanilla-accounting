@@ -4,6 +4,7 @@ import { reconcileMonthly } from '../../accounting/index.js';
 import { cn, fmt } from '../lib/utils.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { monthLocale, t } from '../i18n/index.js';
+import { sources } from '../lib/api.js';
 
 interface Props {
   index: Index;
@@ -131,7 +132,7 @@ export function BankReconciliationTab({ index }: Props) {
                       <td className="px-4 py-1.5 text-center">
                         {receiptId ? (
                           <a
-                            href={`/api/receipts/${receiptId}`}
+                            href={sources.receipt(receiptId)}
                             target="_blank"
                             rel="noreferrer"
                             className="text-xs text-primary hover:underline"

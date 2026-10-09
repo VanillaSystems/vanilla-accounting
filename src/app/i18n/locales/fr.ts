@@ -72,6 +72,7 @@ export default {
 
     'app.subtitle': 'Gestion des justificatifs',
     'app.auditBar': 'Mode révision · lecture seule — les modifications sont désactivées',
+    'app.snapshot': 'Instantané du {date} · schéma des livres {schema} · app v{version}',
     'app.receiptCount': { one: '{n} justificatif', other: '{n} justificatifs' },
     'app.transactionCount': { one: '{n} transaction', other: '{n} transactions' },
     'app.unlinkedCount': { one: '{n} non attribué', other: '{n} non attribués' },

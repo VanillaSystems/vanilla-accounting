@@ -36,6 +36,7 @@ demo-consulting/**
 tools/hooks/**
 
 docs/getting-started.md
+docs/audit-export.md
 docs/releasing.md
 docs/mail-setup.md
 docs/quarter-workflow.md

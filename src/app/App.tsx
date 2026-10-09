@@ -24,13 +24,13 @@ import { TransactionDetail } from './components/transaction-detail.js';
 import { PdfFrame } from './components/pdf-frame.js';
 import { ReceiptEditForm } from './components/receipt-edit-form.js';
 import { ManualTransactionForm } from './components/manual-transaction-form.js';
-import { cn } from './lib/utils.js';
-import { api, orAlert, errorText } from './lib/api.js';
+import { cn, formatDate } from './lib/utils.js';
+import { api, orAlert, errorText, sources } from './lib/api.js';
 import { LOCALES, t } from './i18n/index.js';
 
 export default function App({ language, onLanguage }: { language: string; onLanguage: (code: string) => void }) {
   const { data: index, loading, error, refresh } = useIndex();
-  const { online: apiOnline, readonly } = useApiStatus();
+  const { online: apiOnline, readonly, snapshot } = useApiStatus();
   /** Edit controls show only when a write could succeed: the API runs and is not in audit mode. */
   const canEdit = apiOnline && !readonly;
   const restoredRef = useRef(false);
@@ -183,6 +183,11 @@ export default function App({ language, onLanguage }: { language: string; onLang
         <div role="status" data-testid="audit-bar" className="shrink-0 flex items-center justify-center gap-2 px-6 py-1.5 text-xs font-medium bg-amber-100 text-amber-900 border-b border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
           <Lock className="h-3.5 w-3.5 shrink-0" />
           {t('app.auditBar')}
+          {snapshot && (
+            <span data-testid="audit-snapshot" className="font-normal">
+              · {t('app.snapshot', { date: formatDate(snapshot.createdAt.slice(0, 10)), schema: snapshot.booksSchema, version: snapshot.appVersion })}
+            </span>
+          )}
         </div>
       )}
       <header className="bg-background border-b border-border px-6 py-3 shrink-0 flex items-center justify-between">
@@ -206,7 +211,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
               ))}
             </select>
           </div>
-          {apiOnline && <span className="text-green-600">● {t('app.apiOnline')}</span>}
+          {apiOnline && !snapshot && <span className="text-green-600">● {t('app.apiOnline')}</span>}
           <div className="flex items-center rounded-md border border-border overflow-hidden" role="group" aria-label={t('app.language')}>
             {LOCALES.map(({ code, name }) => (
               <button
@@ -423,7 +428,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                             <Link2 className="h-4 w-4" />
                           </button>
                         )}
-                        <a href={`/api/receipts/${selectedReceipt.id}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title={t('common.openInNewTab')}>
+                        <a href={sources.receipt(selectedReceipt.id)} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title={t('common.openInNewTab')}>
                           <ExternalLink className="h-4 w-4" />
                         </a>
                         <button onClick={() => setSelectedReceipt(null)} title={t('common.close')} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
@@ -479,7 +484,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                       }}
                     />
                   )}
-                  <PdfFrame src={`/api/receipts/${selectedReceipt.id}`} title={selectedReceipt.filename} />
+                  <PdfFrame src={sources.receipt(selectedReceipt.id)} title={selectedReceipt.filename} />
                 </>
               )}
             />
@@ -587,7 +592,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
                     }}
                   />
                   {selectedReceipt && (
-                    <PdfFrame key={selectedReceipt.id} src={`/api/receipts/${selectedReceipt.id}`} title={selectedReceipt.filename} />
+                    <PdfFrame key={selectedReceipt.id} src={sources.receipt(selectedReceipt.id)} title={selectedReceipt.filename} />
                   )}
                 </>
               )}
