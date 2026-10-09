@@ -7,12 +7,11 @@ import type { Index } from '../types/index.js';
 import { ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { receiptDirOf } from '../workspace/reads.js';
 
 export const WS = openWorkspace();
 
-export function receiptDir(location?: string): string {
-  return location === 'staged' ? WS.paths.inbox : WS.paths.receipts;
-}
+export const receiptDir = (location?: string): string => receiptDirOf(WS, location);
 
 export const readBooks = (): Books => loadBooks(WS);
 

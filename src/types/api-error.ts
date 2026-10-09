@@ -1,3 +1,5 @@
+import type { AuditSnapshot } from '../audit/sources.js';
+
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
  * the logs read; `code` and `params` let the UI say the same in the user's language
@@ -17,5 +19,8 @@ export type ApiRefusal =
 
 export type ApiErrorBody = { error: string } & (ApiRefusal | { code?: undefined });
 
-/** GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`). */
-export interface ApiStatus { ok: true; readonly: boolean }
+/**
+ * GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`).
+ * The static audit export's status always is readonly and names its snapshot.
+ */
+export interface ApiStatus { ok: true; readonly: boolean; snapshot?: AuditSnapshot }

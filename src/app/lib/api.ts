@@ -1,18 +1,26 @@
-import type { BankTransaction, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { Account } from './accounts.js';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { ApiErrorBody, ApiStatus } from '../../types/api-error.js';
 import { t } from '../i18n/index.js';
 import { formatDate } from './utils.js';
+import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
+
+/** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
+export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
+
+/** Where each read goes: every URL the UI fetches or links to comes from here. */
+export const sources = STATIC_EXPORT ? EXPORT_SOURCES : API_SOURCES;
 
 /** A refused request: the API's body, whose code errorText says in the user's language. */
 export class ApiError extends Error {
   constructor(readonly body: ApiErrorBody) { super(body.error); }
 }
 
-/** Every call throws an ApiError when the response is not ok. */
+/** Every call throws an ApiError when the response is not ok. The static export refuses every write unsent. */
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (STATIC_EXPORT && method !== 'GET') throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
   const res = await fetch(path, body === undefined ? { method } : {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -84,8 +92,9 @@ export const api = {
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
   classifyTransaction: (txRef: string) => request<unknown>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`),
 
-  status: () => request<ApiStatus>('GET', '/api/status'),
-  accounts: () => request<Account[]>('GET', '/api/accounts'),
-  workspace: () => request<Pick<Workspace, 'company' | 'bankAccounts'>>('GET', '/api/workspace'),
-  filedReturns: (year: string) => request<ReturnFigures[]>('GET', `/api/vat/filed?year=${year}`),
+  books: () => request<Index>('GET', `${sources.books()}?t=${Date.now()}`),
+  status: () => request<ApiStatus>('GET', sources.status()),
+  accounts: () => request<Account[]>('GET', sources.accounts()),
+  workspace: () => request<Pick<Workspace, 'company' | 'bankAccounts'>>('GET', sources.workspace()),
+  filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
 };

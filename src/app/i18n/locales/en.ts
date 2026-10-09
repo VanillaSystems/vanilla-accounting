@@ -72,6 +72,7 @@ export default {
 
     'app.subtitle': 'Receipt management',
     'app.auditBar': 'Audit mode · read only — changes are disabled',
+    'app.snapshot': 'Snapshot of {date} · books schema {schema} · app v{version}',
     'app.receiptCount': { one: '{n} receipt', other: '{n} receipts' },
     'app.transactionCount': { one: '{n} transaction', other: '{n} transactions' },
     'app.unlinkedCount': { one: '{n} unlinked', other: '{n} unlinked' },

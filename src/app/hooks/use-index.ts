@@ -13,10 +13,7 @@ export function useIndex() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/books.json?t=${tick}`).then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<Index>;
-      }),
+      api.books(),
       api.accounts().catch(() => []),
     ]).then(([json, accounts]) => {
       setAccounts(accounts);

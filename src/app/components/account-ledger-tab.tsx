@@ -8,6 +8,8 @@ import { PdfFrame } from './pdf-frame.js';
 import { SplitPane } from './split-pane.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
+import { sources } from '../lib/api.js';
+import { setView, viewParams, viewPath } from '../lib/location.js';
 
 interface Props {
   index: Index;
@@ -34,7 +36,7 @@ function fmt(n: number): string {
   return n.toFixed(2);
 }
 
-const urlParam = (name: string) => new URLSearchParams(window.location.search).get(name);
+const urlParam = (name: string) => viewParams().get(name);
 
 export function AccountLedgerTab({ index, period }: Props) {
   const [selectedAccount, setSelectedAccountState] = useState<string>(() => urlParam('account') ?? '');
@@ -69,13 +71,12 @@ export function AccountLedgerTab({ index, period }: Props) {
   }
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = viewParams();
     for (const [k, v] of [['account', selectedAccount], ['je', selectedEntryId], ['receipt', selectedReceiptId]] as const) {
       if (v) params.set(k, v);
       else params.delete(k);
     }
-    const qs = params.toString();
-    history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+    setView(viewPath(), params);
   }, [selectedAccount, selectedEntryId, selectedReceiptId]);
 
   // Accounts that have at least one journal entry
@@ -274,7 +275,7 @@ export function AccountLedgerTab({ index, period }: Props) {
                         </span>
                       )}
                       <a
-                        href={`/api/receipts/${r.id}`}
+                        href={sources.receipt(r.id)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
@@ -290,7 +291,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               )}
             </div>
             {selectedReceiptId ? (
-              <PdfFrame key={selectedReceiptId} src={`/api/receipts/${selectedReceiptId}`} title={t('col.receipt')} />
+              <PdfFrame key={selectedReceiptId} src={sources.receipt(selectedReceiptId)} title={t('col.receipt')} />
             ) : (
               <div className="flex-1 flex items-center justify-center text-sm text-dim">{t('journal.noReceipt')}</div>
             )}
