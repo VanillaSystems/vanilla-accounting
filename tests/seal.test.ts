@@ -95,3 +95,11 @@ test('npm run seal -- <quarter> --close moves closedThrough one quarter and seal
   assert.match(seal(ws, '2026-Q3', '--close'), /sealed already, and the seal holds/);
   assert.deepEqual(statuses(ws), ['2026-Q2 intact', '2026-Q3 intact']);
 });
+
+test('npm run seal -- <Q4> --close refuses: the fourth quarter closes with the year, after the year-end entries; --force closes it', () => {
+  const ws = sealed();
+  seal(ws, '2026-Q3', '--close');
+  assert.throws(() => seal(ws, '2026-Q4', '--close'), /closes with the year: npm run year:close -- 2026/);
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30');
+  assert.match(seal(ws, '2026-Q4', '--close', '--force'), /closedThrough 2026-09-30 → 2026-12-31/);
+});

@@ -1,0 +1,276 @@
+/**
+ * The year-end close and the next year's opening (src/accounting/year-close.ts,
+ * src/books/year-close.ts) on a small synthetic year: a Swiss sale, a purchase, a EUR receipt,
+ * the VAT payment. Its closing ledger and opening are worked out by hand in the test names.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Index, JournalEntry } from '../src/types/index.js';
+import { estvRates, type EstvRates } from '../src/accounting/fx-conversion.js';
+import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
+import { writeSeal } from '../src/books/seal.js';
+import {
+  applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
+  vatPostings, yearClose, yearEndAccounts, YEAR_END_TEMPLATES, type Books, type YearCloseInput,
+} from '../src/accounting/year-close.js';
+import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, YearCloseRefused } from '../src/books/year-close.js';
+import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
+import type { LedgerBankAccount, Workspace } from '../src/workspace/workspace.js';
+import { APP_ROOT } from '../src/workspace/workspace.js';
+import { tempWorkspace } from './support/workspace.js';
+
+const CHART = ['1020', '1021', '1170', '1171', '2201', '2800', '2970', '3400', '6570', '6960'];
+const ACCOUNTS = yearEndAccounts(CHART);
+const BANKS: LedgerBankAccount[] = [
+  { bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', statements: 'camt053' },
+  { bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise EUR', statements: 'wise' },
+];
+
+const e = (id: string, date: string, accountDebit: string, accountCredit: string, amount: number, more: Partial<JournalEntry> = {}): JournalEntry =>
+  ({ id, transactionRef: id, date, accountDebit, accountCredit, amount, ...more });
+
+function books(): Books & Pick<Index, 'receipts' | 'mappings'> {
+  return {
+    receipts: [],
+    mappings: [],
+    transactions: ['sale', 'buy', 'eur', 'vat'].map((ref) => ({ ref, bank: ref === 'eur' ? 'Wise' : 'Raiffeisen', date: '2026-02-10', amount: 1, currency: ref === 'eur' ? 'EUR' : 'CHF', direction: 'CRDT' as const, description: ref })),
+    bankStatements: [
+      { bank: 'Raiffeisen', filename: 'r.xml', fromDate: '2026-01-01', toDate: '2026-12-31', currency: 'CHF' },
+      { bank: 'Wise', filename: 'w.xml', fromDate: '2026-01-01', toDate: '2026-12-31', currency: 'EUR' },
+    ],
+    statementBalances: [],
+    journalEntries: [
+      e('sale', '2026-02-10', '1020', '3400', 1081, { vatCode: 'V81' }),
+      e('buy', '2026-02-11', '6570', '1020', 108.1, { vatCode: 'I81' }),
+      e('eur', '2026-03-01', '1021', '3400', 500, { vatCode: 'V0-E', exchangeCurrency: 'EUR', exchangeRate: 0.95 }),
+      e('vat', '2026-05-01', '2201', '1020', 72.9),
+    ],
+    config: {
+      closedThrough: '2026-09-30',
+      openingBalances: { 2026: { 1020: 10000, 1021: 940, 2800: 10000, 2970: 940 } },
+      openingBalancesNative: { 2026: { 1021: { amount: 1000, currency: 'EUR' } } },
+    },
+  };
+}
+
+/** A stand-in ESTV table: EUR 0.93 on 31.12.2026, fetched after the year ended. */
+const RATES: EstvRates = estvRates({ fetchedAt: '2027-01-05T08:00:00Z', rates: { '2026-12-31': { EUR: 0.93, src: 'stand-in' }, '2027-01-04': { EUR: 0.931, src: 'stand-in' } } });
+const NO_YEAR_END_RATE: EstvRates = estvRates({ fetchedAt: '2026-10-01T08:00:00Z', rates: { '2026-09-30': { EUR: 0.94 } } });
+
+const input = (b: Books, over: Partial<YearCloseInput> = {}): YearCloseInput => ({
+  year: '2026',
+  books: b,
+  chart: CHART,
+  bankAccounts: BANKS,
+  bankBalances: [
+    { account: '1020', date: '2026-12-31', amount: 10900, source: 'r.xml' },
+    { account: '1021', date: '2026-12-31', amount: 1500, source: 'w.xml' },
+  ],
+  filed: [
+    { period: '2026-Q1', ziffern: { 500: 72.9, 510: 0 } },
+    { period: '2026-Q2', ziffern: { 500: 0, 510: 0 } },
+    { period: '2026-Q3', ziffern: { 500: 0, 510: 0 } },
+    { period: '2026-Q4', ziffern: { 500: 0, 510: 0 } },
+  ],
+  seals: { checks: (['2026-Q1', '2026-Q2', '2026-Q3'] as const).map((quarter) => ({ quarter, file: `${quarter}.json`, status: 'intact' as const })), unsealed: [] },
+  doctor: [],
+  rates: RATES,
+  state: { ...emptyState('2026'), templates: Object.fromEntries(YEAR_END_TEMPLATES.map((t) => [t.id, 'na' as const])) },
+  ...over,
+});
+
+test('VAT codes split the tax off as Banana books it: a sale credits 2201 with 81.00, a purchase debits it with 8.10', () => {
+  const posted = vatPostings(books().journalEntries, '2201');
+  assert.deepEqual(posted.map((p) => [p.accountDebit, p.accountCredit, p.amount]), [['3400', '2201', 81], ['2201', '6570', 8.1]]);
+  const refund = vatPostings([e('r', '2026-03-03', '3400', '1020', 108.1, { vatCode: '-V81' }), e('c', '2026-03-03', '1020', '6570', 108.1, { vatCode: '-I81' })], '2201');
+  assert.deepEqual(refund.map((p) => [p.accountDebit, p.accountCredit, p.amount]), [['2201', '3400', 8.1], ['6570', '2201', 8.1]], 'a minus code posts on the other side');
+  const oneLeg = vatPostings([e('s', '2026-03-31', '', '6580', 12.5, { vatCode: 'M81-2' })], '2201');
+  assert.deepEqual(oneLeg.map((p) => [p.accountDebit, p.accountCredit, p.amount]), [['2201', '', 12.5]], 'a single-leg tax correction balances its empty side');
+  assert.deepEqual(vatPostings([e('b', '2026-03-31', '6600', '1020', 100, { vatCode: 'B81-1' })], '2201'), [], 'Bezugsteuer is owed and deducted on the same account');
+});
+
+test('closing ledger: result 1355.00 (revenue 1081 − 81 + 475, expense 108.10 − 8.10, loss on EUR 20.00), Aktiven = Passiven + result', () => {
+  const b = books();
+  applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  const l = closingLedger(b, '2026', CHART, ACCOUNTS);
+  assert.equal(l.result, 1355);
+  assert.equal(l.balances['2201'], undefined, 'the VAT account is settled: 81.00 owed, 8.10 deducted, 72.90 paid');
+  assert.deepEqual([l.totalAssets, l.totalLiabilities, l.residual], [12295, 10940, 0]);
+  assert.deepEqual(l.causes, []);
+});
+
+test('Kursdifferenz: EUR 1500 × 0.93 = CHF 1395 against a book value of 1415: a loss of 20.00, debit 6960 / credit 1021, dated 31.12., no VAT', () => {
+  const b = books();
+  const [row] = revaluations(b, '2026', foreignAccounts(BANKS), RATES);
+  assert.ok(row.status === 'to-book');
+  assert.deepEqual([row.native, row.targetChf, row.bookChf, row.difference], [1500, 1395, 1415, -20]);
+  const [entry] = revaluationEntries('2026', [row], ACCOUNTS.fxDifference);
+  assert.deepEqual([entry.date, entry.accountDebit, entry.accountCredit, entry.amount, entry.vatCode, entry.origin], ['2026-12-31', '6960', '1021', 20, undefined, 'year-close']);
+});
+
+test('Kursdifferenz: a gain debits the account and credits 6960', () => {
+  const b = books();
+  b.journalEntries.find((x) => x.id === 'eur')!.exchangeRate = 0.9;
+  const [row] = revaluations(b, '2026', foreignAccounts(BANKS), RATES);
+  assert.ok(row.status === 'to-book');
+  assert.equal(row.difference, 5, 'EUR 1500 × 0.93 = 1395 against 940 + 450 = 1390');
+  const [entry] = revaluationEntries('2026', [row], ACCOUNTS.fxDifference);
+  assert.deepEqual([entry.accountDebit, entry.accountCredit, entry.amount], ['1021', '6960', 5]);
+});
+
+test('Kursdifferenz is idempotent: rebooking replaces its entry, the native balance never moves, a later change rebooks the new difference', () => {
+  const b = books();
+  const book = () => applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  book();
+  book();
+  const own = () => b.journalEntries.filter((x) => x.origin === 'year-close');
+  assert.equal(own().length, 1);
+  assert.equal(revaluations(b, '2026', foreignAccounts(BANKS), RATES)[0].status, 'booked');
+  assert.equal(bookBalanceNative(b.journalEntries, '1021', 'EUR', '2026', '2026-12-31', 1000), 1500, 'the revaluation moves no euros');
+  b.journalEntries.push(e('late', '2026-12-20', '1021', '3400', 100, { vatCode: 'V0-E', exchangeCurrency: 'EUR', exchangeRate: 0.92 }));
+  assert.equal(revaluations(b, '2026', foreignAccounts(BANKS), RATES)[0].status, 'to-book');
+  book();
+  assert.equal(own().length, 1);
+  assert.equal(own()[0].amount, 19, 'EUR 1600 × 0.93 = 1488 against 1415 + 92 = 1507');
+});
+
+test('Kursdifferenz without the 31.12. rate: no-rate, and the close is blocked by it', () => {
+  const b = books();
+  assert.equal(revaluations(b, '2026', foreignAccounts(BANKS), NO_YEAR_END_RATE)[0].status, 'no-rate');
+  assert.deepEqual(yearClose(input(b, { rates: NO_YEAR_END_RATE })).blockers, [{ code: 'noRate', currency: 'EUR' }]);
+});
+
+test('the checklist: nothing blocks once Q4 is filed, Q1 to Q3 sealed, the banks match on 31.12., the Kursdifferenz booked and every guided entry decided', () => {
+  const b = books();
+  assert.deepEqual(yearClose(input(b)).blockers, [{ code: 'fxToBook', account: '1021', difference: -20 }]);
+  applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  const close = yearClose(input(b));
+  assert.deepEqual(close.blockers, []);
+  assert.ok(close.checks.every((c) => c.status === 'ok'));
+  assert.equal(close.vat.unexplained, 0);
+});
+
+test('refusals: each precondition names what is missing', () => {
+  const b = books();
+  b.transactions.push({ ref: 'open', bank: 'Raiffeisen', date: '2026-11-11', amount: 5, currency: 'CHF', direction: 'DBIT', description: 'unbooked' });
+  b.bankStatements[1].toDate = '2026-11-30';
+  const close = yearClose(input(b, {
+    filed: [],
+    seals: { checks: [{ quarter: '2026-Q1', file: 'q1', status: 'broken', problem: 'changed' }], unsealed: [] },
+    bankBalances: [{ account: '1020', date: '2026-12-31', amount: 10000, source: 'r.xml' }],
+    doctor: ['accounts.json does not read'],
+    state: emptyState('2026'),
+  }));
+  const codes = close.checks.flatMap((c) => c.problems.map((p) => p.code));
+  assert.deepEqual(codes, ['q4NotFiled', 'sealBroken', 'unsealed', 'unsealed', 'balanceDiffers', 'noYearEndBalance', 'statementGap', 'unbooked', 'doctor']);
+  assert.ok(close.blockers.some((p) => p.code === 'undecided'));
+});
+
+test('opening 2027 = closing 2026: balance-sheet accounts carried, P&L zero, the result in 2970, EUR 1500 at CHF 1395', () => {
+  const b = books();
+  applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  const closing = closingLedger(b, '2026', CHART, ACCOUNTS);
+  const o = openingOf(closing, b, foreignAccounts(BANKS), RATES, ACCOUNTS);
+  assert.equal(o.year, '2027');
+  assert.deepEqual(o.balances, { 1020: 10900, 1021: 1395, 2800: 10000, 2970: 2295 });
+  assert.deepEqual(o.native, { 1021: { amount: 1500, currency: 'EUR' } });
+  assert.deepEqual([o.result, o.residual, o.causes], [1355, 0, []]);
+  for (const [account, value] of Object.entries(o.balances)) {
+    if (account !== '2970') assert.equal(value, closing.balances[account], `${account} opens at its closing balance`);
+  }
+  assert.ok(Object.keys(o.balances).every((a) => a[0] === '1' || a[0] === '2'), 'no P&L account opens');
+});
+
+test('opening without the Kursdifferenz: the foreign account is flagged as not revalued', () => {
+  const b = books();
+  const o = openingOf(closingLedger(b, '2026', CHART, ACCOUNTS), b, foreignAccounts(BANKS), RATES, ACCOUNTS);
+  assert.deepEqual(o.causes, [{ code: 'notRevalued', account: '1021', currency: 'EUR', expected: 1395, actual: 1415 }]);
+});
+
+test('a one-leg entry is a named cause of a difference, never absorbed', () => {
+  const b = books();
+  b.journalEntries.push(e('half', '2026-06-01', '6570', '', 10));
+  const l = closingLedger(b, '2026', CHART, ACCOUNTS);
+  assert.equal(l.residual, 10, 'Aktiven and Passiven differ by the missing leg');
+  assert.deepEqual(l.causes, [{ code: 'oneLeg', entryIds: ['half'], amount: 10 }]);
+});
+
+test('profit allocation: a dividend of 10000 owes 3500 Verrechnungssteuer, 6500 to pay out', () => {
+  assert.deepEqual(dividendSplit(10000), { net: 6500, withholdingTax: 3500 });
+  assert.deepEqual(dividendSplit(333.33), { net: 216.66, withholdingTax: 116.67 });
+});
+
+// ─── On a workspace ───────────────────────────────────────────────────────────
+
+function workspace(): Workspace {
+  const ws = tempWorkspace('year-close-', join(APP_ROOT, 'demo-consulting'));
+  writeFileSync(ws.paths.books, JSON.stringify(books()));
+  writeFileSync(ws.paths.accounts, JSON.stringify(CHART.map((number) => ({ number, name: number }))));
+  return ws;
+}
+
+test('bookRevaluation on a workspace: refuses without the 31.12. rate, books once however often it runs', () => {
+  const ws = workspace();
+  assert.throws(() => bookRevaluation(ws, '2026', NO_YEAR_END_RATE), YearCloseRefused);
+  bookRevaluation(ws, '2026', RATES);
+  bookRevaluation(ws, '2026', RATES);
+  assert.equal(loadBooks(ws).journalEntries.filter((x) => x.origin === 'year-close').length, 1);
+});
+
+test('closeYear refuses while anything blocks; openYear refuses a year that is not closed', () => {
+  const ws = workspace();
+  assert.throws(() => closeYear(ws, '2026', RATES), YearCloseRefused);
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30', 'nothing moved');
+  assert.throws(() => openYear(ws, '2026', RATES), /not closed yet/);
+});
+
+test('bookEntry: an accrual gets the next M-ref, marks its template done, and is refused in a closed period', () => {
+  const ws = workspace();
+  const entry = bookEntry(ws, { date: '2026-12-31', accountDebit: '6570', accountCredit: '2300', amount: 250, description: 'Abgrenzung Hosting Dezember' }, 'accruedExpense');
+  assert.equal(entry.transactionRef, 'M2026-001');
+  assert.equal(entry.origin, 'manual');
+  assert.throws(() => bookEntry(ws, { date: '2026-09-30', accountDebit: '6570', accountCredit: '2300', amount: 1, description: 'zu spät' }), /geschlossen/);
+});
+
+const Q4_FILED = `<VATDeclaration><generalInformation><reportingPeriodFrom>2026-10-01</reportingPeriodFrom><reportingPeriodTill>2026-12-31</reportingPeriodTill></generalInformation>
+<turnoverComputation><totalConsideration>0</totalConsideration></turnoverComputation><effectiveReportingMethod><grossOrNet>2</grossOrNet></effectiveReportingMethod><payableTax>0</payableTax></VATDeclaration>`;
+
+/** The state a real year reaches in February: Q1 to Q3 filed, closed and sealed, Q4 filed, December's bank balances in. */
+function readyToClose(): Workspace {
+  const ws = workspace();
+  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451'].map((number) => ({ number, name: number }))));
+  for (const dir of [ws.paths.receipts, join(ws.paths.statements, 'Raiffeisen'), join(ws.paths.statements, 'Wise'), join(ws.paths.filings, '2026')]) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(ws.paths.filings, '2026', 'mwst-ech0217-2026-Q4.xml'), Q4_FILED);
+  const b = loadBooks(ws);
+  b.statementBalances = [
+    { account: '1020', bank: 'Raiffeisen', currency: 'CHF', date: '2026-12-31', amount: 10900, source: 'pdf', sourceFile: 'r.pdf' },
+    { account: '1021', bank: 'Wise', currency: 'EUR', date: '2026-12-31', amount: 1500, source: 'pdf', sourceFile: 'w.pdf' },
+  ];
+  saveBooks(ws, b);
+  for (const q of ['2026-Q1', '2026-Q2', '2026-Q3'] as const) writeSeal(ws, loadBooks(ws), q, '2026-10-15');
+  return ws;
+}
+
+test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 at the closing balances, reruns change nothing', () => {
+  const ws = readyToClose();
+  assert.throws(() => closeYear(ws, '2026', RATES), YearCloseRefused, 'the Kursdifferenz and the guided entries are open');
+  bookRevaluation(ws, '2026', RATES);
+  for (const t of YEAR_END_TEMPLATES) markTemplate(ws, '2026', t.id, 'na');
+  const result = closeYear(ws, '2026', RATES, '2027-03-01');
+  assert.equal(result.closedThrough, '2026-12-31');
+  assert.equal(result.committed, false, 'a temp folder is no git repository');
+  assert.ok(existsSync(join(ws.paths.filings, '2026', 'seal-Q4.json')));
+  assert.deepEqual(sealsOf(loadBooks(ws)).checks.map((c) => `${c.quarter} ${c.status}`), ['2026-Q1 intact', '2026-Q2 intact', '2026-Q3 intact', '2026-Q4 intact']);
+  assert.equal(closeYear(ws, '2026', RATES, '2027-03-02').closedThrough, '2026-12-31', 'closing again only checks');
+  assert.throws(() => bookRevaluation(ws, '2026', RATES), /closed/, 'nothing can be dated 31.12. any more');
+
+  const opened = openYear(ws, '2026', RATES, '2027-03-01');
+  assert.deepEqual(opened.opening.balances, { 1020: 10900, 1021: 1395, 2800: 10000, 2970: 2295 });
+  assert.equal(opened.ratesReady, true, 'the stand-in table holds a rate of 2027');
+  const config = loadBooks(ws).config;
+  assert.deepEqual(config.openingBalances?.['2027'], opened.opening.balances);
+  assert.deepEqual(config.openingBalancesNative?.['2027'], { 1021: { amount: 1500, currency: 'EUR' } });
+  assert.deepEqual(openYear(ws, '2026', RATES).changes, [], 'a rerun finds nothing to update');
+});

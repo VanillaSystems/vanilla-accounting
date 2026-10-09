@@ -95,8 +95,10 @@ export interface JournalEntry {
    * `npm run classify` and the UI's re-classify) stamps 'classify'; an edit through the API
    * stamps 'manual', and --force keeps such an entry's transaction.
    * Absent means another writer, or an entry booked before the field existed.
+   * 'year-close' is the year-end revaluation of a foreign-currency account (npm run year:close):
+   * it changes the account's CHF value only, so its native balance leaves it out.
    */
-  origin?: 'classify' | 'manual';
+  origin?: 'classify' | 'manual' | 'year-close';
 }
 
 /** A VAT quarter, e.g. "2026-Q2". */

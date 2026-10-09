@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { TransactionPatch } from '../../types/index.js';
 import { ask } from '../../llm/ask.js';
 import { buildManualTxSuggestPrompt } from '../../llm/prompts.js';
+import { nextManualRef } from '../../books/refs.js';
 import { assertOpen, refDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
@@ -58,19 +59,7 @@ router.post('/api/transactions/manual', (req, res) => {
 
   return withBooks(res, (books) => {
     assertOpen(books, [date], 'newTransaction');
-    const year = date.slice(0, 4);
-    // A ref is taken if anything points at it: the Eigenverbrauch rebookings carry
-    // M<year>-NNN refs with no transaction behind them, so transactions alone are not enough.
-    const taken = [
-      ...books.transactions.map((t) => t.ref),
-      ...books.journalEntries.map((j) => j.transactionRef),
-      ...books.mappings.map((m) => m.transactionRef),
-    ].filter((ref) => ref.startsWith(`M${year}-`));
-    const maxSeq = taken.reduce((max, ref) => {
-      const n = parseInt(ref.slice(6), 10);
-      return isNaN(n) ? max : Math.max(max, n);
-    }, 0);
-    const ref = `M${year}-${String(maxSeq + 1).padStart(3, '0')}`;
+    const ref = nextManualRef(books, date.slice(0, 4));
 
     books.transactions.push({
       ref,
