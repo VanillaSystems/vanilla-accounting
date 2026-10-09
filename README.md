@@ -71,6 +71,8 @@ npm start
 
 `docs/getting-started.md` walks through the questions, the first bank statement, the first
 receipts and the first VAT return, and lists what Vanilla Accounting does not do yet.
+`docs/quarter-workflow.md` walks through each quarter, and `docs/year-end.md` through closing
+the year (`npm run year:close`) and opening the next one (`npm run year:open`).
 
 To update, run `npm run update`. `CHANGELOG.md` lists what each version changed, and
 `docs/releasing.md` explains the version numbers.
