@@ -4,18 +4,14 @@
  * mutateJournal while the app runs, the seals of the filed quarters (src/books/seal.ts) on load.
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import type { AccountingConfig, Index, JournalEntry } from '../types/index.js';
+import type { Index } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
-import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
+import { ClosedPeriodError, periodLock, type Books } from './lock.js';
+import { commitBooks, defaultAction } from './history.js';
 
-export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
-
-export class ClosedPeriodError extends Error {
-  /** `reason` names which refusal (src/types/api-error.ts) when the API's assertOpen threw it. */
-  constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason) { super(message); }
-}
+export { ClosedPeriodError, periodLock, type Books, type PeriodLock } from './lock.js';
 /** A filed quarter's seal no longer matches the books: they read, but are never written. */
 export class SealBrokenError extends ClosedPeriodError {}
 
@@ -61,7 +57,12 @@ function withDefaults(index: Index): Books {
   return books;
 }
 
-export function saveBooks(ws: Workspace, books: Books): void {
+/**
+ * Writes books.json atomically, then commits it in the workspace's git repository as the writer
+ * (src/books/history.ts), with `action` as the message. `commit: false` leaves the commit to the
+ * caller (a review merge makes its own merge commit).
+ */
+export function saveBooks(ws: Workspace, books: Books, action: string = defaultAction(), opts: { commit?: boolean } = {}): void {
   const broken = sealsOf(books).checks.find((c) => c.status === 'broken');
   if (broken) throw new SealBrokenError(`Siegel ${broken.quarter} gebrochen, nichts gespeichert: ${broken.problem}. Restore books.json from git.`);
   guards.get(books)?.();
@@ -74,24 +75,7 @@ export function saveBooks(ws: Workspace, books: Books): void {
   const tmp = `${path}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(onDisk, null, 2));
   renameSync(tmp, path);
-}
-
-export interface PeriodLock {
-  closedThrough: string | undefined;
-  isClosed(date: string | undefined): boolean;
-  assertOpen(date: string | undefined, what: string): void;
-}
-
-export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
-  const closedThrough = books.config?.closedThrough;
-  const isClosed = (date: string | undefined) => !!closedThrough && !!date && date <= closedThrough;
-  return {
-    closedThrough,
-    isClosed,
-    assertOpen(date, what) {
-      if (isClosed(date)) throw new ClosedPeriodError(`Periode geschlossen bis ${closedThrough}. ${what}`, closedThrough);
-    },
-  };
+  if (opts.commit !== false) commitBooks(ws, action);
 }
 
 /** The checks of the mutateJournal calls in flight, run again by every saveBooks inside them. */

@@ -14,6 +14,9 @@ import { dirname, join } from 'node:path';
 import { derivePeriod } from '../accounting/periods.js';
 import type { Index, QuarterKey } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
+import { canonical } from './canonical.js';
+
+export { canonical };
 
 type Records = Pick<Index, 'transactions' | 'mappings' | 'journalEntries'>;
 
@@ -38,16 +41,6 @@ export interface SealReport {
 }
 
 const RULE = 'SHA-256 of the canonical JSON of the journal entries, bank transactions and their receipt mappings dated on or before `through` (src/books/seal.ts closedPart)';
-
-/** JSON with the keys of every object sorted, so a reordered key is not a change. */
-export function canonical(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value).filter(([, v]) => v !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
 
 export interface ClosedPart {
   entries: Map<string, string[]>;
