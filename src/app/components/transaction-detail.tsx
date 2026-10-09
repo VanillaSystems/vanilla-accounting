@@ -8,6 +8,7 @@ import { accountTitle } from '../lib/accounts.js';
 import { errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 import { ForeignAmount, FxLine } from './fx-amount.js';
+import { VatCode } from './vat-code.js';
 
 interface TransactionDetailProps {
   txRef: string;
@@ -279,7 +280,7 @@ export function TransactionDetail({
               <span className="tabular-nums text-muted-foreground shrink-0">{formatDate(e.date)}</span>
               <span className="flex-1 min-w-0 truncate text-foreground" title={e.description}>{e.description}</span>
               <span className="font-mono shrink-0" title={`${accountTitle(e.accountDebit)} / ${accountTitle(e.accountCredit)}`}>{e.accountDebit}/{e.accountCredit}</span>
-              {e.vatCode && <span className="font-mono shrink-0 text-muted-foreground">{e.vatCode}</span>}
+              {e.vatCode && <VatCode code={e.vatCode} className="shrink-0 text-muted-foreground" />}
               <ForeignAmount entry={e} className="font-mono tabular-nums shrink-0" />
               <EntryLinks entry={{ id: e.id, date: e.date }} />
             </div>

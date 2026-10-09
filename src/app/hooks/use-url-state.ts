@@ -7,7 +7,7 @@ export type FilterMode = 'all' | 'linked' | 'unlinked';
 const VALID_TABS = ['receipts', 'transactions', 'bank-statements', 'journal-entries', 'trial-balance', 'balance-sheet', 'income-statement', 'vat-report', 'account-ledger', 'bank-reconciliation'];
 
 /** Query keys that belong to one tab's selection: dropped when the tab changes. */
-const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx', 'account'];
+const TAB_SELECTION = ['je', 'utx', 'receipt', 'tx', 'account', 'view', 'code'];
 
 /** /<lang>/<period>/<tab>, /<lang>/<tab> and the older /<period>/<tab> and /<tab>. */
 function parsePath(): { tab: string; period: string } {

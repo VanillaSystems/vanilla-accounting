@@ -12,6 +12,7 @@ import { api, orAlert, sources } from '../lib/api.js';
 import { receiptHref, setView, txHref, viewParams, viewPath } from '../lib/location.js';
 import { t } from '../i18n/index.js';
 import { ForeignAmount, FxLine } from './fx-amount.js';
+import { VatCode } from './vat-code.js';
 
 interface Props {
   index: Index;
@@ -293,7 +294,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
         }}
         title={canEdit ? t('journal.doubleClickEdit') : undefined}
       >
-        {display || <span className="text-dim">—</span>}
+        {field === 'vatCode' && value ? <VatCode code={value} link={!canEdit} /> : display || <span className="text-dim">—</span>}
       </span>
     );
   }
@@ -534,7 +535,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                           {je.exchangeCurrency && je.exchangeCurrency !== 'CHF' && (
                             <span className="text-muted-foreground text-xs shrink-0">{je.exchangeCurrency}</span>
                           )}
-                          {je.vatCode && <span className="text-muted-foreground text-xs shrink-0">{je.vatCode}</span>}
+                          {je.vatCode && <VatCode code={je.vatCode} className="text-muted-foreground text-xs shrink-0" />}
                         </div>
                         <FxLine entry={je} className="px-2 pb-1" />
                       </div>

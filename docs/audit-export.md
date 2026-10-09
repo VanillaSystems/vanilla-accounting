@@ -58,6 +58,16 @@ Then open the address it prints. A link to a view ends in `#/<lang>/<period>/<ta
 
 The fonts ship with the app (no request to Google or any other third party), so the export looks the same offline.
 
+## Read the VAT codes
+
+Every journal entry carries a VAT code such as V81, I0 or B81-1. Hover a code anywhere in the
+export (Buchungen, a transaction, the entries behind a Ziffer of the VAT return, the cases of a
+Korrekturabrechnung) to read what it means, which Ziffern it feeds and when it is used. Click it,
+or open **Codes erklärt** in the MWST tab, for the full list: every code by family, with its rate,
+its Ziffern, when to use it and when not, an example from the casebook, and the entries of the
+period that use it, each linking to its entry. A code shown in amber is one the app does not
+declare in any Ziffer. [`vat-codes.md`](vat-codes.md) is the same list as a document.
+
 ## Hand it over
 
 1. Zip the folder: `cd .. && zip -r audit-2026-10-09.zip audit-2026-10-09`.
