@@ -5,9 +5,15 @@ import { cn, fmt } from '../lib/utils.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { monthLocale, t } from '../i18n/index.js';
 import { sources } from '../lib/api.js';
+import { accountHref } from '../lib/location.js';
+import { OpenInTabLink } from './open-in-tab-link.js';
+import { BookOpen } from 'lucide-react';
+import { inPeriod, type Period } from '../../accounting/periods.js';
 
 interface Props {
   index: Index;
+  /** Its month ends are the rows shown. */
+  period: Period;
 }
 
 function monthLabel(date: string): string {
@@ -15,9 +21,12 @@ function monthLabel(date: string): string {
   return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString(monthLocale(), { month: 'short', year: 'numeric' });
 }
 
-export function BankReconciliationTab({ index }: Props) {
+export function BankReconciliationTab({ index, period }: Props) {
   const bankAccounts = useWorkspace()?.bankAccounts;
-  const accounts = useMemo(() => reconcileMonthly(index, bankAccounts ?? []), [index, bankAccounts]);
+  const accounts = useMemo(() => reconcileMonthly(index, bankAccounts ?? []).map((a) => {
+    const rows = a.rows.filter((r) => inPeriod(period, r.date));
+    return { ...a, rows, allMatched: rows.every((r) => r.matched) };
+  }), [index, bankAccounts, period]);
 
   // Map statement PDF filenames to receipt ids so each bank figure links to its source.
   const receiptByFilename = useMemo(() => {
@@ -114,7 +123,12 @@ export function BankReconciliationTab({ index }: Props) {
                   const receiptId = receiptByFilename.get(r.sourceFile);
                   return (
                     <tr key={r.date} className="border-t border-border/50">
-                      <td className="px-4 py-1.5 text-foreground whitespace-nowrap">{monthLabel(r.date)}</td>
+                      <td className="px-4 py-1.5 text-foreground whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          {monthLabel(r.date)}
+                          <OpenInTabLink href={accountHref(acc.account, r.date.slice(0, 7))} size="xs" icon={BookOpen} title={t('links.openMonthLedger')} />
+                        </span>
+                      </td>
                       <td className="px-4 py-1.5 text-right font-mono tabular-nums whitespace-nowrap text-foreground">
                         {`${fmt(r.bankBalance)} ${acc.currency}`}
                       </td>

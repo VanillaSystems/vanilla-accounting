@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { AlertTriangle, Check } from 'lucide-react';
 import type { Index, Receipt } from '../../../src/types/index.js';
-import { cn, formatDate, formatAmount, dateFromFilename, labelFromFilename, periodMatchesDate, buildReceiptUrl } from '../lib/utils.js';
+import { cn, formatDate, formatAmount, dateFromFilename, labelFromFilename } from '../lib/utils.js';
+import { receiptHref } from '../lib/location.js';
+import { inPeriod, type Period } from '../../accounting/periods.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
 
@@ -25,7 +27,7 @@ interface ReceiptsTableProps {
   filter: 'all' | 'linked' | 'unlinked';
   /** Hide documents that need no payment (see isNonReceipt). */
   hideZero?: boolean;
-  period: string;
+  period: Period;
   onSelectReceipt: (r: Receipt) => void;
   selectedId: string | null;
   selectedIds?: Set<string>;
@@ -78,7 +80,7 @@ export function ReceiptsTable({
       if (filter === 'linked' && !linkedIds.has(r.id)) return false;
       if (filter === 'unlinked' && linkedIds.has(r.id)) return false;
       if (hideZero && isNonReceipt(r, linkedIds)) return false;
-      if (!periodMatchesDate(period, r.date ?? dateFromFilename(r.filename))) return false;
+      if (!inPeriod(period, r.date ?? dateFromFilename(r.filename))) return false;
       if (noDateOnly && (r.date || dateFromFilename(r.filename))) return false;
       if (q) {
         const txRefs = receiptTxRefs.get(r.id) ?? [];
@@ -178,7 +180,7 @@ export function ReceiptsTable({
                         {t(`receipts.kind.${r.kind}`)}
                       </span>
                     )}
-                    <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" />
+                    <OpenInTabLink href={receiptHref(r.id, r.date, period)} size="xs" />
                   </span>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{formatDate(date)}</td>

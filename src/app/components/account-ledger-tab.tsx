@@ -1,35 +1,21 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ExternalLink, FileText } from 'lucide-react';
 import type { Index, Receipt } from '../../types/index.js';
-import { computeAccountLedger } from '../../accounting/index.js';
+import { computeAccountLedger, openingBalancesAt } from '../../accounting/index.js';
 import { getAccounts } from '../lib/accounts.js';
-import { cn, buildReceiptUrl } from '../lib/utils.js';
+import { cn } from '../lib/utils.js';
+import type { Period } from '../../accounting/periods.js';
 import { PdfFrame } from './pdf-frame.js';
+import { AccountCombobox } from './account-combobox.js';
 import { SplitPane } from './split-pane.js';
-import { OpenInTabLink } from './open-in-tab-link.js';
+import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
 import { sources } from '../lib/api.js';
-import { setView, viewParams, viewPath } from '../lib/location.js';
+import { receiptHref, setView, viewParams, viewPath } from '../lib/location.js';
 
 interface Props {
   index: Index;
-  period: string;
-}
-
-function parsePeriodRange(period: string): { from: string; to: string } {
-  if (period === 'all') return { from: '2000-01-01', to: '2099-12-31' };
-  if (period.includes('-Q')) {
-    const [year, q] = period.split('-Q');
-    const quarter = parseInt(q);
-    const startMonth = (quarter - 1) * 3 + 1;
-    const endMonth = quarter * 3;
-    return {
-      from: `${year}-${String(startMonth).padStart(2, '0')}-01`,
-      to: `${year}-${String(endMonth).padStart(2, '0')}-31`,
-    };
-  }
-  // Year only
-  return { from: `${period}-01-01`, to: `${period}-12-31` };
+  period: Period;
 }
 
 function fmt(n: number): string {
@@ -79,29 +65,27 @@ export function AccountLedgerTab({ index, period }: Props) {
     setView(viewPath(), params);
   }, [selectedAccount, selectedEntryId, selectedReceiptId]);
 
-  // Accounts that have at least one journal entry
+  const { from, to } = period;
+  const allAccounts = useMemo(() => [...getAccounts()].sort((a, b) => a.number.localeCompare(b.number)), []);
+
+  // The accounts with an entry in the period, offered first.
   const activeAccounts = useMemo(() => {
-    const usedAccounts = new Set<string>();
+    const used = new Set<string>();
     for (const je of journalEntries) {
-      usedAccounts.add(je.accountDebit);
-      usedAccounts.add(je.accountCredit);
+      if (!je.date || je.date < from || je.date > to) continue;
+      used.add(je.accountDebit);
+      used.add(je.accountCredit);
     }
-    const allAccounts = getAccounts();
-    return allAccounts
-      .filter((a) => usedAccounts.has(a.number))
-      .sort((a, b) => a.number.localeCompare(b.number));
-  }, [journalEntries]);
+    return allAccounts.filter((a) => used.has(a.number));
+  }, [journalEntries, allAccounts, from, to]);
 
-  const { from, to } = useMemo(() => parsePeriodRange(period), [period]);
-
-  // Determine the year for opening balances lookup
-  const year = from.slice(0, 4);
-  const openingBalance = useMemo(() => {
-    if (!selectedAccount) return 0;
-    const balances = index.config?.openingBalances;
-    if (!balances) return 0;
-    return balances[year]?.[selectedAccount] ?? 0;
-  }, [selectedAccount, index.config?.openingBalances, year]);
+  const picker = (
+    <AccountCombobox accounts={activeAccounts} allAccounts={allAccounts} value={selectedAccount} onChange={setSelectedAccount} />
+  );
+  const openingBalance = useMemo(
+    () => (selectedAccount ? openingBalancesAt(journalEntries, from, index.config?.openingBalances)[selectedAccount] ?? 0 : 0),
+    [selectedAccount, journalEntries, from, index.config?.openingBalances],
+  );
 
   const ledger = useMemo(() => {
     if (!selectedAccount) return null;
@@ -119,18 +103,7 @@ export function AccountLedgerTab({ index, period }: Props) {
       <div className="flex flex-col h-full overflow-hidden">
         {/* Toolbar */}
         <div className="bg-muted border-b border-border px-3 py-1.5 flex items-center gap-2 shrink-0">
-          <select
-            value={selectedAccount}
-            onChange={(e) => setSelectedAccount(e.target.value)}
-            className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="">{t('ledger.chooseAccountOption')}</option>
-            {activeAccounts.map((a) => (
-              <option key={a.number} value={a.number}>
-                {a.number} {a.name}
-              </option>
-            ))}
-          </select>
+          {picker}
         </div>
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           {t('ledger.chooseAccount')}
@@ -143,18 +116,7 @@ export function AccountLedgerTab({ index, period }: Props) {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar */}
       <div className="bg-muted border-b border-border px-3 py-1.5 flex items-center gap-2 shrink-0">
-        <select
-          value={selectedAccount}
-          onChange={(e) => setSelectedAccount(e.target.value)}
-          className="text-sm border border-border rounded px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">{t('ledger.chooseAccountOption')}</option>
-          {activeAccounts.map((a) => (
-            <option key={a.number} value={a.number}>
-              {a.number} {a.name}
-            </option>
-          ))}
-        </select>
+          {picker}
         <div className="ml-auto text-xs text-muted-foreground tabular-nums">
           {t('common.entryCount', { n: ledger?.rows.length ?? 0 })}
         </div>
@@ -174,6 +136,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               <th className="px-3 py-2 text-right font-semibold w-28">{t('col.debitChf')}</th>
               <th className="px-3 py-2 text-right font-semibold w-28">{t('col.creditChf')}</th>
               <th className="px-3 py-2 text-right font-semibold w-32">{t('col.balanceChf')}</th>
+              <th className="w-12" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -187,6 +150,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground font-medium">
                 {fmt(ledger!.openingBalance)}
               </td>
+              <td />
             </tr>
 
             {/* Entry rows */}
@@ -224,6 +188,7 @@ export function AccountLedgerTab({ index, period }: Props) {
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground">
                   {fmt(row.balance)}
                 </td>
+                <td className="px-1"><EntryLinks entry={{ id: row.entryId, date: row.date, transactionRef: entryById.get(row.entryId)?.transactionRef }} period={period} /></td>
               </tr>
               );
             })}
@@ -238,6 +203,7 @@ export function AccountLedgerTab({ index, period }: Props) {
               <td className="px-3 py-2 text-right font-mono tabular-nums text-foreground font-bold">
                 {fmt(closingBalance)}
               </td>
+              <td />
             </tr>
           </tfoot>
         </table>
@@ -284,7 +250,7 @@ export function AccountLedgerTab({ index, period }: Props) {
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                      <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" title={t('journal.openInReceipts')} />
+                      <OpenInTabLink href={receiptHref(r.id, r.date, period)} size="xs" title={t('journal.openInReceipts')} />
                     </div>
                   ))}
                 </div>

@@ -4,6 +4,7 @@ import { caseEffect, reconcileCases, roundCHF, type ReturnFigures } from '../../
 import { effectLines, type EffectLine } from './vat-correction-form.js';
 import { EntryDetail } from './vat-entry-table.js';
 import { cn, fmt } from '../lib/utils.js';
+import { receiptHref } from '../lib/location.js';
 import { t } from '../i18n/index.js';
 
 const signed = (n: number) => `${n > 0 ? '+' : ''}${fmt(n)}`;
@@ -89,7 +90,7 @@ export function CorrectionCases({ cases, entries, receipts, filed, corrected, zi
                       <div className="text-xs text-muted-foreground">
                         <dt className="inline">{t('cases.source')} </dt>
                         <dd className="inline font-mono">
-                          {receipt ? <a className="underline hover:text-foreground" href={`/receipts?receipt=${receipt.id}`}>{c.source}</a> : c.source}
+                          {receipt ? <a className="underline hover:text-foreground" href={receiptHref(receipt.id)}>{c.source}</a> : c.source}
                         </dd>
                       </div>
                     )}

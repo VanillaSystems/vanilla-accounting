@@ -1,5 +1,5 @@
 export { toRappen, fromRappen, roundCHF } from './rappen.js';
-export { computeBalances, computeAccountBalance, chfAmount, isDebitNormal, type AccountBalance } from './ledger.js';
+export { computeBalances, computeAccountBalance, openingBalancesAt, chfAmount, isDebitNormal, type AccountBalance } from './ledger.js';
 export { computeTrialBalance, type TrialBalance, type TrialBalanceRow } from './trial-balance.js';
 export { computeBalanceSheet, type BalanceSheet, type BalanceSheetSection } from './balance-sheet.js';
 export { computeIncomeStatement, type IncomeStatement, type IncomeStatementSection } from './income-statement.js';

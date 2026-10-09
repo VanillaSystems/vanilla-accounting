@@ -2,18 +2,19 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Sparkles, Check, X, ExternalLink, ChevronRight, FileText } from 'lucide-react';
 import type { Index, JournalEntry, Receipt } from '../../types/index.js';
 import { SearchBar } from './search-bar.js';
-import { cn, formatDate, buildTxUrl, buildReceiptUrl } from '../lib/utils.js';
+import { cn, formatDate } from '../lib/utils.js';
+import { inPeriod, type Period } from '../../accounting/periods.js';
 import { PdfFrame } from './pdf-frame.js';
 import { accountTitle } from '../lib/accounts.js';
 import { OpenInTabLink } from './open-in-tab-link.js';
 import { SplitPane } from './split-pane.js';
 import { api, orAlert, sources } from '../lib/api.js';
-import { setView, viewParams, viewPath } from '../lib/location.js';
+import { receiptHref, setView, txHref, viewParams, viewPath } from '../lib/location.js';
 import { t } from '../i18n/index.js';
 
 interface Props {
   index: Index;
-  period: string;
+  period: Period;
   onRefresh: () => void;
   /** Show the controls that write: the API runs and is not in audit mode. */
   canEdit: boolean;
@@ -111,19 +112,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
     return result;
   }, [journalEntries, index.transactions, txByRef, classifiedRefs]);
 
-  const periodFiltered = useMemo(() => {
-    if (period === 'all') return rows;
-    if (period.includes('-Q')) {
-      const [year, q] = period.split('-Q');
-      const quarter = parseInt(q);
-      const startMonth = (quarter - 1) * 3 + 1;
-      const endMonth = quarter * 3;
-      const from = `${year}-${String(startMonth).padStart(2, '0')}`;
-      const to = `${year}-${String(endMonth).padStart(2, '0')}`;
-      return rows.filter((r) => r.txDate >= `${from}-01` && r.txDate <= `${to}-31`);
-    }
-    return rows.filter((r) => r.txDate.startsWith(period));
-  }, [rows, period]);
+  const periodFiltered = useMemo(() => rows.filter((r) => inPeriod(period, r.txDate)), [rows, period]);
 
   const modeFiltered = useMemo(() => {
     if (filterMode === 'classified') return periodFiltered.filter((r) => r.type === 'entry');
@@ -509,7 +498,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
               )}
               <div className="text-xs font-mono text-muted-foreground mt-0.5 inline-flex items-center gap-1">
                 {selectedTx.ref}
-                <OpenInTabLink href={buildTxUrl(selectedTx.ref)} size="xs" />
+                <OpenInTabLink href={txHref(selectedTx.ref, selectedTx.date, period)} size="xs" />
               </div>
             </div>
 
@@ -596,7 +585,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                       >
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                      <OpenInTabLink href={buildReceiptUrl(r.id)} size="xs" title={t('journal.openInReceipts')} />
+                      <OpenInTabLink href={receiptHref(r.id, r.date, period)} size="xs" title={t('journal.openInReceipts')} />
                     </div>
                   ))}
                 </div>

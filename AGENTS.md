@@ -82,6 +82,10 @@ UI texts (src/app/):
 - Every text a user reads goes through `t('key')` and the dictionaries in src/app/i18n/locales/ (de is the source; fr, it, en must match it). See docs/i18n.md. tests/i18n.test.ts fails on text written straight into a component.
 - An API refusal the UI shows carries a `code` (src/types/api-error.ts) besides its German `error`; add one when a new refusal needs words in the UI.
 
+UI links (src/app/):
+- Every object listed in a sidebar or panel links to its detail view. Build the link with the helpers in src/app/lib/location.ts (`entryHref`, `txHref`, `receiptHref`, `accountHref`, or `EntryLinks` in components/open-in-tab-link.tsx): they keep the language and a period that holds the object's date, and work in the static export.
+- The URL is /<lang>/<period>/<tab>?…; every period token is parsed by src/accounting/periods.ts (`parsePeriod`). A tab receives a resolved `Period`, never a token string.
+
 UI theming (src/app/):
 - Uses CSS custom properties for light/dark mode (see index.css and tailwind.config.js).
 - NEVER use hardcoded Tailwind gray colors (bg-white, bg-gray-50, text-gray-700, border-gray-200, etc.) in components. Use semantic tokens instead:

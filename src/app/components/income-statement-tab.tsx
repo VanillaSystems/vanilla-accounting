@@ -5,33 +5,24 @@ import { getAccountMap } from '../lib/accounts.js';
 import { cn } from '../lib/utils.js';
 import { accountingName, t } from '../i18n/index.js';
 import type { IncomeStatementSection } from '../../accounting/income-statement.js';
+import type { Period } from '../../accounting/periods.js';
+import { useUrlParam } from '../hooks/use-url-state.js';
+import { SplitPane } from './split-pane.js';
+import { AccountPanel, accountRowProps } from './account-panel.js';
 
 interface Props {
   index: Index;
-  period: string;
+  period: Period;
 }
 
-function parsePeriod(period: string): { from: string; to: string } {
-  if (period === 'all') return { from: '2000-01-01', to: '2099-12-31' };
-  const yearMatch = period.match(/^(\d{4})$/);
-  if (yearMatch) return { from: `${yearMatch[1]}-01-01`, to: `${yearMatch[1]}-12-31` };
-  const qMatch = period.match(/^(\d{4})-Q(\d)$/);
-  if (qMatch) {
-    const year = qMatch[1];
-    const q = parseInt(qMatch[2]);
-    const startMonth = String((q - 1) * 3 + 1).padStart(2, '0');
-    const endMonth = q * 3;
-    const lastDay = new Date(parseInt(year), endMonth, 0).getDate();
-    return { from: `${year}-${startMonth}-01`, to: `${year}-${String(endMonth).padStart(2, '0')}-${lastDay}` };
-  }
-  return { from: '2000-01-01', to: '2099-12-31' };
-}
 
 function fmt(n: number): string {
   return n.toFixed(2);
 }
 
-function SectionBlock({ section }: { section: IncomeStatementSection }) {
+interface Selection { selected: string | null; onSelect: (account: string | null) => void }
+
+function SectionBlock({ section, selected, onSelect }: { section: IncomeStatementSection } & Selection) {
   if (section.rows.length === 0 && section.total === 0) return null;
   return (
     <div className="mb-2">
@@ -40,7 +31,7 @@ function SectionBlock({ section }: { section: IncomeStatementSection }) {
         <span className="normal-case">CHF</span>
       </div>
       {section.rows.map(row => (
-        <div key={row.account} className="flex justify-between px-3 py-0.5 text-sm hover:bg-accent">
+        <div key={row.account} {...accountRowProps(row.account, selected, onSelect, 'flex justify-between px-3 py-0.5 text-sm')}>
           <span className="text-foreground">
             <span className="text-muted-foreground mr-2">{row.account}</span>
             {row.name}
@@ -86,26 +77,38 @@ export function IncomeStatementTab({ index, period }: Props) {
   const accountNames = getAccountMap();
 
   const statement = useMemo(() => {
-    const { from, to } = parsePeriod(period);
-    return computeIncomeStatement(entries, from, to, accountNames);
+    return computeIncomeStatement(entries, period.from, period.to, accountNames);
   }, [entries, period, accountNames]);
 
+  const [account, setAccount] = useUrlParam('account');
+  const sel: Selection = { selected: account, onSelect: setAccount };
+
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <SplitPane
+      storageKey="statement-account"
+      defaultLeft={55}
+      className="flex-1"
+      leftClassName="overflow-auto"
+      right={account && (
+        <AccountPanel index={index} account={account} from={period.from} to={period.to} period={period} onClose={() => setAccount(null)} movementsOnly />
+      )}
+      left={
+    <div className="p-6">
       <div className="max-w-2xl mx-auto space-y-2">
-        <SectionBlock section={statement.revenue} />
-        <SectionBlock section={statement.costOfGoods} />
+        <p className="text-xs text-dim px-3">{t('accountPanel.hint')}</p>
+        <SectionBlock {...sel} section={statement.revenue} />
+        <SectionBlock {...sel} section={statement.costOfGoods} />
         <ResultLine label={`= ${t('income.grossProfit')}`} amount={statement.grossProfit} />
 
         <div className="pt-2">
-          <SectionBlock section={statement.operatingExpenses} />
+          <SectionBlock {...sel} section={statement.operatingExpenses} />
         </div>
         <ResultLine label={`= ${t('income.operatingResult')}`} amount={statement.operatingResult} />
 
         <div className="pt-2">
-          <SectionBlock section={statement.otherIncome} />
-          <SectionBlock section={statement.otherExpenses} />
-          <SectionBlock section={statement.extraordinaryItems} />
+          <SectionBlock {...sel} section={statement.otherIncome} />
+          <SectionBlock {...sel} section={statement.otherExpenses} />
+          <SectionBlock {...sel} section={statement.extraordinaryItems} />
         </div>
 
         <div className="pt-2">
@@ -113,5 +116,7 @@ export function IncomeStatementTab({ index, period }: Props) {
         </div>
       </div>
     </div>
+      }
+    />
   );
 }
