@@ -1,0 +1,34 @@
+id: purchase-refund
+rank: 14
+segment: services
+title: Refund of a purchase
+applies: >
+  A supplier refunds a purchase (a returned item, a cancelled subscription). The money comes back
+  and the input tax deducted on it must be given back too.
+receipt:
+  swissVat: true
+  text: |
+    Papeterie Seeblick, Gutschrift zu Beleg 4471
+    Rücknahme Druckerpatrone, CHF 108.10 inkl. MWST 8.1% 8.10
+transaction:
+  amount: 108.1
+  currency: CHF
+  direction: CRDT
+  description: Papeterie Seeblick Gutschrift
+  account: "1020"
+date: 2026-08-18
+lines:
+  - { debit: "1020", credit: "6500", amount: 108.1, vatCode: -I81, description: "Papeterie Seeblick, Gutschrift Druckerpatrone" }
+ziffern: { "405": -8.1, "479": -8.1 }
+payable: 8.1
+rules: [sid-refund]
+law:
+  - MWSTG Art. 41 Abs. 2 (a reduced consideration reduces the input tax)
+why: >
+  A refund inverts the original code: -I81 takes the tax back out of Ziffer 405. A purchase that
+  was I0 is refunded as -I0.
+pitfalls:
+  - Not V81. The refund is not revenue, and declaring it as turnover would owe tax on money that was never earned.
+signals:
+  kind: supplier-ch
+  keywords: [gutschrift, refund, rückerstattung, storno]

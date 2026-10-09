@@ -1,0 +1,34 @@
+id: webshop-refund
+rank: 31
+segment: goods
+title: Refund to a Swiss webshop customer
+applies: >
+  A customer returns goods bought with 8.1% MWST and gets the money back. The refund reduces the
+  turnover and the tax owed on it.
+receipt:
+  swissVat: true
+  text: |
+    Webshop Rückerstattung #1203, M. Muster, Schweiz
+    Rückerstattung CHF 108.10 inkl. MWST 8.1% 8.10
+transaction:
+  amount: 108.1
+  currency: CHF
+  direction: DBIT
+  description: Rueckzahlung M. Muster Bestellung 1203
+  account: "1020"
+date: 2026-08-26
+lines:
+  - { debit: "3200", credit: "1020", amount: 108.1, vatCode: -V81, description: "Webshop Rückerstattung #1203" }
+ziffern: { "200": -108.1, "299": -108.1, "303": -108.1, "399": -8.1 }
+payable: -8.1
+rules: []
+law:
+  - MWSTG Art. 41 Abs. 1 (a reduced consideration reduces the tax owed)
+why: >
+  The refund inverts the sale's code: -V81 takes the amount out of Ziffer 200 and 303 and the tax
+  out of what is owed. An export refunded is -V0.
+pitfalls:
+  - Not an expense with I81. A refund of a sale is reduced turnover, not a purchase.
+signals:
+  kind: customer-ch
+  keywords: [rückerstattung, rueckzahlung, refund, retoure]

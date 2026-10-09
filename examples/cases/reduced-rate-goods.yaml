@@ -1,0 +1,34 @@
+id: reduced-rate-goods
+rank: 32
+segment: goods
+title: Goods for resale at the reduced rate (2.6%)
+applies: >
+  A company buys goods for resale that are taxed at 2.6%, such as food, books or plants. The
+  invoice shows 2.6% and the input tax follows it.
+receipt:
+  swissVat: true
+  text: |
+    Rösterei Muster GmbH, Rechnung August 2026
+    Kaffeebohnen 20 kg, Total CHF 513.00 inkl. MWST 2.6% 13.00
+transaction:
+  amount: 513
+  currency: CHF
+  direction: DBIT
+  description: Roesterei Muster GmbH Rechnung
+  account: "1020"
+date: 2026-08-24
+lines:
+  - { debit: "4200", credit: "1020", amount: 513, vatCode: M26, description: "Rösterei Muster, Kaffeebohnen" }
+ziffern: { "400": 13, "479": 13 }
+payable: -13
+rules: [pv-prefix-from-account]
+law:
+  - MWSTG Art. 25 Abs. 2 lit. a (2.6% on food and other listed goods)
+why: >
+  The rate on the invoice decides the code: goods for resale at 2.6% are M26, which puts the tax
+  into Ziffer 400.
+pitfalls:
+  - M81 on a 2.6% invoice claims three times the tax that was charged.
+signals:
+  kind: supplier-ch
+  keywords: [kaffeebohnen, lebensmittel, 2.6%, rösterei]

@@ -1,0 +1,34 @@
+id: fx-purchase-estv-rate
+rank: 15
+segment: services
+title: Purchase paid in euros, converted at the ESTV rate
+applies: >
+  A Swiss supplier invoices in euros and charges 8.1% MWST; the company pays from its EUR
+  account. The amount is booked in EUR with the ESTV daily sell rate of the payment date.
+receipt:
+  swissVat: true
+  text: |
+    Fachtagung Digital Zürich, Ticket Business
+    EUR 270.25 inkl. MWST 8.1%, MWST-Nr. auf Rechnung
+transaction:
+  amount: 270.25
+  currency: EUR
+  direction: DBIT
+  description: Fachtagung Digital Ticket
+  account: "1021"
+date: 2026-08-14
+lines:
+  - { debit: "5810", credit: "1021", amount: 270.25, currency: EUR, rate: 0.94711, vatCode: I81, description: "Fachtagung Digital, Ticket" }
+ziffern: { "405": 19.18, "479": 19.18 }
+payable: -19.18
+rules: [cls-fx, pv-charged]
+law:
+  - MWSTG Art. 24 (taxable amount; foreign amounts converted at the ESTV rate, docs/adr/0001)
+why: >
+  The entry keeps the EUR amount and the ESTV sell rate of the day the money left; the engine
+  converts it for the return. The bank's own rate is not an accepted basis for VAT.
+pitfalls:
+  - A flat yearly rate is wrong for booking. The EUR account then needs a year-end Kursdifferenz entry.
+signals:
+  kind: supplier-ch
+  keywords: [eur, ticket, tagung]

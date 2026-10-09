@@ -1,0 +1,37 @@
+id: mixed-rate-receipt
+rank: 25
+segment: services
+title: One receipt with two VAT rates (8.1% and 2.6%)
+applies: >
+  A receipt mixes food at the reduced rate with other goods at the normal rate, as a supermarket
+  receipt for the office kitchen does. It is split into one line per rate.
+receipt:
+  swissVat: true
+  text: |
+    Supermarkt Seeblick
+    Kaffee, Milch, Früchte: CHF 51.30 MWST 2.6% 1.30
+    Spülmittel, Küchenpapier: CHF 54.05 MWST 8.1% 4.05
+    Total CHF 105.35
+transaction:
+  amount: 105.35
+  currency: CHF
+  direction: DBIT
+  description: Supermarkt Seeblick Kartenzahlung
+  account: "1020"
+date: 2026-08-11
+lines:
+  - { debit: "5880", credit: "1020", amount: 51.3, vatCode: I26, description: "Supermarkt Seeblick, Büroküche Lebensmittel" }
+  - { debit: "5880", credit: "1020", amount: 54.05, vatCode: I81, description: "Supermarkt Seeblick, Büroküche Haushalt" }
+ziffern: { "405": 5.35, "479": 5.35 }
+payable: -5.35
+rules: [pv-charged, spl-sum]
+law:
+  - MWSTG Art. 25 Abs. 2 lit. a (2.6% on food)
+why: >
+  Each rate group of the receipt's MWST summary becomes its own line with its own code, summing
+  to the total.
+pitfalls:
+  - One line at I81 for the whole receipt claims too much tax on the food.
+signals:
+  kind: supplier-ch
+  keywords: [supermarkt, lebensmittel, 2.6%, büroküche]

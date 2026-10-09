@@ -1,0 +1,40 @@
+id: import-vat-evv
+rank: 29
+segment: goods
+title: Courier customs bill with import VAT (eVV)
+applies: >
+  Goods imported for the company arrive by courier; the courier advances duties and import VAT
+  and bills them with its own fee. The BAZG assessment (Veranlagungsverfügung MWST, eVV) is the
+  proof for the import VAT.
+receipt:
+  swissVat: true
+  text: |
+    Kurier Express, Zollrechnung zu Sendung aus China
+    Zoll 12.00, Einfuhrsteuer 48.60, Vorlageprovision 10.81 inkl. MWST 8.1%
+    Total CHF 71.41. eVV: Importeur ist der Empfänger.
+transaction:
+  amount: 71.41
+  currency: CHF
+  direction: DBIT
+  description: Kurier Express Zollrechnung
+  account: "1020"
+date: 2026-08-07
+lines:
+  - { debit: "4020", credit: "1020", amount: 12, vatCode: M0, description: "Kurier Express, Zoll Sendung Lager" }
+  - { debit: "4030", credit: "1020", amount: 48.6, description: "Kurier Express, Einfuhrsteuer Sendung Lager" }
+  - { debit: "4040", credit: "1020", amount: 10.81, vatCode: M81, description: "Kurier Express, Vorlageprovision" }
+  - { debit: "", credit: "4030", amount: 48.6, vatCode: M81-2, description: "BAZG eVV, Vorsteuer Einfuhr" }
+ziffern: { "400": 49.41, "479": 49.41 }
+payable: -49.41
+rules: [shp-zollrechnung, pv-import-vat-evv]
+law:
+  - MWSTG Art. 28 Abs. 1 lit. c (import VAT is deductible)
+  - MWSTG Art. 50 ff. (tax on imports, assessed by the BAZG)
+why: >
+  One line per position of the bill; the import VAT is first an expense without code, then a
+  single-leg M81-2 row claims it as input tax in Ziffer 400 on the strength of the eVV.
+pitfalls:
+  - The courier bill alone is no proof; without the eVV the import VAT stays M0 until it is obtained.
+signals:
+  kind: courier
+  keywords: [zollrechnung, einfuhrsteuer, vorlageprovision, verzollung, zoll]

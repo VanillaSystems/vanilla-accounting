@@ -1,0 +1,41 @@
+id: salary-payment
+rank: 1
+segment: services
+title: Monthly salary of the owner-employee
+applies: >
+  The company pays a salary, also to its owner when the owner is employed by the GmbH. The bank
+  pays the net salary; the employee's social contributions are withheld and owed to the
+  Ausgleichskasse and the pension fund.
+receipt:
+  swissVat: false
+  text: |
+    Lohnabrechnung August 2026, A. Beispiel
+    Bruttolohn 6400
+    AHV/IV/EO 5.3%, ALV 1.1%, BVG Arbeitnehmer: total Abzüge 760
+    Nettolohn 5640
+transaction:
+  amount: 5640
+  currency: CHF
+  direction: DBIT
+  description: Lohn August 2026 A. Beispiel
+  account: "1020"
+date: 2026-08-25
+lines:
+  - { debit: "5000", credit: "1020", amount: 5640, description: "A. Beispiel, Lohn Aug 2026 netto" }
+  - { debit: "5000", credit: "2270", amount: 760, description: "A. Beispiel, Lohn Aug 2026 Abzüge AN" }
+ziffern: {}
+payable: 0
+rules: []
+law:
+  - MWSTG Art. 10 Abs. 1 (only an independent business is taxable; employment is no supply)
+  - AHVG Art. 14 Abs. 1 (the employer withholds the employee's contributions)
+why: >
+  A salary is no supply, so it carries no VAT code and moves no Ziffer. The gross salary is the
+  expense: the net goes out of the bank, the withheld part waits on 2270 until the Ausgleichskasse
+  and the pension fund are paid.
+pitfalls:
+  - Book the gross salary, not only the net payment; otherwise 2270 never balances and the salary statement (Lohnausweis) does not match the books.
+  - No I0 on a salary. I0 is for purchases without Swiss MWST, a salary is not a purchase.
+signals:
+  kind: employee
+  keywords: [lohn, salär, salary, gehalt, nettolohn]

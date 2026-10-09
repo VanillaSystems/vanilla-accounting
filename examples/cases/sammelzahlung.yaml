@@ -1,0 +1,41 @@
+id: sammelzahlung
+rank: 18
+segment: services
+title: One bank payment for several invoices (Sammelzahlung)
+applies: >
+  An e-banking batch pays several supplier invoices at once, and the bank shows one booking with
+  the individual payments as its parts. Each invoice gets its own line with its own code.
+receipt:
+  swissVat: true
+  text: |
+    1) Cowork Seeblick, Arbeitsplatz August, CHF 540.50 inkl. MWST 8.1%
+    2) Grafik Atelier Muster, Logo-Überarbeitung, CHF 1081.00 inkl. MWST 8.1%
+    3) Musterversicherung AG, Betriebshaftpflicht 2026, CHF 300.00
+transaction:
+  amount: 1921.5
+  currency: CHF
+  direction: DBIT
+  description: Sammelauftrag 3 Zahlungen
+  account: "1020"
+  parts:
+    - { amount: 540.5, counterparty: Cowork Seeblick }
+    - { amount: 1081, counterparty: Grafik Atelier Muster }
+    - { amount: 300, counterparty: Musterversicherung AG }
+date: 2026-08-28
+lines:
+  - { debit: "6000", credit: "1020", amount: 540.5, vatCode: I81, description: "Cowork Seeblick, Arbeitsplatz Aug 2026" }
+  - { debit: "6600", credit: "1020", amount: 1081, vatCode: I81, description: "Grafik Atelier Muster, Logo-Überarbeitung" }
+  - { debit: "6300", credit: "1020", amount: 300, vatCode: I0, description: "Musterversicherung, Betriebshaftpflicht 2026" }
+ziffern: { "405": 121.5, "479": 121.5 }
+payable: -121.5
+rules: [shp-several-invoices, spl-sum]
+law:
+  - MWSTG Art. 28 Abs. 1 (each invoice's own tax)
+why: >
+  The booking stays one transaction because the balance moved once, but every part is its own
+  invoice: one line per part, each with the code its receipt supports, summing to the payment.
+pitfalls:
+  - One line with one code for the total mixes exempt insurance with taxed services and gets 405 wrong.
+signals:
+  kind: supplier-ch
+  keywords: [sammelauftrag, sammelzahlung, zahlungen, batch]

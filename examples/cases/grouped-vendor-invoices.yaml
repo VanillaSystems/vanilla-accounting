@@ -1,0 +1,38 @@
+id: grouped-vendor-invoices
+rank: 30
+segment: goods
+title: One card charge for several marketplace invoices
+applies: >
+  An online marketplace charges several orders, often from different sellers, as one card
+  payment. Each order has its own invoice, its own account and its own VAT.
+receipt:
+  swissVat: true
+  text: |
+    Online-Marktplatz, 3 Rechnungen zu einer Zahlung
+    1) Verpackungsmaterial CHF 54.05 inkl. MWST 8.1%
+    2) Ersatzteile Handelsware CHF 32.43 inkl. MWST 8.1%
+    3) USB-Kabel Büro CHF 21.62 inkl. MWST 8.1%
+transaction:
+  amount: 108.1
+  currency: CHF
+  direction: DBIT
+  description: ONLINE-MARKTPLATZ KARTENZAHLUNG
+  account: "1020"
+date: 2026-08-21
+lines:
+  - { debit: "4200", credit: "1020", amount: 54.05, vatCode: M81, description: "Online-Marktplatz, Verpackungsmaterial" }
+  - { debit: "4200", credit: "1020", amount: 32.43, vatCode: M81, description: "Online-Marktplatz, Ersatzteile" }
+  - { debit: "6570", credit: "1020", amount: 21.62, vatCode: I81, description: "Online-Marktplatz, USB-Kabel" }
+ziffern: { "400": 6.48, "405": 1.62, "479": 8.1 }
+payable: -8.1
+rules: [shp-several-invoices, spl-sum, pv-prefix-from-account]
+law:
+  - MWSTG Art. 28 Abs. 1 (each invoice's own tax)
+why: >
+  One line per invoice, each on its own account, summing to the charge. Goods for resale take M,
+  the office cable I.
+pitfalls:
+  - A seller on the marketplace may be abroad and charge no Swiss MWST; that invoice is M0 even when the others are M81.
+signals:
+  kind: supplier-ch
+  keywords: [marktplatz, marketplace, rechnungen, bestellungen]

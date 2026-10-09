@@ -1,0 +1,38 @@
+id: accident-sickness-insurance
+rank: 4
+segment: services
+title: Accident (UVG) and sick-pay insurance premium
+applies: >
+  The yearly premium for the mandatory accident insurance (UVG) and the optional sick-pay
+  insurance (Krankentaggeld) arrives as one invoice from the insurer.
+receipt:
+  swissVat: false
+  text: |
+    Musterversicherung AG, Prämienrechnung 2026
+    UVG Berufs- und Nichtberufsunfall 1100
+    Krankentaggeld 700
+    Total 1800
+transaction:
+  amount: 1800
+  currency: CHF
+  direction: DBIT
+  description: Musterversicherung AG Praemie 2026
+  account: "1020"
+date: 2026-07-15
+lines:
+  - { debit: "5730", credit: "1020", amount: 1100, vatCode: I0, description: "Musterversicherung, UVG 2026" }
+  - { debit: "5740", credit: "1020", amount: 700, vatCode: I0, description: "Musterversicherung, Krankentaggeld 2026" }
+ziffern: {}
+payable: 0
+rules: [pv-otherwise]
+law:
+  - MWSTG Art. 21 Abs. 2 Ziff. 18 (insurance is exempt)
+  - UVG Art. 91 (the employee may carry the non-occupational accident premium)
+why: >
+  Insurance carries no MWST, so both lines are I0. One line per kind of insurance keeps the
+  payroll accounts readable.
+pitfalls:
+  - When the employee pays the non-occupational part (NBU), withhold it on the salary against 2270, like AHV.
+signals:
+  kind: insurer
+  keywords: [uvg, unfall, krankentaggeld, ktg, prämienrechnung]

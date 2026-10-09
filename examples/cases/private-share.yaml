@@ -1,0 +1,25 @@
+id: private-share
+rank: 12
+segment: services
+title: Private share of a mixed-use expense (Vorsteuerkorrektur)
+applies: >
+  An expense serves the business and the owner privately, such as a mobile subscription or a
+  laptop also used at home. Its input tax was deducted in full; the private share is given back.
+receipt: none
+transaction: none
+date: 2026-09-30
+lines:
+  - { debit: "2451", credit: "6510", amount: 43.24, vatCode: K81-B, description: "Privatanteil 40% Mobile Abo Q3 2026" }
+ziffern: { "415": 3.24, "479": -3.24 }
+payable: 3.24
+rules: [eig-entry, prv-known]
+law:
+  - MWSTG Art. 30 Abs. 2 (input tax correction for mixed use)
+why: >
+  The private share of the gross expense moves from the expense to the owner's current account,
+  and K81-B gives back the input tax in it through Ziffer 415.
+pitfalls:
+  - Keep the original expense at I81; the correction is a separate entry, so the receipt still matches its booking.
+signals:
+  kind: owner
+  keywords: [privatanteil, private share, privat]

@@ -1,0 +1,35 @@
+id: foreign-supplier-swiss-vat
+rank: 11
+segment: services
+title: Supplier abroad that charges Swiss MWST
+applies: >
+  A supplier based abroad is registered for Swiss MWST and charges 8.1% on its invoice, as many
+  large software and advertising platforms do.
+receipt:
+  swissVat: true
+  text: |
+    Teamboard Ltd, Dublin, Ireland
+    Invoice August 2026, Business plan EUR 54.05
+    Swiss VAT 8.1% included EUR 4.05, Swiss VAT no. on invoice
+transaction:
+  amount: 54.05
+  currency: EUR
+  direction: DBIT
+  description: TEAMBOARD LTD DUBLIN
+  account: "1021"
+date: 2026-08-14
+lines:
+  - { debit: "6570", credit: "1021", amount: 54.05, currency: EUR, rate: 0.94711, vatCode: I81, description: "Teamboard, Abo Business-Plan Aug 2026" }
+ziffern: { "405": 3.84, "479": 3.84 }
+payable: -3.84
+rules: [pv-charged, cls-fx]
+law:
+  - MWSTG Art. 28 Abs. 1 lit. a (input tax charged by a registered supplier)
+why: >
+  The invoice shows Swiss VAT, so it is ordinary input tax: I81 like a Swiss supplier, at the
+  ESTV rate of the payment date. No Bezugsteuer, the supplier already charged the tax.
+pitfalls:
+  - B81-1 here would declare the tax a second time; the receipt decides, not the vendor's country.
+signals:
+  kind: supplier-foreign-registered
+  keywords: [swiss vat, ltd, ireland, business plan]

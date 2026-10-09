@@ -1,0 +1,37 @@
+id: consulting-revenue-ch
+rank: 5
+segment: services
+title: Consulting fee paid by a Swiss client (8.1%)
+applies: >
+  A client in Switzerland pays an invoice for consulting, development or other services that
+  charged 8.1% MWST. On cash basis the tax is owed in the quarter the money arrives.
+receipt:
+  swissVat: true
+  text: |
+    Rechnung 2026-031 an Alpenblick Treuhand AG
+    Beratung Juli 2026, 40 Stunden
+    Total exkl. MWST 10000, MWST 8.1% 810, Total 10810
+transaction:
+  amount: 10810
+  currency: CHF
+  direction: CRDT
+  description: Alpenblick Treuhand AG Rechnung 2026-031
+  account: "1020"
+date: 2026-08-20
+lines:
+  - { debit: "1020", credit: "3400", amount: 10810, vatCode: V81, description: "Alpenblick Treuhand, Beratung Jul 2026" }
+ziffern: { "200": 10810, "299": 10810, "303": 10810, "399": 810 }
+payable: 810
+rules: [sv-order-tax]
+law:
+  - MWSTG Art. 25 Abs. 1 (normal rate 8.1%)
+  - MWSTG Art. 40 Abs. 1 lit. b (cash basis, the tax is owed when the payment arrives)
+why: >
+  The invoice charged 8.1%, so the payment is turnover at V81: the gross amount goes to Ziffer
+  200 and 303, and the tax in it is owed.
+pitfalls:
+  - Book the gross amount the client paid; the code takes the tax out of it. Booking the net amount under V81 understates the turnover.
+  - A partial payment is booked as paid; the rest when it arrives.
+signals:
+  kind: customer-ch
+  keywords: [rechnung, honorar, beratung, consulting]

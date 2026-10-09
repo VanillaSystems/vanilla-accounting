@@ -1,0 +1,34 @@
+id: direct-tax-payment
+rank: 24
+segment: services
+title: Income and capital tax of the company
+applies: >
+  The canton bills the company's own taxes on profit and capital (Staats- und Gemeindesteuern,
+  direkte Bundessteuer), as advance or final invoice.
+receipt:
+  swissVat: false
+  text: |
+    Steueramt Musterkanton, Provisorische Rechnung Staats- und Gemeindesteuern 2026
+    Gewinn- und Kapitalsteuer, Total 1800
+transaction:
+  amount: 1800
+  currency: CHF
+  direction: DBIT
+  description: Steueramt Musterkanton Steuern 2026
+  account: "1020"
+date: 2026-09-15
+lines:
+  - { debit: "8900", credit: "1020", amount: 1800, description: "Steueramt Musterkanton, Staats- und Gemeindesteuern 2026" }
+ziffern: {}
+payable: 0
+rules: []
+law:
+  - MWSTG Art. 18 Abs. 1 (a tax is no supply)
+why: >
+  Direct taxes are no purchase: no VAT code, no Ziffer. They go to 89xx, below the operating
+  result.
+pitfalls:
+  - Not the VAT payment (that clears 2201) and not the owner's private taxes (those go to 2451).
+signals:
+  kind: tax-authority
+  keywords: [steueramt, staatssteuer, gemeindesteuer, bundessteuer, provisorische rechnung]

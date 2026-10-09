@@ -1,0 +1,29 @@
+id: webshop-fees-vat
+rank: 28
+segment: goods
+title: Monthly input tax on webshop fees (single-leg M81-2)
+applies: >
+  A webshop platform registered for Swiss MWST charges 8.1% on its fees, but the per-order payouts
+  hide it; the monthly bill shows the tax. That tax is claimed once a month with one VAT-only row.
+receipt:
+  swissVat: true
+  text: |
+    Webshop-Plattform, Monatsrechnung August 2026
+    Transaktionsgebühren total CHF 108.10 inkl. MWST 8.1% 8.10
+transaction: none
+date: 2026-08-31
+lines:
+  - { debit: "", credit: "6580", amount: 8.1, vatCode: M81-2, description: "Webshop-Plattform, Vorsteuer Gebühren Aug 2026" }
+ziffern: { "400": 8.1, "479": 8.1 }
+payable: -8.1
+rules: [pv-charged]
+law:
+  - MWSTG Art. 28 Abs. 1 lit. a (input tax on the platform's invoice)
+why: >
+  The fees were booked I0 order by order without the tax; the monthly bill proves 8.1%. One row
+  with the tax alone (-2 code) moves it from the fee expense to Ziffer 400.
+pitfalls:
+  - No second leg against the owner's current account and no gross amount, or the fee is reduced twice.
+signals:
+  kind: platform
+  keywords: [monatsrechnung, transaktionsgebühren, billing, gebühren]

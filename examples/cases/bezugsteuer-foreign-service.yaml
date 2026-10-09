@@ -1,0 +1,37 @@
+id: bezugsteuer-foreign-service
+rank: 10
+segment: services
+title: Software subscription from abroad without Swiss VAT (Bezugsteuer)
+applies: >
+  A supplier abroad bills a service (software, online tools, advertising, consulting) and charges
+  no Swiss MWST because it is not registered in Switzerland. The company owes the tax itself.
+receipt:
+  swissVat: false
+  text: |
+    Cloudnote Inc., San Francisco, cloudnote.io
+    Team plan, August 2026, USD 120.00
+    Sales tax 0.00
+transaction:
+  amount: 120
+  currency: USD
+  direction: DBIT
+  description: CLOUDNOTE.IO SUBSCRIPTION
+  account: "1022"
+date: 2026-08-14
+lines:
+  - { debit: "6570", credit: "1022", amount: 120, currency: USD, rate: 0.82194, vatCode: B81-1, description: "Cloudnote, Abo Team-Plan Aug 2026" }
+ziffern: { "383": 98.63, "399": 7.99, "405": 7.99, "479": 7.99 }
+payable: 0
+rules: [pv-bezugsteuer, cls-fx]
+law:
+  - MWSTG Art. 45 Abs. 1 lit. a and Abs. 2 lit. a (a registered recipient owes it from the first franc)
+  - MWSTG Art. 28 Abs. 1 lit. b (deductible again as input tax)
+why: >
+  The service is supplied in Switzerland, where the company sits, so 8.1% is owed in Ziffer 383
+  and deducted again in 405 by the same entry: about zero to pay for business use.
+pitfalls:
+  - The CHF 10,000 threshold only applies to companies NOT registered for VAT. A registered one declares every franc.
+  - Not for goods (import VAT instead) and not for exempt services such as payment processing fees.
+signals:
+  kind: supplier-abroad
+  keywords: [subscription, abo, saas, sales tax, plan]
