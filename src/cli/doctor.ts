@@ -160,7 +160,12 @@ async function mailChecks(ws: Workspace, login: boolean): Promise<Result[]> {
     const label = `Mailbox ${m.label} (${m.address})`;
     const creds = loginOf(m, process.env);
     if (creds.status === 'missing') {
-      results.push(fail(`${label}: ${creds.keys.join(', ')} not set`, `Add to ${join(APP_ROOT, '.env')}: ${creds.keys.map((k) => `${k}=…`).join('  ')} (docs/mail-setup.md).`));
+      const add = `Add to ${join(APP_ROOT, '.env')}: ${creds.keys.map((k) => `${k}=…`).join('  ')} (docs/mail-setup.md).`;
+      // Blanking the app password between collections is the advice in docs/mail-setup.md, so that alone is a note.
+      const onlyPassword = creds.keys.every((k) => k.endsWith('_IMAP_PASSWORD'));
+      results.push(onlyPassword && !login
+        ? warn(`${label}: no app password set (fine between collections)`, `Before collecting: ${add}`)
+        : fail(`${label}: ${creds.keys.join(', ')} not set`, add));
       continue;
     }
     if (!checkLogin) { results.push(ok(`${label}: credentials in .env (npm run doctor -- --mail logs in)`)); continue; }

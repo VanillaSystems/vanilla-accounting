@@ -77,7 +77,7 @@ test('doctor: missing mailbox keys are named; --mail logs in and reports a refus
   try {
     const keysOnly = await doctor(dir, env);
     assert.match(keysOnly, /✓ Mailbox office \(office@example\.com\): credentials in \.env/);
-    assert.match(keysOnly, /✗ Mailbox private \(me@example\.com\): TESTPRIVATE_IMAP_PASSWORD not set\n {4}fix: Add to .*\.env: TESTPRIVATE_IMAP_PASSWORD=…/);
+    assert.match(keysOnly, /! Mailbox private \(me@example\.com\): no app password set \(fine between collections\): Before collecting: Add to .*\.env: TESTPRIVATE_IMAP_PASSWORD=…/);
     assert.doesNotMatch(keysOnly, /logs in to/, 'no login without --mail');
 
     const login = await doctor(dir, env, '--mail');

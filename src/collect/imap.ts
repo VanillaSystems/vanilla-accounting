@@ -57,14 +57,20 @@ function createClient(account: EmailAccount, timeouts: { connectionTimeout?: num
 
 /** Log in and out again, nothing fetched: proves host, port and password. Rejects with the server's answer. */
 export async function checkLogin(account: EmailAccount): Promise<void> {
-  const client = createClient(account, { connectionTimeout: 20_000, greetingTimeout: 20_000 });
+  const client = await connected(account, { connectionTimeout: 20_000, greetingTimeout: 20_000 });
+  await client.logout();
+}
+
+/** A logged-in client. A server keeps the connection open after a refused LOGIN, so a failed connect closes it. */
+async function connected(account: EmailAccount, options?: Parameters<typeof createClient>[1]): Promise<ReturnType<typeof createClient>> {
+  const client = createClient(account, options);
   try {
     await client.connect();
   } catch (e) {
-    client.close(); // a server keeps the connection open after a refused LOGIN
+    client.close();
     throw e;
   }
-  await client.logout();
+  return client;
 }
 
 function hasAttachmentsInStructure(structure: any): boolean {
@@ -81,8 +87,7 @@ export async function fetchEmailSummaries(
   from: Date,
   to: Date,
 ): Promise<EmailSummary[]> {
-  const client = createClient(account);
-  await client.connect();
+  const client = await connected(account);
 
   try {
     const lock = await client.getMailboxLock('INBOX');
@@ -138,8 +143,7 @@ export async function fetchEmailFull(
   account: EmailAccount,
   uid: number,
 ): Promise<EmailFull> {
-  const client = createClient(account);
-  await client.connect();
+  const client = await connected(account);
 
   try {
     const lock = await client.getMailboxLock('INBOX');
