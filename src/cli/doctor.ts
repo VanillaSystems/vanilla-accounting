@@ -68,9 +68,11 @@ function workspaceChecks(ws: Workspace): Result[] {
     results.push(fail(`books.json: ${(e as Error).message.split('\n')[0]}`, 'Restore books.json from git (git checkout books.json), or create it with npm run init in a new folder.'));
   }
 
-  for (const [label, dir] of [['receipts/', ws.paths.receipts], ['beleg-import/', ws.paths.inbox], ['bank-statements/', ws.paths.statements], ['filings/', ws.paths.filings]] as const) {
+  for (const [label, dir] of [['receipts/', ws.paths.receipts], ['bank-statements/', ws.paths.statements], ['filings/', ws.paths.filings]] as const) {
     results.push(existsSync(dir) ? ok(`${label} exists`) : fail(`${label} missing`, `mkdir ${dir}`));
   }
+  // Not in git (.gitignore), so a fresh clone of the books lacks it; an upload creates it.
+  results.push(existsSync(ws.paths.inbox) ? ok('beleg-import/ exists') : warn('beleg-import/ missing', `mkdir ${ws.paths.inbox} to drop receipts there`));
 
   let accounts: { number: string; name: string }[] = [];
   try {
