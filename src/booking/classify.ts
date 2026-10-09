@@ -11,6 +11,7 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor } from '../accounting/bank-accounts.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
+import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 
 export const BATCH_SIZE = 10;
@@ -71,6 +72,30 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
 
 export interface ClassifyContext extends ClassifyPromptContext {
   bankAccounts: readonly LedgerBankAccount[];
+  /** The casebook (examples/cases/): examples for a company with little history of its own. */
+  casebook?: readonly BookingCase[];
+}
+
+/** At most this many casebook examples in one call: the best of each transaction first. */
+const CASES_PER_BATCH = 8;
+
+/**
+ * Rows of the company's own booking history: its journal and the prior year's sample entries.
+ * Below OWN_HISTORY_THRESHOLD the classify prompt also gets casebook examples.
+ */
+export function ownHistoryRows(books: Books, context: ClassifyPromptContext): number {
+  const sampleRows = Math.max(0, context.historicEntries.split('\n').filter((l) => l.trim()).length - 1);
+  return books.journalEntries.length + sampleRows;
+}
+
+/** The casebook examples for one batch: each transaction's best case, then its second best, … without repeats. */
+function casesForBatch(books: Books, batch: BankTransaction[], casebook: readonly BookingCase[]): BookingCase[] {
+  const perTx = batch.map((tx) => selectCases(tx, mappedReceipts(books, tx), casebook));
+  const out: BookingCase[] = [];
+  for (let i = 0; out.length < CASES_PER_BATCH && perTx.some((l) => l[i]); i++) {
+    for (const list of perTx) if (list[i] && !out.includes(list[i]) && out.length < CASES_PER_BATCH) out.push(list[i]);
+  }
+  return out;
 }
 
 /**
@@ -95,6 +120,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     chartOfAccounts: read(ws.paths.history, `${prior}.Konten.txt`),
     historicEntries: read(ws.paths.history, `${prior}.Buchungen-sample.tsv`),
     vatCodes: read(REFERENCE_DIR, 'MWST-codes.txt'),
+    casebook: loadCases(),
   };
 }
 
@@ -150,6 +176,7 @@ export interface ClassifyOutcome {
 export async function classifyTransactions(books: Books, txs: BankTransaction[], deps: ClassifyDeps): Promise<ClassifyOutcome> {
   const { ask, fx, context, log = () => {}, afterWave } = deps;
   const lock = periodLock(books);
+  const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
   const outcome: ClassifyOutcome = { classified: [], failed: [] };
   const batches: BankTransaction[][] = [];
   for (let i = 0; i < txs.length; i += BATCH_SIZE) batches.push(txs.slice(i, i + BATCH_SIZE));
@@ -157,7 +184,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const processBatch = async (batch: BankTransaction[], batchNum: number) => {
     const fail = (tx: BankTransaction, reason: string) => outcome.failed.push({ ref: tx.ref, reason });
     try {
-      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context);
+      const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
+      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context, examples);
       const raw = await ask(prompt, { step: 'booking.guide.yaml#classify', model: 'sonnet', timeoutMs: CALL_TIMEOUT_MS });
       const result = parseBatchClassifyResult(raw);
       if (!result) {

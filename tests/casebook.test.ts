@@ -14,8 +14,9 @@ import { computeVatReport } from '../src/accounting/vat-report.js';
 import { figuresFromBooks } from '../src/accounting/return-figures.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadBooks, mutateJournal } from '../src/books/store.js';
+import { classifyTransactions, type ClassifyDeps } from '../src/booking/classify.js';
 import {
-  CASE_TOKEN_LIMIT, caseEntries, casePeriod, caseTokens, loadCaseChart, loadCases, selectCases, validateCase,
+  CASE_TOKEN_LIMIT, OWN_HISTORY_THRESHOLD, caseEntries, casePeriod, caseTokens, loadCaseChart, loadCases, selectCases, validateCase,
   type BookingCase, type SelectionReceipt,
 } from '../src/knowledge/cases.js';
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
@@ -131,6 +132,30 @@ test('selection is deterministic and returns at most k cases, none without any l
   assert.deepEqual(top(t, r), top(t, r));
   assert.ok(top(t, r).length <= 4);
   assert.deepEqual(selectCases(tx({ direction: 'DBIT', description: 'zzz' }), [], cases), []);
+});
+
+// ─── In the classify prompt ───────────────────────────────────────────────────
+
+function classifyPrompt(journalRows: number, historicEntries = ''): Promise<string> {
+  const salary = tx({ ref: 'S1', amount: 5200, description: 'Lohn September 2026 B. Muster' });
+  const books = {
+    transactions: [salary], receipts: [], mappings: [], bankStatements: [],
+    journalEntries: Array.from({ length: journalRows }, (_, i) => ({ id: `e${i}`, transactionRef: `x${i}`, date: '2026-07-01', accountDebit: '6500', accountCredit: '1020', amount: 1 })),
+    config: {},
+  } as unknown as Parameters<typeof classifyTransactions>[0];
+  let prompt = '';
+  const ask: ClassifyDeps['ask'] = async (p) => { prompt = p; return '{}'; };
+  const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries, vatCodes: '', bankAccounts: [], casebook: cases };
+  return classifyTransactions(books, [salary], { ask, fx, context }).then(() => prompt);
+}
+
+test('a company with little history gets the selected cases in its classify prompt; one with enough history does not', async () => {
+  const fresh = await classifyPrompt(0);
+  assert.match(fresh, /## Casebook/);
+  assert.match(fresh, /Case salary-payment: /);
+  assert.doesNotMatch(await classifyPrompt(OWN_HISTORY_THRESHOLD), /## Casebook/);
+  const header = 'Datum\tBeleg\tBeschreibung\n';
+  assert.doesNotMatch(await classifyPrompt(OWN_HISTORY_THRESHOLD - 10, header + 'row\n'.repeat(10)), /## Casebook/, 'prior-year sample rows count as history');
 });
 
 test('docs/casebook.md lists every case', () => {
