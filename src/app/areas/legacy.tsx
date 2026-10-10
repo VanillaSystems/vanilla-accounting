@@ -4,22 +4,19 @@
  * into the route. Deleted in phase 10 with legacy-tabs.tsx.
  */
 import { useRef, useState } from 'react';
-import type { Index } from '../../types/index.js';
-import { isNonReceipt } from '../components/receipts-table.js';
 import { seedLegacyParams } from '../lib/location.js';
-import { fmt, formatAmount, formatDate } from '../lib/utils.js';
+import { fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
-import { localToday, openQuarter, parsePeriod, periodContaining, type Period } from '../../accounting/periods.js';
+import { localToday, parsePeriod, periodContaining, type Period } from '../../accounting/periods.js';
 import { ListHead } from '../shell/ListHead.js';
 import type { AreaId, Route, RouteOf } from '../shell/route.js';
 import type { Area, AreaProps, PaletteItem } from './index.js';
 import { LegacyTabs, type LegacyTab } from './legacy-tabs.js';
 
-type LegacyArea = Exclude<AreaId, 'company' | 'invoices'>;
+type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts'>;
 
 /** Each area's old tabs; the first is shown unless the route names another. */
 const TABS: Record<LegacyArea, LegacyTab[]> = {
-  receipts: ['receipts'],
   bank: ['bank-statements', 'transactions', 'bank-reconciliation'],
   journal: ['journal-entries'],
   vat: ['vat-report'],
@@ -29,7 +26,7 @@ const TABS: Record<LegacyArea, LegacyTab[]> = {
 };
 
 const TAB_LABEL = {
-  'receipts': 'tab.receipts', 'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
+'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
   'journal-entries': 'tab.journalEntries', 'trial-balance': 'tab.trialBalance', 'balance-sheet': 'tab.balanceSheet',
   'income-statement': 'tab.incomeStatement', 'vat-report': 'tab.vat', 'account-ledger': 'tab.accountLedger',
   'bank-reconciliation': 'tab.bankReconciliation', 'year-close': 'tab.yearClose',
@@ -110,9 +107,8 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
         refresh={nav.refresh}
         canEdit={canEdit}
         onPeriod={(token) => nav.setQuery({ period: parsePeriodToken(token) })}
-        initial={route.area === 'receipts' ? { receiptId: route.id } : route.area === 'bank' ? { txRef: route.payment } : {}}
-        onSelect={({ receiptId, txRef }) => {
-          if (route.area === 'receipts' && receiptId !== route.id) nav.select({ area: 'receipts', ...(receiptId && { id: receiptId }) });
+        initial={route.area === 'bank' ? { txRef: route.payment } : {}}
+        onSelect={({ txRef }) => {
           if (route.area === 'bank' && tab === 'transactions' && txRef !== route.payment) nav.select({ area: 'bank', ...(txRef && { payment: txRef }) });
         }}
       />
@@ -128,24 +124,9 @@ export function legacyArea<A extends LegacyArea>(id: A, rest: Omit<Area<RouteOf<
   return { id: id as RouteOf<A>['area'], List: LegacyPage, ...rest };
 }
 
-/** Open receipts of the open quarter and later: those still waiting for their payment. */
-export function receiptsBadge(books: Index): number {
-  const from = openQuarter(books.config?.closedThrough, localToday()).from;
-  const linked = new Set(books.mappings.map((m) => m.receiptId));
-  return books.receipts.filter((r) => !linked.has(r.id) && !isNonReceipt(r, linked) && !!r.date && r.date >= from).length;
-}
-
 /** A place for an object dated `date`: in the current period when it holds the date (urls.md rule 1). */
 const at = (route: Route, date: string | undefined, current: Period) =>
   ({ route, query: { period: parsePeriod(periodContaining(date, current), localToday()) ?? undefined } });
-
-export function receiptsPalette({ books, nav, period }: AreaProps): PaletteItem[] {
-  return [...books.receipts].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).map((r) => ({
-    label: r.description ? `${r.filename} · ${r.description}` : r.filename,
-    side: [r.date && formatDate(r.date), r.amount != null && formatAmount(r.amount, r.currency)].filter(Boolean).join('  '),
-    run: () => nav.go(at({ area: 'receipts', id: r.id }, r.date, period)),
-  }));
-}
 
 export function journalPalette({ books, nav, period }: AreaProps): PaletteItem[] {
   return [...(books.journalEntries ?? [])].sort((a, b) => b.date.localeCompare(a.date)).map((e) => ({

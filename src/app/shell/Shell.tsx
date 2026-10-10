@@ -16,7 +16,7 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
-import { intake } from './intake.js';
+import { intake } from '../areas/receipts/intake.js';
 import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
@@ -54,7 +54,8 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const current = useRef(loc);
   current.current = loc;
   const nav: Nav = useMemo(() => ({
-    go,
+    // urls.md: the open period is left out of a link.
+    go: (loc) => go(loc.query.period?.token === open.token ? { ...loc, query: { ...loc.query, period: undefined } } : loc),
     select: (route) => go({ route, query: current.current.query }),
     setQuery: (patch) => {
       const query: Query = { ...current.current.query, ...patch };

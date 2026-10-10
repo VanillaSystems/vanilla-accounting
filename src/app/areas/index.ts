@@ -8,10 +8,10 @@ import type { Index } from '../../types/index.js';
 import type { Period } from '../../accounting/periods.js';
 import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js';
 import { t } from '../i18n/index.js';
-import { intakeAdd } from '../shell/intake.js';
 import { company } from './company/company.js';
 import { invoices } from './invoices.js';
-import { legacyArea, receiptsPalette, journalPalette, receiptsBadge } from './legacy.js';
+import { legacyArea, journalPalette } from './legacy.js';
+import { receipts } from './receipts/receipts.js';
 import { ICONS } from './icons.js';
 
 export interface Nav {
@@ -73,10 +73,7 @@ export interface Area<R extends Route = Route> {
 type Registry = { [A in AreaId]: Area<RouteOf<A>> };
 
 export const AREAS: Registry = {
-  receipts: legacyArea('receipts', {
-    label: () => t('area.receipts'), dock: { key: 'b', icon: ICONS.receipts, tip: () => t('area.receipts.tip'), badge: receiptsBadge }, add: intakeAdd,
-    palette: receiptsPalette, title: (r, b) => b.receipts.find((x) => x.id === r.id)?.filename,
-  }),
+  receipts,
   invoices,
   bank: legacyArea('bank', { label: () => t('area.bank'), dock: { key: 'k', icon: ICONS.bank, tip: () => t('area.bank.tip') }, title: (r) => r.payment }),
   journal: legacyArea('journal', { label: () => t('area.journal'), dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') }, palette: journalPalette, title: (r) => r.id, wide: true }),

@@ -11,7 +11,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 
 - [x] 0. Setup: branch, docs read, checks green, API inventory, architecture, this file.
 - [x] 1. Shell: tokens, fonts, theme, zoom, dock, top bar, list/detail with divider, keys, ⌘K, toast with undo, URL sync, add button with N.
-- [ ] 2. Belege.
+- [x] 2. Belege.
 - [ ] 3. Kontoauszüge.
 - [ ] 4. Buchungen and MWST-Codes.
 - [ ] 5. MWST and Bilanz & ER.
@@ -47,6 +47,19 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Tab title "<object> · <area>" without the product name. | urls.md rule 6's example. |
 | 2026-10-11 | The audit bar is a fixed amber strip over the page top. | `main` is exactly one screen high (mockup CSS); a bar in the flow would push it off. |
 | 2026-10-11 | Express serves a built app (`dist/`, or `APP_DIST`) with the same app-path rule as Vite (`src/server/app-paths.ts`); the sandbox's Vite config imports it. | One rule for "file or app path" in three places. |
+| 2026-10-11 | A receipt is locked (read only) when it is linked to a payment or entry of a filed quarter, as the API's `receiptDates` rule; an unlinked receipt dated in a filed quarter stays editable and linkable to open payments. | Cash basis: an invoice of June paid in July is booked in July; the mockup's lock by the receipt's own date would block that. |
+| 2026-10-11 | A receipt's date for the list is its date, else the `YYYYMMDD-` its file name starts with; undated ones count in the period they were read (`indexedAt`). Vendor and description come from splitting the description at the first `, ` / ` — ` / ` - `. | As the mockup's generator did without its model-written titles. |
+| 2026-10-11 | "Not a receipt" is the existing rule (`isNonReceipt`: kinds supporting/statement/noise/duplicate, or 0 without VAT and link); statements are left out of the hidden list. `Kein Beleg` sets `kind: noise`, `Ist doch ein Beleg` sets `kind: invoice`, both `kindBy: human`. No schema step: `kind` exists. | The Receipt type already models it. |
+| 2026-10-11 | `PATCH /api/receipts/:id` takes `kind` and `null` for date, amount and kind. Undo of a kind restores the value but marks it as a person's. | An undo must put back "no date" or "no kind"; an exact kindBy restore is not worth a second field. |
+| 2026-10-11 | Payments are ranked in `model.ts` (the mockup's score: amount in CHF, days, currency) with the ESTV rate of the payment day; fees and filed-quarter payments are left out; a payment that already has a receipt ranks lower instead of being hidden. No function in src/booking or src/reconcile ranked candidates (match.ts asks the model). | Grouped payments (AliExpress, FedEx, Amazon) hold several receipts; ADR 0001 rates. |
+| 2026-10-11 | The suggestion (↵ Zuordnen) is computed, not a model's: the only open payment of exactly the amount in the same currency, within 31 days, without a receipt. No confidence percent, no "privat bezahlt" suggestion. | Nothing stores the matcher's suggestions; a missing payment may only mean a statement is not imported yet. |
+| 2026-10-11 | "Privat oder bar bezahlt" creates a manual payment (`POST /api/transactions/manual`) on the receipt's date and amount and links it; undo deletes the payment and its link. The option shows the workspace's `manual` account number. | The app's existing private-outlay model (classify books it on the owner's account). |
+| 2026-10-11 | Delete asks first (palette-style dialog) and has no undo. | The delete removes the file from disk; the mockup's undo cannot be real. |
+| 2026-10-11 | The paper is pdf.js (`pdfjs-dist`, bundled, worker via Vite `?url`) with the mockup's trim of each page to its ink; it falls back to an iframe. | The mockup's rendered paper; no CDN (offline audit export). |
+| 2026-10-11 | Dropped PDFs show from `GET /api/inbox` (inbox files not in the books, with the id their receipt will get) as rows being read; the page polls every 3 s and reloads the books when one leaves the inbox. The app does not run extract itself. Intake moved from the shell to `areas/receipts/intake.ts`; no undo for an upload. | Reading is `npm run extract` (and its model fallback); running it from the server is a later decision. |
+| 2026-10-11 | The detail's shared CSS (paper, margin sections, forms, status, link dialog, preview, downloads) is `src/app/styles/detail.css`, not `receipts.css`. | Bank and journal details (phases 3 and 4) reuse the same classes. |
+| 2026-10-11 | Removed with the old receipts tab: batch rename, the manual-transaction batch, the duplicate approval and their client calls (the API routes stay until phase 10 decides). | Not in the mockup; the CLI covers rename. |
+| 2026-10-11 | The shell's `nav.go` leaves the open period out of the link; the legacy bank page takes the route's payment as its first selection. | urls.md; under StrictMode the old restore effect lost `/payments/<ref>`. |
 
 ## API inventory against the mockup
 
@@ -58,8 +71,7 @@ classify), year close (revaluation, templates, entries, close, open).
 
 Missing for the mockup, to add in their phase:
 
-- Belege: mark a receipt "kein Beleg nötig" / private outlay kinds (check `ReceiptPatch`), undo of a
-  link (remove exists).
+- Belege: done in phase 2 (receipt PATCH `kind` and nulls, `GET /api/inbox`).
 - Kontoauszüge: statement import (camt.053 and PDF upload) from the UI; today it is a CLI step.
 - Buchungen: new manual entry (route exists only through year-close entries).
 - Export: the export bundle (CSV, XLSX, JSON, PDF, ZIP with LIESMICH and SHA-256 sums).
@@ -78,3 +90,13 @@ Missing for the mockup, to add in their phase:
   old tab bodies (phases 2–9), theme toast has an undo, no ⇧E yet, Firma sections other than Darstellung pending.
   Commits: route.ts, app paths, upload, then the shell. Left: bank badge (needs
   the statement check, phase 3), objects in ⌘K for the other areas as they are built.
+- 2026-10-11 phase 2: Belege. `src/app/areas/receipts/` (model.ts pure order and ranking with tests, list with groups,
+  filters, search, collapse; detail with the pdf.js paper, facts, status, suggestion, Zahlung/Angaben/Datei; link dialog
+  with private outlay; kind, edit, delete with confirm; undo through the toast for link, unlink, private outlay, edit and
+  kind; Space preview, D download; ⌘K objects; dock badge; intake with reading rows from `GET /api/inbox`). API: receipt
+  PATCH takes `kind` and nulls; inbox read routes. Old receipts tab, receipts-table, receipt-edit-form, assign-panel and
+  manual-batch-modal deleted. Evidence and mockup comparison: .verify/evidence/redesign/phase-2/NOTES.md. Differs from
+  the mockup: lock by payment quarter, computed suggestion without percent, delete asks first, the payment link lands in
+  the old Transaktionen tab, reading waits for `npm run extract`. Left: the demo's `npm run extract` refuses its own
+  closed transactions (seen while proving intake, not changed here); API routes rename/suggest-date/approve-duplicate
+  have no UI caller now.

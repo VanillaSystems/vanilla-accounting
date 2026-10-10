@@ -227,6 +227,8 @@ main.full { display: flex; flex-direction: column; }
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .lhead { padding: 33px 32px 0 56px; }
 .lhead .counts { margin-bottom: 14px; }
+.list .lhead { padding: 0; }
+.list .lhead .counts { margin-bottom: 24px; }
 .lbody { padding: 0 32px 140px 56px; overflow: auto; }
 
 /* audit mode: every write is refused */

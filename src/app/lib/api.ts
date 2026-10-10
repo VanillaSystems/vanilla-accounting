@@ -1,4 +1,4 @@
-import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction, InboxFile, Index, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
@@ -75,11 +75,7 @@ export const api = {
   patchReceipt: (id: string, patch: ReceiptPatch) =>
     request<{ receipt: Receipt }>('PATCH', `/api/receipts/${id}`, patch).then((r) => r.receipt),
   deleteReceipt: (id: string) => request<Ok>('DELETE', `/api/receipts/${id}`),
-  suggestFilename: (receiptId: string) =>
-    request<{ suggestedFilename: string }>('POST', '/api/rename/suggest', { receiptId }).then((r) => r.suggestedFilename),
-  suggestDate: (id: string) => request<{ date: string }>('POST', `/api/receipts/${id}/suggest-date`).then((r) => r.date),
   visionExtract: (receiptId: string) => request<Ok>('POST', '/api/vision/extract', { receiptId }),
-  batchRename: () => request<{ renamed: number; skipped: number; failed: number }>('POST', '/api/rename/batch'),
 
   patchTransaction: (ref: string, patch: TransactionPatch) =>
     request<{ transaction: BankTransaction }>('PATCH', `/api/transactions/${encodeURIComponent(ref)}`, patch),
@@ -91,7 +87,6 @@ export const api = {
 
   addMapping: (link: Link) => request<Ok>('POST', '/api/mapping/add', link),
   removeMapping: (link: Link) => request<Ok>('POST', '/api/mapping/remove', link),
-  approveDuplicate: (receiptId: string) => request<Ok>('POST', '/api/mapping/approve-duplicate', { receiptId }),
 
   patchJournalEntry: (id: string, patch: JournalEntryPatch) =>
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),
@@ -112,6 +107,10 @@ export const api = {
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return (await res.json()) as { filename: string };
   },
+
+  /** The PDFs waiting in the inbox to be read; none in the static export. */
+  inbox: () => (STATIC_EXPORT ? Promise.resolve([]) : request<InboxFile[]>('GET', '/api/inbox')),
+  inboxFile: (id: string) => `/api/inbox/${id}`,
 
   books: () => request<Index>('GET', `${sources.books()}?t=${Date.now()}`),
   status: () => request<ApiStatus>('GET', sources.status()),

@@ -71,6 +71,7 @@
     "imapflow": "^1.4.2",
     "lucide-react": "^0.468.0",
     "mailparser": "^3.9.11",
+    "pdfjs-dist": "^5.4.624",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tailwind-merge": "^2.6.0"

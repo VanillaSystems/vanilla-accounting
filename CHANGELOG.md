@@ -25,6 +25,17 @@ Two markers flag an entry you must read before you update:
   redirect. The language no longer sits in the link: it is chosen per viewer. PDFs dropped on the
   page or added with the add button (N) go to the inbox. Until each area is rebuilt it shows its
   old tab.
+- Belege rebuilt (redesign phase 2): what needs you comes first ("Braucht dich"), then month by
+  month; filters `zugeordnet`, `offen`, `ohne Datum` and a search sit in the link
+  (`/receipts/<id>?filter=offen&q=…`). A receipt shows its paper (each PDF page cut to its ink),
+  one line of facts (date, amount, Swiss VAT, VAT number), its payment with links to the
+  statement and the entry, and Zahlung, Angaben and Datei in the margin. L opens Zahlung
+  verknüpfen with the open payments ranked by amount, date and currency, and "privat oder bar
+  bezahlt" books a private outlay; an exact fit is offered as a suggestion (↵). Link, unlink,
+  edits and "kein Beleg" take effect at once and can be undone (⌘Z); a delete asks first.
+  Space previews, D downloads, E edits. A receipt paid in a filed quarter is read only. Dropped
+  PDFs show as "wird gelesen" until `npm run extract` reads them, then the receipt takes their
+  place. Removed with the old tab: batch rename and the manual-transaction batch.
 - VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
   entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it
   means, its rate, the Ziffern it feeds and when to use it. A click, or **Codes erklärt** in the
