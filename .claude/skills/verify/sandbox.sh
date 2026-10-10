@@ -65,6 +65,7 @@ cmd_up() {
   VITE_CONFIG="$REPO/.verify/vite.$RUN.config.mjs"; mkdir -p "$REPO/.verify"
   cat > "$VITE_CONFIG" <<EOF
 import react from '@vitejs/plugin-react';
+import { devProxy } from '$REPO/src/server/app-paths.ts';
 export default {
   root: '$REPO',
   cacheDir: '$SB/.vite',
@@ -72,7 +73,7 @@ export default {
   resolve: { alias: { '@': '$REPO/src' } },
   server: {
     port: $UI_PORT, strictPort: true, host: '127.0.0.1',
-    proxy: Object.fromEntries(['/api', '/scan', '/books.json', '^/receipts/', '^/bank-statements/'].map((p) => [p, 'http://127.0.0.1:$API_PORT'])),
+    proxy: devProxy('http://127.0.0.1:$API_PORT'),
   },
 };
 EOF
