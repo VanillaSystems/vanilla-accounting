@@ -266,6 +266,68 @@ watches. A phone gets no repository credentials. Later, an upload endpoint on a 
 with a token per device that can be revoked, size limits, idempotent uploads and an
 acknowledgement the phone can show; only then the App Store receipt app with QR pairing.
 
+#### The receipt app: encrypted, paired by QR, never plain HTTP
+
+Today the receipt app (`ios/Belege`) uploads over plain `http://` to an address typed by hand,
+and `/api/upload` accepts files from anyone who can reach it. That is replaced, on iOS and on a
+later Android app alike, before the app is distributed:
+
+```
+ Desktop app (first start)                        Phone (receipt app, iOS or Android)
+ 1. creates its own key and certificate
+    (self-signed, long-lived)
+ 2. shows a QR code with:                         3. scans it once and keeps, in the
+    • its address (IP:port) and its                  system keychain:
+      Bonjour name                                    • where the desktop is
+    • the SHA-256 fingerprint of its certificate      • which certificate is genuine
+    • an upload token for this phone                  • its upload token
+                                                  4. uploads over HTTPS, and only if the
+                                                     server's certificate has exactly
+                                                     that fingerprint
+```
+
+- **Always encrypted in transit.** The app speaks HTTPS only; there is no plain-HTTP fallback,
+  not even on the local network. The phone does not ask whether a certificate authority trusts
+  the desktop, but whether the certificate is the one the QR code introduced (certificate
+  pinning). No domain, no certificate authority, no warning; someone on the same Wi-Fi cannot
+  sit in between, because his certificate has another fingerprint. The desktop serves this with
+  Node's `https` and its generated certificate; iOS checks the fingerprint in `URLSession`'s
+  server-trust challenge, Android in OkHttp's trust check. iOS additionally declares the
+  local-network exception (`NSAllowsLocalNetworking`) and the local-network permission text;
+  Android needs no cleartext exception, because there is no cleartext.
+- **Encrypted at rest on the phone.** Receipts waiting for upload are stored in the app's own
+  storage with the operating system's data protection (iOS: file protection
+  `completeUntilFirstUserAuthentication`, so a background upload still works after the first
+  unlock; Android: app-private storage, encrypted by the system). The pairing (address,
+  fingerprint, token) lives in the keychain (iOS) or the Keystore (Android), not in plain
+  settings. A delivered receipt is deleted from the phone once the desktop acknowledged it.
+- **Authorized per device.** The token in the QR code is the upload permission for that phone
+  and nothing else: it cannot read the books. The desktop lists paired phones and revokes one
+  with a click; a revoked or unknown token is refused. Uploads carry an idempotency key, so a
+  retry after a lost acknowledgement does not store a receipt twice.
+- **Found again when the address changes.** The desktop announces itself by Bonjour/mDNS (the
+  app already depends on `bonjour-service`); the phone looks it up by name when the stored
+  address no longer answers. The fingerprint stays the same, so the phone still knows it is the
+  right computer.
+- **When the desktop is not reachable** (switched off, the phone on the road), the phone keeps the
+  receipts and shows "3 Belege warten"; they go out the next time it reaches the desktop. With a
+  cloud instance, the phone uploads there instead, over ordinary HTTPS with the host's public
+  certificate, from anywhere. Without either, a shared folder (iCloud Drive) is the stop in
+  between ([ADR 0008](0008-ingestion-one-inbox.md)).
+- **The vendor is never in the path.** No relay, no pairing service and no analytics of the
+  vendor: receipts go from the phone to the company's own desktop or instance only. The app
+  stores declare no data collected by the vendor.
+
+Rejected for the phone:
+
+- **Plain HTTP on the local network:** receipts and the token would cross the Wi-Fi unencrypted,
+  and Android blocks it by default.
+- **A public certificate for every desktop** (a subdomain per customer, as Plex or Home Assistant
+  Cloud do): needs a domain, a certificate service and infrastructure run by the vendor, which
+  would put the vendor into the data path.
+- **Plain HTTP with an encryption of our own on top:** home-made cryptography instead of standard
+  TLS, and Android still blocks plain HTTP.
+
 ### 10. The model runs where the person is
 
 Each person's agent (Claude Code, Claude Cowork, Codex) runs on their own machine and
