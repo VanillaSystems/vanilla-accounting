@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 792 >>
+<< /Length 949 >>
 stream
 BT
 /F1 10 Tf
@@ -21,16 +21,18 @@ BT
 (Raiffeisenbank Musterdorf) Tj
 T* (Kontoauszug 01.08.2026 - 31.08.2026) Tj
 T* (Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich) Tj
-T* (IBAN CH4180808000000000001, Währung CHF) Tj
+T* (IBAN CH6580808000000000001, Währung CHF) Tj
 T* () Tj
 T* (Anfangssaldo 01.08.2026: 71’100.20) Tj
 T* (03.08.2026 | Dauerauftrag Liegenschaften Muster AG | -2’400.00 | Ref. 90000000048) Tj
-T* (05.08.2026 | Gutschrift Shopify Payments | 1’230.94 | Ref. 90000000049) Tj
-T* (14.08.2026 | Debitkarte Coop Pronto Musterdorf | -69.35 | Ref. 90000000050) Tj
-T* (20.08.2026 | Zahlung Post CH AG | -149.70 | Ref. 90000000051) Tj
-T* (25.08.2026 | Zahlung Gruenkaffee Muster AG | -1’939.95 | Ref. 90000000052) Tj
-T* (28.08.2026 | Gutschrift Muster Payments AG | 10’886.62 | Ref. 90000000053) Tj
-T* (Schlusssaldo 31.08.2026: 78’658.76) Tj
+T* (04.08.2026 | Gutschrift Beispiel Bistro AG | 963.72 | Ref. 90000000049) Tj
+T* (05.08.2026 | Gutschrift Shopify Payments | 1’230.94 | Ref. 90000000050) Tj
+T* (14.08.2026 | Debitkarte Coop Pronto Musterdorf | -69.35 | Ref. 90000000051) Tj
+T* (17.08.2026 | Gutschrift Muster Hotel GmbH | 600.88 | Ref. 90000000052) Tj
+T* (20.08.2026 | Zahlung Post CH AG | -149.70 | Ref. 90000000053) Tj
+T* (25.08.2026 | Zahlung Gruenkaffee Muster AG | -1’939.95 | Ref. 90000000054) Tj
+T* (28.08.2026 | Gutschrift Muster Payments AG | 10’886.62 | Ref. 90000000055) Tj
+T* (Schlusssaldo 31.08.2026: 80’223.36) Tj
 ET
 endstream
 endobj
@@ -45,5 +47,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1180
+1337
 %%EOF

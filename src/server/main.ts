@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { networkInterfaces } from 'node:os';
 import { app, READONLY } from './api.js';
+import { closeBrowser } from '../invoices/pdf.js';
 
 const PORT = Number(process.env.PORT) || 3456;
 
@@ -19,3 +20,7 @@ app.listen(PORT, () => {
   }
   console.log();
 });
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => { void closeBrowser().finally(() => process.exit(0)); });
+}

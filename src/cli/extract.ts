@@ -29,6 +29,9 @@ import type { Receipt, BankTransaction, BankStatement, Index, Mapping } from '..
 import { emptyBooks, loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
 import { openWorkspace } from '../workspace/workspace.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
+import { loadInvoices, saveInvoices } from '../invoices/store.js';
+import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
+import { fileReceipts, paymentContext } from '../invoices/service.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -456,11 +459,18 @@ async function main() {
     wiseRefs,
     bankStatements: loadBankStatements(),
   };
-  const { brokenClosedLinks, vanishedClosedTransactions } = mutateJournal(index, (books) => {
+  // Paid invoices first (ADR 0010): a payment with an invoice's reference is booked from the invoice, before classify sees it.
+  const invoices = loadInvoices(ws);
+  const payments = paymentContext(ws);
+  const { brokenClosedLinks, vanishedClosedTransactions, paid } = mutateJournal(index, (books) => {
     const merged = mergeIndex(books, scan);
     Object.assign(books, merged.index);
-    return merged;
+    return { ...merged, paid: payments ? matchPayments(books, invoices, payments) : undefined };
   });
+  if (paid) {
+    fileReceipts(ws, paid.files);
+    saveInvoices(ws, invoices);
+  }
   saveBooks(ws, index);
 
   const stagedCount = newReceipts.filter((r) => r.location === 'staged').length;
@@ -472,6 +482,7 @@ async function main() {
   console.log(`  ${index.transactions.length} transactions`);
   console.log(`  ${index.bankStatements.length} bank statement PDFs`);
   console.log(`  ${index.mappings.length} mappings`);
+  if (paid) reportPayments(paid);
 
   if (vatProofFlags.length > 0) {
     console.log(`\n⚠ ${vatProofFlags.length} receipt(s) flagged: no VAT proof (see remarks in UI):`);
@@ -492,6 +503,14 @@ async function main() {
   }
 
   console.log(`\nWrote ${ws.paths.books}`);
+}
+
+function reportPayments(paid: PaymentOutcome): void {
+  for (const p of paid.paid) {
+    console.log(`  Rechnung ${p.number}: ${p.amount.toFixed(2)}${p.fee ? ` + Mahngebühr ${p.fee.toFixed(2)}` : ''} bezahlt (${p.transactionRef})${p.booked ? ', Ertrag gebucht' : ''}`);
+  }
+  const why = { cancelled: 'die Rechnung ist storniert', currency: 'andere Währung als die Rechnung', surplus: 'mehr als offen', batch: 'Sammelzahlung mit Teilen ohne Rechnung, nicht gebucht', booked: 'die Zahlung ist schon gebucht, ohne die Rechnung', closed: 'in einer abgeschlossenen Periode' };
+  for (const q of paid.questions) console.log(`  ⚠ Zahlung ${q.transactionRef} (${q.amount.toFixed(2)}) mit der Referenz von Rechnung ${q.number}: ${why[q.problem]}. Bitte entscheiden.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

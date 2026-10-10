@@ -11,6 +11,7 @@ import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
 import type { LegalForm, Preset, QuestionKey, SupportedAnswers } from './setup.js';
 import type { Iban, StatementKind } from './banks.js';
+import type { Address, InvoicingSettings } from '../invoices/model.js';
 
 declare const brand: unique symbol;
 type Brand<T, B> = T & { readonly [brand]: B };
@@ -31,6 +32,8 @@ export interface Company {
   legalForm?: LegalForm;
   /** The language of the app's UI and of the questions agents ask the owner (appLanguages()); German when absent. */
   language?: string;
+  /** Where the company is: printed on its invoices as sender (Art. 26 MWSTG). */
+  address?: Address;
   /** Registered, effective method, cash basis, quarterly: the only setup the engine supports. */
   vat: { method: 'effective'; reporting: 'received' };
 }
@@ -77,6 +80,10 @@ export interface WorkspacePaths {
   mail: string;
   /** Terms the leak guard treats as secret that no file of the books names (src/publish/leak-guard.ts). */
   secretTerms: string;
+  /** Customers, invoices, sent documents (src/invoices/store.ts). */
+  invoices: string;
+  /** The PDFs of issued invoices (<number>.pdf), and of sent reminders and notices (sent/<id>.pdf). */
+  invoiceFiles: string;
 }
 
 export interface Workspace {
@@ -84,6 +91,8 @@ export interface Workspace {
   readonly bankAccounts: readonly LedgerBankAccount[];
   /** Absent in a workspace set up before `npm run init` existed. */
   readonly profile?: WorkspaceProfile;
+  /** Absent until the company writes invoices (the manifest's invoicing block). */
+  readonly invoicing?: InvoicingSettings;
   readonly paths: WorkspacePaths;
 }
 
@@ -103,6 +112,8 @@ export function workspacePaths(root: string): WorkspacePaths {
     data: join(root, 'data'),
     mail: join(root, 'mail.yaml'),
     secretTerms: join(root, 'secret-terms.txt'),
+    invoices: join(root, 'invoices.json'),
+    invoiceFiles: join(root, 'invoices'),
   };
 }
 

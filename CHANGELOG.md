@@ -36,6 +36,27 @@ Two markers flag an entry you must read before you update:
   Space previews, D downloads, E edits. A receipt paid in a filed quarter is read only. Dropped
   PDFs show as "wird gelesen" until `npm run extract` reads them, then the receipt takes their
   place. Removed with the old tab: batch rename and the manual-transaction batch.
+- Invoices (ADR 0010, ADR 0012): customers, invoices and credit notes with VAT per line in CHF or
+  EUR and in German, French, Italian or English, numbered when issued (2026-001, never for a
+  draft), checked against Art. 26 MWSTG before issue, frozen once issued. A draft is deleted; an
+  issued invoice is cancelled (number kept, date and reason, optional notice), and a paid one is
+  credited instead. Reminders in levels with an optional fee, in the invoice's language. Internal
+  comments. The A4 sheet with the Swiss QR-bill (QR reference with a QR-IBAN, creditor reference
+  otherwise) is printed to PDF by the Chrome, Edge, Brave or Chromium on the computer; every sent
+  document is stored byte-exact with its SHA-256 and never printed again. Settings: `company.address`
+  and an `invoicing` block in `belege.workspace.yaml` (docs/getting-started.md). Data:
+  `invoices.json` and `invoices/` in the workspace. Routes under `/api/invoices` and
+  `/api/customers`; the PDF as issued at `/invoices/<number>.pdf`.
+- Paid invoices booked by their reference: `npm run extract` matches each incoming payment whose
+  QR or creditor reference belongs to an issued invoice before anything else books it, marks the
+  invoice paid or partly paid, books the revenue from the invoice's lines with their VAT codes
+  (V81, V26, V0 for an export, V0-E for a service abroad), and files the invoice PDF as the
+  entry's receipt. A payment without the reference is proposed (`GET /api/invoices/payments`) and
+  booked when a person confirms it.
+- **⚠ figures** (demo only): the demo company Muster Kaffee now writes invoices; two of them are
+  paid by QR-bill in Q3, which adds their revenue to the demo's Q3 return. Its bank accounts carry
+  valid IBANs, so the camt.053 file names changed.
+
 - VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
   entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it
   means, its rate, the Ziffern it feeds and when to use it. A click, or **Codes erklärt** in the

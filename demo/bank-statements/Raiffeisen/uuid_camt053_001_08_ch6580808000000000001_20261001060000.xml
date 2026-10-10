@@ -10,7 +10,7 @@
       <CreDtTm>2026-10-01T06:00:00</CreDtTm>
       <FrToDt><FrDtTm>2026-07-01T00:00:00</FrDtTm><ToDtTm>2026-09-30T23:59:59</ToDtTm></FrToDt>
       <Acct>
-        <Id><IBAN>CH4180808000000000001</IBAN></Id>
+        <Id><IBAN>CH6580808000000000001</IBAN></Id>
         <Ccy>CHF</Ccy>
         <Ownr><Nm>Muster Kaffee GmbH</Nm></Ownr>
         <Svcr><FinInstnId><Nm>Raiffeisenbank Musterdorf</Nm></FinInstnId></Svcr>
@@ -23,7 +23,7 @@
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">86687.84</Amt>
+        <Amt Ccy="CHF">88252.44</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-09-30</Dt></Dt>
       </Bal>
@@ -159,13 +159,32 @@
         <AddtlNtryInf>Dauerauftrag Liegenschaften Muster AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
+        <Amt Ccy="CHF">963.72</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-08-04</Dt></BookgDt>
+        <ValDt><Dt>2026-08-04</Dt></ValDt>
+        <AcctSvcrRef>90000000049</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">963.72</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL BISTRO AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260010</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-001</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Bistro AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
         <Amt Ccy="CHF">1230.94</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-05</Dt></BookgDt>
         <ValDt><Dt>2026-08-05</Dt></ValDt>
-        <AcctSvcrRef>90000000049</AcctSvcrRef>
+        <AcctSvcrRef>90000000050</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -184,7 +203,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-14</Dt></BookgDt>
         <ValDt><Dt>2026-08-14</Dt></ValDt>
-        <AcctSvcrRef>90000000050</AcctSvcrRef>
+        <AcctSvcrRef>90000000051</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -196,13 +215,32 @@
         <AddtlNtryInf>Debitkarte Coop Pronto Musterdorf</AddtlNtryInf>
       </Ntry>
       <Ntry>
+        <Amt Ccy="CHF">600.88</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-08-17</Dt></BookgDt>
+        <ValDt><Dt>2026-08-17</Dt></ValDt>
+        <AcctSvcrRef>90000000052</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">600.88</Amt>
+            <RltdPties><Dbtr><Pty><Nm>MUSTER HOTEL GMBH</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260021</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-002</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Muster Hotel GmbH</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
         <Amt Ccy="CHF">149.70</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-20</Dt></BookgDt>
         <ValDt><Dt>2026-08-20</Dt></ValDt>
-        <AcctSvcrRef>90000000051</AcctSvcrRef>
+        <AcctSvcrRef>90000000053</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -221,7 +259,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-25</Dt></BookgDt>
         <ValDt><Dt>2026-08-25</Dt></ValDt>
-        <AcctSvcrRef>90000000052</AcctSvcrRef>
+        <AcctSvcrRef>90000000054</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -240,7 +278,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-28</Dt></BookgDt>
         <ValDt><Dt>2026-08-28</Dt></ValDt>
-        <AcctSvcrRef>90000000053</AcctSvcrRef>
+        <AcctSvcrRef>90000000055</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -258,7 +296,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-07</Dt></BookgDt>
         <ValDt><Dt>2026-09-07</Dt></ValDt>
-        <AcctSvcrRef>90000000054</AcctSvcrRef>
+        <AcctSvcrRef>90000000056</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -277,7 +315,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-14</Dt></BookgDt>
         <ValDt><Dt>2026-09-14</Dt></ValDt>
-        <AcctSvcrRef>90000000055</AcctSvcrRef>
+        <AcctSvcrRef>90000000057</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -295,7 +333,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-21</Dt></BookgDt>
         <ValDt><Dt>2026-09-21</Dt></ValDt>
-        <AcctSvcrRef>90000000056</AcctSvcrRef>
+        <AcctSvcrRef>90000000058</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -314,7 +352,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-28</Dt></BookgDt>
         <ValDt><Dt>2026-09-28</Dt></ValDt>
-        <AcctSvcrRef>90000000057</AcctSvcrRef>
+        <AcctSvcrRef>90000000059</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -332,7 +370,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-30</Dt></BookgDt>
         <ValDt><Dt>2026-09-30</Dt></ValDt>
-        <AcctSvcrRef>90000000058</AcctSvcrRef>
+        <AcctSvcrRef>90000000060</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -357,7 +395,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-30</Dt></BookgDt>
         <ValDt><Dt>2026-09-30</Dt></ValDt>
-        <AcctSvcrRef>90000000059</AcctSvcrRef>
+        <AcctSvcrRef>90000000061</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>

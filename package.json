@@ -62,6 +62,8 @@
     "@fontsource/geist-mono": "^5.3.0",
     "@fontsource/hanken-grotesk": "^5.3.0",
     "@fontsource/instrument-sans": "^5.3.0",
+    "@fontsource/arimo": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "bonjour-service": "^1.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -72,8 +74,10 @@
     "lucide-react": "^0.468.0",
     "mailparser": "^3.9.11",
     "pdfjs-dist": "^5.4.624",
+    "puppeteer-core": "^25.13.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "swissqrbill": "^4.4.2",
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {

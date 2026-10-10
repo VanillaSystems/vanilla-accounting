@@ -1,0 +1,917 @@
+{
+  "schema": 1,
+  "customers": [
+    {
+      "id": "cu_5GQVervgd2rF",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "name": "Beispiel Bistro AG",
+      "address": {
+        "street": "Seeweg",
+        "number": "12",
+        "postcode": "3000",
+        "town": "Bern",
+        "country": "CH"
+      },
+      "language": "de",
+      "vatId": "CHE-987.654.320 MWST",
+      "email": "buchhaltung@bistro.example",
+      "paymentTermsDays": 30
+    },
+    {
+      "id": "cu_2KIQYfUMHYIT",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "name": "Muster Hotel GmbH",
+      "attn": "Küche, z. H. Herr Beispiel",
+      "address": {
+        "street": "Pilatusstrasse",
+        "number": "9",
+        "postcode": "6003",
+        "town": "Luzern",
+        "country": "CH"
+      },
+      "language": "de",
+      "email": "kueche@musterhotel.example",
+      "paymentTermsDays": 20
+    },
+    {
+      "id": "cu_MVknjIERgg_T",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "name": "Café Exemple Sàrl",
+      "address": {
+        "street": "Rue du Marché",
+        "number": "12",
+        "postcode": "1204",
+        "town": "Genève",
+        "country": "CH"
+      },
+      "language": "fr",
+      "vatId": "CHE-111.222.334 TVA",
+      "email": "compta@cafe-exemple.example",
+      "paymentTermsDays": 30
+    },
+    {
+      "id": "cu_xeA65pqbdX_h",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "name": "Kaffeehaus Beispiel GmbH",
+      "address": {
+        "street": "Lindenstrasse",
+        "number": "7",
+        "postcode": "80331",
+        "town": "München",
+        "country": "DE"
+      },
+      "language": "de",
+      "vatId": "DE999999999",
+      "email": "einkauf@kaffeehaus-beispiel.example",
+      "paymentTermsDays": 30
+    }
+  ],
+  "invoices": [
+    {
+      "id": "in_VWzEXhFm3hTa",
+      "createdAt": "2026-07-06T09:12:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-07-06",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Bohnen 1 kg",
+          "quantity": 20,
+          "unit": "pcs",
+          "price": 28,
+          "vatRate": 2.6
+        },
+        {
+          "text": "Barista-Schulung im Betrieb",
+          "quantity": 3,
+          "unit": "h",
+          "price": 120,
+          "vatRate": 8.1,
+          "account": "3600"
+        }
+      ],
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Hausmischung und Barista-Schulung",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-001",
+      "issuedAt": "2026-07-06T09:12:00.000Z",
+      "dueDate": "2026-08-05",
+      "reference": "000000000000000000020260010",
+      "customer": {
+        "name": "Beispiel Bistro AG",
+        "address": {
+          "street": "Seeweg",
+          "number": "12",
+          "postcode": "3000",
+          "town": "Bern",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-987.654.320 MWST",
+        "email": "buchhaltung@bistro.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [
+        {
+          "transactionRef": "90000000049",
+          "date": "2026-08-04",
+          "amount": 963.72,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "invoices/2026-001.pdf",
+        "sha256": "8a9aa66feb0cbf729a76d9ded0ed160e8194b21ef656fb35965624ab8b21c8d5"
+      }
+    },
+    {
+      "id": "in_S9Jcs6yeSIZJ",
+      "createdAt": "2026-07-20T14:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-07-20",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Filterkaffee Guji, Bohnen 500 g",
+          "quantity": 24,
+          "unit": "pcs",
+          "price": 16.5,
+          "vatRate": 2.6
+        },
+        {
+          "text": "Wartung Siebträgermaschine, inkl. Dichtungen",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 180,
+          "vatRate": 8.1,
+          "account": "3600"
+        }
+      ],
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Filterkaffee und Wartung",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 20 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-002",
+      "issuedAt": "2026-07-20T14:30:00.000Z",
+      "dueDate": "2026-08-09",
+      "reference": "000000000000000000020260021",
+      "customer": {
+        "name": "Muster Hotel GmbH",
+        "attn": "Küche, z. H. Herr Beispiel",
+        "address": {
+          "street": "Pilatusstrasse",
+          "number": "9",
+          "postcode": "6003",
+          "town": "Luzern",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "kueche@musterhotel.example",
+        "paymentTermsDays": 20
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [
+        {
+          "transactionRef": "90000000052",
+          "date": "2026-08-17",
+          "amount": 600.88,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "invoices/2026-002.pdf",
+        "sha256": "42f90ab18b7ca8be0cabbd3ae2682bb1c38a2d640c56c626e050fb7db1ae6a6a"
+      }
+    },
+    {
+      "id": "in_glJAMD-ee_Jz",
+      "createdAt": "2026-08-17T08:05:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-08-17",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Bohnen 1 kg",
+          "quantity": 30,
+          "unit": "pcs",
+          "price": 28,
+          "vatRate": 2.6
+        }
+      ],
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Hausmischung August",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-003",
+      "issuedAt": "2026-08-17T08:05:00.000Z",
+      "dueDate": "2026-09-16",
+      "reference": "000000000000000000020260036",
+      "customer": {
+        "name": "Beispiel Bistro AG",
+        "address": {
+          "street": "Seeweg",
+          "number": "12",
+          "postcode": "3000",
+          "town": "Bern",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-987.654.320 MWST",
+        "email": "buchhaltung@bistro.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [],
+      "reminders": [
+        {
+          "level": 1,
+          "date": "2026-09-28",
+          "dueDate": "2026-10-08",
+          "intro": "Unsere Rechnung 2026-003 vom 17.08.2026 war am 16.09.2026 fällig. Bis heute haben wir keine Zahlung erhalten. Bitte überweisen Sie den offenen Betrag innert 10 Tagen.",
+          "closing": "Falls Sie inzwischen bezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\nFreundliche Grüsse",
+          "documentId": "sd_XL9s3VHctVsb"
+        }
+      ],
+      "comments": [
+        {
+          "id": "co_6HuujLjqJR8L",
+          "createdAt": "2026-10-06T10:12:00.000Z",
+          "origin": "manual",
+          "deleted": false,
+          "author": "Anna Muster",
+          "text": "Telefonisch nachgefragt: Buchhaltung war in den Ferien, zahlt bis Ende Oktober."
+        }
+      ],
+      "pdf": {
+        "file": "invoices/2026-003.pdf",
+        "sha256": "87627eab8d0275ad2b620a2158074539964eaa6a3a3eebe30a48818853198a2f"
+      }
+    },
+    {
+      "id": "in_bGsKxKfMFmsz",
+      "createdAt": "2026-09-02T10:40:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "credit-note",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "date": "2026-09-02",
+      "currency": "CHF",
+      "language": "de",
+      "subject": "Gutschrift 2026-002",
+      "lines": [
+        {
+          "text": "2 Pakete Filterkaffee beschädigt geliefert",
+          "quantity": -1,
+          "unit": "flat",
+          "price": 33,
+          "vatRate": 2.6
+        }
+      ],
+      "creditFor": "in_S9Jcs6yeSIZJ",
+      "settlement": "offset",
+      "closing": "Freundliche Grüsse",
+      "intro": "",
+      "status": "issued",
+      "number": "2026-004",
+      "issuedAt": "2026-09-02T10:40:00.000Z",
+      "dueDate": "2026-09-22",
+      "reference": "000000000000000000020260044",
+      "customer": {
+        "name": "Muster Hotel GmbH",
+        "attn": "Küche, z. H. Herr Beispiel",
+        "address": {
+          "street": "Pilatusstrasse",
+          "number": "9",
+          "postcode": "6003",
+          "town": "Luzern",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "kueche@musterhotel.example",
+        "paymentTermsDays": 20
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "invoices/2026-004.pdf",
+        "sha256": "68b1b20d7f0e15c9811fa0906a333308ac8ec1aa9019f640702af4745a97c623"
+      }
+    },
+    {
+      "id": "in_CK97dEv4JYjS",
+      "createdAt": "2026-09-21T13:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-09-21",
+      "currency": "EUR",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Espresso-Mischung, Bohnen 1 kg",
+          "quantity": 40,
+          "unit": "pcs",
+          "price": 19.5,
+          "vatRate": 0
+        },
+        {
+          "text": "Transport bis Grenze",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 85,
+          "vatRate": 0
+        }
+      ],
+      "customerId": "cu_xeA65pqbdX_h",
+      "subject": "Espresso-Mischung, Export",
+      "exemption": "export",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-005",
+      "issuedAt": "2026-09-21T13:00:00.000Z",
+      "dueDate": "2026-10-21",
+      "reference": "RF492026005",
+      "customer": {
+        "name": "Kaffeehaus Beispiel GmbH",
+        "address": {
+          "street": "Lindenstrasse",
+          "number": "7",
+          "postcode": "80331",
+          "town": "München",
+          "country": "DE"
+        },
+        "language": "de",
+        "vatId": "DE999999999",
+        "email": "einkauf@kaffeehaus-beispiel.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1023",
+          "iban": "BE29967000000164",
+          "bank": "Wise"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "invoices/2026-005.pdf",
+        "sha256": "e49c0ef9b3177448993e61287a967be8d4bafdeedec44fce906c2b6a031004c2"
+      }
+    },
+    {
+      "id": "in_rM737093UX1y",
+      "createdAt": "2026-09-29T15:20:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-09-29",
+      "currency": "CHF",
+      "language": "fr",
+      "lines": [
+        {
+          "text": "Mélange espresso maison, grains 1 kg",
+          "quantity": 15,
+          "unit": "pcs",
+          "price": 29,
+          "vatRate": 2.6
+        },
+        {
+          "text": "Formation barista sur place",
+          "quantity": 4,
+          "unit": "h",
+          "price": 120,
+          "vatRate": 8.1,
+          "account": "3600"
+        }
+      ],
+      "customerId": "cu_MVknjIERgg_T",
+      "subject": "Mélange maison et formation",
+      "intro": "Nous vous remercions de votre mandat et vous facturons les prestations suivantes :",
+      "closing": "Payable dans les 30 jours.\nMeilleures salutations, Anna Muster",
+      "status": "issued",
+      "number": "2026-006",
+      "issuedAt": "2026-09-29T15:20:00.000Z",
+      "dueDate": "2026-10-29",
+      "reference": "000000000000000000020260068",
+      "customer": {
+        "name": "Café Exemple Sàrl",
+        "address": {
+          "street": "Rue du Marché",
+          "number": "12",
+          "postcode": "1204",
+          "town": "Genève",
+          "country": "CH"
+        },
+        "language": "fr",
+        "vatId": "CHE-111.222.334 TVA",
+        "email": "compta@cafe-exemple.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "invoices/2026-006.pdf",
+        "sha256": "9a431ce8c21b37822d1effb7ef8b1bbd92ace583b64ecce881ecc2f7fcf1650d"
+      }
+    },
+    {
+      "id": "in_31CeXXkIQDem",
+      "createdAt": "2026-10-01T07:45:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-10-01",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Filterkaffee Guji, Bohnen 500 g",
+          "quantity": 24,
+          "unit": "pcs",
+          "price": 16.5,
+          "vatRate": 2.6
+        }
+      ],
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Filterkaffee Oktober",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 20 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-007",
+      "issuedAt": "2026-10-01T07:45:00.000Z",
+      "dueDate": "2026-10-21",
+      "reference": "000000000000000000020260073",
+      "customer": {
+        "name": "Muster Hotel GmbH",
+        "attn": "Küche, z. H. Herr Beispiel",
+        "address": {
+          "street": "Pilatusstrasse",
+          "number": "9",
+          "postcode": "6003",
+          "town": "Luzern",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "kueche@musterhotel.example",
+        "paymentTermsDays": 20
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "invoices/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "invoices/2026-007.pdf",
+        "sha256": "c29a93828b3f18cadc860f5861a562ebcccfe6e4d1c0f7177043970b23f72980"
+      },
+      "cancelled": {
+        "date": "2026-10-02",
+        "reason": "doppelt erfasst"
+      }
+    },
+    {
+      "id": "in_8rkN6yKIRdjB",
+      "createdAt": "2026-10-09T16:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "status": "draft",
+      "kind": "invoice",
+      "date": "2026-10-09",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Barista-Schulung Latte Art, Gruppe bis 6 Personen",
+          "quantity": 1,
+          "unit": "day",
+          "price": 680,
+          "vatRate": 8.1,
+          "account": "3600"
+        },
+        {
+          "text": "Kursmaterial und Milch",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 45,
+          "vatRate": 8.1,
+          "account": "3600"
+        }
+      ],
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Barista-Schulung Oktober",
+      "comments": []
+    },
+    {
+      "id": "in_0gN7t9VlKZTs",
+      "createdAt": "2026-10-10T11:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "status": "draft",
+      "kind": "invoice",
+      "date": "2026-10-10",
+      "currency": "CHF",
+      "language": "fr",
+      "lines": [
+        {
+          "text": "Mélange espresso maison, grains 1 kg",
+          "quantity": 20,
+          "unit": "pcs",
+          "price": 29,
+          "vatRate": 2.6
+        }
+      ],
+      "customerId": "cu_MVknjIERgg_T",
+      "subject": "Mélange maison octobre",
+      "comments": []
+    }
+  ],
+  "sent": [
+    {
+      "id": "sd_R-O8clcjxMXw",
+      "createdAt": "2026-07-06T09:12:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_VWzEXhFm3hTa",
+      "kind": "invoice",
+      "title": "Rechnung 2026-001",
+      "file": "invoices/2026-001.pdf",
+      "sha256": "8a9aa66feb0cbf729a76d9ded0ed160e8194b21ef656fb35965624ab8b21c8d5",
+      "sentAt": "2026-07-06T09:12:00.000Z",
+      "to": "buchhaltung@bistro.example"
+    },
+    {
+      "id": "sd_N7zXG9NsOQo6",
+      "createdAt": "2026-07-20T14:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_S9Jcs6yeSIZJ",
+      "kind": "invoice",
+      "title": "Rechnung 2026-002",
+      "file": "invoices/2026-002.pdf",
+      "sha256": "42f90ab18b7ca8be0cabbd3ae2682bb1c38a2d640c56c626e050fb7db1ae6a6a",
+      "sentAt": "2026-07-20T14:30:00.000Z",
+      "to": "kueche@musterhotel.example"
+    },
+    {
+      "id": "sd_hakNjz3OdQ9D",
+      "createdAt": "2026-08-17T08:05:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_glJAMD-ee_Jz",
+      "kind": "invoice",
+      "title": "Rechnung 2026-003",
+      "file": "invoices/2026-003.pdf",
+      "sha256": "87627eab8d0275ad2b620a2158074539964eaa6a3a3eebe30a48818853198a2f",
+      "sentAt": "2026-08-17T08:05:00.000Z",
+      "to": "buchhaltung@bistro.example"
+    },
+    {
+      "id": "sd_R89wIzO9Auev",
+      "createdAt": "2026-09-02T10:40:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_bGsKxKfMFmsz",
+      "kind": "credit-note",
+      "title": "Gutschrift 2026-004",
+      "file": "invoices/2026-004.pdf",
+      "sha256": "68b1b20d7f0e15c9811fa0906a333308ac8ec1aa9019f640702af4745a97c623",
+      "sentAt": "2026-09-02T10:40:00.000Z",
+      "to": "kueche@musterhotel.example"
+    },
+    {
+      "id": "sd_B5T2ulLAXEwN",
+      "createdAt": "2026-09-21T13:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_CK97dEv4JYjS",
+      "kind": "invoice",
+      "title": "Rechnung 2026-005",
+      "file": "invoices/2026-005.pdf",
+      "sha256": "e49c0ef9b3177448993e61287a967be8d4bafdeedec44fce906c2b6a031004c2",
+      "sentAt": "2026-09-21T13:00:00.000Z",
+      "to": "einkauf@kaffeehaus-beispiel.example"
+    },
+    {
+      "id": "sd_XL9s3VHctVsb",
+      "createdAt": "2026-09-28T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_glJAMD-ee_Jz",
+      "kind": "reminder",
+      "title": "1. Mahnung · Rechnung 2026-003",
+      "file": "invoices/sent/sd_XL9s3VHctVsb.pdf",
+      "sha256": "6fc0c8faa3764baafc8650724772cb5b7a6b6be93690ac9ab5004e4506387239",
+      "sentAt": "2026-09-28T09:00:00.000Z",
+      "to": "buchhaltung@bistro.example"
+    },
+    {
+      "id": "sd_LiJyNqXGdGxl",
+      "createdAt": "2026-09-29T15:20:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_rM737093UX1y",
+      "kind": "invoice",
+      "title": "Facture 2026-006",
+      "file": "invoices/2026-006.pdf",
+      "sha256": "9a431ce8c21b37822d1effb7ef8b1bbd92ace583b64ecce881ecc2f7fcf1650d",
+      "sentAt": "2026-09-29T15:20:00.000Z",
+      "to": "compta@cafe-exemple.example"
+    },
+    {
+      "id": "sd_aI3ItU60xlva",
+      "createdAt": "2026-10-01T07:45:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_31CeXXkIQDem",
+      "kind": "invoice",
+      "title": "Rechnung 2026-007",
+      "file": "invoices/2026-007.pdf",
+      "sha256": "c29a93828b3f18cadc860f5861a562ebcccfe6e4d1c0f7177043970b23f72980",
+      "sentAt": "2026-10-01T07:45:00.000Z",
+      "to": "kueche@musterhotel.example"
+    },
+    {
+      "id": "sd_oK6z1b13K2C6",
+      "createdAt": "2026-10-02T08:10:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_31CeXXkIQDem",
+      "kind": "cancellation",
+      "title": "STORNIERT: Rechnung 2026-007",
+      "file": "invoices/sent/sd_oK6z1b13K2C6.pdf",
+      "sha256": "a0683f42bdd093cc3f777f19b0081a0f5a01181327470e6d1de908fc0bc41044",
+      "sentAt": "2026-10-02T08:10:00.000Z",
+      "to": "kueche@musterhotel.example"
+    }
+  ]
+}

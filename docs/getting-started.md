@@ -157,6 +157,10 @@ them, and `npm run doctor` names each skipped file.
 After the first import, check the Bank tab: the transactions, and that the closing balance
 matches your bank (`npm run reconcile-balances`).
 
+An incoming payment that carries the QR or creditor reference of an invoice you issued in the app
+is booked by the import itself, from the invoice's lines and VAT rates, with the invoice PDF as its
+receipt (see [Invoices](#invoices)).
+
 ## 5. Add receipts
 
 Put receipts (PDF; photos as PNG or JPG need ImageMagick: `brew install imagemagick`) into
@@ -213,14 +217,46 @@ the new format (with a backup in `data/backups/`), and runs `npm run doctor` and
 from `CHANGELOG.md`: an entry marked **⚠ figures** changes a figure of an open quarter, and one
 marked **⚠ action** needs something from you. Commit your workspace afterwards.
 
+## Invoices
+
+The app writes invoices with a Swiss QR-bill. Add the company's address and an `invoicing` block to
+`belege.workspace.yaml`:
+
+```yaml
+company:
+  # name, uid, owner as before
+  address: { street: Musterstrasse, number: "1", postcode: "8000", town: Zürich, country: CH }
+bankAccounts:
+  - { bank: Raiffeisen, currency: CHF, account: "1021", label: Bank Raiffeisen, iban: CH65 8080 8000 0000 0000 1 }
+invoicing:
+  payTo:
+    CHF: { account: "1021", qrIban: CH44 3199 9123 0008 8901 2 }
+  revenueAccount: "3400"
+  paymentTermsDays: 30
+  layout: { logo: invoices/logo.svg, accent: "#141a26" }
+```
+
+- `payTo` names, per currency (CHF, EUR), the bank account customers pay to. The account needs its
+  IBAN. With a QR-IBAN from your bank, the QR-bill carries a QR reference; without one, a creditor
+  reference (RF…). An account outside Switzerland and Liechtenstein prints its IBAN instead of a
+  QR-bill.
+- `revenueAccount` is where a paid invoice's revenue is booked, unless a line names its own account.
+- `layout` and `texts` (the text above and below the table, per language, `{days}` for the payment
+  term) are optional.
+
+Printing an invoice needs Google Chrome, Microsoft Edge, Brave or Chromium on the computer (or
+`CHROME_PATH` set to one). An issued invoice is stored as `invoices/<number>.pdf` and never printed
+again; `invoices.json` holds the customers, the invoices and what was sent.
+
 ## Limits
 
 - **VAT:** effective method, cash basis, quarterly returns only. No Saldosteuersatz, no
   vereinbarte Entgelte, no books without VAT, no fiscal year other than the calendar year.
 - **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement.
-- **Invoicing:** Vanilla Accounting does not write invoices or track open ones. A sale is booked when its
-  payment arrives.
+- **Invoicing:** invoices, credit notes, reminders and cancellations are written through the API;
+  their screens and sending by e-mail come later. A sale is booked when its payment arrives, also
+  for an invoice; open invoices are not receivables in the books.
 - **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and
   Wise; for another bank, check the first statement's transactions and closing balance. camt.054
   notifications and PayPal and credit card statements are not imported: book those by hand.
