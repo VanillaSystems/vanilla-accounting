@@ -40,7 +40,10 @@ versions and their migration ladders. To change a format:
 3. Add a test: a file of the old version in, the expected file out, and a second run that
    changes nothing (`tests/schema.test.ts` shows the shape).
 4. Write the changelog entry. `npm run update` writes the new format to the adopter's
-   workspace, with a backup in `data/backups/`.
+   workspace, with a backup in `data/backups/`. That holds while one person writes the
+   workspace. Once a contributor or a cloud instance writes it too, the app does not migrate on
+   update: the migration is the owner's event on `main`, and every app checks the formats it
+   can read and write on each write ([ADR 0004](adr/0004-versions-and-record-envelope.md)).
 
 ## Cutting a release
 
