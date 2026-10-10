@@ -45,6 +45,7 @@ docs/quarter-workflow.md
 docs/year-end.md
 docs/adr/**
 docs/personas/**
+docs/redesign/**
 docs/casebook.md
 docs/i18n.md
 docs/i18n-review.md

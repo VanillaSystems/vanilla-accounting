@@ -90,7 +90,7 @@ test('update pulls a release, prints its changelog, writes the workspace at the 
   assert.match(r.out, /A stand-in fix/);
   assert.match(r.out, /books\.json: schema \(none\) → 1, backup data\/backups\/books\.json\.schema-none/);
   assert.match(r.out, /belege\.workspace\.yaml: schema \(none\) → 1/);
-  assert.match(r.out, /^# pass [1-9]\d*$/m, 'the golden master ran its tests');
+  assert.match(r.out, /^(# |ℹ )pass [1-9]\d*$/m, 'the golden master ran its tests');
   assert.match(r.out, /✓ npm run test:books/);
   assert.match(r.out, /Up to date\./);
   assert.equal(ciCalls(), 0, 'the lockfile did not change');
