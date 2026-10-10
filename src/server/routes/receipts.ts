@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import { renameSync, existsSync, unlinkSync, createReadStream } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import type { Receipt, ReceiptPatch } from '../../types/index.js';
+import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { ask } from '../../llm/ask.js';
 import { buildDateSuggestPrompt, buildVisionPrompt } from '../../llm/prompts.js';
 import { receiptDir, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
-/** An empty description or remark clears it. */
+/** An empty description or remark clears it; null clears a date, an amount or a kind. */
 function parseReceiptPatch(body: unknown): ReceiptPatch {
-  const b = patchBody(body, ['filename', 'date', 'amount', 'currency', 'description', 'remarks']);
+  const b = patchBody(body, ['filename', 'date', 'amount', 'currency', 'description', 'remarks', 'kind']);
   const patch: ReceiptPatch = {};
   if ('filename' in b) {
     const filename = stringField(b, 'filename').trim();
@@ -20,21 +20,46 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
     patch.filename = filename;
   }
   if ('date' in b) {
-    const date = stringField(b, 'date');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new RequestError(400, 'date muss JJJJ-MM-TT sein.');
-    patch.date = date;
+    if (b.date === null) patch.date = null;
+    else {
+      const date = stringField(b, 'date');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new RequestError(400, 'date muss JJJJ-MM-TT sein.');
+      patch.date = date;
+    }
   }
-  if ('amount' in b !== 'currency' in b) throw new RequestError(400, 'amount und currency nur zusammen.');
-  if ('amount' in b) {
-    if (typeof b.amount !== 'number' || !Number.isFinite(b.amount)) throw new RequestError(400, 'amount muss eine Zahl sein.');
-    const currency = stringField(b, 'currency').trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) throw new RequestError(400, 'currency muss ein ISO-Code sein (z.B. CHF).');
-    patch.amount = b.amount;
-    patch.currency = currency;
+  if (b.amount === null) {
+    if ('currency' in b) throw new RequestError(400, 'amount und currency nur zusammen.');
+    patch.amount = null;
+  } else {
+    if ('amount' in b !== 'currency' in b) throw new RequestError(400, 'amount und currency nur zusammen.');
+    if ('amount' in b) {
+      if (typeof b.amount !== 'number' || !Number.isFinite(b.amount)) throw new RequestError(400, 'amount muss eine Zahl sein.');
+      const currency = stringField(b, 'currency').trim().toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currency)) throw new RequestError(400, 'currency muss ein ISO-Code sein (z.B. CHF).');
+      patch.amount = b.amount;
+      patch.currency = currency;
+    }
   }
   if ('description' in b) patch.description = stringField(b, 'description') || undefined;
   if ('remarks' in b) patch.remarks = stringField(b, 'remarks') || undefined;
+  if ('kind' in b) {
+    if (b.kind !== null && !RECEIPT_KINDS.includes(b.kind as ReceiptKind)) throw new RequestError(400, `kind muss eines von ${RECEIPT_KINDS.join(', ')} sein.`);
+    patch.kind = b.kind as ReceiptKind | null;
+  }
   return patch;
+}
+
+/** The receipt with the patch applied: null removes a field, a kind is a person's. */
+function patched(receipt: Receipt, { date, amount, kind, ...rest }: ReceiptPatch): Receipt {
+  const out: Receipt = { ...receipt, ...rest };
+  if (date !== undefined) out.date = date ?? undefined;
+  if (amount !== undefined) out.amount = amount ?? undefined;
+  if (kind !== undefined) {
+    out.kind = kind ?? undefined;
+    out.kindBy = kind ? 'human' : undefined;
+    out.kindRule = undefined;
+  }
+  return out;
 }
 
 router.get('/api/receipts/:id', (req, res) => {
@@ -125,7 +150,7 @@ router.patch('/api/receipts/:id', (req, res) => {
 
       const receipt = books.receipts[idx];
       if (patch.filename !== undefined) undoRename = renameReceiptFile(receipt, patch.filename);
-      books.receipts[idx] = { ...receipt, ...patch };
+      books.receipts[idx] = patched(receipt, patch);
       return { ok: true, receipt: books.receipts[idx] };
     });
   } catch (err) {

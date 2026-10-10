@@ -10,7 +10,7 @@
  * stronger one. See docs/adr/0002-counterparty-knowledge-and-lean-calls.md.
  */
 
-import type { BankTransaction, Receipt, ReceiptKind } from '../types/index.js';
+import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
 
 /** Strongest first. The order is the routing precedence. */
 export const TIERS = ['uid', 'domain', 'tx', 'file'] as const;
@@ -31,7 +31,6 @@ export interface Matchers {
   file: RegExp[];
 }
 
-const KINDS: readonly ReceiptKind[] = ['invoice', 'sales-record', 'supporting', 'statement', 'noise', 'duplicate'];
 
 /** A document type a counterparty issues, recognised from the receipt text (every pattern must appear). */
 export interface DocumentType {
@@ -168,7 +167,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   if (TIERS.every((t) => match[t].length === 0)) fail('match needs at least one signal');
   const documents = (raw.documents ?? []).map((d, i) => {
     if (!d.id) fail(`documents[${i}] needs an id`);
-    if (!d.kind || !(KINDS as readonly string[]).includes(d.kind)) fail(`documents ${d.id}: kind must be one of ${KINDS.join(', ')}`);
+    if (!d.kind || !(RECEIPT_KINDS as readonly string[]).includes(d.kind)) fail(`documents ${d.id}: kind must be one of ${RECEIPT_KINDS.join(', ')}`);
     if (!d.text?.length) fail(`documents ${d.id}: text needs at least one pattern`);
     return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')) };
   });

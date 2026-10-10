@@ -23,7 +23,8 @@ export interface ReceiptLine {
  * a supporting document (a Post Aufgabebestätigung billed on the monthly invoice, a delivery
  * note) is kept as proof but never matched. See processes/receipt-intake.flow.yaml.
  */
-export type ReceiptKind = 'invoice' | 'sales-record' | 'supporting' | 'statement' | 'noise' | 'duplicate';
+export const RECEIPT_KINDS = ['invoice', 'sales-record', 'supporting', 'statement', 'noise', 'duplicate'] as const;
+export type ReceiptKind = typeof RECEIPT_KINDS[number];
 
 export interface Receipt {
   id: string;
@@ -52,6 +53,15 @@ export interface Receipt {
   /** Who set the kind: a rule (named in kindRule) or a person. A person's kind is never overwritten. */
   kindBy?: 'rule' | 'human';
   kindRule?: string;
+}
+
+/** A PDF in the workspace's inbox that no receipt holds yet (GET /api/inbox). */
+export interface InboxFile {
+  /** The id its receipt will have once it is read. */
+  id: string;
+  filename: string;
+  size: number;
+  addedAt: string;
 }
 
 export interface Mapping {
@@ -214,8 +224,13 @@ export interface BankTransaction {
   reference?: string;
 }
 
-/** The body of PATCH /api/receipts/:id. amount and currency go together; an empty description or remark clears it. */
-export type ReceiptPatch = Partial<Pick<Receipt, 'filename' | 'date' | 'amount' | 'currency' | 'description' | 'remarks'>>;
+/**
+ * The body of PATCH /api/receipts/:id. amount and currency go together; null clears a date, an
+ * amount or a kind (an undo puts back what was not there); an empty description or remark clears
+ * it. A kind sent here is a person's (kindBy 'human').
+ */
+export type ReceiptPatch = Partial<Pick<Receipt, 'filename' | 'currency' | 'description' | 'remarks'>>
+  & { date?: string | null; amount?: number | null; kind?: ReceiptKind | null };
 
 /** The body of PATCH /api/transactions/:ref. An empty remark or noReceiptNeeded false clears the field. */
 export type TransactionPatch = Partial<Pick<BankTransaction, 'description' | 'remarks' | 'noReceiptNeeded'>>;

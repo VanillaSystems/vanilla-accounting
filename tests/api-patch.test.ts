@@ -95,7 +95,9 @@ const invalid: Array<[string, Record<string, unknown>]> = [
   ['amount without currency', { filename: 'neu.pdf', amount: 12 }],
   ['a bad date', { filename: 'neu.pdf', date: '12.08.2026' }],
   ['a path as filename', { filename: '../neu.pdf', description: 'neu' }],
-  ['an unknown field', { filename: 'neu.pdf', kind: 'noise' }],
+  ['an unknown field', { filename: 'neu.pdf', vendor: 'neu' }],
+  ['an unknown kind', { filename: 'neu.pdf', kind: 'brochure' }],
+  ['a currency with a cleared amount', { filename: 'neu.pdf', amount: null, currency: 'EUR' }],
 ];
 
 for (const [what, body] of invalid) {
