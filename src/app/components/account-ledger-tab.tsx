@@ -13,7 +13,7 @@ import { EntryLinks, OpenInTabLink } from './open-in-tab-link.js';
 import { t } from '../i18n/index.js';
 import { FxChf } from './fx-amount.js';
 import { sources } from '../lib/api.js';
-import { receiptHref, setView, viewParams, viewPath } from '../lib/location.js';
+import { receiptHref, setView, viewParams } from '../lib/location.js';
 
 interface Props {
   index: Index;
@@ -64,7 +64,7 @@ export function AccountLedgerTab({ index, period }: Props) {
       if (v) params.set(k, v);
       else params.delete(k);
     }
-    setView(viewPath(), params);
+    setView(params);
   }, [selectedAccount, selectedEntryId, selectedReceiptId]);
 
   const { from, to } = period;

@@ -158,3 +158,12 @@ export function periodContaining(date: IsoDate | undefined, current?: Period): s
 export function localToday(now = new Date()): IsoDate {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
+
+/**
+ * The quarter the work is in: the first one after the filed ones (`closedThrough`), or today's
+ * quarter when nothing is filed. A page shows it unless its link names another period.
+ */
+export function openQuarter(closedThrough: IsoDate | undefined, today: IsoDate): Period {
+  const day = closedThrough ? addDays(closedThrough, 1) : today;
+  return parsePeriod(`${day.slice(0, 4)}-Q${quarterOf(Number(day.slice(5, 7)))}`, today)!;
+}

@@ -1,52 +1,64 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import * as Tabs from '@radix-ui/react-tabs';
-import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2, Sun, Moon, Monitor, ZoomIn, ZoomOut, Lock } from 'lucide-react';
-import type { Receipt } from '../../src/types/index.js';
-import { useIndex } from './hooks/use-index.js';
-import { FxProvider } from './hooks/use-fx.js';
-import { useApiStatus } from './hooks/use-api-status.js';
-import { useUrlState, type FilterMode } from './hooks/use-url-state.js';
-import { useTheme, useZoom, usePersistedFlag } from './hooks/use-display-prefs.js';
-import { SearchBar } from './components/search-bar.js';
-import { ReceiptsTable, isNonReceipt } from './components/receipts-table.js';
-import { TransactionsTable } from './components/transactions-table.js';
-import { BankStatementsTab } from './components/bank-statements-tab.js';
-import { JournalEntriesTab } from './components/journal-entries-tab.js';
-import { TrialBalanceTab } from './components/trial-balance-tab.js';
-import { BalanceSheetTab } from './components/balance-sheet-tab.js';
-import { IncomeStatementTab } from './components/income-statement-tab.js';
-import { VatReportTab } from './components/vat-report-tab.js';
-import { AccountLedgerTab } from './components/account-ledger-tab.js';
-import { BankReconciliationTab } from './components/bank-reconciliation-tab.js';
-import { YearCloseTab } from './components/year-close-tab.js';
-import { SplitPane } from './components/split-pane.js';
-import { PeriodPicker } from './components/period-picker.js';
-import { AssignPanel } from './components/assign-panel.js';
-import { ManualBatchModal } from './components/manual-batch-modal.js';
-import { TransactionDetail } from './components/transaction-detail.js';
-import { PdfFrame } from './components/pdf-frame.js';
-import { ReceiptEditForm } from './components/receipt-edit-form.js';
-import { ManualTransactionForm } from './components/manual-transaction-form.js';
-import { cn, formatDate } from './lib/utils.js';
-import { api, orAlert, errorText, sources, STATIC_EXPORT } from './lib/api.js';
-import { LOCALES, t } from './i18n/index.js';
+import { ExternalLink, X, Pencil, Wand2, Link2, ScanLine, Plus, Trash2 } from 'lucide-react';
+import type { Index, Receipt } from '../../types/index.js';
+import type { Period } from '../../accounting/periods.js';
+import { FxProvider } from '../hooks/use-fx.js';
+import { usePersistedFlag } from '../shell/prefs.js';
+import { SearchBar } from '../components/search-bar.js';
+import { ReceiptsTable, isNonReceipt } from '../components/receipts-table.js';
+import { TransactionsTable } from '../components/transactions-table.js';
+import { BankStatementsTab } from '../components/bank-statements-tab.js';
+import { JournalEntriesTab } from '../components/journal-entries-tab.js';
+import { TrialBalanceTab } from '../components/trial-balance-tab.js';
+import { BalanceSheetTab } from '../components/balance-sheet-tab.js';
+import { IncomeStatementTab } from '../components/income-statement-tab.js';
+import { VatReportTab } from '../components/vat-report-tab.js';
+import { AccountLedgerTab } from '../components/account-ledger-tab.js';
+import { BankReconciliationTab } from '../components/bank-reconciliation-tab.js';
+import { YearCloseTab } from '../components/year-close-tab.js';
+import { SplitPane } from '../components/split-pane.js';
+import { AssignPanel } from '../components/assign-panel.js';
+import { ManualBatchModal } from '../components/manual-batch-modal.js';
+import { TransactionDetail } from '../components/transaction-detail.js';
+import { PdfFrame } from '../components/pdf-frame.js';
+import { ReceiptEditForm } from '../components/receipt-edit-form.js';
+import { ManualTransactionForm } from '../components/manual-transaction-form.js';
+import { cn } from '../lib/utils.js';
+import { api, orAlert, errorText, sources } from '../lib/api.js';
+import { t } from '../i18n/index.js';
 
-export default function App({ language, onLanguage }: { language: string; onLanguage: (code: string) => void }) {
-  const { data: index, loading, error, refresh } = useIndex();
-  const { online: apiOnline, readonly, snapshot } = useApiStatus();
-  /** Edit controls show only when a write could succeed: the API runs and is not in audit mode. */
-  const canEdit = apiOnline && !readonly;
+export type LegacyTab = 'receipts' | 'transactions' | 'bank-statements' | 'journal-entries' | 'trial-balance' | 'balance-sheet'
+  | 'income-statement' | 'vat-report' | 'account-ledger' | 'bank-reconciliation' | 'year-close';
+type FilterMode = 'all' | 'linked' | 'unlinked';
+
+export interface Selection { receiptId?: string; txRef?: string }
+
+/**
+ * The old tabs, one at a time, inside the new shell: the shell owns the period, the language,
+ * the theme and the URL. Deleted in phase 10 with the components it renders.
+ */
+export function LegacyTabs({ tab, period, index, refresh, canEdit, onPeriod, initial, onSelect }: {
+  tab: LegacyTab;
+  period: Period;
+  index: Index;
+  refresh: () => void;
+  canEdit: boolean;
+  onPeriod: (token: string) => void;
+  initial: Selection;
+  onSelect: (sel: Selection) => void;
+}) {
   const restoredRef = useRef(false);
   const skipReceiptClearRef = useRef(false);
 
-  const [theme, setTheme] = useTheme();
-  const [zoom, setZoom] = useZoom();
   const [hideZero, setHideZeroPersist] = usePersistedFlag('hideZeroReceipts', true);
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [search, setSearch] = useState('');
 
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [selectedTxRef, setSelectedTxRef] = useState<string | null>(null);
-  const { tab, setTab, period, setPeriod, filterMode, setFilterMode, search, setSearch, initialSelection } =
-    useUrlState({ loading, language, receiptId: selectedReceipt?.id ?? null, txRef: selectedTxRef });
+  useEffect(() => {
+    if (restoredRef.current) onSelect({ receiptId: selectedReceipt?.id, txRef: selectedTxRef ?? undefined });
+  }, [selectedReceipt?.id, selectedTxRef]);
   const [assignOpen, setAssignOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,168 +156,29 @@ export default function App({ language, onLanguage }: { language: string; onLang
     }
   }
 
-  // Restore selected receipt/tx from URL after index loads (runs once)
+  // The route's selection, once.
   useEffect(() => {
-    if (loading || restoredRef.current) return;
+    if (restoredRef.current) return;
     restoredRef.current = true;
-    const { txRef, receiptId } = initialSelection;
+    const { txRef, receiptId } = initial;
     if (txRef) { skipReceiptClearRef.current = true; setSelectedTxRef(txRef); }
     if (receiptId) {
       const r = index.receipts.find((r) => r.id === receiptId);
       if (r) setSelectedReceipt(r);
     }
-  }, [loading, index]);
+  }, []);
 
-  // The quarters and years the picker lists: those with transactions, newest first.
-  const periodOptions = useMemo(() => {
-    const years = new Set<string>();
-    const quarters = new Set<string>();
-    for (const tx of index.transactions) {
-      years.add(tx.date.slice(0, 4));
-      quarters.add(`${tx.date.slice(0, 4)}-Q${Math.ceil(parseInt(tx.date.slice(5, 7)) / 3)}`);
-    }
-    return { years: [...years].sort().reverse(), quarters: [...quarters].sort().reverse() };
-  }, [index.transactions]);
-
-  const linkedCount = new Set(index.mappings.map((m) => m.receiptId)).size;
   const zeroCount = useMemo(() => {
     const linked = new Set(index.mappings.map((m) => m.receiptId));
     return index.receipts.filter((r) => isNonReceipt(r, linked)).length;
   }, [index]);
-  const unlinkedCount = index.receipts.length - linkedCount;
 
   return (
-    <div className="h-screen flex flex-col bg-muted overflow-hidden">
-      {readonly && (
-        <div role="status" data-testid="audit-bar" className="shrink-0 flex items-center justify-center gap-2 px-6 py-1.5 text-xs font-medium bg-amber-100 text-amber-900 border-b border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
-          <Lock className="h-3.5 w-3.5 shrink-0" />
-          {t('app.auditBar')}
-          {snapshot && (
-            <span data-testid="audit-snapshot" className="font-normal">
-              · {t('app.snapshot', { date: formatDate(snapshot.createdAt.slice(0, 10)), schema: snapshot.booksSchema, version: snapshot.appVersion })}
-            </span>
-          )}
-        </div>
-      )}
-      <header className="bg-background border-b border-border px-6 py-3 shrink-0 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-foreground">Vanilla Accounting</h1>
-          <span className="text-xs text-muted-foreground">{t('app.subtitle')}</span>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{t('app.receiptCount', { n: index.receipts.length })}</span>
-          <span>{t('app.transactionCount', { n: index.transactions.length })}</span>
-          <span className="text-amber-600">{t('app.unlinkedCount', { n: unlinkedCount })}</span>
-          <div className="ml-2">
-            <PeriodPicker
-              period={period}
-              onChange={setPeriod}
-              quarters={periodOptions.quarters}
-              years={periodOptions.years}
-              closedThrough={index.config?.closedThrough}
-            />
-          </div>
-          {apiOnline && !snapshot && <span className="text-green-600">● {t('app.apiOnline')}</span>}
-          <div className="flex items-center rounded-md border border-border overflow-hidden" role="group" aria-label={t('app.language')}>
-            {LOCALES.map(({ code, name }) => (
-              <button
-                key={code}
-                onClick={() => onLanguage(code)}
-                title={name}
-                lang={code}
-                aria-pressed={language === code}
-                className={cn(
-                  'px-1.5 py-1 text-[10px] font-medium uppercase border-l border-border first:border-l-0 transition-colors',
-                  language === code ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent',
-                )}
-              >
-                {code}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
-            <button onClick={() => setZoom((z) => Math.max(60, z - 10))} title={t('app.zoomOut')} className="p-1.5 bg-background text-muted-foreground hover:bg-accent transition-colors">
-              <ZoomOut className="h-3 w-3" />
-            </button>
-            <button onClick={() => setZoom(100)} title={t('app.zoomReset', { zoom })} className="px-1 text-[10px] tabular-nums bg-background text-muted-foreground hover:bg-accent border-l border-r border-border transition-colors min-w-[2rem] text-center">
-              {zoom}%
-            </button>
-            <button onClick={() => setZoom((z) => Math.min(200, z + 10))} title={t('app.zoomIn')} className="p-1.5 bg-background text-muted-foreground hover:bg-accent transition-colors">
-              <ZoomIn className="h-3 w-3" />
-            </button>
-          </div>
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
-            {([
-              { value: 'light' as const, icon: <Sun className="h-3 w-3" />, title: t('app.themeLight') },
-              { value: 'system' as const, icon: <Monitor className="h-3 w-3" />, title: t('app.themeSystem') },
-              { value: 'dark' as const, icon: <Moon className="h-3 w-3" />, title: t('app.themeDark') },
-            ]).map(({ value, icon, title }) => (
-              <button
-                key={value}
-                onClick={() => setTheme(value)}
-                title={title}
-                className={cn(
-                  'p-1.5 border-l border-border first:border-l-0 transition-colors',
-                  theme === value ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent',
-                )}
-              >
-                {icon}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      {loading && (
-        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-          {t('app.loading')}
-        </div>
-      )}
-
-      {error && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-2">
-            <p className="text-red-600 font-medium">{t('app.loadFailed')}</p>
-            <p className="text-sm text-muted-foreground">
-              {t('app.loadFailedHint', { command: 'npm run extract' })}
-            </p>
-            <p className="text-xs text-muted-foreground">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {!loading && !error && (
+    <div className="flex-1 min-h-0 flex flex-col bg-muted overflow-hidden">
         <FxProvider index={index}>
-        <Tabs.Root
-          value={tab}
-          onValueChange={setTab}
-          className="flex-1 flex flex-col overflow-hidden"
-        >
-          {/* Tab bar */}
-          <Tabs.List className="bg-background border-b border-border px-6 flex items-center gap-0 shrink-0">
-            <TabTrigger value="receipts">{t('tab.receipts')}</TabTrigger>
-            <TabTrigger value="transactions">{t('tab.transactions')}</TabTrigger>
-            <TabTrigger value="bank-statements">{t('tab.bankStatements')}</TabTrigger>
-            <TabTrigger value="journal-entries">
-              {t('tab.journalEntries')}
-              {(index.journalEntries?.length ?? 0) > 0 && (
-                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-1.5 py-0.5 font-medium">
-                  {index.journalEntries!.length}
-                </span>
-              )}
-            </TabTrigger>
-            <span className="mx-1 text-border">|</span>
-            <TabTrigger value="trial-balance">{t('tab.trialBalance')}</TabTrigger>
-            <TabTrigger value="balance-sheet">{t('tab.balanceSheet')}</TabTrigger>
-            <TabTrigger value="income-statement">{t('tab.incomeStatement')}</TabTrigger>
-            <TabTrigger value="vat-report">{t('tab.vat')}</TabTrigger>
-            <TabTrigger value="account-ledger">{t('tab.accountLedger')}</TabTrigger>
-            <TabTrigger value="bank-reconciliation">{t('tab.bankReconciliation')}</TabTrigger>
-            {!STATIC_EXPORT && <TabTrigger value="year-close">{t('tab.yearClose')}</TabTrigger>}
-          </Tabs.List>
 
           {/* Belege tab */}
-          <Tabs.Content value="receipts" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
+          {tab === 'receipts' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Toolbar */}
             <div className="bg-background border-b border-border px-4 py-2 flex items-center gap-3 shrink-0 flex-wrap">
               <div className="flex rounded-md border border-border overflow-hidden text-sm">
@@ -484,10 +357,10 @@ export default function App({ language, onLanguage }: { language: string; onLang
                 </>
               )}
             />
-          </Tabs.Content>
+          </div>)}
 
           {/* Transaktionen tab */}
-          <Tabs.Content value="transactions" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
+          {tab === 'transactions' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Toolbar */}
             <div className="bg-background border-b border-border px-4 py-2 flex items-center gap-3 shrink-0 flex-wrap">
               <div className="flex rounded-md border border-border overflow-hidden text-sm">
@@ -593,80 +466,52 @@ export default function App({ language, onLanguage }: { language: string; onLang
                 </>
               )}
             />
-          </Tabs.Content>
+          </div>)}
 
           {/* Bank Statements tab */}
-          <Tabs.Content
-            value="bank-statements"
-            className="flex-1 data-[state=active]:flex overflow-hidden outline-none"
-          >
+          {tab === 'bank-statements' && (<div className="flex-1 flex overflow-hidden min-h-0">
             <BankStatementsTab index={index} />
-          </Tabs.Content>
+          </div>)}
 
           {/* Journal Entries tab */}
-          <Tabs.Content
-            value="journal-entries"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
+          {tab === 'journal-entries' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <JournalEntriesTab index={index} period={period} onRefresh={refresh} canEdit={canEdit} />
-          </Tabs.Content>
+          </div>)}
 
           {/* Saldobilanz tab */}
-          <Tabs.Content
-            value="trial-balance"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
+          {tab === 'trial-balance' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <TrialBalanceTab index={index} period={period} />
-          </Tabs.Content>
+          </div>)}
 
           {/* Bilanz tab */}
-          <Tabs.Content
-            value="balance-sheet"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
+          {tab === 'balance-sheet' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <BalanceSheetTab index={index} period={period} />
-          </Tabs.Content>
+          </div>)}
 
           {/* Erfolgsrechnung tab */}
-          <Tabs.Content
-            value="income-statement"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
+          {tab === 'income-statement' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <IncomeStatementTab index={index} period={period} />
-          </Tabs.Content>
+          </div>)}
 
           {/* MWST-Abrechnung tab */}
-          <Tabs.Content
-            value="vat-report"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
-            <VatReportTab index={index} period={period} onPeriod={setPeriod} />
-          </Tabs.Content>
+          {tab === 'vat-report' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <VatReportTab index={index} period={period} onPeriod={onPeriod} />
+          </div>)}
 
           {/* Kontoauszug tab */}
-          <Tabs.Content
-            value="account-ledger"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
+          {tab === 'account-ledger' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <AccountLedgerTab index={index} period={period} />
-          </Tabs.Content>
+          </div>)}
 
           {/* Kontenabgleich tab — bank reconciliation proof */}
-          <Tabs.Content
-            value="bank-reconciliation"
-            className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none"
-          >
+          {tab === 'bank-reconciliation' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <BankReconciliationTab index={index} period={period} />
-          </Tabs.Content>
+          </div>)}
 
-          {!STATIC_EXPORT && (
-            <Tabs.Content value="year-close" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
-              <YearCloseTab period={period} canEdit={canEdit} onRefresh={refresh} />
-            </Tabs.Content>
-          )}
-        </Tabs.Root>
+          {tab === 'year-close' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <YearCloseTab period={period} canEdit={canEdit} onRefresh={refresh} />
+          </div>)}
         </FxProvider>
-      )}
 
       {/* Manual transaction batch modal */}
       {manualBatchModalOpen && (
@@ -714,16 +559,5 @@ export default function App({ language, onLanguage }: { language: string; onLang
         </div>
       )}
     </div>
-  );
-}
-
-function TabTrigger({ value, children }: { value: string; children: React.ReactNode }) {
-  return (
-    <Tabs.Trigger
-      value={value}
-      className="px-4 py-3 text-sm font-medium text-muted-foreground border-b-2 border-transparent transition-colors data-[state=active]:text-foreground data-[state=active]:border-foreground data-[state=active]:font-semibold hover:text-foreground"
-    >
-      {children}
-    </Tabs.Trigger>
   );
 }

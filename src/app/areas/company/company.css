@@ -1,0 +1,11 @@
+/* Firma: the settings list and its detail. */
+.docbody { max-width: 680px; margin-top: 18px; }
+.docbody p.m { color: var(--muted); }
+.src-note { margin-top: 18px !important; font-size: 12px; color: var(--faint) !important; }
+.kv2 { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: 13.5px; }
+.kv2.wide { max-width: 760px; }
+.kv2 dt { color: var(--muted); }
+.kv2 dd { margin: 0; }
+.kv2 .m, .docbody .m { color: var(--muted); font-size: 12.5px; }
+.row.fset { grid-template-columns: minmax(0, 1fr) auto; }
+.row.fset .a { color: var(--muted); font-size: 12.5px; }

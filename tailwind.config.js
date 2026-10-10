@@ -29,9 +29,7 @@ export default {
         },
       },
       fontFamily: {
-        figtree: ['Figtree', 'sans-serif'],
-        'roboto-condensed': ['Roboto Condensed', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        mono: ['Geist Mono', 'monospace'],
       },
       borderRadius: {
         lg: 'var(--radius)',

@@ -1,0 +1,95 @@
+/**
+ * The areas of the app, one object each (docs/redesign/architecture.md §3). The shell renders
+ * an area's list and detail and asks it for its dock entry, add action, palette entries, keys
+ * and tab title, so the add button, N, the URLs and ⌘K work the same in every area.
+ */
+import type { ComponentType, ReactNode } from 'react';
+import type { Index } from '../../types/index.js';
+import type { Period } from '../../accounting/periods.js';
+import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js';
+import { t } from '../i18n/index.js';
+import { intakeAdd } from '../shell/intake.js';
+import { company } from './company/company.js';
+import { invoices } from './invoices.js';
+import { legacyArea, receiptsPalette, journalPalette, receiptsBadge } from './legacy.js';
+import { ICONS } from './icons.js';
+
+export interface Nav {
+  /** To another place: a new history entry when the area changes, else the current one replaced (urls.md rule 4). */
+  go(loc: Location): void;
+  /** A row of the current page: replaces the history entry and keeps the query. */
+  select(route: Route): void;
+  /** The page's period, search or filter: replaces the history entry. */
+  setQuery(query: Query): void;
+  toast(msg: string, undo?: () => void): void;
+  refresh(): void;
+}
+
+export interface AreaProps<R extends Route = Route> {
+  route: R;
+  query: Query;
+  /** The query's period, else the open quarter. */
+  period: Period;
+  books: Index;
+  nav: Nav;
+  /** A write could succeed: the API answers and is not in audit mode. */
+  canEdit: boolean;
+}
+
+export interface PaletteItem {
+  label: string;
+  side?: string;
+  run(): void;
+}
+
+/** One line of the key legend: the keys, a word, and the tooltip. */
+export type LegendItem = [keys: string[], label: string, tip: string];
+
+export interface Area<R extends Route = Route> {
+  id: R['area'];
+  label(): string;
+  /** In the dock: G + `key` opens it. Absent: reached from another area (codes from MWST). */
+  dock?: { key: string; icon: ReactNode; tip(): string; badge?(books: Index): number };
+  /** The dock entry marked while this area is open, when it has none of its own. */
+  dockAs?: AreaId;
+  List: ComponentType<AreaProps<R>>;
+  /** Absent: the list takes the whole page (the old tabs until their phase). */
+  Detail?: ComponentType<AreaProps<R>>;
+  /** The add button and N; absent when the area has nothing to add. */
+  add?: { label(): string; title(): string; run(props: AreaProps): void };
+  /** The objects ⌘K finds in this area, under the area's name. */
+  palette?(props: AreaProps): PaletteItem[];
+  /** Keys handled while this area is open, beyond the shell's own; true when handled. */
+  keys?(e: KeyboardEvent, props: AreaProps<R>): boolean;
+  legend?(): LegendItem[];
+  /** The object the route names, for the tab title "<object> · <area>" (urls.md rule 6). */
+  title(route: R, books: Index): string | undefined;
+  /** Wider list column (journal, reports). */
+  wide?: boolean;
+  /** Pages without a period (company, codes): no period in the top bar or the heading. */
+  periodless?: boolean;
+}
+
+type Registry = { [A in AreaId]: Area<RouteOf<A>> };
+
+export const AREAS: Registry = {
+  receipts: legacyArea('receipts', {
+    label: () => t('area.receipts'), dock: { key: 'b', icon: ICONS.receipts, tip: () => t('area.receipts.tip'), badge: receiptsBadge }, add: intakeAdd,
+    palette: receiptsPalette, title: (r, b) => b.receipts.find((x) => x.id === r.id)?.filename,
+  }),
+  invoices,
+  bank: legacyArea('bank', { label: () => t('area.bank'), dock: { key: 'k', icon: ICONS.bank, tip: () => t('area.bank.tip') }, title: (r) => r.payment }),
+  journal: legacyArea('journal', { label: () => t('area.journal'), dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') }, palette: journalPalette, title: (r) => r.id, wide: true }),
+  vat: legacyArea('vat', { label: () => t('area.vat'), dock: { key: 'm', icon: ICONS.vat, tip: () => t('area.vat.tip') }, title: (r) => r.ziffer }),
+  codes: legacyArea('codes', { label: () => t('area.codes'), dockAs: 'vat', title: (r) => r.code, periodless: true }),
+  reports: legacyArea('reports', { label: () => t('area.reports'), dock: { key: 'r', icon: ICONS.reports, tip: () => t('area.reports.tip') }, title: (r) => r.account, wide: true }),
+  close: legacyArea('close', { label: () => t('area.close'), dock: { key: 'a', icon: ICONS.close, tip: () => t('area.close.tip') }, title: (r) => r.step }),
+  company,
+};
+
+/** The dock's order; a divider stands before the last group. */
+export const DOCK: AreaId[][] = [['receipts', 'invoices', 'bank', 'journal', 'vat', 'reports', 'close'], ['company']];
+
+/** The area of a route, typed for its own route: the registry pairs them, a lookup cannot show it to the compiler. */
+export const areaOf = <R extends Route>(route: R) => AREAS[route.area] as unknown as Area<R>;
+

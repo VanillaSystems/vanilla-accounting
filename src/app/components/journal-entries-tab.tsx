@@ -10,7 +10,7 @@ import { OpenInTabLink } from './open-in-tab-link.js';
 import { SplitPane } from './split-pane.js';
 import { useAutoSelectFirst } from '../hooks/use-auto-select-first.js';
 import { api, orAlert, sources } from '../lib/api.js';
-import { receiptHref, setView, txHref, viewParams, viewPath } from '../lib/location.js';
+import { receiptHref, setView, txHref, viewParams } from '../lib/location.js';
 import { t } from '../i18n/index.js';
 import { ForeignAmount, FxLine } from './fx-amount.js';
 import { VatCode } from './vat-code.js';
@@ -166,7 +166,7 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
       else params.set('utx', selectedRow.txRef);
     }
     if (selectedReceiptId) params.set('receipt', selectedReceiptId);
-    setView(viewPath(), params);
+    setView(params);
   }, [selectedRow, selectedReceiptId]);
 
   const handleKeyDown = useCallback(
@@ -365,9 +365,9 @@ export function JournalEntriesTab({ index, period, onRefresh, canEdit }: Props) 
                     {t(label)}
                     <span
                       onMouseDown={(e) => onResizeStart(key, e)}
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize group flex justify-center"
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize group/resize flex justify-center"
                     >
-                      <span className="w-px h-full bg-muted-foreground/40 group-hover:w-0.5 group-hover:bg-ring group-active:w-0.5 group-active:bg-ring transition-colors" />
+                      <span className="w-px h-full bg-muted-foreground/40 group-hover/resize:w-0.5 group-hover/resize:bg-ring group-active/resize:w-0.5 group-active/resize:bg-ring transition-colors" />
                     </span>
                   </th>
                 ))}

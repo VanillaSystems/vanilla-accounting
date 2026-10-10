@@ -134,9 +134,9 @@ export function TransactionsTable({
                 {t(label)}
                 <span
                   onMouseDown={(e) => onResizeStart(key, e)}
-                  className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize group flex justify-center"
+                  className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize group/resize flex justify-center"
                 >
-                  <span className="w-px h-full bg-muted-foreground/40 group-hover:w-0.5 group-hover:bg-ring group-active:w-0.5 group-active:bg-ring transition-colors" />
+                  <span className="w-px h-full bg-muted-foreground/40 group-hover/resize:w-0.5 group-hover/resize:bg-ring group-active/resize:w-0.5 group-active/resize:bg-ring transition-colors" />
                 </span>
               </th>
             ))}

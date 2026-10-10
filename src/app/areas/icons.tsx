@@ -1,0 +1,16 @@
+/** The dock's glyphs, one per area, drawn on a 24 grid with the stroke the dock's CSS sets. */
+export const ICONS = {
+  receipts: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z" /><path d="M9 8h6M9 12h6M9 16h3" /></svg>,
+  invoices: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8M16 13H8M16 17H8" /></svg>,
+  bank: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5 12 4l8.5 5.5z" /><path d="M6 10.5v7M10 10.5v7M14 10.5v7M18 10.5v7" /><path d="M3.5 20.5h17" /></svg>,
+  journal: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v14c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5z" /><path d="M12 6.5V20.5" /></svg>,
+  vat: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5" /><path d="M15 9l-6 6" /><circle cx="9.3" cy="9.3" r="1" /><circle cx="14.7" cy="14.7" r="1" /></svg>,
+  reports: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17" /><rect x="5" y="11" width="3.2" height="6.5" rx="1" /><rect x="10.4" y="5.5" width="3.2" height="12" rx="1" /><rect x="15.8" y="13.5" width="3.2" height="4" rx="1" /></svg>,
+  close: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /><path d="m9 15.2 2 2 4-4" /></svg>,
+  company: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5V21" /><path d="M16 9h2.5A1.5 1.5 0 0 1 20 10.5V21" /><path d="M2.5 21h19" /><path d="M8 7.5h4M8 11.5h4M8 15.5h4" /></svg>,
+  plus: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>,
+  down: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>,
+  search: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>,
+  lock: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>,
+  upload: <svg className="i ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5" /><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></svg>,
+};

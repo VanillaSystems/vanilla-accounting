@@ -16,6 +16,15 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- The new shell (redesign phase 1): the page is a list and a detail with a resizable divider
+  (drag, ←/→, double-click resets; kept per area), the areas sit in a dock at the bottom edge
+  (`G` + letter), and a bar at the top edge holds search, the period, zoom, light/dark/system and
+  the language. ⌘K finds receipts, entries, areas and actions; a toast offers Rückgängig (⌘Z);
+  `?` hides the key help. Every page has its own link (`/journal/M2026-001`, `/vat/405`,
+  `/reports/balance/1021`, docs/urls.md); old `/<lang>/<period>/<tab>` links and bookmarks
+  redirect. The language no longer sits in the link: it is chosen per viewer. PDFs dropped on the
+  page or added with the add button (N) go to the inbox. Until each area is rebuilt it shows its
+  old tab.
 - VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
   entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it
   means, its rate, the Ziffern it feeds and when to use it. A click, or **Codes erklärt** in the

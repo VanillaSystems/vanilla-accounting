@@ -10,11 +10,15 @@
   </head>
   <body>
     <script>
+      // The stored theme and zoom before the first paint (src/app/shell/prefs.ts keeps them).
       (function() {
-        var t = localStorage.getItem('theme');
-        if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark');
-        }
+        var t = null, z = 1;
+        try { t = localStorage.getItem('theme'); z = Number(localStorage.getItem('zoom')) || 1; } catch (e) {}
+        var dark = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        var root = document.documentElement;
+        root.dataset.theme = dark ? 'dark' : 'light';
+        root.classList.toggle('dark', dark);
+        if (z > 0 && z <= 3 && z !== 1) { root.style.zoom = String(z); root.style.setProperty('--z', String(z)); }
       })();
     </script>
     <div id="root"></div>

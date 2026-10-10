@@ -32,6 +32,19 @@ export type Route =
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
 
+/** Each area's own page, where the dock and G + letter go. */
+export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
+  receipts: { area: 'receipts' },
+  invoices: { area: 'invoices', view: 'list' },
+  bank: { area: 'bank' },
+  journal: { area: 'journal' },
+  vat: { area: 'vat' },
+  codes: { area: 'codes' },
+  reports: { area: 'reports', report: 'income' },
+  close: { area: 'close' },
+  company: { area: 'company', section: 'profile' },
+};
+
 export interface Query {
   /** Absent: the open period. */
   period?: Period;

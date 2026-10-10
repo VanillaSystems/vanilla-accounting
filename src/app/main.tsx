@@ -1,31 +1,27 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 // Self-hosted fonts: no request to Google, and an audit export works offline.
-import '@fontsource/figtree/400.css';
-import '@fontsource/figtree/500.css';
-import '@fontsource/figtree/600.css';
-import '@fontsource/figtree/700.css';
-import '@fontsource/figtree/900.css';
-import '@fontsource/roboto-condensed/400.css';
-import '@fontsource/roboto-condensed/500.css';
-import '@fontsource/roboto-condensed/700.css';
-import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/500.css';
-import '@fontsource/jetbrains-mono/700.css';
+import '@fontsource/hanken-grotesk/400.css';
+import '@fontsource/hanken-grotesk/600.css';
+import '@fontsource/hanken-grotesk/700.css';
+import '@fontsource/hanken-grotesk/800.css';
+import '@fontsource/instrument-sans/400.css';
+import '@fontsource/instrument-sans/500.css';
+import '@fontsource/instrument-sans/600.css';
+import '@fontsource/instrument-sans/700.css';
+import '@fontsource/geist-mono/400.css';
+import '@fontsource/geist-mono/500.css';
 import './index.css';
-import App from './App.js';
-import { useLanguage } from './hooks/use-display-prefs.js';
-import { STATIC_EXPORT } from './lib/api.js';
+import './styles/tokens.css';
+import './styles/shell.css';
+import { Shell } from './shell/Shell.js';
+import { useLanguage } from './shell/prefs.js';
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
 function Root() {
   const [language, setLanguage] = useLanguage();
-  return <App key={language} language={language} onLanguage={setLanguage} />;
+  return <Shell key={language} language={language} onLanguage={setLanguage} />;
 }
-
-// The export's view lives after '#': a link pasted into the same tab changes only the hash, and the
-// app reads its view once at load, as it does from a server path.
-if (STATIC_EXPORT) window.addEventListener('hashchange', () => window.location.reload());
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod } from '../src/accounting/periods.js';
+import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openQuarter } from '../src/accounting/periods.js';
 
 const range = (token: string, today = '2026-10-09') => {
   const p = parsePeriod(token, today);
@@ -147,4 +147,10 @@ test('periodContaining: a link keeps the current period when it holds the date, 
   assert.equal(periodContaining('2026-01-01', parsePeriod('all', '2026-10-09')!), 'all');
   assert.equal(periodContaining(undefined, qtd), 'all');
   assert.equal(periodContaining('2026-08-15'), '2026-Q3', 'without a current period: the quarter');
+});
+
+test('the open quarter follows the filed ones, else today', () => {
+  assert.equal(openQuarter('2026-06-30', '2026-10-09').token, '2026-Q3');
+  assert.equal(openQuarter('2025-12-31', '2026-10-09').token, '2026-Q1');
+  assert.equal(openQuarter(undefined, '2026-10-09').token, '2026-Q4');
 });
