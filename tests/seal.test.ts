@@ -1,7 +1,7 @@
 /**
  * Seals of the filed quarters (src/books/seal.ts, npm run seal). Runs against temp copies of
  * tests/fixtures/period-lock-index.json: closed through 2026-06-30, its closed records all in
- * 2026-Q2 (C1/jc, M2026-001), the open ones in Q3 (O1/jo, M2026-002).
+ * 2026-Q2 (C1/jc, M2026-001, CI), the open ones in Q3 (O1/jo, M2026-002).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,7 +35,7 @@ test('a sealed quarter verifies, and sealing it again changes nothing', () => {
   const ws = sealed();
   const file = join(ws.paths.filings, '2026', 'seal-Q2.json');
   const seal = JSON.parse(readFileSync(file, 'utf8'));
-  assert.deepEqual(seal.records, { entries: 1, transactions: 2, mappings: 1 });
+  assert.deepEqual(seal.records, { entries: 1, transactions: 3, mappings: 1 });
   assert.deepEqual(statuses(ws), ['2026-Q2 intact']);
   assert.equal(writeSeal(ws, loadBooks(ws), '2026-Q2', '2026-10-09').status, 'intact');
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).sealedAt, '2026-07-11', 'the seal file is not rewritten');

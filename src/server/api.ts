@@ -12,8 +12,18 @@ import { router as journal } from './routes/journal.js';
 import { router as config } from './routes/config.js';
 import { router as yearClose } from './routes/year-close.js';
 import { router as files } from './files.js';
+import { router as invoices } from './routes/invoices.js';
+import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
+import { PaymentError } from '../invoices/payments.js';
+import { NoBrowserError } from '../invoices/pdf.js';
 
 export const app = express();
+
+/** An invoicing refusal: the German text, and which rule refused (src/invoices/rules.ts), for the UI to say in the user's language. */
+export type InvoiceErrorBody = { error: string; invoiceRefusal: InvoiceRefusal | 'noBrowser'; missing?: InvoiceRuleError['missing'] };
+const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
+  incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409,
+};
 
 /**
  * The server listens on the network only so the phone app can upload scans (src/server/routes/scan.ts).
@@ -44,13 +54,17 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose);
+app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose, invoices);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {
     const params = { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}) };
     res.status(403).json({ error: err.message, code: 'periodClosed', params } satisfies ApiErrorBody);
   } else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
+  else if (err instanceof InvoiceRuleError) {
+    res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
+  } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
+  else if (err instanceof NoBrowserError) res.status(503).json({ error: err.message, invoiceRefusal: 'noBrowser' } satisfies InvoiceErrorBody);
   else {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

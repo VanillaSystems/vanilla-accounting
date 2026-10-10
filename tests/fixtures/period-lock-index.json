@@ -8,7 +8,9 @@
     { "ref": "C1", "bank": "Raiffeisen", "date": "2026-05-10", "amount": 10, "currency": "CHF", "direction": "DBIT", "description": "Bank Mai" },
     { "ref": "O1", "bank": "Raiffeisen", "date": "2026-08-10", "amount": 20, "currency": "CHF", "direction": "DBIT", "description": "Bank August" },
     { "ref": "M2026-001", "bank": "manual", "source": "manual", "date": "2026-06-01", "amount": 5, "currency": "CHF", "direction": "DBIT", "description": "Manuell Juni" },
-    { "ref": "M2026-002", "bank": "manual", "source": "manual", "date": "2026-08-15", "amount": 7, "currency": "CHF", "direction": "DBIT", "description": "Manuell August" }
+    { "ref": "M2026-002", "bank": "manual", "source": "manual", "date": "2026-08-15", "amount": 7, "currency": "CHF", "direction": "DBIT", "description": "Manuell August" },
+    { "ref": "CI", "bank": "Raiffeisen", "date": "2026-06-20", "amount": 108.1, "currency": "CHF", "direction": "CRDT", "description": "Gutschrift Juni" },
+    { "ref": "OI", "bank": "Raiffeisen", "date": "2026-08-20", "amount": 108.1, "currency": "CHF", "direction": "CRDT", "description": "Gutschrift August" }
   ],
   "mappings": [
     { "transactionRef": "C1", "receiptId": "rc" },
