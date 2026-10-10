@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 290 60" width="290" height="60">
+  <g fill="#5a3a22"><ellipse cx="30" cy="30" rx="17" ry="25" transform="rotate(28 30 30)"/></g>
+  <path d="M22 9c10 10 6 30 16 42" stroke="#f4ece4" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <text x="58" y="30" font-family="Helvetica, Arial, sans-serif" font-size="23" font-weight="700" fill="#5a3a22" letter-spacing="1">MUSTER KAFFEE</text>
+  <text x="59" y="49" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#8a6a52" letter-spacing="3.2">RÖSTEREI · ZÜRICH</text>
+</svg>

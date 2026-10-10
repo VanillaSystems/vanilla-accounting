@@ -11,6 +11,8 @@ import {
   YEAR, bankDay, chf, invoicesFor, isoDate, lastDay, MONTHS, mulberry32, pad, qrReference, r2, taxIn,
   type Company, type Demo, type Doc, type ManualEntry, type Part, type Payment, type Scenario, type StatementBank, type Vendor,
 } from './kit.js';
+import { KAFFEE_INVOICING } from './kaffee-invoices.js';
+import { invoicePayments } from './invoices.js';
 
 const COMPANY: Company = {
   name: 'Muster Kaffee GmbH',
@@ -22,11 +24,11 @@ const COMPANY: Company = {
 const BANKS: Record<'raiffeisen' | 'wise-eur', StatementBank> = {
   raiffeisen: {
     bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank Raiffeisen',
-    iban: 'CH4180808000000000001', institution: 'Raiffeisenbank Musterdorf', opening: 18500,
+    iban: 'CH6580808000000000001', institution: 'Raiffeisenbank Musterdorf', opening: 18500,
   },
   'wise-eur': {
     bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR',
-    iban: 'BE00967000000001', institution: 'Wise Europe SA', opening: 4000,
+    iban: 'BE29967000000164', institution: 'Wise Europe SA', opening: 4000,
   },
 };
 
@@ -48,7 +50,9 @@ const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
   ['2970', 'Gewinnvortrag'],
   ['3000', 'Ertrag Café'],
   ['3200', 'Ertrag Kaffeebohnen Laden'],
+  ['3300', 'Ertrag Grosshandel'],
   ['3400', 'Ertrag Webshop'],
+  ['3600', 'Ertrag Schulungen und Service'],
   ['4000', 'Rohkaffee'],
   ['4210', 'Verbrauchsmaterial Gastronomie'],
   ['6000', 'Mietaufwand'],
@@ -300,6 +304,9 @@ function scenario(seed: number): Scenario {
     source: 'receipts/20260209-digitec-galaxus-milchkaennchen.pdf',
   }];
 
+  // Wholesale customers pay their invoices by QR-bill (kaffee-invoices.ts).
+  payments.push(...invoicePayments(KAFFEE_INVOICING));
+
   return {
     payments,
     manual,
@@ -363,4 +370,5 @@ export const kaffee: Demo = {
   vendors: VENDORS,
   knowledge: KNOWLEDGE,
   scenario,
+  invoicing: KAFFEE_INVOICING,
 };

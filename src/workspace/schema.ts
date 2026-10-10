@@ -1,9 +1,10 @@
 /**
- * The versions of a workspace's two data files, and the steps that bring an older file up to
- * date. The one place both versions are listed; docs/releasing.md says when to bump one.
+ * The versions of a workspace's data files, and the steps that bring an older file up to
+ * date. The one place the versions are listed; docs/releasing.md says when to bump one.
  *
  *   books.json             `schema` (absent: 1)  BOOKS_MIGRATIONS
  *   belege.workspace.yaml  `schema` (absent: 1)  MANIFEST_MIGRATIONS
+ *   invoices.json          `schema`              INVOICES_MIGRATIONS (src/invoices/store.ts)
  *
  * A step `n` turns a file of schema n into schema n + 1. Steps are pure, run forward only, and
  * run in memory on every load (src/books/store.ts loadBooks, src/workspace/manifest.ts), so the
@@ -15,6 +16,7 @@ import type { Document } from 'yaml';
 
 export const BOOKS_SCHEMA = 1;
 export const WORKSPACE_SCHEMA = 1;
+export const INVOICES_SCHEMA = 1;
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
@@ -22,6 +24,7 @@ export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
 export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {};
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {};
+export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {};
 
 /** A file written by a newer version of the app than this one. */
 export class SchemaTooNewError extends Error {}

@@ -999,6 +999,37 @@
       "kind": "sales-record"
     },
     {
+      "id": "8a9aa66feb0cbf72",
+      "filename": "20260706-rechnung-2026-001.pdf",
+      "originalFilename": "20260706-rechnung-2026-001.pdf",
+      "extractedText": "Muster Kaffee GmbH\nRechnung 2026-001\nBeispiel Bistro AG\nHausmischung Espresso, Bohnen 1 kg\nBarista-Schulung im Betrieb\nTotal CHF 963.72",
+      "extractionMethod": "pdftotext",
+      "fileSize": 74599,
+      "indexedAt": "2026-08-04T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-06",
+      "description": "Rechnung 2026-001 Beispiel Bistro AG",
+      "amount": 963.72,
+      "currency": "CHF",
+      "vatId": "CHE-123.456.789",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 360,
+          "vat": 29.16,
+          "gross": 389.16
+        },
+        {
+          "ratePercent": 2.6,
+          "net": 560,
+          "vat": 14.56,
+          "gross": 574.56
+        }
+      ],
+      "kind": "sales-record"
+    },
+    {
       "id": "299d5d3e065f8e0f",
       "filename": "20260710-gruenkaffee-muster-rechnung-2026-07.pdf",
       "originalFilename": "20260710-gruenkaffee-muster-rechnung-2026-07.pdf",
@@ -1101,6 +1132,37 @@
       ],
       "vatExtractedAt": "2026-07-14T18:00:00.000Z",
       "kind": "invoice"
+    },
+    {
+      "id": "42f90ab18b7ca8be",
+      "filename": "20260720-rechnung-2026-002.pdf",
+      "originalFilename": "20260720-rechnung-2026-002.pdf",
+      "extractedText": "Muster Kaffee GmbH\nRechnung 2026-002\nMuster Hotel GmbH\nFilterkaffee Guji, Bohnen 500 g\nWartung Siebträgermaschine, inkl. Dichtungen\nTotal CHF 600.88",
+      "extractionMethod": "pdftotext",
+      "fileSize": 74185,
+      "indexedAt": "2026-08-17T18:00:00.000Z",
+      "location": "archived",
+      "date": "2026-07-20",
+      "description": "Rechnung 2026-002 Muster Hotel GmbH",
+      "amount": 600.88,
+      "currency": "CHF",
+      "vatId": "CHE-123.456.789",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "net": 180,
+          "vat": 14.58,
+          "gross": 194.58
+        },
+        {
+          "ratePercent": 2.6,
+          "net": 396,
+          "vat": 10.3,
+          "gross": 406.3
+        }
+      ],
+      "kind": "sales-record"
     },
     {
       "id": "ce7b8e2415e04e61",
@@ -1438,7 +1500,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Miete Ladenlokal Musterstrasse 1, Januar 2026",
-      "reference": "Miete Ladenlokal Musterstrasse 1, Januar 2026",
       "remarks": "Dauerauftrag gemäss Mietvertrag vom 1.11.2024; Miete ohne MWST (MWSTG Art. 21 Abs. 2 Ziff. 21)",
       "noReceiptNeeded": true
     },
@@ -1449,8 +1510,7 @@
       "amount": 1183.75,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Payout 202601",
-      "reference": "Payout 202601"
+      "description": "Payout 202601"
     },
     {
       "ref": "CARD-7000001",
@@ -1486,8 +1546,7 @@
       "amount": 255.25,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung Post CH Januar 2026",
-      "reference": "000000000000000000512601204"
+      "description": "Rechnung Post CH Januar 2026"
     },
     {
       "ref": "90000000006",
@@ -1496,8 +1555,7 @@
       "amount": 2879.15,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung GK-2026-01",
-      "reference": "000000000000000000202601106"
+      "description": "Rechnung GK-2026-01"
     },
     {
       "ref": "90000000007",
@@ -1516,7 +1574,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Miete Ladenlokal Musterstrasse 1, Februar 2026",
-      "reference": "Miete Ladenlokal Musterstrasse 1, Februar 2026",
       "remarks": "Dauerauftrag gemäss Mietvertrag vom 1.11.2024; Miete ohne MWST (MWSTG Art. 21 Abs. 2 Ziff. 21)",
       "noReceiptNeeded": true
     },
@@ -1536,8 +1593,7 @@
       "amount": 1085.65,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Payout 202602",
-      "reference": "Payout 202602"
+      "description": "Payout 202602"
     },
     {
       "ref": "90000000010",
@@ -1564,8 +1620,7 @@
       "amount": 1240,
       "currency": "EUR",
       "direction": "DBIT",
-      "description": "FT 2026/0188",
-      "reference": "FT 2026/0188"
+      "description": "FT 2026/0188"
     },
     {
       "ref": "90000000012",
@@ -1574,8 +1629,7 @@
       "amount": 178.3,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung Post CH Februar 2026",
-      "reference": "000000000000000000512602200"
+      "description": "Rechnung Post CH Februar 2026"
     },
     {
       "ref": "90000000013",
@@ -1584,8 +1638,7 @@
       "amount": 2894.3,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung GK-2026-02",
-      "reference": "000000000000000000202602101"
+      "description": "Rechnung GK-2026-02"
     },
     {
       "ref": "90000000014",
@@ -1604,7 +1657,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Miete Ladenlokal Musterstrasse 1, März 2026",
-      "reference": "Miete Ladenlokal Musterstrasse 1, März 2026",
       "remarks": "Dauerauftrag gemäss Mietvertrag vom 1.11.2024; Miete ohne MWST (MWSTG Art. 21 Abs. 2 Ziff. 21)",
       "noReceiptNeeded": true
     },
@@ -1624,8 +1676,7 @@
       "amount": 913.72,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Payout 202603",
-      "reference": "Payout 202603"
+      "description": "Payout 202603"
     },
     {
       "ref": "90000000017",
@@ -1643,8 +1694,7 @@
       "amount": 183.35,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung Post CH März 2026",
-      "reference": "000000000000000000512603207"
+      "description": "Rechnung Post CH März 2026"
     },
     {
       "ref": "90000000019",
@@ -1653,8 +1703,7 @@
       "amount": 1969.95,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung GK-2026-03",
-      "reference": "000000000000000000202603108"
+      "description": "Rechnung GK-2026-03"
     },
     {
       "ref": "90000000020",
@@ -2009,6 +2058,16 @@
     {
       "ref": "90000000049",
       "bank": "Raiffeisen",
+      "date": "2026-08-04",
+      "amount": 963.72,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-001",
+      "reference": "000000000000000000020260010"
+    },
+    {
+      "ref": "90000000050",
+      "bank": "Raiffeisen",
       "date": "2026-08-05",
       "amount": 1230.94,
       "currency": "CHF",
@@ -2017,7 +2076,7 @@
       "reference": "Payout 202608"
     },
     {
-      "ref": "90000000050",
+      "ref": "90000000051",
       "bank": "Raiffeisen",
       "date": "2026-08-14",
       "amount": 69.35,
@@ -2026,7 +2085,17 @@
       "description": "Coop Pronto Musterdorf"
     },
     {
-      "ref": "90000000051",
+      "ref": "90000000052",
+      "bank": "Raiffeisen",
+      "date": "2026-08-17",
+      "amount": 600.88,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Rechnung 2026-002",
+      "reference": "000000000000000000020260021"
+    },
+    {
+      "ref": "90000000053",
       "bank": "Raiffeisen",
       "date": "2026-08-20",
       "amount": 149.7,
@@ -2036,7 +2105,7 @@
       "reference": "000000000000000000512608202"
     },
     {
-      "ref": "90000000052",
+      "ref": "90000000054",
       "bank": "Raiffeisen",
       "date": "2026-08-25",
       "amount": 1939.95,
@@ -2046,7 +2115,7 @@
       "reference": "000000000000000000202608109"
     },
     {
-      "ref": "90000000053",
+      "ref": "90000000055",
       "bank": "Raiffeisen",
       "date": "2026-08-28",
       "amount": 10886.62,
@@ -2064,7 +2133,7 @@
       "description": "Card transaction of 39.00 EUR issued by Example Cloud Inc SAN FRANCISCO"
     },
     {
-      "ref": "90000000054",
+      "ref": "90000000056",
       "bank": "Raiffeisen",
       "date": "2026-09-07",
       "amount": 904.98,
@@ -2074,7 +2143,7 @@
       "reference": "Payout 202609"
     },
     {
-      "ref": "90000000055",
+      "ref": "90000000057",
       "bank": "Raiffeisen",
       "date": "2026-09-14",
       "amount": 79.25,
@@ -2083,7 +2152,7 @@
       "description": "Coop Pronto Musterdorf"
     },
     {
-      "ref": "90000000056",
+      "ref": "90000000058",
       "bank": "Raiffeisen",
       "date": "2026-09-21",
       "amount": 217.75,
@@ -2093,7 +2162,7 @@
       "reference": "000000000000000000512609205"
     },
     {
-      "ref": "90000000057",
+      "ref": "90000000059",
       "bank": "Raiffeisen",
       "date": "2026-09-28",
       "amount": 12724.4,
@@ -2102,7 +2171,7 @@
       "description": "Abrechnung Kartenzahlungen September 2026"
     },
     {
-      "ref": "90000000058",
+      "ref": "90000000060",
       "bank": "Raiffeisen",
       "date": "2026-09-30",
       "amount": 5288.3,
@@ -2125,7 +2194,7 @@
       ]
     },
     {
-      "ref": "90000000059",
+      "ref": "90000000061",
       "bank": "Raiffeisen",
       "date": "2026-09-30",
       "amount": 15,
@@ -2322,23 +2391,23 @@
       "receiptId": "92ada9352bedf9b0"
     },
     {
-      "transactionRef": "90000000049",
+      "transactionRef": "90000000050",
       "receiptId": "eba3cec4abbd9ecf"
     },
     {
-      "transactionRef": "90000000050",
+      "transactionRef": "90000000051",
       "receiptId": "4cde51ad4fece427"
     },
     {
-      "transactionRef": "90000000051",
+      "transactionRef": "90000000053",
       "receiptId": "f8dfc19340bf4fee"
     },
     {
-      "transactionRef": "90000000052",
+      "transactionRef": "90000000054",
       "receiptId": "4978a4c1a2ba92c6"
     },
     {
-      "transactionRef": "90000000053",
+      "transactionRef": "90000000055",
       "receiptId": "d6352bd6253610ac"
     },
     {
@@ -2346,34 +2415,46 @@
       "receiptId": "2092f1f80f54f43f"
     },
     {
-      "transactionRef": "90000000054",
+      "transactionRef": "90000000056",
       "receiptId": "57948c599fab9bae"
     },
     {
-      "transactionRef": "90000000055",
+      "transactionRef": "90000000057",
       "receiptId": "f1858d782d46261c"
     },
     {
-      "transactionRef": "90000000056",
+      "transactionRef": "90000000058",
       "receiptId": "d01cf1305bb4ca43"
     },
     {
-      "transactionRef": "90000000057",
+      "transactionRef": "90000000059",
       "receiptId": "24563fcabf52a878"
     },
     {
-      "transactionRef": "90000000058",
+      "transactionRef": "90000000060",
       "receiptId": "2741f68677338c64"
     },
     {
       "transactionRef": "M2026-001",
       "receiptId": "2b7a7f5b741c450f"
+    },
+    {
+      "transactionRef": "90000000049",
+      "receiptId": "8a9aa66feb0cbf72",
+      "by": "rule",
+      "rule": "invoice-reference"
+    },
+    {
+      "transactionRef": "90000000052",
+      "receiptId": "42f90ab18b7ca8be",
+      "by": "rule",
+      "rule": "invoice-reference"
     }
   ],
   "bankStatements": [
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.01.2026 - 31.01.2026 - CH4180808000000000001 - 2026-01-31.pdf",
+      "filename": "Kontoauszug 01.01.2026 - 31.01.2026 - CH6580808000000000001 - 2026-01-31.pdf",
       "fromDate": "2026-01-01",
       "toDate": "2026-01-31"
     },
@@ -2386,7 +2467,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.02.2026 - 28.02.2026 - CH4180808000000000001 - 2026-02-28.pdf",
+      "filename": "Kontoauszug 01.02.2026 - 28.02.2026 - CH6580808000000000001 - 2026-02-28.pdf",
       "fromDate": "2026-02-01",
       "toDate": "2026-02-28"
     },
@@ -2399,7 +2480,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.03.2026 - 31.03.2026 - CH4180808000000000001 - 2026-03-31.pdf",
+      "filename": "Kontoauszug 01.03.2026 - 31.03.2026 - CH6580808000000000001 - 2026-03-31.pdf",
       "fromDate": "2026-03-01",
       "toDate": "2026-03-31"
     },
@@ -2412,7 +2493,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.04.2026 - 30.04.2026 - CH4180808000000000001 - 2026-04-30.pdf",
+      "filename": "Kontoauszug 01.04.2026 - 30.04.2026 - CH6580808000000000001 - 2026-04-30.pdf",
       "fromDate": "2026-04-01",
       "toDate": "2026-04-30"
     },
@@ -2425,7 +2506,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.05.2026 - 31.05.2026 - CH4180808000000000001 - 2026-05-31.pdf",
+      "filename": "Kontoauszug 01.05.2026 - 31.05.2026 - CH6580808000000000001 - 2026-05-31.pdf",
       "fromDate": "2026-05-01",
       "toDate": "2026-05-31"
     },
@@ -2438,7 +2519,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.06.2026 - 30.06.2026 - CH4180808000000000001 - 2026-06-30.pdf",
+      "filename": "Kontoauszug 01.06.2026 - 30.06.2026 - CH6580808000000000001 - 2026-06-30.pdf",
       "fromDate": "2026-06-01",
       "toDate": "2026-06-30"
     },
@@ -2451,7 +2532,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.07.2026 - 31.07.2026 - CH4180808000000000001 - 2026-07-31.pdf",
+      "filename": "Kontoauszug 01.07.2026 - 31.07.2026 - CH6580808000000000001 - 2026-07-31.pdf",
       "fromDate": "2026-07-01",
       "toDate": "2026-07-31"
     },
@@ -2464,7 +2545,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.08.2026 - 31.08.2026 - CH4180808000000000001 - 2026-08-31.pdf",
+      "filename": "Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf",
       "fromDate": "2026-08-01",
       "toDate": "2026-08-31"
     },
@@ -2477,7 +2558,7 @@
     },
     {
       "bank": "Raiffeisen",
-      "filename": "Kontoauszug 01.09.2026 - 30.09.2026 - CH4180808000000000001 - 2026-09-30.pdf",
+      "filename": "Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf",
       "fromDate": "2026-09-01",
       "toDate": "2026-09-30"
     },
@@ -3319,18 +3400,30 @@
       "exchangeRate": 0.9381
     },
     {
-      "id": "13ce8ebaa2feed1d",
+      "id": "0dfcf6de470b1404",
       "transactionRef": "90000000049",
-      "date": "2026-08-05",
+      "date": "2026-08-04",
       "accountDebit": "1021",
-      "accountCredit": "3400",
-      "amount": 1276.35,
-      "vatCode": "V26",
-      "description": "Webshop, Kaffeebohnen August 2026"
+      "accountCredit": "3600",
+      "amount": 389.16,
+      "vatCode": "V81",
+      "description": "Rechnung 2026-001 Beispiel Bistro AG",
+      "origin": "invoice"
     },
     {
-      "id": "cf82c6bb27b628ef",
+      "id": "cf641f6700147a84",
       "transactionRef": "90000000049",
+      "date": "2026-08-04",
+      "accountDebit": "1021",
+      "accountCredit": "3300",
+      "amount": 574.56,
+      "vatCode": "V26",
+      "description": "Rechnung 2026-001 Beispiel Bistro AG",
+      "origin": "invoice"
+    },
+    {
+      "id": "3b6fade26a27079a",
+      "transactionRef": "90000000050",
       "date": "2026-08-05",
       "accountDebit": "6840",
       "accountCredit": "1021",
@@ -3341,6 +3434,16 @@
     {
       "id": "fc8f59188c3974ce",
       "transactionRef": "90000000050",
+      "date": "2026-08-05",
+      "accountDebit": "1021",
+      "accountCredit": "3400",
+      "amount": 1276.35,
+      "vatCode": "V26",
+      "description": "Webshop, Kaffeebohnen August 2026"
+    },
+    {
+      "id": "fe35aade6ffcb9c4",
+      "transactionRef": "90000000051",
       "date": "2026-08-14",
       "accountDebit": "6200",
       "accountCredit": "1021",
@@ -3349,8 +3452,30 @@
       "description": "Coop Pronto Musterdorf, Tanken"
     },
     {
-      "id": "fe35aade6ffcb9c4",
-      "transactionRef": "90000000051",
+      "id": "23962d51cd5cc896",
+      "transactionRef": "90000000052",
+      "date": "2026-08-17",
+      "accountDebit": "1021",
+      "accountCredit": "3300",
+      "amount": 406.3,
+      "vatCode": "V26",
+      "description": "Rechnung 2026-002 Muster Hotel GmbH",
+      "origin": "invoice"
+    },
+    {
+      "id": "c40c85e98c6ee698",
+      "transactionRef": "90000000052",
+      "date": "2026-08-17",
+      "accountDebit": "1021",
+      "accountCredit": "3600",
+      "amount": 194.58,
+      "vatCode": "V81",
+      "description": "Rechnung 2026-002 Muster Hotel GmbH",
+      "origin": "invoice"
+    },
+    {
+      "id": "0ded262aaa3c8940",
+      "transactionRef": "90000000053",
       "date": "2026-08-20",
       "accountDebit": "6513",
       "accountCredit": "1021",
@@ -3359,8 +3484,8 @@
       "description": "Post CH, Pakete Webshop August 2026"
     },
     {
-      "id": "f20c49f966d7fa29",
-      "transactionRef": "90000000052",
+      "id": "cb81d1072a39749c",
+      "transactionRef": "90000000054",
       "date": "2026-08-25",
       "accountDebit": "4000",
       "accountCredit": "1021",
@@ -3369,18 +3494,8 @@
       "description": "Grünkaffee Muster, Rohkaffee August 2026"
     },
     {
-      "id": "0ded262aaa3c8940",
-      "transactionRef": "90000000053",
-      "date": "2026-08-28",
-      "accountDebit": "1021",
-      "accountCredit": "3000",
-      "amount": 8747.5,
-      "vatCode": "V81",
-      "description": "Café, Umsatz August 2026"
-    },
-    {
-      "id": "780e6fbe314ba61f",
-      "transactionRef": "90000000053",
+      "id": "1b3dcd79663d4289",
+      "transactionRef": "90000000055",
       "date": "2026-08-28",
       "accountDebit": "6840",
       "accountCredit": "1021",
@@ -3389,8 +3504,18 @@
       "description": "Muster Payments, Kommission August 2026"
     },
     {
-      "id": "81c23ad966df01ff",
-      "transactionRef": "90000000053",
+      "id": "738c01da7cc7001c",
+      "transactionRef": "90000000055",
+      "date": "2026-08-28",
+      "accountDebit": "1021",
+      "accountCredit": "3000",
+      "amount": 8747.5,
+      "vatCode": "V81",
+      "description": "Café, Umsatz August 2026"
+    },
+    {
+      "id": "75e659f335b6a8d5",
+      "transactionRef": "90000000055",
       "date": "2026-08-28",
       "accountDebit": "1021",
       "accountCredit": "3200",
@@ -3411,8 +3536,8 @@
       "exchangeRate": 0.95067
     },
     {
-      "id": "734fd1a4728f8630",
-      "transactionRef": "90000000054",
+      "id": "b203d6ac22bd87be",
+      "transactionRef": "90000000056",
       "date": "2026-09-07",
       "accountDebit": "6840",
       "accountCredit": "1021",
@@ -3421,8 +3546,8 @@
       "description": "Shopify Payments, Gebühren September 2026"
     },
     {
-      "id": "cb81d1072a39749c",
-      "transactionRef": "90000000054",
+      "id": "bd99dc7f1fd46934",
+      "transactionRef": "90000000056",
       "date": "2026-09-07",
       "accountDebit": "1021",
       "accountCredit": "3400",
@@ -3431,8 +3556,8 @@
       "description": "Webshop, Kaffeebohnen September 2026"
     },
     {
-      "id": "738c01da7cc7001c",
-      "transactionRef": "90000000055",
+      "id": "4be8575d9926d3db",
+      "transactionRef": "90000000057",
       "date": "2026-09-14",
       "accountDebit": "6200",
       "accountCredit": "1021",
@@ -3441,8 +3566,8 @@
       "description": "Coop Pronto Musterdorf, Tanken"
     },
     {
-      "id": "bd99dc7f1fd46934",
-      "transactionRef": "90000000056",
+      "id": "3f83d2653b0cdfc4",
+      "transactionRef": "90000000058",
       "date": "2026-09-21",
       "accountDebit": "6513",
       "accountCredit": "1021",
@@ -3451,18 +3576,8 @@
       "description": "Post CH, Pakete Webshop September 2026"
     },
     {
-      "id": "4be8575d9926d3db",
-      "transactionRef": "90000000057",
-      "date": "2026-09-28",
-      "accountDebit": "1021",
-      "accountCredit": "3000",
-      "amount": 10440,
-      "vatCode": "V81",
-      "description": "Café, Umsatz September 2026"
-    },
-    {
-      "id": "742de4ec942e68c6",
-      "transactionRef": "90000000057",
+      "id": "1b104277908469a8",
+      "transactionRef": "90000000059",
       "date": "2026-09-28",
       "accountDebit": "1021",
       "accountCredit": "3200",
@@ -3471,8 +3586,8 @@
       "description": "Kaffeebohnen Laden, Umsatz September 2026"
     },
     {
-      "id": "f606653f1f7c360c",
-      "transactionRef": "90000000057",
+      "id": "91184a5345272647",
+      "transactionRef": "90000000059",
       "date": "2026-09-28",
       "accountDebit": "6840",
       "accountCredit": "1021",
@@ -3481,8 +3596,18 @@
       "description": "Muster Payments, Kommission September 2026"
     },
     {
-      "id": "3f83d2653b0cdfc4",
-      "transactionRef": "90000000058",
+      "id": "a0252c5543ee84ca",
+      "transactionRef": "90000000059",
+      "date": "2026-09-28",
+      "accountDebit": "1021",
+      "accountCredit": "3000",
+      "amount": 10440,
+      "vatCode": "V81",
+      "description": "Café, Umsatz September 2026"
+    },
+    {
+      "id": "2e100442f7d8fd3a",
+      "transactionRef": "90000000060",
       "date": "2026-09-30",
       "accountDebit": "4000",
       "accountCredit": "1021",
@@ -3491,8 +3616,8 @@
       "description": "Grünkaffee Muster, Rohkaffee September 2026"
     },
     {
-      "id": "67c62855ebd6d454",
-      "transactionRef": "90000000058",
+      "id": "84f1ff38179a1cba",
+      "transactionRef": "90000000060",
       "date": "2026-09-30",
       "accountDebit": "6000",
       "accountCredit": "1021",
@@ -3501,8 +3626,8 @@
       "description": "Liegenschaften Muster, Miete Ladenlokal September 2026"
     },
     {
-      "id": "a0252c5543ee84ca",
-      "transactionRef": "90000000059",
+      "id": "1d41695834ab1bb3",
+      "transactionRef": "90000000061",
       "date": "2026-09-30",
       "accountDebit": "6940",
       "accountCredit": "1021",
@@ -3556,7 +3681,7 @@
       "date": "2026-01-31",
       "amount": 25612.52,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.01.2026 - 31.01.2026 - CH4180808000000000001 - 2026-01-31.pdf"
+      "sourceFile": "Kontoauszug 01.01.2026 - 31.01.2026 - CH6580808000000000001 - 2026-01-31.pdf"
     },
     {
       "account": "1023",
@@ -3574,7 +3699,7 @@
       "date": "2026-02-28",
       "amount": 21014.87,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.02.2026 - 28.02.2026 - CH4180808000000000001 - 2026-02-28.pdf"
+      "sourceFile": "Kontoauszug 01.02.2026 - 28.02.2026 - CH6580808000000000001 - 2026-02-28.pdf"
     },
     {
       "account": "1023",
@@ -3592,7 +3717,7 @@
       "date": "2026-03-31",
       "amount": 40267.07,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.03.2026 - 31.03.2026 - CH4180808000000000001 - 2026-03-31.pdf"
+      "sourceFile": "Kontoauszug 01.03.2026 - 31.03.2026 - CH6580808000000000001 - 2026-03-31.pdf"
     },
     {
       "account": "1023",
@@ -3610,7 +3735,7 @@
       "date": "2026-04-30",
       "amount": 48409.34,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.04.2026 - 30.04.2026 - CH4180808000000000001 - 2026-04-30.pdf"
+      "sourceFile": "Kontoauszug 01.04.2026 - 30.04.2026 - CH6580808000000000001 - 2026-04-30.pdf"
     },
     {
       "account": "1023",
@@ -3628,7 +3753,7 @@
       "date": "2026-05-31",
       "amount": 55101.23,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.05.2026 - 31.05.2026 - CH4180808000000000001 - 2026-05-31.pdf"
+      "sourceFile": "Kontoauszug 01.05.2026 - 31.05.2026 - CH6580808000000000001 - 2026-05-31.pdf"
     },
     {
       "account": "1023",
@@ -3646,7 +3771,7 @@
       "date": "2026-06-30",
       "amount": 63846.48,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.06.2026 - 30.06.2026 - CH4180808000000000001 - 2026-06-30.pdf"
+      "sourceFile": "Kontoauszug 01.06.2026 - 30.06.2026 - CH6580808000000000001 - 2026-06-30.pdf"
     },
     {
       "account": "1023",
@@ -3664,7 +3789,7 @@
       "date": "2026-07-31",
       "amount": 71100.2,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.07.2026 - 31.07.2026 - CH4180808000000000001 - 2026-07-31.pdf"
+      "sourceFile": "Kontoauszug 01.07.2026 - 31.07.2026 - CH6580808000000000001 - 2026-07-31.pdf"
     },
     {
       "account": "1023",
@@ -3680,9 +3805,9 @@
       "bank": "Raiffeisen",
       "currency": "CHF",
       "date": "2026-08-31",
-      "amount": 78658.76,
+      "amount": 80223.36,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.08.2026 - 31.08.2026 - CH4180808000000000001 - 2026-08-31.pdf"
+      "sourceFile": "Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf"
     },
     {
       "account": "1023",
@@ -3698,9 +3823,9 @@
       "bank": "Raiffeisen",
       "currency": "CHF",
       "date": "2026-09-30",
-      "amount": 86687.84,
+      "amount": 88252.44,
       "source": "pdf",
-      "sourceFile": "Kontoauszug 01.09.2026 - 30.09.2026 - CH4180808000000000001 - 2026-09-30.pdf"
+      "sourceFile": "Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf"
     },
     {
       "account": "1023",

@@ -60,8 +60,16 @@
     "name": "Ertrag Kaffeebohnen Laden"
   },
   {
+    "number": "3300",
+    "name": "Ertrag Grosshandel"
+  },
+  {
     "number": "3400",
     "name": "Ertrag Webshop"
+  },
+  {
+    "number": "3600",
+    "name": "Ertrag Schulungen und Service"
   },
   {
     "number": "4000",

@@ -5,6 +5,7 @@
  * tools/demo/generate.ts, so they cannot disagree.
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
+import type { Address, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, VatRate } from '../../src/invoices/model.js';
 
 export const YEAR = '2026';
 
@@ -39,8 +40,12 @@ export interface Doc {
 /** One booking line of a payment. amount is signed as it moves the bank: + money in, − money out. */
 export interface Leg { account: string; amount: number; vatCode?: string; text: string; key?: string }
 
-/** One payment inside a bank booking. A Sammelzahlung has several. */
-export interface Part { counterparty: string; reference?: string; text: string; legs: Leg[]; doc?: Doc; noReceipt?: string }
+/**
+ * One payment inside a bank booking. A Sammelzahlung has several. A part that pays an issued
+ * invoice names its number: its legs only give the amount, the invoice matcher books it
+ * (src/invoices/payments.ts), with the invoice PDF as its receipt.
+ */
+export interface Part { counterparty: string; reference?: string; text: string; legs: Leg[]; doc?: Doc; noReceipt?: string; invoice?: string }
 
 /**
  * Paid by the owner privately (Auslagen): a manual transaction booked on the owner's current
@@ -71,6 +76,29 @@ export interface Scenario {
   correctionPayment?(difference: number): Payment;
 }
 
+/**
+ * A demo company's invoicing: its address, the manifest's invoicing block, a logo, customers, and
+ * what happened to its invoices in order (tools/demo/invoices.ts plays it through the app's own
+ * invoicing service). Invoices are numbered in the order they are issued.
+ */
+export interface DemoInvoicing {
+  address: Address;
+  /** The invoicing block of belege.workspace.yaml, as YAML. */
+  manifest: string;
+  logo?: { file: string; svg: string };
+  customers: Record<string, CustomerFields>;
+  steps: InvoiceStep[];
+}
+
+interface Drafted { key: string; customer: string; at: string; date: string; subject: string; lines: InvoiceLine[]; currency?: InvoiceCurrency; exemption?: Exemption }
+export type InvoiceStep =
+  | ({ do: 'issue'; paid?: { date: string; bank: string } } & Drafted)
+  | ({ do: 'draft' } & Drafted)
+  | { do: 'credit'; key: string; of: string; at: string; amount?: number; vatRate?: VatRate; reason: string; settlement?: 'refund' | 'offset' }
+  | { do: 'remind'; of: string; at: string; fee?: number }
+  | { do: 'cancel'; of: string; at: string; reason: string }
+  | { do: 'comment'; of: string; at: string; text: string };
+
 /** One demo workspace: who the company is, its chart and banks, and its year as a Scenario. */
 export interface Demo {
   /** The directory under the app root, which is also its VANILLA_WORKSPACE shortcut. */
@@ -88,6 +116,7 @@ export interface Demo {
   /** knowledge/<role>/<file>: the workspace's own business files (bindings and private ones). */
   knowledge: Record<string, string>;
   scenario(seed: number): Scenario;
+  invoicing?: DemoInvoicing;
 }
 
 // ─── numbers and dates ──────────────────────────────────────────────────────

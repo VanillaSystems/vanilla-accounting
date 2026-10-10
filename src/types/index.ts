@@ -97,8 +97,9 @@ export interface JournalEntry {
    * Absent means another writer, or an entry booked before the field existed.
    * 'year-close' is the year-end revaluation of a foreign-currency account (npm run year:close):
    * it changes the account's CHF value only, so its native balance leaves it out.
+   * 'invoice' is the revenue of a paid invoice, booked from its lines (src/invoices/payments.ts).
    */
-  origin?: 'classify' | 'manual' | 'year-close';
+  origin?: 'classify' | 'manual' | 'year-close' | 'invoice';
 }
 
 /** A VAT quarter, e.g. "2026-Q2". */

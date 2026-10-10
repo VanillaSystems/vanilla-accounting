@@ -1,5 +1,5 @@
 {
- "note": "The bank and manual transaction refs of books.json frozen on 2026-10-09.",
+ "note": "The bank and manual transaction refs of books.json frozen on 2026-10-10.",
  "refs": [
   "90000000001",
   "90000000002",
@@ -60,6 +60,8 @@
   "90000000057",
   "90000000058",
   "90000000059",
+  "90000000060",
+  "90000000061",
   "CARD-7000001",
   "CARD-7000002",
   "CARD-7000003",

@@ -1815,8 +1815,7 @@
       "amount": 450,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung CW-2026-01",
-      "reference": "000000000000000030112026011"
+      "description": "Rechnung CW-2026-01"
     },
     {
       "ref": "90000000002",
@@ -1853,8 +1852,7 @@
       "amount": 1425,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "BVG-Beitrag Q1 2026",
-      "reference": "000000000000000005720202616"
+      "description": "BVG-Beitrag Q1 2026"
     },
     {
       "ref": "90000000004",
@@ -1863,8 +1861,7 @@
       "amount": 101.55,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung MT-202601",
-      "reference": "000000000000000086422026013"
+      "description": "Rechnung MT-202601"
     },
     {
       "ref": "90000000005",
@@ -1873,8 +1870,7 @@
       "amount": 6486,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Rechnung 2026-011",
-      "reference": "Rechnung 2026-011"
+      "description": "Rechnung 2026-011"
     },
     {
       "ref": "90000000006",
@@ -1883,8 +1879,7 @@
       "amount": 1398,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Prämienrechnung 2026",
-      "reference": "000000000000000000573020265"
+      "description": "Prämienrechnung 2026"
     },
     {
       "ref": "90000000007",
@@ -1894,7 +1889,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Lohn Januar 2026",
-      "reference": "Lohn Januar 2026",
       "remarks": "Lohn Januar 2026 gemäss Lohnabrechnung: brutto 8’600.00, netto 7’812.10; Lohn ist kein Entgelt im Sinne der MWST",
       "noReceiptNeeded": true
     },
@@ -1906,7 +1900,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Spesen Januar 2026",
-      "reference": "Spesen Januar 2026",
       "remarks": "Spesenabrechnung Januar 2026: die Belege hängen an den einzelnen Auslagen",
       "noReceiptNeeded": true
     },
@@ -1917,8 +1910,7 @@
       "amount": 450,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung CW-2026-02",
-      "reference": "000000000000000030112026026"
+      "description": "Rechnung CW-2026-02"
     },
     {
       "ref": "TRANSFER-8000001",
@@ -1927,8 +1919,7 @@
       "amount": 3800,
       "currency": "EUR",
       "direction": "CRDT",
-      "description": "Rechnung 2026-013",
-      "reference": "Rechnung 2026-013"
+      "description": "Rechnung 2026-013"
     },
     {
       "ref": "90000000010",
@@ -1984,8 +1975,7 @@
       "amount": 98.75,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung MT-202602",
-      "reference": "000000000000000086422026029"
+      "description": "Rechnung MT-202602"
     },
     {
       "ref": "90000000013",
@@ -1994,8 +1984,7 @@
       "amount": 6486,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Rechnung 2026-021",
-      "reference": "Rechnung 2026-021"
+      "description": "Rechnung 2026-021"
     },
     {
       "ref": "90000000014",
@@ -2005,7 +1994,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Lohn Februar 2026",
-      "reference": "Lohn Februar 2026",
       "remarks": "Lohn Februar 2026 gemäss Lohnabrechnung: brutto 8’600.00, netto 7’812.10; Lohn ist kein Entgelt im Sinne der MWST",
       "noReceiptNeeded": true
     },
@@ -2016,8 +2004,7 @@
       "amount": 450,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung CW-2026-03",
-      "reference": "000000000000000030112026034"
+      "description": "Rechnung CW-2026-03"
     },
     {
       "ref": "90000000016",
@@ -2027,7 +2014,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Spesen Februar 2026",
-      "reference": "Spesen Februar 2026",
       "remarks": "Spesenabrechnung Februar 2026: die Belege hängen an den einzelnen Auslagen",
       "noReceiptNeeded": true
     },
@@ -2047,8 +2033,7 @@
       "amount": 5695.68,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Rechnung 2026-022",
-      "reference": "Rechnung 2026-022"
+      "description": "Rechnung 2026-022"
     },
     {
       "ref": "CARD-7000003",
@@ -2086,8 +2071,7 @@
       "amount": 91.85,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Rechnung MT-202603",
-      "reference": "000000000000000086422026037"
+      "description": "Rechnung MT-202603"
     },
     {
       "ref": "90000000020",
@@ -2096,8 +2080,7 @@
       "amount": 6486,
       "currency": "CHF",
       "direction": "CRDT",
-      "description": "Rechnung 2026-031",
-      "reference": "Rechnung 2026-031"
+      "description": "Rechnung 2026-031"
     },
     {
       "ref": "90000000021",
@@ -2107,7 +2090,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Lohn März 2026",
-      "reference": "Lohn März 2026",
       "remarks": "Lohn März 2026 gemäss Lohnabrechnung: brutto 8’600.00, netto 7’812.10; Lohn ist kein Entgelt im Sinne der MWST",
       "noReceiptNeeded": true
     },
@@ -2118,8 +2100,7 @@
       "amount": 3612.6,
       "currency": "CHF",
       "direction": "DBIT",
-      "description": "Akonto AHV Q1 2026",
-      "reference": "000000000000000007700202615"
+      "description": "Akonto AHV Q1 2026"
     },
     {
       "ref": "90000000023",
@@ -2129,7 +2110,6 @@
       "currency": "CHF",
       "direction": "DBIT",
       "description": "Spesen März 2026",
-      "reference": "Spesen März 2026",
       "remarks": "Spesenabrechnung März 2026: die Belege hängen an den einzelnen Auslagen",
       "noReceiptNeeded": true
     },
