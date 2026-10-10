@@ -1,57 +1,122 @@
-# ADR 0006: The desktop shell: a single program first, Electron later
+# ADR 0006: Distribution: a Claude plugin first, then a single program, then Electron
 
-Status: accepted (2026-10-10). Nothing built yet; last in the order of work of
-[ADR 0003](0003-deployment-and-collaboration.md).
+Status: accepted (2026-10-10), revised the same day (plugin first, git inside the app, GitHub
+first). Nothing built yet.
 
 ## Problem
 
 Company members run the app locally ([ADR 0003](0003-deployment-and-collaboration.md)). The
-owner is technical; a bookkeeper or an employee who helps with the books may not be. The app's
-engine is Node and TypeScript (an Express server, the rules, the books), and local-first adds
-needs a plain web page cannot meet: git built in for people who have never installed it, a Sync
-button, the conflict view, native file dialogs, and automatic updates.
+owner is technical; a bookkeeper may not be. Today the app starts with `npm start` from a clone of
+the app repository, and needs Node.js, npm, `pdftotext` (poppler), ImageMagick, `git` and the
+`claude` CLI. That is a developer's setup, and it makes every company a fork.
 
-Today the app starts with `npm start` from a clone of the app repository, which assumes Node,
-git and a terminal, and makes every company a fork.
+The goal: **download one thing, double-click, and start in Claude Cowork,** with no terminal, no
+npm and no git command.
 
-## Options
+## What makes that possible
 
-| Option | Size | Fit |
-|---|---|---|
-| **Electron** | large (~100 MB and more) | Brings Chromium and Node; the server runs inside unchanged. Mature auto-update. GitHub Desktop is built on it with git embedded (`dugite`), which is this app's case. Same rendering on every system. |
-| **Tauri** | small (~10 MB) | Rust shell with the system's web view. The Node server would have to ship beside it as a bundled program (a sidecar), which takes most of the size advantage away; rendering differs between Safari's engine (Mac) and Edge's (Windows). |
-| **Electrobun** | small | TypeScript on Bun with the system's web view, closest to this stack. Young: maturity, Windows support and updates are a risk (an assessment at the time of writing, to check again). |
-| **No shell** | smallest | One executable (Node or Bun compiled) that starts the server and opens the browser; installable as a web app from the browser. No built-in git, no automatic update, no native dialogs. |
+- **Claude Desktop installs MCP Bundles (`.mcpb`, formerly `.dxt`) with a double-click.** A bundle
+  is a zip with an MCP server, all its dependencies and a `manifest.json`.
+- **Claude Desktop ships its own Node.js** on macOS and Windows; a bundle's Node server needs no
+  installed runtime.
+- **Claude Cowork has full MCP and plugin support, local servers included.** A **plugin** bundles
+  MCP tools with Skills and slash commands, and works in Cowork and in Claude Code.
 
 ## Decision
 
-1. **First, no shell:** the `vanilla` CLI ([ADR 0005](0005-agents-command-registry-cli-mcp.md)) as
-   one executable; `vanilla open` serves the UI and opens the browser. It covers the owner,
-   developers and every agent, at no cost, and needs no desktop decision.
-2. **Then Electron,** once a company member without a terminal needs to work locally: its own
-   window, git built in, Sync, the conflict view, the MCP server for Claude Desktop and Cowork,
-   automatic updates, and the `vanilla` command installed alongside. Electron is the proven way
-   to ship a web UI with Node and git built in; its size does not matter on a bookkeeper's
-   machine.
-3. **Look at Electrobun again** when step 2 starts; if it is stable then, it is the lighter path
-   with the same stack.
+### Four forms, in this order
 
-`npm start` from a clone of the app repository stays the path for developers and for anyone who
-forks; companies adapt the app through their workspace and keep every upgrade.
+| | Form | For | Install |
+|---|---|---|---|
+| **1** | **Claude plugin with an MCP Bundle** | owner and bookkeeper with Claude Desktop or Cowork | download, double-click |
+| 2 | `vanilla` CLI as one executable (Bun or Node single executable) | developers, Claude Code, Linux | `curl … \| sh`, Homebrew, or a download |
+| 3 | Electron app | when a second person needs a window with Sync and the conflict view | download |
+| 4 | `npm start` from a clone | developers of the app | as today |
+
+All four run the same engine and the same command registry
+([ADR 0005](0005-agents-command-registry-cli-mcp.md)).
+
+### 1. The plugin
+
+- **MCP tools** from the registry (the 10 to 15 coarse tools), **Skills** for the bookkeeping jobs
+  ("Buchhaltung einrichten", "Eingang verarbeiten", "Quartal abschliessen"), and the company's
+  knowledge read from its workspace. The Skills carry what `AGENTS.md` and the process guides
+  carry today, delivered with the app.
+- **In plugin mode the agent is the model.** The app's own model calls (`claude -p`) need Claude
+  Code, which a Cowork user does not have. The tools therefore hand judgment to the agent ("these
+  12 receipts are unread, here is their text"; "save this classification") and the model work
+  runs on the user's subscription through Cowork.
+- **The UI comes with it:** a tool starts the local server on request and opens the books in the
+  browser.
+- **Limits:** Claude Desktop runs on macOS and Windows, not Linux (Linux takes the CLI); Cowork
+  needs a paid Claude plan; a bundle downloaded from the website does not update itself, a
+  listing in the Desktop Extensions gallery would.
+
+### 2. No external programs
+
+Everything runs on a JavaScript runtime the app does not install (Claude Desktop's Node, or the
+runtime inside the single executable or Electron), so the engine uses libraries, not programs:
+
+| Today | Instead |
+|---|---|
+| `pdftotext` (poppler) | pdf.js |
+| ImageMagick | a JavaScript or WebAssembly library (`pdf-lib` to wrap images, a WASM codec to compress own scans, [ADR 0008](0008-ingestion-one-inbox.md)) |
+| `git` | a pure-JavaScript git (for example `isomorphic-git`), see 3 |
+| `claude` CLI | the agent in Cowork (plugin), or the `claude` CLI where installed |
+
+Native add-ons are avoided: they do not travel inside a bundle or a single executable reliably.
+
+### 3. Git inside the app, GitHub first
+
+Nobody types a git command. The app does git itself:
+
+- **Sync** ("Synchronisieren", a button or "synchronisiere meine Buchhaltung" in Cowork): fetch
+  `main`, bring it into the person's branch, push the branch. Merging is the app's own
+  record-level merge ([ADR 0003](0003-deployment-and-collaboration.md)), not git's.
+- **Pure-JavaScript git over HTTPS.** It clones, fetches, commits and pushes; it does not speak
+  SSH, and it has no built-in Git LFS (as far as known when writing), which fits keeping PDFs in
+  plain git for now.
+- **GitHub is the one supported host at first.** "Mit GitHub verbinden" uses GitHub's device-code
+  login (the app shows a code, the person confirms it on github.com); the key is kept in the
+  operating system's keychain. No token is copied, no SSH key is made.
+- **The owner never needs github.com either:** "Sicherung einrichten" creates the private
+  repository through GitHub's API and pushes the books; "Buchhalterin einladen" sends the
+  invitation.
+- **What remains for a bookkeeper:** a GitHub account, made once, and accepting the invitation
+  by e-mail.
+- **Protection of `main` needs a paid GitHub plan for private repositories** (Pro or Team, as far
+  as known when writing; check the prices). Alone, the free plan is enough; with a contributor,
+  the company needs a paid plan, or only the app's local guard protects `main`.
+- **Other hosts later:** the sync layer is plain git over HTTPS and stays host-neutral, so
+  GitLab, Bitbucket and others can be added as adapters (login, repository creation, branch
+  rules) without rebuilding it. Until then they are not supported. A remote reachable only by
+  SSH or a network share needs the CLI with an installed git.
+
+### 4. Electron, when a second person needs it
+
+The Electron app adds a window of its own with Sync, the conflict view and automatic updates,
+and installs the `vanilla` command and the plugin alongside. It comes when a company member
+without Claude Desktop, or a second writer, needs it. Electrobun is checked again then.
 
 ## Consequences
 
-- The app becomes an installable package with a single entry (`vanilla`); the server, the UI
-  and the commands do not depend on being run from the repository.
-- Signing for Electron costs the vendor an Apple developer account (about USD 99 a year) and, for
-  Windows, a code-signing certificate; the company pays nothing.
-- The Treuhänder and the auditor never install any of this: they use a cloud instance or a
-  static export in the browser ([ADR 0003](0003-deployment-and-collaboration.md)).
+- The engine drops its external programs (pdf.js, a WASM codec, pure-JavaScript git) before the
+  plugin can ship.
+- The command registry gains tools that let the agent supply judgment, beside the app's own model
+  calls.
+- Signing costs the vendor an Apple developer account (about USD 99 a year) for the single
+  executable and Electron; the plugin is signed through its own mechanism.
+- A GitHub adapter: device-code login, keychain, repository creation, invitations, reading branch
+  protection.
 
 ## Rejected
 
+- **npm as the way in for companies:** needs Node, npm and a terminal, and makes every company a
+  fork.
+- **Electron first:** a heavy download before anyone needs a window of its own; the plugin
+  reaches the owner and the bookkeeper inside the agent they already use.
+- **Bundling poppler, ImageMagick or git as programs:** they do not travel inside a bundle
+  reliably; libraries do.
 - **Tauri:** small only without the Node server, which this app needs.
-- **Electron from the start:** a desktop app before anyone needs it; the CLI comes first and
-  serves the people who exist today.
-- **`npm start` from a clone as the path for companies:** needs Node, git and a terminal, and
-  makes every company a fork.
+- **Every git host from the start:** each needs its own login and API adapter; GitHub covers most
+  companies, the sync layer keeps the door open.

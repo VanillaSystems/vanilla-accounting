@@ -60,9 +60,10 @@ that do not change its return (year-end entries carry no VAT).
 
 ### 1. The trust model: the git host decides who may do what
 
-Users and permissions live where the company keeps its repository: the git host (GitHub,
-GitLab, Bitbucket, a self-hosted Gitea or Forgejo). Adding or removing a person is done there,
-by the host's administrator, not in the app.
+Users and permissions live where the company keeps its repository: the git host. Adding or
+removing a person is done there, by the host's administrator (or through the app, which asks the
+host). GitHub is the one supported host at first; the sync layer is plain git over HTTPS, so
+other hosts can follow as adapters ([ADR 0006](0006-desktop-shell.md), section 3).
 
 | Role | On the git host | May |
 |---|---|---|

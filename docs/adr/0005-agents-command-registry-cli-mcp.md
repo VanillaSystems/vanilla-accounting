@@ -46,8 +46,10 @@ safe ([ADR 0003](0003-deployment-and-collaboration.md), section 7):
 
 - **CLI first** (`vanilla`, an npm package and later a single executable): it covers the owner,
   developers and every agent with a shell, and is today's `npm run` scripts made installable.
-- **MCP second:** `vanilla mcp` over stdio for Claude Desktop and Cowork on a company member's
-  machine, and the same tools over HTTPS on a cloud instance, behind its login gate, for a
+- **MCP as a Claude plugin** for Claude Desktop and Cowork on a company member's machine,
+  installed with a double-click and running on Claude Desktop's own Node
+  ([ADR 0006](0006-desktop-shell.md)); in that mode the agent supplies the judgment the app's
+  own model calls supply elsewhere. The same tools run over HTTPS on a cloud instance, behind its login gate, for a
   Treuhänder who wants to work through his own Claude plan
   ([ADR 0003](0003-deployment-and-collaboration.md), section 5).
 - **Few, coarse tools** (10 to 15) that match the jobs of the personas, not one per field:
