@@ -104,3 +104,15 @@ Row selection follows the mockup: ↑/↓ or J/K move, Enter opens, Esc goes bac
 
 Decided in phase 8 with ADR 0012 (PDF path) after the prototype of headless Chromium against a PDF
 library. Records carry the ADR 0004 envelope and live in the workspace beside `books.json`.
+
+```
+src/invoices/   model.ts (records), rules.ts (pure rules), reference.ts (QRR, SCOR), texts.ts
+                (document words in de, fr, it, en), sheet.ts (the A4 renderer, no Node import),
+                documents.ts (what each document shows), fonts.ts, pdf.ts (Chromium), store.ts
+                (invoices.json, PDFs), service.ts (every change), payments.ts (camt matching)
+workspace       invoices.json, invoices/<number>.pdf, invoices/sent/<id>.pdf, and the manifest's
+                company.address and invoicing block (payTo per currency, accounts, layout, texts)
+```
+
+The UI (phase 9) renders sheets with `sheetBlocks`, measures the blocks in its own DOM, places them
+with `paginate` and writes them with `assembleSheets`: the same code that prints the PDF.
