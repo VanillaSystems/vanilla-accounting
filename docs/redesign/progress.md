@@ -76,5 +76,5 @@ Missing for the mockup, to add in their phase:
   add button with N, tab titles; every old tab inside its area through the legacy adapter; Firma list/detail with
   Darstellung. Evidence and mockup comparison: .verify/evidence/redesign/phase-1/NOTES.md. Differs from the mockup:
   old tab bodies (phases 2–9), theme toast has an undo, no ⇧E yet, Firma sections other than Darstellung pending.
-  Commits 647643f (route.ts), 2577e82 (app paths), bac78a8 (upload), then the shell commit. Left: bank badge (needs
+  Commits: route.ts, app paths, upload, then the shell. Left: bank badge (needs
   the statement check, phase 3), objects in ⌘K for the other areas as they are built.
