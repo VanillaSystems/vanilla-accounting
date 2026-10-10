@@ -10,6 +10,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { config as loadEnv } from 'dotenv';
 import { loadBooks, periodLock, sealsOf, type Books } from '../books/store.js';
@@ -20,7 +21,7 @@ import { bankKind, parseIban } from '../workspace/banks.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { APP_ROOT, openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
 
-type Result =
+export type Result =
   | { status: 'ok'; label: string }
   | { status: 'warn'; label: string; note: string }
   | { status: 'fail'; label: string; fix: string };
@@ -61,7 +62,8 @@ function toolChecks(): Result[] {
   ];
 }
 
-function workspaceChecks(ws: Workspace): Result[] {
+/** The checks of the workspace itself; `npm run year:close` requires them clean. */
+export function workspaceChecks(ws: Workspace): Result[] {
   const results: Result[] = [ok(`Workspace ${ws.paths.root} (${ws.company.name})`)];
   const { profile } = ws;
   results.push(profile
@@ -216,4 +218,4 @@ async function main(): Promise<number> {
   return failed ? 1 : 0;
 }
 
-process.exitCode = await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main();

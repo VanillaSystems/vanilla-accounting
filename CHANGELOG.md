@@ -25,6 +25,25 @@ Two markers flag an entry you must read before you update:
   engine, so the explanation cannot drift from the return (tests/vat-codes.test.ts).
   `docs/vat-codes.md` is the same catalogue as a document; `npm run vat-codes` regenerates it
   and its data from `reference/MWST-codes.txt` and the casebook.
+- Year-end close: `npm run year:close -- <year> [--dry-run]` and a Jahresabschluss tab (de, fr,
+  it, en). A checklist computed from the books: the fourth quarter filed, Q1 to Q3 sealed, every
+  bank account matching its statement on 31.12., the statements covering the year, every
+  transaction booked, `npm run doctor` clean. It books the exchange difference (Kursdifferenz)
+  of each foreign-currency account on 31.12. at the ESTV rate of that day (rerunning replaces it),
+  reconciles the VAT accounts with the year's returns, guides the year-end entries (depreciation,
+  accruals and deferrals, provisions, tax provision, private use, inventory, social insurance,
+  doubtful accounts) as prefilled entries or "not needed", and shows the closing balance sheet
+  with the VAT split off by code. "Jahr abschliessen" closes through 31.12., seals the fourth
+  quarter and commits the workspace. See docs/year-end.md.
+- Opening the next year: `npm run year:open -- <year>` and a button after the close. Opening
+  balances from the app's own closed books: balance-sheet accounts carried, the result to 2970,
+  foreign accounts at their native balance and the 31.12. rate. Rerunning updates them.
+  `npm run import-opening` stays the way to open from Banana.
+- Profit allocation after the shareholders' resolution: reserve and dividend with 35%
+  Verrechnungssteuer, as guided entries in the new year.
+- `npm run fetch-rates -- --year <year>`: one ESTV rate file per year
+  (`reference/estv-daily-rates-<year>.json`); every year's file is read.
+
 - Exchange rates: every foreign amount (Buchungen, MWST Ziffer detail, Kontoauszug, the account
   panel, a transaction's entries) explains itself on hover as "EUR amount × rate = CHF amount ·
   ESTV Devisenkurs Verkauf <date>", and the Buchungen and transaction details spell it out.
@@ -96,6 +115,9 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ action** `npm run seal -- <year>-Q4 --close` refuses: the fourth quarter closes with the
+  year (`npm run year:close`), so the year-end entries can still be dated 31.12. `--force`
+  closes it anyway.
 - The app is called Vanilla Accounting. The workspace variable is `VANILLA_WORKSPACE`;
   `BELEGE_WORKSPACE` still works and prints a note.
 - **⚠ action**: a workspace's `counterparties/` and `policy/` folders moved to

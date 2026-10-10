@@ -35,6 +35,8 @@
     "reconcile-balances": "tsx src/cli/reconcile-balances.ts",
     "check-closed": "tsx src/cli/check-closed-period.ts",
     "seal": "tsx src/cli/seal.ts",
+    "year:close": "tsx src/cli/year-close.ts",
+    "year:open": "tsx src/cli/year-open.ts",
     "board": "tsx src/cli/import-board.ts",
     "extract-balances": "tsx src/cli/extract-statement-balances.ts",
     "check-processes": "tsx src/cli/check-processes.ts",

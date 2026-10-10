@@ -190,7 +190,8 @@ npm run vat-xml -- 2026-Q3
 ```
 
 This writes an eCH-0217 XML. Import it in the ESTV portal ("MWST abrechnen"), check, and
-submit. Then copy the XML into `filings/<year>/` and close the quarter:
+submit. Then copy the XML into `filings/<year>/` and close the quarter (the fourth quarter closes with
+the year instead, see [year-end.md](year-end.md)):
 
 ```sh
 npm run seal -- 2026-Q3 --close
@@ -223,6 +224,7 @@ marked **⚠ action** needs something from you. Commit your workspace afterwards
 - **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and
   Wise; for another bank, check the first statement's transactions and closing balance. camt.054
   notifications and PayPal and credit card statements are not imported: book those by hand.
-- **Year-end:** the closing, the revaluation of foreign currency accounts and the annual
-  report are guided (processes/year-close.flow.yaml), but your Treuhand or your accounting
-  software does the annual accounts.
+- **Year-end:** `npm run year:close` checks the year, books the exchange difference, guides the
+  year-end entries and closes the year; `npm run year:open` opens the next one
+  ([year-end.md](year-end.md)). Your Treuhand still signs off the annual accounts, and the
+  Bilanz and Erfolgsrechnung tabs show amounts VAT included.

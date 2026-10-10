@@ -32,7 +32,7 @@ export interface ReconcileRow {
 const MATCH_TOLERANCE_RAPPEN = 1; // 0.01 in the account's currency unit
 
 /** Native opening balance for a bank account at the start of `year`. */
-function nativeOpening(index: Index, account: string, currency: string, year: string): number {
+export function nativeOpening(index: Pick<Index, 'config'>, account: string, currency: string, year: string): number {
   const native = index.config?.openingBalancesNative?.[year]?.[account];
   if (native && native.currency === currency) return native.amount;
   // CHF accounts store their opening in the plain (CHF) opening-balance table.
@@ -53,6 +53,8 @@ export function bookBalanceNative(
   let rappen = toRappen(opening);
   for (const e of entries) {
     if (!e.date || e.date < from || e.date > asOf) continue;
+    // The year-end revaluation (src/accounting/year-close.ts) changes the CHF value only: no money moved.
+    if (e.origin === 'year-close') continue;
     if (e.accountDebit === account) rappen += toRappen(e.amount);
     if (e.accountCredit === account) rappen -= toRappen(e.amount);
   }

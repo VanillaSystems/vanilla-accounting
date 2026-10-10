@@ -18,6 +18,7 @@ import { IncomeStatementTab } from './components/income-statement-tab.js';
 import { VatReportTab } from './components/vat-report-tab.js';
 import { AccountLedgerTab } from './components/account-ledger-tab.js';
 import { BankReconciliationTab } from './components/bank-reconciliation-tab.js';
+import { YearCloseTab } from './components/year-close-tab.js';
 import { SplitPane } from './components/split-pane.js';
 import { PeriodPicker } from './components/period-picker.js';
 import { AssignPanel } from './components/assign-panel.js';
@@ -27,7 +28,7 @@ import { PdfFrame } from './components/pdf-frame.js';
 import { ReceiptEditForm } from './components/receipt-edit-form.js';
 import { ManualTransactionForm } from './components/manual-transaction-form.js';
 import { cn, formatDate } from './lib/utils.js';
-import { api, orAlert, errorText, sources } from './lib/api.js';
+import { api, orAlert, errorText, sources, STATIC_EXPORT } from './lib/api.js';
 import { LOCALES, t } from './i18n/index.js';
 
 export default function App({ language, onLanguage }: { language: string; onLanguage: (code: string) => void }) {
@@ -300,6 +301,7 @@ export default function App({ language, onLanguage }: { language: string; onLang
             <TabTrigger value="vat-report">{t('tab.vat')}</TabTrigger>
             <TabTrigger value="account-ledger">{t('tab.accountLedger')}</TabTrigger>
             <TabTrigger value="bank-reconciliation">{t('tab.bankReconciliation')}</TabTrigger>
+            {!STATIC_EXPORT && <TabTrigger value="year-close">{t('tab.yearClose')}</TabTrigger>}
           </Tabs.List>
 
           {/* Belege tab */}
@@ -656,6 +658,12 @@ export default function App({ language, onLanguage }: { language: string; onLang
           >
             <BankReconciliationTab index={index} period={period} />
           </Tabs.Content>
+
+          {!STATIC_EXPORT && (
+            <Tabs.Content value="year-close" className="flex-1 data-[state=active]:flex flex-col overflow-hidden outline-none">
+              <YearCloseTab period={period} canEdit={canEdit} onRefresh={refresh} />
+            </Tabs.Content>
+          )}
         </Tabs.Root>
         </FxProvider>
       )}

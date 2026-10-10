@@ -1,8 +1,9 @@
 # Closing a year and opening the next one.
 #
-# The weakest process of the seven: the year-end revaluation of the foreign
-# currency accounts has no script behind it at all, and an opening can carry a
-# small cross-check difference that is flagged rather than fixed.
+# npm run year:close computes every item (preconditions, Kursdifferenz, VAT
+# check, guided year-end entries, closing balance sheet), books the Kursdifferenz
+# and closes the year; npm run year:open opens the next one from the closed books.
+# The owner's version: docs/year-end.md.
 
 id: year-close
 name: Close the year
@@ -15,7 +16,8 @@ phases: [revalue, close, open]
 
 steps:
   - id: q4_filed
-    name: The year's last quarter is filed
+    name: The year's last quarter is filed, not closed
+    note: npm run seal refuses Q4; year:close closes and seals it after the 31.12. entries
     kind: start
     phase: revalue
     duration: day 0
@@ -23,16 +25,17 @@ steps:
   - id: revalue
     name: Revalue the foreign-currency accounts at the 31.12 rate
     with: { guide: year-close.guide.yaml#revalue }
-    kind: human
-    note: Kursdifferenz — no script exists for this yet
+    icon: calculator
+    uses: npm:year:close
+    note: "Kursdifferenz: native balance × ESTV rate of 31.12. against the CHF book value; --dry-run previews"
     needs: [q4_filed]
     phase: revalue
     duration: 1h
 
   - id: book_diff
-    name: Book the exchange difference to Kursgewinn/-verlust
+    name: Book the exchange difference and the year-end entries
     kind: human
-    note: the Wise EUR and USD accounts
+    note: year:close books the Kursdifferenz to 6960 (replacing its own entry on a rerun); the guided entries in the Jahresabschluss tab, each booked or marked not needed
     needs: [revalue]
     phase: revalue
     duration: 20m
@@ -40,7 +43,7 @@ steps:
   - id: reports
     name: Produce the balance sheet and the income statement
     icon: file-output
-    note: "the UI tabs: Bilanz, Erfolgsrechnung, Kontenblätter"
+    note: "the Jahresabschluss tab's closing balance sheet (VAT split off by code), and the tabs Bilanz, Erfolgsrechnung, Kontenblätter"
     needs: [book_diff, find.rebook]
     phase: close
     duration: 5m
@@ -81,9 +84,9 @@ steps:
     duration: days
 
   - id: banana_close
-    name: Close the year in Banana Accounting
+    name: Close the year (npm run year:close), or in Banana Accounting
     kind: human
-    note: produces buchhaltung-<year>.Konten.xml
+    note: "year:close: closedThrough → 31.12., Q4 sealed, the close recorded and committed; Banana produces buchhaltung-<year>.Konten.xml"
     needs: [signoff.signed]
     phase: close
     duration: 1h
@@ -95,8 +98,8 @@ steps:
       Aktiven equal Passiven, and any difference is explained rather than
       plugged into a rounding account.
     icon: import
-    uses: npm:import-opening
-    note: balance-sheet accounts carry forward, P&L accounts reset to zero
+    uses: npm:year:open
+    note: balance-sheet accounts carry forward, P&L accounts reset to zero, the result to 2970; from Banana instead npm run import-opening
     outcomes: [ties_out, differs]
     needs: [banana_close, explain.resolved]
     phase: open

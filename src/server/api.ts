@@ -10,6 +10,7 @@ import { router as transactions } from './routes/transactions.js';
 import { router as mappings } from './routes/mappings.js';
 import { router as journal } from './routes/journal.js';
 import { router as config } from './routes/config.js';
+import { router as yearClose } from './routes/year-close.js';
 import { router as files } from './files.js';
 
 export const app = express();
@@ -43,7 +44,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify);
+app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

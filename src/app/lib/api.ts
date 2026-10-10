@@ -4,6 +4,7 @@ import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { ApiErrorBody, ApiStatus } from '../../types/api-error.js';
+import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t } from '../i18n/index.js';
 import { formatDate } from './utils.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
@@ -42,6 +43,7 @@ export function errorText(e: unknown): string {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
     case 'manualOnly': return t('error.manualOnly');
+    case 'yearClose': return t('error.yearClose');
     case 'fileExists': return t('error.fileExists', b.params);
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
@@ -66,6 +68,8 @@ type Ok = { ok: true };
 type Link = { receiptId: string; transactionRef: string };
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description'>>;
 export type ManualTransactionInput ={ date: string; description: string; amount: number; currency: string };
+export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
+export type YearCloseView = YearClose & { opening?: Opening };
 
 export const api = {
   patchReceipt: (id: string, patch: ReceiptPatch) =>
@@ -93,6 +97,13 @@ export const api = {
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
   classifyTransaction: (txRef: string) => request<unknown>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`),
+
+  yearClose: (year: string) => request<YearCloseView>('GET', `/api/year-close/${year}`),
+  bookRevaluation: (year: string) => request<{ entries: JournalEntry[] }>('POST', `/api/year-close/${year}/revaluation`),
+  markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<unknown>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),
+  bookYearEndEntry: (year: string, input: YearEndEntryInput) => request<{ entry: JournalEntry }>('POST', `/api/year-close/${year}/entries`, input),
+  closeYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/close`),
+  openYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/open`),
 
   books: () => request<Index>('GET', `${sources.books()}?t=${Date.now()}`),
   status: () => request<ApiStatus>('GET', sources.status()),

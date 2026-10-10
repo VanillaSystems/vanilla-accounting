@@ -233,6 +233,9 @@ Once the return is filed, the quarter never changes again. This is the first rul
 4. Run `npm run check-closed`. It proves that nothing in the closed period differs from the
    committed state.
 
+The fourth quarter is the exception: it closes with the year (`npm run year:close`, see
+[year-end.md](year-end.md)), so the year-end entries can still be dated 31.12.
+
 A quarter you closed before seals existed: `npm run seal -- 2026-Q2` seals it as it is now.
 `npm run doctor` lists the closed quarters that have no seal yet.
 
@@ -259,6 +262,6 @@ For agents: [`correction.flow.yaml`](../processes/correction.flow.yaml).
 ## After the fourth quarter
 
 The year-end comes on top of the fourth quarter: the revaluation of foreign currency accounts,
-the closing, the opening balances of the new year. See
-[`year-close.flow.yaml`](../processes/year-close.flow.yaml). Your Treuhand or your accounting
-software does the annual accounts.
+the year-end entries, the closing, the opening balances of the new year. File the fourth
+quarter as usual, but do not close it with `npm run seal`: `npm run year:close` closes and
+seals it after the year-end entries. See [year-end.md](year-end.md).

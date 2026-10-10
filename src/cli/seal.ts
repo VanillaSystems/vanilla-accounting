@@ -11,6 +11,10 @@
  *
  * Safe to rerun: an intact seal is left as it is, and --close on a closed quarter only seals.
  * --close moves closedThrough forward by one quarter at a time, never back.
+ *
+ * The fourth quarter closes with the year: `npm run year:close` books the year-end entries on
+ * 31.12. first, then closes and seals it. `--close` refuses a fourth quarter unless `--force`
+ * says the year-end entries are booked already.
  */
 import { loadBooks, saveBooks } from '../books/store.js';
 import { asQuarter, checkSeals, quarterOf, writeSeal } from '../books/seal.js';
@@ -32,6 +36,10 @@ if (args.includes('--close') && (!closedThrough || closedThrough < end)) {
   const next = closedThrough ? quarterOf(new Date(Date.parse(closedThrough) + 86_400_000).toISOString().slice(0, 10)) : quarter;
   if (next !== quarter) {
     console.error(`The books are closed through ${closedThrough}; the next quarter to close is ${next}, not ${quarter}.`);
+    process.exit(1);
+  }
+  if (quarter.endsWith('Q4') && !args.includes('--force')) {
+    console.error(`${quarter} closes with the year: npm run year:close -- ${quarter.slice(0, 4)} books the Kursdifferenz and the other year-end entries on 31.12. first, then closes and seals it (docs/year-end.md).\nClosing it now leaves nothing to date 31.12. Add --force if the year-end entries are booked already.`);
     process.exit(1);
   }
   books.config.closedThrough = end;
