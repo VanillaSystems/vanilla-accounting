@@ -11,6 +11,7 @@ import en from '../app/i18n/locales/en.js';
 import fr from '../app/i18n/locales/fr.js';
 import it from '../app/i18n/locales/it.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
+import { PRODUCT, SHORT_NAME } from '../app/brand/names.js';
 
 const LOCALES: Record<string, Locale> = { de, en, fr, it };
 
@@ -35,20 +36,20 @@ export interface MenuActions {
 
 export function menuTemplate(language: string, recent: readonly KnownBooks[], actions: MenuActions, dev: boolean): MenuItemConstructorOptions[] {
   const t = textsIn(language);
-  const product = 'Vanilla Accounting';
   return [
     {
-      label: product,
+      // macOS titles this menu with CFBundleName, the short name (electron-builder.config.cjs); About names the product in full.
+      label: SHORT_NAME,
       submenu: [
-        { id: 'about', label: t('desktop.menu.about', { app: product }), click: () => actions.command('about') },
+        { id: 'about', label: t('desktop.menu.about', { app: PRODUCT }), click: () => actions.command('about') },
         { type: 'separator' },
         { role: 'services', label: t('desktop.menu.services') },
         { type: 'separator' },
-        { role: 'hide', label: t('desktop.menu.hide', { app: product }) },
+        { role: 'hide', label: t('desktop.menu.hide', { app: SHORT_NAME }) },
         { role: 'hideOthers', label: t('desktop.menu.hideOthers') },
         { role: 'unhide', label: t('desktop.menu.showAll') },
         { type: 'separator' },
-        { role: 'quit', label: t('desktop.menu.quit', { app: product }) },
+        { role: 'quit', label: t('desktop.menu.quit', { app: SHORT_NAME }) },
       ],
     },
     {

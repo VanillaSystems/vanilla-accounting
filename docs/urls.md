@@ -15,7 +15,9 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
    through every row the arrow keys passed.
 5. **A link to something that no longer exists** opens its list with a notice ("Rechnung 2026-099 gibt es
    nicht"), never an empty or broken page.
-6. **The tab title names the object:** `2026-006 · Rechnungen`.
+6. **The tab title names the object, then the product:** `2026-006 · Rechnungen · Vanilla Accounting`
+   (the brand's `Page · Vanilla Accounting`; `windowTitle` in src/app/brand/names.ts). The page part is
+   translated, the product name never.
 7. **A link opens only for someone who may see it.** The URL carries no access; the role decides
    ([personas](personas/README.md)). The same link works on the desktop app, a cloud instance and the
    read-only audit export, wherever the object exists there.

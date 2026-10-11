@@ -22,6 +22,7 @@ import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer } from './server.js';
 import { readState, writeState, type Bounds } from './state.js';
+import { PRODUCT } from '../app/brand/names.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -155,7 +156,7 @@ function createWindow(stateFile: string): BrowserWindow {
   const saved = visible(readState(stateFile).bounds);
   const win = new BrowserWindow({
     ...(saved ?? { width: 1440, height: 900 }),
-    minWidth: 900, minHeight: 600, show: false, title: 'Vanilla Accounting',
+    minWidth: 900, minHeight: 600, show: false, title: PRODUCT,
     webPreferences: {
       preload: join(HERE, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,
       additionalArguments: SMOKE ? ['--vanilla-smoke'] : [],

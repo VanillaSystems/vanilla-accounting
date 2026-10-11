@@ -66,3 +66,13 @@ test('no brand mark in the workspace: the top bar and the dock show no logo', ()
     assert.doesNotMatch(read(file).toString(), /brand\/|lockup|wave|seal/i, file);
   }
 });
+
+test('names per surface: the full name for Finder, Dock and installer, the short noun in the macOS menu bar, the page first in a title', async () => {
+  const { windowTitle, PRODUCT, SHORT_NAME } = await import('../src/app/brand/names.js');
+  assert.equal(config.productName, PRODUCT);
+  assert.equal(config.mac.extendInfo.CFBundleName, SHORT_NAME);
+  assert.ok(SHORT_NAME.length <= 12, 'fits the iOS home screen and the 15 of the menu bar');
+  assert.equal(config.mac.extendInfo.CFBundleDisplayName, PRODUCT);
+  assert.equal(windowTitle('2026-006', 'Rechnungen'), '2026-006 · Rechnungen · Vanilla Accounting');
+  assert.equal(windowTitle('', 'Belege'), 'Belege · Vanilla Accounting');
+});

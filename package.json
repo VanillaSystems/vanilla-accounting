@@ -2,7 +2,7 @@
   "name": "vanilla-accounting",
   "version": "0.3.0",
   "description": "Swiss bookkeeping for a small company: receipts, bank statements, VAT, invoices.",
-  "author": "Vanilla Accounting",
+  "author": "Vanilla Machines",
   "main": "out/desktop/main.mjs",
   "desktop": {
     "autoUpdate": false
