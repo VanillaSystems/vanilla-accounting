@@ -13,30 +13,24 @@ import type { AreaId, Route, RouteOf } from '../shell/route.js';
 import type { Area, AreaProps, PaletteItem } from './index.js';
 import { LegacyTabs, type LegacyTab } from './legacy-tabs.js';
 
-type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts'>;
+type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'vat' | 'reports'>;
 
 /** Each area's old tabs; the first is shown unless the route names another. */
 const TABS: Record<LegacyArea, LegacyTab[]> = {
   bank: ['bank-statements', 'transactions', 'bank-reconciliation'],
   journal: ['journal-entries'],
-  vat: ['vat-report'],
-  codes: ['vat-report'],
-  reports: ['income-statement', 'balance-sheet', 'trial-balance', 'account-ledger'],
+  codes: ['vat-codes'],
   close: ['year-close'],
 };
 
 const TAB_LABEL = {
 'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
-  'journal-entries': 'tab.journalEntries', 'trial-balance': 'tab.trialBalance', 'balance-sheet': 'tab.balanceSheet',
-  'income-statement': 'tab.incomeStatement', 'vat-report': 'tab.vat', 'account-ledger': 'tab.accountLedger',
+  'journal-entries': 'tab.journalEntries', 'vat-codes': 'vatCodes.title',
   'bank-reconciliation': 'tab.bankReconciliation', 'year-close': 'tab.yearClose',
 } as const satisfies Record<LegacyTab, string>;
 
-const REPORT_TAB = { income: 'income-statement', balance: 'balance-sheet', trial: 'trial-balance' } as const;
-
 /** The tab a route names, if it names one. */
 function routeTab(route: Route): LegacyTab | undefined {
-  if (route.area === 'reports') return REPORT_TAB[route.report];
   if (route.area === 'bank' && route.payment) return 'transactions';
   return undefined;
 }
@@ -45,8 +39,6 @@ function routeTab(route: Route): LegacyTab | undefined {
 function legacyParams(route: Route): URLSearchParams {
   const p = new URLSearchParams();
   if (route.area === 'journal' && route.id) p.set('je', route.id);
-  if (route.area === 'reports' && route.account) p.set('account', route.account);
-  if (route.area === 'vat' && route.ziffer) p.set('ziffer', route.ziffer);
   if (route.area === 'codes') { p.set('view', 'codes'); if (route.code) p.set('code', route.code); }
   return p;
 }
@@ -56,8 +48,7 @@ function routeOfParams(route: Route, p: URLSearchParams): Route {
   const get = (k: string) => p.get(k) || undefined;
   switch (route.area) {
     case 'journal': return { area: 'journal', ...(get('je') && { id: get('je') }) };
-    case 'reports': return { area: 'reports', report: route.report, ...(get('account') && { account: get('account') }) };
-    case 'vat': case 'codes': return get('view') === 'codes'
+    case 'codes': return get('view') === 'codes'
       ? { area: 'codes', ...(get('code') && { code: get('code') }) }
       : { area: 'vat', ...(get('ziffer') && { ziffer: get('ziffer') }) };
     default: return route;
@@ -82,10 +73,7 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
 
   function pick(next: LegacyTab) {
     setPicked(next);
-    if (route.area === 'reports') {
-      const report = (Object.keys(REPORT_TAB) as Array<keyof typeof REPORT_TAB>).find((r) => REPORT_TAB[r] === next);
-      if (report) nav.select({ area: 'reports', report });
-    } else if (route.area === 'bank' && route.payment) nav.select({ area: 'bank' });
+    if (route.area === 'bank' && route.payment) nav.select({ area: 'bank' });
   }
 
   return (
@@ -106,7 +94,6 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
         index={books}
         refresh={nav.refresh}
         canEdit={canEdit}
-        onPeriod={(token) => nav.setQuery({ period: parsePeriodToken(token) })}
         initial={route.area === 'bank' ? { txRef: route.payment } : {}}
         onSelect={({ txRef }) => {
           if (route.area === 'bank' && tab === 'transactions' && txRef !== route.payment) nav.select({ area: 'bank', ...(txRef && { payment: txRef }) });
@@ -116,9 +103,6 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
   );
 }
 
-function parsePeriodToken(token: string) {
-  return parsePeriod(token, localToday()) ?? undefined;
-}
 
 export function legacyArea<A extends LegacyArea>(id: A, rest: Omit<Area<RouteOf<A>>, 'id' | 'List'>): Area<RouteOf<A>> {
   return { id: id as RouteOf<A>['area'], List: LegacyPage, ...rest };

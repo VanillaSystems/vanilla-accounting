@@ -36,6 +36,15 @@ Two markers flag an entry you must read before you update:
   Space previews, D downloads, E edits. A receipt paid in a filed quarter is read only. Dropped
   PDFs show as "wird gelesen" until `npm run extract` reads them, then the receipt takes their
   place. Removed with the old tab: batch rename and the manual-transaction batch.
+- MWST and Bilanz & ER rebuilt (redesign phase 5). MWST shows one return per page: the Ziffern
+  by part of the form with Zu bezahlen or Guthaben on top, and for the selected Ziffer its formula
+  or its entries grouped by VAT code (`/vat/405?period=2026-Q3`). An open quarter shows its due
+  date, a filed one its lock, marks every Ziffer that differs from the filed return and why, and
+  ends with the Korrekturabrechnung (form 0535, `/vat/0535`) with its correction cases and a print
+  button. Bilanz & ER lists the Erfolgsrechnung, Bilanz or Saldobilanz of any period with the
+  selected account's ledger beside it (`/reports/balance/1021`), finds an account by number or
+  name in whichever report holds it, shows all accounts of the chart on request, and names the
+  entries booked on one side when Aktiven and Passiven differ. ⌘K finds every account.
 - Invoices (ADR 0010, ADR 0012): customers, invoices and credit notes with VAT per line in CHF or
   EUR and in German, French, Italian or English, numbered when issued (2026-001, never for a
   draft), checked against Art. 26 MWSTG before issue, frozen once issued. A draft is deleted; an

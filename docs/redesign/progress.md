@@ -14,7 +14,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 - [x] 2. Belege.
 - [ ] 3. Kontoauszüge.
 - [ ] 4. Buchungen and MWST-Codes.
-- [ ] 5. MWST and Bilanz & ER.
+- [x] 5. MWST and Bilanz & ER.
 - [ ] 6. Export.
 - [ ] 7. Abschluss and Firma.
 - [x] 8. Invoices: data and documents.
@@ -75,6 +75,18 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Invoice fonts: Inter and Arimo (as Liberation Sans for the QR-bill) from @fontsource, Latin subsets inlined; layout fonts are Inter and Helvetica (Arimo) for now. | ADR 0012: the same pages on every machine; phase 9 can add fonts to INVOICE_FONTS. |
 | 2026-10-11 | The demo's IBANs are valid (CH65 8080 …, BE29 9670 …) and the QR-IBAN is SIX's example; its PDFs are printed by the generator, so `demo:generate` is byte-stable per machine and browser. | The manifest refuses an IBAN with wrong check digits; a PDF depends on the Chromium build (ADR 0012). |
 | 2026-10-11 | Not built in phase 8: e-mail sending, the git finalization at issue (ADR 0010 rule D), open invoices in the year-end checklist, the chrome-headless-shell download, agent tools. | Each needs a part that does not exist yet (mail settings, sync, the phase 9 UI, the registry). |
+| 2026-10-11 | MWST shows the return of the period's ESTV period (quarter, half, year); any other period (a month, a range) shows the open quarter, as the mockup's `vatKey`. A half year or year is "Zusammenzug, nur zur Übersicht"; due date (end + 60 days) only for a quarter. | A return exists only for an ESTV period; the old tab's quarter chooser is one click more for the same result. |
+| 2026-10-11 | The Korrekturabrechnung is the pseudo-Ziffer `0535` (`/vat/0535?period=<filed quarter>`), the last row of a filed quarter's list: the form (bisher eingereicht, korrigiert, Differenz; a line selects its Ziffer), the reconciliation and the correction cases as `<details>`, and Drucken (print CSS shows only the form and every case). A Ziffer's filed-difference notice links to it. | The mockup has no place for the 0535 beyond the notice; a list row keeps it one ↓ away, linkable, and keeps the list/detail model. |
+| 2026-10-11 | No correction booking form in MWST: a correction stays a journal entry with `corrects:` in the open quarter (Buchungen, phase 4, or the CLI). | The old tab had no booking form either (its "CorrectionForm" was the 0535 view); the mockup has no place for one; a manual entry is phase 4's. |
+| 2026-10-11 | A filed quarter says "eingereicht" without a date. | The eCH-0217 XML the app files carries only its generation time, not the filing date; adding it to the parsed return would change the golden of the filed returns. |
+| 2026-10-11 | A filed difference is marked when today's figure differs by a Rappen or more from the filed XML; rate rows compare their turnover (gross for supplies, net for Bezugsteuer), as the XML holds it. | The mockup compared Bezugsteuer's tax with the filed turnover and marked 383 on every filed quarter. |
+| 2026-10-11 | The Ziffer list's labels are short names (`vat.n<ziffer>`), the detail's explanation the ESTV form's long wording (`vat.z<ziffer>`) or the mockup's sentence for sums. | As the mockup: short in the list, the meaning on the right. |
+| 2026-10-11 | Reports: the report is in the path (`/reports/income|balance|trial`); "Nur mit Betrag / Alle Konten" and the collapsed groups are per viewer (localStorage). The search (`?q=`) shows every matching account and switches between Bilanz and Erfolgsrechnung by replacing the route. | urls.md: the report is a place, the toggle a view preference. |
+| 2026-10-11 | Entries booked on one side (an `M81-2` code) are the account `none` in links (`/reports/trial/none`), shown as "Ohne Gegenkonto · nur MWST-Betrag". | urls.md has no empty segment; account numbers are digits, so `none` cannot collide. |
+| 2026-10-11 | A link to a known account without an amount keeps it selected (the ledger shows) though the list hides its row; an unknown account selects the first row. | ⌘K offers every account of the chart; replacing the link's account would make those entries dead ends. |
+| 2026-10-11 | Ledger rows are links to the entry (`/journal/<id>`); VAT codes in MWST link to `/vat/codes/<code>` (minus sign dropped) with a plain title "<code> · <kind>". The shared hover card is phase 4's. | Brief; urls.md names codes without the sign. |
+| 2026-10-11 | Export and Herunterladen in Bilanz & ER are left to phase 6 (export dialog). | The mockup's buttons open the export dialog of phase 6. |
+| 2026-10-11 | Removed: vat-report-tab, vat-correction-form, vat-correction-cases, income-statement-tab, balance-sheet-tab, trial-balance-tab, account-ledger-tab, account-panel, and 40 i18n keys only they used (common.* and col.* kept). Kept for phase 4: vat-codes-view, vat-entry-table, vat-code (the codes area renders VatCodesView through the legacy adapter's `vat-codes` tab). | Migrate callers, then delete; the codes area is phase 4's. |
 
 ## API inventory against the mockup
 
@@ -125,3 +137,4 @@ Missing for the mockup, to add in their phase:
   uses QRR (QR-IBAN) where the mockup shows RF; the EUR invoice to a BE IBAN has no QR-bill.
   Found and fixed: `npm run extract` failed on both demos (filed transactions generated with parts
   and reference). Left for phase 9: every screen; later: e-mail, finalization at issue, year-end list.
+- 2026-10-11 phase 5 (branch `redesign-p5`): MWST and Bilanz & ER. `src/app/areas/vat/` (model.ts: the return, its state, the entries per Ziffer, shown Ziffern, filed differences; form0535.ts; list with parts, result box, filed marks, 0535 row; detail with formula or entries by code, notices, the 0535 with cases and print) and `src/app/areas/reports/` (model.ts: the three reports from the app's functions, search, one-sided gap, ledger; list with tabs, all accounts, search, groups; ledger detail). Tests: tests/vat-reports-area.test.ts. Old VAT and report tabs deleted, legacy adapter keeps only the codes tab. Evidence and mockup comparison: .verify/evidence/redesign/phase-5/NOTES.md. Differs from the mockup: the 0535 is a list row with its own detail (the mockup had only the notice), no filing date, no Export/Herunterladen (phase 6), Bezugsteuer compared on its turnover. Left: phase 4 wires the VAT code hover card onto `a.vlink`; the codes area still renders the old VatCodesView.

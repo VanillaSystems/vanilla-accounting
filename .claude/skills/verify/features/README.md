@@ -34,7 +34,8 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 - [Journal entries (Buchungen)](./journal-entries.md) covers inline edit and the Periodensperre refusals (edit, delete, reclassify). **Driven end to end on 2026-10-08.**
 - [Transactions and receipt linking](./transactions.md) covers the transaction detail, description and note edits, the "kein Beleg nötig" toggle, and linking or unlinking a receipt. **Unlink, relink, toggle and closed-period refusal driven on 2026-10-08.**
 - [Receipts (Belege)](./receipts.md) covers the new Belege area: groups, filters, search, the paper, linking with the ranked dialog, private outlay, edit, kind, undo, delete, preview, download and intake. **Driven end to end on 2026-10-11.**
-- [MWST report](./vat-report.md) covers the Ziffern per period, the Ziffer detail, the Korrekturabrechnung (0535) with its correction cases, and the `vat-report` / `vat-xml` CLIs. **Driven on 2026-10-08.**
+- [MWST report](./vat-report.md) covers the new MWST area: the Ziffern of a return, the Ziffer detail with its sum or entries, filed quarters with their differences, the Korrekturabrechnung (0535) with its correction cases, and the `vat-report` / `vat-xml` CLIs. **Driven on 2026-10-11.**
+- [Bilanz & ER](./reports.md) covers Erfolgsrechnung, Bilanz, Saldobilanz, all accounts, the account search, the gap of one-sided entries, and the account ledger. **Driven on 2026-10-11.**
 - [Static audit export](./audit-export.md) covers `npm run build:audit` served by a plain static server: every tab, search, PDFs, the snapshot line, no `/api/*` request. **Driven on 2026-10-09.**
 
 ## Not mapped yet
