@@ -89,6 +89,13 @@ UI links (src/app/):
 - The URL is a path of docs/urls.md (`/journal/<id>?period=2026-Q3`), parsed and written only by src/app/shell/route.ts; old `/<lang>/<period>/<tab>` links redirect. The language is a per-viewer preference, never in a link. Every period token is parsed by src/accounting/periods.ts (`parsePeriod`); an area receives a resolved `Period`, never a token string.
 - The new UI (docs/redesign/architecture.md): areas are registered in src/app/areas/index.ts; plain CSS with the mockup's tokens and class names (see UI theming).
 
+Brand (docs/brand.md):
+- The Vanilla Machines brand repository (`brand.json`, `guidelines/`) is the source of truth for colour, names, icons, voice and where the logo goes. Read its pages 12-color, 16-voice, 17-swiss-engineering, 21-accounting-devices and 22-accounting-in-app before changing anything the brand touches.
+- The accent is Tram blue (`--accent` #005b8c, `--accent-soft` #e6eff4); dark mode is grayscale. Red only for errors, never as an accent or a logo colour of this product.
+- The brand shows on the start screen, in About, while loading and as the empty-state watermark (src/app/brand/). Never in the workspace (top bar, dock, lists) and never on a customer document (invoice, reminder, report, export): there the name is only the PDF Producer.
+- Names are English and never translated: "Vanilla Accounting", the short "Accounting" where a launcher shortens; titles `Page · Vanilla Accounting` (src/app/brand/names.ts). German UI says du, writes ss.
+- Icons and logo files are the brand's, copied by `node tools/brand/make.mjs <brand repo>`; never draw or recolour them in the app.
+
 UI theming (src/app/):
 - Colours, fonts and shadows are tokens in src/app/styles/tokens.css (the mockup's): light under `:root`, dark under `[data-theme="dark"]`, which src/app/shell/prefs.ts and index.html set on `<html>`.
 - Plain CSS, one file per area (src/app/areas/<area>/<area>.css) beside the shared shell.css and detail.css, with the mockup's class names. No CSS framework, no utility classes, no inline colours.

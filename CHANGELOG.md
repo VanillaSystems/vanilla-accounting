@@ -37,6 +37,30 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The brand: Vanilla Accounting now follows the Vanilla Machines brand. The accent is Tram blue
+  (#005B8C) in light mode; dark mode stays grayscale. The app icon is the brand's: the blue tile with
+  the white wave on the Mac, in the browser tab and on the iPhone, the blue wave on Windows. The start screen shows the blue lockup,
+  "by Vanilla Machines" and the Swiss engineering seal; while the app loads, its icon pulses; an
+  empty list shows the wave as a faint watermark; the workspace shows no logo at all. The
+  temporary colour test in Firma › Darstellung is gone.
+- About Vanilla Accounting is a page of the app: Firma › Über Vanilla Accounting, also opened by
+  the Mac app menu (icon, version, subtitle, licence, seal).
+- Names: the macOS menu bar says Accounting, Finder and the Dock Vanilla Accounting; window and
+  tab titles end in "· Vanilla Accounting".
+- Every PDF the app writes (invoices, credit notes, reminders, export reports) names
+  "Vanilla Accounting <version>" as its Producer, and carries no Vanilla logo or line. The VAT
+  report (`npm run vat-report-html`) no longer prints "Vanilla Accounting" in its footer.
+- The iPhone app is called Accounting on the home screen and has the blue icon in light, dark
+  and tinted. Its bundle id is unchanged, so an installed app updates in place.
+- The German texts say du everywhere, also in the Claude setup; French and Italian say tu there
+  too.
+- **⚠ action** The Mac app no longer reopens the last books by itself: every start shows the start
+  screen with the recent books, newest first. To open the same books at every start, tick
+  "Immer diese Buchhaltung öffnen" on their row (one at most). Marked books whose folder moved
+  bring the start screen with a notice; ⌥ held while the app starts shows the start screen once;
+  File › Buchhaltung wechseln… (⇧⌘O) always shows it, and Firma › Darstellung says which books
+  open at start, with "Nicht mehr automatisch öffnen".
+
 - The inbox job counts a `claude` that is installed but signed out as missing (`claude auth
   status`), so its model steps wait instead of failing call by call.
 - The app follows changes made outside it. When Claude Code, a CLI script, `git pull` or another
