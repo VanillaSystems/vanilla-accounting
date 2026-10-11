@@ -6,6 +6,8 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import fs from 'node:fs';
+import git from 'isomorphic-git';
 import { request as httpRequest, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -85,6 +87,9 @@ test('Demo: a copy in the user data folder opens; another workspace is created, 
   const created = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Neu') });
   assert.equal(created.status, 200, created.text);
   assert.equal((await call('GET', '/api/workspace')).json.company.name, 'Neu Test GmbH');
+  const commits = await git.log({ fs, dir: join(home, 'Neu') });
+  assert.deepEqual(commits.map((c) => c.commit.message.trim()), ['Workspace set up'], 'new books are committed as npm run init commits them');
+  assert.ok((await git.statusMatrix({ fs, dir: join(home, 'Neu') })).every(([, head, work, stage]) => head === 1 && work === 1 && stage === 1), 'everything written is in the commit');
   assert.equal((await call('GET', `/receipts/${encodeURIComponent(receipt)}`)).status, 404, 'files come from the books open now');
   assert.deepEqual((await call('GET', '/books.json')).json.journalEntries ?? [], []);
 

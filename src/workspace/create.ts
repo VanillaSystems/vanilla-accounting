@@ -10,6 +10,7 @@ import { bankKind, parseIban } from './banks.js';
 import { applyPlan, planWorkspace, suggestAccount, type InitInput } from './scaffold.js';
 import { PRESET_NAMES, firstUnsupported, type Answers, type Preset, type QuestionKey } from './setup.js';
 import { parseUid } from './uid.js';
+import { initRepository } from './git.js';
 import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from './workspace.js';
 
 /**
@@ -94,10 +95,15 @@ export interface Created {
   created: string[];
   /** Files that were there with other content: kept. */
   differing: string[];
+  /** The first commit of the new books; `exists` when the folder already was a repository. */
+  git?: 'committed' | 'exists' | { error: string };
 }
 
-/** Checks every answer, then writes the workspace. A folder that already is a workspace stays as it is. */
-export function createWorkspace(req: SetupRequest): Created {
+/**
+ * Checks every answer, writes the workspace and commits it to a new git repository. A folder that
+ * already is a workspace stays as it is.
+ */
+export async function createWorkspace(req: SetupRequest): Promise<Created> {
   if (!req.root.trim()) throw new SetupError('A folder for the books is needed.', { reason: 'required', field: 'root' });
   const root = resolve(req.root);
   if (existsSync(join(root, MANIFEST_FILE))) {
@@ -127,5 +133,15 @@ export function createWorkspace(req: SetupRequest): Created {
   };
   const applied = applyPlan(root, planWorkspace(input, loadChart(), root, APP_ROOT));
   workspaceAt(root);
-  return { root, existed: false, ...applied };
+  return { root, existed: false, ...applied, git: await firstCommit(root) };
+}
+
+async function firstCommit(root: string): Promise<NonNullable<Created['git']>> {
+  if (existsSync(join(root, '.git'))) return 'exists';
+  try {
+    await initRepository(root, 'Workspace set up');
+    return 'committed';
+  } catch (e) {
+    return { error: (e as Error).message.split('\n')[0] };
+  }
 }

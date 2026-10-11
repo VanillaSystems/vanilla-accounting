@@ -91,7 +91,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
   app.post('/api/desktop/create', async (req, res) => {
     try {
-      const created = createWorkspace(req.body as SetupRequest);
+      const created = await createWorkspace(req.body as SetupRequest);
       res.json(await openBooks(created.root));
     } catch (e) { refuse(res, e); }
   });

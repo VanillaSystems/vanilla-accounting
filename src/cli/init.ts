@@ -17,11 +17,10 @@ import { join, resolve } from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import { BANKS, bankKind } from '../workspace/banks.js';
-import { SetupError, checkBank, checkPreset, createWorkspace, type Bank } from '../workspace/create.js';
+import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Created } from '../workspace/create.js';
 import { suggestAccount } from '../workspace/scaffold.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import { parseUid } from '../workspace/uid.js';
-import { initRepository } from '../workspace/git.js';
 import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from '../workspace/workspace.js';
 
 const flagOf = (key: QuestionKey) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
@@ -166,14 +165,10 @@ async function pointEnvAt(envFile: string, root: string): Promise<string> {
   return `${envFile} points at ${root}.`;
 }
 
-async function gitInit(root: string): Promise<string> {
-  if (existsSync(join(root, '.git'))) return 'Git repository exists: nothing committed.';
-  try {
-    await initRepository(root, 'Workspace set up with npm run init');
-    return 'Committed the workspace to a new git repository.';
-  } catch (e) {
-    return `The git repository could not be made (${(e as Error).message.split('\n')[0]}). Run git init and commit the folder yourself: it keeps every change to the books traceable.`;
-  }
+function gitMessage(git: Created['git']): string {
+  if (git === 'committed') return 'Committed the workspace to a new git repository.';
+  if (git === 'exists' || !git) return 'Git repository exists: nothing committed.';
+  return `The git repository could not be made (${git.error}). Run git init and commit the folder yourself: it keeps every change to the books traceable.`;
 }
 
 async function main(): Promise<string> {
@@ -205,11 +200,11 @@ async function main(): Promise<string> {
     const banks = await askBanks();
     const exportTo = await answer('export-to', '\nWhere do the books go at year-end (accounting software or Treuhand; optional)', '');
 
-    const applied = createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, banks, exportTo });
+    const applied = await createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, banks, exportTo });
     message = [
       `Created ${applied.created.length} files and folders in ${root}.`,
       ...applied.differing.map((p) => `Kept your ${p}: it differs from what init would write.`),
-      await gitInit(root),
+      gitMessage(applied.git),
     ].join('\n');
   }
 
