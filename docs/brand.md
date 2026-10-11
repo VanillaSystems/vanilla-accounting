@@ -23,11 +23,11 @@ It needs the installed Google Chrome (or `CHROME_PATH`), `iconutil` (macOS) and 
 |---|---|---|
 | `desktop/icon.icns` | `vanilla-accounting-icon-macos.svg`, at 16 and 32 px `vanilla-accounting-favicon.svg` | Mac app icon (Finder, Dock) |
 | `desktop/icon.ico` | `vanilla-accounting-favicon.svg`, 16 to 256 px | Windows app icon |
-| `desktop/icon.png` | `vanilla-accounting-icon-macos.svg`, 512 px | About panel, Dock when unpacked |
+| `desktop/icon.png` | `vanilla-accounting-icon-macos.svg`, 512 px | Dock when the app runs unpacked |
 | `public/favicon.svg`, `public/favicon.ico` | `vanilla-accounting-favicon.svg` | Browser tab |
 | `public/apple-touch-icon.png` | `vanilla-accounting-icon.svg`, 180 px | Home-screen bookmark |
 | `ios/…/AppIcon.appiconset` | `vanilla-accounting-icon.svg`, `-icon-dark.svg`, `-icon-tinted.svg`, 1024 px, no alpha | iPhone app icon (light, dark, tinted) |
-| `src/app/brand/assets/` | the blue lockup, the on-dark lockup, the macOS icon, the muted seals, the black and white wave | Start screen, About, loading, empty states |
+| `src/app/brand/assets/` | the blue lockup, the on-dark lockup, the macOS icon, the muted seals, the wave (as a mask) | Start screen, About, loading, empty states |
 | `docs/logo.svg`, `docs/swiss-engineering.svg` | the blue lockup, the seal | README header |
 | `docs/social-preview.png` | the blue lockup on white, 1280 × 640 | GitHub social preview |
 

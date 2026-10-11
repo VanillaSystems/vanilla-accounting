@@ -40,7 +40,7 @@ export function menuTemplate(language: string, recent: readonly KnownBooks[], ac
     {
       label: product,
       submenu: [
-        { role: 'about', label: t('desktop.menu.about', { app: product }) },
+        { id: 'about', label: t('desktop.menu.about', { app: product }), click: () => actions.command('about') },
         { type: 'separator' },
         { role: 'services', label: t('desktop.menu.services') },
         { type: 'separator' },

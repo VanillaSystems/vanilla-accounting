@@ -28,4 +28,5 @@ test('Electron prints a 1-line invoice on one page, longer ones on more, the dem
   assert.deepEqual(r.demo, { sheet: 1, pdf: 1, qr: true });
   assert.equal(r.sameBytes, true);
   assert.equal(r.dates, true, 'creation and modification dates are the document time');
+  assert.equal(r.producer, true, 'the Producer names the app');
 });

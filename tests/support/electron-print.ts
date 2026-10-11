@@ -51,6 +51,7 @@ try {
     demo: { sheet: demo.pages, pdf: pageCount(demo.pdf), qr: /class="a4 [^"]*has-qr/.test(demo.html) },
     sameBytes: sha(a.pdf) === sha(b.pdf),
     dates: /\/CreationDate \(D:20261011123456/.test(text) && /\/ModDate \(D:20261011123456/.test(text),
+    producer: /\/Producer \(Vanilla Accounting \d/.test(text),
   }) + '\n');
 } catch (e) {
   process.stdout.write(JSON.stringify({ error: String((e as Error).stack ?? e) }) + '\n');

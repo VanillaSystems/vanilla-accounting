@@ -30,7 +30,7 @@ module.exports = {
     'src/server/scan.html',
     'src/app/i18n/locales/*.ts',
     'public-files.txt',
-    // The About panel's and the dock's icon when the app runs unpacked (src/desktop/main.ts).
+    // The dock's icon when the app runs unpacked (src/desktop/main.ts).
     'desktop/icon.png',
     '!node_modules/{react,react-dom,scheduler}/**/*',
     '!node_modules/@fontsource/{geist-mono,hanken-grotesk,instrument-sans}/**/*',

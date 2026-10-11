@@ -3,12 +3,16 @@
  * (ADR 0012): puppeteer-core drives it, one browser per process; the desktop app prints with its own
  * Chromium instead (usePrintPages, src/desktop/print.ts). The PDF's creation and
  * modification dates are set to the document's own time, so the same sheet printed twice by
- * the same browser gives the same bytes. A sent PDF is stored once and never printed again.
+ * the same browser gives the same bytes, and its Producer names the app: the only place a
+ * customer's document carries it. A sent PDF is stored once and never printed again.
  */
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Browser } from 'puppeteer-core';
+import { PDFDict, PDFDocument, PDFName, PDFString } from 'pdf-lib';
+import { appVersion } from '../audit/manifest.js';
+import { PRODUCT } from '../app/brand/names.js';
 import { invoiceFontCss } from './fonts.js';
 import { MEASURE_SCRIPT, assembleSheets, hasQrBill, measureHtml, paginate, sheetBlocks, sheetDocument, sheetTitle, type SheetData } from './sheet.js';
 
@@ -119,7 +123,7 @@ export function renderPdf(d: SheetData, at: string): Promise<Rendered & { pdf: B
     const laid = await layOut(page, d);
     await page.setContent(laid.html);
     await page.evaluate('document.fonts.ready');
-    return { ...laid, pdf: stampDates(Buffer.from(await page.pdf()), at) };
+    return { ...laid, pdf: await finishPdf(await page.pdf(), at) };
   });
 }
 
@@ -128,15 +132,29 @@ export function printPdf(html: string, at: string): Promise<Buffer> {
   return withPage(async (page) => {
     await page.setContent(html);
     await page.evaluate('document.fonts.ready');
-    return stampDates(Buffer.from(await page.pdf()), at);
+    return finishPdf(await page.pdf(), at);
   });
 }
 
 /**
- * Chromium writes the print time into /CreationDate and /ModDate, the only bytes that differ
- * between two prints. They are replaced digit for digit, so every offset in the file stays right.
+ * Producer "Vanilla Accounting 0.3.0" on every PDF the app writes (the brand's in-app page). A plain
+ * string, not pdf-lib's UTF-16 hex, so the name can be found in the file as it reads.
  */
-export function stampDates(pdf: Buffer, at: string): Buffer {
-  const ts = at.replace(/\D/g, '').slice(0, 14).padEnd(14, '0');
-  return Buffer.from(pdf.toString('latin1').replace(/\(D:\d{14}/g, `(D:${ts}`), 'latin1');
+export function setProducer(doc: PDFDocument): void {
+  const producer = `${PRODUCT} ${appVersion()}`;
+  doc.setProducer(producer);
+  doc.context.lookup(doc.context.trailerInfo.Info, PDFDict).set(PDFName.of('Producer'), PDFString.of(producer));
+}
+
+/**
+ * The printed PDF as the app hands it out: Producer the app, creation and modification date `at`
+ * instead of the print time, so two prints of one sheet are the same bytes. Saved without object
+ * streams, as Chromium wrote it.
+ */
+export async function finishPdf(pdf: Uint8Array, at: string): Promise<Buffer> {
+  const doc = await PDFDocument.load(pdf, { updateMetadata: false });
+  setProducer(doc);
+  doc.setCreationDate(new Date(at));
+  doc.setModificationDate(new Date(at));
+  return Buffer.from(await doc.save({ useObjectStreams: false }));
 }

@@ -11,7 +11,9 @@ import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
 import { START_PATH, desktop } from './bridge.js';
-import { Lockup } from '../brand/Brand.js';
+import { About, Endorsement, Lockup, Seal } from '../brand/Brand.js';
+import { PRODUCT } from '../brand/names.js';
+import { version } from '../../../package.json';
 import './start.css';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
@@ -48,11 +50,13 @@ const answerList = (a: Partial<Answers>, key: QuestionKey): string[] => ([] as s
 export function StartScreen({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
   const [info, setInfo] = useState<DesktopInfo | null>(null);
   const [creating, setCreating] = useState(() => new URLSearchParams(location.search).has('new'));
+  const [about, setAbout] = useState(() => new URLSearchParams(location.search).has('about'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { void api.desktop.info().then(setInfo, (e) => setError(errorText(e))); }, []);
-  useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
+  useEffect(() => { document.title = PRODUCT; }, []);
+  useEffect(() => desktop?.onMenu((c) => { if (c === 'about') setAbout(true); }), []);
 
   const run = async (open: () => Promise<KnownBooks>) => {
     setBusy(true);
@@ -79,11 +83,19 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
           ))}
         </span>
       </header>
-      {creating
+      {about
+        ? (
+          <div className="st-main st-about">
+            <About version={version} />
+            <p className="st-back"><button type="button" onClick={() => { setAbout(false); history.replaceState(null, '', START_PATH); }}>{t('about.back')}</button></p>
+          </div>
+        )
+        : creating
         ? <CreateForm info={info} busy={busy} error={error} onCancel={() => { setCreating(false); setError(''); history.replaceState(null, '', '/start'); }} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
-            <h1 className="st-brand"><Lockup height={56} /></h1>
+            <h1 className="st-brand"><Lockup height={52} /></h1>
+            <Endorsement />
             <p className="st-sub">{info?.open ? t('desktop.switchBooks', { name: info.open.demo ? t('desktop.demoName') : info.open.name ?? info.open.root }) : t('desktop.welcome')}</p>
             <div className="st-choices">
               <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>
@@ -110,6 +122,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
             {info?.open && <p className="st-back"><a href="/">{t('desktop.backTo', { name: info.open.demo ? t('desktop.demoName') : info.open.name ?? '' })}</a></p>}
           </div>
         )}
+      {/* Once per screen: About carries its own. */}
+      {!about && <footer className="st-seal"><Seal /></footer>}
     </div>
   );
 }

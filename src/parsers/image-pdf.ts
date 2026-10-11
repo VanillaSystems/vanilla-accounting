@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { PDFDocument, concatTransformationMatrix, popGraphicsState, pushGraphicsState } from 'pdf-lib';
+import { setProducer } from '../invoices/pdf.js';
 
 export const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.heic', '.heif'] as const;
 
@@ -20,7 +21,8 @@ export function isImageFile(filename: string): boolean {
 
 export async function imageToPdf(image: Uint8Array, filename: string): Promise<Uint8Array> {
   const lower = filename.toLowerCase();
-  const doc = await PDFDocument.create();
+  const doc = await PDFDocument.create({ updateMetadata: false });
+  setProducer(doc);
   // pdf-lib reads a JPEG through a DataView on `.buffer` from offset 0: a small Buffer from
   // readFileSync lies inside Node's shared pool at another offset, so each gets its own copy.
   const bytes = new Uint8Array(/\.hei[cf]$/.test(lower) ? await heicToJpeg(image) : image);

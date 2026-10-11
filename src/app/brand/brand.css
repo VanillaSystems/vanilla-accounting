@@ -1,0 +1,15 @@
+/* The brand's few places in the app (Brand.tsx); sizes from the brand's in-app page. */
+.themed { display: inline-flex; }
+.themed img { display: block; width: auto; }
+[data-theme="dark"] .themed .on-light, :root:not([data-theme="dark"]) .themed .on-dark { display: none; }
+
+.endorse { margin: 10px 0 0; font: 500 12.5px "Instrument Sans", sans-serif; color: var(--muted); }
+
+.splash { height: 100%; min-height: 60vh; display: grid; place-items: center; }
+.splash .appicon { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .55; transform: scale(.96); } }
+
+.about-card { max-width: 340px; padding: 26px 24px 18px; text-align: center; border: 1px solid var(--line); border-radius: 14px; }
+.about-card h2 { font: 800 20px/1.2 "Hanken Grotesk", sans-serif; letter-spacing: -.02em; margin: 8px 0 4px; }
+.about-card p { margin: 0 0 3px; font-size: 13px; color: var(--muted); }
+.about-seal { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); display: flex; justify-content: center; }

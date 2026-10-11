@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { closeBrowser, findBrowser, renderPdf, stampDates } from '../src/invoices/pdf.js';
+import { closeBrowser, findBrowser, renderPdf } from '../src/invoices/pdf.js';
+import { appVersion } from '../src/audit/manifest.js';
 import { createCustomer, createDraft, issueInvoice, issuedPdf, logoSrc, recordSend, sendReminder, cancelInvoice, updateDraft } from '../src/invoices/service.js';
 import { issuedSheet } from '../src/invoices/documents.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
@@ -57,13 +58,14 @@ test('a short invoice prints on one page with its QR-bill: the demo 2026-001, tw
   assert.match(out.html, /class="a4 [^"]*has-qr/);
 });
 
-test('the same sheet printed twice gives the same bytes; the PDF dates are the document time', { skip }, async () => {
+test('the same sheet printed twice gives the same bytes; the PDF dates are the document time, its Producer the app', { skip }, async () => {
   const a = await renderPdf(sheet(3), '2026-10-11T12:34:56Z');
   const b = await renderPdf(sheet(3), '2026-10-11T12:34:56Z');
   assert.equal(sha(a.pdf), sha(b.pdf));
   assert.match(a.pdf.toString('latin1'), /\/CreationDate \(D:20261011123456/);
   assert.match(a.pdf.toString('latin1'), /\/ModDate \(D:20261011123456/);
-  assert.equal(stampDates(a.pdf, '2026-10-11T12:34:56Z').length, a.pdf.length, 'stamping keeps every offset');
+  assert.ok(a.pdf.toString('latin1').includes(`/Producer (Vanilla Accounting ${appVersion()})`));
+  assert.ok(!/Vanilla Machines|Swiss engineering/i.test(a.html), 'no Vanilla brand on the customer\'s document');
 });
 
 test('issue stores the PDF byte-exact with its checksum; it is read back as stored, never printed again', { skip }, async () => {

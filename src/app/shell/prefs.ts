@@ -78,7 +78,7 @@ export function useZoom(): [number, (step: -1 | 0 | 1) => void] {
     return () => removeEventListener('keydown', onKey, true);
   }, []);
   // The desktop app's View menu: its zoom items show the same keys and step the same zoom.
-  useEffect(() => desktop?.onMenu((c) => step(c === 'zoomIn' ? 1 : c === 'zoomOut' ? -1 : 0)), []);
+  useEffect(() => desktop?.onMenu((c) => { if (c !== 'about') step(c === 'zoomIn' ? 1 : c === 'zoomOut' ? -1 : 0); }), []);
   return [zoom, step];
 }
 

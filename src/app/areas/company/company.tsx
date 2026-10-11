@@ -15,7 +15,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useShellUi } from '../../shell/ui.js';
 import { moveKey } from '../../shell/keyboard.js';
 import type { Theme } from '../../shell/prefs.js';
-import { Lockup } from '../../brand/Brand.js';
+import { About } from '../../brand/Brand.js';
 import { version } from '../../../../package.json';
 import { addDays, localToday, openQuarter, parsePeriod } from '../../../accounting/periods.js';
 import type { Address } from '../../../invoices/model.js';
@@ -33,7 +33,7 @@ type Props = AreaProps<RouteOf<'company'>>;
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
   ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail']],
   ['company.groupBooks', ['accounts', 'periods', 'opening']],
-  ['company.groupApp', ['claude', 'display']],
+  ['company.groupApp', ['claude', 'display', 'about']],
 ];
 
 const THEMES: Theme[] = ['light', 'dark', 'system'];
@@ -76,6 +76,7 @@ function List({ route, books, nav }: Props) {
     opening: opening ? t('company.nAccounts', { n: Object.keys(opening).length }) : undefined,
     claude: claude && t(`claude.state.${claude.state}`),
     display: themeLabel(ui.theme),
+    about: version,
   };
   return (
     <>
@@ -117,7 +118,7 @@ function Detail(props: Props) {
   return (
     <div className="detail-in" key={section}>
       <div className="head"><h2 className="who">{sectionLabel(section, books)}<small>{ws?.company.name}</small></h2></div>
-      <div className="docbody">{!ws && section !== 'display' && section !== 'claude' ? <p className="m">{t('yearClose.loading')}</p> : <Section {...props} section={section} ws={ws!} />}</div>
+      <div className="docbody">{!ws && section !== 'display' && section !== 'claude' && section !== 'about' ? <p className="m">{t('yearClose.loading')}</p> : <Section {...props} section={section} ws={ws!} />}</div>
     </div>
   );
 }
@@ -134,6 +135,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'opening': return <Opening {...p} />;
     case 'claude': return <ClaudeSection nav={p.nav} />;
     case 'display': return <Display />;
+    case 'about': return <About version={version} />;
   }
 }
 
@@ -459,11 +461,6 @@ function Display() {
         <dd><span className="mono">{Math.round(ui.zoom * 100)} %</span> <span className="m">{t('display.zoomHint')}</span></dd>
       </dl>
       <p className="m src-note">{t('display.local')}</p>
-      <section className="about">
-        <h3>{t('about.title')}</h3>
-        <Lockup height={40} />
-        <p className="m">{t('about.version', { version })} · {t('about.license')}</p>
-      </section>
     </>
   );
 }

@@ -4,8 +4,8 @@
  * (`npm start`, the audit export) neither exists.
  */
 
-/** A menu item the page carries out itself: the zoom is the page's own (src/app/shell/prefs.ts). */
-export type MenuCommand = 'zoomIn' | 'zoomOut' | 'zoomReset';
+/** A menu item the page carries out itself: the zoom is the page's own (src/app/shell/prefs.ts), About is a page of the app. */
+export type MenuCommand = 'zoomIn' | 'zoomOut' | 'zoomReset' | 'about';
 
 export interface DesktopBridge {
   /** The folder the person picks in the system's dialog; null when cancelled. */

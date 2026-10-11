@@ -48,3 +48,21 @@ test('the light accent is Tram blue with a 10 % tint behind it, readable on both
   }
   assert.ok(!css.includes('data-palette'), 'the colour test is gone');
 });
+
+test('the app menu\'s About opens the app\'s own About page, which carries the seal', async () => {
+  const { menuTemplate } = await import('../src/desktop/menu.js');
+  const commands: string[] = [];
+  const noop = () => {};
+  const [appMenu] = menuTemplate('de', [], { openBooks: noop, newBooks: noop, demo: noop, openRecent: noop, command: (c) => commands.push(c) }, false);
+  const about = (appMenu.submenu as Array<{ id?: string; label?: string; role?: string; click?: () => void }>).find((i) => i.id === 'about')!;
+  assert.equal(about.label, 'Über Vanilla Accounting');
+  assert.equal(about.role, undefined, 'not the native panel');
+  about.click!();
+  assert.deepEqual(commands, ['about']);
+});
+
+test('no brand mark in the workspace: the top bar and the dock show no logo', () => {
+  for (const file of ['src/app/shell/TopBar.tsx', 'src/app/shell/Dock.tsx']) {
+    assert.doesNotMatch(read(file).toString(), /brand\/|lockup|wave|seal/i, file);
+  }
+});

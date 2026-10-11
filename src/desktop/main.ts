@@ -37,10 +37,9 @@ async function start(): Promise<void> {
   await app.whenReady();
   const stateFile = join(app.getPath('userData'), 'desktop.json');
   const { homepage } = appPackage();
-  const icon = join(APP_ROOT, 'desktop/icon.png');
-  app.setAboutPanelOptions({ applicationName: 'Vanilla Accounting', applicationVersion: app.getVersion(), copyright: 'GNU AGPL v3', website: homepage, iconPath: icon });
+  // About is a page of the app (Firma › Über Vanilla Accounting, menu.ts): the brand puts the seal there.
   // Packed, macOS takes the icon from the bundle (desktop/icon.icns); `npm run desktop` would show Electron's.
-  if (!app.isPackaged) app.dock?.setIcon(icon);
+  if (!app.isPackaged) app.dock?.setIcon(join(APP_ROOT, 'desktop/icon.png'));
   usePrintPages(electronPage);
   const claudeFound = resolveClaude();
   let language = languageOf(app.getLocale());

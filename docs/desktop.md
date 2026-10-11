@@ -62,8 +62,8 @@ Firma › Claude says so, so the person knows why the app still asks for Claude 
 `tools/desktop/build.mjs` bundles `src/desktop` into `out/desktop/` (two folders below the app
 root, as `APP_ROOT` expects) and fails when the bundle imports a package that is not a
 dependency in `package.json`, since only those are packed. The app icon is
-`desktop/icon.icns` (macOS), `desktop/icon.ico` (Windows) and `desktop/icon.png` (the About panel,
-and the dock when the app runs unpacked): the Tram blue tile with the white wave, rendered from the
+`desktop/icon.icns` (macOS), `desktop/icon.ico` (Windows) and `desktop/icon.png` (the dock
+when the app runs unpacked): the Tram blue tile with the white wave, rendered from the
 brand repository by `node tools/brand/make.mjs <brand repo>` ([brand.md](brand.md)).
 
 The smoke test starts the packaged app with only `/usr/bin:/bin` on its PATH and a fresh user data

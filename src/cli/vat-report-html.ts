@@ -237,7 +237,6 @@ const html = `<style>
 
   <footer>
     <span>${esc(generatedNote)}</span>
-    <span>Vanilla Accounting</span>
   </footer>
 </div>`;
 

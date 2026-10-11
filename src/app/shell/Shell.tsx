@@ -38,6 +38,9 @@ import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
+import { Splash } from '../brand/Brand.js';
+import { windowTitle } from '../brand/names.js';
+import { desktop } from '../desktop/bridge.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 
 type Overlay =
@@ -173,10 +176,13 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     exportOpen: () => openExport(),
   });
 
-  // urls.md rule 6: the tab names the object.
+  // urls.md rule 6: the tab names the object, then the product.
   useEffect(() => {
-    document.title = [area.title(loc.route, books), area.label()].filter(Boolean).join(' · ');
+    document.title = windowTitle(area.title(loc.route, books), area.label());
   }, [area, loc.route, books, language]);
+
+  // The app menu's About opens Firma › Über Vanilla Accounting.
+  useEffect(() => desktop?.onMenu((c) => { if (c === 'about') go({ route: { area: 'company', section: 'about' }, query: {} }); }), [go]);
 
   // The keyboard stays on the selected row as the selection moves.
   useLayoutEffect(() => {
@@ -249,7 +255,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
       <a className="skip" href="#list">{t('shell.skip')}</a>
       {loading || error ? (
         <main className="full">
-          <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint', { command: 'npm run extract' })}</p><p>{error}</p></div>}</div>
+          {loading ? <Splash /> : <div className="detail-empty"><div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint', { command: 'npm run extract' })}</p><p>{error}</p></div></div>}
         </main>
       ) : (
         <FxProvider index={books}>

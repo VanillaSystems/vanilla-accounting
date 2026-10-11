@@ -30,7 +30,6 @@ const SRC = {
   sealMuted: join(brandRoot, 'assets/generated/badge/swiss-engineering-muted.svg'),
   sealMutedOnDark: join(brandRoot, 'assets/generated/badge/swiss-engineering-muted-on-dark.svg'),
   waveBlack: join(brandRoot, 'assets/mark/wave-black.svg'),
-  waveWhite: join(brandRoot, 'assets/mark/wave-white.svg'),
 };
 for (const f of Object.values(SRC)) if (!existsSync(f)) throw new Error(`missing in the brand repo: ${f}`);
 
@@ -123,7 +122,6 @@ copy(SRC.iconMac, 'src/app/brand/assets/icon.svg');
 copy(SRC.sealMuted, 'src/app/brand/assets/seal-muted.svg');
 copy(SRC.sealMutedOnDark, 'src/app/brand/assets/seal-muted-on-dark.svg');
 copy(SRC.waveBlack, 'src/app/brand/assets/wave-black.svg');
-copy(SRC.waveWhite, 'src/app/brand/assets/wave-white.svg');
 
 // The README header and the GitHub social preview (the lockup on white, 1280 × 640).
 copy(SRC.lockup, 'docs/logo.svg');

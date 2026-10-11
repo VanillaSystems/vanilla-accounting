@@ -18,13 +18,14 @@ import { Shell } from './shell/Shell.js';
 import { useLanguage } from './shell/prefs.js';
 import { desktop } from './desktop/bridge.js';
 import { StartScreen, useStartScreen } from './desktop/StartScreen.js';
+import { Splash } from './brand/Brand.js';
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
 function Root() {
   const start = useStartScreen();
   const [language, setLanguage] = useLanguage(start === false);
   useEffect(() => { desktop?.setLanguage(language); }, [language]);
-  if (start === undefined) return null;
+  if (start === undefined) return <Splash />;
   return start
     ? <StartScreen key={language} language={language} onLanguage={setLanguage} />
     : <Shell key={language} language={language} onLanguage={setLanguage} />;
