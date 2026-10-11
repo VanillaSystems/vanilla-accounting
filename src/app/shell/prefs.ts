@@ -17,10 +17,8 @@ export function store(key: string, value: string | null): void {
 export type Theme = 'system' | 'light' | 'dark';
 const darkOS = () => matchMedia('(prefers-color-scheme: dark)');
 
-/** data-theme on <html> for the new CSS; the `dark` class for the old Tailwind components until phase 10. */
 function applyTheme(dark: boolean) {
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  document.documentElement.classList.toggle('dark', dark);
 }
 
 /**

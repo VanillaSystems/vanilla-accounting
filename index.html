@@ -17,7 +17,6 @@
         var dark = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
         var root = document.documentElement;
         root.dataset.theme = dark ? 'dark' : 'light';
-        root.classList.toggle('dark', dark);
         if (z > 0 && z <= 3 && z !== 1) { root.style.zoom = String(z); root.style.setProperty('--z', String(z)); }
       })();
     </script>

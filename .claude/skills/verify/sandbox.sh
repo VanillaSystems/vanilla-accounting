@@ -93,7 +93,7 @@ EOF
   # READONLY=1 in the caller's environment starts it in audit mode, as `npm run start:audit` does.
   (cd "$SB" && VANILLA_WORKSPACE="$SB" PATH="$SB/bin:$PATH" PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
   echo $! >"$SB/api.pid"
-  # UI: cwd = repo so Tailwind's relative content globs resolve; data comes through the API proxy.
+  # UI: cwd = the repo; data comes through the API proxy.
   (cd "$REPO" && exec node "$REPO/node_modules/vite/bin/vite.js" --config "$VITE_CONFIG" </dev/null >"$SB/ui.log" 2>&1) &
   echo $! >"$SB/ui.pid"
 

@@ -87,16 +87,9 @@ UI links (src/app/):
 - An area is a list and a detail beside it (the shell lays them out, src/app/shell/Split.tsx): the detail column is always there (a placeholder until a row is selected), so selecting a row never moves the layout.
 - With nothing selected, a list + detail view selects its first visible row (a URL selection wins).
 - The URL is a path of docs/urls.md (`/journal/<id>?period=2026-Q3`), parsed and written only by src/app/shell/route.ts; old `/<lang>/<period>/<tab>` links redirect. The language is a per-viewer preference, never in a link. Every period token is parsed by src/accounting/periods.ts (`parsePeriod`); an area receives a resolved `Period`, never a token string.
-- The new UI (docs/redesign/architecture.md): areas are registered in src/app/areas/index.ts; plain CSS with the mockup's tokens and class names (src/app/styles/), no Tailwind in new code.
+- The new UI (docs/redesign/architecture.md): areas are registered in src/app/areas/index.ts; plain CSS with the mockup's tokens and class names (see UI theming).
 
 UI theming (src/app/):
-- Uses CSS custom properties for light/dark mode (see index.css and tailwind.config.js).
-- NEVER use hardcoded Tailwind gray colors (bg-white, bg-gray-50, text-gray-700, border-gray-200, etc.) in components. Use semantic tokens instead:
-  - Backgrounds: `bg-background`, `bg-muted`, `bg-accent`, `bg-primary`
-  - Text: `text-foreground`, `text-muted-foreground`, `text-dim`
-  - Borders: `border-border`, `border-input`
-  - Focus: `focus:ring-ring`
-  - Destructive: `text-destructive`, `bg-destructive`
-  - Active buttons: `bg-primary text-primary-foreground`
-  - Hover: `hover:bg-accent`, `hover:text-foreground`
-- Non-gray accent colors (blue, amber, green, red, violet) for semantic states are fine with dark: prefixes (e.g. `bg-blue-50 dark:bg-blue-950`).
+- Colours, fonts and shadows are tokens in src/app/styles/tokens.css (the mockup's): light under `:root`, dark under `[data-theme="dark"]`, which src/app/shell/prefs.ts and index.html set on `<html>`.
+- Plain CSS, one file per area (src/app/areas/<area>/<area>.css) beside the shared shell.css and detail.css, with the mockup's class names. No CSS framework, no utility classes, no inline colours.
+- No hardcoded colour in a component or an area's CSS: use `var(--ink)`, `var(--muted)`, `var(--line)`, `var(--accent)` and the other tokens, and add a token (light and dark) when none fits. Exceptions: a printed document on screen (the receipt paper, the A4 invoice sheet) keeps paper colours in both themes, and an invoice layout's colour is the user's choice.

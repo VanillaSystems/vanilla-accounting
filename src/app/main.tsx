@@ -11,7 +11,6 @@ import '@fontsource/instrument-sans/600.css';
 import '@fontsource/instrument-sans/700.css';
 import '@fontsource/geist-mono/400.css';
 import '@fontsource/geist-mono/500.css';
-import './index.css';
 import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/detail.css';
