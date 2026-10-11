@@ -239,6 +239,11 @@ and reads its password from `VANILLA_SMTP_PASSWORD` in `.env` (in the Mac app, t
   put into the inbox from the Finder or the phone starts the processing as a PDF does.
 - Without the `claude` CLI, a model feature (Neu lesen, Klassifizieren) answers with what to
   install instead of a failed process, also under `npm start`.
+- `npm run release:github`: the GitHub release of the version in `package.json`, with that
+  version's changelog section as its text and the Mac app's two `.dmg` files (and the update
+  feed's files when built) as downloads, each with its SHA-256. Without `--publish` it shows the
+  release and changes nothing; it refuses to publish unless the clean, tagged commit is on
+  `origin/main` (docs/releasing.md).
 
 ### Removed
 
