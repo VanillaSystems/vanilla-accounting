@@ -1,6 +1,6 @@
 /**
- * npm run doctor: is everything in place to keep the books? Checks the tools (Node, pdftotext,
- * the claude CLI and its login, without a model call) and the workspace (manifest, books.json,
+ * npm run doctor: is everything in place to keep the books? Checks the tools (Node, the claude
+ * CLI and its login, without a model call; git only for npm run update) and the workspace (manifest, books.json,
  * folders, chart, bank accounts, which bank account each statement lands on, the answers of
  * npm run init), the mailboxes of mail.yaml (their keys in the app's .env; `--mail` also logs in
  * to each, nothing fetched) and how many open transactions route to no knowledge file. Prints one
@@ -35,7 +35,6 @@ function run(cmd: string, args: string[]): string | undefined {
     return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15_000 });
   } catch (e) {
     const err = e as { code?: string; stdout?: string; stderr?: string };
-    // pdftotext -v exits non-zero on some versions but still answers.
     return err.code === 'ENOENT' ? undefined : (err.stdout || err.stderr || undefined);
   }
 }
@@ -44,8 +43,8 @@ function toolChecks(): Result[] {
   const major = Number(process.versions.node.split('.')[0]);
   const results = [
     major >= 22 ? ok(`Node.js ${process.versions.node}`) : fail(`Node.js ${process.versions.node} is too old`, 'Install Node.js 22 or newer (nodejs.org, or brew install node).'),
-    run('pdftotext', ['-v']) !== undefined ? ok('pdftotext (poppler) found') : fail('pdftotext not found', 'Install poppler: brew install poppler (macOS) or apt install poppler-utils (Linux).'),
-    run('convert', ['-version']) !== undefined ? ok('ImageMagick found (photos of receipts)') : warn('ImageMagick not found', 'receipts as PNG or JPG are not read; PDFs are. To read photos: brew install imagemagick'),
+    // PDFs, photos and the workspace's git history are read and written by the app itself (ADR 0006).
+    run('git', ['--version']) !== undefined ? ok('git found (npm run update, npm run check-closed)') : warn('git not found', 'the books work without it; npm run update and npm run check-closed need it'),
   ];
   const version = run('claude', ['--version']);
   if (version === undefined) {

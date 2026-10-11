@@ -90,7 +90,7 @@ function print(c: YearClose): void {
   for (const cause of l.causes) console.log(`    cause: ${causeText(cause)}`);
 }
 
-function main(): number {
+async function main(): Promise<number> {
   if (!dryRun) {
     for (const id of list(values.done)) markTemplate(ws, year, id, 'done');
     for (const id of list(values.na)) markTemplate(ws, year, id, 'na');
@@ -119,7 +119,7 @@ function main(): number {
     console.log(`\nNothing blocks: npm run year:close -- ${year} closes ${year}.`);
     return 0;
   }
-  const result = closeYear(ws, year, rates);
+  const result = await closeYear(ws, year, rates);
   console.log(`\nClosed ${year}: config.closedThrough → ${result.closedThrough}, sealed ${result.seal}.`);
   console.log(result.committed ? 'Committed the workspace.' : 'Commit the workspace now (books.json and filings/), so the close is on record.');
   console.log(`Open ${+year + 1}: npm run year:open -- ${+year + 1}`);
@@ -127,7 +127,7 @@ function main(): number {
 }
 
 try {
-  process.exitCode = main();
+  process.exitCode = await main();
 } catch (e) {
   if (!(e instanceof YearCloseRefused)) throw e;
   console.error(e.message);

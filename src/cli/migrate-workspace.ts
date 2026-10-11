@@ -24,7 +24,7 @@ if (dryRun) {
   process.exit(0);
 }
 
-const result = migrate(root, plan);
+const result = await migrate(root, plan);
 console.log(`Workspace ${root}:`);
 for (const m of result.moved) console.log(line(m));
 if (result.done.length) console.log(`  ${result.done.length} file(s) already in knowledge/`);

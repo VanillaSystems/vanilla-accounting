@@ -12,7 +12,6 @@
  *
  * Rerun on a finished workspace changes nothing. Exit code 2: an answer the app does not support yet.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
@@ -22,6 +21,7 @@ import { BANKS, bankKind, parseIban } from '../workspace/banks.js';
 import { applyPlan, planWorkspace, suggestAccount, type InitInput } from '../workspace/scaffold.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, isSupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import { parseUid } from '../workspace/uid.js';
+import { initRepository } from '../workspace/git.js';
 import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from '../workspace/workspace.js';
 
 const flagOf = (key: QuestionKey) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
@@ -178,16 +178,13 @@ async function pointEnvAt(envFile: string, root: string): Promise<string> {
   return `${envFile} points at ${root}.`;
 }
 
-function gitInit(root: string): string {
+async function gitInit(root: string): Promise<string> {
   if (existsSync(join(root, '.git'))) return 'Git repository exists: nothing committed.';
   try {
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-    git('init', '-q');
-    git('add', '-A');
-    git('commit', '-q', '-m', 'Workspace set up with npm run init');
+    await initRepository(root, 'Workspace set up with npm run init');
     return 'Committed the workspace to a new git repository.';
   } catch (e) {
-    return `git did not run (${(e as Error).message.split('\n')[0]}). Run git init and commit the folder yourself: it keeps every change to the books traceable.`;
+    return `The git repository could not be made (${(e as Error).message.split('\n')[0]}). Run git init and commit the folder yourself: it keeps every change to the books traceable.`;
   }
 }
 
@@ -229,7 +226,7 @@ async function main(): Promise<string> {
     message = [
       `Created ${applied.created.length} files and folders in ${root}.`,
       ...applied.differing.map((p) => `Kept your ${p}: it differs from what init would write.`),
-      gitInit(root),
+      await gitInit(root),
     ].join('\n');
   }
 

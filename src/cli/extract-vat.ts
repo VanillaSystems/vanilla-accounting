@@ -24,6 +24,7 @@ import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import type { Receipt } from '../types/index.js';
 import { loadBooks, mutateJournal, saveBooks, type Books } from '../books/store.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { hasVatIndicator } from '../parsers/receipt-text.js';
 
 
 const ws = openWorkspace();
@@ -38,12 +39,6 @@ const MAX_RATE_LIMIT_RETRIES = 8; // per receipt, before giving up
 const SAVE_EVERY = 10; // persist index every N completions
 
 const MIN_TEXT_LEN = 20; // below this, text is too poor to trust — needs vision review
-
-// Cheap pre-filter: does the text contain anything that could be Swiss MWST?
-// Absence lets us skip the LLM and record hasSwissVat=false directly.
-function hasVatIndicator(text: string): boolean {
-  return /MWST|MwSt|Mehrwertsteuer|CHE-\d{3}|\bVAT\b|USt|\d[.,]\d\s?%/i.test(text);
-}
 
 function nowIso(): string {
   return new Date().toISOString();

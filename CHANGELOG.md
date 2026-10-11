@@ -115,6 +115,21 @@ Two markers flag an entry you must read before you update:
   ESTV sell rate of its payment date (a stale or flat rate) gets a warning naming the right rate;
   `npm run restamp-fx` sets it. Each foreign statement lists the rates its entries used. The audit
   export carries the rate table (`data/fx-rates.json`).
+- **No program outside Node (ADR 0006 section 2).** The app reads a PDF's text with pdf.js in
+  the three shapes the parsers expect (`src/parsers/pdf-text.ts`: reading order for receipts,
+  content-stream order for the Wise transfer references, physical layout for statement closing
+  balances), wraps a dropped photo into a PDF with pdf-lib, and does its own git with
+  isomorphic-git (the repository `npm run init` makes, the commits of a year close and of the
+  opening, the moves of `npm run migrate-workspace`). A scanned PDF without text goes to the
+  model's vision as before. `npm run doctor` no longer asks for pdftotext or ImageMagick and
+  names git as optional (`npm run update`, `npm run check-closed`). `extractionMethod:
+  'pdftotext'` stays the value of a PDF's own text, so existing books load unchanged. Proven
+  against the parsed results of every PDF of both demos and of a real workspace
+  (`tools/pdf-text/compare.ts` reruns the comparison against an installed pdftotext).
+- A Wise transfer reference on a page's last line ends at the page end; before, the page footer
+  was glued to it.
+- A Swiss UID wrapped after `CHE-` on an invoice is found by the knowledge routing too (the
+  intake's check already allowed the break).
 
 ### Added
 
@@ -193,6 +208,8 @@ Two markers flag an entry you must read before you update:
   receipt), and the duplicate approval.
 - Tailwind and its helpers (clsx, tailwind-merge, class-variance-authority, lucide-react): the
   styles are `tokens.css` and plain CSS per area.
+- `src/parsers/pdf.ts` (pdftotext, pdftoppm and tesseract behind `extractText`): nothing called
+  it. The OCR fallback is the model's vision, in `npm run extract` and in Belege.
 
 ### Fixed
 

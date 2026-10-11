@@ -9,12 +9,12 @@
  * accounts and name, and a file nothing tells apart goes to suppliers/ and is reported as unsure.
  * Idempotent: a file already in place is skipped, and a run after a crash finishes the rest.
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { parse } from 'yaml';
 import { ROLES, type RawCounterparty, type Role } from '../knowledge/counterparties.js';
 import { GUIDE_DIR, LEGACY_DIRS, RULES_DIR, ROLE_DIRS, homeOf } from '../knowledge/layers.js';
+import { isTracked, moveTracked, removeTracked, repositoryAt } from './git.js';
 
 export interface Move {
   from: string;
@@ -59,11 +59,6 @@ export function planMigration(root: string, roles: Map<string, Role>): Move[] {
   return [...businesses, ...rules];
 }
 
-const git = (root: string, ...args: string[]) => execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' }).toString();
-const tracked = (root: string, path: string) => {
-  try { git(root, 'ls-files', '--error-unmatch', path); return true; } catch { return false; }
-};
-
 export interface Migration {
   moved: Move[];
   /** Already at their new place: a rerun. */
@@ -79,15 +74,15 @@ export interface Migration {
  * directories once they hold nothing but a .gitkeep. Throws before moving anything if a file
  * exists at both its old and its new place.
  */
-export function migrate(root: string, plan: Move[]): Migration {
+export async function migrate(root: string, plan: Move[]): Promise<Migration> {
   const both = plan.filter((m) => existsSync(join(root, m.from)) && existsSync(join(root, m.to)));
   if (both.length) throw new Error(`in both places, keep one: ${both.map((m) => `${m.from} and ${m.to}`).join('; ')}`);
-  const inGit = (() => { try { return git(root, 'rev-parse', '--show-toplevel').trim().length > 0; } catch { return false; } })();
+  const inGit = (await repositoryAt(root)) !== null;
   const out: Migration = { moved: [], done: [], removed: [], leftover: [] };
   for (const m of plan) {
     if (!existsSync(join(root, m.from))) { out.done.push(m.to); continue; }
     mkdirSync(dirname(join(root, m.to)), { recursive: true });
-    if (inGit && tracked(root, m.from)) git(root, 'mv', m.from, m.to);
+    if (inGit && await isTracked(root, m.from)) await moveTracked(root, m.from, m.to);
     else renameSync(join(root, m.from), join(root, m.to));
     out.moved.push(m);
   }
@@ -96,7 +91,7 @@ export function migrate(root: string, plan: Move[]): Migration {
     if (!existsSync(full) || !statSync(full).isDirectory()) continue;
     const rest = readdirSync(full);
     if (rest.every((f) => f === '.gitkeep')) {
-      if (rest.length && inGit && tracked(root, `${dir}/.gitkeep`)) git(root, 'rm', '-q', `${dir}/.gitkeep`);
+      if (rest.length && inGit && await isTracked(root, `${dir}/.gitkeep`)) await removeTracked(root, `${dir}/.gitkeep`);
       rmSync(full, { recursive: true, force: true });
       out.removed.push(`${dir}/`);
     } else {

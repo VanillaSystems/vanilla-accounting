@@ -20,13 +20,11 @@ import { testIban, withTestIbans } from './support/iban.js';
 const TYPO_UID = ['CHE-153', '004', '185'].join('.');
 const tmp = () => mkdtempSync(join(tmpdir(), 'belege-init-'));
 
-/** A PATH whose claude and pdftotext answer like logged-in, installed tools, without a model call. */
+/** A PATH whose claude answers like a logged-in, installed tool, without a model call. */
 function stubTools(): string {
   const bin = tmp();
   writeFileSync(join(bin, 'claude'), '#!/bin/sh\nif [ "$1" = auth ]; then echo \'{"loggedIn":true}\'; else echo "9.9.9 (Claude Code)"; fi\n');
-  writeFileSync(join(bin, 'pdftotext'), '#!/bin/sh\necho "pdftotext version 99" >&2\n');
   chmodSync(join(bin, 'claude'), 0o755);
-  chmodSync(join(bin, 'pdftotext'), 0o755);
   return bin;
 }
 
@@ -80,8 +78,10 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   const envFile = join(base, 'app.env');
   const bin = stubTools();
 
-  const first = cli('init.ts', consultant(dir, envFile));
+  // No program on the PATH: the workspace and its git repository are made by the app alone.
+  const first = cli('init.ts', consultant(dir, envFile), undefined, { PATH: '/nonexistent' });
   assert.equal(first.code, 0, first.out);
+  assert.match(first.out, /Committed the workspace to a new git repository/);
 
   const ws = workspaceAt(dir);
   assert.equal(ws.company.uid, 'CHE-153.004.184');

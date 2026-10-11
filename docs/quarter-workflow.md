@@ -76,7 +76,7 @@ npm run extract
 npm run extract-vat
 ```
 
-`extract` reads the text of each new receipt in `beleg-import/` (pdftotext, or tesseract for
+`extract` reads the text of each new receipt in `beleg-import/` (pdf.js, or the model's vision for
 a scan). `extract-vat` then reads the VAT facts printed on it: the UID, whether Swiss MWST was
 charged, the amounts per rate. Both skip what they have already read.
 

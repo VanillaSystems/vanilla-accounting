@@ -19,7 +19,9 @@ test('transfer ids map to their payment reference; card lines carry none', () =>
   ]);
 });
 
-test('reference ends at the line break and is trimmed', () => {
+test('reference ends at the line break or the page end and is trimmed', () => {
   const raw = '1 July 2026 | Transaction: TRANSFER-1 |  Reference: abc  \nnext line\n';
   assert.deepEqual([...wiseReferences(raw)], [['TRANSFER-1', 'abc']]);
+  const lastLine = '1 July 2026 | Transaction: TRANSFER-2 | Reference: Shopify A1B2C3\fref:0000 5/5';
+  assert.deepEqual([...wiseReferences(lastLine)], [['TRANSFER-2', 'Shopify A1B2C3']]);
 });

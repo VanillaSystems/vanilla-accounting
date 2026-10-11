@@ -306,7 +306,7 @@ export type SelectionReceipt = Pick<Receipt, 'extractedText' | 'hasSwissVat' | '
 export type SelectionTransaction = Pick<BankTransaction, 'direction' | 'currency' | 'description'>;
 
 /** A web address or legal form outside Switzerland in the receipt: a sign of a supplier abroad. */
-const FOREIGN_HINT = /\b[\w-]+\.(?:com|io|ai|net|org|de|fr|it|at|ie|nl|co|us|uk|eu)\b|\b(?:inc|llc|ltd|limited|gmbh & co|b\.v|s\.a\.r\.l)\b|\bvat (?:id|no|number)\b|\bust-?id/i;
+export const FOREIGN_HINT = /\b[\w-]+\.(?:com|io|ai|net|org|de|fr|it|at|ie|nl|co|us|uk|eu)\b|\b(?:inc|llc|ltd|limited|gmbh & co|b\.v|s\.a\.r\.l)\b|\bvat (?:id|no|number)\b|\bust-?id/i;
 
 /** The counterparty kinds a transaction's structure alone points at. Keywords decide the rest. */
 function inferredKinds(tx: SelectionTransaction, receipts: readonly SelectionReceipt[]): Set<CounterpartyKind> {

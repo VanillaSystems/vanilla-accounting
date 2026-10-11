@@ -12,8 +12,6 @@ AG is fully supported. Read [Limits](#limits) before you start.
 You need:
 
 - **Node.js 22** or newer. On macOS: `brew install node`.
-- **pdftotext**, from poppler. It reads the text of your receipts. On macOS:
-  `brew install poppler`. On Linux: `apt install poppler-utils`.
 - **Claude Code** with a Claude subscription (Pro or Max). Vanilla Accounting calls the `claude` command to
   read receipts, match them to payments and book them. Install it with
   `npm install -g @anthropic-ai/claude-code`, then run `claude` once and log in.
@@ -117,7 +115,7 @@ asking).
 npm run doctor
 ```
 
-It checks the tools (Node.js, pdftotext, the `claude` command and its login) and the workspace
+It checks the tools (Node.js, the `claude` command and its login) and the workspace
 (the manifest, `books.json`, the folders, that every bank account is in the chart, and which
 bank account each statement file lands on). Each line starts with ✓ or ✗. A ✗ line says how
 to fix it. A ! line is a note that does not stop you.
@@ -165,7 +163,7 @@ receipt (see [Invoices](#invoices)).
 
 ## 5. Add receipts
 
-Put receipts (PDF; photos as PNG or JPG need ImageMagick: `brew install imagemagick`) into
+Put receipts (PDF, or photos as PNG or JPG) into
 `beleg-import/`, or drop them on the app's page. Every invoice, every till slip, every customs
 bill. A receipt is what lets you deduct the VAT you paid.
 

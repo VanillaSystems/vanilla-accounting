@@ -247,11 +247,11 @@ test('bookRevaluation on a workspace: refuses without the 31.12. rate, books onc
   assert.equal(loadBooks(ws).journalEntries.filter((x) => x.origin === 'year-close').length, 1);
 });
 
-test('closeYear refuses while anything blocks; openYear refuses a year that is not closed', () => {
+test('closeYear refuses while anything blocks; openYear refuses a year that is not closed', async () => {
   const ws = workspace();
-  assert.throws(() => closeYear(ws, '2026', RATES), YearCloseRefused);
+  await assert.rejects(() => closeYear(ws, '2026', RATES), YearCloseRefused);
   assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30', 'nothing moved');
-  assert.throws(() => openYear(ws, '2026', RATES), /not closed yet/);
+  await assert.rejects(() => openYear(ws, '2026', RATES), /not closed yet/);
 });
 
 test('bookEntry: an accrual gets the next M-ref, marks its template done, and is refused in a closed period', () => {
@@ -281,29 +281,29 @@ function readyToClose(): Workspace {
   return ws;
 }
 
-test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 at the closing balances, reruns change nothing', () => {
+test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 at the closing balances, reruns change nothing', async () => {
   const ws = readyToClose();
-  assert.throws(() => closeYear(ws, '2026', RATES), YearCloseRefused, 'the Kursdifferenz and the guided entries are open');
+  await assert.rejects(() => closeYear(ws, '2026', RATES), YearCloseRefused, 'the Kursdifferenz and the guided entries are open');
   bookRevaluation(ws, '2026', RATES);
   for (const t of YEAR_END_TEMPLATES) markTemplate(ws, '2026', t.id, 'na');
-  const result = closeYear(ws, '2026', RATES, '2027-03-01');
+  const result = await closeYear(ws, '2026', RATES, '2027-03-01');
   assert.equal(result.closedThrough, '2026-12-31');
   assert.equal(result.committed, false, 'a temp folder is no git repository');
   assert.ok(existsSync(join(ws.paths.filings, '2026', 'seal-Q4.json')));
   assert.deepEqual(sealsOf(loadBooks(ws)).checks.map((c) => `${c.quarter} ${c.status}`), ['2026-Q1 intact', '2026-Q2 intact', '2026-Q3 intact', '2026-Q4 intact']);
-  assert.equal(closeYear(ws, '2026', RATES, '2027-03-02').closedThrough, '2026-12-31', 'closing again only checks');
+  assert.equal((await closeYear(ws, '2026', RATES, '2027-03-02')).closedThrough, '2026-12-31', 'closing again only checks');
   assert.throws(() => bookRevaluation(ws, '2026', RATES), /closed/, 'nothing can be dated 31.12. any more');
 
-  const opened = openYear(ws, '2026', RATES, '2027-03-01');
+  const opened = await openYear(ws, '2026', RATES, '2027-03-01');
   assert.deepEqual(opened.opening.balances, { 1020: 10900, 1021: 1395, 2800: 10000, 2970: 2295 });
   assert.equal(opened.ratesReady, true, 'the stand-in table holds a rate of 2027');
   const config = loadBooks(ws).config;
   assert.deepEqual(config.openingBalances?.['2027'], opened.opening.balances);
   assert.deepEqual(config.openingBalancesNative?.['2027'], { 1021: { amount: 1500, currency: 'EUR' } });
-  assert.deepEqual(openYear(ws, '2026', RATES).changes, [], 'a rerun finds nothing to update');
+  assert.deepEqual((await openYear(ws, '2026', RATES)).changes, [], 'a rerun finds nothing to update');
 });
 
-test('receivables: booked on 31.12. under the year\'s id, once; opening the next year reverses them on 1.1., a rerun keeps one reversal', () => {
+test('receivables: booked on 31.12. under the year\'s id, once; opening the next year reverses them on 1.1., a rerun keeps one reversal', async () => {
   const ws = readyToClose();
   writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451', '1100'].map((number) => ({ number, name: number }))));
   bookRevaluation(ws, '2026', RATES);
@@ -312,12 +312,12 @@ test('receivables: booked on 31.12. under the year\'s id, once; opening the next
   const booked = bookEntry(ws, input, 'receivables');
   assert.equal(booked.id, 'yc-2026-receivables');
   assert.throws(() => bookEntry(ws, input, 'receivables'), /booked already/);
-  closeYear(ws, '2026', RATES, '2027-03-01');
+  await closeYear(ws, '2026', RATES, '2027-03-01');
 
-  const opened = openYear(ws, '2026', RATES, '2027-03-01');
+  const opened = await openYear(ws, '2026', RATES, '2027-03-01');
   assert.equal(opened.opening.balances['1100'], 540.5, 'the receivables open 2027');
   const reversal = { id: 'yc-2027-receivables-reversal', transactionRef: 'yc-2027-receivables-reversal', date: '2027-01-01', accountDebit: '3400', accountCredit: '1100', amount: 540.5, description: `Auflösung Debitoren per 31.12.2026 (${booked.transactionRef})`, origin: 'year-close' };
   assert.deepEqual(opened.reversal, reversal);
-  openYear(ws, '2026', RATES, '2027-03-02');
+  await openYear(ws, '2026', RATES, '2027-03-02');
   assert.deepEqual(loadBooks(ws).journalEntries.filter((x) => x.id.includes('receivables')), [booked, reversal]);
 });

@@ -37,13 +37,13 @@ function print(o: Opening): void {
   for (const c of o.causes) console.log(`    ${causeText(c)}`);
 }
 
-function main(): number {
+async function main(): Promise<number> {
   if (values['dry-run']) {
     print(openingFor(ws, closed, rates, loadBooks(ws)));
     console.log('\n--dry-run: nothing written.');
     return 0;
   }
-  const { opening, changes, ratesReady } = openYear(ws, closed, rates);
+  const { opening, changes, ratesReady } = await openYear(ws, closed, rates);
   print(opening);
   if (changes.length) {
     console.log(`\nUpdated config.openingBalances.${opening.year}:`);
@@ -54,7 +54,7 @@ function main(): number {
 }
 
 try {
-  process.exitCode = main();
+  process.exitCode = await main();
 } catch (e) {
   if (!(e instanceof YearCloseRefused)) throw e;
   console.error(e.message);
