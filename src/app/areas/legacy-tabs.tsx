@@ -7,11 +7,8 @@ import { SearchBar } from '../components/search-bar.js';
 import { TransactionsTable } from '../components/transactions-table.js';
 import { BankStatementsTab } from '../components/bank-statements-tab.js';
 import { JournalEntriesTab } from '../components/journal-entries-tab.js';
-import { TrialBalanceTab } from '../components/trial-balance-tab.js';
-import { BalanceSheetTab } from '../components/balance-sheet-tab.js';
-import { IncomeStatementTab } from '../components/income-statement-tab.js';
-import { VatReportTab } from '../components/vat-report-tab.js';
-import { AccountLedgerTab } from '../components/account-ledger-tab.js';
+import { VatCodesView } from '../components/vat-codes-view.js';
+import { useUrlParam } from '../hooks/use-url-state.js';
 import { BankReconciliationTab } from '../components/bank-reconciliation-tab.js';
 import { YearCloseTab } from '../components/year-close-tab.js';
 import { SplitPane } from '../components/split-pane.js';
@@ -22,8 +19,7 @@ import { cn } from '../lib/utils.js';
 import { api, orAlert, sources } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 
-export type LegacyTab = 'transactions' | 'bank-statements' | 'journal-entries' | 'trial-balance' | 'balance-sheet'
-  | 'income-statement' | 'vat-report' | 'account-ledger' | 'bank-reconciliation' | 'year-close';
+export type LegacyTab = 'transactions' | 'bank-statements' | 'journal-entries' | 'vat-codes' | 'bank-reconciliation' | 'year-close';
 type FilterMode = 'all' | 'linked' | 'unlinked';
 
 export interface Selection { txRef?: string }
@@ -32,13 +28,12 @@ export interface Selection { txRef?: string }
  * The old tabs, one at a time, inside the new shell: the shell owns the period, the language,
  * the theme and the URL. Deleted in phase 10 with the components it renders.
  */
-export function LegacyTabs({ tab, period, index, refresh, canEdit, onPeriod, initial, onSelect }: {
+export function LegacyTabs({ tab, period, index, refresh, canEdit, initial, onSelect }: {
   tab: LegacyTab;
   period: Period;
   index: Index;
   refresh: () => void;
   canEdit: boolean;
-  onPeriod: (token: string) => void;
   initial: Selection;
   onSelect: (sel: Selection) => void;
 }) {
@@ -187,29 +182,8 @@ export function LegacyTabs({ tab, period, index, refresh, canEdit, onPeriod, ini
             <JournalEntriesTab index={index} period={period} onRefresh={refresh} canEdit={canEdit} />
           </div>)}
 
-          {/* Saldobilanz tab */}
-          {tab === 'trial-balance' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <TrialBalanceTab index={index} period={period} />
-          </div>)}
-
-          {/* Bilanz tab */}
-          {tab === 'balance-sheet' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <BalanceSheetTab index={index} period={period} />
-          </div>)}
-
-          {/* Erfolgsrechnung tab */}
-          {tab === 'income-statement' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <IncomeStatementTab index={index} period={period} />
-          </div>)}
-
-          {/* MWST-Abrechnung tab */}
-          {tab === 'vat-report' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <VatReportTab index={index} period={period} onPeriod={onPeriod} />
-          </div>)}
-
-          {/* Kontoauszug tab */}
-          {tab === 'account-ledger' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <AccountLedgerTab index={index} period={period} />
+          {tab === 'vat-codes' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <CodesTab index={index} period={period} />
           </div>)}
 
           {/* Kontenabgleich tab — bank reconciliation proof */}
@@ -224,4 +198,11 @@ export function LegacyTabs({ tab, period, index, refresh, canEdit, onPeriod, ini
 
     </div>
   );
+}
+
+/** The code catalogue until phase 4 builds its area: ?view=codes&code= as the old MWST tab kept them. */
+function CodesTab({ index, period }: { index: Index; period: Period }) {
+  const [code, setCode] = useUrlParam('code');
+  const [, setView] = useUrlParam('view');
+  return <VatCodesView index={index} period={period} code={code} onCode={setCode} onBack={() => { setView(null); setCode(null); }} />;
 }

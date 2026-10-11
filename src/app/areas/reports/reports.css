@@ -1,0 +1,34 @@
+/* Bilanz & ER: the mockup's report list, the Saldobilanz columns, and the account ledger. The result box is .vresult (vat.css). */
+.rnote { margin-left: auto; font-size: 12.5px; }
+.rall { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 1px 8px; }
+.rall:hover { color: var(--ink); border-color: var(--line-2); }
+.counts .rall.on { background: var(--accent-soft); color: var(--ink); border-color: transparent; font-weight: 400; }
+.rows.rep .row.zero .t, .rows.rep .row.zero .a, .rows.rep .row.zero .d { color: var(--faint); }
+.rows.rep .row { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.rows.rep .row .d { color: var(--muted); }
+.rows.rep .row.plain { cursor: default; }
+.rows.rep .row.plain:hover { background: none; }
+.rows.rep .row.plain .t { color: var(--muted); font-style: italic; }
+.rows.rep.sbal .row, .rows.rep.sbal .sbh { grid-template-columns: 52px minmax(0, 1fr) 92px 92px 92px 96px; }
+.rows.rep.sbal .row .f { color: var(--muted); font-size: 12.5px; }
+.sbh { display: grid; gap: 14px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 0 12px; margin: 0 -12px 4px; }
+.sbh .r { text-align: right; }
+.rhead { font: 700 15px "Hanken Grotesk"; margin: 26px 0 4px; }
+.rhead:first-child { margin-top: 0; }
+.rsum { display: flex; justify-content: space-between; padding: 9px 0; margin: 4px 0 10px; border-top: 1px solid var(--line-2); font-size: 13.5px; font-weight: 500; }
+.rsum .mono { font-size: 13px; }
+.rsum.strong { border-top: 1.5px solid var(--ink); font-weight: 600; }
+.rgap { margin: -8px 0 18px; font-size: 12.5px; }
+.rgap button { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.rsearch { margin: -8px 0 18px; }
+.rsearch input, .rsearch input:focus, .rsearch input.has { width: 260px; }
+.ledger { margin-top: 20px; max-width: 900px; }
+.ledger > * { display: grid; grid-template-columns: 84px minmax(0, 1fr) 54px 84px 84px 92px; gap: 12px; align-items: baseline; padding: 6px 10px; font-size: 12.5px; width: 100%; text-align: left; box-sizing: border-box; }
+.ledger .lh { color: var(--faint); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.ledger .lr { border-radius: 7px; color: var(--ink-2); text-decoration: none; }
+.ledger a.lr:hover { background: var(--hover); }
+.ledger .lr .d { color: var(--date); }
+.ledger .lr .oc { color: var(--muted); font-size: 12px; }
+.ledger .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ledger .r { text-align: right; }
+.ledger .lr.open { color: var(--muted); font-style: italic; }
