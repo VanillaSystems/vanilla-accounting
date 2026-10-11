@@ -12,7 +12,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 - [x] 0. Setup: branch, docs read, checks green, API inventory, architecture, this file.
 - [x] 1. Shell: tokens, fonts, theme, zoom, dock, top bar, list/detail with divider, keys, ⌘K, toast with undo, URL sync, add button with N.
 - [x] 2. Belege.
-- [ ] 3. Kontoauszüge.
+- [x] 3. Kontoauszüge.
 - [ ] 4. Buchungen and MWST-Codes.
 - [ ] 5. MWST and Bilanz & ER.
 - [ ] 6. Export.
@@ -75,6 +75,15 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Invoice fonts: Inter and Arimo (as Liberation Sans for the QR-bill) from @fontsource, Latin subsets inlined; layout fonts are Inter and Helvetica (Arimo) for now. | ADR 0012: the same pages on every machine; phase 9 can add fonts to INVOICE_FONTS. |
 | 2026-10-11 | The demo's IBANs are valid (CH65 8080 …, BE29 9670 …) and the QR-IBAN is SIX's example; its PDFs are printed by the generator, so `demo:generate` is byte-stable per machine and browser. | The manifest refuses an IBAN with wrong check digits; a PDF depends on the Chromium build (ADR 0012). |
 | 2026-10-11 | Not built in phase 8: e-mail sending, the git finalization at issue (ADR 0010 rule D), open invoices in the year-end checklist, the chrome-headless-shell download, agent tools. | Each needs a part that does not exist yet (mail settings, sync, the phase 9 UI, the registry). |
+| 2026-10-11 | A statement is a monthly PDF of `bankStatements` on the manifest's account (bank + currency); a month that ended without one is missing from the account's first statement or payment (or the year its books open) on; the running month shows when it has payments. | The mockup's model; a month before an account's data is not missing, and the current month's payments need a place before its PDF exists. |
+| 2026-10-11 | The check is the mockup's (opening + payments − closing, from `statementBalances`; in January the year's native opening of reconcile-bank.ts) plus the books' balance on the last day (`bookBalanceNative`) beside the bank's close. The list's dot and the dock badge count only missing statements and payments that do not add up; a ledger difference shows in the detail. | Kontenabgleich's check without its page; unbooked payments of the open quarter are normal until classify runs and would keep the badge lit. |
+| 2026-10-11 | Kontenabgleich has no page: each statement shows its books' balance and, for a foreign account, the ESTV rates its entries were booked at (section Kurse). Old `bank-reconciliation` links open `/bank`. | The mockup has no such page; its two facts belong to one statement. |
+| 2026-10-11 | Removed with Transaktionen: editing a payment's text and note, deleting a manual payment, the manual-transaction form, linking a receipt from the payment's side. Kept: `kein Beleg nötig` (braucht keinen / zurücksetzen, ⌘Z) in the payment bar; notes show read only. | The mockup's payment bar; linking lives in Belege, a private outlay is Belege's "privat bezahlt"; the routes stay until phase 10 decides. |
+| 2026-10-11 | `POST /api/statements?name=&account=&month=` stores the file in `bank-statements/<bank>/` (camt.053 by IBAN, else the hint; a PDF by its bank's file name, else renamed the bank's way when account and month are given), refuses a statement whose last day is on or before `closedThrough` (reason `newStatement`) and a camt.053 already read, then reads the folder as extract does (src/books/bank-import.ts), keeps every payment no file holds, keeps the books' order, matches invoice payments and merges the PDF closing balances. A refused file is removed again. | The CLI layout and extract's merge; an upload must not drop payments or reorder books.json. |
+| 2026-10-11 | A drop on the page goes to the open area's `drop` (Kontoauszüge: statements), else to the receipts' inbox; the drop zone says which. | One drop zone, the file goes where the user is looking. |
+| 2026-10-11 | The payment's line is found in the PDF's text: Wise by transaction id (and the fee's), else amount + date line; other banks by a dated row with the amount, in a column or between `|`, `dd.mm.yy` or `dd.mm.yyyy`. | The mockup's findLines plus the demo's one-text rows. |
+| 2026-10-11 | A link to a statement or payment the loaded books do not hold keeps its place with a notice and resolves once the books reload. | After an import the route changes before the books are loaded again. |
+| 2026-10-11 | Group labels are the manifest's account labels (`Bank Raiffeisen`). | The mockup cut "Bank " from its generator's labels; the app shows what the company named the account. |
 
 ## API inventory against the mockup
 
@@ -87,7 +96,7 @@ classify), year close (revaluation, templates, entries, close, open).
 Missing for the mockup, to add in their phase:
 
 - Belege: done in phase 2 (receipt PATCH `kind` and nulls, `GET /api/inbox`).
-- Kontoauszüge: statement import (camt.053 and PDF upload) from the UI; today it is a CLI step.
+- Kontoauszüge: done in phase 3 (`POST /api/statements`).
 - Buchungen: new manual entry (route exists only through year-close entries).
 - Export: the export bundle (CSV, XLSX, JSON, PDF, ZIP with LIESMICH and SHA-256 sums).
 - Firma: write company profile, banks, periods, display and invoice layout to `belege.workspace.yaml`.
@@ -125,3 +134,14 @@ Missing for the mockup, to add in their phase:
   uses QRR (QR-IBAN) where the mockup shows RF; the EUR invoice to a BE IBAN has no QR-bill.
   Found and fixed: `npm run extract` failed on both demos (filed transactions generated with parts
   and reference). Left for phase 9: every screen; later: e-mail, finalization at issue, year-end list.
+- 2026-10-11 phase 3 (branch `redesign-p3`): Kontoauszüge. `src/app/areas/bank/` (model.ts statements, missing and
+  running months, checks, folded Wise fees; lines.ts the payment's line in the PDF text; list by account or month,
+  search, the statement detail with facts, check, books' balance, the PDF with the line marked, Zahlungen, Kurse, Datei,
+  the payment bar with receipt, entry, fee and `kein Beleg nötig` with undo; preview, download, ⌘K, dock badge, drop).
+  API: `POST /api/statements`; extract's bank reading moved to src/books/bank-import.ts. Old Kontoauszüge, Transaktionen
+  and Kontenabgleich tabs and six components deleted, their dead texts too. Commits: the bank-import module, the area,
+  the docs. Evidence and mockup comparison: .verify/evidence/redesign/phase-3/NOTES.md. Differs from the mockup: the
+  books' balance and Kurse in the detail, running months, payments shown for a missing month, the payment bar's
+  `braucht keinen`, the hint no longer under the dock. Left: the demo's statement PDFs give no closing balance when read
+  again (generator text); the audit export's bank area not driven; transaction PATCH description/remarks, DELETE and the
+  manual-transaction routes have no UI caller now.

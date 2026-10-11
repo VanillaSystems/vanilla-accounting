@@ -4,7 +4,7 @@
 
 ## Sub-features
 
-- Every tab reads from the export's files: Belege (search, receipt PDF), Buchungen, MWST with the Korrekturabrechnung (0535) of a filed quarter, Kontoauszug, Kontenabgleich, Kontoauszüge (statement PDF).
+- Every tab reads from the export's files: Belege (search, receipt PDF), Buchungen, MWST with the Korrekturabrechnung (0535) of a filed quarter, Kontoauszug, Kontoauszüge (statement PDF with its balance check).
 - The audit bar shows with the snapshot line (date, books schema, app version), translated; the "API running" badge does not show; no edit control shows.
 - The view lives after `#` (`#/journal/<id>?period=…`; an old `#/<lang>/<period>/<tab>` link redirects), and a pasted `#` link opens its view.
 - `manifest.json` and `npm run verify-audit` (tests/audit-export.test.ts covers tampering).
