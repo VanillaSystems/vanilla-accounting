@@ -392,9 +392,9 @@ function Profit({ d, nav, canEdit }: StepProps) {
       <p className="lead">{t('close.profitLead')}</p>
       <div className="gv">
         {row(<>{t('close.result', { year: d.year })} {!d.closed && <span className="m">{t('close.soFar')}</span>}</>, <b className="mono">{fmt(result)}</b>)}
-        <label className="gvrow"><span>{t('close.resolutionDate')}</span><input type="date" value={date} min={`${next}-01-01`} onChange={(e) => setDate(e.target.value)} /></label>
-        <label className="gvrow"><span>{t('close.reserve')} <span className="mono m">2950</span></span><input className="mono" inputMode="decimal" placeholder="0.00" value={reserve} onChange={(e) => setReserve(e.target.value)} /></label>
-        <label className="gvrow"><span>{t('close.dividend')}</span><input className="mono" inputMode="decimal" placeholder="0.00" value={dividend} onChange={(e) => setDividend(e.target.value)} /></label>
+        <label className="gvrow"><span>{t('close.resolutionDate')}</span><input type="date" value={date} min={`${next}-01-01`} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} /></label>
+        <label className="gvrow"><span>{t('close.reserve')} <span className="mono m">2950</span></span><input className="mono" inputMode="decimal" placeholder="0.00" value={reserve} onChange={(e) => setReserve(e.target.value)} disabled={!canEdit} /></label>
+        <label className="gvrow"><span>{t('close.dividend')}</span><input className="mono" inputMode="decimal" placeholder="0.00" value={dividend} onChange={(e) => setDividend(e.target.value)} disabled={!canEdit} /></label>
         {row(<>{t('close.withholding')} <span className="mono m">2206</span></>, <span className="mono">{fmt(split.withholdingTax)}</span>, 'sub')}
         {row(<>{t('close.toShareholder')} <span className="mono m">2451</span></>, <span className="mono">{fmt(split.net)}</span>, 'sub')}
         {row(<>{t('close.staysRetained')} <span className="mono m">{d.accounts.retainedEarnings}</span></>, <b className={`mono${rest < 0 ? ' neg' : ''}`}>{fmt(rest)}</b>, 'tot')}

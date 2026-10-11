@@ -112,7 +112,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
       </div>
       <div className="lkprevw">
         {load.state === 'ready' && <Preview ws={ws} layout={layout} lang={lang} texts={texts} guide={guide} canEdit={canEdit} onText={saveText} />}
-        <p className="m ivhint">{t('invoiceLayout.daysHint', { days: DAYS })}{changed > 0 && <> · {t('invoiceLayout.nChanged', { n: changed })} · <button type="button" className="quiet2" onClick={resetTexts}>{t('invoiceLayout.reset')}</button></>}</p>
+        <p className="m ivhint">{t('invoiceLayout.daysHint', { days: DAYS })}{changed > 0 && <> · {t('invoiceLayout.nChanged', { n: changed })}{canEdit && <> · <button type="button" className="quiet2" onClick={resetTexts}>{t('invoiceLayout.reset')}</button></>}</>}</p>
       </div>
     </div>
   );
