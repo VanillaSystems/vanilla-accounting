@@ -5,15 +5,15 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { request as httpRequest, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
 import { claudeOn } from '../src/desktop/claude.js';
-import { ask, NoClaudeError } from '../src/llm/ask.js';
+import { ask, modelReady, NoClaudeError } from '../src/llm/ask.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
-import { MANIFEST_FILE } from '../src/workspace/workspace.js';
+import { APP_ROOT, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import de from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -108,7 +108,20 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
   assert.equal(claudeOn(`/nonexistent:${bin}:/usr/bin`), join(bin, 'claude'));
   assert.equal(claudeOn('/nonexistent:relative/bin'), undefined);
 
-  process.env.CLAUDE_BIN = join(home, 'no-such-claude');
+  // As the app runs: PATH /usr/bin:/bin, the CLI known only by CLAUDE_BIN, its node in its own folder.
+  const path = process.env.PATH;
+  const found = mkdtempSync(join(tmpdir(), 'login-bin-'));
+  copyFileSync(join(APP_ROOT, 'tests/support/stub-bin/claude'), join(found, 'claude'));
+  symlinkSync(process.execPath, join(found, 'node'));
+  process.env.PATH = '/usr/bin:/bin';
+  process.env.CLAUDE_BIN = join(found, 'claude');
+  try {
+    assert.equal(await modelReady(), true, 'the inbox job finds the CLI by CLAUDE_BIN');
+    process.env.CLAUDE_BIN = join(home, 'no-such-claude');
+    assert.equal(await modelReady(), false);
+  } finally {
+    process.env.PATH = path;
+  }
   try {
     await assert.rejects(ask('hi', { step: 'test' }), NoClaudeError);
     const before = (await call('GET', '/books.json')).text;

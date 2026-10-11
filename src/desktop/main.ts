@@ -32,7 +32,7 @@ async function start(): Promise<void> {
   const stateFile = join(app.getPath('userData'), 'desktop.json');
   const { homepage } = appPackage();
   usePrintPages(electronPage);
-  void findClaude().then((bin) => { if (bin) process.env.CLAUDE_BIN = bin; });
+  const claudeFound = findClaude().then((bin) => { if (bin) process.env.CLAUDE_BIN = bin; });
   let language = languageOf(app.getLocale());
   let win: BrowserWindow | undefined;
 
@@ -92,6 +92,8 @@ async function start(): Promise<void> {
   const last = readState(stateFile).recent[0];
   if (last) await server.open(last).catch(() => undefined);
   refreshMenu();
+  // The page starts the inbox job as it loads; the job checks for claude once, so it must be known by then.
+  await claudeFound;
   show();
   app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
