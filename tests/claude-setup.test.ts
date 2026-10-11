@@ -16,7 +16,7 @@ import { APP_ROOT } from '../src/workspace/workspace.js';
 
 const DE: SetupTexts = {
   title: 'Claude einrichten', install: 'Installieren.', signIn: 'Anmelden.', back: 'Zurück zur App.',
-  failed: 'Hat nicht geklappt.', done: 'Fertig.',
+  failed: 'Hat nicht geklappt.', done: 'Fertig.', notSignedIn: 'Nicht angemeldet.',
 };
 const FR: SetupTexts = { ...DE, title: 'Configurer Claude', done: 'Terminé, c’est l’app qu\'il faut rouvrir.' };
 
@@ -62,9 +62,25 @@ EOF
   const r = runMac(text, home, bin);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(readFileSync(join(home, 'curl.args'), 'utf8').trim(), '-fsSL https://claude.ai/install.sh');
-  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['auth status', 'auth login'], 'signs in with the claude it just installed');
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['auth status', 'auth login', 'auth status'], 'signs in with the claude it just installed, then checks it worked');
   for (const line of ['Claude einrichten', '1. Installieren.', '2. Anmelden.', '3. Zurück zur App.', 'Configurer Claude']) assert.ok(r.stdout.includes(line), line);
   assert.ok(r.stdout.trimEnd().endsWith('Fertig. / Terminé, c’est l’app qu\'il faut rouvrir.'), r.stdout);
+  assert.equal(readFileSync(join(home, '.zprofile'), 'utf8'), '\nexport PATH="$HOME/.local/bin:$PATH"\n', 'a new Terminal window finds claude');
+});
+
+test('Mac: run twice, the PATH line is added once; a sign-in that did not complete never says done', () => {
+  const home = tmp('setup-home-');
+  const log = join(home, 'claude.log');
+  program(join(home, '.local/bin/claude'), `#!/bin/sh\necho "$*" >> ${log}\n[ "$1 $2" = "auth status" ] && exit 1\nexit 0\n`);
+  writeFileSync(join(home, '.zprofile'), 'export EDITOR=vi\n');
+  const text = setupScript('darwin', [DE]).text;
+  for (let i = 0; i < 2; i++) {
+    const r = runMac(text, home, tmp('setup-bin-'));
+    assert.equal(r.status, 1);
+    assert.ok(r.stdout.trimEnd().endsWith('Nicht angemeldet.'), r.stdout);
+    assert.ok(!r.stdout.includes('Fertig.'), r.stdout);
+  }
+  assert.equal(readFileSync(join(home, '.zprofile'), 'utf8'), 'export EDITOR=vi\n\nexport PATH="$HOME/.local/bin:$PATH"\n', 'kept what was there, added the line once');
 });
 
 test('Mac: claude installed and signed in: nothing is installed and nobody is asked to sign in again', () => {
@@ -77,7 +93,7 @@ test('Mac: claude installed and signed in: nothing is installed and nobody is as
   const r = runMac(setupScript('darwin', [DE]).text, home, bin);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(existsSync(join(home, 'curl.ran')), false);
-  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['auth status']);
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['auth status', 'auth status']);
 });
 
 test('Mac: the installer fails: the script says so and stops before any sign-in', () => {
@@ -101,6 +117,8 @@ test('Windows: the PowerShell script runs the official installer and the sign-in
     "if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { Write-Host 'Hat nicht geklappt. / Hat nicht geklappt.'; return }",
     'claude auth status *> $null',
     'if ($LASTEXITCODE -ne 0) { claude auth login }',
+    'claude auth status *> $null',
+    "if ($LASTEXITCODE -ne 0) { Write-Host 'Nicht angemeldet. / Nicht angemeldet.'; return }",
     '',
   ]);
   assert.ok(lines.includes("Write-Host '3. Zurück zur App.'"));

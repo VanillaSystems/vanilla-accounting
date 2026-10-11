@@ -611,6 +611,7 @@ export const messages = {
   'claude.script.back': 'Wenn hier «Fertig» steht, wechseln Sie zurück zu Vanilla Accounting.',
   'claude.script.failed': 'Die Installation hat nicht geklappt; die Meldung oben sagt warum. Danach in Vanilla Accounting nochmals «Claude einrichten».',
   'claude.script.done': 'Fertig. Wechseln Sie zurück zu Vanilla Accounting; dieses Fenster können Sie schliessen.',
+  'claude.script.notSignedIn': 'Die Anmeldung ist nicht abgeschlossen. Nochmals «Claude einrichten» in Vanilla Accounting, oder hier «claude auth login» eingeben.',
   'chat.title': 'Claude',
   'chat.open': 'Claude fragen',
   'chat.placeholder': 'Tippe / für Skills',

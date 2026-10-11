@@ -614,6 +614,7 @@ export default {
     'claude.script.back': 'Quand «Terminé» s’affiche ici, revenez à Vanilla Accounting.',
     'claude.script.failed': 'L’installation n’a pas abouti; le message ci-dessus dit pourquoi. Ensuite, refaire «Configurer Claude» dans Vanilla Accounting.',
     'claude.script.done': 'Terminé. Revenez à Vanilla Accounting; vous pouvez fermer cette fenêtre.',
+    'claude.script.notSignedIn': 'La connexion n’a pas abouti. Refaire «Configurer Claude» dans Vanilla Accounting, ou taper «claude auth login» ici.',
     'chat.title': 'Claude',
     'chat.open': 'Demander à Claude',
     'chat.placeholder': 'Tapez / pour les compétences',

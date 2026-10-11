@@ -123,7 +123,7 @@ function setupTexts(language: string): SetupTexts {
   const t = textsIn(language);
   return {
     title: t('claude.script.title'), install: t('claude.script.install'), signIn: t('claude.script.signIn'),
-    back: t('claude.script.back'), failed: t('claude.script.failed'), done: t('claude.script.done'),
+    back: t('claude.script.back'), failed: t('claude.script.failed'), done: t('claude.script.done'), notSignedIn: t('claude.script.notSignedIn'),
   };
 }
 

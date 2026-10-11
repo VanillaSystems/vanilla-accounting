@@ -614,6 +614,7 @@ export default {
     'claude.script.back': 'Quando qui appare «Fatto», tornate a Vanilla Accounting.',
     'claude.script.failed': 'L’installazione non è riuscita; il messaggio sopra dice perché. Poi rifare «Configurare Claude» in Vanilla Accounting.',
     'claude.script.done': 'Fatto. Tornate a Vanilla Accounting; potete chiudere questa finestra.',
+    'claude.script.notSignedIn': 'L’accesso non è stato completato. Rifare «Configurare Claude» in Vanilla Accounting, oppure digitare «claude auth login» qui.',
     'chat.title': 'Claude',
     'chat.open': 'Chiedere a Claude',
     'chat.placeholder': 'Digita / per le competenze',
