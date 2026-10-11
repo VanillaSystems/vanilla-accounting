@@ -16,7 +16,16 @@ EVIDENCE_BASE="$REPO/.verify/evidence"
 
 die() { echo "sandbox: $*" >&2; exit 1; }
 port_free() { ! lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
-free_port() { local p=$1; while ! port_free "$p"; do p=$((p + 1)); done; echo "$p"; }
+# A port is ours once its lock dir is made (mkdir is atomic): two `up`s started together cannot
+# both pick the same free port. `down` removes the locks.
+claim_port() {
+  local p=$1 l; mkdir -p "$BASE/.ports"
+  for l in "$BASE/.ports"/*/; do [[ -d "$l" && ! -d "$BASE/$(cat "$l/run" 2>/dev/null)" ]] && rm -rf "$l"; done
+  until port_free "$p" && mkdir "$BASE/.ports/$p" 2>/dev/null; do p=$((p + 1)); done
+  echo "$RUN" > "$BASE/.ports/$p/run"; echo "$p"
+}
+# Every request is bounded: a server that accepts but never answers makes a check FAIL, not hang.
+get() { curl -sf --connect-timeout 3 --max-time 15 "$@"; }
 alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
 
 resolve_run() {
@@ -61,7 +70,7 @@ cmd_up() {
   printf '#!/bin/sh\ncat >/dev/null\necho "verify sandbox: no model calls" >&2\nexit 1\n' >"$SB/bin/claude"
   chmod +x "$SB/bin/claude"
 
-  API_PORT="$(free_port 3556)"; UI_PORT="$(free_port 5273)"
+  API_PORT="$(claim_port 3556)"; UI_PORT="$(claim_port 5273)"
   # The Vite config lives in the repo (gitignored .verify/), so it and its plugins resolve the
   # repo's node_modules; the sandbox holds no code.
   VITE_CONFIG="$REPO/.verify/vite.$RUN.config.mjs"; mkdir -p "$REPO/.verify"
@@ -121,11 +130,11 @@ EOF
   source "$SB/env"
 
   for _ in $(seq 1 60); do
-    curl -sf "$API/api/status" >/dev/null 2>&1 && curl -sf "$UI/" >/dev/null 2>&1 && break
+    get "$API/api/status" >/dev/null 2>&1 && get "$UI/" >/dev/null 2>&1 && break
     sleep 0.5
   done
-  curl -sf "$API/api/status" >/dev/null || { tail -20 "$SB/api.log"; die "API did not come up (log above)"; }
-  curl -sf "$UI/" >/dev/null || { tail -20 "$SB/ui.log"; die "UI did not come up (log above)"; }
+  get "$API/api/status" >/dev/null || { tail -20 "$SB/api.log"; die "API did not come up (log above)"; }
+  get "$UI/" >/dev/null || { tail -20 "$SB/ui.log"; die "UI did not come up (log above)"; }
   echo "ready"
   cat "$SB/env"
 }
@@ -136,24 +145,24 @@ cmd_doctor() {
   # The first PDF under the sandbox's $1/, fetched through the UI, is byte-identical to the clone's.
   served() {
     local f; f="$(cd "$SB/$1" && find . -name '*.pdf' | sort | head -1)"; f="${f#./}"
-    [[ -n "$f" ]] && curl -sf "$UI/$1/$(jq -rn --arg f "$f" '$f|split("/")|map(@uri)|join("/")')" | cmp -s - "$SB/$1/$f"
+    [[ -n "$f" ]] && get "$UI/$1/$(jq -rn --arg f "$f" '$f|split("/")|map(@uri)|join("/")')" | cmp -s - "$SB/$1/$f"
   }
   check "api pid $API_PID alive"                  "alive $API_PID"
   check "ui pid $UI_PID alive"                    "alive $UI_PID"
   check "port $API_PORT owned by api pid"         "lsof -nP -a -p $API_PID -iTCP:$API_PORT -sTCP:LISTEN >/dev/null 2>&1"
   check "port $UI_PORT owned by ui pid"           "lsof -nP -a -p $UI_PID -iTCP:$UI_PORT -sTCP:LISTEN >/dev/null 2>&1"
   check "api cwd is the sandbox"                  "[[ \"\$(lsof -a -p $API_PID -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')\" == \"\$(cd $SB && pwd -P)\" ]]"
-  check "GET /api/status ok"                      "curl -sf $API/api/status | grep -q '\"ok\":true'"
-  check "UI serves index.html"                    "curl -sf $UI/ | grep -q '<div id=\"root\"'"
-  check "UI compiles the app"                     "curl -sf $UI/src/app/main.tsx >/dev/null"
-  check "UI proxies /api to this sandbox"         "curl -sf $UI/api/status >/dev/null"
-  check "UI serves the sandbox books"             "[[ \"\$(curl -sf $UI/books.json | shasum -a 256 | cut -d' ' -f1)\" == \"\$(shasum -a 256 < $SB/books.json | cut -d' ' -f1)\" ]]"
+  check "GET /api/status ok"                      "get $API/api/status | grep -q '\"ok\":true'"
+  check "UI serves index.html"                    "get $UI/ | grep -q '<div id=\"root\"'"
+  check "UI compiles the app"                     "get $UI/src/app/main.tsx >/dev/null"
+  check "UI proxies /api to this sandbox"         "get $UI/api/status >/dev/null"
+  check "UI serves the sandbox books"             "[[ \"\$(get $UI/books.json | shasum -a 256 | cut -d' ' -f1)\" == \"\$(shasum -a 256 < $SB/books.json | cut -d' ' -f1)\" ]]"
   check "UI serves the sandbox receipts"          "served receipts"
   check "UI serves the sandbox bank statements"   "served bank-statements"
   check "real workspace books untouched since up" "[[ \"\$(shasum -a 256 $WS_SRC/books.json | cut -d' ' -f1)\" == $REAL_INDEX_SHA ]]"
   check "api opened the sandbox workspace"        "ps eww -p $API_PID | grep -q 'VANILLA_WORKSPACE=$SB '"
-  check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude 2>/dev/null"
-  echo "closedThrough: $(curl -sf "$API/api/config" | jq -r '.closedThrough // "none"')"
+  check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude </dev/null 2>/dev/null"
+  echo "closedThrough: $(get "$API/api/config" | jq -r '.closedThrough // "none"')"
   echo "UI=$UI  API=$API  EVIDENCE=$EVIDENCE"
   return $bad
 }
@@ -198,7 +207,7 @@ cmd_down() {
   for pid in "$UI_PID" "$API_PID"; do alive "$pid" && kill -KILL "$pid" 2>/dev/null || true; done
   # Keep the logs with the evidence before the sandbox goes.
   mkdir -p "$EVIDENCE"; cp "$SB/api.log" "$SB/ui.log" "$EVIDENCE/" 2>/dev/null || true
-  rm -rf "$SB" "$VITE_CONFIG"
+  rm -rf "$SB" "$VITE_CONFIG" "$BASE/.ports/$API_PORT" "$BASE/.ports/$UI_PORT"
   port_free "$API_PORT" && port_free "$UI_PORT" || echo "warning: port $API_PORT or $UI_PORT still listening (not ours? check lsof)"
   echo "down: $RUN removed; evidence kept at $EVIDENCE"
 }
