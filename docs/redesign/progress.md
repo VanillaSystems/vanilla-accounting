@@ -19,7 +19,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 - [x] 7. Abschluss and Firma.
 - [x] 8. Invoices: data and documents.
 - [x] 9. Invoices: UI.
-- [ ] 10. Clean up and final pass. (Part 1, clean up, done; part 2, the final pass, open.)
+- [x] 10. Clean up and final pass. Report: [final-pass.md](final-pass.md).
 
 ## Decisions and defaults
 
@@ -153,6 +153,9 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Shell components an area renders read the open area from the shell context (`ShellUi.area`), never from the registry; `tests/import-cycles.test.ts` fails on any runtime import cycle in src/app. | An area importing the registry back is a cycle Vite's HMR cannot swap; a test keeps it from coming back, a doc note would not. |
 | 2026-10-11 | `statementName` lives in bank/Detail.tsx, not model.ts. | model.ts stays free of i18n so tests/bank-model.test.ts runs under plain Node (`import.meta.glob` exists only in Vite). |
 | 2026-10-11 | The changelog's Unreleased section describes the end state: superseded intermediate entries (the language in every link, the Jahresabschluss tab, Kontenabgleich) are folded into the area that replaced them or listed under Removed. | One readable summary for the update; the ⚠ markers are kept word for word. |
+| 2026-10-11 | Choosing another period in Belege, Kontoauszüge or Buchungen opens the new list at its first row (`Area.periodRows`); a filter, a search or a collapsed group that hides the selected row selects the first row it shows (`useSelectionFollowsRows`). A link still keeps its object. | The mockup does so; the detail kept an object of the old period or one the filter hid, so list and detail disagreed. |
+| 2026-10-11 | A link to an unknown Ziffer, Abschluss step or Firma section still opens the first one without a notice. | These ids come from fixed lists nothing deletes; a notice in three more areas is left for later (final-pass.md, open). |
+| 2026-10-11 | The add button's label is the area's noun (Beleg, Auszug, Buchung, Rechnung, Kunde), the title says the action. `Area.add.label/title` take the route, so Rechnungen › Kunden says Kunde. | The final mockup page; one place for the add action per view. |
 
 ## API inventory against the mockup
 
@@ -248,3 +251,4 @@ Missing for the mockup, to add in their phase:
   one summary with its ⚠ markers, verify handles and feature files). Evidence: .verify/evidence/redesign/phase-10a/NOTES.md
   (smoke of all nine areas, no console error). Left for part 2: the last full pass of every area against the mockup
   screenshots and the final report.
+- 2026-10-11 phase 10 part 2: the final pass. All 95 mockup shots driven through the user's path in the sandbox on demo (`.verify/p10/drive.mjs`, one recipe file per area; puppeteer on the installed Chrome) and compared: 66 match, 6 differ on purpose, 23 had a defect fixed, two items open. Fixed, one commit each: the Wise one-text row marked alone; another period opens the list at its first row; a filter or search that hides the selection moves it; Firma's legend; the customer form's React key warning; Kunden's add button (Neuer Kunde, then Kunde); MWST 0.00 for an unpriced draft; undo of a delete keeps a missing origin; a link to a missing entry says so; the test static server's `.mjs`; two audit-mode edit leaks (Gewinn verwenden, layout reset); the period picker's submenu words; no QR-bill place on a draft paid outside CH/LI; Rechnungen' add button reads Rechnung. Also checked: back/forward across areas, an old `/de/<period>/journal-entries?je=` link, rule-5 links in every area, audit mode in all nine areas, the static audit export under a sub-path. Report and what is left: [final-pass.md](final-pass.md). Evidence: .verify/evidence/redesign/phase-10/ (NOTES.md).
