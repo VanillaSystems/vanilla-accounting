@@ -1571,5 +1571,9 @@ export default {
     'invoiceLayout.sampleCustomer': 'Esempio SA',
     'invoiceLayout.sampleStreet': 'Via Esempio',
     'invoiceLayout.sampleTown': 'Zurigo',
+    // Release track C
+    'vat.zifferGone': 'La cifra {n} non esiste.',
+    'close.stepGone': 'Questo passo non esiste.',
+    'company.sectionGone': 'Questa sezione non esiste.',
   },
 } satisfies Locale;

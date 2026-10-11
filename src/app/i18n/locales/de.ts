@@ -1568,6 +1568,10 @@ export const messages = {
   'invoiceLayout.sampleCustomer': 'Beispiel AG',
   'invoiceLayout.sampleStreet': 'Musterweg',
   'invoiceLayout.sampleTown': 'Zürich',
+  // Release track C
+  'vat.zifferGone': 'Die Ziffer {n} gibt es nicht.',
+  'close.stepGone': 'Diesen Schritt gibt es nicht.',
+  'company.sectionGone': 'Diesen Abschnitt gibt es nicht.',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

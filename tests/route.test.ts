@@ -96,7 +96,6 @@ test('other spellings redirect to the canonical path', () => {
   assert.equal(to('/reports'), '/reports/income');
   assert.equal(to('/reports/nope/1021'), '/reports/income');
   assert.equal(to('/company'), '/company/profile');
-  assert.equal(to('/company/nope'), '/company/profile');
   assert.equal(to('/nowhere/at/all'), '/receipts');
   assert.equal(to('/journal?q=x&vat=I81'), '/journal?vat=I81&q=x');
   assert.equal(to('/journal?period=2026-Q9'), '/journal');

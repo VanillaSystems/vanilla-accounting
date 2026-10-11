@@ -29,7 +29,7 @@ export function Detail(props: Props) {
     return filed ? <Correction {...props} v={v} filed={filed} /> : <div className="detail-empty"><div>{t('vat.noFiledReturn', { period: periodName(v.period) })}</div></div>;
   }
   const z = v.report.ziffern.find((x) => x.number === route.ziffer);
-  if (!z) return <div className="detail-empty"><div>{t('vat.chooseZiffer')}</div></div>;
+  if (!z) return <div className="detail-empty"><div>{route.ziffer ? t('vat.zifferGone', { n: route.ziffer }) : t('vat.chooseZiffer')}</div></div>;
   return <Ziffer {...props} v={v} filed={filed} n={z.number} amount={z.amount} />;
 }
 

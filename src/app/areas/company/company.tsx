@@ -6,7 +6,7 @@
  */
 import { Fragment, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
-import { COMPANY_SECTIONS, type CompanySection, type RouteOf } from '../../shell/route.js';
+import { COMPANY_SECTIONS, companySection, type CompanySection, type RouteOf } from '../../shell/route.js';
 import { reloadWorkspace, useWorkspace } from '../../hooks/use-workspace.js';
 import { LOCALES, t } from '../../i18n/index.js';
 import { api, errorText } from '../../lib/api.js';
@@ -105,16 +105,18 @@ function List({ route, books, nav }: Props) {
 function Detail(props: Props) {
   const { route, books } = props;
   const ws = useWorkspace();
+  const section = companySection(route.section);
+  if (!section) return <div className="detail-empty"><div>{t('company.sectionGone')}</div></div>;
   return (
-    <div className="detail-in" key={route.section}>
-      <div className="head"><h2 className="who">{sectionLabel(route.section, books)}<small>{ws?.company.name}</small></h2></div>
-      <div className="docbody">{!ws && route.section !== 'display' ? <p className="m">{t('yearClose.loading')}</p> : <Section {...props} ws={ws!} />}</div>
+    <div className="detail-in" key={section}>
+      <div className="head"><h2 className="who">{sectionLabel(section, books)}<small>{ws?.company.name}</small></h2></div>
+      <div className="docbody">{!ws && section !== 'display' ? <p className="m">{t('yearClose.loading')}</p> : <Section {...props} section={section} ws={ws!} />}</div>
     </div>
   );
 }
 
-function Section(p: Props & { ws: CompanyInfo }) {
-  switch (p.route.section) {
+function Section({ section, ...p }: Props & { section: CompanySection; ws: CompanyInfo }) {
+  switch (section) {
     case 'profile': return <Profile {...p} />;
     case 'vat': return <Vat {...p} />;
     case 'banks': return <Banks {...p} />;
@@ -466,7 +468,7 @@ export const company: Area<RouteOf<'company'>> = {
   Detail,
   legend,
   periodless: true,
-  title: (r, books) => sectionLabel(r.section, books),
+  title: (r, books) => { const s = companySection(r.section); return s ? sectionLabel(s, books) : ''; },
   keys(e, { route, nav }) {
     if (e.key === 'Enter') {
       document.querySelector<HTMLElement>('.detail button, .detail a, .detail input')?.focus();
@@ -474,7 +476,7 @@ export const company: Area<RouteOf<'company'>> = {
     }
     const d = moveKey(e);
     if (!d) return false;
-    const i = COMPANY_SECTIONS.indexOf(route.section);
+    const i = COMPANY_SECTIONS.indexOf(route.section as CompanySection);
     nav.select({ area: 'company', section: COMPANY_SECTIONS[Math.min(COMPANY_SECTIONS.length - 1, Math.max(0, i + d))] });
     return true;
   },
