@@ -16,6 +16,7 @@ export interface SetupTexts {
   back: string;
   failed: string;
   done: string;
+  notSignedIn: string;
 }
 
 /** The script for `platform`, its header in each of `texts` (the app's language, then English). */
@@ -35,6 +36,8 @@ export function setupScript(platform: SetupPlatform, texts: SetupTexts[]): { fil
         `claude auth status *> $null`,
         `if ($LASTEXITCODE -ne 0) { claude auth login }`,
         `Write-Host ''`,
+        `claude auth status *> $null`,
+        `if ($LASTEXITCODE -ne 0) { Write-Host ${q(say((x) => x.notSignedIn))}; return }`,
         `Write-Host ${q(say((x) => x.done))}`,
         '',
       ].join('\r\n'),
@@ -52,8 +55,11 @@ export function setupScript(platform: SetupPlatform, texts: SetupTexts[]): { fil
       'VANILLA',
       'export PATH="$HOME/.local/bin:$PATH"',
       `command -v claude >/dev/null || curl -fsSL https://claude.ai/install.sh | bash || { printf '%s\\n' ${q(say((x) => x.failed))}; exit 1; }`,
+      // The installer leaves ~/.local/bin off the PATH of new Terminal windows; add it once.
+      'grep -qs \'.local/bin\' "$HOME/.zprofile" || printf \'\\nexport PATH="$HOME/.local/bin:$PATH"\\n\' >> "$HOME/.zprofile"',
       'claude auth status >/dev/null 2>&1 || claude auth login',
       'echo',
+      `claude auth status >/dev/null 2>&1 || { printf '%s\\n' ${q(say((x) => x.notSignedIn))}; exit 1; }`,
       `printf '%s\\n' ${q(say((x) => x.done))}`,
       '',
     ].join('\n'),

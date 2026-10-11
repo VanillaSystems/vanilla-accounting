@@ -614,6 +614,7 @@ export default {
     'claude.script.back': 'When “Done” shows here, switch back to Vanilla Accounting.',
     'claude.script.failed': 'The installation did not work; the message above says why. Then use “Set up Claude” in Vanilla Accounting again.',
     'claude.script.done': 'Done. Switch back to Vanilla Accounting; you can close this window.',
+    'claude.script.notSignedIn': 'The sign-in did not complete. Use “Set up Claude” in Vanilla Accounting again, or type “claude auth login” here.',
     'period.filedShort': 'filed',
     'period.choose': 'Choose period',
     'display.modeDark': 'dark',
