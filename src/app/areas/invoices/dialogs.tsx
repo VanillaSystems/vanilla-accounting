@@ -136,7 +136,7 @@ function CustomerDialog({ customer, nav }: Props & { customer?: Customer }) {
     return next;
   });
   const field = (k: keyof Form, label: string, ph: string, cls: string, mono = false) => (
-    <label className={`cf ${cls}${errors[k] ? ' err' : ''}`}>
+    <label key={k} className={`cf ${cls}${errors[k] ? ' err' : ''}`}>
       <span>{label}{errors[k] && <em>{errors[k]}</em>}</span>
       <input className={mono ? 'mono' : undefined} value={f[k]} placeholder={ph} onChange={(e) => set(k, e.target.value)} autoFocus={k === 'name'} />
     </label>
