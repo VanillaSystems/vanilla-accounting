@@ -377,18 +377,17 @@ export function parseReceiptVat(raw: string): ReceiptVatResult | null {
       } catch {}
     }
   }
-  if (!parsed || typeof parsed !== "object") return null;
+  // An answer without both facts the prompt asks for is no answer, not "no VAT".
+  if (!parsed || typeof parsed !== "object" || typeof parsed.hasSwissVat !== "boolean" || !Array.isArray(parsed.vatSummary)) return null;
 
-  const summary: VatRateGroup[] = Array.isArray(parsed.vatSummary)
-    ? parsed.vatSummary
-        .filter((g: any) => g && typeof g.ratePercent === "number")
-        .map((g: any) => ({
-          ratePercent: g.ratePercent,
-          net: typeof g.net === "number" ? g.net : undefined,
-          vat: typeof g.vat === "number" ? g.vat : 0,
-          gross: typeof g.gross === "number" ? g.gross : undefined,
-        }))
-    : [];
+  const summary: VatRateGroup[] = parsed.vatSummary
+    .filter((g: any) => g && typeof g.ratePercent === "number")
+    .map((g: any) => ({
+      ratePercent: g.ratePercent,
+      net: typeof g.net === "number" ? g.net : undefined,
+      vat: typeof g.vat === "number" ? g.vat : 0,
+      gross: typeof g.gross === "number" ? g.gross : undefined,
+    }));
 
   const lineItems: ReceiptLine[] | undefined = Array.isArray(parsed.lineItems) && parsed.lineItems.length
     ? parsed.lineItems

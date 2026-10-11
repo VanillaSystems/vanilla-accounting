@@ -4,8 +4,10 @@
  * receipt is the source of truth for whether Swiss MWST was charged and at which rate(s); the
  * accounting code is decided later, at classify time, from these facts.
  *
- * Takes up only receipts without vatExtractedAt (all of them with `force`). A text without any
- * VAT indicator is recorded hasSwissVat=false without a model call.
+ * Takes up only receipts without VAT facts (all of them with `force`): facts the books wrote
+ * themselves (an invoice's receipt, a tutti purchase) carry no vatExtractedAt and stay. A text
+ * without any VAT indicator is recorded hasSwissVat=false without a model call, on a receipt
+ * that has no facts. Only a model answer that parses as VAT facts replaces facts.
  */
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
@@ -27,9 +29,11 @@ type Facts = Pick<Receipt, 'vatId' | 'hasSwissVat' | 'vatSummary' | 'lineItems' 
 
 const NO_VAT: Omit<Facts, 'vatExtractedAt'> = { vatId: undefined, hasSwissVat: false, vatSummary: [], lineItems: undefined };
 
+const hasFacts = (r: Receipt) => r.vatExtractedAt != null || r.hasSwissVat !== undefined;
+
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
-    const candidates = books.read().receipts.filter((r) => force || !r.vatExtractedAt);
+    const candidates = books.read().receipts.filter((r) => force || !hasFacts(r));
     if (candidates.length === 0) {
       log('All receipts already have VAT facts extracted (use --force to redo).');
       return { notes: [] };
@@ -46,15 +50,16 @@ export function vatStep({ force = false } = {}): StepRun {
     );
 
     /** Writes the facts onto receipts that still have the text they were read from. */
-    const apply = (items: Array<[Receipt, Facts]>) => books.update((index) => {
+    const apply = (items: Array<[Receipt, Facts]>, replace: boolean) => books.update((index) => {
       for (const [was, facts] of items) {
         const r = index.receipts.find((x) => x.id === was.id);
-        if (r && r.extractedText === was.extractedText && (force || !r.vatExtractedAt)) Object.assign(r, facts);
+        if (r && r.extractedText === was.extractedText && (replace || !hasFacts(r))) Object.assign(r, facts);
       }
     });
 
     const total = deterministic.length + needsLlm.length;
-    apply(deterministic.map((r) => [r, { ...NO_VAT, vatExtractedAt: new Date().toISOString() }]));
+    // No indicator is no evidence against facts a receipt has.
+    apply(deterministic.map((r) => [r, { ...NO_VAT, vatExtractedAt: new Date().toISOString() }]), false);
     let done = deterministic.length;
     progress(done, total);
 
@@ -84,7 +89,7 @@ export function vatStep({ force = false } = {}): StepRun {
             progress(++done, total);
             if (outcome.ok) {
               const v: ReceiptVatResult = outcome.result;
-              apply([[r, { vatId: v.vatId, hasSwissVat: v.hasSwissVat, vatSummary: v.vatSummary, lineItems: v.lineItems, vatExtractedAt: new Date().toISOString() }]]);
+              apply([[r, { vatId: v.vatId, hasSwissVat: v.hasSwissVat, vatSummary: v.vatSummary, lineItems: v.lineItems, vatExtractedAt: new Date().toISOString() }]], force);
               const rates = v.vatSummary.map((g) => `${g.ratePercent}%`).join(', ') || 'none';
               log(`  ✓ ${r.filename}: hasSwissVat=${v.hasSwissVat} [${rates}]${v.vatId ? ` ${v.vatId}` : ''}`);
             } else {
