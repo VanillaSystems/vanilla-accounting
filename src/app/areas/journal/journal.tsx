@@ -46,7 +46,8 @@ function List(props: Props) {
   useEffect(() => {
     const v = route.id ? j.byId.get(route.id) : undefined;
     // An entry that went away (deleted, undone, booked again) hands the selection to the first row.
-    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && (!route.id || j.views.length)) nav.select({ area: 'journal', id: ids[0] }); return; }
+    // A link to an entry that never was here keeps its place, and the detail says so (urls.md rule 5).
+    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && (!route.id || seen.current === route.id)) nav.select({ area: 'journal', id: ids[0] }); return; }
     if (route.id === listed.pending) listed.pending = undefined;
     if (seen.current === route.id) return;
     seen.current = route.id;
