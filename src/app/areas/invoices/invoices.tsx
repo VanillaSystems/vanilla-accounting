@@ -249,7 +249,7 @@ export const invoices: Area<RouteOf<'invoices'>> = {
   List: (props) => <><List {...props} /><Dialogs {...props} /></>,
   Detail,
   add: {
-    label: (r) => t(r.view === 'customers' ? 'invoices.sec.customer' : 'invoices.new'),
+    label: (r) => t(r.view === 'customers' ? 'invoices.sec.customer' : 'invoices.docKind.invoice'),
     title: (r) => t(r.view === 'customers' ? 'invoices.newCustomer' : 'invoices.newTitle'),
     run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'customers' ? { kind: 'customer' } : { kind: 'new' } }),
   },
