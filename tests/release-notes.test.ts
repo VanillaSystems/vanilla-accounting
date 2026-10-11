@@ -35,6 +35,6 @@ test('the release lists each dmg with its Mac and SHA-256, and says how to open 
   assert.match(unsigned, /\| Vanilla Accounting-0\.3\.0-arm64\.dmg \| Apple silicon \(M1 and later\) \| `a{64}` \|/);
   assert.match(unsigned, /\| Vanilla Accounting-0\.3\.0-x64\.dmg \| Intel \| `b{64}` \|/);
   assert.doesNotMatch(unsigned, /latest-mac\.yml/);
-  assert.match(unsigned, /right-click → \*\*Open\*\*/);
-  assert.doesNotMatch(releaseNotes({ changelog, version: '0.3.0', assets, signed: true }), /right-click/);
+  assert.match(unsigned, /Privacy & Security and click \*\*Open Anyway\*\*/);
+  assert.doesNotMatch(releaseNotes({ changelog, version: '0.3.0', assets, signed: true }), /Open Anyway/);
 });

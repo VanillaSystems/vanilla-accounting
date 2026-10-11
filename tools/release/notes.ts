@@ -19,7 +19,7 @@ export function releaseNotes({ changelog, version, assets, signed }: { changelog
     ['| File | Mac | SHA-256 |', '|---|---|---|', ...downloads].join('\n'),
   ];
   if (!signed) {
-    parts.push('This build is not signed with an Apple Developer ID. The first time, open the app in Applications with right-click → **Open**, then **Open** again.');
+    parts.push('This build is not signed with an Apple Developer ID, so macOS refuses it the first time. Open it once and click **Done**, then go to System Settings › Privacy & Security and click **Open Anyway** next to "Vanilla Accounting was blocked".');
   }
   return parts.join('\n\n') + '\n';
 }
