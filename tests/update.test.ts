@@ -13,7 +13,7 @@ import { APP_ROOT } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'update-'));
-// No automatic maintenance: git 2.54 repacks after a commit of this many files, in the background,
+// No automatic maintenance: a recent git repacks after a commit of this many files, in the background,
 // and deletes the loose objects while the bare clone below copies them.
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', ...args], { encoding: 'utf8', stdio: 'pipe' });
 
