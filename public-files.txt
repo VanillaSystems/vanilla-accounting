@@ -36,6 +36,7 @@ tools/hooks/**
 tools/pdf-text/compare.ts
 tools/desktop/**
 tools/release/**
+tools/brand/**
 desktop/electron-builder.config.cjs
 desktop/entitlements.mac.plist
 desktop/not-packed.cjs
@@ -58,6 +59,10 @@ docs/i18n.md
 docs/i18n-review.md
 docs/urls.md
 docs/desktop.md
+docs/brand.md
+docs/logo.svg
+docs/swiss-engineering.svg
+docs/social-preview.png
 docs/chat.md
 docs/runbooks/**
 docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf
@@ -77,12 +82,6 @@ ios/Belege/*.swift
 ios/Belege/Info.plist
 ios/Belege/Assets.xcassets/Contents.json
 ios/Belege/Assets.xcassets/AppIcon.appiconset/Contents.json
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-40.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-58.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-60.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-80.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-87.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-120.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png
 ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-dark-1024.png
+ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-tinted-1024.png
