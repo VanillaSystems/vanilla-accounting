@@ -230,6 +230,10 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Live reload: a file the API wrote itself sends no event; a folder change it made does, with `external: false`. | The page that wrote a file has it; a receipt the intake moved still has to show in every page, without the toast. |
 | 2026-10-11 | Live reload: the version check covers `withBooks` only; the year-end close routes write through src/books/year-close.ts and are not checked. | The brief names withBooks; the close's writes are guided steps the page reloads after. |
 | 2026-10-11 | Live reload: within 3 s of a `stale` refusal the "Von aussen geändert" toast is not shown. | The change's own event follows the refusal and would replace "bitte nochmals" before it is read. |
+| 2026-10-11 | Public demo: `build:audit --demo` is the audit export built in vite mode `demo`; the purpose is also in the snapshot (status.json, manifest). | One machinery for both; the mode lets texts that would say "Prüfung" or "Export" say "Demo", the snapshot lets a reader of the folder tell the two apart. |
+| 2026-10-11 | Public demo: it opens on Belege of the open quarter, the app's own start. | The first thing the app shows is the work: receipts with their PDFs. No special start route to keep in step. |
+| 2026-10-11 | Public demo: "App herunterladen" links vanillamachines.com/accounting/download/, a website page that forwards to the latest GitHub release (`DOWNLOAD_URL`). | The repository's owner name is a term the leak guard refuses in the app; the target can change without a new demo build. |
+| 2026-10-11 | Public demo: `--demo` takes only the app's own demo workspaces. | A demo goes on a public URL; real books never should. |
 
 ## API inventory against the mockup
 
