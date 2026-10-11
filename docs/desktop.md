@@ -14,7 +14,8 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 | PDFs | `src/desktop/print.ts` | Invoice and report PDFs printed by Electron's own Chromium in a hidden window (ADR 0012), so no browser has to be installed. `npm start` and the CLI keep printing with puppeteer-core. |
 | claude CLI | `src/desktop/claude.ts` | Found through the person's login shell (an app from the Finder gets PATH `/usr/bin:/bin`) before the window opens; only its path is taken (`CLAUDE_BIN`), and the inbox job uses it. Without it, model features answer with what to install (`noClaude`), the inbox job does the steps that need no model, and everything else works. |
 | Passwords | `src/secrets/sealed-store.ts` | The SMTP password, sealed by Electron's `safeStorage` (its key is the keychain item "vanilla-accounting Safe Storage") into `secrets.json` in the user data folder, per books. Firma › E-Mail-Versand saves it there; under `npm start` it stays in `.env`. |
-| What is packed | `desktop/not-packed.cjs` | puppeteer-core and the canvas binary pdf.js would load stay out, with every package only they need. The engine imports them only dynamically; `tools/desktop/build.mjs` fails when the bundle imports one at start. |
+| What is packed | `desktop/not-packed.cjs` | puppeteer-core, the canvas binary pdf.js would load, and the mail client of receipt collection (imapflow, mailparser) stay out, with every package only they need. The engine imports them only dynamically or from CLI code the bundle does not reach; `tools/desktop/build.mjs` fails when the bundle imports one at start. |
+| Photos | `src/parsers/image-pdf.ts` | A JPG, PNG or HEIC in the inbox becomes a one-page PDF, turned upright by its EXIF orientation; HEIC is decoded by `/usr/bin/sips`. |
 
 The port is kept from one start to the next, because the page stores theme, zoom and language
 per origin. The page's zoom is its own (`src/app/shell/prefs.ts`); View › Vergrössern,
@@ -23,7 +24,7 @@ Verkleinern and Originalgrösse step it, and ⌘+ ⌘− ⌘0 still reach the pa
 ## Commands
 
     npm run desktop          # build the UI and the main process, then run the app from this checkout
-    npm run desktop:build    # the .dmg files for Apple silicon and Intel, in release/
+    npm run desktop:build    # release/Vanilla Accounting-<version>-arm64.dmg and -x64.dmg
     node tools/desktop/smoke.mjs "release/mac-arm64/Vanilla Accounting.app" .verify/evidence/release/b
 
 `tools/desktop/build.mjs` bundles `src/desktop` into `out/desktop/` (two folders below the app
@@ -38,7 +39,12 @@ invoice sent to a local SMTP server (the attachment's hash is the stored PDF's),
 a HEIC dropped and read by the inbox job, a camt.053 that pays the invoice, new books (committed
 to git), File › Demo through the menu, a restart, and a start without claude. claude is
 `tests/support/stub-bin/claude`, found through a login shell whose PATH holds it. Screenshots and
-`smoke.json` go to the evidence folder.
+`smoke.json` go to the evidence folder. When the login keychain already holds the item
+"vanilla-accounting Safe Storage" (an installed copy of the app made it), the smoke starts the app
+with Chromium's `--use-mock-keychain` and checks that the item stays as it was: an unsigned
+build of another signature would otherwise wait on macOS's prompt for it, and a test must not
+change a person's keychain. [releasing.md](releasing.md) explains the prompt and how a release
+is built, proven and published.
 
 The release build is fused (`electronFuses` in the builder config): no `ELECTRON_RUN_AS_NODE`,
 no `NODE_OPTIONS`, no `--inspect`, code only from `app.asar` with its hash checked, encrypted
@@ -55,7 +61,7 @@ has neither, and whoever can start it with switches could drive the page anyway.
 |---|---|
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | the Developer ID certificate (.p12) and its password: the app is signed. Without them it is not signed, even when the keychain holds an identity. |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | with a signing certificate: the app is notarized. |
-| `VANILLA_RELEASES` | `owner/repo` of the GitHub releases: the update feed written into the app. |
+| `VANILLA_RELEASES` | `owner/repo` of the GitHub releases: the update feed written into the app, and the `.zip` files the updater installs from. |
 
 The app checks for updates only when `package.json` has `"desktop": { "autoUpdate": true }`
 (or `VANILLA_AUTO_UPDATE=1` is set), and only as a packaged app. Help › Dokumentation appears

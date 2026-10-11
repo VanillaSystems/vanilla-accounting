@@ -9,14 +9,28 @@ AG is fully supported. Read [Limits](#limits) before you start.
 
 ## 1. Install
 
-You need:
+Both ways need **Claude Code** with a Claude subscription (Pro or Max): Vanilla Accounting calls
+the `claude` command to read receipts, match them to payments and book them. Install it with
+`npm install -g @anthropic-ai/claude-code`, then run `claude` once and log in. Without it,
+everything else works.
 
-- **Node.js 22** or newer. On macOS: `brew install node`.
-- **Claude Code** with a Claude subscription (Pro or Max). Vanilla Accounting calls the `claude` command to
-  read receipts, match them to payments and book them. Install it with
-  `npm install -g @anthropic-ai/claude-code`, then run `claude` once and log in.
+### The Mac app
 
-Then clone this repository and install the app:
+Download the `.dmg` from the Releases page of this repository (`arm64` for Apple silicon, `x64`
+for an Intel Mac), open it and drag **Vanilla Accounting** into Applications. Until the app is
+signed, macOS refuses it the first time: open System Settings › Privacy & Security and choose
+**Open Anyway**.
+
+The app starts on a screen with three choices. **Neue Buchhaltung anlegen** asks the questions of
+step 2 as a form and creates the workspace folder you choose; **Bestehende Buchhaltung öffnen**
+opens a workspace you already have; **Demo ansehen** opens a copy of the demo company. The app
+does what this guide does with commands: read on from step 2 for what the questions mean, and
+skip the commands. The [desktop guide](desktop.md) explains how the app is built.
+
+### From the source
+
+You need **Node.js 22** or newer (on macOS: `brew install node`). Clone this repository and
+install the app:
 
 ```sh
 cd vanilla-accounting  # the folder you cloned it into
@@ -24,6 +38,8 @@ npm install
 ```
 
 ## 2. Set up your books: `npm run init`
+
+In the Mac app: **Neue Buchhaltung anlegen** on the start screen, or File › Neue Buchhaltung…
 
 ```sh
 npm run init
@@ -111,6 +127,8 @@ asking).
 
 ## 3. Check the setup: `npm run doctor`
 
+From the source only. The Mac app opens only a folder that holds `belege.workspace.yaml`.
+
 ```sh
 npm run doctor
 ```
@@ -163,26 +181,28 @@ receipt (see [Invoices](#invoices)).
 
 ## 5. Add receipts
 
-Put receipts (PDF, or photos as PNG or JPG) into
-`beleg-import/`, or drop them on the app's page. Every invoice, every till slip, every customs
+Drop receipts (PDF, or photos as JPG, PNG or HEIC) on the app's window, add them with the add
+button in Belege, or put them into the workspace's `beleg-import/` folder (from the Finder or
+the phone). Every invoice, every till slip, every customs
 bill. A receipt is what lets you deduct the VAT you paid.
 
 ## 6. Read, match, book
 
-Start the app:
+Open the app (from the source: `npm start`, then http://localhost:5173). The app processes the
+inbox itself after every drop, add, statement upload or phone scan, and when a file arrives in
+`beleg-import/`; a line at the bottom left says what it does. **Eingang verarbeiten** in Belege
+(also in ⌘K) starts it by hand. Its steps:
 
-```sh
-npm start
-```
-
-Open http://localhost:5173. Then run, in a second terminal:
-
-1. `npm run extract`: reads the statements and the receipts. A PDF dropped on the app shows as
-   "wird gelesen" until this has read it.
-2. `npm run match`: links each receipt to its payment, with Claude. Receipts move from
+1. Read the statements and the receipts (a photo becomes a PDF, turned upright). A dropped file
+   shows as "wird gelesen" until it is read.
+2. Read each receipt's VAT facts, with Claude.
+3. Link each receipt to its payment and name it, with Claude. Receipts move from
    `beleg-import/` to `receipts/`.
-3. `npm run classify`: books each payment (accounts, VAT code, exchange rate), with Claude.
+4. Book each new payment (accounts, VAT code, exchange rate), with Claude.
    **Neu klassifizieren** on an entry in Buchungen books that one payment again.
+
+From the source, `npm run extract`, `npm run extract-vat`, `npm run match` and
+`npm run classify` run the same steps one by one; they wait while the app runs a job.
 
 Then check the result in the app. Belege lists first what needs you ("Braucht dich"): a receipt
 without a payment (L links one, or books it as paid privately), a payment without a receipt. Add
@@ -252,6 +272,11 @@ app's `AGENTS.md`, golden rule 1.
 
 ## 8. Update the app
 
+The Mac app: download the new `.dmg` and replace the app in Applications. Your books stay where
+they are; the app brings them to the new format when it opens them.
+
+From the source:
+
 ```sh
 npm run update
 ```
@@ -290,12 +315,19 @@ invoicing:
   term) are optional.
 
 Write invoices in Rechnungen (`G I`, then `N`). A draft is edited on the A4 sheet itself;
-**Ausstellen** numbers it after checking what Art. 26 MWSTG requires, and **Senden** downloads
-the PDF and records the send (no e-mail yet). Firma › Rechnungslayout sets the font, colour,
-logo and texts.
+**Ausstellen** numbers it after checking what Art. 26 MWSTG requires, and **Senden** sends it
+by e-mail or downloads the PDF, and records the send. Firma › Rechnungslayout sets the font,
+colour, logo, texts and the e-mail's subject and text per language.
 
-Printing an invoice needs Google Chrome, Microsoft Edge, Brave or Chromium on the computer (or
-`CHROME_PATH` set to one). An issued invoice is stored as `invoices/<number>.pdf` and never printed
+To send by e-mail, set the company's mailbox in Firma › E-Mail-Versand: SMTP server, port,
+encryption, user, sender and reply-to (`outgoingMail` in `belege.workspace.yaml`). The password
+is never in the workspace: the Mac app keeps it in the Mac's keychain (enter it in
+E-Mail-Versand), and from the source it is `VANILLA_SMTP_PASSWORD` in the app's `.env`
+(`.env.example`). The stored PDF goes out byte for byte; a message the server refuses records
+nothing.
+
+The Mac app prints invoices itself. From the source, printing needs Google Chrome, Microsoft
+Edge, Brave or Chromium on the computer (or `CHROME_PATH` set to one). An issued invoice is stored as `invoices/<number>.pdf` and never printed
 again; `invoices.json` holds the customers, the invoices and what was sent.
 
 ## Limits
@@ -304,8 +336,8 @@ again; `invoices.json` holds the customers, the invoices and what was sent.
   vereinbarte Entgelte, no books without VAT, no fiscal year other than the calendar year.
 - **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement.
-- **Invoicing:** invoices, credit notes, reminders and cancellations are written in the app;
-  sending by e-mail comes later. A sale is booked when its payment arrives, also for an invoice.
+- **Invoicing:** invoices, credit notes, reminders and cancellations are written in the app and
+  sent by e-mail through the company's own SMTP mailbox. A sale is booked when its payment arrives, also for an invoice.
   Invoices still open on 31 December are booked as receivables at the year-end close and reversed
   on 1 January.
 - **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and

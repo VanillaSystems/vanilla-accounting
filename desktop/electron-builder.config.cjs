@@ -63,7 +63,8 @@ module.exports = {
   mac: {
     category: 'public.app-category.finance',
     icon: 'desktop/icon.png',
-    target: [{ target: 'dmg', arch: ['arm64', 'x64'] }],
+    // electron-updater on macOS installs from a zip; built only when there is a feed to publish it to.
+    target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, ...(releases?.length === 2 ? [{ target: 'zip', arch: ['arm64', 'x64'] }] : [])],
     hardenedRuntime: true,
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',

@@ -23,8 +23,8 @@ the ESTV in 2026, and it prepares the year-end close, updated when the year turn
 
 ## How it is organized
 
-- **The app** is this repository: a React UI, a local API server, and the CLI scripts in
-  `src/cli/`.
+- **The app** is this repository: a React UI, a local API server, the CLI scripts in
+  `src/cli/`, and the Mac app around them (`src/desktop/`, [docs/desktop.md](docs/desktop.md)).
 - **A workspace** is one company's data: `belege.workspace.yaml` (who the company is and which
   ledger account each bank books on), `books.json`, `receipts/`, `bank-statements/`, `filings/`.
   The app never stores company data, and a workspace contains no code. Booking with Claude reads
@@ -57,10 +57,12 @@ One window, a list on the left and the selected item on the right. Nine areas si
 the bottom edge (`G` and a letter); a bar at the top edge holds search, the period, the export,
 zoom, light or dark, and the language (German, French, Italian, English).
 
-- **Belege**: the receipts, what needs you first. A receipt shows its paper, its facts (date,
+- **Belege**: the receipts, what needs you first. A dropped PDF or photo is read, named, linked
+  to its payment and booked by the app itself. A receipt shows its paper, its facts (date,
   amount, Swiss VAT, VAT number) and its payment; `L` links one, or books it as paid privately.
 - **Rechnungen**: invoices and credit notes with the Swiss QR-bill, edited on the A4 sheet,
-  checked against Art. 26 MWSTG before they are issued; customers, reminders, every document sent.
+  checked against Art. 26 MWSTG before they are issued, sent by e-mail through the company's own
+  mailbox; customers, reminders, every document sent.
 - **Kontoauszüge**: each bank account's monthly statements, whether their payments add up to the
   bank's balances, a missing month, and each payment with its receipt and entry.
 - **Buchungen**: the journal as one grid, edited in place, with corrections of a filed quarter
@@ -76,12 +78,29 @@ audit, the year's archive). Every page has its own link, such as `/journal/M2026
 `/vat/405?period=2026-Q3` ([docs/urls.md](docs/urls.md)). A filed quarter shows with a lock, and
 the app refuses every edit in it.
 
-## Quick start
+## Get started
 
-You need Node.js 22 and Claude Code with a Claude subscription: reading,
-matching and booking receipts call Claude through the `claude` command.
+### The Mac app
 
-To look around first, open the demo company:
+Download the `.dmg` from the Releases page of this repository: `arm64` for a Mac with Apple
+silicon (M1 or newer), `x64` for an Intel Mac. Open it, drag **Vanilla Accounting** into
+Applications and start it. You need no Node.js, Homebrew or terminal.
+
+The app starts on a screen with three choices: open existing books (a workspace folder), set up
+new books (the questions of `npm run init`, as a form), or look at a copy of the demo company.
+It opens the last books at the next start; File switches.
+
+Reading, matching and booking receipts call Claude: install
+[Claude Code](https://claude.com/claude-code) and log in with a Claude subscription. Without it,
+statements, invoices, VAT and every other area work, and the app says what waits for Claude.
+
+Until the app is signed with an Apple Developer ID, macOS refuses to open it the first time:
+open System Settings › Privacy & Security and choose **Open Anyway**.
+
+### From the source
+
+For developers, or to run the app in a browser. You need Node.js 22 and Claude Code with a
+Claude subscription. To look around first, open the demo company:
 
 ```sh
 npm install
@@ -98,13 +117,19 @@ npm run doctor    # checks the tools and the workspace, and says how to fix what
 npm start
 ```
 
+`npm run desktop` runs the Mac app from the checkout, and `npm run desktop:build` builds the two
+`.dmg` files ([docs/desktop.md](docs/desktop.md)).
+
+### Next
+
 `docs/getting-started.md` walks through the questions, the first bank statement, the first
 receipts and the first VAT return, and lists what Vanilla Accounting does not do yet.
 `docs/quarter-workflow.md` walks through each quarter, and `docs/year-end.md` through closing
 the year (`npm run year:close`) and opening the next one (`npm run year:open`).
 
-To update, run `npm run update`. `CHANGELOG.md` lists what each version changed, and
-`docs/releasing.md` explains the version numbers.
+To update from the source, run `npm run update`; the Mac app is updated by downloading the new
+`.dmg`. `CHANGELOG.md` lists what each version changed, and `docs/releasing.md` explains the
+version numbers and how a release is made.
 
 ## Audit export
 

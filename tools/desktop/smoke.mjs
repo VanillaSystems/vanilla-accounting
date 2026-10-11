@@ -58,9 +58,15 @@ const smtp = new SMTPServer({
 await new Promise((r) => smtp.listen(0, '127.0.0.1', r));
 const smtpPort = smtp.server.address().port;
 
+// safeStorage's key is the login keychain item of the build that made it. When one exists (an
+// installed copy of the app made it), this build would wait on macOS's prompt for it and a test
+// must not touch it: the run then seals with Chromium's mock keychain and checks the item stays as it was.
+const keychainEntry = () => { try { return execFileSync('security', ['find-generic-password', '-s', 'vanilla-accounting Safe Storage'], { encoding: 'utf8' }); } catch { return undefined; } };
+const keychainBefore = keychainEntry();
+
 async function launch(port, shell) {
   const log = join(out, `app-${port}.log`);
-  const child = spawn(exe, [`--remote-debugging-port=${port}`, '--vanilla-smoke', `--user-data-dir=${userData}`], {
+  const child = spawn(exe, [`--remote-debugging-port=${port}`, '--vanilla-smoke', `--user-data-dir=${userData}`, ...(keychainBefore ? ['--use-mock-keychain'] : [])], {
     env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME, SHELL: shell, TMPDIR: process.env.TMPDIR ?? '/tmp', LANG: 'de_CH.UTF-8' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -222,8 +228,8 @@ const sealed = existsSync(join(userData, 'secrets.json')) ? readFileSync(join(us
 check('the password is saved through Firma into the keychain store, sealed, not in the books', mailStatus?.password === 'set' && mailStatus.inApp && sealed.length > 0 && !sealed.includes(SMTP_PASSWORD)
   && !readFileSync(join(userData, 'Demo', 'belege.workspace.yaml'), 'utf8').includes(SMTP_PASSWORD), JSON.stringify(mailStatus));
 // The key safeStorage seals with lives in the login keychain under the app's name (only its presence is read).
-const keychainItem = (() => { try { execFileSync('security', ['find-generic-password', '-s', 'vanilla-accounting Safe Storage'], { stdio: 'ignore' }); return true; } catch { return false; } })();
-check('the sealing key is in the macOS keychain', keychainItem, 'vanilla-accounting Safe Storage');
+if (keychainBefore) check('the login keychain item of the installed app is left as it was (sealed with the mock keychain)', keychainEntry() === keychainBefore, 'vanilla-accounting Safe Storage');
+else check('the sealing key is in the macOS keychain', keychainEntry() !== undefined, 'vanilla-accounting Safe Storage');
 
 // 4c. The issued invoice by e-mail: the stored PDF arrives byte for byte.
 const invoices = (await api(page, '/api/invoices')).json.invoices;
