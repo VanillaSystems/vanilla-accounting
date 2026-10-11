@@ -15,7 +15,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 - [ ] 3. Kontoauszüge.
 - [ ] 4. Buchungen and MWST-Codes.
 - [x] 5. MWST and Bilanz & ER.
-- [ ] 6. Export.
+- [x] 6. Export.
 - [ ] 7. Abschluss and Firma.
 - [x] 8. Invoices: data and documents.
 - [ ] 9. Invoices: UI.
@@ -87,6 +87,15 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Ledger rows are links to the entry (`/journal/<id>`); VAT codes in MWST link to `/vat/codes/<code>` (minus sign dropped) with a plain title "<code> · <kind>". The shared hover card is phase 4's. | Brief; urls.md names codes without the sign. |
 | 2026-10-11 | Export and Herunterladen in Bilanz & ER are left to phase 6 (export dialog). | The mockup's buttons open the export dialog of phase 6. |
 | 2026-10-11 | Removed: vat-report-tab, vat-correction-form, vat-correction-cases, income-statement-tab, balance-sheet-tab, trial-balance-tab, account-ledger-tab, account-panel, and 40 i18n keys only they used (common.* and col.* kept). Kept for phase 4: vat-codes-view, vat-entry-table, vat-code (the codes area renders VatCodesView through the legacy adapter's `vat-codes` tab). | Migrate callers, then delete; the codes area is phase 4's. |
+| 2026-10-11 | The server builds the export (`POST /api/export`, src/export/): tables from the pages' own models (reports, MWST, Belege) and src/accounting, PDFs printed by Chromium from an HTML table (`printPdf` beside the invoice printer, ADR 0012), CSV with semicolons and BOM, Excel by write-excel-file, ZIP by fflate (both MIT), streamed. One file without checksums comes as it is. | The brief; one place for figures; no PDF stack beside Chromium; small maintained MIT libraries. |
+| 2026-10-11 | The export's folders, file names, columns and LIESMICH are in the UI language, from the UI dictionaries (src/app/i18n/core.ts holds the formatter without Vite; src/export/texts.ts loads de, fr, it, en). | The dialog and the files name each part alike; one dictionary. |
+| 2026-10-11 | Own presets are kept per viewer in localStorage (`export.presets`), as the mockup does; also in ⌘K. | A preset is a person's habit, not a fact of the books; the mockup implies no sharing. |
+| 2026-10-11 | The export only reads, so audit mode (READONLY=1) lets `POST /api/export` through; the static audit export shows the dialog with a note and Exportieren disabled, and no ledger download menu. | An auditor may take files; the static export has no server, and already is the files with their checksums. |
+| 2026-10-11 | Receipts in an export are those the Belege list holds for the period (date, file-name date, else the day read; not "Kein Beleg"); statements those overlapping the period; filed returns and seals of the filed quarters inside the period (`MWST-eingereicht/<year>/`). | Same set the user sees in Belege; the Treuhänder and the auditor get the filed eCH-0217 XML. |
+| 2026-10-11 | MWST-Abrechnungen export each whole quarter of the period that has ended, with today's figure and the filed one beside it (the 0535 difference shows as two columns, not as its own form). | The mockup's vatRows; the 0535 page has its own print. |
+| 2026-10-11 | `npm run export` and the bundle share src/export/banana.ts; the CLI now also lists entries without a bank payment. Its description checks stay in the CLI only. | Same file from both; an entry without a payment (Eigenverbrauch, private outlay) belongs in Banana too. The demo's Q3 file is byte-identical. |
+| 2026-10-11 | The "download popover" is the mockup's: the ledger's Herunterladen menu (CSV, Excel, PDF, Weitere Optionen), key D. No list of recent downloads. | The mockup has no recent-downloads list; the browser keeps that. |
+| 2026-10-11 | ⇧E is the shell's, before the area's keys (Belege's `E` edits only without Shift). The export is reachable from the top bar chip, ⇧E and ⌘K; `useShellUi().openExport(config)` opens it preset (Abschluss step 7 can call it). | The mockup's global key; one entry point for other areas. |
 
 ## API inventory against the mockup
 
@@ -101,7 +110,7 @@ Missing for the mockup, to add in their phase:
 - Belege: done in phase 2 (receipt PATCH `kind` and nulls, `GET /api/inbox`).
 - Kontoauszüge: statement import (camt.053 and PDF upload) from the UI; today it is a CLI step.
 - Buchungen: new manual entry (route exists only through year-close entries).
-- Export: the export bundle (CSV, XLSX, JSON, PDF, ZIP with LIESMICH and SHA-256 sums).
+- Export: done in phase 6 (`POST /api/export`).
 - Firma: write company profile, banks, periods, display and invoice layout to `belege.workspace.yaml`.
 - Rechnungen: everything (phase 8).
 
@@ -138,3 +147,4 @@ Missing for the mockup, to add in their phase:
   Found and fixed: `npm run extract` failed on both demos (filed transactions generated with parts
   and reference). Left for phase 9: every screen; later: e-mail, finalization at issue, year-end list.
 - 2026-10-11 phase 5 (branch `redesign-p5`): MWST and Bilanz & ER. `src/app/areas/vat/` (model.ts: the return, its state, the entries per Ziffer, shown Ziffern, filed differences; form0535.ts; list with parts, result box, filed marks, 0535 row; detail with formula or entries by code, notices, the 0535 with cases and print) and `src/app/areas/reports/` (model.ts: the three reports from the app's functions, search, one-sided gap, ledger; list with tabs, all accounts, search, groups; ledger detail). Tests: tests/vat-reports-area.test.ts. Old VAT and report tabs deleted, legacy adapter keeps only the codes tab. Evidence and mockup comparison: .verify/evidence/redesign/phase-5/NOTES.md. Differs from the mockup: the 0535 is a list row with its own detail (the mockup had only the notice), no filing date, no Export/Herunterladen (phase 6), Bezugsteuer compared on its turnover. Left: phase 4 wires the VAT code hover card onto `a.vlink`; the codes area still renders the old VatCodesView.
+- 2026-10-11 phase 6 (branch `redesign-p6`): Export. src/export/ (model: parts, formats, presets, request parsing; tables from the reports, MWST and Belege models; banana.ts shared with `npm run export`; bundle: folders, LIESMICH, SHA256SUMS.txt, manifest.json, ZIP streamed), `POST /api/export` (open in audit mode), `printPdf` for report PDFs; src/app/areas/export/ (the dialog with presets, own presets, period row and picker, parts and formats, summary; the ledger's Herunterladen menu); top bar export chip, ⇧E, ⌘K entries. Tests: tests/export.test.ts (files per preset, checksums match the ZIP, journal CSV and Excel match the books, boundary, a real PDF, audit mode). Commits: "Export bundle: POST /api/export …" and "Redesign phase 6, Export: …". Evidence and mockup comparison: .verify/evidence/redesign/phase-6/NOTES.md. Differs from the mockup: a Kontoblatt and a filed-returns part, one PDF for all quarters of MWST, own presets also deletable with undo, the static export cannot export. Left: Abschluss step 7 (phase 7) can open the presets through `openExport`; the statement download (shot 40) is phase 3's.

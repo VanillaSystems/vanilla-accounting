@@ -129,6 +129,21 @@ Two markers flag an entry you must read before you update:
   publish them: `docs/audit-export.md` says how to hand an export over or host it behind access
   protection.
 
+- Export (redesign phase 6): one dialog for every export, from the top bar's export chip, ⇧E or
+  ⌘K. Presets Treuhänder-Paket (the open quarter: reports as PDF, the journal for Banana and as
+  CSV, payments, every original), Prüfung ESTV / AHV and Jahresarchiv (the year, with SHA-256
+  checksums and the filed returns and seals), Excel-Rohdaten (one workbook); save your own preset
+  (kept in your browser, also in ⌘K). Choose the period (a quarter, the year, any range), the
+  parts (Erfolgsrechnung, Bilanz, Saldobilanz, MWST-Abrechnungen, Kontoblatt, all Kontoblätter,
+  journal, payments, receipt list, chart of accounts, the receipts, statements and filed returns
+  as originals) and the formats (PDF, CSV, Excel, JSON, Banana). The app builds the files
+  (`POST /api/export`): one ZIP with folders, a LIESMICH in your language, and on request
+  SHA256SUMS.txt and manifest.json (`shasum -a 256 -c SHA256SUMS.txt` checks them); a single file
+  is downloaded as it is. PDFs need Chrome, Edge, Brave or Chromium, as invoices do. The export
+  only reads the books and works in audit mode (`npm run start:audit`). A ledger's `Herunterladen`
+  (D) gives it as CSV, Excel or PDF in one click. `npm run export` writes the same Banana file;
+  it now also lists entries without a bank payment (private outlays, Eigenverbrauch).
+
 ### Fixed
 
 - **⚠ figures** Saldobilanz and Kontoauszug of a period that starts after 1 January (a quarter,
