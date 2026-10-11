@@ -13,7 +13,9 @@ import { APP_ROOT } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'update-'));
-const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { encoding: 'utf8', stdio: 'pipe' });
+// No automatic maintenance: git 2.54 repacks after a commit of this many files, in the background,
+// and deletes the loose objects while the bare clone below copies them.
+const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'maintenance.auto=false', '-c', 'gc.auto=0', ...args], { encoding: 'utf8', stdio: 'pipe' });
 
 // Upstream: this checkout's files as one commit, served by a bare repo.
 const seed = join(tmp, 'seed');
@@ -78,15 +80,17 @@ const ciCalls = () => (existsSync(npmLog) ? readFileSync(npmLog, 'utf8').split('
 const read = (f: string) => readFileSync(join(ws, f), 'utf8');
 
 test('update pulls a release, prints its changelog, writes the workspace at the new schema with backups', () => {
-  release('v0.2.1', () => {
-    const pkg = join(seed, 'package.json');
-    writeFileSync(pkg, readFileSync(pkg, 'utf8').replace(/"version": "[^"]+"/, '"version": "0.2.1"'));
+  const pkg = join(seed, 'package.json');
+  const current: string = JSON.parse(readFileSync(pkg, 'utf8')).version;
+  const next = current.replace(/\d+$/, (patch) => String(Number(patch) + 1));
+  release(`v${next}`, () => {
+    writeFileSync(pkg, readFileSync(pkg, 'utf8').replace(/"version": "[^"]+"/, `"version": "${next}"`));
     const log = join(seed, 'CHANGELOG.md');
-    writeFileSync(log, readFileSync(log, 'utf8').replace(/^## \[/m, '## [0.2.1] - 2026-10-10\n\n### Fixed\n\n- A stand-in fix.\n\n## ['));
+    writeFileSync(log, readFileSync(log, 'utf8').replace(/^## \[/m, `## [${next}] - 2026-10-10\n\n### Fixed\n\n- A stand-in fix.\n\n## [`));
   });
   const r = update();
   assert.equal(r.status, 0, r.out);
-  assert.match(r.out, /version 0\.2\.0 → 0\.2\.1/);
+  assert.ok(r.out.includes(`version ${current} → ${next}`), r.out);
   assert.match(r.out, /A stand-in fix/);
   assert.match(r.out, /books\.json: schema \(none\) → 1, backup data\/backups\/books\.json\.schema-none/);
   assert.match(r.out, /belege\.workspace\.yaml: schema \(none\) → 1/);
