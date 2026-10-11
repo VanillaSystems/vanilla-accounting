@@ -67,8 +67,9 @@ router.post('/api/journal-entries', (req, res) => {
   if (corrects && !/^\d{4}-Q[1-4]$/.test(corrects)) throw new RequestError(400, 'corrects: YYYY-Qn.');
   const transactionRef = optional('transactionRef');
   const id = optional('id');
-  const origin = optional('origin') ?? 'manual';
-  if (!ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
+  // An undo puts back an entry without an origin (books from before origins) without one.
+  const origin = optional('origin') ?? (id ? undefined : 'manual');
+  if (origin && !ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
 
   return withBooks(res, (books) => {
     assertOpen(books, [date], 'newEntry');
@@ -91,7 +92,7 @@ router.post('/api/journal-entries', (req, res) => {
       description,
       ...(exchangeCurrency && { exchangeCurrency, exchangeRate }),
       ...(corrects && { corrects: corrects as QuarterKey }),
-      origin: origin as Origin,
+      ...(origin && { origin: origin as Origin }),
     };
     books.journalEntries.push(entry);
     return { entry };
