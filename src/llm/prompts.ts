@@ -86,57 +86,6 @@ export function buildVisionPrompt(absPdfPath: string): string {
     'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar.';
 }
 
-export function buildManualTxSuggestPrompt(extractedText: string): string {
-  return `You are an accounting assistant. Extract key accounting fields from this receipt text to create a manual transaction entry for an out-of-pocket expense.
-
-## Receipt Text
-${extractedText || "(no text extracted)"}
-
-Return ONLY a valid JSON object:
-{
-  "date": "YYYY-MM-DD",
-  "description": "Vendor / purpose (concise, max 60 chars)",
-  "amount": 85.40,
-  "currency": "CHF"
-}
-
-Rules:
-- date: the receipt/invoice date in ISO format
-- description: concise vendor name and purchase purpose
-- amount: the total amount paid (positive number)
-- currency: ISO 4217 code (CHF, EUR, USD, GBP, etc.)`;
-}
-
-export function buildDateSuggestPrompt(extractedText: string): string {
-  return `You are an accounting assistant. Extract the invoice/receipt date from this receipt text.
-
-## Receipt Text
-${extractedText || "(no text extracted)"}
-
-Return ONLY a valid JSON object:
-{"date": "YYYY-MM-DD"}
-
-Rules:
-- date: the date the payment was made / money moved (e.g. "Zahlung", "Bezahlt", "Date of payment", transaction date), in ISO 8601 format
-- Prefer payment date over invoice date; use invoice date only if no payment date is present
-- If no date is found, return an empty string for date`;
-}
-
-export function buildRenamePrompt(extractedText: string): string {
-  const body = extractedText
-    ? `## Receipt Text\n${extractedText}`
-    : `The receipt is provided as a PDF attachment above. Read it directly.`;
-
-  return `You are an accounting assistant. Based on the receipt, suggest a concise archiving filename.
-
-${body}
-
-Return ONLY a valid JSON object:
-{"suggestedFilename": "YYYYMMDD-vendor-name.pdf"}
-
-Rules: YYYYMMDD prefix using the receipt date, lowercase, hyphens instead of spaces, no special chars except hyphens, end with .pdf.`;
-}
-
 export interface ClassifyEntry {
   accountDebit: string;
   accountCredit: string;

@@ -67,7 +67,6 @@ export interface InboxFile {
 export interface Mapping {
   transactionRef: string;
   receiptId: string;
-  approvedDuplicate?: boolean;
   /** Who made the link: a deterministic rule (and which), the AI matcher, or a person. Absent: before this was recorded. */
   by?: 'rule' | 'llm' | 'human';
   rule?: string;

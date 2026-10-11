@@ -108,8 +108,6 @@ export const api = {
   deleteTransaction: (ref: string) => request<Ok>('DELETE', `/api/transactions/${encodeURIComponent(ref)}`),
   createManualTransaction: (input: ManualTransactionInput) =>
     request<{ ref: string }>('POST', '/api/transactions/manual', input).then((r) => r.ref),
-  suggestManualTransaction: (receiptId: string) =>
-    request<{ date: string; description: string; amount: number | null; currency: string }>('POST', '/api/transactions/manual/suggest', { receiptId }),
 
   addMapping: (link: Link) => request<Ok>('POST', '/api/mapping/add', link),
   removeMapping: (link: Link) => request<Ok>('POST', '/api/mapping/remove', link),

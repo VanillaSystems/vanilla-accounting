@@ -2,7 +2,7 @@
 // Stands in for the `claude` CLI that src/llm/ask.ts spawns, so a test runs the real code with
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
 // carries Swiss VAT facts. A call with the Read tool (vision) answers STUB_OCR_TEXT; any other
-// prompt answers STUB_ANSWER, which fits the rename, date and Auslage parsers.
+// prompt answers STUB_ANSWER (JSON).
 // $CLAUDE_STUB_PROMPTS: each prompt is appended there.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';

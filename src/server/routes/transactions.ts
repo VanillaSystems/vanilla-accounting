@@ -1,9 +1,7 @@
 import { Router } from 'express';
 import type { TransactionPatch } from '../../types/index.js';
-import { ask } from '../../llm/ask.js';
-import { buildManualTxSuggestPrompt } from '../../llm/prompts.js';
 import { nextManualRef } from '../../books/refs.js';
-import { assertOpen, refDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { assertOpen, refDates, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
@@ -23,31 +21,6 @@ function parseTransactionPatch(body: unknown): TransactionPatch {
   }
   return patch;
 }
-
-router.post('/api/transactions/manual/suggest', async (req, res) => {
-  const { receiptId } = req.body as { receiptId: string };
-  const receipt = readBooks().receipts.find((r) => r.id === receiptId);
-  if (!receipt) throw new RequestError(404, 'Receipt not found');
-
-  try {
-    const raw = await ask(buildManualTxSuggestPrompt(receipt.extractedText), { step: 'ui/auslage', model: 'sonnet' });
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    let result: { date?: string; description?: string; amount?: number; currency?: string } | null = null;
-    try { result = JSON.parse(cleaned); } catch {
-      const m = cleaned.match(/\{[\s\S]*\}/);
-      if (m) try { result = JSON.parse(m[0]); } catch {}
-    }
-    if (!result) throw new Error('Could not parse LLM response');
-    res.json({
-      date: result.date ?? '',
-      description: result.description ?? '',
-      amount: result.amount ?? null,
-      currency: result.currency ?? 'CHF',
-    });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
 
 router.post('/api/transactions/manual', (req, res) => {
   const { date, description, amount, currency } = req.body as {

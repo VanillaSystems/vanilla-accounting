@@ -5,7 +5,6 @@ import type { ApiErrorBody, ApiStatus, InvoiceErrorBody } from '../types/api-err
 import { router as classify } from './routes/classify.js';
 import { router as scan } from './routes/scan.js';
 import { router as receipts } from './routes/receipts.js';
-import { router as rename } from './routes/rename.js';
 import { router as transactions } from './routes/transactions.js';
 import { router as mappings } from './routes/mappings.js';
 import { router as journal } from './routes/journal.js';
@@ -56,7 +55,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

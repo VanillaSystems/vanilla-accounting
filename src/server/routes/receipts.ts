@@ -3,7 +3,7 @@ import { renameSync, existsSync, unlinkSync, createReadStream } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { ask } from '../../llm/ask.js';
-import { buildDateSuggestPrompt, buildVisionPrompt } from '../../llm/prompts.js';
+import { buildVisionPrompt } from '../../llm/prompts.js';
 import { receiptDir, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
@@ -116,24 +116,6 @@ router.post('/api/vision/extract', async (req, res) => {
     receipt.needsVisionReview = undefined;
     return { ok: true, extractedText: text };
   });
-});
-
-router.post('/api/receipts/:id/suggest-date', async (req, res) => {
-  const receipt = readBooks().receipts.find((r) => r.id === req.params.id);
-  if (!receipt) throw new RequestError(404, 'Receipt not found');
-
-  try {
-    const raw = await ask(buildDateSuggestPrompt(receipt.extractedText), { step: 'ui/receipt-date', model: 'sonnet' });
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    let result: { date?: string } | null = null;
-    try { result = JSON.parse(cleaned); } catch {
-      const m = cleaned.match(/\{[\s\S]*\}/);
-      if (m) try { result = JSON.parse(m[0]); } catch {}
-    }
-    res.json({ date: result?.date ?? '' });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and

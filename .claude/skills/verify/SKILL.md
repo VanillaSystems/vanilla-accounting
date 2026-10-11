@@ -24,7 +24,7 @@ $S up my-run            # run-id optional; default v<timestamp>
 
 It is ready when it prints `ready`, followed by the env block (`UI`, `API`, `EVIDENCE`, PIDs, and the period lock `CT`, `CLOSED_Q`, `CLOSED_FROM`, `OPEN_Q`, `OPEN_FROM` that the recipes use). Load that env with `source $TMPDIR/belege-verify/<run>/env`.
 
-The sandbox makes **no model calls**. Every model call goes through `src/llm/ask.ts`, which spawns the `claude` CLI, and the sandbox starts the API with `$SB/bin` first on its `PATH`, where a `claude` shim exits 1. Endpoints that call a model (`Neu klassifizieren`, `KI-Vorschlag`, vision extract, rename suggest and batch, receipt date) answer 500 with `claude exited 1: verify sandbox: no model calls`, and the UI shows it in an alert. A closed-period refusal still comes first, as 403. If a verification truly needs a model, ask the user first. To drive the real code without one, put `tests/support/stub-bin/claude` at `$SB/bin/claude` instead.
+The sandbox makes **no model calls**. Every model call goes through `src/llm/ask.ts`, which spawns the `claude` CLI, and the sandbox starts the API with `$SB/bin` first on its `PATH`, where a `claude` shim exits 1. Endpoints that call a model (Buchungen › `Neu klassifizieren`, Belege › `Neu lesen (KI)` through vision extract) answer 500 with `claude exited 1: verify sandbox: no model calls`, and the UI shows it in an alert. A closed-period refusal still comes first, as 403. If a verification truly needs a model, ask the user first. To drive the real code without one, put `tests/support/stub-bin/claude` at `$SB/bin/claude` instead.
 
 Two sandboxes can run side by side because each one has its own ports, data, and Vite cache.
 

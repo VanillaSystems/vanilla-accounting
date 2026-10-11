@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { assertOpen, refDates, receiptDates, withBooks, RequestError } from '../books.js';
+import { assertOpen, refDates, withBooks, RequestError } from '../books.js';
 
 export const router = Router();
 
@@ -19,19 +19,6 @@ router.post('/api/mapping/add', (req, res) => {
     if (!books.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receiptId)) {
       books.mappings.push({ transactionRef, receiptId });
     }
-    return { ok: true };
-  });
-});
-
-router.post('/api/mapping/approve-duplicate', (req, res) => {
-  const { receiptId } = req.body as { receiptId: string };
-  if (!receiptId) throw new RequestError(400, 'receiptId is required');
-
-  return withBooks(res, (books) => {
-    assertOpen(books, receiptDates(books, receiptId), 'mapping');
-    books.mappings = books.mappings.map((m) =>
-      m.receiptId === receiptId ? { ...m, approvedDuplicate: true } : m,
-    );
     return { ok: true };
   });
 });

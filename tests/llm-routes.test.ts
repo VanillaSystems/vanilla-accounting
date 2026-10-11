@@ -68,25 +68,16 @@ async function editWhileModelThinks(method: string, path: string, remarks: strin
 
 test('every UI model call is ledgered under its step', async () => {
   openGate();
-  const date = await api.send('POST', '/api/receipts/rw/suggest-date');
-  assert.deepEqual([date.status, date.json], [200, { date: '2026-08-12' }]);
-  const auslage = await api.send('POST', '/api/transactions/manual/suggest', { receiptId: 'rw' });
-  assert.deepEqual([auslage.status, auslage.json], [200, { date: '2026-08-12', description: 'Stub Shop', amount: 50, currency: 'EUR' }]);
-  const name = await api.send('POST', '/api/rename/suggest', { receiptId: 'rw' });
-  assert.deepEqual([name.status, name.json], [200, { suggestedFilename: '20260812-stub-shop.pdf' }]);
   const vision = await api.send('POST', '/api/vision/extract', { receiptId: 'rw' });
   assert.equal(vision.status, 200, String(vision.json.error));
-  const batch = await api.send('POST', '/api/rename/batch');
-  assert.deepEqual([batch.status, batch.json], [200, { ok: true, renamed: 1, skipped: 0, failed: 0 }]);
+  const classify = await api.send('POST', '/api/journal-entries/classify/W1');
+  assert.equal(classify.status, 200, String(classify.json.error));
 
   assert.deepEqual(
     ledger().map((r) => [r.step, r.model, r.ok, r.input, r.output]),
     [
-      ['ui/receipt-date', 'sonnet', true, 7, 3],
-      ['ui/auslage', 'sonnet', true, 7, 3],
-      ['ui/rename', 'sonnet', true, 7, 3],
       ['receipt-intake.guide.yaml#vision', 'sonnet', true, 7, 3],
-      ['ui/rename', 'sonnet', true, 7, 3],
+      ['booking.guide.yaml#classify', 'sonnet', true, 7, 3],
     ],
   );
   assert.ok(readFileSync(promptLog, 'utf8').includes(`'${join(realpathSync(api.root), 'receipts', PDF)}'`), 'vision reads the PDF by its absolute path');
@@ -97,25 +88,6 @@ test('vision OCR keeps an edit made while the model reads the PDF', async () => 
   assert.equal(status, 200, String(json.error));
   const r = receipt();
   assert.deepEqual([r.remarks, r.extractedText, r.extractionMethod], ['während OCR', 'Stub-OCR\n\nBeleg vom Stub gelesen', 'claude']);
-});
-
-test('batch rename keeps an edit made while the model suggests names', async () => {
-  const { status, json } = await editWhileModelThinks('POST', '/api/rename/batch', 'während Umbenennen');
-  assert.deepEqual([status, json], [200, { ok: true, renamed: 1, skipped: 0, failed: 0 }]);
-  assert.deepEqual([receipt().remarks, receipt().filename], ['während Umbenennen', '20260812-stub-shop.pdf']);
-  assert.deepEqual(readdirSync(join(api.root, 'receipts')), ['20260812-stub-shop.pdf']);
-});
-
-test('batch rename skips a receipt renamed while the model suggested a name', async () => {
-  const pending = api.send('POST', '/api/rename/batch');
-  await modelCalled();
-  const edit = await api.send('PATCH', '/api/receipts/rw', { filename: 'von-hand.pdf' });
-  assert.equal(edit.status, 200, String(edit.json.error));
-  openGate();
-  const { json } = await pending;
-  assert.deepEqual(json, { ok: true, renamed: 0, skipped: 1, failed: 0 });
-  assert.equal(receipt().filename, 'von-hand.pdf');
-  assert.deepEqual(readdirSync(join(api.root, 'receipts')), ['von-hand.pdf']);
 });
 
 test('re-classify keeps an edit made while the model books the transaction', async () => {
