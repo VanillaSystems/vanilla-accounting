@@ -52,6 +52,8 @@ export interface Query {
   filter?: ReceiptFilter;
   status?: InvoiceStatus;
   vat?: string;
+  /** /invoices/new?customer=<id>: the customer of the draft to write. */
+  customer?: string;
 }
 
 export interface Location { route: Route; query: Query }
@@ -76,6 +78,7 @@ export function formatLocation({ route, query }: Location): string {
   if (query.filter) qs.set('filter', query.filter);
   if (query.status) qs.set('status', query.status);
   if (query.vat) qs.set('vat', query.vat);
+  if (query.customer) qs.set('customer', query.customer);
   if (query.q) qs.set('q', query.q);
   const s = qs.toString();
   return s ? `${path}?${s}` : path;
@@ -122,6 +125,7 @@ function queryOf(params: URLSearchParams, today: IsoDate): Query {
     filter: isOneOf(RECEIPT_FILTERS, filter) ? filter : undefined,
     status: isOneOf(INVOICE_STATUSES, status) ? status : undefined,
     vat: get('vat'),
+    customer: get('customer'),
   });
 }
 

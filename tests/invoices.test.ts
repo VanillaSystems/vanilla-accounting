@@ -11,7 +11,7 @@ import {
   revenueSplit, status, totals, withPayment, InvoiceRuleError,
 } from '../src/invoices/rules.js';
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/invoices/reference.js';
-import { PAGE, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
+import { PAGE, addressLines, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type Sender } from '../src/invoices/model.js';
 
 const QR_IBAN = 'CH4431999123000889012';
@@ -274,4 +274,10 @@ test('the sheet on screen: a draft edited in place names each field; texts-only 
 
   const printed = sheetBlocks(draft).map((b) => b.html).join('');
   assert.doesNotMatch(printed, /data-ed|contenteditable|data-ia/);
+});
+
+test('address lines: the house number first where the post writes it so; town and postcode as the destination orders them', () => {
+  assert.deepEqual(addressLines({ street: 'Rue du Marché', number: '12', postcode: '75002', town: 'Paris', country: 'FR' }, 'fr'), ['12 Rue du Marché', '75002 Paris', 'FRANCE']);
+  assert.deepEqual(addressLines({ street: 'Mission Street', number: '500', line2: 'Suite 400', postcode: '94105', town: 'San Francisco', state: 'CA', country: 'US' }, 'en'), ['500 Mission Street', 'Suite 400', 'San Francisco, CA 94105', 'UNITED STATES']);
+  assert.deepEqual(addressLines({ street: 'Seeweg', number: '12', postcode: '3000', town: 'Bern', country: 'CH' }, 'de'), ['Seeweg 12', '3000 Bern']);
 });

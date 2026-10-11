@@ -6,7 +6,7 @@ import { t } from '../i18n/index.js';
 import { useShellUi } from './ui.js';
 
 /** A list's heading: the area's name, its period (a lock when filed), and its add button. */
-export function ListHead({ route, period, books, canEdit, children, title }: Omit<AreaProps, 'query' | 'nav'> & { children?: ReactNode; title?: string }) {
+export function ListHead({ route, period, books, canEdit, children, title, noPeriod }: Omit<AreaProps, 'query' | 'nav'> & { children?: ReactNode; title?: string; noPeriod?: boolean }) {
   const area = areaOf(route);
   const ui = useShellUi();
   const closed = books.config?.closedThrough;
@@ -15,7 +15,7 @@ export function ListHead({ route, period, books, canEdit, children, title }: Omi
     <header className="lhead">
       <h1>
         {title ?? area.label()}
-        {!area.periodless && (
+        {!area.periodless && !noPeriod && (
           <button type="button" className="period" aria-haspopup="dialog" title={t('period.choose')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>
             {periodName(period)}{filed && ICONS.lock}{ICONS.down}
           </button>

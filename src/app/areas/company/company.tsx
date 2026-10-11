@@ -22,6 +22,7 @@ import type { ManifestPatch } from '../../../workspace/manifest-write.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, Nav } from '../index.js';
+import { InvoiceLayoutSection } from './InvoiceLayout.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
@@ -63,7 +64,7 @@ function List({ route, books, nav }: Props) {
     profile: ws?.company.uid,
     vat: t('company.vatEffective'),
     banks: ws ? String(ws.bankAccounts.filter((b) => b.bank !== 'manual').length) : undefined,
-    'invoice-layout': t('company.soon'),
+    'invoice-layout': ws?.invoicing?.layout.font,
     accounts: String(Object.keys(getAccountMap()).length),
     periods: closed ? t('company.through', { date: formatDate(closed) }) : undefined,
     opening: opening ? t('company.nAccounts', { n: Object.keys(opening).length }) : undefined,
@@ -117,7 +118,7 @@ function Section(p: Props & { ws: CompanyInfo }) {
     case 'profile': return <Profile {...p} />;
     case 'vat': return <Vat {...p} />;
     case 'banks': return <Banks {...p} />;
-    case 'invoice-layout': return <Soon />;
+    case 'invoice-layout': return <InvoiceLayoutSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;
@@ -448,15 +449,6 @@ function Display() {
       </dl>
       <p className="m src-note">{t('display.local')}</p>
     </>
-  );
-}
-
-export function Soon() {
-  return (
-    <div className="empty">
-      <h2>{t('area.soon')}</h2>
-      <p>{t('area.soonHint')}</p>
-    </div>
   );
 }
 

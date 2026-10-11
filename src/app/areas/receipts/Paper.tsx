@@ -43,7 +43,8 @@ function trim(c: HTMLCanvasElement): HTMLCanvasElement {
   return out;
 }
 
-export function Paper({ src, maxWidth = 600 }: { src: string; maxWidth?: number }) {
+/** `whole`: every page as printed, not cut to its ink (a document as it was sent). */
+export function Paper({ src, maxWidth = 600, whole = false }: { src: string; maxWidth?: number; whole?: boolean }) {
   const box = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -64,12 +65,13 @@ export function Paper({ src, maxWidth = 600 }: { src: string; maxWidth?: number 
         c.width = viewport.width; c.height = viewport.height;
         await page.render({ canvas: c, viewport }).promise;
         if (!live) return;
-        pages.push(trim(c));
+        if (whole) { c.className = 'pg'; c.style.width = `${c.width / 2}px`; }
+        pages.push(whole ? c : trim(c));
       }
       if (live) el.replaceChildren(...pages);
     })().catch(() => { if (live) setFailed(true); });
     return () => { live = false; task.destroy(); };
-  }, [src, maxWidth]);
+  }, [src, maxWidth, whole]);
 
   if (failed) return <iframe className="pg" style={{ width: '100%', height: 760, border: 0 }} src={`${src}#toolbar=0`} title={t('receipts.preview')} />;
   return <div ref={box} className="pages"><div className="loading" /></div>;

@@ -1,4 +1,5 @@
 import type { AuditSnapshot } from '../audit/sources.js';
+import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -28,7 +29,10 @@ export type ApiRefusal =
  */
 export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate';
 
-export type ApiErrorBody = { error: string } & (ApiRefusal | { code?: undefined });
+/** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */
+export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser'; missing?: Missing[] };
+
+export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined })) | InvoiceErrorBody;
 
 /**
  * GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`).

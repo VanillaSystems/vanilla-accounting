@@ -10,7 +10,7 @@ import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js'
 import { t } from '../i18n/index.js';
 import { close } from './close/close.js';
 import { company } from './company/company.js';
-import { invoices } from './invoices.js';
+import { invoices } from './invoices/invoices.js';
 import { journal } from './journal/journal.js';
 import { codes } from './codes/codes.js';
 import { receipts } from './receipts/receipts.js';

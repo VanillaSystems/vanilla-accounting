@@ -9,6 +9,10 @@ import type { Opening, TemplateState, YearClose } from '../../accounting/year-cl
 import { t } from '../i18n/index.js';
 import { formatDate } from './utils.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
+import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
+import type { PaymentProposal } from '../../invoices/payments.js';
+import type { DraftPatch } from '../../invoices/service.js';
+import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -40,6 +44,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export function errorText(e: unknown): string {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
+  if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
   switch (b.code) {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
@@ -59,6 +64,15 @@ export function errorText(e: unknown): string {
     }
     case undefined: return b.error;
   }
+}
+
+/** What an invoice still needs before it is issued (Art. 26 MWSTG), one phrase per gap; `line` counts from 0. */
+export const missingText = (m: Missing): string =>
+  m.line === undefined ? t(`invoice.missing.${m.field}`) : t('invoice.missingLine', { line: m.line + 1, what: t(`invoice.missing.${m.field}`) });
+
+function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser', missing?: Missing[]): string {
+  if (code === 'incomplete' && missing?.length) return t('invoice.refusal.incompleteList', { list: missing.map(missingText).join(', ') });
+  return t(`invoice.refusal.${code}`);
 }
 
 /** Awaits an API call and shows its refusal in an alert instead of throwing. True when it succeeded. */
@@ -81,6 +95,18 @@ export type JournalEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'ac
 export type ManualTransactionInput ={ date: string; description: string; amount: number; currency: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening };
+export interface InvoiceList { today: string; invoices: Invoice[]; customers: Customer[]; sent: SentDocument[] }
+export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
+export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
+export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string }
+
+/** Raw bytes to a route that takes a file; the static export refuses unsent. */
+async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
+  if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': type }, body });
+  if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
+  return res.json() as Promise<T>;
+}
 
 export const api = {
   patchReceipt: (id: string, patch: ReceiptPatch) =>
@@ -141,6 +167,27 @@ export const api = {
   workspace: () => request<CompanyInfo>('GET', sources.workspace()),
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
+  uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),
+  logoUrl: (path: string) => `/api/invoice-logo?path=${encodeURIComponent(path)}`,
+
+  invoices: () => request<InvoiceList>('GET', '/api/invoices'),
+  paymentProposals: () => request<{ proposals: PaymentProposal[] }>('GET', '/api/invoices/payments').then((r) => r.proposals),
+  createCustomer: (fields: CustomerFields) => request<Customer>('POST', '/api/customers', fields),
+  patchCustomer: (id: string, fields: Partial<CustomerFields>) => request<Customer>('PATCH', `/api/customers/${id}`, fields),
+  createDraft: (input: DraftChange & { customerId: string }) => request<Draft>('POST', '/api/invoices', input),
+  patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
+  deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),
+  issue: (id: string) => request<Issued>('POST', `/api/invoices/${id}/issue`),
+  recordSend: (id: string, to?: string) => request<SentDocument>('POST', `/api/invoices/${id}/send`, to ? { to } : {}),
+  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string }) =>
+    request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
+  creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
+  sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),
+  addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
+  confirmPayment: (id: string, transactionRef: string) => request<{ paid: unknown }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
+  /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */
+  documentUrl: (file: string) => `/${file.split('/').map(encodeURIComponent).join('/')}`,
+
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
   fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),
 };

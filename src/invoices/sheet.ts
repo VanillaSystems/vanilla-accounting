@@ -82,9 +82,13 @@ const countryName = (code: string, lang: InvoiceLanguage): string => {
   try { return new Intl.DisplayNames([lang], { type: 'region' }).of(code) ?? code; } catch { return code; }
 };
 
+/** Where the house number comes before the street ("12 rue du Marché", "500 Mission Street"). */
+export const NUMBER_FIRST: readonly string[] = ['FR', 'LU', 'GB', 'IE', 'US', 'CA', 'AU'];
+
 /** The address lines as the post of the destination country wants them, the country last (not for Switzerland). */
 export function addressLines(a: Address, lang: InvoiceLanguage): string[] {
-  const street = [a.street, a.number].filter(Boolean).join(' ');
+  const parts = [a.street, a.number].filter(Boolean);
+  const street = (NUMBER_FIRST.includes(a.country) ? parts.reverse() : parts).join(' ');
   const out = street ? [street] : [];
   if (a.line2) out.push(a.line2);
   if (a.country === 'GB' || a.country === 'IE') out.push(a.town, a.postcode);

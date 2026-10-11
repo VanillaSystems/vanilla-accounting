@@ -1,7 +1,7 @@
 import express from 'express';
 import { ClosedPeriodError } from '../books/store.js';
 import { RequestError } from './books.js';
-import type { ApiErrorBody, ApiStatus } from '../types/api-error.js';
+import type { ApiErrorBody, ApiStatus, InvoiceErrorBody } from '../types/api-error.js';
 import { router as classify } from './routes/classify.js';
 import { router as scan } from './routes/scan.js';
 import { router as receipts } from './routes/receipts.js';
@@ -21,8 +21,6 @@ import { NoBrowserError } from '../invoices/pdf.js';
 
 export const app = express();
 
-/** An invoicing refusal: the German text, and which rule refused (src/invoices/rules.ts), for the UI to say in the user's language. */
-export type InvoiceErrorBody = { error: string; invoiceRefusal: InvoiceRefusal | 'noBrowser'; missing?: InvoiceRuleError['missing'] };
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409,
 };
