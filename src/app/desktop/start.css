@@ -3,6 +3,7 @@
 .st-top { display: flex; justify-content: flex-end; padding: 18px 24px 0; }
 .st-main { max-width: 640px; margin: 0 auto; padding: 56px 24px 96px; }
 .st-main h1 { margin-bottom: 8px; }
+.st-main h1.st-brand { margin-bottom: 20px; color: var(--ink); }
 .st-sub { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 32px; }
 .st-choices { display: grid; gap: 10px; }
 .st-choice { display: grid; gap: 4px; text-align: left; padding: 16px 18px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); }

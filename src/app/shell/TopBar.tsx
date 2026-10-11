@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import { t } from '../i18n/index.js';
 import { ZOOM_STEPS } from './prefs.js';
 import { ICONS } from '../areas/icons.js';
+import { Wave } from '../brand/Brand.js';
 
 interface Props {
   company?: string;
@@ -21,6 +22,7 @@ interface Props {
 export const TopBar = forwardRef<HTMLDivElement, Props>(function TopBar(p, ref) {
   return (
     <div className="topbar" ref={ref} role="toolbar" aria-label={t('shell.toolbar')}>
+      <Wave size={17} label="Vanilla Accounting" />
       {p.company && <span className="chip" tabIndex={0}><b style={{ fontWeight: 600 }}>{p.company}</b></span>}
       <span className="sep" />
       <button type="button" className="chip" onClick={p.onSearch}>⌕ {t('shell.search')} <span className="k">⌘K</span></button>

@@ -93,6 +93,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .chip.primary:hover { filter: brightness(1.08); }
 .chip.lock { color: var(--muted); cursor: default; }
 .chip.lock:hover { background: none; }
+.topbar .wave { margin: 0 2px 0 8px; flex: none; }
 .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
 .dock { position: fixed; left: 50%; bottom: 14px; transform: translate(-50%, 130%); display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px;
   border-radius: 22px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);

@@ -15,6 +15,9 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useShellUi } from '../../shell/ui.js';
 import { moveKey } from '../../shell/keyboard.js';
 import type { Theme } from '../../shell/prefs.js';
+import { PALETTES } from '../../brand/palette.js';
+import { Lockup } from '../../brand/Brand.js';
+import { version } from '../../../../package.json';
 import { addDays, localToday, openQuarter, parsePeriod } from '../../../accounting/periods.js';
 import type { Address } from '../../../invoices/model.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -451,12 +454,26 @@ function Display() {
           </span>{' '}
           <span className="m">{ui.theme === 'system' ? t('display.followsOs', { mode: t(ui.dark ? 'display.modeDark' : 'display.modeLight') }) : t('display.toggleHint')}</span>
         </dd>
+        <dt>{t('display.paletteTest')}</dt>
+        <dd>
+          <span className="seg2" role="radiogroup" aria-label={t('display.paletteTest')}>
+            {PALETTES.map((p) => (
+              <button key={p} type="button" role="radio" aria-checked={ui.palette === p} className={ui.palette === p ? 'on' : ''} onClick={() => ui.setPalette(p)}>{t(`display.palette.${p}`)}</button>
+            ))}
+          </span>{' '}
+          <span className="m">{t('display.paletteHint')}</span>
+        </dd>
         <dt>{t('app.language')}</dt>
         <dd>{LOCALES.find((l) => l.code === ui.language)?.name} <span className="m">{t('display.languageHint')}</span></dd>
         <dt>{t('shell.zoom')}</dt>
         <dd><span className="mono">{Math.round(ui.zoom * 100)} %</span> <span className="m">{t('display.zoomHint')}</span></dd>
       </dl>
       <p className="m src-note">{t('display.local')}</p>
+      <section className="about">
+        <h3>{t('about.title')}</h3>
+        <Lockup height={40} />
+        <p className="m">{t('about.version', { version })} · {t('about.license')}</p>
+      </section>
     </>
   );
 }

@@ -11,6 +11,7 @@ import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
 import { START_PATH, desktop } from './bridge.js';
+import { Lockup } from '../brand/Brand.js';
 import './start.css';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
@@ -82,7 +83,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
         ? <CreateForm info={info} busy={busy} error={error} onCancel={() => { setCreating(false); setError(''); history.replaceState(null, '', '/start'); }} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
-            <h1>Vanilla Accounting</h1>
+            <h1 className="st-brand"><Lockup height={56} /></h1>
             <p className="st-sub">{info?.open ? t('desktop.switchBooks', { name: info.open.demo ? t('desktop.demoName') : info.open.name ?? info.open.root }) : t('desktop.welcome')}</p>
             <div className="st-choices">
               <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>

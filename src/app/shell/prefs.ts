@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { desktop } from '../desktop/bridge.js';
+import { PALETTES, type Palette } from '../brand/palette.js';
 
 export function stored(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -42,6 +43,16 @@ export function useTheme(): [Theme, (t: Theme) => void, boolean] {
   useEffect(() => applyTheme(dark), [dark]);
   useEffect(() => store('theme', theme), [theme]);
   return [theme, setTheme, dark];
+}
+
+/** The colour test (brand/palette.ts), applied on <html data-palette>. */
+export function usePalette(): [Palette, (p: Palette) => void] {
+  const [palette, setPalette] = useState<Palette>(() => PALETTES.find((p) => p === stored('palette')) ?? 'blue');
+  useEffect(() => {
+    document.documentElement.dataset.palette = palette;
+    store('palette', palette);
+  }, [palette]);
+  return [palette, setPalette];
 }
 
 export const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6] as const;
