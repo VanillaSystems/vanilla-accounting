@@ -1,24 +1,29 @@
-name: Belege
+# The iPhone app of Vanilla Accounting: scans receipts and sends them to the app on the Mac.
+# Home screen label "Accounting", the brand's short name (CFBundleDisplayName, ≤ 12); the bundle id
+# stays com.belege.receipts, since a new one would be a new app to every installed phone and TestFlight.
+name: Accounting
 options:
   bundleIdPrefix: com.belege
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+  developmentLanguage: en
 
 targets:
-  Belege:
+  Accounting:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - path: Belege
+      - path: Accounting
         excludes:
           - Info.plist
     info:
-      path: Belege/Info.plist
+      path: Accounting/Info.plist
       properties:
+        CFBundleDisplayName: "Accounting"
         NSCameraUsageDescription: "Used to photograph receipts"
-        NSLocalNetworkUsageDescription: "Used to find and connect to the Belege server on your local network"
+        NSLocalNetworkUsageDescription: "Used to find Vanilla Accounting on your Mac in the local network"
         NSBonjourServices:
           - "_http._tcp"
         UILaunchScreen: {}
@@ -30,6 +35,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.belege.receipts
+        PRODUCT_NAME: Accounting
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
         MARKETING_VERSION: "1.0"

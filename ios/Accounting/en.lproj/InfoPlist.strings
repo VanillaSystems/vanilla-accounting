@@ -1,0 +1,4 @@
+/* The brand's names are proper names, the same in every language (21-accounting-devices). */
+"CFBundleDisplayName" = "Accounting";
+"NSCameraUsageDescription" = "Used to photograph receipts";
+"NSLocalNetworkUsageDescription" = "Used to find Vanilla Accounting on your Mac in the local network";

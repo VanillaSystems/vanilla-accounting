@@ -7,7 +7,7 @@ out/
 beleg-import/
 data/
 .gstack/
-ios/Belege.xcodeproj/
+ios/Accounting.xcodeproj/
 ios/Team.local.xcconfig
 .llm-concurrency.json
 

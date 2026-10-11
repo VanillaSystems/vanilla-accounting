@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct BelegeApp: App {
+struct AccountingApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

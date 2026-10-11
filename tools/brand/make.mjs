@@ -14,7 +14,7 @@ if (!brandRoot || !existsSync(join(brandRoot, 'brand.json'))) {
 
 const icons = (f) => join(brandRoot, 'assets/app-icons', f);
 const generated = (f) => join(brandRoot, 'assets/generated', f);
-const appicon = 'ios/Belege/Assets.xcassets/AppIcon.appiconset';
+const appicon = 'ios/Accounting/Assets.xcassets/AppIcon.appiconset';
 const IOS = [['AppIcon-1024.png', null], ['AppIcon-dark-1024.png', 'dark'], ['AppIcon-tinted-1024.png', 'tinted']];
 
 /** Path in the app ← file in the brand repo. */

@@ -78,10 +78,11 @@ public/apple-touch-icon.png
 
 ios/project.yml
 ios/Signing.xcconfig
-ios/Belege/*.swift
-ios/Belege/Info.plist
-ios/Belege/Assets.xcassets/Contents.json
-ios/Belege/Assets.xcassets/AppIcon.appiconset/Contents.json
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-dark-1024.png
-ios/Belege/Assets.xcassets/AppIcon.appiconset/AppIcon-tinted-1024.png
+ios/Accounting/*.swift
+ios/Accounting/Info.plist
+ios/Accounting/*.lproj/InfoPlist.strings
+ios/Accounting/Assets.xcassets/Contents.json
+ios/Accounting/Assets.xcassets/AppIcon.appiconset/Contents.json
+ios/Accounting/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+ios/Accounting/Assets.xcassets/AppIcon.appiconset/AppIcon-dark-1024.png
+ios/Accounting/Assets.xcassets/AppIcon.appiconset/AppIcon-tinted-1024.png

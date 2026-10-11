@@ -268,7 +268,7 @@ acknowledgement the phone can show; only then the App Store receipt app with QR 
 
 #### The receipt app: encrypted, paired by QR, never plain HTTP
 
-Today the receipt app (`ios/Belege`) uploads over plain `http://` to an address typed by hand,
+Today the receipt app (`ios/Accounting`) uploads over plain `http://` to an address typed by hand,
 and `/api/upload` accepts files from anyone who can reach it. That is replaced, on iOS and on a
 later Android app alike, before the app is distributed:
 

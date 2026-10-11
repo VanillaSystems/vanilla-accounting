@@ -1,0 +1,4 @@
+/* Der Name bleibt Englisch (21-accounting-devices); die Beschreibungen sprechen dich an (16-voice). */
+"CFBundleDisplayName" = "Accounting";
+"NSCameraUsageDescription" = "Damit du Belege fotografieren kannst";
+"NSLocalNetworkUsageDescription" = "Damit die App Vanilla Accounting auf deinem Mac im lokalen Netz findet";

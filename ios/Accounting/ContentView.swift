@@ -33,7 +33,7 @@ struct ContentView: View {
                     .onDelete(perform: deleteUploads)
                 }
             }
-            .navigationTitle("Belege")
+            .navigationTitle("Receipts")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     serverBadge
