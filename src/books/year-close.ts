@@ -26,7 +26,7 @@ import {
 import { roundCHF } from '../accounting/rappen.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn } from '../invoices/rules.js';
-import { workspaceChecks } from '../cli/doctor.js';
+import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, mutateJournal, saveBooks, sealsOf, type Books } from './store.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './refs.js';
