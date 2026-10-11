@@ -10,7 +10,8 @@ import { startApi, type ApiServer } from './support/api-server.js';
 const lan = Object.values(networkInterfaces()).flat().find((a) => a && a.family === 'IPv4' && !a.internal)?.address;
 let api: ApiServer;
 
-before(async () => { api = await startApi('tests/fixtures/period-lock-index.json'); });
+// Listens on every interface, as `npm start` does.
+before(async () => { api = await startApi('tests/fixtures/period-lock-index.json', { VANILLA_API_HOST: '' }); });
 after(() => api?.stop());
 
 test('from this computer, the books are served', async () => {

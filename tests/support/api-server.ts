@@ -4,7 +4,6 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { tempWorkspace } from './workspace.js';
 
@@ -18,21 +17,11 @@ export interface ApiServer {
   stop(): void;
 }
 
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = createServer();
-    srv.once('error', reject);
-    srv.listen(0, () => {
-      const { port } = srv.address() as { port: number };
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
 /**
  * `env` is added to the server's environment. The temp workspace has the demo manifest and a stub
  * prior-year history/ for classify's prompt. The server finds tests/support/no-model-bin/claude
- * first unless `env.PATH` says otherwise.
+ * first unless `env.PATH` says otherwise, and listens on 127.0.0.1 unless `env.VANILLA_API_HOST`
+ * says otherwise ('' for every interface).
  */
 export async function startApi(fixture: string, env: Record<string, string> = {}): Promise<ApiServer> {
   const { paths } = tempWorkspace('belege-api-');
@@ -43,19 +32,24 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   writeFileSync(join(paths.history, 'prior-year.Konten.txt'), '1021\tBank\n6570\tInformatikaufwand\n');
   writeFileSync(join(paths.history, 'prior-year.Buchungen-sample.tsv'), 'Datum\tBeschreibung\tKtSoll\tKtHaben\tBetrag\n');
   copyFileSync(join(REPO, fixture), indexPath);
-  const port = await freePort();
-  const base = `http://127.0.0.1:${port}`;
   const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(REPO, 'src/server/main.ts')], {
     cwd: root,
-    env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, PORT: String(port), READONLY: '', ...env },
+    env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, VANILLA_API_HOST: '127.0.0.1', PORT: '0', READONLY: '', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
-  await new Promise<void>((resolve, reject) => {
+  // The server takes the port the system gives 127.0.0.1 and names it: a port probed here and
+  // passed on could meanwhile belong to another process, and a wildcard listen shares a port with a
+  // process listening on 127.0.0.1 alone, which then gets the test's requests.
+  const port = await new Promise<number>((resolve, reject) => {
+    let out = '';
     server.once('exit', (code) => reject(new Error(`API exited with ${code}`)));
     server.stdout!.on('data', (chunk: Buffer) => {
-      if (chunk.toString().includes('API server running')) resolve();
+      out += chunk.toString();
+      const m = out.match(/API server running on port (\d+)/);
+      if (m) resolve(Number(m[1]));
     });
   });
+  const base = `http://127.0.0.1:${port}`;
   return {
     port,
     root,
