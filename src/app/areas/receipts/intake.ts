@@ -1,14 +1,15 @@
 /**
- * Files added by the add button, N or a drop on any page: PDFs go to the workspace's inbox
- * (beleg-import/) and the inbox processing starts. Belege opens on the first one, shown as being
- * read until the processing reads it into the books; it keeps its id (its checksum), so it stays
- * selected.
+ * Files added by the add button, N or a drop on any page: PDFs and photos go to the workspace's
+ * inbox (beleg-import/) and the inbox processing starts (it wraps a photo into a PDF). Belege opens
+ * on the first PDF, shown as being read until the processing reads it into the books; it keeps its
+ * id (its checksum), so it stays selected.
  */
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
 import { pollInbox } from './state.js';
 import { startIntake } from '../../shell/Intake.js';
+import { RECEIPT_TYPES, receiptType } from '../../../types/upload.js';
 
 /** The id extract gives the file: the first 16 hex characters of its SHA-256. */
 async function idOf(file: File): Promise<string | undefined> {
@@ -18,25 +19,28 @@ async function idOf(file: File): Promise<string | undefined> {
 }
 
 export async function intake(files: File[], nav: Nav): Promise<void> {
-  const pdfs = files.filter((f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
-  const skipped = files.filter((f) => !pdfs.includes(f)).map((f) => f.name);
+  const taken = files.flatMap((file) => { const type = receiptType(file); return type ? [{ file, type }] : []; });
+  const skipped = files.filter((f) => !receiptType(f)).map((f) => f.name);
   try {
-    for (const f of pdfs) await api.upload(f, new Date(f.lastModified || Date.now()));
+    for (const { file, type } of taken) await api.upload(file, type, new Date(file.lastModified || Date.now()));
   } catch (e) {
     nav.toast(errorText(e));
     return;
   }
-  nav.toast([pdfs.length && t('intake.done', { n: pdfs.length }), skipped.length && t('intake.skipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '));
-  if (!pdfs.length) return;
+  nav.toast([taken.length && t('intake.done', { n: taken.length }), skipped.length && t('intake.skipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '));
+  if (!taken.length) return;
   void startIntake();
-  const id = await idOf(pdfs[0]).catch(() => undefined);
+  // A photo's id is that of the PDF it becomes, known only once it is wrapped.
+  const pdf = taken.find((f) => f.type === 'application/pdf')?.file;
+  const id = pdf && await idOf(pdf).catch(() => undefined);
   await pollInbox(nav.refresh);
   nav.go({ route: { area: 'receipts', ...(id && { id }) }, query: {} });
 }
 
-/** Opens the system's file dialog for PDFs. */
+/** Opens the system's file dialog for PDFs and photos. */
 function pickFiles(onFiles: (files: File[]) => void) {
-  const input = Object.assign(document.createElement('input'), { type: 'file', multiple: true, accept: '.pdf,application/pdf' });
+  const accept = [...Object.keys(RECEIPT_TYPES), ...Object.values(RECEIPT_TYPES).map((e) => `.${e}`), '.jpeg'].join(',');
+  const input = Object.assign(document.createElement('input'), { type: 'file', multiple: true, accept });
   input.onchange = () => onFiles([...(input.files ?? [])]);
   input.click();
 }

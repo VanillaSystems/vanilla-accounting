@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { RequestError, WS, readBooks } from '../books.js';
 import type { InboxFile } from '../../types/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
+import { RECEIPT_TYPES, type ReceiptType } from '../../types/upload.js';
 
 export const router = Router();
 
@@ -27,10 +28,11 @@ router.get('/scan/manifest.json', (_req, res) => {
   });
 });
 
-router.post('/api/upload', express.raw({ type: 'application/pdf', limit: '50mb' }), (req, res) => {
+router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit: '50mb' }), (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-    res.status(400).json({ error: 'No PDF body received' }); return;
+    res.status(400).json({ error: 'No PDF or photo (JPG, PNG, HEIC) received' }); return;
   }
+  const ext = RECEIPT_TYPES[req.headers['content-type']?.split(';')[0].trim().toLowerCase() as ReceiptType];
   mkdirSync(WS.paths.inbox, { recursive: true });
   const capturedAtHeader = req.headers['x-captured-at'] as string | undefined;
   const ts = capturedAtHeader ? new Date(capturedAtHeader) : new Date();
@@ -38,8 +40,11 @@ router.post('/api/upload', express.raw({ type: 'application/pdf', limit: '50mb' 
   const pad = (n: number) => String(n).padStart(2, '0');
   const stamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
   // Several files dropped at once share their second: none may overwrite another.
-  let filename = `${stamp}.pdf`;
-  for (let n = 2; existsSync(join(WS.paths.inbox, filename)); n++) filename = `${stamp}-${n}.pdf`;
+  // A photo's PDF takes the photo's name, so no two files may share a name before the extension.
+  const stems = new Set(readdirSync(WS.paths.inbox).map((f) => f.replace(/\.[^.]+$/, '')));
+  let name = stamp;
+  for (let n = 2; stems.has(name); n++) name = `${stamp}-${n}`;
+  const filename = `${name}.${ext}`;
   writeFileSync(join(WS.paths.inbox, filename), req.body);
   console.log(`  scan upload: ${filename} (${req.body.length} bytes)`);
   res.json({ ok: true, filename });

@@ -7,6 +7,7 @@ import type { CompanyInfo } from '../../books/company.js';
 import type { ManifestPatch } from '../../workspace/manifest-write.js';
 import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
 import type { MailMessage } from '../../invoices/mail.js';
+import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { formatDate } from './utils.js';
@@ -148,10 +149,10 @@ export const api = {
   closeYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/close`),
   openYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/open`),
 
-  /** A PDF into the workspace's inbox (beleg-import/), as the phone app sends it. */
-  upload: async (pdf: Blob, capturedAt: Date) => {
+  /** A PDF or photo into the workspace's inbox (beleg-import/), as the phone app sends it. */
+  upload: async (file: Blob, type: ReceiptType, capturedAt: Date) => {
     if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-    const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Captured-At': capturedAt.toISOString() }, body: pdf });
+    const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': capturedAt.toISOString() }, body: file });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return (await res.json()) as { filename: string };
   },

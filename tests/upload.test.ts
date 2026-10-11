@@ -24,3 +24,15 @@ test('two PDFs of the same second are both kept', async () => {
   assert.deepEqual(readdirSync(inbox).sort(), [a.filename, b.filename].sort());
   assert.equal(readFileSync(join(inbox, b.filename), 'utf8'), '%PDF-1.4 b');
 });
+
+test('a photo (JPG, PNG, HEIC) goes into the inbox as it is, under a name its PDF will not share; another type is refused', async () => {
+  const send = (type: string, body: string) => fetch(`http://127.0.0.1:${api.port}/api/upload`, {
+    method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': '2026-10-09T12:00:00' }, body,
+  });
+  const heic = await (await send('image/heic', 'heic')).json() as { filename: string };
+  const png = await (await send('image/png', 'png')).json() as { filename: string };
+  const pdf = await (await send('application/pdf', '%PDF-1.4 c')).json() as { filename: string };
+  assert.deepEqual([heic.filename, png.filename, pdf.filename], ['20261009-120000.heic', '20261009-120000-2.png', '20261009-120000-3.pdf']);
+  assert.equal(readFileSync(join(api.root, 'beleg-import', heic.filename), 'utf8'), 'heic');
+  assert.equal((await send('text/plain', 'hello')).status, 400);
+});

@@ -84,13 +84,13 @@ interface FoundFile {
   location: 'staged' | 'archived';
 }
 
-// Wraps any PNG/JPG images in a directory into PDFs, then removes the originals so they
+// Wraps any PNG/JPG/HEIC images in a directory into PDFs, then removes the originals so they
 // aren't picked up as duplicates by scanPdfs.
 async function convertImagesToPdf(dir: string, log: (line: string) => void): Promise<void> {
   if (!existsSync(dir)) return;
   for (const f of readdirSync(dir).filter(isImageFile)) {
     const imgPath = join(dir, f);
-    const pdfPath = imgPath.replace(/\.(png|jpg|jpeg)$/i, '.pdf');
+    const pdfPath = imgPath.replace(/\.[^.]+$/, '.pdf');
     if (existsSync(pdfPath)) {
       log(`  skip convert (target exists): ${f}`);
       continue;
