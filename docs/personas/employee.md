@@ -14,10 +14,11 @@ many.
 
 Whenever they pay; seconds each time.
 
-## Technical level
+## Skill level
 
-Low to medium. They install an app from the App Store and scan a QR code once. The company
-(the owner) does any further setup for them.
+Either kind ([skill level](README.md#skill-level-technical-or-non-technical)); the job needs no
+more than the non-technical kind has. They install an app from the App Store and scan a QR code
+once. The owner does any further setup for them.
 
 ## Where they work
 

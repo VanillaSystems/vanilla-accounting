@@ -4,10 +4,13 @@ Whoever turns receipts and bank statements into journal entries. In a small comp
 the owner, an assistant, or already the Treuhänder; the role is defined by the work, not by a
 job title.
 
-## Technical level
+## Skill level
 
-Medium. Downloads statements from e-banking (camt.053 or PDF), works in the desktop app, may run
-an AI agent with prepared instructions. No git, no configuration files.
+Either kind ([skill level](README.md#skill-level-technical-or-non-technical)).
+
+- **Non-technical:** downloads statements from e-banking (camt.053 or PDF), works in the Mac
+  app, and hands the bulk to Claude Desktop with Cowork. No git, no configuration files.
+- **Technical:** the same, or an agent in a terminal and the CLI.
 
 ## Jobs
 

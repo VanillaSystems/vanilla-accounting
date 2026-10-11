@@ -19,10 +19,12 @@ and signs off the annual accounts.
 Per quarter (VAT review), and intensively at year-end. Many clients, so each visit is short and
 must start with "what changed since I last looked".
 
-## Technical level
+## Skill level
 
-Low. An expert in accounting, not in software. We may expect a browser, a link and a login.
-Not an install, not a command line, not git, not a configuration step.
+Either kind ([skill level](README.md#skill-level-technical-or-non-technical)). An expert in
+accounting, not necessarily in software. We ask for a browser, a link and a login, never an
+install, a command line, git or a configuration step. A technical Treuhänder may bring his own
+agent; the app does not count on it.
 
 ## Where they work
 

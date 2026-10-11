@@ -38,6 +38,10 @@ npm and no git command.
 All four run the same engine and the same command registry
 ([ADR 0005](0005-agents-command-registry-cli-mcp.md)).
 
+Form 1 with the Mac app is what every persona of the **non-technical** skill level uses; forms 2
+and 4 are for the **technical** level ([personas](../personas/README.md#skill-level-technical-or-non-technical)).
+Every job must be possible at the non-technical level.
+
 ### 1. The plugin
 
 - **MCP tools** from the registry (the 10 to 15 coarse tools), **Skills** for the bookkeeping jobs

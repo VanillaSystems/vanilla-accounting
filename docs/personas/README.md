@@ -7,18 +7,43 @@ Treuhänder does the journal.
 
 ## Overview
 
-| Persona | Main job | Technical level we may expect | Works in |
+| Persona | Main job | The least we may ask of them | Works in |
 |---|---|---|---|
-| [Owner](owner.md) | Decides, answers, files VAT, closes the year | **Medium to high.** Installs a desktop app, uses Claude Code or Codex, can follow a setup guide. | Desktop app, an AI agent on the workspace |
-| [Employee](employee.md) | Hands in receipts | **Low to medium.** Installs a phone app and scans a QR code; nothing more should be needed. | Phone app, mail, a shared folder |
-| [Bookkeeper](bookkeeper.md) | Imports statements, links receipts, books | **Medium.** Downloads statements from e-banking, uses the desktop app, may use an agent. | Desktop app, an AI agent |
-| [Treuhänder](treuhaender.md) | Reviews, corrects, closes, advises | **Low.** Expert in accounting, not in software. A link and a login, nothing to install, no git, no terminal. | The app in the browser, or an export |
-| [Auditor](auditor.md) | Checks the books for ESTV or AHV | **Low.** A link and a login, or a file that opens with a double-click. | Read-only audit view |
+| [Owner](owner.md) | Decides, answers, files VAT, closes the year | Installs the Mac app and the Claude Desktop plugin, follows a setup guide. | The Mac app, an AI agent on the workspace |
+| [Employee](employee.md) | Hands in receipts | Installs a phone app and scans a QR code; nothing more. | Phone app, mail, a shared folder |
+| [Bookkeeper](bookkeeper.md) | Imports statements, links receipts, books | Downloads statements from e-banking, uses the Mac app and Claude Desktop. | The Mac app, an AI agent |
+| [Treuhänder](treuhaender.md) | Reviews, corrects, closes, advises | A link and a login; nothing to install. | The app in the browser, or an export |
+| [Auditor](auditor.md) | Checks the books for ESTV or AHV | A link and a login, or a file that opens with a double-click. | Read-only audit view |
 | [AI agent](ai-agent.md) | Does the work a person asks for | (an actor, not a person) | The workspace, through the app's commands |
 
-The company side (owner, bookkeeper, employees) can handle some technical setup, and the owner
-does it once for everyone. The outside side (Treuhänder, auditor) gets nothing technical: no
+The company side (owner, bookkeeper, employees) installs what its work needs, and the owner sets
+it up once for everyone. The outside side (Treuhänder, auditor) gets nothing technical: no
 install, no command line, no git, no configuration.
+
+## Skill level: technical or non-technical
+
+The skill level is not a persona. Every persona comes in both kinds, and the app serves both
+without asking which one it has in front of it.
+
+| | Non-technical | Technical |
+|---|---|---|
+| **Works with** | the Mac app, and Claude Desktop with Cowork, connected to the app through its plugin (MCP) | the same, plus command-line tools: Claude Code or Codex in a terminal, the `vanilla` CLI, `npm` scripts, git |
+| **Talks to the model** | in Claude Desktop: chat, attached files, dictation | in Claude Desktop or in a terminal agent; the app's own model steps run through the `claude` CLI |
+| **Sets up** | by double-click: the app, the plugin, a folder for the books | anything the docs describe, including a clone of the app |
+| **Never needs** | a terminal, git, `npm`, a configuration file, an API key | (nothing is closed to them) |
+
+Rules:
+
+- **Everything works for the non-technical kind.** A job that only a terminal can do is a gap
+  in the app, not a skill the person lacks. The Mac app and the plugin are the reference; the
+  CLI is a second door to the same commands
+  ([ADR 0005](../adr/0005-agents-command-registry-cli-mcp.md),
+  [ADR 0006](../adr/0006-desktop-shell.md)).
+- **Same rights at both levels.** The skill level changes how a person works, never what they
+  may do: the table below holds for both kinds.
+- **The model runs on the person's own Claude subscription at both levels.** The non-technical
+  kind reaches it through Claude Desktop, the technical kind through Claude Desktop or the
+  `claude` CLI.
 
 ## Who can do what
 

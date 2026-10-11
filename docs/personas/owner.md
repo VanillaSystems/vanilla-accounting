@@ -1,15 +1,18 @@
 # Owner (Inhaber, Geschäftsführer)
 
-Runs a small Swiss company (GmbH or AG, one to twenty people), is technical enough to install
-an app and use Claude Code or Codex, and wants the books done without hiring a full-time
-bookkeeper. Answers to the Treuhänder and, every few years, to an auditor.
+Runs a small Swiss company (GmbH or AG, one to twenty people), installs the Mac app, works with
+Claude (in Claude Desktop, or in a terminal if technical), and wants the books done without
+hiring a full-time bookkeeper. Answers to the Treuhänder and, every few years, to an auditor.
 
-## Technical level
+## Skill level
 
-Medium to high. Installs a desktop app, follows a setup guide, works with Claude Code or Codex,
-and sets things up once for everyone else in the company (receipt app pairing, Treuhänder
-access). The less of this is required, the more companies can use the app, but some of it is
-acceptable here.
+Either kind ([skill level](README.md#skill-level-technical-or-non-technical)).
+
+- **Non-technical:** installs the Mac app and the Claude Desktop plugin, follows a setup guide,
+  and does the company's setup once for everyone in the app (receipt app pairing, Treuhänder
+  access). The bulk work runs in Claude Desktop with Cowork.
+- **Technical:** the same, or Claude Code or Codex in a terminal on the workspace, the CLI and
+  git.
 
 ## Jobs
 
@@ -27,8 +30,9 @@ a day per year (closing, with the Treuhänder).
 
 ## Where they work
 
-- The desktop app, for looking, deciding and filing.
-- Claude Code or Codex on the workspace, for the bulk work: "collect this month's receipts",
+- The Mac app, for looking, deciding and filing.
+- An AI agent on the workspace for the bulk work (Claude Desktop with Cowork, or Claude Code or
+  Codex in a terminal): "collect this month's receipts",
   "book what is open", "why is Q3 different from Q2". The agent works through the app's
   commands (see [ai-agent.md](ai-agent.md)), so the owner's instructions become history like any
   other change.

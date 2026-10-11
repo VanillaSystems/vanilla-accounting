@@ -21,12 +21,13 @@ The **read-only audit export**: the app built as static files with the books, ev
 statement PDF, the filed returns, and a manifest with the SHA-256 of every file
 ([audit-export.md](../audit-export.md)). No way to change anything.
 
-## Technical level
+## Skill level
 
-Low. A browser, a link and a login, or a file that opens with a double-click. Today the audit
-export has to be served (`npx serve <folder>`) because a browser does not load it from a file;
-that is too much to ask. The export must open as a link: a static host behind a login, for the
-audit's duration ([ADR 0003](../adr/0003-deployment-and-collaboration.md)).
+Either kind ([skill level](README.md#skill-level-technical-or-non-technical)); we ask for no
+more than the non-technical kind has: a browser, a link and a login, or a file that opens with a
+double-click. Today the audit export has to be served (`npx serve <folder>`) because a browser
+does not load it from a file; that is too much to ask. The export must open as a link: a static
+host behind a login, for the audit's duration ([ADR 0003](../adr/0003-deployment-and-collaboration.md)).
 
 ## What they may change
 
