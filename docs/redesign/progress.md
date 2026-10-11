@@ -25,6 +25,12 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-11 | Chat: dictation is transcribed on the local server (Node, onnxruntime-node), not in the page. | The model folder is a real folder (user data, `VANILLA_MODELS_DIR`), no wasm files to serve, and it measured 1.1–1.3 s for 10 s of German on an M3; the browser and the Mac app share the same path. |
+| 2026-10-11 | Chat: Whisper small, 8-bit (`onnx-community/whisper-small`), not base. | base misheard German words ("boche", "Swisskom") at 0.5 s; small got them right at 1.2 s. |
+| 2026-10-11 | Chat: Claude's limits are CLI permissions: read everywhere, edit only `knowledge/**`, Bash only `npm --prefix <app> run *` from source. | A refused `books.json` edit was checked with a real `claude -p`; the prompt alone is no guard. The packaged app has no npm, so there Claude names the change instead. |
+| 2026-10-11 | Chat: a "/" job is a chip on the draft, sent as "Job: … Follow processes/<id>.flow.yaml", not text in the field. | The id stays exact whatever the UI language; names and one-liners per flow come from the dictionaries (`chat.skill.<id>`), the flow's own name as fallback. |
+| 2026-10-11 | Chat: the field is read-only while Claude answers; Stopp ends the answer. | The owner's spec: usable for typing unless sending. |
+| 2026-10-11 | Chat: the jobs menu has a solid background, the composer and answers are glass. | A backdrop filter inside the composer's own does not blur in Chromium. |
 | 2026-10-11 | `tests/update.test.ts` accepts the spec reporter's `ℹ pass N` besides TAP's `# pass N`. | Node 24 prints the spec format in the nested run; the test failed on main before any redesign change. |
 | 2026-10-11 | The language leaves the URL; it is a per-viewer preference. Old `/<lang>/<period>/<tab>` links redirect. | urls.md rule 3: links do not change with the UI language. |
 | 2026-10-11 | Plain CSS with the mockup's class names, one file per area; Tailwind only in old components until phase 10. | Plan, architecture decision 1. |
