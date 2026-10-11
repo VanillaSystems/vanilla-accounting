@@ -5,6 +5,8 @@
  * Chromium for the PDF, MEASURE_SCRIPT), then `paginate` places them on sheets of 210 x 297 mm:
  * page 2 and later carry a page header and repeat the table header, a table header never ends a
  * page alone, and the QR-bill takes the bottom 105 mm of the last sheet, or a sheet of its own.
+ * The sheet with the QR-bill has no footer, as Swiss invoices print it: the QR-bill names the
+ * account and the header the VAT number, so a short invoice fits on one page.
  *
  * Pure strings, no Node module: the UI imports it as it is.
  */
@@ -45,7 +47,7 @@ export interface SheetData {
 export interface Block { html: string; head?: boolean; row?: boolean }
 
 /** In millimetres, as the mockup lays the sheet out. */
-export const PAGE = { firstTop: 92, nextTop: 30, bottom: 297 - 14, footer: 11, qrBill: 105, cutLine: 5 } as const;
+export const PAGE = { firstTop: 88, nextTop: 30, bottom: 297 - 14, footer: 11, qrBill: 105, cutLine: 5 } as const;
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -149,7 +151,7 @@ export function paginate(blocks: ReadonlyArray<Pick<Block, 'head' | 'row'>>, mm:
     pages[pages.length - 1].push(i);
     y += mm[i];
   });
-  return { pages, qrOwnPage: opts.qrBill && y > 297 - PAGE.qrBill - PAGE.cutLine - foot };
+  return { pages, qrOwnPage: opts.qrBill && y > 297 - PAGE.qrBill - PAGE.cutLine };
 }
 
 /** The sheets as HTML, from the blocks and their pagination. */
@@ -165,7 +167,7 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const s = d.sender;
   const uid = `${esc(s.uid)} ${L.vatSuffix}`;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
-  const footer = (k: number) => show.footer
+  const footer = (k: number, qrHere = false) => show.footer && !qrHere
     ? `<div class="foot"><span>${esc(s.name)}<br>${esc(oneLine(s.address))}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${L.vatNo}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
     : n > 1 ? `<div class="foot bare"><span class="pno">${L.page(k, n)}</span></div>` : '';
   const style = `--ivf:${FONT_STACK[layout.font]};--iva:${layout.accent};--lh:${LOGO_MM[layout.logoSize]}mm`;
@@ -182,9 +184,9 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
     const top = i === 0 ? logo + from + to : pageHead(k);
     const body = ids.map((id) => (id === -1 ? blocks.find((b) => b.head)!.html : blocks[id].html)).join('');
     h += sheet(`win-${layout.window} logo-${show.logo ? layout.logoPosition : 'none'}${withQr ? ' has-qr' : ''}`,
-      `${top}${d.cancelled ? `<div class="cxstamp">${L.stamp}</div>` : ''}<div class="ivmain" style="top:${i === 0 ? PAGE.firstTop : PAGE.nextTop}mm">${body}</div>${footer(k)}${withQr ? qr : ''}`);
+      `${top}${d.cancelled ? `<div class="cxstamp">${L.stamp}</div>` : ''}<div class="ivmain" style="top:${i === 0 ? PAGE.firstTop : PAGE.nextTop}mm">${body}</div>${footer(k, withQr)}${withQr ? qr : ''}`);
   });
-  if (qr && qrOwnPage) h += sheet('has-qr', `${pageHead(n)}${footer(n)}${qr}`);
+  if (qr && qrOwnPage) h += sheet('has-qr', `${pageHead(n)}${footer(n, true)}${qr}`);
   return h;
 }
 
@@ -251,7 +253,7 @@ html, body { margin: 0 }
 .a4 .to.many { font-size: 9pt; line-height: 1.22 }
 .a4.win-left .to { left: 22mm }
 .a4 .to .sl { position: absolute; top: -4.6mm; font-size: 6.5pt; color: #5b6270; white-space: nowrap; border-bottom: .15mm solid #9aa1ad; max-width: 76mm; overflow: hidden; text-overflow: ellipsis }
-.a4 .ivmain { position: absolute; left: 20mm; right: 20mm; top: 92mm }
+.a4 .ivmain { position: absolute; left: 20mm; right: 20mm; top: 88mm }
 .a4 .ivmain > p:first-child { margin-top: 0 }
 .a4 h3 { font-family: inherit; font-size: 15pt; font-weight: 700; color: var(--iva); margin: 0 0 1.5mm; letter-spacing: -.01em }
 .a4 .draftno { color: #8a909c; font-style: italic; font-weight: 400 }

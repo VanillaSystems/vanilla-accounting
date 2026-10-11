@@ -999,12 +999,12 @@
       "kind": "sales-record"
     },
     {
-      "id": "8a9aa66feb0cbf72",
+      "id": "f97841477c1b8e95",
       "filename": "20260706-rechnung-2026-001.pdf",
       "originalFilename": "20260706-rechnung-2026-001.pdf",
       "extractedText": "Muster Kaffee GmbH\nRechnung 2026-001\nBeispiel Bistro AG\nHausmischung Espresso, Bohnen 1 kg\nBarista-Schulung im Betrieb\nTotal CHF 963.72",
       "extractionMethod": "pdftotext",
-      "fileSize": 74599,
+      "fileSize": 70269,
       "indexedAt": "2026-08-04T18:00:00.000Z",
       "location": "archived",
       "date": "2026-07-06",
@@ -1134,12 +1134,12 @@
       "kind": "invoice"
     },
     {
-      "id": "42f90ab18b7ca8be",
+      "id": "29069a28ed29cf30",
       "filename": "20260720-rechnung-2026-002.pdf",
       "originalFilename": "20260720-rechnung-2026-002.pdf",
       "extractedText": "Muster Kaffee GmbH\nRechnung 2026-002\nMuster Hotel GmbH\nFilterkaffee Guji, Bohnen 500 g\nWartung Siebträgermaschine, inkl. Dichtungen\nTotal CHF 600.88",
       "extractionMethod": "pdftotext",
-      "fileSize": 74185,
+      "fileSize": 69863,
       "indexedAt": "2026-08-17T18:00:00.000Z",
       "location": "archived",
       "date": "2026-07-20",
@@ -2440,13 +2440,13 @@
     },
     {
       "transactionRef": "90000000049",
-      "receiptId": "8a9aa66feb0cbf72",
+      "receiptId": "f97841477c1b8e95",
       "by": "rule",
       "rule": "invoice-reference"
     },
     {
       "transactionRef": "90000000052",
-      "receiptId": "42f90ab18b7ca8be",
+      "receiptId": "29069a28ed29cf30",
       "by": "rule",
       "rule": "invoice-reference"
     }

@@ -11,7 +11,7 @@ import {
   revenueSplit, status, totals, withPayment, InvoiceRuleError,
 } from '../src/invoices/rules.js';
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/invoices/reference.js';
-import { PAGE, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
+import { PAGE, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type Sender } from '../src/invoices/model.js';
 
 const QR_IBAN = 'CH4431999123000889012';
@@ -227,14 +227,26 @@ test('blocks: one per table row, so a long table breaks between rows', () => {
 
 test('pagination: line count → sheets, the QR-bill on the last sheet or on one of its own', () => {
   const sheets = (n: number) => { const p = pagesFor(n); return p.pages.length + (p.qrOwnPage ? 1 : 0); };
-  assert.equal(sheets(1), 1, '92 + 15 + 10 + 8 + 7 + 25 + 12 = 169 mm leaves the bottom 105 mm for the QR-bill');
-  assert.equal(sheets(2), 1, 'ending at 176 mm it still fits');
-  assert.equal(sheets(3), 2, 'at 183 mm the QR-bill no longer fits: it gets a sheet of its own');
+  assert.equal(sheets(1), 1, '88 + 15 + 10 + 8 + 7 + 25 + 12 = 165 mm leaves the bottom 105 mm for the QR-bill');
+  assert.equal(sheets(2), 1, 'a 2-line invoice: one page with its QR-bill');
+  assert.equal(sheets(4), 1, 'ending at 186 mm it still fits: the QR-bill sheet has no footer to make room for');
+  assert.equal(sheets(5), 2, 'at 193 mm the QR-bill no longer fits: it gets a sheet of its own');
   const thirty = pagesFor(30);
   assert.deepEqual(thirty.pages.map((p) => p.filter((i) => i >= 0 && thirty.blocks[i].row).length), [21, 9], `21 rows fit above the footer (limit ${PAGE.bottom - PAGE.footer} mm)`);
   assert.equal(thirty.pages[1][0], -1, 'page 2 repeats the table header');
   assert.equal(thirty.qrOwnPage, false);
   assert.equal(sheets(60), 3);
+});
+
+test('the sheet that carries the QR-bill has no footer; the others keep it', () => {
+  const d = sheet(30);
+  const blocks = sheetBlocks(d);
+  const html = assembleSheets(d, blocks, { pages: [[0, 1, 2], [-1, 3]], qrOwnPage: false });
+  const pages = html.split('<div class="a4 ').slice(1);
+  assert.match(pages[0], /class="foot"/);
+  assert.match(pages[1], /has-qr/);
+  assert.doesNotMatch(pages[1], /class="foot"/);
+  assert.match(pages[1], /class="foot bare"><span class="pno">Seite 2 von 2/, 'the page number stays');
 });
 
 test('pagination: a table header never ends a page alone', () => {

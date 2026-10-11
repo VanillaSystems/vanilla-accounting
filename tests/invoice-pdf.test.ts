@@ -9,7 +9,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeBrowser, findBrowser, renderPdf, stampDates } from '../src/invoices/pdf.js';
-import { createCustomer, createDraft, issueInvoice, issuedPdf, recordSend, sendReminder, cancelInvoice, updateDraft } from '../src/invoices/service.js';
+import { createCustomer, createDraft, issueInvoice, issuedPdf, logoSrc, recordSend, sendReminder, cancelInvoice, updateDraft } from '../src/invoices/service.js';
+import { issuedSheet } from '../src/invoices/documents.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
 import { loadInvoices, storePdf } from '../src/invoices/store.js';
 import { InvoiceRuleError } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type InvoiceLine, type Issued } from '../src/invoices/model.js';
@@ -37,11 +39,22 @@ function sheet(n: number): SheetData {
 }
 
 test('line count → pages of the printed PDF, the QR-bill on the last', { skip }, async () => {
-  for (const [n, pages] of [[1, 1], [25, 2], [60, 4]] as const) {
+  for (const [n, pages] of [[1, 1], [25, 2], [60, 3]] as const) {
     const out = await renderPdf(sheet(n), '2026-10-11T12:00:00Z');
     assert.equal(out.pages, pages, `${n} lines`);
     assert.equal(pageCount(out.pdf), pages, `${n} lines: the PDF has as many pages as the sheet`);
   }
+});
+
+test('a short invoice prints on one page with its QR-bill: the demo 2026-001, two lines at two rates', { skip }, async () => {
+  const ws = workspaceAt(DEMO_ROOT);
+  const book = loadInvoices(ws);
+  const inv = book.invoices.find((i): i is Issued => i.status === 'issued' && i.number === '2026-001')!;
+  assert.equal(inv.lines.length, 2);
+  const out = await renderPdf(issuedSheet(book, inv, logoSrc(ws, inv.layout.logo)), inv.issuedAt);
+  assert.equal(out.pages, 1);
+  assert.equal(pageCount(out.pdf), 1);
+  assert.match(out.html, /class="a4 [^"]*has-qr/);
 });
 
 test('the same sheet printed twice gives the same bytes; the PDF dates are the document time', { skip }, async () => {

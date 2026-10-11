@@ -181,6 +181,9 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A short invoice prints on one page with its QR-bill: the sheet that carries the QR-bill has no
+  footer (the QR-bill names the account, the header the VAT number), and the text starts at
+  88 mm, 7 mm below the envelope window. A two-line invoice at two VAT rates took two pages.
 - **⚠ figures** Saldobilanz and Kontoauszug of a period that starts after 1 January (a quarter,
   the last 30 days) open with the balance on the period's first day, not with the 1 January
   opening balance. Only these two views change; VAT figures, returns and `test:books` do not.
