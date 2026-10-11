@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 // Self-hosted fonts: no request to Google, and an audit export works offline.
 import '@fontsource/hanken-grotesk/400.css';
@@ -16,11 +16,18 @@ import './styles/shell.css';
 import './styles/detail.css';
 import { Shell } from './shell/Shell.js';
 import { useLanguage } from './shell/prefs.js';
+import { desktop } from './desktop/bridge.js';
+import { StartScreen, useStartScreen } from './desktop/StartScreen.js';
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
 function Root() {
-  const [language, setLanguage] = useLanguage();
-  return <Shell key={language} language={language} onLanguage={setLanguage} />;
+  const start = useStartScreen();
+  const [language, setLanguage] = useLanguage(start === false);
+  useEffect(() => { desktop?.setLanguage(language); }, [language]);
+  if (start === undefined) return null;
+  return start
+    ? <StartScreen key={language} language={language} onLanguage={setLanguage} />
+    : <Shell key={language} language={language} onLanguage={setLanguage} />;
 }
 
 createRoot(document.getElementById('root')!).render(

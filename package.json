@@ -1,6 +1,12 @@
 {
   "name": "vanilla-accounting",
   "version": "0.2.0",
+  "description": "Swiss bookkeeping for a small company: receipts, bank statements, VAT, invoices.",
+  "author": "Vanilla Accounting",
+  "main": "out/desktop/main.mjs",
+  "desktop": {
+    "autoUpdate": false
+  },
   "type": "module",
   "scripts": {
     "start": "concurrently --names \"vite,api\" --prefix-colors \"cyan,green\" \"vite\" \"tsx src/server/main.ts\"",
@@ -11,6 +17,8 @@
     "build:audit": "tsx src/cli/build-audit.ts",
     "verify-audit": "tsx src/cli/verify-audit.ts",
     "preview": "vite preview",
+    "desktop": "vite build && node tools/desktop/build.mjs && electron .",
+    "desktop:build": "npm run build && node tools/desktop/build.mjs && electron-builder --mac --publish never --config desktop/electron-builder.config.cjs",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",
     "update": "tsx src/cli/update.ts",
@@ -66,6 +74,7 @@
     "@fontsource/inter": "^5.3.0",
     "bonjour-service": "^1.4.1",
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.9",
     "express": "^5.2.1",
     "fast-xml-parser": "^4.5.1",
     "fflate": "^0.8.3",
@@ -79,7 +88,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "swissqrbill": "^4.4.2",
-    "write-excel-file": "^4.1.1"
+    "write-excel-file": "^4.1.1",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/bonjour": "^3.5.13",
@@ -92,11 +102,13 @@
     "@types/smtp-server": "^3.5.13",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^10.0.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.0",
     "read-excel-file": "^9.3.12",
     "smtp-server": "^3.19.21",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7",
-    "yaml": "^2.9.1"
+    "vite": "^6.0.7"
   }
 }

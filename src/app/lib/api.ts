@@ -8,13 +8,15 @@ import type { ManifestPatch } from '../../workspace/manifest-write.js';
 import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
-import { t } from '../i18n/index.js';
+import { t, tData } from '../i18n/index.js';
 import { formatDate } from './utils.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
+import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
+import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -62,11 +64,26 @@ export function errorText(e: unknown): string {
       return t(`error.statement.${reason}`);
     }
     case 'noBrowser': return t('error.noBrowser');
+    case 'noClaude': return t('error.noClaude');
+    case 'noWorkspace': return t('desktop.noWorkspace');
+    case 'notWorkspace': return t('desktop.notWorkspace');
+    case 'setup': return setupText(b.params);
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;
     }
     case undefined: return b.error;
+  }
+}
+
+/** Why a new workspace was refused, as the start screen says it (src/workspace/create.ts). */
+export function setupText(r: SetupRefusal): string {
+  switch (r.reason) {
+    case 'unsupported': return r.question === 'preset' ? t('desktop.q.preset.freelancer.unsupported') : tData(`desktop.q.${r.question}.${r.value}.unsupported`);
+    case 'required': return t(`desktop.setup.required.${r.field}`);
+    case 'uid': case 'language': case 'preset': return t(`desktop.setup.${r.reason}`, { detail: r.detail });
+    case 'noBank': return t('desktop.setup.noBank');
+    default: return t(`desktop.setup.${r.reason}`, { bank: r.bank, detail: r.detail });
   }
 }
 
@@ -161,6 +178,13 @@ export const api = {
   status: () => request<ApiStatus>('GET', sources.status()),
   accounts: () => request<Account[]>('GET', sources.accounts()),
   workspace: () => request<CompanyInfo>('GET', sources.workspace()),
+  /** The desktop app's start screen (src/desktop/server.ts). */
+  desktop: {
+    info: () => request<DesktopInfo>('GET', '/api/desktop'),
+    open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
+    create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
+    demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
+  },
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),

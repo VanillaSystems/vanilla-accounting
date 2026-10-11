@@ -1,6 +1,9 @@
 .env
 node_modules
 dist
+# The desktop app's bundle (npm run desktop:build) and its packages (release/).
+out/
+release/
 beleg-import/
 data/
 .gstack/

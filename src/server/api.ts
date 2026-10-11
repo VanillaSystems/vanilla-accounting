@@ -20,6 +20,7 @@ import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
+import { NoClaudeError } from '../llm/ask.js';
 
 export const app = express();
 
@@ -71,6 +72,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
     res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
   } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
   else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
+  else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude' } satisfies ApiErrorBody);
   else if (err instanceof NoBrowserError) res.status(503).json({ error: err.message, invoiceRefusal: 'noBrowser' } satisfies InvoiceErrorBody);
   else {
     console.error(err);

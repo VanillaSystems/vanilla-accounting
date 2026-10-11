@@ -16,10 +16,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
-import { loadChart } from '../workspace/chart.js';
-import { BANKS, bankKind, parseIban } from '../workspace/banks.js';
-import { applyPlan, planWorkspace, suggestAccount, type InitInput } from '../workspace/scaffold.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, isSupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { BANKS, bankKind } from '../workspace/banks.js';
+import { SetupError, checkBank, checkPreset, createWorkspace, type Bank } from '../workspace/create.js';
+import { suggestAccount } from '../workspace/scaffold.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { initRepository } from '../workspace/git.js';
 import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from '../workspace/workspace.js';
@@ -105,25 +105,13 @@ async function askAnswers(preset: Preset): Promise<Answers> {
   return answers as Answers;
 }
 
-const CURRENCY = /^[A-Z]{3}$/;
-
-async function askBanks(): Promise<InitInput['banks']> {
-  const taken = new Set<string>();
-  const banks: InitInput['banks'] = [];
-  const add = (bank: string, currency: string, account: string, ibanRaw = '') => {
-    const iban = ibanRaw ? parseIban(ibanRaw) : undefined;
-    if (ibanRaw && !iban) throw new Stop(`Bank ${bank}: "${ibanRaw}" is not an IBAN (wrong length or check digits).`);
-    if (!CURRENCY.test(currency)) throw new Stop(`Bank ${bank}: currency "${currency}" must be a 3-letter code like CHF or EUR.`);
-    const range = bankKind(bank).range;
-    if (!/^\d{4}$/.test(account) || account[0] !== (range === 'card' ? '2' : '1')) {
-      throw new Stop(`Bank ${bank}: ledger account "${account}" must be 4 digits in class ${range === 'card' ? 2 : 1}.`);
-    }
-    if (taken.has(account)) throw new Stop(`Bank ${bank}: ledger account ${account} is used twice.`);
-    if (banks.some((b) => b.bank === bank && b.currency === currency)) throw new Stop(`${bank} ${currency} is listed twice.`);
-    taken.add(account);
-    banks.push({ bank, currency, account, ...(iban ? { iban } : {}) });
+async function askBanks(): Promise<Bank[]> {
+  const banks: Bank[] = [];
+  const add = (bank: string, currency: string, account?: string, iban = '') => {
+    const checked = checkBank({ bank, currency, account, iban }, banks);
+    banks.push(checked);
     const note = bankKind(bank).note;
-    console.log(`    ${bank} ${currency} on ledger account ${account}${note ? `. Note: ${note}` : ''}`);
+    console.log(`    ${bank} ${checked.currency} on ledger account ${checked.account}${note ? `. Note: ${note}` : ''}`);
   };
   const canonical = (name: string) => Object.keys(BANKS).find((b) => b.toLowerCase() === name.toLowerCase()) ?? name;
 
@@ -131,7 +119,7 @@ async function askBanks(): Promise<InitInput['banks']> {
     for (const spec of flags.bank) {
       const [name, currency = 'CHF', account, iban] = spec.split(':').map((s) => s.trim());
       const bank = canonical(name);
-      add(bank, currency.toUpperCase(), account || suggestAccount(bank, currency.toUpperCase(), taken), iban);
+      add(bank, currency, account, iban);
     }
   } else if (interactive) {
     const names = [...Object.keys(BANKS).slice(0, 4), 'other cantonal or regional bank', ...Object.keys(BANKS).slice(4)];
@@ -145,7 +133,7 @@ async function askBanks(): Promise<InitInput['banks']> {
       const bank = listed === names[4] ? (await rl!.question('    Name of the bank (e.g. BEKB) > ')).trim() : listed;
       if (!bank) continue;
       const currency = ((await rl!.question('    Currency [CHF] > ')).trim() || 'CHF').toUpperCase();
-      const suggested = suggestAccount(bank, currency, taken);
+      const suggested = suggestAccount(bank, currency, new Set(banks.map((b) => b.account)));
       const account = (await rl!.question(`    Ledger account [${suggested}] > `)).trim() || suggested;
       const iban = bankKind(bank).statements
         ? (await rl!.question('    IBAN (Enter to skip: the statement folder then decides; npm run doctor reads it from the first statement) > ')).trim()
@@ -194,8 +182,7 @@ async function main(): Promise<string> {
     ? `Which fits best? ${PRESET_NAMES.map((p, i) => `${i + 1}) ${PRESETS[p].label}`).join('   ')}\n`
     : 'Preset';
   const presetRaw = await answer('preset', presetPrompt, interactive ? '1' : undefined);
-  const preset = (/^\d+$/.test(presetRaw) ? PRESET_NAMES[Number(presetRaw) - 1] : presetRaw) as Preset;
-  if (!PRESET_NAMES.includes(preset)) throw new Stop(`--preset must be one of ${PRESET_NAMES.join(', ')}.`);
+  const preset = checkPreset(/^\d+$/.test(presetRaw) ? PRESET_NAMES[Number(presetRaw) - 1] : presetRaw);
   const presetStop = firstUnsupported(PRESETS[preset].answers as Answers);
   if (presetStop) throw new Stop(`${PRESETS[preset].label}: ${presetStop.option.unsupported}`, 2);
 
@@ -208,21 +195,17 @@ async function main(): Promise<string> {
     workspaceAt(root);
     message = `${root} is already a workspace: nothing to change.`;
   } else {
-    const uidText = await text('uid', 'UID (CHE-###.###.###, from uid.admin.ch)', (v) => { const r = parseUid(v); return 'error' in r ? r.error : undefined; });
-    const uid = (parseUid(uidText) as { uid: InitInput['uid'] }).uid;
+    const uid = await text('uid', 'UID (CHE-###.###.###, from uid.admin.ch)', (v) => { const r = parseUid(v); return 'error' in r ? r.error : undefined; });
     const owner = await text('owner', 'Owner (managing director)');
     const about = await answer('about', 'What the company does, in a few words (helps booking; optional)', '');
     const languages = appLanguages();
     const language = await answer('language', `Language of the app (${languages.join(', ')})`, 'de');
     if (!languages.includes(language)) throw new Stop(`--language must be one of ${languages.join(', ')}.`);
     const answers = await askAnswers(preset);
-    if (!isSupported(answers)) throw new Stop(firstUnsupported(answers)!.option.unsupported!, 2);
     const banks = await askBanks();
     const exportTo = await answer('export-to', '\nWhere do the books go at year-end (accounting software or Treuhand; optional)', '');
 
-    const input: InitInput = { name, uid, owner, ...(about ? { business: about } : {}), ...(language !== 'de' ? { language } : {}), preset, answers, banks, ...(exportTo ? { exportTo } : {}) };
-    const applied = applyPlan(root, planWorkspace(input, loadChart(), root, APP_ROOT));
-    workspaceAt(root);
+    const applied = createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, banks, exportTo });
     message = [
       `Created ${applied.created.length} files and folders in ${root}.`,
       ...applied.differing.map((p) => `Kept your ${p}: it differs from what init would write.`),
@@ -240,6 +223,6 @@ main()
   .then((message) => { console.log(`\n${message}`); })
   .catch((e: unknown) => {
     console.error(`\n${e instanceof Error ? e.message : String(e)}`);
-    process.exitCode = e instanceof Stop ? e.code : 1;
+    process.exitCode = e instanceof Stop ? e.code : e instanceof SetupError && e.refusal.reason === 'unsupported' ? 2 : 1;
   })
   .finally(() => rl?.close());

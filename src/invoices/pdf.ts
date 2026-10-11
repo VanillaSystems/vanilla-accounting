@@ -1,6 +1,7 @@
 /**
  * Invoice PDFs, printed from the HTML sheet by a Chromium-based browser already on the machine
- * (ADR 0012): puppeteer-core drives it, one browser per process. The PDF's creation and
+ * (ADR 0012): puppeteer-core drives it, one browser per process; the desktop app prints with its own
+ * Chromium instead (usePrintPages, src/desktop/print.ts). The PDF's creation and
  * modification dates are set to the document's own time, so the same sheet printed twice by
  * the same browser gives the same bytes. A sent PDF is stored once and never printed again.
  */
@@ -62,17 +63,44 @@ export async function closeBrowser(): Promise<void> {
 
 export interface Rendered { html: string; pages: number }
 
-async function withPage<T>(fn: (page: import('puppeteer-core').Page) => Promise<T>): Promise<T> {
+/** A browser page that lays out and prints HTML. */
+export interface PrintPage {
+  /** Resolves once the page has loaded. */
+  setContent(html: string): Promise<void>;
+  evaluate(script: string): Promise<unknown>;
+  /** A4 from the page's CSS, backgrounds printed, no margins of its own. */
+  pdf(): Promise<Uint8Array>;
+  close(): Promise<void>;
+}
+
+async function puppeteerPage(): Promise<PrintPage> {
   const page = await (await browser()).newPage();
+  return {
+    setContent: (html) => page.setContent(html, { waitUntil: 'load' }),
+    evaluate: (script) => page.evaluate(script),
+    pdf: () => page.pdf({ preferCSSPageSize: true, printBackground: true }),
+    close: () => page.close(),
+  };
+}
+
+let newPage: () => Promise<PrintPage> = puppeteerPage;
+
+/** Prints through `pages` from now on instead of a browser on the machine. */
+export function usePrintPages(pages: () => Promise<PrintPage>): void {
+  newPage = pages;
+}
+
+async function withPage<T>(fn: (page: PrintPage) => Promise<T>): Promise<T> {
+  const page = await newPage();
   try { return await fn(page); } finally { await page.close(); }
 }
 
 /** The sheet laid out: blocks measured in the browser, placed on A4 sheets, as one HTML document. */
-async function layOut(page: import('puppeteer-core').Page, d: SheetData): Promise<Rendered> {
+async function layOut(page: PrintPage, d: SheetData): Promise<Rendered> {
   const blocks = sheetBlocks(d);
   const fonts = invoiceFontCss();
   const title = `${sheetTitle(d)} ${d.number ?? ''}`.trim();
-  await page.setContent(sheetDocument(measureHtml(d, blocks), fonts, title, d.language), { waitUntil: 'load' });
+  await page.setContent(sheetDocument(measureHtml(d, blocks), fonts, title, d.language));
   const mm = (await page.evaluate(MEASURE_SCRIPT)) as number[];
   const pagination = paginate(blocks, mm, { footer: d.layout.show.footer, qrBill: hasQrBill(d) });
   const html = sheetDocument(assembleSheets(d, blocks, pagination), fonts, title, d.language);
@@ -88,19 +116,18 @@ export function renderHtml(d: SheetData): Promise<Rendered> {
 export function renderPdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }> {
   return withPage(async (page) => {
     const laid = await layOut(page, d);
-    await page.setContent(laid.html, { waitUntil: 'load' });
+    await page.setContent(laid.html);
     await page.evaluate('document.fonts.ready');
-    const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
-    return { ...laid, pdf: stampDates(Buffer.from(pdf), at) };
+    return { ...laid, pdf: stampDates(Buffer.from(await page.pdf()), at) };
   });
 }
 
 /** Any HTML page as PDF (the export's reports), its dates set to `at`. */
 export function printPdf(html: string, at: string): Promise<Buffer> {
   return withPage(async (page) => {
-    await page.setContent(html, { waitUntil: 'load' });
+    await page.setContent(html);
     await page.evaluate('document.fonts.ready');
-    return stampDates(Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true })), at);
+    return stampDates(Buffer.from(await page.pdf()), at);
   });
 }
 

@@ -11,8 +11,16 @@ export const router = Router();
 router.get('/books.json', (_req, res) => {
   res.sendFile(WS.paths.books);
 });
-router.use('/receipts', express.static(WS.paths.receipts));
-router.use('/bank-statements', express.static(WS.paths.statements));
+/** The folder of the books open now: the desktop app switches them while the server runs. */
+function staticOf(dir: () => string): express.RequestHandler {
+  let served: { dir: string; handler: express.RequestHandler } | undefined;
+  return (req, res, next) => {
+    if (served?.dir !== dir()) served = { dir: dir(), handler: express.static(dir()) };
+    served.handler(req, res, next);
+  };
+}
+router.use('/receipts', staticOf(() => WS.paths.receipts));
+router.use('/bank-statements', staticOf(() => WS.paths.statements));
 
 /** The built app (npm run build), when there is one: every app path answers with its index.html. */
 const DIST = process.env.APP_DIST || join(APP_ROOT, 'dist');
