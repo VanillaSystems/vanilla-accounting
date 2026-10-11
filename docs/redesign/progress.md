@@ -252,3 +252,14 @@ Missing for the mockup, to add in their phase:
   (smoke of all nine areas, no console error). Left for part 2: the last full pass of every area against the mockup
   screenshots and the final report.
 - 2026-10-11 phase 10 part 2: the final pass. All 95 mockup shots driven through the user's path in the sandbox on demo (`.verify/p10/drive.mjs`, one recipe file per area; puppeteer on the installed Chrome) and compared: 66 match, 6 differ on purpose, 23 had a defect fixed, two items open. Fixed, one commit each: the Wise one-text row marked alone; another period opens the list at its first row; a filter or search that hides the selection moves it; Firma's legend; the customer form's React key warning; Kunden's add button (Neuer Kunde, then Kunde); MWST 0.00 for an unpriced draft; undo of a delete keeps a missing origin; a link to a missing entry says so; the test static server's `.mjs`; two audit-mode edit leaks (Gewinn verwenden, layout reset); the period picker's submenu words; no QR-bill place on a draft paid outside CH/LI; Rechnungen' add button reads Rechnung. Also checked: back/forward across areas, an old `/de/<period>/journal-entries?je=` link, rule-5 links in every area, audit mode in all nine areas, the static audit export under a sub-path. Report and what is left: [final-pass.md](final-pass.md). Evidence: .verify/evidence/redesign/phase-10/ (NOTES.md).
+
+## Release
+
+Plan: [release.md](release.md). Tracks A (no external programs), B (Electron app), C (inbox
+processing, invoice e-mail, small open items) run in parallel worktrees; D (release preparation)
+after they are merged.
+
+- [ ] A. No external programs.
+- [ ] B. The Electron app.
+- [ ] C. Close the gaps in the app.
+- [ ] D. Release preparation.
