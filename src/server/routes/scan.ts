@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { RequestError, WS, readBooks } from '../books.js';
 import type { InboxFile } from '../../types/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
-import { RECEIPT_TYPES, type ReceiptType } from '../../types/upload.js';
+import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload.js';
 
 export const router = Router();
 
@@ -54,12 +54,16 @@ router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit
  * The PDFs in the inbox (beleg-import/) that the books do not hold yet: dropped or scanned, not
  * read by the inbox processing (src/intake/) so far. Each carries the id its receipt will have (the first 16 hex
  * of its SHA-256, as extract computes it), so a link to it keeps working once it is read.
+ * `photos` adds the photos the processing wraps into PDFs; Belege shows them only once wrapped.
  */
-export function inboxFiles({ withRead = false } = {}): InboxFile[] {
+export function inboxFiles({ withRead = false, photos = false } = {}): InboxFile[] {
   if (!existsSync(WS.paths.inbox)) return [];
   const known = new Set(withRead ? [] : readBooks().receipts.filter((r) => r.location === 'staged').map((r) => r.filename));
   return readdirSync(WS.paths.inbox)
-    .filter((f) => f.toLowerCase().endsWith('.pdf') && !known.has(f))
+    .filter((f) => {
+      const type = receiptType({ type: '', name: f });
+      return (type === 'application/pdf' || (photos && type !== undefined)) && !known.has(f);
+    })
     .map((filename) => {
       const path = join(WS.paths.inbox, filename);
       const content = readFileSync(path);

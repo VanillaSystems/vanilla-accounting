@@ -36,7 +36,7 @@ function start(): void {
   })().catch((e) => console.error('intake:', e)).finally(() => { running = undefined; });
 }
 
-const status = (): IntakeStatus => ({ running: !!running, job: last, ...(busy ? { busy } : {}), inbox: inboxFiles().map((f) => f.id) });
+const status = (): IntakeStatus => ({ running: !!running, job: last, ...(busy ? { busy } : {}), inbox: inboxFiles({ photos: true }).map((f) => f.id) });
 
 router.get('/api/intake', (_req, res) => {
   res.json(status());

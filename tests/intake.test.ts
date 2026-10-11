@@ -7,6 +7,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { appendFileSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -155,4 +156,16 @@ test('without a working claude CLI the job reads and imports, and says what wait
   } finally {
     noModel.stop();
   }
+});
+
+test('a photo put into the inbox from the Finder or the phone counts as waiting, so the shell starts the job; Belege lists PDFs only', async () => {
+  await until('no job', async () => !(await status()).running);
+  const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGP4z8DwHwYBAB7FA/+WnI5aAAAAAElFTkSuQmCC', 'base64');
+  writeFileSync(join(api.root, 'beleg-import', 'IMG_0005.HEIC.icloud'), '');
+  writeFileSync(join(api.root, 'beleg-import', 'IMG_0005.PNG'), photo);
+  const id = createHash('sha256').update(photo).digest('hex').slice(0, 16);
+  assert.ok((await status()).inbox.includes(id), 'the photo waits for the job');
+  assert.equal((await status()).inbox.length, 1, 'an iCloud placeholder does not');
+  const listed = (await api.send('GET', '/api/inbox')).json as unknown as { id: string }[];
+  assert.ok(!listed.some((f) => f.id === id), 'Belege shows PDFs only');
 });
