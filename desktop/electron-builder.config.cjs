@@ -15,9 +15,9 @@ const releases = env.VANILLA_RELEASES?.split('/');
 module.exports = {
   appId: 'org.vanilla-accounting.desktop',
   // The brand's names per surface (21-accounting-devices): Finder, Dock, Launchpad, the Windows Start
-  // menu and the installer show the full name; the macOS menu bar the short one (CFBundleName, ≤ 15).
-  // Proper names, never translated, so no InfoPlist.strings per language.
+  // menu and the installer show the full name; the macOS menu bar the short one (after-pack.cjs).
   productName: 'Vanilla Accounting',
+  afterPack: join(__dirname, 'after-pack.cjs'),
   directories: { output: 'release', buildResources: 'desktop' },
   // What the app reads at run time from its own folder (APP_ROOT): the bundle, the built UI and the
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
@@ -71,7 +71,6 @@ module.exports = {
   },
   mac: {
     category: 'public.app-category.finance',
-    extendInfo: { CFBundleName: 'Accounting', CFBundleDisplayName: 'Vanilla Accounting' },
     icon: 'desktop/icon.icns',
     // electron-updater on macOS installs from a zip; built only when there is a feed to publish it to.
     target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, ...(releases?.length === 2 ? [{ target: 'zip', arch: ['arm64', 'x64'] }] : [])],

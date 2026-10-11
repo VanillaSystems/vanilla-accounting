@@ -40,6 +40,7 @@ tools/brand/**
 desktop/electron-builder.config.cjs
 desktop/entitlements.mac.plist
 desktop/not-packed.cjs
+desktop/after-pack.cjs
 desktop/icon.icns
 desktop/icon.ico
 desktop/icon.png
