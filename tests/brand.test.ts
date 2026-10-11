@@ -76,3 +76,15 @@ test('names per surface: the full name for Finder, Dock and installer, the short
   assert.equal(windowTitle('2026-006', 'Rechnungen'), '2026-006 · Rechnungen · Vanilla Accounting');
   assert.equal(windowTitle('', 'Belege'), 'Belege · Vanilla Accounting');
 });
+
+test('voice: the German UI says du, never Sie, and writes ss, never ß (the brand\'s Voice page)', async () => {
+  const { messages } = await import('../src/app/i18n/locales/de.js');
+  // "Sie muss auf dem Beleg stehen": the VAT number, not the reader.
+  const third = new Set(['receipts.uidTip']);
+  const texts = Object.entries(messages).flatMap(([k, v]) => (typeof v === 'string' ? [[k, v]] : [[k, v.one], [k, v.other]]));
+  for (const [key, text] of texts) {
+    if (!third.has(key)) assert.doesNotMatch(text, /\b(Sie|Ihnen|Ihr|Ihre|Ihren|Ihrem|Ihrer|Ihres)\b/, key);
+    assert.doesNotMatch(text, /ß/, key);
+    assert.doesNotMatch(text, /magi(c|sch)/i, key);
+  }
+});
