@@ -17,7 +17,8 @@ export type ApiRefusal =
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason } }
   | { code: 'manualOnly' }
   | { code: 'yearClose' }
-  | { code: 'fileExists'; params: { filename: string } };
+  | { code: 'fileExists'; params: { filename: string } }
+  | { code: 'noBrowser' };
 
 export type ApiErrorBody = { error: string } & (ApiRefusal | { code?: undefined });
 

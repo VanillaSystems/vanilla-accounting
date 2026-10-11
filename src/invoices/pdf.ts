@@ -95,6 +95,15 @@ export function renderPdf(d: SheetData, at: string): Promise<Rendered & { pdf: B
   });
 }
 
+/** Any HTML page as PDF (the export's reports), its dates set to `at`. */
+export function printPdf(html: string, at: string): Promise<Buffer> {
+  return withPage(async (page) => {
+    await page.setContent(html, { waitUntil: 'load' });
+    await page.evaluate('document.fonts.ready');
+    return stampDates(Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true })), at);
+  });
+}
+
 /**
  * Chromium writes the print time into /CreationDate and /ModDate, the only bytes that differ
  * between two prints. They are replaced digit for digit, so every offset in the file stays right.

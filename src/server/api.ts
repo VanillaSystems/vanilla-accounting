@@ -13,6 +13,7 @@ import { router as config } from './routes/config.js';
 import { router as yearClose } from './routes/year-close.js';
 import { router as files } from './files.js';
 import { router as invoices } from './routes/invoices.js';
+import { router as exportBundle } from './routes/export.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
@@ -39,10 +40,12 @@ app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
 // whole app without risk of accidental edits/deletes or triggering paid LLM calls.
+// The export is a POST that only reads the books: it stays open.
 export const READONLY = process.env.READONLY === '1';
+const READ_POSTS: ReadonlySet<string> = new Set(['/api/export']);
 if (READONLY) {
   app.use((req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && !READ_POSTS.has(req.path)) {
       res.status(403).json({ error: 'Nur-Lese-Modus: Änderungen sind während der Prüfung deaktiviert.', code: 'readonly' } satisfies ApiErrorBody);
       return;
     }
@@ -54,7 +57,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose, invoices);
+app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose, invoices, exportBundle);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

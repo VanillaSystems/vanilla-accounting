@@ -45,6 +45,7 @@ export function errorText(e: unknown): string {
     case 'manualOnly': return t('error.manualOnly');
     case 'yearClose': return t('error.yearClose');
     case 'fileExists': return t('error.fileExists', b.params);
+    case 'noBrowser': return t('error.noBrowser');
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;

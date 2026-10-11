@@ -12,7 +12,7 @@ import { accountsOf, filedReturnsOf, receiptDirOf, workspaceInfo } from '../work
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
-import { hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
+import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 
 export class ExportError extends Error {}
 
@@ -83,4 +83,3 @@ function target(out: string, path: string): string {
 const writeOut = (out: string, path: string, data: string) => writeFileSync(target(out, path), data);
 const copyOut = (out: string, path: string, src: string) => copyFileSync(src, target(out, path));
 
-const appVersion = (): string => (JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as { version: string }).version;
