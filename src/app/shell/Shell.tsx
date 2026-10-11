@@ -101,6 +101,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
 
   const ui: ShellUi = {
     area: area as Area,
+    route: loc.route,
     openPeriod: (anchor) => setOverlay({ kind: 'period', anchor: anchor.getBoundingClientRect() }),
     add: runAdd,
     openExport,
@@ -155,7 +156,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
       ({ label, side: t('shell.report'), run: () => go({ route: { area: 'reports', report }, query: p.query.period ? { period: p.query.period } : {} }) });
     const add = areaOf(p.route).add;
     const actions: PaletteItem[] = [
-      ...(add && p.canEdit ? [{ label: add.title(), side: 'N', run: () => add.run(p) }] : []),
+      ...(add && p.canEdit ? [{ label: add.title(p.route), side: 'N', run: () => add.run(p) }] : []),
       report('income', t('tab.incomeStatement')),
       report('balance', t('tab.balanceSheet')),
       report('trial', t('tab.trialBalance')),
@@ -177,7 +178,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
 
   const legendItems: LegendItem[] = area.legend?.() ?? [
     ...(area.Detail ? [[['↑', '↓'], t('keys.select'), t('keys.selectTip')] as LegendItem] : []),
-    ...(area.add && canEdit ? [[['N'], t('keys.new'), area.add.title()] as LegendItem] : []),
+    ...(area.add && canEdit ? [[['N'], t('keys.new'), area.add.title(loc.route)] as LegendItem] : []),
     [['G'], t('keys.area'), t('keys.areaTip')],
     [['/'], t('keys.search'), t('keys.searchTip')],
     [['⌘', 'K'], t('keys.all'), t('keys.allTip')],

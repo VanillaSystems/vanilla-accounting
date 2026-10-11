@@ -6,8 +6,6 @@
 .row.inv.st-cancelled .a { text-decoration: line-through; }
 .row.cust { grid-template-columns: minmax(0, 1fr) auto; }
 .row.sentrow { grid-template-columns: 64px minmax(0, 1fr) auto; }
-.counts .newcust { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
-.counts .newcust .i { width: 14px; height: 14px; }
 [data-area="invoices"] .counts { flex-wrap: wrap; row-gap: 6px; }
 .vresult.static { cursor: default; }
 .vresult b small { font: 500 12px "Geist Mono"; color: var(--muted); margin-right: 6px; }

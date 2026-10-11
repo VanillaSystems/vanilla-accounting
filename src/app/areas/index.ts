@@ -61,7 +61,7 @@ export interface Area<R extends Route = Route> {
   /** Absent: the list takes the whole page (the old tabs until their phase). */
   Detail?: ComponentType<AreaProps<R>>;
   /** The add button and N; absent when the area has nothing to add. */
-  add?: { label(): string; title(): string; run(props: AreaProps): void };
+  add?: { label(route: R): string; title(route: R): string; run(props: AreaProps): void };
   /** Files dropped on the page while this area is open, and what the drop zone says; absent: they go to the receipts' inbox. */
   drop?: { text(): string; formats(): string; run(files: File[], props: AreaProps): void };
   /** The objects ⌘K finds in this area, under the area's name. */

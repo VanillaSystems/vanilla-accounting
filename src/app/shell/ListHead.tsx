@@ -21,8 +21,8 @@ export function ListHead({ period, books, canEdit, children, title, noPeriod }: 
           </button>
         )}
         {area.add && canEdit && (
-          <button type="button" className="addbtn" data-add title={t('shell.addKey', { title: area.add.title() })} onClick={ui.add}>
-            {ICONS.plus}<span>{area.add.label()}</span><span className="kb">N</span>
+          <button type="button" className="addbtn" data-add title={t('shell.addKey', { title: area.add.title(ui.route) })} onClick={ui.add}>
+            {ICONS.plus}<span>{area.add.label(ui.route)}</span><span className="kb">N</span>
           </button>
         )}
       </h1>

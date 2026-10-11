@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import type { Theme } from './prefs.js';
 import type { DialogConfig } from '../areas/export/state.js';
 import type { Area } from '../areas/index.js';
+import type { Route } from './route.js';
 
 /**
  * What the shell offers the pages inside it: the area open now, its overlays and the viewer's
@@ -10,6 +11,7 @@ import type { Area } from '../areas/index.js';
  */
 export interface ShellUi {
   area: Area;
+  route: Route;
   openPeriod(anchor: HTMLElement): void;
   /** The current area's add action (the add button and N). */
   add(): void;

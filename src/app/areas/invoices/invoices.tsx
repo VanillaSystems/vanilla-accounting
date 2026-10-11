@@ -161,7 +161,7 @@ function useFirstRow(props: Props, selected: string | undefined) {
 }
 
 function CustomerList(props: Props & { d: Records }) {
-  const { route, query, nav, canEdit, d } = props;
+  const { route, query, nav, d } = props;
   const rows = customerRows(d, query.q);
   listed.ids = rows.map((c) => c.id);
   useFirstRow(props, route.id);
@@ -170,7 +170,6 @@ function CustomerList(props: Props & { d: Records }) {
       <ListHead {...props} noPeriod>
         <div className="counts">
           <span>{t('invoices.nCustomers', { n: d.customers.length })}</span>
-          {canEdit && <button type="button" className="newcust" onClick={() => setUi({ dialog: { kind: 'customer' } })}>{I.plus}{t('invoices.newCustomer')}</button>}
           <Views on="customers" props={props} />
           <Search props={props} />
         </div>
@@ -250,8 +249,8 @@ export const invoices: Area<RouteOf<'invoices'>> = {
   List: (props) => <><List {...props} /><Dialogs {...props} /></>,
   Detail,
   add: {
-    label: () => t('invoices.new'),
-    title: () => t('invoices.newTitle'),
+    label: (r) => t(r.view === 'customers' ? 'invoices.newCustomer' : 'invoices.new'),
+    title: (r) => t(r.view === 'customers' ? 'invoices.newCustomer' : 'invoices.newTitle'),
     run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'customers' ? { kind: 'customer' } : { kind: 'new' } }),
   },
   legend,
