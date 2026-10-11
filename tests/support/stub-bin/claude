@@ -3,9 +3,14 @@
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
 // carries Swiss VAT facts. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
 // reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
-// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
+// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once, and so
+// does `auth status`: signed in, or signed out with $CLAUDE_STUB_SIGNED_OUT.
 // $CLAUDE_STUB_PROMPTS: each prompt is appended there.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
+// A chat message (--output-format stream-json) streams STUB_CHAT_ANSWER as Claude Code does: the
+// session, a Read of each attached file, the text in pieces ($CLAUDE_STUB_CHAT_DELAY ms apart) and
+// the result; --resume keeps its session. $CLAUDE_STUB_ARGS: each call's arguments are appended there.
+import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 const STUB_OCR_TEXT = 'Stub-OCR\n\nBeleg vom Stub gelesen';
@@ -16,13 +21,41 @@ if (process.argv.includes('--version')) {
   process.stdout.write('0.0.0 (stub)\n');
   process.exit(0);
 }
+if (process.argv[2] === 'auth' && process.argv[3] === 'status') {
+  const loggedIn = !process.env.CLAUDE_STUB_SIGNED_OUT;
+  process.stdout.write(JSON.stringify({ loggedIn, authMethod: loggedIn ? 'claude.ai' : 'none' }));
+  process.exit(loggedIn ? 0 : 1);
+}
 
 const prompt = readFileSync(0, 'utf8');
 if (process.env.CLAUDE_STUB_PROMPTS) appendFileSync(process.env.CLAUDE_STUB_PROMPTS, prompt + '\n\0\n');
+if (process.env.CLAUDE_STUB_ARGS) appendFileSync(process.env.CLAUDE_STUB_ARGS, JSON.stringify(process.argv.slice(2)) + '\n');
 const gate = process.env.CLAUDE_STUB_GATE;
 if (gate) {
   appendFileSync(`${gate}.started`, 'x\n');
   while (!existsSync(gate)) await new Promise((r) => setTimeout(r, 20));
+}
+
+if (process.argv.includes('stream-json')) {
+  const at = process.argv.indexOf('--resume');
+  const session = at > 0 ? process.argv[at + 1] : randomUUID();
+  const line = (o) => process.stdout.write(JSON.stringify({ ...o, session_id: session }) + '\n');
+  const pause = () => new Promise((r) => setTimeout(r, Number(process.env.CLAUDE_STUB_CHAT_DELAY ?? 0)));
+  line({ type: 'system', subtype: 'init', cwd: process.cwd() });
+  for (const file of prompt.match(/^- data\/chat\/.+$/gm) ?? []) {
+    line({ type: 'assistant', message: { content: [{ type: 'tool_use', id: randomUUID(), name: 'Read', input: { file_path: `${process.cwd()}/${file.slice(2)}` } }] } });
+  }
+  const asked = prompt.split('\n').filter((l) => l.trim() && !l.startsWith('- ') && !l.startsWith('Attached')).at(-1) ?? '';
+  const answer = `Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Die Unterhaltung geht weiter.' : 'Eine neue Unterhaltung.'}`;
+  line({ type: 'stream_event', event: { type: 'message_start' } });
+  line({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'text', text: '' } } });
+  for (const piece of answer.match(/.{1,12}/gs)) {
+    await pause();
+    line({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: piece } } });
+  }
+  line({ type: 'assistant', message: { content: [{ type: 'text', text: answer }] } });
+  line({ type: 'result', subtype: 'success', is_error: false, result: answer, num_turns: 1, usage: { input_tokens: 7, output_tokens: 3 }, modelUsage: { 'claude-stub-sonnet': {} } });
+  process.exit(0);
 }
 
 function classify() {

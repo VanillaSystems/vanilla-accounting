@@ -1,5 +1,5 @@
 /** The four steps in their order, and how a CLI runs one of them. */
-import { ask, modelReady } from '../llm/ask.js';
+import { ask, claudeStatus } from '../llm/ask.js';
 import { openWorkspace } from '../workspace/workspace.js';
 import { classifyStep } from './classify.js';
 import { matchStep } from './match.js';
@@ -14,9 +14,9 @@ export const PIPELINE: ReadonlyArray<readonly [IntakeStepId, StepRun]> = [
   ['classify', classifyStep()],
 ];
 
-/** The model, if a working `claude` CLI answers; otherwise the steps run without it. */
+/** The model, if a signed-in `claude` CLI answers; otherwise the steps run without it. */
 export async function askIfReady(): Promise<Ask | undefined> {
-  return (await modelReady()) ? ask : undefined;
+  return (await claudeStatus()).state === 'ready' ? ask : undefined;
 }
 
 /** `npm run <step>`: one step on the workspace's books, its log on the terminal; exit 1 when it stopped. */

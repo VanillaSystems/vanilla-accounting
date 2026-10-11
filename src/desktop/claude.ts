@@ -6,6 +6,7 @@
  */
 import { execFile } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
+import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
 const MARK = '__vanilla_path__';
@@ -25,9 +26,24 @@ export function claudeOn(path: string): string | undefined {
   return path.split(':').filter(isAbsolute).map((dir) => join(dir, 'claude')).find(executable);
 }
 
+/**
+ * The CLI on the login PATH, else in ~/.local/bin, where the official installer puts it: right
+ * after "Claude einrichten" the shell's profile may not name that folder yet.
+ */
 export async function findClaude(shell?: string): Promise<string | undefined> {
   const path = await loginPath(shell);
-  return path ? claudeOn(path) : undefined;
+  return claudeOn([path, join(homedir(), '.local/bin')].filter(Boolean).join(':'));
+}
+
+/**
+ * Looks for the CLI again and sets CLAUDE_BIN, which src/llm/ask.ts reads on every call: a CLI
+ * installed while the app runs is used from the next inbox job on, without a restart.
+ */
+export async function resolveClaude(shell?: string): Promise<string | undefined> {
+  const bin = await findClaude(shell);
+  if (bin) process.env.CLAUDE_BIN = bin;
+  else delete process.env.CLAUDE_BIN;
+  return bin;
 }
 
 function executable(path: string): boolean {

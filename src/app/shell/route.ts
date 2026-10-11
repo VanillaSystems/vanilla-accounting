@@ -8,7 +8,7 @@ import { localToday, parsePeriod, type IsoDate, type Period } from '../../accoun
 export const REPORTS = ['income', 'balance', 'trial'] as const;
 export type Report = typeof REPORTS[number];
 
-export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'accounts', 'periods', 'opening', 'display'] as const;
+export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'accounts', 'periods', 'opening', 'claude', 'display'] as const;
 export type CompanySection = typeof COMPANY_SECTIONS[number];
 
 export const RECEIPT_FILTERS = ['zugeordnet', 'offen', 'ohneDatum'] as const;

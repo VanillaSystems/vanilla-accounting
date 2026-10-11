@@ -2,7 +2,7 @@
  * Firma: what the workspace says about the company, one section per row. The profile, the bank
  * accounts and the chart of accounts can be changed here (belege.workspace.yaml, accounts.json);
  * periods and seals are read only (a quarter closes with the seal CLI, the year with Abschluss);
- * Darstellung is this browser's own.
+ * Claude is the computer's (src/app/shell/claude.tsx); Darstellung is this browser's own.
  */
 import { Fragment, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
@@ -24,13 +24,14 @@ import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
 import { MailSection } from './MailSection.js';
+import { ClaudeSection, useClaude } from '../../shell/claude.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
   ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail']],
   ['company.groupBooks', ['accounts', 'periods', 'opening']],
-  ['company.groupApp', ['display']],
+  ['company.groupApp', ['claude', 'display']],
 ];
 
 const THEMES: Theme[] = ['light', 'dark', 'system'];
@@ -59,6 +60,7 @@ async function patch(nav: Nav, change: ManifestPatch, message: string, undo?: Ma
 function List({ route, books, nav }: Props) {
   const ws = useWorkspace();
   const ui = useShellUi();
+  const claude = useClaude();
   const closed = books.config?.closedThrough;
   const opening = books.config?.openingBalances?.[bookYear(books)];
   const side: Partial<Record<CompanySection, string>> = {
@@ -70,6 +72,7 @@ function List({ route, books, nav }: Props) {
     accounts: String(Object.keys(getAccountMap()).length),
     periods: closed ? t('company.through', { date: formatDate(closed) }) : undefined,
     opening: opening ? t('company.nAccounts', { n: Object.keys(opening).length }) : undefined,
+    claude: claude && t(`claude.state.${claude.state}`),
     display: themeLabel(ui.theme),
   };
   return (
@@ -112,7 +115,7 @@ function Detail(props: Props) {
   return (
     <div className="detail-in" key={section}>
       <div className="head"><h2 className="who">{sectionLabel(section, books)}<small>{ws?.company.name}</small></h2></div>
-      <div className="docbody">{!ws && section !== 'display' ? <p className="m">{t('yearClose.loading')}</p> : <Section {...props} section={section} ws={ws!} />}</div>
+      <div className="docbody">{!ws && section !== 'display' && section !== 'claude' ? <p className="m">{t('yearClose.loading')}</p> : <Section {...props} section={section} ws={ws!} />}</div>
     </div>
   );
 }
@@ -127,6 +130,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;
+    case 'claude': return <ClaudeSection nav={p.nav} />;
     case 'display': return <Display />;
   }
 }

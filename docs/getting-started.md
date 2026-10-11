@@ -10,9 +10,22 @@ AG is fully supported. Read [Limits](#limits) before you start.
 ## 1. Install
 
 Both ways need **Claude Code** with a Claude subscription (Pro or Max): Vanilla Accounting calls
-the `claude` command to read receipts, match them to payments and book them. Install it with
-`npm install -g @anthropic-ai/claude-code`, then run `claude` once and log in. Without it,
+the `claude` command to read receipts, match them to payments and book them. Without it,
 everything else works.
+
+In the Mac app, open Firma › Claude and click **Claude einrichten**. A Terminal window opens and
+runs the official installer from claude.ai; then your browser opens and you sign in with your
+Claude account. When the window says you are done, switch back to Vanilla Accounting: it finds
+Claude by itself and shows "Claude verbunden". The app never sees your password. Claude Desktop
+alone is not enough, because it does not bring the `claude` command; Firma › Claude tells you when
+that is the case.
+
+From the source, or by hand, type in a terminal:
+
+```sh
+curl -fsSL https://claude.ai/install.sh | bash   # Windows PowerShell: irm https://claude.ai/install.ps1 | iex
+claude auth login
+```
 
 ### The Mac app
 

@@ -25,6 +25,11 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-11 | Chat: no dictation in the MVP; macOS's own dictation (Fn twice) types into the field. The Whisper version (local server, transformers.js, whisper-small 8-bit, 1.1–1.3 s for 10 s of German on an M3) is kept on branch `feat/chat-voice`. | The owner's decision. Without it the app needs no microphone permission and no 250 MB model download, and the arm64 dmg drops from 160.6 MB to 124.5 MB (the size of the 0.3.0 release). |
+| 2026-10-11 | Chat: Claude's limits are CLI permissions: read everywhere, edit only `knowledge/**`, Bash only `npm --prefix <app> run *` from source. | A refused `books.json` edit was checked with a real `claude -p`; the prompt alone is no guard. The packaged app has no npm, so there Claude names the change instead. |
+| 2026-10-11 | Chat: a "/" job is a chip on the draft, sent as "Job: … Follow processes/<id>.flow.yaml", not text in the field. | The id stays exact whatever the UI language; names and one-liners per flow come from the dictionaries (`chat.skill.<id>`), the flow's own name as fallback. |
+| 2026-10-11 | Chat: the field is read-only while Claude answers; Stopp ends the answer. | The owner's spec: usable for typing unless sending. |
+| 2026-10-11 | Chat: the jobs menu has a solid background, the composer and answers are glass. | A backdrop filter inside the composer's own does not blur in Chromium. |
 | 2026-10-11 | `tests/update.test.ts` accepts the spec reporter's `ℹ pass N` besides TAP's `# pass N`. | Node 24 prints the spec format in the nested run; the test failed on main before any redesign change. |
 | 2026-10-11 | The language leaves the URL; it is a per-viewer preference. Old `/<lang>/<period>/<tab>` links redirect. | urls.md rule 3: links do not change with the UI language. |
 | 2026-10-11 | Plain CSS with the mockup's class names, one file per area; Tailwind only in old components until phase 10. | Plan, architecture decision 1. |

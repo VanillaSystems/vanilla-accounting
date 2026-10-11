@@ -14,6 +14,32 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- Claude einrichten: Firma › Claude shows whether Claude Code is installed and signed in (and its
+  version). In the Mac app, **Claude einrichten** opens a Terminal window that runs the official
+  installer from claude.ai and then `claude auth login`; you install and sign in yourself, the
+  app never runs an installer out of sight and never handles the login. Back in the app, it finds
+  Claude again by itself (also in `~/.local/bin`, where the installer puts it) and the inbox job
+  uses it without a restart. Belege and the inbox job's message lead there while Claude is
+  missing. In the browser (`npm start`) the page shows the two commands to type. When Claude
+  Desktop is installed but no `claude` command is, the page says that Claude Desktop alone is not
+  enough: its private copy of Claude Code (and the ChatGPT app's `codex`) is not used, being
+  undocumented and versioned per release. A Windows script exists and is tested as text, not run.
+- Chat with Claude: **⌘J** (or **Claude fragen** in ⌘K) opens a composer at the bottom of the
+  window. Ask about the books, type **/** to start a bookkeeping job from the process flows
+  (Eingang verarbeiten, Kontoauszüge importieren, Quartal abschliessen, …), attach files with **+**
+  or by dropping them. The answer streams in above it, follow-ups continue the conversation,
+  **Neu** starts over. Claude works in the workspace under the app's rules: it may edit
+  `knowledge/` and run the app's own commands, never `books.json` or `filings/` directly. The chat
+  has no dictation of its own; macOS's dictation (Fn twice) types into its field. See
+  [docs/chat.md](docs/chat.md).
+
+### Changed
+
+- The inbox job counts a `claude` that is installed but signed out as missing (`claude auth
+  status`), so its model steps wait instead of failing call by call.
+
 ## [0.3.0] - 2026-10-11
 
 The redesign and the Mac app. The app is one window with nine areas, each page with its own

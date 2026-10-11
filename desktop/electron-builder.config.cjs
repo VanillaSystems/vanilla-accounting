@@ -24,6 +24,7 @@ module.exports = {
     'dist/**/*',
     'reference/**/*',
     'processes/**/*',
+    'AGENTS.md',
     'demo/**/*',
     'examples/cases/**/*',
     'src/server/scan.html',
@@ -44,6 +45,9 @@ module.exports = {
     '!node_modules/**/*.{map,d.ts,d.mts,d.cts}',
   ],
   asar: true,
+  // The chat's Claude reads the app's rules and process guides with its own tools, which cannot look
+  // into the archive (src/chat/claude.ts).
+  asarUnpack: ['AGENTS.md', 'processes/**/*'],
   // Chromium's own translations only for the app's languages.
   electronLanguages: ['de', 'fr', 'it', 'en'],
   // Hardening of the release build: the app's binary cannot be run as Node, takes no NODE_OPTIONS

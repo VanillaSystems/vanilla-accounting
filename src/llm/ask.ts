@@ -14,10 +14,11 @@
  */
 
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
+import type { ClaudeStatus } from '../types/claude.js';
 
 export type Model = 'haiku' | 'sonnet' | 'opus';
 
@@ -51,7 +52,7 @@ const DEFAULT_SYSTEM =
 /** No `claude` CLI to run: model features say what to install, everything else works without them. */
 export class NoClaudeError extends Error {
   constructor() {
-    super('Für Belege lesen und Buchungsvorschläge braucht die App Claude Code: von claude.com/claude-code installieren und einmal im Terminal mit "claude" anmelden.');
+    super('Für Belege lesen und Buchungsvorschläge braucht die App Claude Code: unter Firma › Claude einrichten, oder im Terminal installieren (claude.ai/install.sh) und mit "claude auth login" anmelden.');
   }
 }
 
@@ -59,7 +60,7 @@ export class NoClaudeError extends Error {
  * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/desktop/claude.ts),
  * else `claude` on the PATH. Its own folder joins the PATH, so an npm-installed claude finds its node.
  */
-function claude(): { bin: string; env: NodeJS.ProcessEnv } {
+export function claudeCommand(): { bin: string; env: NodeJS.ProcessEnv } {
   const bin = process.env.CLAUDE_BIN;
   if (!bin) return { bin: 'claude', env: process.env };
   return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
@@ -91,7 +92,7 @@ function args(opts: AskOptions): string[] {
   return a;
 }
 
-function record(row: LedgerRow): void {
+export function record(row: LedgerRow): void {
   try {
     const path = ledgerPath();
     mkdirSync(dirname(path), { recursive: true });
@@ -110,7 +111,7 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
   const model = opts.model ?? 'sonnet';
   const started = Date.now();
   return new Promise((resolve, reject) => {
-    const { bin, env } = claude();
+    const { bin, env } = claudeCommand();
     const child = spawn(bin, args(opts), { cwd: cwd(), env });
     let out = '';
     let err = '';
@@ -145,16 +146,37 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
 }
 
 /**
- * Whether a working `claude` CLI answers here (CLAUDE_BIN, else on PATH) and exits 0 for
- * `--version`. Steps that need the model skip their model part without it and say so, instead of
- * failing each call.
+ * What the `claude` CLI here (CLAUDE_BIN, else on PATH) can do: not there (or not answering
+ * `--version`), there but signed out, or ready. Signed in or not is `claude auth status`, which
+ * answers from the local credentials without a model call (exit 1 and `loggedIn: false` when
+ * signed out). A CLI too old for that command is taken as ready; its first call says otherwise.
  */
-export function modelReady(timeoutMs = 15_000): Promise<boolean> {
+export async function claudeStatus(desktopApps = CLAUDE_DESKTOP_APPS): Promise<ClaudeStatus> {
+  const version = await run(['--version'], 15_000);
+  if (version?.code !== 0) return { state: 'missing', desktopApp: desktopApps.some((p) => existsSync(p)) };
+  const v = version.stdout.trim().split(/\s+/)[0] ?? '';
+  const auth = await run(['auth', 'status', '--json'], 15_000);
+  let loggedIn: unknown;
+  try { loggedIn = (JSON.parse(auth?.stdout ?? '') as { loggedIn?: unknown }).loggedIn; } catch { /* no auth command: an older CLI */ }
+  return { state: loggedIn === false ? 'signedOut' : 'ready', version: v };
+}
+
+/**
+ * Where Claude Desktop lives. It brings no `claude` command of its own (its Claude Code copy is
+ * private to it), so with it installed and no CLI the setup says why the app still asks.
+ */
+const CLAUDE_DESKTOP_APPS = process.platform === 'win32'
+  ? [join(process.env.LOCALAPPDATA ?? '', 'AnthropicClaude')]
+  : ['/Applications/Claude.app', join(homedir(), 'Applications/Claude.app')];
+
+function run(argv: string[], timeoutMs: number): Promise<{ code: number | null; stdout: string } | undefined> {
   return new Promise((resolve) => {
-    const { bin, env } = claude();
-    const child = spawn(bin, ['--version'], { cwd: cwd(), env, stdio: ['ignore', 'ignore', 'ignore'] });
-    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(false); }, timeoutMs);
-    child.on('error', () => { clearTimeout(timer); resolve(false); });
-    child.on('close', (code) => { clearTimeout(timer); resolve(code === 0); });
+    const { bin, env } = claudeCommand();
+    const child = spawn(bin, argv, { cwd: cwd(), env, stdio: ['ignore', 'pipe', 'ignore'] });
+    let stdout = '';
+    child.stdout.on('data', (d) => (stdout += d));
+    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(undefined); }, timeoutMs);
+    child.on('error', () => { clearTimeout(timer); resolve(undefined); });
+    child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout }); });
   });
 }

@@ -18,6 +18,8 @@ import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
 import { IntakeLine, finishedText, watchIntake } from './Intake.js';
+import { checkClaude, onClaudeConnected, toClaudeSetup } from './claude.js';
+import { Chat } from './chat/Chat.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
@@ -53,6 +55,8 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);
   const [dropping, setDropping] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const chatHere = canEdit && !STATIC_EXPORT;
 
   const area = areaOf(loc.route);
   const open = openQuarter(books.config?.closedThrough, localToday());
@@ -113,12 +117,23 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   // The inbox processing runs on the server; the books are loaded again when a job ends.
   const reload = useRef(refresh);
   reload.current = refresh;
-  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => { reload.current(); toast(finishedText(job)); })), [canEdit, toast]);
+  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => {
+    reload.current();
+    if (!job.steps.some((s) => s.notes.some((n) => n.code === 'noModel'))) return toast(finishedText(job));
+    void checkClaude();
+    toast(finishedText(job), undefined, { label: t('claude.setup'), run: () => toClaudeSetup(propsRef.current.nav) });
+  })), [canEdit, toast]);
+  useEffect(() => onClaudeConnected((version) => toast(t('claude.connected', { version }))), [toast]);
 
   useShellKeys({
     overlayOpen: () => overlay !== null,
     closeOverlay: () => { setOverlay(null); focusSelectedRow(); },
     palette: () => setOverlay({ kind: 'palette' }),
+    chat: () => {
+      if (!chatHere) return;
+      setChatOpen((was) => !was);
+      if (chatOpen) focusSelectedRow();
+    },
     undo,
     area: (letter) => {
       const id = DOCK.flat().find((a) => AREAS[a].dock?.key === letter);
@@ -164,6 +179,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     const add = areaOf(p.route).add;
     const actions: PaletteItem[] = [
       ...(add && p.canEdit ? [{ label: add.title(p.route), side: 'N', run: () => add.run(p) }] : []),
+      ...(p.canEdit && !STATIC_EXPORT ? [{ label: t('chat.open'), side: '⌘J', run: () => setChatOpen(true) }] : []),
       report('income', t('tab.incomeStatement')),
       report('balance', t('tab.balanceSheet')),
       report('trial', t('tab.trialBalance')),
@@ -189,6 +205,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     [['G'], t('keys.area'), t('keys.areaTip')],
     [['/'], t('keys.search'), t('keys.searchTip')],
     [['⌘', 'K'], t('keys.all'), t('keys.allTip')],
+    ...(chatHere ? [[['⌘', 'J'], t('chat.title'), t('chat.open')] as LegendItem] : []),
     [['?'], t('keys.help'), t('keys.helpTip')],
   ];
 
@@ -237,6 +254,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
       <Dock ref={dockRef} current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
+      {chatHere && <Chat open={chatOpen} nav={nav} onClose={() => { setChatOpen(false); focusSelectedRow(); }} />}
       <div className="hint" aria-hidden="true" />
       {toastNode}
       <IntakeLine onOpen={() => goArea('receipts')} />
