@@ -14,6 +14,18 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-11
+
+The redesign and the Mac app. The app is one window with nine areas, each page with its own
+link. It now comes as a Mac app (a `.dmg` for Apple silicon and Intel) that needs no Node.js,
+Homebrew or terminal; `npm start` and the CLI work as before. Invoices are written, issued,
+printed with a Swiss QR-bill, sent by e-mail through the company's own mailbox and booked when
+they are paid. The app processes the inbox itself: a dropped receipt or photo is read, named,
+linked and booked without `npm run extract`. Nothing for you to do: `npm run update` installs
+it. Two entries carry **⚠ figures** (the demo's Q3 return, and the opening balance of Saldobilanz
+and Kontoauszug for a period after 1 January); no filed figure moves. E-mail sending is optional
+and reads its password from `VANILLA_SMTP_PASSWORD` in `.env` (in the Mac app, the keychain).
+
 ### Changed
 
 - **The redesign.** The app is one window: a list on the left and the selected item on the right
@@ -36,8 +48,8 @@ Two markers flag an entry you must read before you update:
     aufheben**, which deletes its private payment (⌘Z pays it again); a private payment that is
     already booked is not deleted, its entry goes first. Link, unlink, edits and "kein Beleg" take
     effect at once and can be undone; a delete asks first. Space previews, D downloads, E edits. A
-    receipt paid in a filed quarter is read only. Dropped PDFs show as "wird gelesen" until
-    `npm run extract` reads them, then the receipt takes their place.
+    receipt paid in a filed quarter is read only. Dropped files show as "wird gelesen" while
+    the inbox processing reads them, then the receipt takes their place.
   - **Kontoauszüge** (`/bank/1021-2026-09`, `/bank/1021-2026-09/<ref>`, `/payments/<ref>`): each
     bank account's monthly statements, grouped by account or by month; a month that ended without
     its statement shows as missing, the running month with its payments. A statement shows the
@@ -97,7 +109,7 @@ Two markers flag an entry you must read before you update:
     out). An invoice shows on its A4 sheet, laid out by the same renderer as its PDF; a draft is
     edited on the sheet itself (customer, dates, texts, each line's text, quantity, unit, price and
     VAT rate, the reason for 0 %), with Vorschau, Ausstellen (what Art. 26 MWSTG still needs is
-    named), Senden (the PDF is downloaded and the send recorded; no e-mail yet), copy, credit note
+    named), Senden (by e-mail, or the PDF downloaded, and the send recorded), copy, credit note
     (whole or part, refund or set off), cancellation with a notice, reminders written on the sheet
     with a fee, comments, and payment proposals to confirm. The customer form takes addresses of
     any country (postcode, state, house number first, VAT number, language). New invoice with `N`
@@ -223,7 +235,8 @@ Two markers flag an entry you must read before you update:
   mode, no NODE_OPTIONS, no inspector, its code checked at start). Signing, notarization and
   updates from GitHub releases are configured and stay off until their variables are set.
 - Belege takes photos: JPG, PNG and HEIC (iPhone) from the drop and the add button go into the
-  inbox and become PDFs as they are read.
+  inbox and become PDFs as they are read, turned upright by the photo's orientation. A photo
+  put into the inbox from the Finder or the phone starts the processing as a PDF does.
 - Without the `claude` CLI, a model feature (Neu lesen, Klassifizieren) answers with what to
   install instead of a failed process, also under `npm start`.
 
