@@ -1,16 +1,14 @@
 /**
  * The chat composer (src/app/shell/chat/): the jobs of the "/" menu, attached files, a message to
- * Claude with its answer streamed back, and speech to text. Nothing here writes the books: Claude
- * changes them only through the app's commands (src/chat/claude.ts). Answers and transcriptions
- * stream as NDJSON, one event per line.
+ * Claude with its answer streamed back. Nothing here writes the books: Claude changes them only
+ * through the app's commands (src/chat/claude.ts). Answers stream as NDJSON, one event per line.
  */
 import express, { Router, type Response } from 'express';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, relative } from 'node:path';
 import { chatSkills } from '../../chat/skills.js';
 import { runChat } from '../../chat/claude.js';
-import { SAMPLE_RATE, transcribe } from '../../chat/transcribe.js';
-import type { ChatEvent, ChatFile, ChatSend, ChatSkill, TranscribeEvent } from '../../types/chat.js';
+import type { ChatEvent, ChatFile, ChatSend, ChatSkill } from '../../types/chat.js';
 import { RequestError, WS } from '../books.js';
 
 export const router = Router();
@@ -72,27 +70,5 @@ router.post('/api/chat', async (req, res) => {
   const stop = new AbortController();
   res.on('close', () => { if (!res.writableFinished) stop.abort(); });
   await runChat(send, { root: WS.paths.root, skills: chatSkills(), onEvent: emit, signal: stop.signal });
-  res.end();
-});
-
-/** Mono 32-bit float PCM at 16 kHz, as the composer records it. */
-router.post('/api/transcribe', express.raw({ type: 'application/octet-stream', limit: '64mb' }), async (req, res) => {
-  const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-  if (!body.length || body.length % 4) throw new RequestError(400, 'Audio: 32-bit float PCM erwartet.');
-  // A copy: the request's buffer may sit unaligned in a larger pool.
-  const audio = new Float32Array(new Uint8Array(body).buffer);
-  if (audio.length > SAMPLE_RATE * 600) throw new RequestError(400, 'Höchstens 10 Minuten Audio.');
-  const emit = ndjson<TranscribeEvent>(res);
-  let last = 0;
-  try {
-    const text = await transcribe(audio, String(req.query.language ?? 'de'), (loaded, total) => {
-      if (Date.now() - last < 150 && loaded < total) return;
-      last = Date.now();
-      emit({ type: 'progress', loaded, total });
-    });
-    emit({ type: 'text', text });
-  } catch (e) {
-    emit({ type: 'error', message: e instanceof Error ? e.message : String(e) });
-  }
   res.end();
 });

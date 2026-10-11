@@ -43,13 +43,11 @@ module.exports = {
     '!node_modules/@pdf-lib/*/{dist,es,src}/**/*',
     '!node_modules/@fontsource/*/files/{*.woff,*-italic.woff2,*-{cyrillic,cyrillic-ext,greek,greek-ext,vietnamese,hebrew}-*}',
     '!node_modules/**/*.{map,d.ts,d.mts,d.cts}',
-    // The speech model runs on onnxruntime-node (src/chat/transcribe.ts): its Mac binaries only.
-    '!node_modules/onnxruntime-node/bin/napi-v*/{linux,win32}/**/*',
   ],
   asar: true,
   // The chat's Claude reads the app's rules and process guides with its own tools, which cannot look
-  // into the archive (src/chat/claude.ts); the speech model's native libraries load from disk.
-  asarUnpack: ['AGENTS.md', 'processes/**/*', 'node_modules/onnxruntime-node/bin/**/*', 'node_modules/@img/**/*'],
+  // into the archive (src/chat/claude.ts).
+  asarUnpack: ['AGENTS.md', 'processes/**/*'],
   // Chromium's own translations only for the app's languages.
   electronLanguages: ['de', 'fr', 'it', 'en'],
   // Hardening of the release build: the app's binary cannot be run as Node, takes no NODE_OPTIONS
@@ -74,10 +72,6 @@ module.exports = {
     hardenedRuntime: true,
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',
-    // Dictation in the chat (src/app/shell/chat/recorder.ts); the audio is transcribed on the Mac.
-    extendInfo: {
-      NSMicrophoneUsageDescription: 'Vanilla Accounting braucht das Mikrofon zum Diktieren im Chat. Der Text wird auf diesem Mac erkannt. / Vanilla Accounting uses the microphone for dictation in the chat; the text is recognised on this Mac.',
-    },
     // null: no signing, even when the keychain holds an identity.
     identity: signed ? undefined : null,
     notarize,

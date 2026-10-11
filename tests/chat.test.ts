@@ -18,29 +18,9 @@ import { startApi, type ApiServer } from './support/api-server.js';
 const CONV = '0b5e3a2c-1d4f-4e6a-9b7c-8d9e0f1a2b3c';
 const run = (actions: ChatAction[], from: ChatState = initialChat(CONV)) => actions.reduce(chatReducer, from);
 
-test('the microphone: idle → recording → transcribing → idle, the transcript added to the draft', () => {
-  let s = run([{ type: 'draft', text: 'Bitte' }, { type: 'record' }]);
-  assert.equal(s.phase.kind, 'recording');
-  s = run([{ type: 'accept' }, { type: 'progress', loaded: 25, total: 100 }], s);
-  assert.deepEqual(s.phase, { kind: 'transcribing', progress: 0.25 });
-  s = run([{ type: 'transcribed', text: ' buche die Rechnung. ' }], s);
-  assert.deepEqual([s.phase.kind, s.draft], ['idle', 'Bitte buche die Rechnung.']);
-});
-
-test('discarding a recording keeps the draft; a failure returns to idle and says why', () => {
-  assert.deepEqual(run([{ type: 'draft', text: 'x' }, { type: 'record' }, { type: 'discard' }]).draft, 'x');
-  const failed = run([{ type: 'record' }, { type: 'failed', message: 'Kein Mikrofon' }]);
-  assert.deepEqual([failed.phase.kind, failed.error], ['idle', 'Kein Mikrofon']);
-  assert.equal(run([{ type: 'record' }, { type: 'accept' }, { type: 'failed', message: 'nope' }]).phase.kind, 'idle');
-});
-
-test('one thing at a time: no recording while busy, no send while recording or transcribing', () => {
-  const recording = run([{ type: 'draft', text: 'Frage' }, { type: 'record' }]);
-  assert.equal(run([{ type: 'send' }], recording), recording);
-  const transcribing = run([{ type: 'accept' }], recording);
-  assert.equal(run([{ type: 'send' }, { type: 'record' }], transcribing), transcribing);
+test('one thing at a time: while Claude answers, no second send, no draft change, no new conversation', () => {
   const sending = run([{ type: 'draft', text: 'Frage' }, { type: 'send' }]);
-  assert.equal(run([{ type: 'record' }, { type: 'draft', text: 'anders' }, { type: 'fresh', conversation: 'other' }], sending), sending);
+  assert.equal(run([{ type: 'draft', text: 'anders' }, { type: 'send' }, { type: 'attach', files: [{ id: 'f', name: 'x.pdf' }] }, { type: 'fresh', conversation: 'other' }], sending), sending);
 });
 
 test('Enter sends only something, and not before every attached file is stored', () => {

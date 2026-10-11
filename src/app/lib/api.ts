@@ -1,5 +1,5 @@
 import type { ClaudeStatus } from '../../types/claude.js';
-import type { ChatEvent, ChatFile, ChatSend, ChatSkill, TranscribeEvent } from '../../types/chat.js';
+import type { ChatEvent, ChatFile, ChatSend, ChatSkill } from '../../types/chat.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { IntakeStatus } from '../../intake/pipeline.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
@@ -196,9 +196,6 @@ export const api = {
   /** A message to Claude; the answer streams to `onEvent` until it is done (or `signal` stops it). */
   chat: (send: ChatSend, onEvent: (e: ChatEvent) => void, signal: AbortSignal) =>
     stream<ChatEvent>('/api/chat', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(send), signal }, onEvent),
-  /** Speech (mono, 16 kHz) to text on this computer; the speech model's download reports its progress first. */
-  transcribe: (audio: Float32Array<ArrayBuffer>, language: string, onEvent: (e: TranscribeEvent) => void) =>
-    stream<TranscribeEvent>(`/api/transcribe?language=${language}`, { headers: { 'Content-Type': 'application/octet-stream' }, body: new Blob([audio]) }, onEvent),
   /** Starts the inbox processing; while a job runs, one more run after it. */
   startIntake: () => request<IntakeStatus>('POST', '/api/intake'),
 

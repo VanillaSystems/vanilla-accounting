@@ -29,11 +29,10 @@ Two markers flag an entry you must read before you update:
 - Chat with Claude: **⌘J** (or **Claude fragen** in ⌘K) opens a composer at the bottom of the
   window. Ask about the books, type **/** to start a bookkeeping job from the process flows
   (Eingang verarbeiten, Kontoauszüge importieren, Quartal abschliessen, …), attach files with **+**
-  or by dropping them, and dictate with the microphone. The answer streams in above it, follow-ups
-  continue the conversation, **Neu** starts over. Claude works in the workspace under the app's
-  rules: it may edit `knowledge/` and run the app's own commands, never `books.json` or
-  `filings/` directly. Dictation is transcribed on your computer (Whisper small, downloaded once,
-  about 250 MB); the audio is never sent anywhere. The Mac app asks once for the microphone. See
+  or by dropping them. The answer streams in above it, follow-ups continue the conversation,
+  **Neu** starts over. Claude works in the workspace under the app's rules: it may edit
+  `knowledge/` and run the app's own commands, never `books.json` or `filings/` directly. The chat
+  has no dictation of its own; macOS's dictation (Fn twice) types into its field. See
   [docs/chat.md](docs/chat.md).
 
 ### Changed

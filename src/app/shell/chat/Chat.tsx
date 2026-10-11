@@ -1,29 +1,23 @@
 /**
  * The chat composer (⌘J, or "Claude fragen" in ⌘K): a box at the bottom centre, above the dock.
- * Type, or "/" for a bookkeeping job of processes/, attach files with + or by dropping them on it,
- * dictate with the microphone (transcribed on this computer), Enter sends to Claude, Shift+Enter is
- * a new line. The answer streams into the panel above it; the next message continues the
+ * Type, or "/" for a bookkeeping job of processes/, attach files with + or by dropping them on it;
+ * Enter sends to Claude, Shift+Enter is a new line. The answer streams into the panel above it; the next message continues the
  * conversation until "Neu". Closed, it keeps its draft and conversation (it is only hidden).
  */
 import { useEffect, useReducer, useRef, useState } from 'react';
-import '@fontsource/instrument-sans/400-italic.css';
 import type { ChatSend, ChatSkill } from '../../../types/chat.js';
 import { api, errorText } from '../../lib/api.js';
 import { isKey, language, t, tData } from '../../i18n/index.js';
 import type { Nav } from '../../areas/index.js';
 import { toClaudeSetup, useClaude } from '../claude.js';
 import { canSend, chatReducer, initialChat, skillQuery, type Attachment, type ChatState } from './model.js';
-import { startRecording, type Recording } from './recorder.js';
 import '../../styles/chat.css';
 
 const svg = (d: string) => <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg>;
 const ICON = {
   plus: svg('M12 5v14M5 12h14'),
-  mic: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>,
   x: svg('M6 6l12 12M18 6 6 18'),
-  check: svg('m5 12.5 4.5 4.5L19 7.5'),
 };
-const BARS = 14;
 
 const skillName = (s: ChatSkill) => (isKey(`chat.skill.${s.id}`) ? tData(`chat.skill.${s.id}`) : s.name);
 const skillLine = (s: ChatSkill) => (isKey(`chat.skill.${s.id}.line`) ? tData(`chat.skill.${s.id}.line`) : s.line);
@@ -38,7 +32,6 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
   const field = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const log = useRef<HTMLDivElement>(null);
-  const recording = useRef<Recording>();
   const stopper = useRef<AbortController>();
   const state = useRef(s);
   state.current = s;
@@ -49,7 +42,7 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
     if (!skills.length) api.chatSkills().then(setSkills).catch(() => { /* the menu stays empty */ });
   }, [open, skills.length]);
   useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [s.turns]);
-  useEffect(() => () => { recording.current?.cancel(); stopper.current?.abort(); }, []);
+  useEffect(() => () => { stopper.current?.abort(); }, []);
   useEffect(() => {
     const el = field.current;
     if (!el) return;
@@ -74,38 +67,6 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
         .then((path) => dispatch({ type: 'stored', id: a.id, path }))
         .catch(() => dispatch({ type: 'storeFailed', id: a.id }));
     }
-  }
-
-  async function record() {
-    if (state.current.phase.kind !== 'idle') return;
-    dispatch({ type: 'record' });
-    try {
-      recording.current = await startRecording();
-    } catch (e) {
-      dispatch({ type: 'failed', message: t('chat.micFailed', { reason: e instanceof Error ? e.message : String(e) }) });
-    }
-  }
-  function discard() {
-    recording.current?.cancel();
-    recording.current = undefined;
-    dispatch({ type: 'discard' });
-  }
-  async function accept() {
-    const audio = recording.current?.stop();
-    recording.current = undefined;
-    dispatch({ type: 'accept' });
-    // Under a third of a second is a click, and silence is no speech: Whisper would make up a word for either.
-    if (!audio || audio.length < 5000 || !audio.some((v) => Math.abs(v) > 0.01)) return dispatch({ type: 'transcribed', text: '' });
-    try {
-      await api.transcribe(audio, language(), (e) => {
-        if (e.type === 'progress') dispatch({ type: 'progress', loaded: e.loaded, total: e.total });
-        else if (e.type === 'text') dispatch({ type: 'transcribed', text: e.text });
-        else dispatch({ type: 'failed', message: t('chat.transcribeFailed', { reason: e.message }) });
-      });
-    } catch (e) {
-      dispatch({ type: 'failed', message: t('chat.transcribeFailed', { reason: errorText(e) }) });
-    }
-    field.current?.focus();
   }
 
   async function send() {
@@ -147,13 +108,12 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
     if (e.key === 'Backspace' && s.skill && !s.draft && field.current?.selectionStart === 0) dispatch({ type: 'skill', id: undefined });
   }
 
-  /** Esc anywhere in the chat: drops a recording, else closes it. */
+  /** Esc anywhere in the chat closes it. */
   function onChatKeyDown(e: React.KeyboardEvent) {
     if (e.key !== 'Escape') return;
     e.preventDefault();
     e.stopPropagation();
-    if (phase === 'recording') discard();
-    else onClose();
+    onClose();
   }
 
   const hasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes('Files');
@@ -171,7 +131,6 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
   };
 
   const skill = skills.find((k) => k.id === s.skill);
-  const placeholder = phase === 'recording' ? t('chat.listening') : t('chat.placeholder');
   return (
     <div className="chat" hidden={!open} data-testid="chat" data-phase={phase} onKeyDown={onChatKeyDown}>
       {s.turns.length > 0 && <Answers s={s} skills={skills} log={log} onNew={() => { dispatch({ type: 'fresh', conversation: crypto.randomUUID() }); field.current?.focus(); }}
@@ -210,8 +169,7 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
           rows={2}
           value={s.draft}
           readOnly={phase === 'sending'}
-          className={phase === 'recording' ? 'listening' : undefined}
-          placeholder={placeholder}
+          placeholder={t('chat.placeholder')}
           aria-label={t('chat.open')}
           onChange={(e) => { dispatch({ type: 'draft', text: e.target.value }); setAt(0); }}
           onKeyDown={onKeyDown}
@@ -223,27 +181,11 @@ export function Chat({ open, onClose, nav }: { open: boolean; onClose(): void; n
             <button type="button" className="btn primary" onClick={() => { onClose(); toClaudeSetup(nav); }}>{t('claude.setup')}</button>
           </div>
         )}
-        {s.error && <div className="err" role="alert">{s.error}</div>}
         <div className="bar">
           <button type="button" className="ib" aria-label={t('chat.attach')} title={t('chat.attach')} disabled={phase === 'sending'} onClick={() => picker.current?.click()}>{ICON.plus}</button>
           <input ref={picker} type="file" multiple hidden onChange={(e) => { attach([...(e.target.files ?? [])]); e.target.value = ''; }} />
           <span className="grow" />
-          {phase === 'recording' ? (
-            <>
-              <Meter level={() => recording.current?.level() ?? 0} />
-              <button type="button" className="sq" data-testid="chat-discard" aria-label={t('chat.discard')} title={t('chat.discard')} onClick={discard}>{ICON.x}</button>
-              <button type="button" className="sq" data-testid="chat-accept" aria-label={t('chat.accept')} title={t('chat.accept')} onClick={() => void accept()}>{ICON.check}</button>
-            </>
-          ) : phase === 'idle' ? (
-            <button type="button" className="ib" data-testid="chat-mic" aria-label={t('chat.record')} title={t('chat.record')} onClick={() => void record()}>{ICON.mic}</button>
-          ) : (
-            <span className="busy" data-testid="chat-busy" role="status" aria-label={phase === 'sending' ? t('chat.working') : t('chat.transcribing')}>
-              {s.phase.kind === 'transcribing' && s.phase.progress !== undefined && s.phase.progress < 1 && (
-                <span className="m">{t('chat.downloading', { percent: Math.round(s.phase.progress * 100) })}</span>
-              )}
-              <span className="spin" />
-            </span>
-          )}
+          {phase === 'sending' && <span className="busy" data-testid="chat-busy" role="status" aria-label={t('chat.working')}><span className="spin" /></span>}
         </div>
         {dragging && <div className="dropping" aria-hidden="true">{t('chat.dropHere')}</div>}
       </div>
@@ -290,21 +232,4 @@ function Answers({ s, skills, log, onNew, onStop, onClose }: {
       </div>
     </div>
   );
-}
-
-/** The microphone's level of the last moments, as bars moving right to left. */
-function Meter({ level }: { level(): number }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const read = useRef(level);
-  read.current = level;
-  useEffect(() => {
-    const levels = new Array<number>(BARS).fill(0);
-    const timer = setInterval(() => {
-      levels.shift();
-      levels.push(read.current());
-      ref.current?.querySelectorAll<HTMLElement>('i').forEach((bar, i) => bar.style.setProperty('--h', levels[i].toFixed(3)));
-    }, 70);
-    return () => clearInterval(timer);
-  }, []);
-  return <span className="meter" ref={ref} data-testid="chat-meter" aria-hidden="true">{Array.from({ length: BARS }, (_, i) => <i key={i} />)}</span>;
 }

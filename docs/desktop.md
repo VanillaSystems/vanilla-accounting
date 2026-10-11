@@ -49,9 +49,9 @@ The app does not use those copies (undocumented, versioned per release, signed i
 When Claude Desktop is installed (`/Applications/Claude.app`) and no `claude` CLI is found,
 Firma › Claude says so, so the person knows why the app still asks for Claude Code.
 
-## Chat and dictation
+## Chat
 
-⌘J opens the chat with Claude; the microphone dictates into it, transcribed on the Mac. The app gets the microphone only for its own pages; the model is kept in the user data folder (`models/`). See [chat.md](chat.md).
+⌘J opens the chat with Claude. The app has no dictation of its own and no page gets a device permission; macOS's dictation (Fn twice) types into the chat's field. See [chat.md](chat.md).
 
 ## Commands
 

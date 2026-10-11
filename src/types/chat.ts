@@ -1,7 +1,7 @@
 /**
  * The chat composer's wire format (src/server/routes/chat.ts, src/app/shell/chat/): a job from
- * processes/*.flow.yaml, a message sent to Claude, the events its answer streams as, and the
- * events of a local transcription. Both streams are NDJSON, one event per line.
+ * processes/*.flow.yaml, a message sent to Claude and the events its answer streams as (NDJSON,
+ * one event per line).
  */
 
 /** A bookkeeping job the "/" menu offers: a flow of processes/. `name` and `line` are the flow's own (English) words. */
@@ -30,9 +30,3 @@ export type ChatEvent =
 
 /** POST /api/chat/files answers with where the file lies. */
 export interface ChatFile { path: string }
-
-/** POST /api/transcribe: the model's download (once), then the text. */
-export type TranscribeEvent =
-  | { type: 'progress'; loaded: number; total: number }
-  | { type: 'text'; text: string }
-  | { type: 'error'; message: string };

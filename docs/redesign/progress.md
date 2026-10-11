@@ -25,8 +25,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 
 | Date | Decision | Why |
 |---|---|---|
-| 2026-10-11 | Chat: dictation is transcribed on the local server (Node, onnxruntime-node), not in the page. | The model folder is a real folder (user data, `VANILLA_MODELS_DIR`), no wasm files to serve, and it measured 1.1–1.3 s for 10 s of German on an M3; the browser and the Mac app share the same path. |
-| 2026-10-11 | Chat: Whisper small, 8-bit (`onnx-community/whisper-small`), not base. | base misheard German words ("boche", "Swisskom") at 0.5 s; small got them right at 1.2 s. |
+| 2026-10-11 | Chat: no dictation in the MVP; macOS's own dictation (Fn twice) types into the field. The Whisper version (local server, transformers.js, whisper-small 8-bit, 1.1–1.3 s for 10 s of German on an M3) is kept on branch `feat/chat-voice`. | The owner's decision. Without it the app needs no microphone permission and no 250 MB model download, and the arm64 dmg drops from 160.6 MB to 124.5 MB (the size of the 0.3.0 release). |
 | 2026-10-11 | Chat: Claude's limits are CLI permissions: read everywhere, edit only `knowledge/**`, Bash only `npm --prefix <app> run *` from source. | A refused `books.json` edit was checked with a real `claude -p`; the prompt alone is no guard. The packaged app has no npm, so there Claude names the change instead. |
 | 2026-10-11 | Chat: a "/" job is a chip on the draft, sent as "Job: … Follow processes/<id>.flow.yaml", not text in the field. | The id stays exact whatever the UI language; names and one-liners per flow come from the dictionaries (`chat.skill.<id>`), the flow's own name as fallback. |
 | 2026-10-11 | Chat: the field is read-only while Claude answers; Stopp ends the answer. | The owner's spec: usable for typing unless sending. |

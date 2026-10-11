@@ -1,8 +1,7 @@
 # Chat with Claude
 
-The chat composer lets you ask Claude about the open books, start a bookkeeping job, or dictate.
-It needs Claude Code, set up under Firma › Claude ([desktop.md](desktop.md#claude-einrichten)).
-Dictation needs no Claude and works offline after one download.
+The chat composer lets you ask Claude about the open books or start a bookkeeping job. It needs
+Claude Code, set up under Firma › Claude ([desktop.md](desktop.md#claude-einrichten)).
 
 ## Use it
 
@@ -16,8 +15,6 @@ Dictation needs no Claude and works offline after one download.
   empty field removes it.
 - Attach files with **+**, by dropping them on the composer, or by pasting them. Each file shows
   as a chip with ✕ to remove it.
-- Click the microphone to dictate. The bars show the microphone level. ✕ discards the recording,
-  ✓ turns it into text in the field. Nothing is sent until you press Enter.
 - The answer streams into the panel above the composer, with each file Claude reads or changes.
   The next message continues the same conversation. **Neu** starts a fresh one, **Stopp** ends a
   running answer.
@@ -46,28 +43,12 @@ to `data/llm-ledger.jsonl` with the step `chat` (`npm run llm-usage`).
 
 ## Dictation
 
-The page records the microphone as mono PCM at 16 kHz (`src/app/shell/chat/recorder.ts`) and
-sends it to the app's own local server, which transcribes it with Whisper small, 8-bit quantized
-(`onnx-community/whisper-small`), through transformers.js on onnxruntime-node
-(`src/chat/transcribe.ts`). The audio never leaves the computer. The language follows the app's
-language (de, fr, it, en).
-
-The model (about 250 MB) downloads from Hugging Face on the first dictation; the busy state shows
-the progress. It is kept in the Mac app's user data folder (`models/`), or in
-`~/.cache/vanilla-accounting/models` for `npm start`. `VANILLA_MODELS_DIR` sets another folder.
-
-Measured on an Apple M3 for a 9.8 s German clip: 1.1 to 1.3 s per transcription in Node with the
-model loaded (0.6 s to load it from disk), and 1.5 to 1.7 s from ✓ to the text in the dev Mac
-app. whisper-base took 0.5 s but misheard words ("boche", "Swisskom"), so the app uses
-whisper-small.
-
-The Mac app asks macOS for the microphone once (`NSMicrophoneUsageDescription`, entitlement
-`com.apple.security.device.audio-input`). Inside the app, only the app's own pages get the
-microphone and no other device (`src/desktop/permissions.ts`). In the browser, the browser asks.
+Dictation is left out of the MVP. macOS's own dictation works in the text field: press **Fn**
+twice (or the dictation key), speak, and the text appears at the cursor. Nothing is sent until you
+press Enter. A version with dictation built in (Whisper, transcribed on the computer) is kept on
+the branch `feat/chat-voice`.
 
 ## Tests
 
 - `tests/chat.test.ts`: the composer's state machine, the jobs from the flows, the message and
   CLI arguments, the stream-json parser, and the routes with the claude stub.
-- `tests/transcribe.test.ts`: German speech from macOS `say`, transcribed. It is skipped unless the
-  model is already in `VANILLA_MODELS_DIR`, since a test does not download it.

@@ -8,7 +8,6 @@
 .chat .composer.drag { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
 .chat textarea { display: block; width: 100%; min-height: 46px; max-height: 200px; border: 0; outline: 0; resize: none; background: transparent; padding: 3px 4px 0 2px; font-size: 15px; line-height: 1.45; }
 .chat textarea::placeholder { color: var(--muted); }
-.chat textarea.listening::placeholder { font-style: italic; }
 .chat textarea:read-only { color: var(--muted); }
 
 .chat .bar { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-height: 36px; }
@@ -17,17 +16,9 @@
 .chat .ib:hover { background: var(--hover); }
 .chat .ib:disabled { color: var(--faint); cursor: default; background: none; }
 .chat .ib svg { width: 20px; height: 20px; stroke-width: 1.5; }
-.chat .sq { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent); transition: background .12s; }
-.chat .sq:hover { background: var(--hover); }
-.chat .sq svg { width: 18px; height: 18px; stroke-width: 1.5; }
 
-/* recording: the microphone's level, newest on the right */
-.chat .meter { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-right: 10px; }
-.chat .meter i { width: 2.5px; height: calc(5px + var(--h, 0) * 19px); border-radius: 2px; background: var(--ink); transition: height .07s linear; }
-
-/* busy: transcribing, or Claude working */
+/* busy: Claude working */
 .chat .busy { display: inline-flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; }
-.chat .busy .m { font-size: 12px; color: var(--muted); }
 .chat .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--ink-2); animation: spin .8s linear infinite; flex: none; }
 .chat .spin.sm { width: 12px; height: 12px; border-width: 1.5px; }
 @keyframes spin { to { transform: rotate(360deg); } }

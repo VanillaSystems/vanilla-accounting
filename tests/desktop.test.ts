@@ -1,8 +1,7 @@
 /**
  * The desktop app's server (src/desktop/server.ts) without Electron: the start screen's routes,
  * opening, creating and switching books in place, the demo copy, the host guard; the start
- * screen's words for every setup question; the claude CLI found through a PATH or refused clearly;
- * the microphone as the only device a page gets.
+ * screen's words for every setup question; the claude CLI found through a PATH or refused clearly.
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
 import { claudeOn } from '../src/desktop/claude.js';
-import { allowPermission } from '../src/desktop/permissions.js';
 import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
 import { ask, claudeStatus, NoClaudeError } from '../src/llm/ask.js';
@@ -101,18 +99,6 @@ test('Demo: a copy in the user data folder opens; another workspace is created, 
   assert.deepEqual(info.recent.map((b: { name: string; demo: boolean }) => [b.name, b.demo]), [['Neu Test GmbH', false], [demoName, true]]);
   assert.equal((await call('POST', '/api/desktop/open', { root: join(home, 'Demo') })).status, 200);
   assert.equal((await call('GET', '/api/workspace')).json.company.name, demoName);
-});
-
-test('a page gets the microphone only when it is the app\'s own and asks for audio alone; no other device, no other page', () => {
-  const base = 'http://127.0.0.1:4100';
-  const own = `${base}/receipts`;
-  assert.equal(allowPermission(base, 'media', { requestingUrl: own, mediaTypes: ['audio'] }), true);
-  assert.equal(allowPermission(base, 'media', { requestingUrl: own, mediaTypes: ['audio', 'video'] }), false);
-  assert.equal(allowPermission(base, 'media', { requestingUrl: own, mediaTypes: ['video'] }), false);
-  assert.equal(allowPermission(base, 'media', { requestingUrl: own, mediaTypes: [] }), false);
-  assert.equal(allowPermission(base, 'media', { requestingUrl: 'http://127.0.0.1:4100.evil.example/', mediaTypes: ['audio'] }), false);
-  assert.equal(allowPermission(base, 'media', { requestingUrl: 'https://example.com/', mediaTypes: ['audio'] }), false);
-  for (const p of ['geolocation', 'notifications', 'display-capture', 'clipboard-read', 'openExternal']) assert.equal(allowPermission(base, p, { requestingUrl: own }), false, p);
 });
 
 test('a request naming another host is refused (a page elsewhere cannot rebind its name to this port)', async () => {

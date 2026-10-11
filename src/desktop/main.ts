@@ -19,7 +19,6 @@ import type { MenuCommand } from '../types/desktop.js';
 import { resolveClaude } from './claude.js';
 import { launchSetup, type SetupTexts } from './claude-setup.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
-import { allowPermission } from './permissions.js';
 import { electronPage } from './print.js';
 import { desktopServer } from './server.js';
 import { readState, writeState, type Bounds } from './state.js';
@@ -40,8 +39,6 @@ async function start(): Promise<void> {
   const { homepage } = appPackage();
   usePrintPages(electronPage);
   const claudeFound = resolveClaude();
-  // The chat's speech model (src/chat/transcribe.ts), downloaded once.
-  process.env.VANILLA_MODELS_DIR ??= join(app.getPath('userData'), 'models');
   let language = languageOf(app.getLocale());
   let win: BrowserWindow | undefined;
 
@@ -177,7 +174,7 @@ function visible(bounds: Bounds | undefined): Bounds | undefined {
   return overlaps ? bounds : undefined;
 }
 
-/** Pages of the app stay in the app; every other link opens in the browser; only the app's own pages get the microphone, no other device. */
+/** Pages of the app stay in the app; every other link opens in the browser; no page gets a device permission. */
 function guard(base: string): void {
   const external = (url: string) => { if (/^(https?|mailto):/.test(url)) void shell.openExternal(url); };
   app.on('web-contents-created', (_e, contents) => {
@@ -192,7 +189,7 @@ function guard(base: string): void {
       external(url);
     });
   });
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => callback(allowPermission(base, permission, details)));
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
 }
 
 /** package.json: `homepage` (Help › Dokumentation, absent until the app has a public page) and `desktop.autoUpdate`. */
