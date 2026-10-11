@@ -128,6 +128,12 @@ test('a Wise payment is found by its transaction id, with its fee', () => {
   assert.equal(bands.length, 2);
   assert.ok(bands[0][0] < 100 && bands[0][1] > 112 && bands[0][1] < 140, 'the payment\'s two lines');
   assert.ok(bands[1][0] < 140 && bands[1][1] > 152 && bands[1][1] < 180, 'its fee\'s two lines, not CARD-2');
+  const oneText = [
+    ...line(100, 'Anfangssaldo 01.06.2026: 2565.00'),
+    ...line(112, '03.06.2026 | Card transaction of 39.00 EUR issued by Shop | -39.00 | Ref. CARD-7'),
+  ];
+  const [band] = findLines(oneText, { ref: 'CARD-7', date: '2026-06-03', amount: -39 }, true);
+  assert.ok(band[0] > 90 && band[1] > 112, 'a row printed as one text is its own band, without the lines above');
 });
 
 test('another bank\'s payment is the dated row with its amount closest to its date', () => {

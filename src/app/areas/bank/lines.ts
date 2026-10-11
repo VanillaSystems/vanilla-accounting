@@ -37,7 +37,9 @@ export function findLines(items: TextItem[], t: Pick<BankTransaction, 'ref' | 'd
       const i = lines.findIndex((l) => re.test(l.s));
       if (i < 0) continue;
       let j = i;
-      while (j > 0 && i - j < 4 && !/-?[\d,]+\.\d\d\s+-?[\d,]+\.\d\d\s*$/.test(lines[j].s)) j--;
+      // A row printed as one text ("date | text | -39.00 | Ref. CARD-…") is the whole payment.
+      const oneText = lines[i].s.split(/\s*\|\s*/).some((part) => /^-?[\d,']+\.\d\d$/.test(part));
+      while (!oneText && j > 0 && i - j < 4 && !/-?[\d,]+\.\d\d\s+-?[\d,]+\.\d\d\s*$/.test(lines[j].s)) j--;
       out.push(band(j, i));
     }
     if (!out.length) {
