@@ -30,6 +30,7 @@ import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, mutateJournal, saveBooks, sealsOf, type Books } from './store.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './refs.js';
+import { wrote } from '../workspace/own-writes.js';
 
 export const stateFile = (ws: Workspace, year: string): string => join(ws.paths.filings, year, 'year-close.json');
 
@@ -44,6 +45,7 @@ function writeState(ws: Workspace, state: YearCloseState): void {
   const file = stateFile(ws, state.year);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(state, null, 2) + '\n');
+  wrote(file);
 }
 
 /** The bank's own balances: the month-end balances read off statement PDFs, and every camt.053 closing balance. */

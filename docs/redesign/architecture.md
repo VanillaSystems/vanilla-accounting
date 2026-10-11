@@ -100,6 +100,40 @@ Row selection follows the mockup: ↑/↓ or J/K move, Enter opens, Esc goes bac
   `tests/period-lock.test.ts`.
 - Every user-visible text goes through `t()` (de source; fr, it, en).
 
+### Changes from outside the app
+
+Claude Code, a CLI, `git pull` or another window may change the workspace while the UI is open.
+The UI follows without a reload of the page:
+
+```
+src/server/watch.ts      fs.watch on the workspace folder (recursive), 300 ms after the last event of a
+                         burst compares each touched target with what it last saw: a SHA-256 of
+                         books.json, invoices.json, the manifest, accounts.json; a listing of receipts/,
+                         beleg-import/, bank-statements/, invoices/, filings/
+src/workspace/own-writes.ts  what this process wrote (saveBooks, writeAtomic, the routes and the intake
+                         that move files), so the API's own writes are not announced as external
+src/server/events.ts     GET /api/events: one Server-Sent Event {kind, external} per change; the watcher
+                         runs while a page listens and follows the books open now (desktop reopen)
+src/app/shell/live.ts    EventSource with reconnect (1 s … 30 s); after a reconnect the shell reads
+                         everything again, since changes made meanwhile were missed
+```
+
+- The folder is watched, not the files: every save writes a temp file and renames it over the old one.
+- A file the API wrote itself sends no event (the page that asked for the write has it). A folder
+  change does, with `external: false` when the API made it (the intake moving a receipt).
+- The shell reloads only what changed (books and accounts, invoices, the manifest, the inbox) in the
+  background: the area, the route, the selection and the scroll stay. An external change shows the toast
+  "Von aussen geändert". A selected object the change removed keeps its place with the detail's notice
+  (urls.md rule 5); a delete in the app still hands the selection to the first row.
+- The inbox poll (every 3 s) and the idle intake poll (every 10 s) are gone: an `inbox` event reads the
+  inbox and starts the processing. The running intake is still followed every second.
+- Write protection: `GET /books.json` and every answer of `withBooks` carry `X-Books-Version` (the file's
+  SHA-256). The UI sends the version it has with every write; `withBooks` refuses a write made on books
+  that changed since with 409 `stale`, and the UI reloads and says "Inzwischen geändert, neu geladen —
+  bitte nochmals". A write without the header (CLI, tests) behaves as before. The year-end close routes
+  write the books without `withBooks` and do not check the version.
+- The static audit export has no server: no events, no versions.
+
 ## 5. Invoices
 
 Decided in phase 8 with ADR 0012 (PDF path) after the prototype of headless Chromium against a PDF

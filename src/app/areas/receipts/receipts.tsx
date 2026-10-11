@@ -14,7 +14,7 @@ import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { badgeCount, chfOf, groups, isOpen, suggestion, visible, type Candidate, type GroupKey, type ReceiptView } from './model.js';
-import { pollInbox, setUi, toggleGroup, ui, useUi } from './state.js';
+import { readInbox, setUi, toggleGroup, ui, useUi } from './state.js';
 import { at, ledgerFor, listed } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
@@ -57,7 +57,7 @@ function List(props: Props) {
   listed.ids = ids;
   listed.suggestions = suggestions;
 
-  useEffect(() => { pollInbox(nav.refresh); }, [nav]);
+  useEffect(() => { readInbox(nav.refresh); }, [nav]);
 
   // A list with nothing selected selects its first row; a link to a receipt of another period opens that period (urls.md rule 1).
   const seen = useRef<string>();
@@ -70,7 +70,7 @@ function List(props: Props) {
   }, [route.id, ids[0], l]);
 
   const select = (id: string) => nav.select({ area: 'receipts', id });
-  useSelectionFollowsRows(route.id, ids, select);
+  useSelectionFollowsRows(route.id, ids, select, books);
   const row = (v: ReceiptView, same: boolean) => (
     <Row key={v.r.id} v={v} sel={v.r.id === route.id} same={same} canEdit={canEdit} onSelect={select} onAct={(a) => runAct(props, a, v.r.id)} />
   );

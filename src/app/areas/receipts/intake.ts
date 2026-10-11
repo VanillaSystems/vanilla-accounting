@@ -7,7 +7,7 @@
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
-import { pollInbox } from './state.js';
+import { readInbox } from './state.js';
 import { startIntake } from '../../shell/Intake.js';
 import { RECEIPT_TYPES, receiptType } from '../../../types/upload.js';
 
@@ -33,7 +33,7 @@ export async function intake(files: File[], nav: Nav): Promise<void> {
   // A photo's id is that of the PDF it becomes, known only once it is wrapped.
   const pdf = taken.find((f) => f.type === 'application/pdf')?.file;
   const id = pdf && await idOf(pdf).catch(() => undefined);
-  await pollInbox(nav.refresh);
+  await readInbox(nav.refresh);
   nav.go({ route: { area: 'receipts', ...(id && { id }) }, query: {} });
 }
 

@@ -22,6 +22,7 @@ import type { StatementClosingBalance, StatementImport } from '../../types/index
 import { parseIban } from '../../workspace/banks.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, readBooks, withBooks } from '../books.js';
+import { wrote } from '../../workspace/own-writes.js';
 
 export const router = Router();
 
@@ -109,6 +110,7 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
   }
   mkdirSync(dir, { recursive: true });
   writeFileSync(path, body);
+  wrote(path);
   try {
     const bank = readTransactions(WS);
     const unmatched = bank.files.find((f) => f.status === 'unmatched');
@@ -149,6 +151,7 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
     });
   } catch (e) {
     rmSync(path, { force: true });
+    wrote(path);
     throw e;
   }
 });

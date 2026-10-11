@@ -102,7 +102,7 @@ function List(props: Props) {
   }, [ws, JSON.stringify(route), query.period?.token, keys[0], b]);
 
   const select = (key: string) => nav.select({ area: 'bank', statement: key });
-  useSelectionFollowsRows(route.statement, keys, select);
+  useSelectionFollowsRows(route.statement, keys, select, books);
 
   return (
     <div className="page">

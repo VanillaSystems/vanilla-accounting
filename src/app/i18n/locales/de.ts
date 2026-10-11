@@ -16,6 +16,7 @@ export const messages = {
   'col.name': 'Name',
 
   'error.readonly': 'Prüfmodus: Änderungen sind deaktiviert.',
+  'error.stale': 'Inzwischen geändert, neu geladen — bitte nochmals.',
   'error.localOnly': 'Nur von diesem Computer aus erreichbar.',
   'error.periodClosed': 'Periode geschlossen bis {date}.',
   'error.closed.editTransaction': 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',
@@ -547,6 +548,7 @@ export const messages = {
   'shell.lookup': 'Nachschlagen',
   'shell.themeToggle': 'Hell / Dunkel',
   'shell.undo': 'Rückgängig',
+  'shell.changedOutside': 'Von aussen geändert',
   'shell.edges': 'Oberer Rand → Leiste · unterer Rand → Dock',
   'shell.split': 'Spaltenbreite (ziehen: Breite ändern · Doppelklick: zurücksetzen · ←→ mit Fokus)',
   'shell.addKey': '{title} (N)',

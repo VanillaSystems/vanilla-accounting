@@ -25,6 +25,7 @@ import { journalFor, newEntryDate, runAct } from './commands.js';
 import { Detail } from './Detail.js';
 import { NewEntry } from './NewEntry.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
+import { loadedFromOutside } from '../../hooks/use-index.js';
 import './journal.css';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -45,9 +46,9 @@ function List(props: Props) {
   const seen = useRef<string>();
   useEffect(() => {
     const v = route.id ? j.byId.get(route.id) : undefined;
-    // An entry that went away (deleted, undone, booked again) hands the selection to the first row.
-    // A link to an entry that never was here keeps its place, and the detail says so (urls.md rule 5).
-    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && (!route.id || seen.current === route.id)) nav.select({ area: 'journal', id: ids[0] }); return; }
+    // An entry that went away in the app (deleted, undone, booked again) hands the selection to the first row.
+    // A link to an entry that never was here, or one removed outside the app, keeps its place, and the detail says so (urls.md rule 5).
+    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && (!route.id || (seen.current === route.id && !loadedFromOutside(books)))) nav.select({ area: 'journal', id: ids[0] }); return; }
     if (route.id === listed.pending) listed.pending = undefined;
     if (seen.current === route.id) return;
     seen.current = route.id;
@@ -58,7 +59,7 @@ function List(props: Props) {
   }, [route.id, ids[0], j]);
 
   const select = (id: string) => nav.select({ area: 'journal', id });
-  useSelectionFollowsRows(route.id, ids, select, route.id === listed.pending);
+  useSelectionFollowsRows(route.id, ids, select, books, route.id === listed.pending);
   const setFilter = (filter?: JournalFilter) => setUi({ filter });
 
   return (

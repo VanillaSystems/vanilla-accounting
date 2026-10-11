@@ -19,6 +19,7 @@ export default {
     'col.name': 'Nome',
 
     'error.readonly': 'Modalità revisione: le modifiche sono disattivate.',
+    'error.stale': 'Modificato nel frattempo, ricaricato — riprovare per favore.',
     'error.localOnly': 'Accessibile solo da questo computer.',
     'error.periodClosed': 'Periodo chiuso fino al {date}.',
     'error.closed.editTransaction': 'Le transazioni di un periodo chiuso non possono essere modificate.',
@@ -550,6 +551,7 @@ export default {
     'shell.lookup': 'Consultazione',
     'shell.themeToggle': 'Chiaro / scuro',
     'shell.undo': 'Annulla',
+    'shell.changedOutside': 'Modificato dall’esterno',
     'shell.edges': 'Bordo superiore → barra · bordo inferiore → dock',
     'shell.split': 'Larghezza della colonna (trascina: cambia · doppio clic: ripristina · ←→ con il focus)',
     'shell.addKey': '{title} (N)',

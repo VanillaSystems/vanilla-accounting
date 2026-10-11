@@ -6,6 +6,7 @@ import { RequestError, WS, readBooks } from '../books.js';
 import type { InboxFile } from '../../types/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload.js';
+import { wrote } from '../../workspace/own-writes.js';
 
 export const router = Router();
 
@@ -46,6 +47,7 @@ router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit
   for (let n = 2; stems.has(name); n++) name = `${stamp}-${n}`;
   const filename = `${name}.${ext}`;
   writeFileSync(join(WS.paths.inbox, filename), req.body);
+  wrote(join(WS.paths.inbox, filename));
   console.log(`  scan upload: ${filename} (${req.body.length} bytes)`);
   res.json({ ok: true, filename });
 });

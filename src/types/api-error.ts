@@ -27,7 +27,8 @@ export type ApiRefusal =
   | { code: 'noClaude' }
   | { code: 'noWorkspace' }
   | { code: 'notWorkspace' }
-  | { code: 'setup'; params: SetupRefusal };
+  | { code: 'setup'; params: SetupRefusal }
+  | { code: 'stale' };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no
@@ -60,3 +61,14 @@ export interface MailStatus {
   /** The desktop app: the password is saved in Firma › E-Mail-Versand into the keychain store. */
   inApp: boolean;
 }
+
+/**
+ * The version of books.json (a SHA-256 of the file) the UI loaded, on GET /books.json and on every
+ * write's answer; sent back with a write, the API refuses it with `stale` when the books changed since.
+ */
+export const BOOKS_VERSION = 'X-Books-Version';
+
+/** What changed in the workspace: one Server-Sent Event of GET /api/events (src/server/watch.ts). */
+export type ChangeKind = 'books' | 'invoices' | 'manifest' | 'accounts' | 'receipts' | 'statements' | 'inbox';
+/** `external`: not written by the API itself (Claude Code, a CLI, git pull). */
+export interface WorkspaceChange { kind: ChangeKind; external: boolean }

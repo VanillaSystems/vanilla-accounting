@@ -9,6 +9,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+import { versionOf, wrote } from '../workspace/own-writes.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { INVOICES_MIGRATIONS, INVOICES_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { Envelope, InvoiceBook } from './model.js';
@@ -29,6 +30,7 @@ export function writeAtomic(path: string, data: string | Buffer): void {
   const tmp = `${path}.${process.pid}.tmp`;
   writeFileSync(tmp, data);
   renameSync(tmp, path);
+  wrote(path, versionOf(data));
 }
 
 export function saveInvoices(ws: Pick<Workspace, 'paths'>, book: InvoiceBook): void {

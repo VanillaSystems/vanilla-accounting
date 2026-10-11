@@ -24,6 +24,7 @@ import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
 import type { Ask, IntakeNote, StepRun } from './pipeline.js';
+import { wrote } from '../workspace/own-writes.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
 
@@ -98,6 +99,8 @@ async function convertImagesToPdf(dir: string, log: (line: string) => void): Pro
     try {
       writeFileSync(pdfPath, await imageToPdf(readFileSync(imgPath), f));
       unlinkSync(imgPath);
+      wrote(pdfPath);
+      wrote(imgPath);
       log(`  converted ${f} -> ${basename(pdfPath)}`);
     } catch (e: any) {
       log(`  convert failed for ${f}: ${e.message?.substring(0, 100)}`);

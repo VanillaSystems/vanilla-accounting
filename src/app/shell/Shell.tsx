@@ -8,7 +8,7 @@ import { localToday, openQuarter, parsePeriod } from '../../accounting/periods.j
 import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
 import { useApiStatus } from '../hooks/use-api-status.js';
-import { useWorkspace } from '../hooks/use-workspace.js';
+import { reloadWorkspace, useWorkspace } from '../hooks/use-workspace.js';
 import { FxProvider } from '../hooks/use-fx.js';
 import { LOCALES, t } from '../i18n/index.js';
 import { periodName } from '../lib/period-label.js';
@@ -17,10 +17,14 @@ import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
-import { IntakeLine, finishedText, watchIntake } from './Intake.js';
+import { IntakeLine, checkIntake, finishedText, watchIntake } from './Intake.js';
 import { checkClaude, onClaudeConnected, toClaudeSetup } from './claude.js';
 import { Chat } from './chat/Chat.js';
-import { STATIC_EXPORT } from '../lib/api.js';
+import { onStale, STATIC_EXPORT } from '../lib/api.js';
+import type { ChangeKind } from '../../types/api-error.js';
+import { readInbox } from '../areas/receipts/state.js';
+import { reloadInvoices } from '../areas/invoices/data.js';
+import { listen } from './live.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
 import { PRESETS } from '../../export/model.js';
@@ -124,6 +128,27 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     toast(finishedText(job), undefined, { label: t('claude.setup'), run: () => toClaudeSetup(propsRef.current.nav) });
   })), [canEdit, toast]);
   useEffect(() => onClaudeConnected((version) => toast(t('claude.connected', { version }))), [toast]);
+
+  // A change outside the app (Claude Code, a CLI, git pull) reloads what it touched in the
+  // background: the area, the selection and the scroll stay. A write refused as stale reloads too.
+  useEffect(() => {
+    if (STATIC_EXPORT) return undefined;
+    const books = (external: boolean) => reload.current(external ? 'outside' : undefined);
+    const inbox = () => { void readInbox(() => reload.current()); checkIntake(); };
+    const RELOAD: Record<ChangeKind, (external: boolean) => void> = {
+      books, accounts: books, receipts: books, statements: books, inbox,
+      invoices: () => void reloadInvoices(),
+      manifest: reloadWorkspace,
+    };
+    // The refused write's own message ("bitte nochmals") stays up when the change's event follows it.
+    let staleAt = 0;
+    const stopStale = onStale(() => { staleAt = Date.now(); books(true); });
+    const stop = listen((c) => {
+      RELOAD[c.kind](c.external);
+      if (c.external && Date.now() - staleAt > 3000) toast(t('shell.changedOutside'));
+    }, () => { books(true); inbox(); void reloadInvoices(); reloadWorkspace(); });
+    return () => { stop(); stopStale(); };
+  }, [toast]);
 
   useShellKeys({
     overlayOpen: () => overlay !== null,
