@@ -9,6 +9,7 @@ import type { AreaProps } from '../index.js';
 import { Go, entryAt } from '../vat/links.js';
 import { NO_ACCOUNT, ledgerOf, reportOfAccount } from './model.js';
 import { accountName, accountOfRoute } from './view.js';
+import { DownloadMenu } from '../export/DownloadMenu.js';
 
 type Props = AreaProps<RouteOf<'reports'>>;
 
@@ -32,6 +33,7 @@ export function Detail({ route, books, period, nav }: Props) {
         <span title={t('reports.balanceOn', { date: formatDate(period.to) })}>{t('reports.factClosing', { amount: fmt(l.closing) })}</span>
         <span>{t('common.entryCount', { n: l.rows.length })}</span>
       </div>
+      <DownloadMenu account={account} label={none ? t('reports.noAccount') : `${account} ${names[account] ?? ''}`.trim()} period={period} toast={nav.toast} />
       {none && <p className="zexpl">{t('reports.oneSidedText')}</p>}
       <div className="ledger">
         <div className="lh"><span>{t('col.date')}</span><span>{t('vat.colEntry')}</span><span>{t('reports.counter')}</span><span className="r">{t('reports.debit')}</span><span className="r">{t('reports.credit')}</span><span className="r">{t('reports.balance')}</span></div>

@@ -22,7 +22,7 @@ import { ITEMS, quartersIn, receiptsIn, statementsIn, type ExportRequest, type F
 import { tableOf, type Table, type Words } from './tables.js';
 import { wordsIn } from './texts.js';
 
-export const EXPORT_MANIFEST_FORMAT = 'vanilla-accounting-export/1';
+const EXPORT_MANIFEST_FORMAT = 'vanilla-accounting-export/1';
 
 export interface BundleFile { path: string; data: Uint8Array }
 

@@ -17,6 +17,10 @@ import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
+import { ExportDialog } from '../areas/export/ExportDialog.js';
+import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
+import { PRESETS } from '../../export/model.js';
+import { accountOfRoute } from '../areas/reports/view.js';
 import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
@@ -31,7 +35,8 @@ import { ShellUiContext, type ShellUi } from './ui.js';
 type Overlay =
   | { kind: 'palette' }
   | { kind: 'period'; anchor: DOMRect }
-  | { kind: 'language'; anchor: DOMRect };
+  | { kind: 'language'; anchor: DOMRect }
+  | { kind: 'export'; config: DialogConfig };
 
 export function Shell({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
   const { data: books, loading, error, refresh } = useIndex();
@@ -87,9 +92,17 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const toggleTheme = () => setTheme(dark ? 'light' : 'dark');
   const runAdd = () => { if (area.add && canEdit) area.add.run(propsRef.current); };
 
+  // The palette's search keeps the first render's closure: the open quarter is read from the props of now.
+  const openNow = () => openQuarter(propsRef.current.books.config?.closedThrough, localToday());
+  const openExport = (config?: DialogConfig) => {
+    const { route, period } = propsRef.current;
+    setOverlay({ kind: 'export', config: config ?? presetFor(route, period, openNow()) });
+  };
+
   const ui: ShellUi = {
     openPeriod: (anchor) => setOverlay({ kind: 'period', anchor: anchor.getBoundingClientRect() }),
     add: runAdd,
+    openExport,
     theme, setTheme, dark, zoom, language,
   };
 
@@ -108,6 +121,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     areaKeys: (e) => area.keys?.(e, propsRef.current) ?? false,
     toggleTheme,
     toggleLegend: () => setLegend(!legend),
+    exportOpen: () => openExport(),
   });
 
   // urls.md rule 6: the tab names the object.
@@ -145,6 +159,9 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
       report('balance', t('tab.balanceSheet')),
       report('trial', t('tab.trialBalance')),
       { label: t('area.codes'), side: t('shell.lookup'), run: () => goArea('codes') },
+      { label: t('export.paletteAction'), side: '⇧E', run: () => openExport() },
+      ...PRESETS.map((x) => ({ label: t('export.palettePreset', { name: t(`export.preset.${x.id}`) }), side: t('export.paletteBuiltin'), run: () => openExport(configOf(x.id, openNow(), p.period)) })),
+      ...ownPresets().map((x) => ({ label: t('export.palettePreset', { name: x.name }), side: t('export.paletteOwn'), run: () => openExport(ownConfig(x)) })),
       { label: t('shell.themeToggle'), side: 'T', run: toggleTheme },
     ].filter(hit);
     const areas: PaletteItem[] = DOCK.flat().map((id) => ({ label: AREAS[id].label(), side: `G ${AREAS[id].dock!.key.toUpperCase()}`, run: () => goArea(id) })).filter(hit);
@@ -206,6 +223,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
         onPeriod={ui.openPeriod}
         onZoom={zoomStep}
         onTheme={cycleTheme}
+        onExport={() => openExport()}
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
@@ -235,6 +253,18 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
           anchor={overlay.anchor}
           items={LOCALES.map((l) => ({ label: l.name, side: l.code.toUpperCase(), current: l.code === language, run: () => onLanguage(l.code) }))}
           onClose={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === 'export' && (
+        <ExportDialog
+          initial={overlay.config}
+          books={books}
+          company={workspace?.company.name}
+          page={period}
+          account={loc.route.area === 'reports' ? accountOfRoute(loc.route) : undefined}
+          quarters={quarters}
+          toast={toast}
+          onClose={() => { setOverlay(null); focusSelectedRow(); }}
         />
       )}
       {overlay?.kind === 'period' && (

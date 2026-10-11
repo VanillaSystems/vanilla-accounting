@@ -6,7 +6,7 @@
 import type { Index, JournalEntry } from '../types/index.js';
 import { chfAmount } from '../accounting/ledger.js';
 
-export const BANANA_COLUMNS = [
+const BANANA_COLUMNS = [
   'Date', 'Description', 'AccountDebit', 'AccountCredit', 'Amount', 'AmountCurrency',
   'ExchangeCurrency', 'ExchangeRate', 'ExchangeMultiplier', 'VatCode', 'ExternalReference',
 ] as const;

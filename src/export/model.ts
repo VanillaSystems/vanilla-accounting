@@ -43,7 +43,6 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'statements', group: 'documents', formats: ['orig'] },
   { id: 'filings', group: 'documents', formats: ['orig'] },
 ];
-export const itemDef = (id: ItemId): ItemDef => ITEMS.find((i) => i.id === id)!;
 
 export type Selection = Partial<Record<ItemId, Format[]>>;
 

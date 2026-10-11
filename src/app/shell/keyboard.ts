@@ -1,7 +1,7 @@
 /**
  * The keyboard model of the mockup. Typing in a field never triggers it. The shell's own keys:
- * ⌘K palette, G + letter area, N add, T light/dark, / search, ? key help, ⌘Z undo, Esc back to
- * the list; ↑/↓ and J/K belong to the area (moveKey), ⌘+/⌘−/⌘0 to the zoom (prefs.ts).
+ * ⌘K palette, G + letter area, N add, T light/dark, ⇧E export, / search, ? key help, ⌘Z undo,
+ * Esc back to the list; ↑/↓ and J/K belong to the area (moveKey), ⌘+/⌘−/⌘0 to the zoom (prefs.ts).
  */
 import { useEffect, useRef } from 'react';
 
@@ -27,6 +27,8 @@ export interface ShellKeys {
   areaKeys(e: KeyboardEvent): boolean;
   toggleTheme(): void;
   toggleLegend(): void;
+  /** ⇧E: the export dialog, preset for the page. */
+  exportOpen(): void;
 }
 
 const plain = (e: KeyboardEvent) => !e.metaKey && !e.ctrlKey && !e.altKey;
@@ -53,6 +55,7 @@ export function useShellKeys(keys: ShellKeys) {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && k.undo()) { e.preventDefault(); return; }
       if (gPending && plain(e) && /^[a-z]$/.test(e.key)) { endG(); if (k.area(e.key)) e.preventDefault(); return; }
+      if (plain(e) && e.shiftKey && e.key === 'E') { e.preventDefault(); k.exportOpen(); return; }
       if (k.areaKeys(e)) { e.preventDefault(); return; }
       if (!plain(e)) return;
       switch (e.key) {
