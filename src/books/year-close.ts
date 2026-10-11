@@ -20,9 +20,12 @@ import { estvRates, type EstvRates } from '../accounting/fx-conversion.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import {
   applyRevaluation, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, revaluationEntries,
-  yearClose, yearEndAccounts, YEAR_END_TEMPLATES, PROFIT_ALLOCATION,
-  type BankBalance, type Opening, type TemplateState, type YearClose, type YearCloseState,
+  yearClose, yearEndAccounts, YEAR_END_TEMPLATES, PROFIT_ALLOCATION, RECEIVABLES,
+  type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState,
 } from '../accounting/year-close.js';
+import { roundCHF } from '../accounting/rappen.js';
+import { loadInvoices } from '../invoices/store.js';
+import { liveInvoices, openOn } from '../invoices/rules.js';
 import { workspaceChecks } from '../cli/doctor.js';
 import { loadBooks, mutateJournal, saveBooks, sealsOf, type Books } from './store.js';
 import { writeSeal } from './seal.js';
@@ -44,7 +47,7 @@ function writeState(ws: Workspace, state: YearCloseState): void {
 }
 
 /** The bank's own balances: the month-end balances read off statement PDFs, and every camt.053 closing balance. */
-function bankBalances(ws: Workspace, books: Books): BankBalance[] {
+export function bankBalances(ws: Workspace, books: Books): BankBalance[] {
   const fromPdf = (books.statementBalances ?? []).map((b) => ({ account: b.account, date: b.date, amount: b.amount, source: b.sourceFile }));
   const fromCamt = readBankStatements(ws).flatMap((f) => f.status !== 'read' ? [] : parseStatementBalances(f.statement, f.account.bank, f.file)
     .filter((s) => s.type === 'CLBD' && s.currency === f.account.currency)
@@ -53,6 +56,19 @@ function bankBalances(ws: Workspace, books: Books): BankBalance[] {
 }
 
 const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []));
+
+/** The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before it). */
+export function receivablesOf(ws: Workspace, year: string, rates: EstvRates): Receivables {
+  const end = `${year}-12-31`;
+  const invoices = liveInvoices(loadInvoices(ws));
+  const open = invoices.flatMap((inv) => {
+    const amount = inv.status === 'issued' ? openOn(inv, invoices, end) : 0;
+    if (inv.status !== 'issued' || amount === 0) return [];
+    const rate = inv.currency === 'CHF' ? 1 : rates.on(inv.currency, end)?.rate ?? 0;
+    return [{ number: inv.number, customer: inv.customer.name, date: inv.date, currency: inv.currency, open: amount, chf: roundCHF(amount * rate) }];
+  });
+  return { invoices: open, total: roundCHF(open.reduce((s, i) => s + i.chf, 0)), revenueAccount: ws.invoicing?.revenueAccount };
+}
 
 /** `ratesDir` points at another reference/ (a test, a rehearsal with a stand-in 31.12. rate). */
 export function ratesOf(ratesDir?: string): EstvRates {
@@ -72,6 +88,7 @@ export function yearCloseOf(ws: Workspace, year: string, rates: EstvRates = rate
     doctor: workspaceChecks(ws).flatMap((r) => (r.status === 'fail' ? [r.label] : [])),
     rates,
     state: readState(ws, year),
+    receivables: receivablesOf(ws, year, rates),
   });
 }
 
@@ -99,7 +116,8 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
 }
 
 export function markTemplate(ws: Workspace, year: string, id: string, state: TemplateState | null): YearCloseState {
-  if (!YEAR_END_TEMPLATES.some((t) => t.id === id)) throw new YearCloseRefused(`Unknown year-end entry "${id}". Known: ${YEAR_END_TEMPLATES.map((t) => t.id).join(', ')}`);
+  const known = [...YEAR_END_TEMPLATES, RECEIVABLES].map((t) => t.id);
+  if (!known.includes(id)) throw new YearCloseRefused(`Unknown year-end entry "${id}". Known: ${known.join(', ')}`);
   const current = readState(ws, year);
   if (current.closedAt) throw new YearCloseRefused(`${year} is closed: its checklist no longer changes.`);
   const templates = { ...current.templates };

@@ -13,7 +13,7 @@ import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
 import { writeSeal } from '../src/books/seal.js';
 import {
   applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
-  vatPostings, yearClose, yearEndAccounts, YEAR_END_TEMPLATES, type Books, type YearCloseInput,
+  vatPostings, yearClose, yearEndAccounts, YEAR_END_TEMPLATES, RECEIVABLES, type Books, type YearCloseInput,
 } from '../src/accounting/year-close.js';
 import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, YearCloseRefused } from '../src/books/year-close.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
@@ -150,6 +150,19 @@ test('the checklist: nothing blocks once Q4 is filed, Q1 to Q3 sealed, the banks
   assert.deepEqual(close.blockers, []);
   assert.ok(close.checks.every((c) => c.status === 'ok'));
   assert.equal(close.vat.unexplained, 0);
+});
+
+test('open invoices on 31.12.: proposed as a receivables entry (1100 / the revenue account, no VAT code) that must be decided; none, no proposal', () => {
+  const b = books();
+  applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  assert.ok(!yearClose(input(b)).templates.some((t) => t.id === RECEIVABLES.id));
+  const receivables = { invoices: [{ number: '2026-004', customer: 'Kunde', date: '2026-12-01', currency: 'CHF', open: 540.5, chf: 540.5 }], total: 540.5, revenueAccount: '3400' };
+  const close = yearClose(input(b, { receivables }));
+  const proposed = close.templates.find((t) => t.id === RECEIVABLES.id);
+  assert.deepEqual(proposed, { id: 'receivables', accountDebit: '1100', accountCredit: '3400', amount: 540.5, state: undefined });
+  assert.deepEqual(close.blockers, [{ code: 'undecided', templates: ['receivables'] }]);
+  const decided = yearClose(input(b, { receivables, state: { ...emptyState('2026'), templates: { ...Object.fromEntries(YEAR_END_TEMPLATES.map((t) => [t.id, 'na' as const])), receivables: 'done' } } }));
+  assert.deepEqual(decided.blockers, []);
 });
 
 test('refusals: each precondition names what is missing', () => {
