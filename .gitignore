@@ -3,7 +3,7 @@ node_modules
 dist
 # The desktop app's bundle (npm run desktop:build) and its packages (release/).
 out/
-release/
+/release/
 beleg-import/
 data/
 .gstack/

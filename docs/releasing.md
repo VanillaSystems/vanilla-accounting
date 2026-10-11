@@ -74,8 +74,10 @@ versions and their migration ladders. To change a format:
    git tag -a vX.Y.Z -m "Vanilla Accounting X.Y.Z"
    ```
 
-6. Push the commit and the tag (`git push --follow-tags`). A release on GitHub, if you write
-   one, repeats the changelog section and carries the two `.dmg` files of the Mac app.
+6. Push the commit and the tag (`git push --follow-tags`).
+7. Build the Mac app at this version (`npm run desktop:build`, [Building the Mac app](#building-the-mac-app))
+   and publish the GitHub release with its downloads: `npm run release:github -- --publish`
+   (step 6 of [What the owner does to publish](#what-the-owner-does-to-publish)).
 
 `npm run update` follows the branch an adopter's copy tracks, so a pushed commit on `main` is
 what they get. Tags mark the versions that the changelog describes.
@@ -157,7 +159,21 @@ The release run prepares everything up to these steps; each one is the owner's.
    `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. Set `VANILLA_RELEASES=owner/repo`. Build
    with `npm run desktop:build` and prove both `.dmg` files with the smoke test.
 5. Make the repository public. Add `homepage` to `package.json` for Help › Dokumentation.
-6. Write a GitHub release for the tag: the changelog section as its text, the two `.dmg` files
-   (and, with a feed, the `.zip` files and `latest-mac.yml`) as its assets.
+6. Publish the GitHub release with the downloads: check out the tagged commit and run
+
+   ```sh
+   npm run release:github              # shows the release it would create, changes nothing
+   npm run release:github -- --publish # creates it on GitHub
+   ```
+
+   It takes the version from `package.json`, the text from that version's section of
+   `CHANGELOG.md`, and attaches `release/Vanilla Accounting-X.Y.Z-arm64.dmg` and `-x64.dmg` (plus
+   the `.zip` files and `latest-mac.yml` when a feed was built), with each file's SHA-256 in the
+   text and, for an unsigned build, how to open it the first time. It refuses to publish when
+   the tree is not clean, the tag is missing, not pushed, not the checked-out commit or not on
+   `origin/main`, a `.dmg` is missing, or the release exists already. It needs the `gh` CLI,
+   logged in with write access to the repository (`VANILLA_RELEASES=owner/repo` overrides the
+   repository taken from `origin`). While the repository is private, only its members see the
+   release.
 7. Turn on updates: set `"desktop": { "autoUpdate": true }` in `package.json` and release that in
    the next version; apps from then on update themselves from the GitHub releases.

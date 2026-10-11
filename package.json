@@ -18,6 +18,7 @@
     "verify-audit": "tsx src/cli/verify-audit.ts",
     "preview": "vite preview",
     "desktop": "vite build && node tools/desktop/build.mjs && electron .",
+    "release:github": "tsx tools/release/github.ts",
     "desktop:build": "npm run build && node tools/desktop/build.mjs && electron-builder --mac --publish never --config desktop/electron-builder.config.cjs",
     "init": "tsx src/cli/init.ts",
     "doctor": "tsx src/cli/doctor.ts",

@@ -35,6 +35,7 @@ demo-consulting/**
 tools/hooks/**
 tools/pdf-text/compare.ts
 tools/desktop/**
+tools/release/**
 desktop/electron-builder.config.cjs
 desktop/entitlements.mac.plist
 desktop/not-packed.cjs
