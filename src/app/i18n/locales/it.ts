@@ -551,6 +551,7 @@ export default {
     'shell.lookup': 'Consultazione',
     'shell.themeToggle': 'Chiaro / scuro',
     'shell.undo': 'Annulla',
+    'shell.changedOutside': 'Modificato dall’esterno',
     'shell.edges': 'Bordo superiore → barra · bordo inferiore → dock',
     'shell.split': 'Larghezza della colonna (trascina: cambia · doppio clic: ripristina · ←→ con il focus)',
     'shell.addKey': '{title} (N)',

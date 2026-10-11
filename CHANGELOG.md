@@ -14,6 +14,15 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- The app follows changes made outside it. When Claude Code, a CLI script, `git pull` or another
+  window changes the books, the invoices, the company settings or the receipt folders, the open page
+  loads them again by itself and says "Von aussen geändert"; the page, the selected row and the scroll
+  stay. A receipt dropped into `beleg-import/` in the Finder appears at once and is processed.
+- An edit made on books that changed meanwhile is refused instead of saved over the change: the app
+  loads the books again and says "Inzwischen geändert, neu geladen — bitte nochmals".
+
 ## [0.3.0] - 2026-10-11
 
 The redesign and the Mac app. The app is one window with nine areas, each page with its own

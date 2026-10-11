@@ -551,6 +551,7 @@ export default {
     'shell.lookup': 'Référence',
     'shell.themeToggle': 'Clair / sombre',
     'shell.undo': 'Annuler',
+    'shell.changedOutside': 'Modifié de l’extérieur',
     'shell.edges': 'Bord supérieur → barre · bord inférieur → dock',
     'shell.split': 'Largeur de colonne (glisser: changer · double-clic: réinitialiser · ←→ avec le focus)',
     'shell.addKey': '{title} (N)',

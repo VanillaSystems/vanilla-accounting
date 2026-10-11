@@ -1,7 +1,8 @@
 /**
  * The inbox processing as the shell sees it (POST/GET /api/intake, src/intake/): started after
  * every intake, by Belege's button and by files that arrive in the inbox meanwhile (the phone
- * app); a quiet line at the bottom left while it runs; the books loaded again when it ends.
+ * app, the Finder: announced by src/app/shell/live.ts); a quiet line at the bottom left while it
+ * runs; the books loaded again when it ends.
  */
 import { useSyncExternalStore } from 'react';
 import type { IntakeJob, IntakeNote, IntakeStatus } from '../../intake/pipeline.js';
@@ -37,7 +38,12 @@ async function poll(): Promise<void> {
     watcher?.onFinished(next.job!);
   }
   if (watcher?.canEdit && !next.running && next.inbox.some((id) => !started.has(id))) { void startIntake(); return; }
-  if (watcher) timer = setTimeout(poll, next.running ? 1000 : 10_000);
+  if (watcher && next.running) timer = setTimeout(poll, 1000);
+}
+
+/** Files arrived in the inbox (the phone app, the Finder): the processing starts for them. */
+export function checkIntake(): void {
+  if (watcher) void poll();
 }
 
 /** Keeps the status fresh while the shell is open; `onFinished` runs once per job that ends. */

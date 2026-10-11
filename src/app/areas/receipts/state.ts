@@ -60,17 +60,14 @@ export function toggleGroup(key: GroupKey): void {
   setUi({ collapsed: next });
 }
 
-let polling: ReturnType<typeof setTimeout> | undefined;
-
 /**
- * Reads the inbox again; while files wait there, again every few seconds. `onRead` runs when a
- * file left it (extract read it into the books), so the books are loaded again.
+ * Reads the inbox again: on opening Belege, after an upload, and when the API says beleg-import/
+ * changed (src/app/shell/live.ts). `onRead` runs when a file left it (extract read it into the
+ * books), so the books are loaded again.
  */
-export async function pollInbox(onRead: () => void): Promise<void> {
-  clearTimeout(polling);
+export async function readInbox(onRead: () => void): Promise<void> {
   const before = new Set(state.inbox.map((f) => f.id));
   const inbox = await api.inbox().catch(() => state.inbox);
   setUi({ inbox });
   if ([...before].some((id) => !inbox.some((f) => f.id === id))) onRead();
-  if (inbox.length) polling = setTimeout(() => pollInbox(onRead), 3000);
 }

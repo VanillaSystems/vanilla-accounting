@@ -548,6 +548,7 @@ export const messages = {
   'shell.lookup': 'Nachschlagen',
   'shell.themeToggle': 'Hell / Dunkel',
   'shell.undo': 'Rückgängig',
+  'shell.changedOutside': 'Von aussen geändert',
   'shell.edges': 'Oberer Rand → Leiste · unterer Rand → Dock',
   'shell.split': 'Spaltenbreite (ziehen: Breite ändern · Doppelklick: zurücksetzen · ←→ mit Fokus)',
   'shell.addKey': '{title} (N)',

@@ -551,6 +551,7 @@ export default {
     'shell.lookup': 'Reference',
     'shell.themeToggle': 'Light / dark',
     'shell.undo': 'Undo',
+    'shell.changedOutside': 'Changed outside the app',
     'shell.edges': 'Top edge → bar · bottom edge → dock',
     'shell.split': 'Column width (drag: resize · double-click: reset · ←→ when focused)',
     'shell.addKey': '{title} (N)',
