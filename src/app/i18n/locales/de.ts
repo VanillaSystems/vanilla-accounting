@@ -50,6 +50,7 @@ export const messages = {
   'error.closed.deleteReceipt': 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
   'error.closed.editEntry': 'Korrekturen als neue Buchung in der offenen Periode erfassen.',
   'error.closed.deleteEntry': 'Buchungen in geschlossenen Perioden können nicht gelöscht werden.',
+  'error.closed.newEntry': 'Neue Buchungen müssen in der offenen Periode liegen.',
   'error.manualOnly': 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).',
   'error.yearClose': 'Die Kursdifferenz berechnet der Jahresabschluss: ihn neu laufen lassen, statt die Buchung zu ändern.',
   'error.fileExists': 'Datei {filename} existiert bereits.',

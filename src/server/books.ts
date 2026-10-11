@@ -50,6 +50,7 @@ export const CLOSED: Record<ClosedReason, string> = {
   deleteReceipt: 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
   editEntry: 'Korrekturen als neue Buchung in der offenen Periode erfassen.',
   deleteEntry: 'Buchungen in geschlossenen Perioden können nicht gelöscht werden.',
+  newEntry: 'Neue Buchungen müssen in der offenen Periode liegen.',
 };
 
 export function assertOpen(books: Pick<Index, 'config'>, dates: Array<string | undefined>, reason: ClosedReason): void {

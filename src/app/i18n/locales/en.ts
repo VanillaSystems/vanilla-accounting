@@ -53,6 +53,7 @@ export default {
     'error.closed.deleteReceipt': 'A receipt linked to a transaction in a closed period cannot be deleted.',
     'error.closed.editEntry': 'Book the correction as a new entry in the open period.',
     'error.closed.deleteEntry': 'Entries in a closed period cannot be deleted.',
+    'error.closed.newEntry': 'A new entry must be dated in the open period.',
     'error.manualOnly': 'Only manual transactions can be deleted. Bank transactions come from the bank statement (camt053/Wise).',
     'error.yearClose': 'The year-end close computes the exchange difference: run it again instead of editing the entry.',
     'error.fileExists': 'File {filename} already exists.',

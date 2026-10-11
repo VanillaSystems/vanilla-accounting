@@ -7,7 +7,7 @@ import type { AuditSnapshot } from '../audit/sources.js';
  */
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
-  'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry',
+  'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newEntry',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 

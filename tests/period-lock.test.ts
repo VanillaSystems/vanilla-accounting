@@ -66,7 +66,10 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/mapping/approve-duplicate', body: { receiptId: 'rc' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jo', body: { date: '2026-06-15' }, status: 403 },
+  { method: 'PATCH', path: '/api/journal-entries/jc', body: { amount: 5 }, status: 403 },
   { method: 'DELETE', path: '/api/journal-entries/jc', status: 403 },
+  { method: 'POST', path: '/api/journal-entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'rückdatiert' }, status: 403 },
+  { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-01', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zur geschlossenen Zahlung', transactionRef: 'C1' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
   { method: 'POST', path: '/api/year-close/2026/entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1520', amount: 100, description: 'rückdatiert' }, status: 403 },
@@ -116,6 +119,8 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => { const r = i.receipts.find((x) => x.id === 'rm'); return !!r && !('date' in r) && !('amount' in r); } },
   { method: 'POST', path: '/api/mapping/approve-duplicate', body: { receiptId: 'ro' },
     check: (i) => i.mappings.find((m) => m.receiptId === 'ro')?.approvedDuplicate === true },
+  { method: 'PATCH', path: '/api/journal-entries/jo', body: { amount: 12.5 },
+    check: (i) => i.journalEntries!.find((j) => j.id === 'jo')?.amount === 12.5 },
   { method: 'PATCH', path: '/api/journal-entries/jo', body: { date: '2026-08-20' },
     check: (i) => {
       const jo = i.journalEntries!.find((j) => j.id === 'jo');
@@ -135,6 +140,10 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'M2026-004' && j.date === '2026-08-31' && j.origin === 'manual') },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'OI' },
     check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'OI' && j.vatCode === 'V81' && j.origin === 'invoice') && i.mappings.some((m) => m.transactionRef === 'OI' && m.rule === 'invoice-reference') },
+  { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-31', accountDebit: '6800', accountCredit: '1020', amount: 10, vatCode: 'I81', description: 'von Hand' },
+    check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'M2026-005' && j.vatCode === 'I81' && j.origin === 'manual') },
+  { method: 'POST', path: '/api/journal-entries', body: { id: 'jr', transactionRef: 'O1', date: '2026-08-02', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'Korrektur', exchangeCurrency: 'EUR', exchangeRate: 0.93, corrects: '2026-Q2' },
+    check: (i) => { const j = i.journalEntries!.find((x) => x.id === 'jr'); return j?.transactionRef === 'O1' && j.corrects === '2026-Q2' && j.exchangeRate === 0.93; } },
 ];
 
 for (const call of allowed) {

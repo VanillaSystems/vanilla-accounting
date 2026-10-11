@@ -53,6 +53,7 @@ export default {
     'error.closed.deleteReceipt': 'Un justificatif lié à une transaction d’une période clôturée ne peut pas être supprimé.',
     'error.closed.editEntry': 'Saisissez la correction comme nouvelle écriture dans la période ouverte.',
     'error.closed.deleteEntry': 'Les écritures d’une période clôturée ne peuvent pas être supprimées.',
+    'error.closed.newEntry': 'Une nouvelle écriture doit être datée dans la période ouverte.',
     'error.manualOnly': 'Seules les transactions manuelles peuvent être supprimées. Les transactions bancaires proviennent de l’extrait de compte (camt053/Wise).',
     'error.yearClose': 'La différence de change est calculée par la clôture annuelle: relancez-la au lieu de modifier l’écriture.',
     'error.fileExists': 'Le fichier {filename} existe déjà.',

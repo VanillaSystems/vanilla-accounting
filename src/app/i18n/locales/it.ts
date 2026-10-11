@@ -53,6 +53,7 @@ export default {
     'error.closed.deleteReceipt': 'Un giustificativo collegato a una transazione di un periodo chiuso non può essere eliminato.',
     'error.closed.editEntry': 'Registrate la correzione come nuova registrazione nel periodo aperto.',
     'error.closed.deleteEntry': 'Le registrazioni di un periodo chiuso non possono essere eliminate.',
+    'error.closed.newEntry': 'Una nuova registrazione deve essere datata nel periodo aperto.',
     'error.manualOnly': 'Si possono eliminare solo le transazioni manuali. Le transazioni bancarie provengono dall’estratto conto (camt053/Wise).',
     'error.yearClose': 'La differenza di cambio è calcolata dalla chiusura annuale: rilanciarla invece di modificare la registrazione.',
     'error.fileExists': 'Il file {filename} esiste già.',
