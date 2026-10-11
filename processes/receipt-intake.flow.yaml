@@ -32,7 +32,7 @@ steps:
 
   - id: convert
     name: Convert the image to PDF
-    note: ImageMagick; the original is deleted
+    note: pdf-lib wraps the image; the original is deleted
     needs: [is_pdf.image]
     phase: normalise
     duration: 2s
@@ -61,7 +61,7 @@ steps:
     produces: receipts
     icon: scan-text
     uses: npm:extract
-    note: pdftotext, tesseract fallback, SHA-256 dedup
+    note: pdf.js text, the model's vision as fallback, SHA-256 dedup
     outcomes: [text, no_text, duplicate]
     needs: [size.small, compress]
     phase: extract

@@ -278,7 +278,7 @@ Structurally the same split as a FedEx Zollrechnung, but with traps of its own. 
   invoice look like it carries no Swiss MWST. DHL's UID is in the page footer:
   `DHL Express (Schweiz) AG … UID: CHE-105.901.000, CHE-116.304.564 MWST`. Check the footer
   and the `MWST im Detail` table before assigning a zero VAT code.
-- **The PDF is a scan** — `pdftotext` returns nothing, so `extract` falls back to
+- **The PDF is a scan** — it carries no text, so `extract` falls back to
   claude-vision/OCR. Expect it to arrive as an image PDF and budget for the OCR pass.
 - **Official customs proof**: page 2 carries the `Deklarationsnummer` and an `EVV Code`
   (access code). The electronic assessment decision (eVV) can be downloaded at

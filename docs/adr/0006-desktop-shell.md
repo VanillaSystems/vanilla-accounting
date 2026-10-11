@@ -1,7 +1,9 @@
 # ADR 0006: Distribution: a Claude plugin first, then a single program, then Electron
 
 Status: accepted (2026-10-10), revised the same day (plugin first, git inside the app, GitHub
-first). Nothing built yet.
+first). Section 2 built 2026-10-11 (release track A): pdf.js text in `src/parsers/pdf-text.ts`,
+pdf-lib for photos, isomorphic-git in `src/workspace/git.ts`; the ImageMagick row became
+pdf-lib, and no WASM OCR was needed since the vision path covers scans.
 
 ## Problem
 

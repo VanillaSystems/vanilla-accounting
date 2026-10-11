@@ -78,7 +78,7 @@ the app refuses every edit in it.
 
 ## Quick start
 
-You need Node.js 22, `pdftotext` (poppler) and Claude Code with a Claude subscription: reading,
+You need Node.js 22 and Claude Code with a Claude subscription: reading,
 matching and booking receipts call Claude through the `claude` command.
 
 To look around first, open the demo company:
