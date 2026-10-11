@@ -1,6 +1,6 @@
 /**
  * Changes to belege.workspace.yaml from the Firma page: the company's profile, its bank
- * accounts' labels and IBANs, a new bank account. ADR 0004: the change is applied to the YAML
+ * accounts' labels and IBANs, a new bank account, the invoice layout and texts. ADR 0004: the change is applied to the YAML
  * document as it is on disk, field by field, so its comments, its layout and every field this
  * app does not know stay as they were. The result is checked by the same reader the app opens
  * the workspace with before it replaces the file; a change the reader refuses is never written.
@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address } from '../invoices/model.js';
+import type { Address, InvoiceLanguage, InvoiceLayout, LayoutElement } from '../invoices/model.js';
 import { parseIban } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
@@ -41,10 +41,17 @@ export interface NewBank {
   iban?: string;
 }
 
+/** Firma › Rechnungslayout: the invoicing block's layout and its texts per language; null removes a field (the app's default again). */
+export interface InvoicingPatch {
+  layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
+  texts?: Partial<Record<InvoiceLanguage, { intro?: string | null; closing?: string | null }>>;
+}
+
 export interface ManifestPatch {
   company?: ProfilePatch;
   banks?: BankPatch[];
   addBank?: NewBank;
+  invoicing?: InvoicingPatch;
 }
 
 const ADDRESS_KEYS = ['street', 'number', 'line2', 'postcode', 'town', 'state', 'country'] as const;
@@ -93,6 +100,16 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     // The new line looks like its neighbours: one-line `{ … }` when they are.
     node.flow = seq.items.length > 0 && isMap(seq.items[0]) && !!seq.items[0].flow;
     seq.items.push(node);
+  }
+  const inv = patch.invoicing;
+  if (inv) {
+    if (!isMap(doc.get('invoicing'))) throw new WorkspaceError(`${path} has no invoicing block: add one (payTo, revenueAccount) before the layout`);
+    const { show, ...layout } = inv.layout ?? {};
+    for (const [key, value] of Object.entries(layout)) set(doc, ['invoicing', 'layout', key], value);
+    for (const [key, value] of Object.entries(show ?? {})) doc.setIn(['invoicing', 'layout', 'show', key], value);
+    for (const [lang, texts] of Object.entries(inv.texts ?? {})) {
+      for (const [key, value] of Object.entries(texts)) set(doc, ['invoicing', 'texts', lang, key], value);
+    }
   }
   // A one-line `{ … }` stays one line however long it grows, a quoted text with \n in it too.
   const out = doc.toString({ lineWidth: 0, doubleQuotedAsJSON: true });

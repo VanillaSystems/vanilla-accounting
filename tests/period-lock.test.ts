@@ -147,6 +147,8 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
   // The manifest and the chart hold no dated record: no period is closed to them.
   { method: 'PATCH', path: '/api/workspace', body: { company: { business: 'Kaffeerösterei' } },
     check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('business: Kaffeerösterei') },
+  { method: 'PATCH', path: '/api/workspace', body: { invoicing: { layout: { accent: '#0f766e' }, texts: { de: { intro: 'Hallo' } } } },
+    check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('accent: "#0f766e"') },
   { method: 'PUT', path: '/api/accounts/1100', body: { name: 'Debitoren' },
     check: () => readFileSync(join(api.root, 'accounts.json'), 'utf8').includes('"Debitoren"') },
 ];
@@ -203,4 +205,12 @@ test('the closed period is still exactly as in the fixture', () => {
     config: i.config,
   });
   assert.deepEqual(closed(now), closed(fixture));
+});
+
+test('open period: POST /api/workspace/logo succeeds: a logo is no dated record, the books stay as they were', async () => {
+  const before = readFileSync(api.indexPath, 'utf8');
+  const res = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([137, 80, 78, 71]) });
+  assert.equal(res.status, 200);
+  assert.match(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), /logo: invoices\/logo-[0-9a-f]{12}\.png/);
+  assert.equal(readFileSync(api.indexPath, 'utf8'), before);
 });

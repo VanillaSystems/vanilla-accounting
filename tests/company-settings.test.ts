@@ -114,3 +114,57 @@ test('API: PATCH /api/workspace answers and serves the changed manifest at once;
     api.stop();
   }
 });
+
+const INVOICING = `${MANIFEST}invoicing:
+  payTo:
+    CHF: { account: "1021" }
+  revenueAccount: "3400"
+  layout: { accent: "#5a3a22", logo: invoices/logo.svg }
+  texts:
+    de: { closing: "Zahlbar innert {days} Tagen." }
+`;
+
+test('Rechnungslayout: layout fields, elements and texts land in the invoicing block; null takes the app default again', () => {
+  const { text, manifest } = patchManifestText(INVOICING, {
+    invoicing: {
+      layout: { font: 'Helvetica', window: 'left', logo: null, logoSize: 'l', show: { footer: false, qrBill: true } },
+      texts: { de: { closing: null, intro: 'Gerne verrechnen wir:' }, fr: { closing: 'Payable à {days} jours.' } },
+    },
+  }, 'm.yaml');
+  const l = manifest.invoicing!.layout;
+  assert.deepEqual([l.font, l.window, l.logo, l.logoSize, l.accent, l.show.footer, l.show.qrBill, l.show.logo], ['Helvetica', 'left', undefined, 'l', '#5a3a22', false, true, true]);
+  assert.deepEqual(manifest.invoicing!.texts, { de: { intro: 'Gerne verrechnen wir:' }, fr: { closing: 'Payable à {days} jours.' } });
+  assert.match(text, /^# Muster GmbH: hand-kept, keep this comment/);
+  assert.equal(parse(text).bankAccounts[0].note, 'x');
+});
+
+test('Rechnungslayout refused: no invoicing block, a colour that is none, a font the app does not ship', () => {
+  assert.throws(() => patchManifestText(MANIFEST, { invoicing: { layout: { font: 'Inter' } } }, 'm.yaml'), /no invoicing block/);
+  assert.throws(() => patchManifestText(INVOICING, { invoicing: { layout: { accent: 'blue' } } }, 'm.yaml'), /accent/);
+  assert.throws(() => patchManifestText(INVOICING, { invoicing: { layout: { font: 'Comic Sans' as never } } }, 'm.yaml'), /font/);
+});
+
+test('API: a logo upload is stored by its checksum and becomes the layout\'s logo; only a layout\'s logo is served', async () => {
+  const api = await startApi('tests/fixtures/period-lock-index.json');
+  try {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><rect width="40" height="10"/></svg>';
+    const up = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'image/svg+xml' }, body: svg });
+    assert.equal(up.status, 200);
+    const info = await up.json() as CompanyInfo;
+    const logo = info.invoicing!.layout.logo!;
+    assert.match(logo, /^invoices\/logo-[0-9a-f]{12}\.svg$/);
+    assert.equal(readFileSync(join(api.root, logo), 'utf8'), svg);
+    assert.match(readFileSync(join(api.root, MANIFEST_FILE), 'utf8'), new RegExp(`logo: ${logo.replace('.', '\\.')}`));
+    const served = await fetch(`http://127.0.0.1:${api.port}/api/invoice-logo?path=${encodeURIComponent(logo)}`);
+    assert.equal(await served.text(), svg);
+    assert.equal((await api.send('GET', '/api/invoice-logo?path=books.json')).status, 404, 'no other file of the workspace');
+    const bad = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'x' });
+    assert.equal(bad.status, 400);
+    const layout = await api.send('PATCH', '/api/workspace', { invoicing: { layout: { logo: null, accent: '#0f766e' }, texts: { de: { intro: 'Hallo' } } } });
+    assert.equal(layout.status, 200);
+    const now = (await api.send('GET', '/api/workspace')).json as unknown as CompanyInfo;
+    assert.deepEqual([now.invoicing!.layout.logo, now.invoicing!.layout.accent, now.invoicing!.texts.de?.intro], [undefined, '#0f766e', 'Hallo']);
+  } finally {
+    api.stop();
+  }
+});

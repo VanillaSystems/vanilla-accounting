@@ -11,10 +11,10 @@ import { isAppPath } from '../src/server/app-paths.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
 test('app paths and data paths', () => {
-  for (const p of ['/', '/receipts', '/receipts/3f2a9c01b7d4e5f6', '/journal/M2026-001', '/vat/codes/I81', '/payments/ZKB-4711~2', '/bank/1021-2026-09', '/de/2026-Q3/journal-entries']) {
+  for (const p of ['/', '/receipts', '/receipts/3f2a9c01b7d4e5f6', '/journal/M2026-001', '/vat/codes/I81', '/payments/ZKB-4711~2', '/bank/1021-2026-09', '/invoices/2026-001', '/invoices/draft-in_x', '/invoices/sent/sd_x', '/de/2026-Q3/journal-entries']) {
     assert.ok(isAppPath(p), p);
   }
-  for (const p of ['/api', '/api/status', '/scan', '/scan/manifest.json', '/books.json', '/receipts/20260930-coop.pdf', '/bank-statements/zkb/sept.xml', '/assets/index-abc.js', '/favicon.svg']) {
+  for (const p of ['/api', '/api/status', '/scan', '/scan/manifest.json', '/books.json', '/receipts/20260930-coop.pdf', '/bank-statements/zkb/sept.xml', '/invoices/2026-001.pdf', '/invoices/sent/sd_x.pdf', '/assets/index-abc.js', '/favicon.svg']) {
     assert.ok(!isAppPath(p), p);
   }
 });

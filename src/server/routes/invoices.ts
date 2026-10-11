@@ -4,6 +4,8 @@
  * one route that books (a payment confirmed by a person) goes through withBooks and assertOpen.
  */
 import { Router, type Request } from 'express';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { WS, assertOpen, readBooks, withBooks, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
@@ -77,6 +79,16 @@ router.get('/api/customers/:id', (req, res) => {
   const c = liveCustomers(book).find((x) => x.id === req.params.id);
   if (!c) throw new RequestError(404, 'Kunde nicht gefunden.');
   res.json({ ...c, invoices: liveInvoices(book).filter((i) => i.customerId === c.id).map((i) => viewOf(book, i, today())) });
+});
+
+/** A logo an invoice is laid out with: the layout's, or one an issued invoice froze; no other file. */
+router.get('/api/invoice-logo', (req, res) => {
+  const path = String(req.query.path ?? '');
+  const known = new Set([WS.invoicing?.layout.logo, ...loadInvoices(WS).invoices.map((i) => (i.status === 'issued' ? i.layout.logo : undefined))]);
+  const type = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[path.split('.').pop()?.toLowerCase() ?? ''];
+  const file = join(WS.paths.root, path);
+  if (!path || !known.has(path) || !type || !existsSync(file)) throw new RequestError(404, 'Logo nicht gefunden.');
+  res.type(type).send(readFileSync(file));
 });
 
 /** The PDF exactly as issued (an invoice or credit note), or a sent reminder or notice exactly as sent. */

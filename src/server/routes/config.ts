@@ -1,10 +1,15 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import { createHash } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { companyInfo } from '../../books/company.js';
 import { WorkspaceError } from '../../workspace/workspace.js';
-import { patchManifest, type BankPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
+import { patchManifest, type BankPatch, type InvoicingPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
+import { writeAtomic } from '../../invoices/store.js';
+import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS } from '../../invoices/model.js';
 import { setAccountName } from '../../workspace/accounts-write.js';
 import type { Address } from '../../invoices/model.js';
 
@@ -75,17 +80,61 @@ function newBank(raw: unknown): NewBank {
   return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account: stringField(b, 'account'), label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined };
 }
 
+/** The layout's values are checked by the manifest's reader; here only their kinds. */
+function invoicingPatch(raw: unknown): InvoicingPatch {
+  const b = patchBody(raw, ['layout', 'texts']);
+  const out: InvoicingPatch = {};
+  if (b.layout !== undefined) {
+    const l = patchBody(b.layout, ['font', 'accent', 'window', 'logo', 'logoPosition', 'logoSize', 'show']);
+    const layout: NonNullable<InvoicingPatch['layout']> = {};
+    for (const key of ['font', 'accent', 'window', 'logoPosition', 'logoSize'] as const) if (l[key] !== undefined) (layout as Record<string, unknown>)[key] = stringField(l, key);
+    if (l.logo !== undefined) layout.logo = optText(l, 'logo');
+    if (l.show !== undefined) {
+      const show = patchBody(l.show, LAYOUT_ELEMENTS);
+      for (const [k, v] of Object.entries(show)) if (typeof v !== 'boolean') throw new RequestError(400, `show.${k}: true oder false.`);
+      layout.show = show as NonNullable<typeof layout.show>;
+    }
+    out.layout = layout;
+  }
+  if (b.texts !== undefined) {
+    const texts = patchBody(b.texts, INVOICE_LANGUAGES);
+    out.texts = Object.fromEntries(Object.entries(texts).map(([lang, v]) => {
+      const t = patchBody(v, ['intro', 'closing']);
+      return [lang, { ...(t.intro === undefined ? {} : { intro: optText(t, 'intro') }), ...(t.closing === undefined ? {} : { closing: optText(t, 'closing') }) }];
+    }));
+  }
+  return out;
+}
+
+const LOGO_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' };
+
+/**
+ * The invoice logo: stored under invoices/ by its checksum (a new logo is a new file, so an
+ * issued invoice keeps showing the logo it was issued with) and set as the layout's logo.
+ */
+router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), limit: '1500kb' }), (req, res) => {
+  const ext = LOGO_TYPES[String(req.headers['content-type'] ?? '').split(';')[0].trim()];
+  if (!ext || !Buffer.isBuffer(req.body) || req.body.length === 0) throw new RequestError(400, 'Logo als PNG, JPEG oder SVG erwartet.');
+  const file = `invoices/logo-${createHash('sha256').update(req.body).digest('hex').slice(0, 12)}.${ext}`;
+  mkdirSync(join(WS.paths.root, 'invoices'), { recursive: true });
+  writeAtomic(join(WS.paths.root, file), req.body);
+  checked(() => patchManifest(WS.paths.manifest, { invoicing: { layout: { logo: file } } }));
+  reopenWorkspace();
+  res.json(companyInfo(WS, readBooks()));
+});
+
 /**
  * The company's profile and bank accounts in belege.workspace.yaml, patched field by field
  * (src/workspace/manifest-write.ts). No record of the books changes, so no period is closed to it.
  */
 router.patch('/api/workspace', (req, res) => {
-  const b = patchBody(req.body, ['company', 'banks', 'addBank']);
+  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing']);
   if (b.banks !== undefined && !Array.isArray(b.banks)) throw new RequestError(400, 'banks: eine Liste erwartet.');
   const patch: ManifestPatch = {
     ...(b.company === undefined ? {} : { company: profilePatch(b.company) }),
     ...(b.banks === undefined ? {} : { banks: (b.banks as unknown[]).map(bankPatch) }),
     ...(b.addBank === undefined ? {} : { addBank: newBank(b.addBank) }),
+    ...(b.invoicing === undefined ? {} : { invoicing: invoicingPatch(b.invoicing) }),
   };
   checked(() => patchManifest(WS.paths.manifest, patch));
   reopenWorkspace();
