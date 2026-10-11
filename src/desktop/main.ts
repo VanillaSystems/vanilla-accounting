@@ -37,6 +37,10 @@ async function start(): Promise<void> {
   await app.whenReady();
   const stateFile = join(app.getPath('userData'), 'desktop.json');
   const { homepage } = appPackage();
+  const icon = join(APP_ROOT, 'desktop/icon.png');
+  app.setAboutPanelOptions({ applicationName: 'Vanilla Accounting', applicationVersion: app.getVersion(), copyright: 'GNU AGPL v3', website: homepage, iconPath: icon });
+  // Packed, macOS takes the icon from the bundle (desktop/icon.icns); `npm run desktop` would show Electron's.
+  if (!app.isPackaged) app.dock?.setIcon(icon);
   usePrintPages(electronPage);
   const claudeFound = resolveClaude();
   let language = languageOf(app.getLocale());

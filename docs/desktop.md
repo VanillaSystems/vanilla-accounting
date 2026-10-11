@@ -61,8 +61,9 @@ Firma › Claude says so, so the person knows why the app still asks for Claude 
 
 `tools/desktop/build.mjs` bundles `src/desktop` into `out/desktop/` (two folders below the app
 root, as `APP_ROOT` expects) and fails when the bundle imports a package that is not a
-dependency in `package.json`, since only those are packed. `tools/desktop/icon.mjs` renders
-`desktop/icon.svg` to the PNG electron-builder makes the icon from.
+dependency in `package.json`, since only those are packed. The app icon is
+`desktop/icon.icns` (macOS), `desktop/icon.ico` (Windows) and `desktop/icon.png` (the About panel,
+and the dock when the app runs unpacked), exported from the brand's finished files.
 
 The smoke test starts the packaged app with only `/usr/bin:/bin` on its PATH and a fresh user data
 folder (so it never opens books of the machine), and drives it: start screen, Demo, every area,

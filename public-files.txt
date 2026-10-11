@@ -39,7 +39,8 @@ tools/release/**
 desktop/electron-builder.config.cjs
 desktop/entitlements.mac.plist
 desktop/not-packed.cjs
-desktop/icon.svg
+desktop/icon.icns
+desktop/icon.ico
 desktop/icon.png
 
 docs/getting-started.md
@@ -68,7 +69,6 @@ docs/specs/mwst-form-0550-03-2024-de.pdf
 
 public/favicon.ico
 public/favicon.svg
-public/favicon-192.png
 public/apple-touch-icon.png
 
 ios/project.yml

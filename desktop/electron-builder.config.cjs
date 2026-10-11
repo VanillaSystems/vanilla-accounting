@@ -30,6 +30,8 @@ module.exports = {
     'src/server/scan.html',
     'src/app/i18n/locales/*.ts',
     'public-files.txt',
+    // The About panel's and the dock's icon when the app runs unpacked (src/desktop/main.ts).
+    'desktop/icon.png',
     '!node_modules/{react,react-dom,scheduler}/**/*',
     '!node_modules/@fontsource/{geist-mono,hanken-grotesk,instrument-sans}/**/*',
     // Packages the desktop app does not use (not-packed.cjs) and the parts of packages it does
@@ -66,7 +68,7 @@ module.exports = {
   },
   mac: {
     category: 'public.app-category.finance',
-    icon: 'desktop/icon.png',
+    icon: 'desktop/icon.icns',
     // electron-updater on macOS installs from a zip; built only when there is a feed to publish it to.
     target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, ...(releases?.length === 2 ? [{ target: 'zip', arch: ['arm64', 'x64'] }] : [])],
     hardenedRuntime: true,
@@ -76,6 +78,7 @@ module.exports = {
     identity: signed ? undefined : null,
     notarize,
   },
+  win: { icon: 'desktop/icon.ico' },
   dmg: { artifactName: '${productName}-${version}-${arch}.${ext}' },
   // electron-updater reads its feed from here; the app checks only when package.json's desktop.autoUpdate is on.
   publish: releases?.length === 2 ? { provider: 'github', owner: releases[0], repo: releases[1] } : null,
