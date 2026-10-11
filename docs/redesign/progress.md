@@ -107,6 +107,10 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | An entry without a receipt shows a link to its statement (`/payments/<ref>`), not the statement excerpt with the highlighted line. | The statement renderer is phase 3's (built in parallel); the link lands on the same payment. |
 | 2026-10-11 | The entry title is its text split at the first `, ` / ` — ` / ` - ` / `: `; correction texts keep their "Korrektur …" prefix (the mockup stripped it). | The list shows no other mark for a correction. |
 | 2026-10-11 | `conversionText`/`checkText` moved to `src/app/lib/fx-text.ts`; `.acts button` in shell.css is scoped to `.row .acts` (it squeezed the receipt delete dialog's buttons to 28 px). | The new detail needs the FX texts without the Tailwind component; the CSS fix is a phase 2 defect found here. |
+| 2026-10-11 | Integration of phases 3 and 4: the legacy adapter serves only Abschluss (`close`), one old tab, no tab buttons, no query seeding (`seedLegacyParams` and src/app/lib/location.ts are gone). | Every other area is rebuilt; phase 7 deletes the adapter. |
+| 2026-10-11 | VAT codes get the hover card where the mockup shows codes: Buchungen, MWST-Codes and MWST (a code in MWST stays a link to its catalogue page, without a title, and carries `data-vat`). Kontoauszüge, Belege and Bilanz & ER show no VAT codes, in the mockup and in the app, so they render no `<VatCards>`. | Shots 35-vat-card and 41-vat-underline; a native title would cover the card. |
+| 2026-10-11 | An entry without a receipt shows the strip of its statement around the payment's line (`StatementPaper` with `excerpt`, ±70 px as the mockup), "Seite n von m", download, and a click opens the payment in Kontoauszüge; without a statement PDF it keeps the link. Replaces phase 4's link-only default. | Shot 28-journal-no-receipt; one renderer for the statement page and its strip. |
+| 2026-10-11 | Kept for Abschluss until phase 7/10: year-close-tab, account-combobox (the old Tailwind combobox), lib/account-filter (also the new AccountField), and the `common.*` and `col.*` keys nothing uses now. | Phases 6 and 7 run in parallel from before this cleanup and may use the generic keys; phase 10 removes what is left. |
 
 ## API inventory against the mockup
 
@@ -178,3 +182,11 @@ Missing for the mockup, to add in their phase:
   `vat-entry-table.tsx` stay: the old MWST tab (phase 5) and transaction detail (phase 3) import them; phase 10
   deletes what is left. Evidence: .verify/evidence/redesign/phase-4/NOTES.md. Differs from the mockup: no statement
   excerpt (link instead), corrections editable, correction texts unstripped, "Betrag" only for codes with a rate.
+- 2026-10-11 integration of phases 3 and 4 into `redesign`: merges "Merge phase 3: Kontoauszüge" and "Merge phase 4:
+  Buchungen and MWST-Codes" (bank, journal, codes, vat, reports are real areas; the legacy adapter keeps only close;
+  locales kept both blocks; bank's `checkText` import follows phase 4's move to lib/fx-text.ts; the fx-rates-section
+  phase 3 deleted stays deleted). Wire-up: MWST's codes get the VAT card, Buchungen shows the statement excerpt for an
+  entry without receipt (phase 3's StatementPaper, new `excerpt` mode). Cleanup: vat-codes-view, vat-code,
+  vat-entry-table, fx-amount, open-in-tab-link, pdf-frame, search-bar, split-pane, use-url-state, use-auto-select-first
+  (kept alive only by its test), lib/location and 39 dead i18n keys deleted; AGENTS.md's link and layout rules name the
+  new helpers. Evidence: .verify/evidence/redesign/integrate-3-4/.
