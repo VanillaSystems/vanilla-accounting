@@ -33,6 +33,6 @@ router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   withBooks(res, (books) => {
     openTransaction(books, txRef);
     books.journalEntries = [...books.journalEntries.filter((je) => je.transactionRef !== txRef), ...entries];
-    return { ok: true, count: entries.length };
+    return { ok: true, count: entries.length, entries };
   });
 });

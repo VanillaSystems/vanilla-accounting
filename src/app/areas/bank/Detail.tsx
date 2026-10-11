@@ -12,7 +12,7 @@ import { sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
-import { checkText } from '../../components/fx-amount.js';
+import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { I } from '../receipts/icons.js';

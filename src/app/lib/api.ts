@@ -72,7 +72,10 @@ export async function orAlert(call: Promise<unknown>): Promise<boolean> {
 
 type Ok = { ok: true };
 type Link = { receiptId: string; transactionRef: string };
-export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description'>>;
+export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount'>>;
+/** A new entry by hand; `id` and `transactionRef` put a deleted one back (undo). */
+export type JournalEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount'> & { description: string }
+  & Partial<Pick<JournalEntry, 'id' | 'transactionRef' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate' | 'corrects' | 'origin'>>;
 export type ManualTransactionInput ={ date: string; description: string; amount: number; currency: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening };
@@ -96,8 +99,11 @@ export const api = {
 
   patchJournalEntry: (id: string, patch: JournalEntryPatch) =>
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),
+  createJournalEntry: (input: JournalEntryInput) =>
+    request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
-  classifyTransaction: (txRef: string) => request<unknown>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`),
+  classifyTransaction: (txRef: string) =>
+    request<{ entries: JournalEntry[] }>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`).then((r) => r.entries),
 
   yearClose: (year: string) => request<YearCloseView>('GET', `/api/year-close/${year}`),
   bookRevaluation: (year: string) => request<{ entries: JournalEntry[] }>('POST', `/api/year-close/${year}/revaluation`),

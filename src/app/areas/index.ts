@@ -10,7 +10,9 @@ import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js'
 import { t } from '../i18n/index.js';
 import { company } from './company/company.js';
 import { invoices } from './invoices.js';
-import { legacyArea, journalPalette } from './legacy.js';
+import { legacyArea } from './legacy.js';
+import { journal } from './journal/journal.js';
+import { codes } from './codes/codes.js';
 import { receipts } from './receipts/receipts.js';
 import { bank } from './bank/bank.js';
 import { reports } from './reports/reports.js';
@@ -81,9 +83,9 @@ export const AREAS: Registry = {
   receipts,
   invoices,
   bank,
-  journal: legacyArea('journal', { label: () => t('area.journal'), dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') }, palette: journalPalette, title: (r) => r.id, wide: true }),
+  journal,
   vat,
-  codes: legacyArea('codes', { label: () => t('area.codes'), dockAs: 'vat', title: (r) => r.code, periodless: true }),
+  codes,
   reports,
   close: legacyArea('close', { label: () => t('area.close'), dock: { key: 'a', icon: ICONS.close, tip: () => t('area.close.tip') }, title: (r) => r.step }),
   company,

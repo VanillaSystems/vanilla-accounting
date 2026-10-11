@@ -47,9 +47,9 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .row:has(.acts):hover .a, .row.hov:has(.acts) .a, .row:has(.acts:focus-within) .a { opacity: 0; }
 .row:focus-visible { outline: none; }
 .row:not(.sel):focus-visible { box-shadow: inset 0 0 0 1px var(--line-2); }
-.acts button { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); }
-.acts button:hover { color: var(--ink); background: var(--bg); }
-.acts button.del:hover { color: var(--neg); }
+.row .acts button { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--muted); }
+.row .acts button:hover { color: var(--ink); background: var(--bg); }
+.row .acts button.del:hover { color: var(--neg); }
 .row.reading .t { color: var(--muted); }
 .shimmer { display: inline-block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--line) 0%, var(--hover) 50%, var(--line) 100%); background-size: 200% 100%; animation: sh 1.2s linear infinite; vertical-align: middle; }
 @keyframes sh { to { background-position: -200% 0; } }

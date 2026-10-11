@@ -120,8 +120,9 @@ test('batch rename skips a receipt renamed while the model suggested a name', as
 
 test('re-classify keeps an edit made while the model books the transaction', async () => {
   const { status, json } = await editWhileModelThinks('POST', '/api/journal-entries/classify/W1', 'während Klassifizieren');
-  assert.deepEqual([status, json], [200, { ok: true, count: 1 }]);
+  assert.deepEqual([status, json.count], [200, 1]);
   const b = books();
+  assert.deepEqual(json.entries, b.journalEntries.filter((e) => e.transactionRef === 'W1'), 'the answer names the new entries');
   assert.equal(b.receipts.find((r) => r.id === 'rw')!.remarks, 'während Klassifizieren');
   assert.deepEqual(b.journalEntries.filter((e) => e.transactionRef === 'W1').map((e) => [e.description, e.origin]), [['Stub, Aufwand', 'classify']]);
 });

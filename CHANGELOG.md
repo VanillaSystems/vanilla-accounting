@@ -45,6 +45,16 @@ Two markers flag an entry you must read before you update:
   selected account's ledger beside it (`/reports/balance/1021`), finds an account by number or
   name in whichever report holds it, shows all accounts of the chart on request, and names the
   entries booked on one side when Aktiven and Passiven differ. ⌘K finds every account.
+- Buchungen rebuilt (redesign phase 4): the period's entries month by month as one grid of Datum,
+  Text, Soll, Haben, MWST and amount, the entries of one payment joined; filters `ohne Beleg` and
+  `Korrekturen`, a search over text, accounts, code, ref and amount, and `?vat=<code>`. An entry
+  shows its Buchungssatz with the account names, the FX conversion with the ESTV check, its payment,
+  receipt and paper. Soll, Haben (pick by number or name), MWST, amount and text are edited in
+  place; N books a new entry by hand (`POST /api/journal-entries`); a filed entry offers a
+  correction in the open quarter, pre-filled as its reversal with `corrects`. Edit, new entry,
+  delete and Neu klassifizieren can be undone (⌘Z). Hovering a VAT code anywhere explains it; the
+  histogram shows the period's codes by count or CHF. MWST-Codes (`/vat/codes/<code>`) is the
+  catalogue by family with each code's use, Ziffern, example and the period's entries.
 - Invoices (ADR 0010, ADR 0012): customers, invoices and credit notes with VAT per line in CHF or
   EUR and in German, French, Italian or English, numbered when issued (2026-001, never for a
   draft), checked against Art. 26 MWSTG before issue, frozen once issued. A draft is deleted; an

@@ -1,0 +1,55 @@
+/* Buchungen: the rows as one grid, the Buchungssatz, the account field, the new entry (the mockup's CSS). */
+.rows.je { display: grid; grid-template-columns: 88px minmax(0, 1fr) auto auto auto auto auto; column-gap: 0; }
+.rows.je > * { grid-column: 1 / -1; }
+.rows.je .row, .rows.je .group { display: grid; grid-template-columns: subgrid; gap: 0; }
+.rows.je .row > .t { padding-right: 14px; }
+.rows.je .dr, .rows.je .cr { font-size: 12px; color: var(--faint); text-align: right; }
+.rows.je .dr { padding-left: 4px; }
+.rows.je .cr { padding-left: 14px; }
+.rows.je .none { color: var(--line-2); }
+.rows.je .row.sel .dr, .rows.je .row.sel .cr, .rows.je .row:hover .dr, .rows.je .row:hover .cr { color: var(--muted); }
+.rows.je .cu { font-size: 11.5px; color: var(--muted); text-align: right; padding-left: 14px; }
+.rows.je .a { padding-left: 6px; }
+.rows.je .group .gl { grid-column: 1 / 3; text-align: left; }
+.rows.je .group .cap { text-align: right; font-size: 10px; letter-spacing: .08em; padding-left: 14px; }
+.rows.je .group .cap:first-of-type { padding-left: 4px; }
+.rows.je .group .n { grid-column: 6 / 8; text-align: right; }
+.rows.je .vc { font-size: 11.5px; color: var(--faint); padding-left: 16px; text-align: left; }
+.rows.je .vc.rev { color: var(--muted); }
+.rows.je .row.sel .vc, .rows.je .row:hover .vc { color: var(--muted); }
+.rows.je .group .cap.vh { text-align: left; padding-left: 16px; }
+.rows.je .row.cont::before { content: ''; position: absolute; left: 92px; top: -50%; height: 100%; width: 7px; border-left: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2); border-bottom-left-radius: 5px; transform: translateY(-1px); }
+.rows.je .row.cont > .t { padding-left: 14px; }
+
+.satz { margin-top: 14px; display: grid; gap: 2px; max-width: 640px; font-size: 13px; }
+.satz > div { display: grid; grid-template-columns: 52px 54px 1fr; gap: 10px; align-items: baseline; }
+.satz .k { color: var(--faint); font-size: 12px; }
+.satz .n { font-size: 13px; }
+.satz .nm { color: var(--ink-2); }
+.satz .m { color: var(--muted); font-size: 12px; }
+.status.jst { gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+.golink.jl { color: var(--muted); font-size: 12.5px; margin-left: 14px; }
+.golink.jl:hover { color: var(--ink); }
+.satz .nm.warn { color: var(--warn); font-size: 12px; }
+
+.src { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; max-width: 640px; }
+.src button { white-space: nowrap; }
+.src button { color: var(--ink-2); border-bottom: 1px solid var(--line-2); }
+.src button:hover { color: var(--ink); border-bottom-color: currentColor; }
+
+/* the account field: the number, its name under it, the chart as you type */
+.form .acf { position: relative; }
+.form .acf .acn { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acl { position: absolute; z-index: 45; left: 0; top: 56px; width: 280px; max-height: 260px; overflow: auto; margin: 0; padding: 4px; list-style: none; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.acl li { display: flex; gap: 10px; padding: 5px 8px; border-radius: 6px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acl li .mono { color: var(--muted); min-width: 34px; }
+.acl li.on { background: var(--accent-soft); color: var(--ink); }
+.acl li.none { color: var(--muted); cursor: default; }
+
+/* the new entry */
+.jnew { width: 520px; top: 12vh; overflow: visible; }
+.jnew .ctx { padding: 16px 20px 4px; font-size: 13.5px; color: var(--ink-2); }
+.jnew .ctx .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+.jnew .form { padding: 8px 20px 18px; }
+.jnew .dacts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.jnew .form .two { grid-template-columns: 1fr 1fr; }
