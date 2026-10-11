@@ -1387,6 +1387,7 @@ export default {
     'invoices.nothingFound': 'Nothing found',
     'invoices.nothingFoundText': 'No invoice matches “{q}”.',
     'invoices.unavailable': 'Invoices are only in the app with its server, not in this export.',
+    'invoices.demoOff': 'You write invoices in the app. The demo does not show them.',
     'invoices.draft': 'Draft',
     'invoices.new': 'New invoice',
     'invoices.newTitle': 'Write a new invoice',

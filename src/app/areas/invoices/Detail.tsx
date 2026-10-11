@@ -13,7 +13,7 @@ import type { PaymentProposal } from '../../../invoices/payments.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
-import { api, missingText, type DraftChange, type InvoiceList } from '../../lib/api.js';
+import { api, DEMO, missingText, type DraftChange, type InvoiceList } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
 import { I } from '../receipts/icons.js';
@@ -35,7 +35,7 @@ const days = (from: string, to: string) => Math.round((Date.parse(to) - Date.par
 export function Detail(props: Props) {
   const load = useInvoices();
   const ws = useWorkspace();
-  if (load.state !== 'ready' || !ws) return <div className="detail-empty"><div>{load.state === 'failed' ? t('invoices.unavailable') : ''}</div></div>;
+  if (load.state !== 'ready' || !ws) return <div className="detail-empty"><div>{load.state === 'failed' ? t(DEMO ? 'invoices.demoOff' : 'invoices.unavailable') : ''}</div></div>;
   const d = load.data;
   const { route } = props;
   if (route.view === 'customers') return <CustomerDetail {...props} d={d} />;

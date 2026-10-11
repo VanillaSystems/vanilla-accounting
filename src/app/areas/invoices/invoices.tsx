@@ -11,7 +11,7 @@ import { moveKey } from '../../shell/keyboard.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
 import { monthName } from '../../lib/period-label.js';
-import type { InvoiceList as Records } from '../../lib/api.js';
+import { DEMO, type InvoiceList as Records } from '../../lib/api.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
@@ -73,7 +73,7 @@ function List(props: Props) {
     return (
       <div className="page">
         <ListHead {...props} noPeriod={route.view !== 'list'} />
-        <div className="empty"><p>{load.state === 'loading' ? t('app.loading') : t('invoices.unavailable')}</p></div>
+        <div className="empty"><p>{load.state === 'loading' ? t('app.loading') : t(DEMO ? 'invoices.demoOff' : 'invoices.unavailable')}</p></div>
       </div>
     );
   }

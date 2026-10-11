@@ -1387,6 +1387,7 @@ export default {
     'invoices.nothingFound': 'Rien trouvé',
     'invoices.nothingFoundText': 'Aucune facture ne correspond à « {q} ».',
     'invoices.unavailable': 'Les factures n’existent que dans l’app avec son serveur, pas dans cet export.',
+    'invoices.demoOff': 'Tu écris les factures dans l’app. La démo ne les montre pas.',
     'invoices.draft': 'Projet',
     'invoices.new': 'Nouvelle facture',
     'invoices.newTitle': 'Écrire une nouvelle facture',

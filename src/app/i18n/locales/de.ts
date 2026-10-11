@@ -1384,6 +1384,7 @@ export const messages = {
   'invoices.nothingFound': 'Nichts gefunden',
   'invoices.nothingFoundText': 'Keine Rechnung passt zu «{q}».',
   'invoices.unavailable': 'Rechnungen gibt es nur in der App mit ihrem Server, nicht in diesem Export.',
+  'invoices.demoOff': 'Rechnungen schreibst du in der App. Die Demo zeigt sie nicht.',
   'invoices.draft': 'Entwurf',
   'invoices.new': 'Neue Rechnung',
   'invoices.newTitle': 'Neue Rechnung schreiben',
