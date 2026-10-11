@@ -4,18 +4,15 @@
  * extract` and the statement upload (POST /api/statements) both read the folder through here and
  * merge with mergeIndex, so a statement imported from the UI lands exactly as extract would put it.
  */
-import { execFile } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { transactionsOf } from '../parsers/camt053.js';
+import { pdfText } from '../parsers/pdf-text.js';
 import { wiseReferences } from '../parsers/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { periodLock } from './store.js';
-
-const execFileAsync = promisify(execFile);
 
 type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
 
@@ -80,8 +77,7 @@ export async function readWiseReferences(ws: Ws, warn: (msg: string) => void = (
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir).filter((x) => x.endsWith('.pdf'))) {
       try {
-        const { stdout } = await execFileAsync('pdftotext', ['-raw', join(dir, f), '-']);
-        for (const [id, ref] of wiseReferences(stdout)) refs.set(id, ref);
+        for (const [id, ref] of wiseReferences(await pdfText(join(dir, f), 'raw'))) refs.set(id, ref);
       } catch (e) { warn(`${f}: ${e}`); }
     }
   }

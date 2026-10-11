@@ -2,12 +2,12 @@
  * npm run extract
  *
  * Scans beleg-import/ (staged) and receipts/ (archived) for PDFs, extracts text
- * via pdftotext (fallback: tesseract), parses the camt053 statements under bank-statements/
+ * with pdf.js (fallback: the model's vision), parses the camt053 statements under bank-statements/
  * (src/workspace/bank-statements.ts) into transactions[], then writes books.json. A statement
  * no bank account of belege.workspace.yaml takes stops the run before anything is written.
  *
- * PNG/JPG files dropped into beleg-import/ are converted to PDF (via ImageMagick's
- * `convert`) before scanning; the original image is deleted after conversion.
+ * PNG/JPG files dropped into beleg-import/ are wrapped into a PDF (src/parsers/image-pdf.ts)
+ * before scanning; the original image is deleted after conversion.
  *
  * iCloud edge cases: skips .icloud placeholder files and files smaller than 1 KB.
  * Cross-folder duplicates: if a file in beleg-import/ has the same SHA-256 as
@@ -15,13 +15,14 @@
  */
 
 import 'dotenv/config';
-import { readdirSync, readFileSync, statSync, existsSync, unlinkSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { assignUniqueRefs } from '../parsers/camt053.js';
+import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
+import { pdfText } from '../parsers/pdf-text.js';
+import { detectVatProofIssue } from '../parsers/receipt-text.js';
 import { ask } from '../llm/ask.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt, BankTransaction } from '../types/index.js';
@@ -32,17 +33,14 @@ import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
 
-const execFileAsync = promisify(execFile);
+// ─── The PDF's own text, fallback to claude -p for OCR ──────────────────────
 
-// ─── Fast pdftotext, fallback to claude -p for OCR ──────────────────────────
-
+/** `pdftotext` names the method of a digital PDF's own text, as the books have recorded it since the first extraction. */
 async function extractTextFast(
   pdfPath: string,
 ): Promise<{ text: string; method: 'pdftotext' | 'claude-vision' }> {
-  // Try pdftotext first (instant for digital PDFs)
   try {
-    const { stdout } = await execFileAsync('pdftotext', ['-enc', 'UTF-8', pdfPath, '-']);
-    const text = stdout.trim();
+    const text = (await pdfText(pdfPath)).trim();
     if (text.length > 30) {
       return { text, method: 'pdftotext' };
     }
@@ -111,18 +109,11 @@ interface FoundFile {
   location: 'staged' | 'archived';
 }
 
-const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg'];
-
-// Converts any PNG/JPG images in a directory to PDFs (via ImageMagick), then
-// removes the originals so they aren't picked up as duplicates by scanPdfs.
+// Wraps any PNG/JPG images in a directory into PDFs, then removes the originals so they
+// aren't picked up as duplicates by scanPdfs.
 async function convertImagesToPdf(dir: string): Promise<void> {
   if (!existsSync(dir)) return;
-  const images = readdirSync(dir).filter((f) => {
-    const lower = f.toLowerCase();
-    return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
-  });
-
-  for (const f of images) {
+  for (const f of readdirSync(dir).filter(isImageFile)) {
     const imgPath = join(dir, f);
     const pdfPath = imgPath.replace(/\.(png|jpg|jpeg)$/i, '.pdf');
     if (existsSync(pdfPath)) {
@@ -130,42 +121,13 @@ async function convertImagesToPdf(dir: string): Promise<void> {
       continue;
     }
     try {
-      await execFileAsync('convert', [imgPath, pdfPath]);
+      writeFileSync(pdfPath, await imageToPdf(readFileSync(imgPath), f));
       unlinkSync(imgPath);
       console.log(`  converted ${f} -> ${basename(pdfPath)}`);
     } catch (e: any) {
       console.error(`  convert failed for ${f}: ${e.message?.substring(0, 100)}`);
     }
   }
-}
-
-// ─── VAT-proof heuristics ────────────────────────────────────────────────────
-//
-// Some vendors expose two different PDFs for the same purchase: a summary/
-// confirmation page (no proof of Swiss VAT) and the actual tax invoice (shows
-// the CHE-... UID). Filing the wrong one silently loses the VAT deduction —
-// see docs/runbooks/receipt-collection.md for the full list of vendor traps.
-// This only flags known patterns; absence of a flag is not proof a receipt is fine.
-// A Swiss UID survives PDF text extraction in more shapes than one: pdftotext
-// wraps it across lines ("#CHE-\n153.004.184 MWST" on Shopify's bills, the same
-// break after "CHE-" on some other invoices), and some layouts
-// space the groups out. Matching the strict "CHE-###.###.###" form alone
-// produces false "no VAT proof" verdicts on perfectly good invoices, so allow
-// whitespace between every part.
-const SWISS_UID_RE = /CHE[-\s]*\d{3}[.\s]*\d{3}[.\s]*\d{3}/;
-
-export function hasSwissUid(text: string): boolean {
-  return SWISS_UID_RE.test(text);
-}
-
-function detectVatProofIssue(text: string): string | undefined {
-  // Amazon.de "Order Summary" (order-history print/PDF) vs. the real per-seller
-  // "Rechnung" invoice. The summary only ever shows "Estimated VAT"; the real
-  // invoice shows "Rechnungsnummer" + "USt-IDNr. CHE-...".
-  if (/Order Summary/i.test(text) && /Estimated VAT/i.test(text) && !hasSwissUid(text)) {
-    return '⚠ VAT PROOF MISSING: this looks like an Amazon order-summary page, not the real invoice — no CHE-... VAT ID shown, so it cannot justify a VAT refund. Download the actual "Invoice" PDF per order/seller from the order details popover instead (see docs/runbooks/receipt-collection.md § Amazon.de).';
-  }
-  return undefined;
 }
 
 function scanPdfs(dir: string, location: 'staged' | 'archived'): FoundFile[] {

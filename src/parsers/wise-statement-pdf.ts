@@ -3,11 +3,13 @@
  * reference of a transfer ("Invoice 2026000001 Ref.: 1234567890-1", a QR reference). Each
  * transaction ends with a line like
  *   25 August 2026 | Transaction: TRANSFER-1234567890 | Reference: Invoice 2026000001 Ref.: …
- * Returns transaction id → reference, from `pdftotext -raw` output.
+ * Returns transaction id → reference, from the statement's text in content-stream order
+ * (`pdfText(…, 'raw')`). A reference on a page's last line ends at the form feed, not at the
+ * footer of the page.
  */
 export function wiseReferences(rawText: string): Map<string, string> {
   const out = new Map<string, string>();
-  for (const m of rawText.matchAll(/Transaction: ([A-Z]+-[\w-]+)\s*\|\s*Reference: ([^\n]+)/g)) {
+  for (const m of rawText.matchAll(/Transaction: ([A-Z]+-[\w-]+)\s*\|\s*Reference: ([^\n\f]+)/g)) {
     out.set(m[1], m[2].trim());
   }
   return out;

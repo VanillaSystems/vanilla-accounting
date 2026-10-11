@@ -80,7 +80,8 @@ export interface Signals {
   filenames: string[];
 }
 
-const UID_RE = /CHE[-\s]?(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})/g;
+// Extraction wraps a UID across lines after "CHE-" on some invoices, or spaces its groups out.
+const UID_RE = /CHE[-\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})/g;
 
 /** The counterparty part of a bank description, without the bank's wrapper text. */
 export function merchantOf(description: string): string {

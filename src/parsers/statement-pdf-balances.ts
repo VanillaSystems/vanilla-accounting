@@ -9,20 +9,12 @@
  *    is the balance held on the statement's last day. US number format 12,345.67.
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { StatementClosingBalance } from '../types/index.js';
 import { findBankAccount } from '../accounting/bank-accounts.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-
-const execFileAsync = promisify(execFile);
-
-async function pdfText(pdfPath: string): Promise<string> {
-  const { stdout } = await execFileAsync('pdftotext', ['-layout', '-enc', 'UTF-8', pdfPath, '-']);
-  return stdout;
-}
+import { pdfText } from './pdf-text.js';
 
 function parseSwissNumber(s: string): number {
   return parseFloat(s.replace(/'/g, ''));
@@ -59,6 +51,11 @@ function toDateFromFilename(filename: string): string | null {
   const rai = filename.match(/\d{2}\.\d{2}\.\d{4}\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
   if (rai) return `${rai[3]}-${rai[2]}-${rai[1]}`;
   return null;
+}
+
+/** The closing balance in a statement's layout text (`pdfText(…, 'layout')`), or null when the line is not there. */
+export function closingBalance(text: string, bank: 'Raiffeisen' | 'Wise', currency: string): number | null {
+  return bank === 'Raiffeisen' ? extractRaiffeisenClosing(text) : extractWiseClosing(text, currency);
 }
 
 function currencyFromFilename(filename: string, bank: string): string {
@@ -106,12 +103,12 @@ export async function extractStatementBalances(statementsDir: string, bankAccoun
 
       let text: string;
       try {
-        text = await pdfText(join(dir, file));
+        text = await pdfText(join(dir, file), 'layout');
       } catch (e) {
-        warnings.push(`${file}: pdftotext failed (${e})`);
+        warnings.push(`${file}: the PDF does not read (${e})`);
         continue;
       }
-      const amount = bank === 'Raiffeisen' ? extractRaiffeisenClosing(text) : extractWiseClosing(text, currency);
+      const amount = closingBalance(text, bank, currency);
       if (amount === null) { warnings.push(`${file}: closing balance not found in PDF text`); continue; }
 
       balances.push({ account: mapping.account, bank, currency, date, amount, source: 'pdf', sourceFile: file });

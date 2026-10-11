@@ -33,6 +33,7 @@ tools/vat-codes/**
 examples/**
 demo-consulting/**
 tools/hooks/**
+tools/pdf-text/compare.ts
 
 docs/getting-started.md
 docs/audit-export.md
