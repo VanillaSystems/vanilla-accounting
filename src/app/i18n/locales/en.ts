@@ -185,6 +185,7 @@ export default {
     'journal.correctIn': 'Book a correction in {period} →',
     'journal.lockedToast': 'Filed: this entry never changes. A correction goes in the open period.',
     'journal.noReceiptSource': 'No receipt. The payment is in the',
+    'journal.excerptFrom': 'No receipt. Excerpt from the',
     'journal.statementOf': 'statement of {month}',
     'journal.noDocument': 'There is no document for this entry.',
     'journal.details': 'Details',

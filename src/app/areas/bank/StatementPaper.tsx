@@ -53,11 +53,38 @@ export const forgetPages = () => drawn.clear();
 
 export interface Mark { tx: Pick<BankTransaction, 'ref' | 'date' | 'amount'>; fee?: Pick<BankTransaction, 'ref'>; wise: boolean }
 
+/** The page strip around the marked lines, as one wrapped canvas; none when no page holds them. */
+function excerptOf(doc: Doc, mark: Mark): { w: HTMLElement; page: number } | undefined {
+  for (const [i, p] of doc.pages.entries()) {
+    const lines = findLines(p.items, mark.tx, mark.wise, mark.fee);
+    if (!lines.length) continue;
+    const y0 = Math.max(0, Math.min(...lines.map((l) => l[0])) - 70);
+    const y1 = Math.min(p.height, Math.max(...lines.map((l) => l[1])) + 70);
+    const w = document.createElement('div');
+    w.className = 'pgw';
+    const c = document.createElement('canvas');
+    c.className = 'pg';
+    c.width = p.canvas.width; c.height = y1 - y0;
+    c.getContext('2d')!.drawImage(p.canvas, 0, y0, c.width, c.height, 0, 0, c.width, c.height);
+    w.append(c);
+    for (const [a, z] of lines) {
+      const hl = document.createElement('div');
+      hl.className = 'hl';
+      hl.style.top = `${((a - y0) / (y1 - y0)) * 100}%`;
+      hl.style.height = `${((z - a) / (y1 - y0)) * 100}%`;
+      w.append(hl);
+    }
+    return { w, page: i + 1 };
+  }
+  return undefined;
+}
+
 /**
  * `onPage` hears where the mark is ("Seite 2 von 5"), or that it is not found. `scroller` is the
- * box that scrolls the paper: the line is scrolled into it only when out of sight.
+ * box that scrolls the paper: the line is scrolled into it only when out of sight. `excerpt` draws
+ * only the strip around the marked line (the statement as evidence for an entry), else every page.
  */
-export function StatementPaper({ src, mark, onPage, scroller }: { src: string; mark?: Mark; onPage?(text: string): void; scroller?(el: HTMLElement): HTMLElement | null }) {
+export function StatementPaper({ src, mark, excerpt, onPage, scroller }: { src: string; mark?: Mark; excerpt?: boolean; onPage?(text: string): void; scroller?(el: HTMLElement): HTMLElement | null }) {
   const box = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const key = mark ? `${mark.tx.ref}|${mark.fee?.ref ?? ''}` : '';
@@ -68,6 +95,12 @@ export function StatementPaper({ src, mark, onPage, scroller }: { src: string; m
     pagesOf(src).then((doc) => {
       const el = box.current;
       if (!live || !el) return;
+      const strip = excerpt && mark ? excerptOf(doc, mark) : undefined;
+      if (strip) {
+        el.replaceChildren(strip.w);
+        onPage?.(t('bank.page', { page: strip.page, n: doc.n }));
+        return;
+      }
       let first: { hl: HTMLElement; page: number } | undefined;
       el.replaceChildren(...doc.pages.map((p, i) => {
         const w = document.createElement('div');
@@ -97,7 +130,7 @@ export function StatementPaper({ src, mark, onPage, scroller }: { src: string; m
       } else onPage?.(mark ? t('bank.lineNotFound') : '');
     }, () => { if (live) setFailed(true); });
     return () => { live = false; };
-  }, [src, key]);
+  }, [src, key, excerpt]);
 
   if (failed) return <iframe className="pg" style={{ width: '100%', height: 760, border: 0 }} src={`${src}#toolbar=0`} title={t('bank.statement')} />;
   return <div ref={box} className="pages"><div className="loading" /></div>;

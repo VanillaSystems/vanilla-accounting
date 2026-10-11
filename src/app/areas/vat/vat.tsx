@@ -22,6 +22,7 @@ import {
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
 import { entryAt } from './links.js';
 import { Detail } from './Detail.js';
+import { VatCards } from '../codes/vat-card.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -33,7 +34,8 @@ const readAll = () => { try { return localStorage.getItem(ALL_KEY) === '1'; } ca
 /** The list as last shown, in ↑↓ order, and the return behind it: the keys act on it. */
 const listed: { ids: string[]; v?: VatReturn } = { ids: [] };
 
-function List({ route, period, books, nav, canEdit }: Props) {
+function List(props: Props) {
+  const { route, period, books, nav, canEdit } = props;
   const { v, filed } = useReturn({ books, period });
   const [all, setAll] = useState(readAll);
   const rows = shownZiffern(v, filed, all);
@@ -96,6 +98,7 @@ function List({ route, period, books, nav, canEdit }: Props) {
         )}
       </div>
       <div className="hidden-note"><button type="button" onClick={toggleAll}>{all ? t('vat.hideEmpty') : t('vat.showAll')}</button></div>
+      <VatCards {...(props as AreaProps)} />
     </div>
   );
 }

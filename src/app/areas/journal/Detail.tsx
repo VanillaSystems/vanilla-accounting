@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
 import { lookupVatCode, VAT_CODES } from '../../../accounting/vat-codes.js';
+import type { BankTransaction } from '../../../types/index.js';
 import { vatLine } from '../../../accounting/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -14,6 +15,7 @@ import { checkText } from '../../lib/fx-text.js';
 import { periodName, monthName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
@@ -26,6 +28,8 @@ import { selectNew, setUi, useUi, type Section } from './state.js';
 import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
 import { AccountField } from './AccountField.js';
+import { StatementPaper } from '../bank/StatementPaper.js';
+import { bankFor } from '../bank/state.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -104,7 +108,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} title={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
             </div>
           ) : tx ? (
-            <div className="src">{t('journal.noReceiptSource')} <button type="button" onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('journal.statementOf', { month: monthName(tx.date) })}</button></div>
+            <Excerpt {...props} tx={tx} />
           ) : (
             <div className="src">{t('journal.noDocument')}</div>
           )}
@@ -217,4 +221,28 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
 /** The codes a VAT field offers as you type. */
 export function VatCodeList() {
   return <datalist id="vat-codes">{VAT_CODES.map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
+}
+
+/** No receipt: the strip of the payment's statement that shows it, as in Kontoauszüge. */
+function Excerpt({ books, nav, tx }: Props & { tx: BankTransaction }) {
+  const ws = useWorkspace();
+  const [page, setPage] = useState('');
+  const b = bankFor(books, ws?.bankAccounts);
+  const s = b.statementOf(tx);
+  const src = s?.file && sources.statement(s.file.bank, s.file.filename);
+  const toStatement = () => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date));
+  const link = <button type="button" title={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
+  if (!src) return <div className="src">{t('journal.noReceiptSource')} {link}</div>;
+  return (
+    <>
+      <div className="src">
+        {t('journal.excerptFrom')} {link}
+        <span className="pgno">{page}</span>
+        <a className="dl inline" href={src} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>
+      </div>
+      <div className="paper real stmt excerpt" role="button" tabIndex={0} aria-label={t('journal.openPaymentKey')} onClick={toStatement}>
+        <StatementPaper src={src} mark={{ tx, fee: b.feeOf(tx.ref), wise: s.account.statements === 'wise' }} excerpt onPage={setPage} />
+      </div>
+    </>
+  );
 }

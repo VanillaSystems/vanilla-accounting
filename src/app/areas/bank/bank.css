@@ -5,6 +5,7 @@
 .src button:hover { color: var(--ink); border-bottom-color: currentColor; }
 .src .pgno { margin-left: auto; font: 12px "Geist Mono"; color: var(--faint); }
 .paper.stmt { max-width: 640px; }
+.paper.stmt.excerpt .pg { border-radius: 6px; }
 .pgw { position: relative; width: 100%; }
 .pgw .pg { width: 100%; height: auto; }
 .pgw .hl { position: absolute; left: 2.5%; right: 2.5%; border-radius: 4px; background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); pointer-events: none; animation: hlin .5s ease; }

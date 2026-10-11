@@ -185,6 +185,7 @@ export default {
     'journal.correctIn': 'Saisir une correction en {period} →',
     'journal.lockedToast': 'Déposée: cette écriture ne change plus. Une correction va dans la période ouverte.',
     'journal.noReceiptSource': 'Pas de justificatif. Le paiement figure dans le',
+    'journal.excerptFrom': 'Pas de justificatif. Extrait du',
     'journal.statementOf': 'relevé de {month}',
     'journal.noDocument': 'Aucun document pour cette écriture.',
     'journal.details': 'Détails',

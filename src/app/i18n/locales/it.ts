@@ -185,6 +185,7 @@ export default {
     'journal.correctIn': 'Registra una correzione in {period} →',
     'journal.lockedToast': 'Inoltrata: questa registrazione non cambia più. Una correzione va nel periodo aperto.',
     'journal.noReceiptSource': 'Nessun giustificativo. Il pagamento figura nel',
+    'journal.excerptFrom': 'Nessun giustificativo. Estratto dal',
     'journal.statementOf': 'estratto conto di {month}',
     'journal.noDocument': 'Nessun documento per questa registrazione.',
     'journal.details': 'Dettagli',

@@ -182,6 +182,7 @@ export const messages = {
   'journal.correctIn': 'Korrektur in {period} erfassen →',
   'journal.lockedToast': 'Eingereicht: diese Buchung ändert sich nicht mehr. Eine Korrektur geht in die offene Periode.',
   'journal.noReceiptSource': 'Kein Beleg. Die Zahlung steht im',
+  'journal.excerptFrom': 'Kein Beleg. Ausschnitt aus dem',
   'journal.statementOf': 'Kontoauszug {month}',
   'journal.noDocument': 'Zu dieser Buchung gibt es kein Dokument.',
   'journal.details': 'Details',
