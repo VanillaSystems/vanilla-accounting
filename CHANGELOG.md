@@ -87,6 +87,10 @@ Two markers flag an entry you must read before you update:
   (`PATCH /api/workspace`, `PUT /api/accounts/<number>`): `belege.workspace.yaml` keeps its
   comments, layout and every field the app does not know, and a change its reader refuses is
   never written. Removed with the old tab: the Jahresabschluss tab and its account combobox.
+- Opening the next year reverses the receivables entry of 31.12. on 1.1. (revenue against 1100),
+  so an invoice's revenue counts in the year it is paid, with its VAT; a rerun keeps one reversal.
+  The handover cards of Abschluss open the export dialog: the journal for Banana, and the
+  Prüfung ESTV / AHV preset for the year.
 
 - VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
   entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it

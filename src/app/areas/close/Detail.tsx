@@ -17,6 +17,8 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { AreaProps, Nav } from '../index.js';
 import { closeYear as yearOfPage, useYearClose } from './data.js';
+import { useShellUi } from '../../shell/ui.js';
+import { configOf } from '../export/state.js';
 import { STEPS, causeText, checkRows, closeBlockers, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
@@ -408,6 +410,7 @@ function Profit({ d, nav, canEdit }: StepProps) {
 
 function Handover({ d, nav }: StepProps) {
   const year = parsePeriod(d.year, localToday())!;
+  const ui = useShellUi();
   return (
     <>
       <p className="lead">{t('close.handoverLead')}</p>
@@ -415,8 +418,12 @@ function Handover({ d, nav }: StepProps) {
         <button type="button" className="hcard" onClick={() => nav.go({ route: { area: 'reports', report: 'balance' }, query: { period: year } })}>
           <b>{t('close.handReports', { year: d.year })}</b><span>{t('close.handReportsText')}</span>
         </button>
-        <div className="hcard"><b>{t('close.handBanana', { year: d.year })}</b><span>{t('close.handBananaText')}</span></div>
-        <div className="hcard"><b>{t('close.handAudit', { year: d.year })}</b><span>{t('close.handAuditText')}</span></div>
+        <button type="button" className="hcard" onClick={() => ui.openExport({ period: d.year, items: { journal: ['banana'] }, sums: false, oneBook: false, preset: null })}>
+          <b>{t('close.handBanana', { year: d.year })}</b><span>{t('close.handBananaText')}</span>
+        </button>
+        <button type="button" className="hcard" onClick={() => ui.openExport(configOf('audit', year, year, d.year))}>
+          <b>{t('close.handAudit', { year: d.year })}</b><span>{t('close.handAuditText')}</span>
+        </button>
       </div>
     </>
   );
