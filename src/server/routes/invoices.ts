@@ -14,6 +14,8 @@ import {
   missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
 import { confirmPayment, paymentProposals } from '../../invoices/payments.js';
+import { checkMessage, sendMail } from '../../invoices/mail.js';
+import type { Deliver } from '../../invoices/service.js';
 
 export const router = Router();
 
@@ -134,15 +136,26 @@ router.post('/api/invoices/:id/issue', async (req, res) => {
   res.json(await issueInvoice(WS, req.params.id));
 });
 
-router.post('/api/invoices/:id/send', (req, res) => {
-  res.json(recordSend(WS, req.params.id, optText(body(req), 'to')));
+/** `email: { to, subject, body }` sends it through the company's mailbox; without, it is recorded as downloaded. */
+function delivery(b: Record<string, unknown>): Deliver | undefined {
+  if (b.email === undefined) return undefined;
+  const e = b.email;
+  if (!e || typeof e !== 'object' || Array.isArray(e)) throw new RequestError(400, 'email: { to, subject, body } erwartet.');
+  const m = e as Record<string, unknown>;
+  const message = checkMessage({ to: optText(m, 'to') ?? '', subject: optText(m, 'subject') ?? '', body: optText(m, 'body') ?? '' });
+  return ({ filename, pdf }) => sendMail(WS, message, { filename, content: pdf });
+}
+
+router.post('/api/invoices/:id/send', async (req, res) => {
+  const b = body(req);
+  res.json(await recordSend(WS, req.params.id, { to: optText(b, 'to'), deliver: delivery(b) }));
 });
 
 router.post('/api/invoices/:id/cancel', async (req, res) => {
   const b = body(req);
   res.json(await cancelInvoice(WS, req.params.id, {
     date: optText(b, 'date') ?? today(), reason: optText(b, 'reason') ?? '', notify: b.notify === true, to: optText(b, 'to'),
-  }));
+  }, { deliver: delivery(b) }));
 });
 
 router.post('/api/invoices/:id/credit-note', (req, res) => {
@@ -157,7 +170,7 @@ router.post('/api/invoices/:id/reminders', async (req, res) => {
   const b = body(req);
   res.json(await sendReminder(WS, req.params.id, {
     date: optText(b, 'date'), fee: optNumber(b, 'fee'), intro: optText(b, 'intro'), closing: optText(b, 'closing'), to: optText(b, 'to'),
-  }));
+  }, { deliver: delivery(b) }));
 });
 
 router.post('/api/invoices/:id/comments', (req, res) => {

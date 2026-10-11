@@ -23,11 +23,12 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
+import { MailSection } from './MailSection.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
-  ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout']],
+  ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail']],
   ['company.groupBooks', ['accounts', 'periods', 'opening']],
   ['company.groupApp', ['display']],
 ];
@@ -65,6 +66,7 @@ function List({ route, books, nav }: Props) {
     vat: t('company.vatEffective'),
     banks: ws ? String(ws.bankAccounts.filter((b) => b.bank !== 'manual').length) : undefined,
     'invoice-layout': ws?.invoicing?.layout.font,
+    mail: ws?.outgoingMail?.host,
     accounts: String(Object.keys(getAccountMap()).length),
     periods: closed ? t('company.through', { date: formatDate(closed) }) : undefined,
     opening: opening ? t('company.nAccounts', { n: Object.keys(opening).length }) : undefined,
@@ -121,6 +123,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'vat': return <Vat {...p} />;
     case 'banks': return <Banks {...p} />;
     case 'invoice-layout': return <InvoiceLayoutSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
+    case 'mail': return <MailSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;

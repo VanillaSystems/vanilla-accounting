@@ -171,6 +171,10 @@ export interface SentDocument extends Envelope {
   sentAt: string;
   /** An e-mail address, or `download` when the PDF was saved to be sent by other means. */
   to: string;
+  /** How it went out; absent on documents recorded before the app sent e-mail (`to` tells). */
+  channel?: 'email' | 'download';
+  /** The Message-ID of the e-mail, as the company's mail server took it. */
+  messageId?: string;
 }
 
 /** invoices.json. */
@@ -221,6 +225,28 @@ export interface InvoicingSettings {
   feeAccount?: string;
   paymentTermsDays: number;
   layout: InvoiceLayout;
-  /** The texts above and below the table, per language; absent: the app's own (src/invoices/texts.ts). */
-  texts: Partial<Record<InvoiceLanguage, { intro?: string; closing?: string }>>;
+  /** The texts above and below the table and of the e-mail that sends a document, per language; absent: the app's own (src/invoices/texts.ts). */
+  texts: Partial<Record<InvoiceLanguage, InvoiceOwnTexts>>;
+}
+
+export const OWN_TEXTS = ['intro', 'closing', 'mailSubject', 'mailBody'] as const;
+export type InvoiceOwnTexts = Partial<Record<(typeof OWN_TEXTS)[number], string>>;
+
+export const MAIL_SECURITY = ['tls', 'starttls', 'none'] as const;
+export type MailSecurity = (typeof MAIL_SECURITY)[number];
+
+/**
+ * The company's own mailbox that sends invoices, reminders and notices (belege.workspace.yaml
+ * `outgoingMail`, ADR 0010). The password is no part of it: src/secrets/ has it.
+ */
+export interface OutgoingMail {
+  host: string;
+  port: number;
+  /** tls: TLS from the first byte (port 465); starttls: plain, then upgraded (587); none: neither. */
+  security: MailSecurity;
+  /** Absent: the server takes mail without a login. */
+  user?: string;
+  fromName?: string;
+  fromAddress: string;
+  replyTo?: string;
 }

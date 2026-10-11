@@ -1,6 +1,6 @@
 # ADR 0010: Invoicing in the same app, paid invoices matched by their QR reference
 
-Status: accepted (2026-10-10). Data, documents and payment matching built 2026-10-11 (`src/invoices/`, PDFs: [ADR 0012](0012-invoice-pdfs.md)); the UI, sending by e-mail and the year-end list are still to come.
+Status: accepted (2026-10-10). Data, documents and payment matching built 2026-10-11 (`src/invoices/`, PDFs: [ADR 0012](0012-invoice-pdfs.md)); the UI 2026-10-11; sending by e-mail through the company's own mailbox (`src/invoices/mail.ts`, Firma › E-Mail-Versand) 2026-10-11; the year-end list is still to come.
 
 ## Problem
 

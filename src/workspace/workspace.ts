@@ -11,7 +11,7 @@ import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
 import type { LegalForm, Preset, QuestionKey, SupportedAnswers } from './setup.js';
 import type { Iban, StatementKind } from './banks.js';
-import type { Address, InvoicingSettings } from '../invoices/model.js';
+import type { Address, InvoicingSettings, OutgoingMail } from '../invoices/model.js';
 
 declare const brand: unique symbol;
 type Brand<T, B> = T & { readonly [brand]: B };
@@ -93,6 +93,8 @@ export interface Workspace {
   readonly profile?: WorkspaceProfile;
   /** Absent until the company writes invoices (the manifest's invoicing block). */
   readonly invoicing?: InvoicingSettings;
+  /** Absent until the company sends documents by e-mail (the manifest's outgoingMail block). */
+  readonly outgoingMail?: OutgoingMail;
   readonly paths: WorkspacePaths;
 }
 

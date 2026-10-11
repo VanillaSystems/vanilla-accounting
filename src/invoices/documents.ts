@@ -7,7 +7,7 @@ import type { Company } from '../workspace/workspace.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
 import { addDays, openAmount, openFees, paidAmount, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
-import { TEXTS } from './texts.js';
+import { TEXTS, formatDate } from './texts.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
 
@@ -36,6 +36,23 @@ function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
   if (!target || target.status !== 'issued') return undefined;
   const last = target.payments.at(-1);
   return { number: target.number, date: target.date, gross: totals(target.lines).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
+}
+
+export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number } | { kind: 'cancellation' };
+
+/**
+ * The subject and text of the e-mail that sends a document: the language's own texts
+ * (Firma › Rechnungslayout), else the app's, with {document} and {company} filled in.
+ */
+export function mailText(settings: InvoicingSettings | undefined, inv: Issued, doc: MailDocument, company: string): { subject: string; body: string } {
+  const L = TEXTS[inv.language];
+  const own = settings?.texts[inv.language];
+  const what = `${inv.kind === 'credit-note' ? L.credit : L.invoice} ${inv.number}`;
+  const document = doc.kind === 'reminder' ? `${L.reminder(doc.level)} · ${what}`
+    : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
+    : what;
+  const fill = (s: string) => s.replaceAll('{document}', document).replaceAll('{company}', company);
+  return { subject: fill(own?.mailSubject ?? L.mailSubject), body: fill(own?.mailBody ?? L.mailBody) };
 }
 
 export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: Customer | undefined, logoSrc?: string): SheetData {

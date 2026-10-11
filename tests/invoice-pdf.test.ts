@@ -83,8 +83,8 @@ test('issue stores the PDF byte-exact with its checksum; it is read back as stor
   assert.throws(() => updateDraft(ws, d.id, { subject: 'neu' }), (e: InvoiceRuleError) => e.code === 'notDraft', 'issued is frozen');
   assert.throws(() => storePdf(ws, '2026-001.pdf', Buffer.from('other')), /never replaced/);
 
-  const sent = recordSend(ws, d.id, undefined, '2026-10-11T09:01:00Z');
-  const resent = recordSend(ws, d.id, 'x@y.example', '2026-10-12T09:00:00Z');
+  const sent = await recordSend(ws, d.id, { now: '2026-10-11T09:01:00Z' });
+  const resent = await recordSend(ws, d.id, { to: 'x@y.example', now: '2026-10-12T09:00:00Z' });
   assert.deepEqual([sent.kind, sent.to, sent.sha256, resent.kind, resent.file], ['invoice', 'a@b.example', inv.pdf.sha256, 'resend', inv.pdf.file], 'a resend is the same bytes');
 
   const { sent: reminder } = await sendReminder(ws, d.id, { date: '2026-11-20', fee: 20 }, { now: '2026-11-20T08:00:00Z' });

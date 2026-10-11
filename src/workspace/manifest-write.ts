@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceLanguage, InvoiceLayout, LayoutElement } from '../invoices/model.js';
+import type { Address, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
 import { parseIban } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
@@ -44,14 +44,18 @@ export interface NewBank {
 /** Firma › Rechnungslayout: the invoicing block's layout and its texts per language; null removes a field (the app's default again). */
 export interface InvoicingPatch {
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
-  texts?: Partial<Record<InvoiceLanguage, { intro?: string | null; closing?: string | null }>>;
+  texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
 }
+
+/** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
+export type MailPatch = { [K in keyof OutgoingMail]?: OutgoingMail[K] | null };
 
 export interface ManifestPatch {
   company?: ProfilePatch;
   banks?: BankPatch[];
   addBank?: NewBank;
   invoicing?: InvoicingPatch;
+  outgoingMail?: MailPatch | null;
 }
 
 const ADDRESS_KEYS = ['street', 'number', 'line2', 'postcode', 'town', 'state', 'country'] as const;
@@ -110,6 +114,11 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [lang, texts] of Object.entries(inv.texts ?? {})) {
       for (const [key, value] of Object.entries(texts)) set(doc, ['invoicing', 'texts', lang, key], value);
     }
+  }
+  if (patch.outgoingMail === null) doc.delete('outgoingMail');
+  else if (patch.outgoingMail) {
+    if (!isMap(doc.get('outgoingMail'))) doc.set('outgoingMail', doc.createNode({}));
+    for (const [key, value] of Object.entries(patch.outgoingMail)) set(doc, ['outgoingMail', key], typeof value === 'string' ? value.trim() : value);
   }
   // A one-line `{ … }` stays one line however long it grows, a quoted text with \n in it too.
   const out = doc.toString({ lineWidth: 0, doubleQuotedAsJSON: true });

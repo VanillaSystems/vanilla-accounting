@@ -1,6 +1,7 @@
 /**
- * The dialogs of Rechnungen: whom a new invoice is for, the customer form (any country), and
- * cancelling or crediting an issued invoice. A dialog is an action, not a place (docs/urls.md).
+ * The dialogs of Rechnungen: whom a new invoice is for, the customer form (any country),
+ * sending an invoice or a reminder (by e-mail or as a download), and cancelling or crediting an
+ * issued invoice. A dialog is an action, not a place (docs/urls.md).
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
@@ -13,8 +14,13 @@ import { I } from '../receipts/icons.js';
 import type { AreaProps } from '../index.js';
 import { invoicesNow, useInvoices } from './data.js';
 import { byRouteId, customerChange } from './model.js';
-import { setUi, useUi } from './state.js';
-import { cancel, creditNote, newDraftFor, saveCustomer, saveDraft } from './actions.js';
+import { setUi, useUi, type ReminderEdit } from './state.js';
+import { api } from '../../lib/api.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
+import { mailText, type MailDocument } from '../../../invoices/documents.js';
+import type { MailMessage } from '../../../invoices/mail.js';
+import type { MailStatus } from '../../../types/api-error.js';
+import { cancel, creditNote, newDraftFor, saveCustomer, saveDraft, send, sendReminder } from './actions.js';
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
@@ -30,6 +36,7 @@ export function Dialogs(props: Props) {
     case 'customer': return <CustomerDialog {...props} customer={d.customers.find((c) => c.id === (s.dialog as { id?: string }).id)} />;
     case 'cancel': return inv?.status === 'issued' ? <CancelDialog {...props} inv={inv} /> : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
+    case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} /> : null;
     default: return null;
   }
 }
@@ -213,10 +220,74 @@ function CustomerDialog({ customer, nav }: Props & { customer?: Customer }) {
   );
 }
 
+/** The company's mailbox, as far as a send needs to know: can it send, and what does the e-mail say by default. */
+function useMail(inv: Issued, doc: MailDocument): { ready: boolean; status?: MailStatus; defaults: MailMessage } {
+  const ws = useWorkspace();
+  const [status, setStatus] = useState<MailStatus>();
+  useEffect(() => { api.mailStatus().then(setStatus, () => setStatus(undefined)); }, []);
+  const text = mailText(ws?.invoicing, inv, doc, ws?.company.name ?? '');
+  return { ready: !!status?.configured && status.password !== 'missing', status, defaults: { to: inv.customer.email ?? '', ...text } };
+}
+
+/** Recipient, subject and text of the e-mail, editable; or why the app cannot send e-mail yet. */
+function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof useMail>; value: MailMessage; onChange(m: MailMessage): void; nav: Props['nav'] }) {
+  if (!mail.status) return null;
+  if (!mail.ready) {
+    return (
+      <p className="m ivhint">
+        {mail.status.configured ? t('mail.passwordMissing', { where: mail.status.where }) : t('invoices.mailNotSetUp')}{' '}
+        <button type="button" className="quiet2" onClick={() => { close(); nav.go({ route: { area: 'company', section: 'mail' }, query: {} }); }}>{t('invoices.toMail')}</button>
+      </p>
+    );
+  }
+  return (
+    <>
+      <label className="lkr"><span>{t('invoices.mailTo')}</span><input name="to" type="email" value={value.to} placeholder={t('customer.emailPh')} onChange={(e) => onChange({ ...value, to: e.target.value })} /></label>
+      <label className="lkr"><span>{t('invoices.mailSubject')}</span><input name="subject" value={value.subject} onChange={(e) => onChange({ ...value, subject: e.target.value })} /></label>
+      <label className="lkr top"><span>{t('invoices.mailBody')}</span><textarea name="body" rows={6} value={value.body} onChange={(e) => onChange({ ...value, body: e.target.value })} /></label>
+    </>
+  );
+}
+
+/** Senden: the issued invoice or a reminder, by e-mail with the stored PDF attached, or saved as a download. */
+function SendDialog({ inv, nav, reminder }: Props & { inv: Issued; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number } }) {
+  const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level } : { kind: 'invoice' });
+  const [m, setM] = useState<MailMessage>();
+  const [busy, setBusy] = useState(false);
+  const value = m ?? mail.defaults;
+  const go = async (email?: MailMessage) => {
+    setBusy(true);
+    const { level: _, ...input } = reminder ?? { level: 0 };
+    const ok = reminder ? await sendReminder(nav, inv, input, email) : await send(nav, inv, email);
+    setBusy(false);
+    if (!ok) return;
+    close();
+    if (reminder) setUi({ reminder: null, preview: false });
+  };
+  const label = reminder ? t('invoices.sendReminder', { level: reminder.level }) : t('invoices.sendTitle', { number: inv.number });
+  const foot = (
+    <>
+      <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
+      <button type="button" className={`btn ${mail.ready ? 'ghost' : 'primary'}`} data-act="download" disabled={busy} onClick={() => void go()}>{t('invoices.downloadInstead')}</button>
+      {mail.ready && <button type="button" className="btn primary" data-act="mail" disabled={busy || !value.to.trim()} onClick={() => void go(value)}>{busy ? t('invoices.mailing') : t('invoices.mailSend')}</button>}
+    </>
+  );
+  return (
+    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv.lines).gross)}`} foot={foot} className="isend">
+      <div className="ibody lkf">
+        <MailFields mail={mail} value={value} onChange={setM} nav={nav} />
+        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { level: reminder.level }) : `${inv.number}.pdf` })}</p>
+      </div>
+    </Frame>
+  );
+}
+
 function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
   const [reason, setReason] = useState('');
   const [date, setDate] = useState(localToday());
   const [notify, setNotify] = useState(true);
+  const mail = useMail(inv, { kind: 'cancellation' });
+  const [m, setM] = useState<MailMessage>();
   const gross = totals(inv.lines).gross;
   const title = `${inv.customer.name} · ${inv.currency} ${fmt(gross)}`;
   const label = t('invoices.cancelTitle', { number: inv.number });
@@ -227,13 +298,14 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
       </Frame>
     );
   }
-  const run = async () => { if (await cancel(nav, inv, { date, reason, notify })) close(); };
+  const run = async () => { if (await cancel(nav, inv, { date, reason, notify }, notify && mail.ready ? m ?? mail.defaults : undefined)) close(); };
   return (
     <Frame label={label} title={title} foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><button type="button" className="btn primary danger" data-act="cancel-ok" onClick={() => void run()}>{t('invoices.cancelOk')}</button></>}>
       <div className="ibody lkf">
         <label className="lkr"><span>{t('invoices.reason')}</span><input autoFocus value={reason} placeholder={t('invoices.cancelReasonPh')} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void run(); }} /></label>
         <label className="lkr"><span>{t('invoices.date')}</span><span className="iin"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></span></label>
         <label className="lkr"><span /><span className="iin"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> {t('invoices.cancelNotify')}</span></label>
+        {notify && <MailFields mail={mail} value={m ?? mail.defaults} onChange={setM} nav={nav} />}
         <p className="m ivhint">{t('invoices.cancelHint', { number: inv.number })}</p>
       </div>
     </Frame>

@@ -10,6 +10,8 @@ export interface InvoiceTexts {
   desc: string; qty: string; price: string; vat: string; amount: string;
   net: string; vatOn: (rate: string, net: string) => string; total: string;
   intro: string; closing: (days: number) => string; creditClosing: string;
+  /** The e-mail that sends a document; {document} and {company} are filled in. */
+  mailSubject: string; mailBody: string;
   reminderIntro: (level: number, no: string, date: string, due: string, previous?: string) => string; reminderClosing: string; fee: string; paidSoFar: string; openNow: string;
   ofInvoice: (no: string, date: string) => string; paidOn: (date: string) => string; creditLine: string;
   refund: (amount: string) => string; offset: (amount: string) => string; stillOpen: (no: string, amount: string) => string;
@@ -26,6 +28,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     desc: 'Beschreibung', qty: 'Menge', price: 'Preis', vat: 'MWST', amount: 'Betrag',
     net: 'Total netto', vatOn: (r, n) => `MWST ${r} % auf ${n}`, total: 'Total',
     intro: 'Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:',
+    mailSubject: '{document} · {company}', mailBody: 'Guten Tag\n\nIm Anhang finden Sie {document}.\n\nFreundliche Grüsse\n{company}',
     closing: (d) => `Zahlbar innert ${d} Tagen.\nFreundliche Grüsse`, creditClosing: 'Freundliche Grüsse',
     reminderIntro: (lv, no, d, due, prev) => lv === 1
       ? `Unsere Rechnung ${no} vom ${d} war am ${due} fällig. Bis heute haben wir keine Zahlung erhalten. Bitte überweisen Sie den offenen Betrag innert 10 Tagen.`
@@ -49,6 +52,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     desc: 'Description', qty: 'Quantité', price: 'Prix', vat: 'TVA', amount: 'Montant',
     net: 'Total net', vatOn: (r, n) => `TVA ${r} % sur ${n}`, total: 'Total',
     intro: 'Nous vous remercions de votre mandat et vous facturons les prestations suivantes :',
+    mailSubject: '{document} · {company}', mailBody: 'Bonjour\n\nVous trouverez en annexe {document}.\n\nMeilleures salutations\n{company}',
     closing: (d) => `Payable dans les ${d} jours.\nMeilleures salutations`, creditClosing: 'Meilleures salutations',
     reminderIntro: (lv, no, d, due, prev) => lv === 1
       ? `Notre facture ${no} du ${d} était payable le ${due}. À ce jour, nous n’avons reçu aucun paiement. Nous vous prions de régler le montant dans les 10 jours.`
@@ -72,6 +76,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     desc: 'Descrizione', qty: 'Quantità', price: 'Prezzo', vat: 'IVA', amount: 'Importo',
     net: 'Totale netto', vatOn: (r, n) => `IVA ${r} % su ${n}`, total: 'Totale',
     intro: 'Vi ringraziamo per l’incarico e vi fatturiamo le seguenti prestazioni:',
+    mailSubject: '{document} · {company}', mailBody: 'Buongiorno\n\nIn allegato trova {document}.\n\nCordiali saluti\n{company}',
     closing: (d) => `Pagabile entro ${d} giorni.\nCordiali saluti`, creditClosing: 'Cordiali saluti',
     reminderIntro: (lv, no, d, due, prev) => lv === 1
       ? `La nostra fattura ${no} del ${d} era pagabile il ${due}. Finora non abbiamo ricevuto alcun pagamento. Vi preghiamo di versare l’importo entro 10 giorni.`
@@ -96,6 +101,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     desc: 'Description', qty: 'Qty', price: 'Price', vat: 'VAT', amount: 'Amount',
     net: 'Net total', vatOn: (r, n) => `VAT ${r} % on ${n}`, total: 'Total',
     intro: 'Thank you for your order. We invoice the following services:',
+    mailSubject: '{document} · {company}', mailBody: 'Hello\n\nPlease find attached {document}.\n\nKind regards\n{company}',
     closing: (d) => `Payable within ${d} days.\nKind regards`, creditClosing: 'Kind regards',
     reminderIntro: (lv, no, d, due, prev) => lv === 1
       ? `Our invoice ${no} of ${d} was due on ${due}. We have not received payment yet. Please transfer the amount within 10 days.`

@@ -79,3 +79,8 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 - Toasts with an undo vanish after 6 s; take the undo before a slow step (a screenshot, a diff).
 - Undoing `Kein Beleg` puts the kind back but marks it as a person's (`kindBy: human`).
 - Driven end to end on 2026-10-11 (redesign phase 2): every recipe above.
+
+## Inbox processing (release C)
+
+- A drop, the add button, a statement upload and new inbox files start `POST /api/intake`; `GET /api/intake` reports the job (`steps[].state|done|total|notes`). The shell shows `[data-testid=intake]` at the bottom left while it runs; Belege has `[data-testid=run-inbox]` (Eingang verarbeiten).
+- The sandbox's `claude` refuses: the job reads text and statements and every model step notes `noModel` (toast "Ohne Claude: …"). To drive the model steps, copy `tests/support/stub-bin/claude` to `$SB/bin/claude` after `up`; `CLAUDE_STUB_GATE=<file>` in the environment of `up` holds each model call until the file exists (to screenshot the running line), `CLAUDE_STUB_ANSWER=<json>` sets the match answer (`suggestedFilename`, `confidence`, `matchedTransactionRefs`). A drop is dispatched as a `drop` event with a `DataTransfer` holding a `File` (see `.verify/evidence/release/c/NOTES.md`).

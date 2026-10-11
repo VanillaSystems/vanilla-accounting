@@ -110,7 +110,7 @@ export async function withSeededIds<T>(seed: number, fn: () => Promise<T>): Prom
 async function issueAndSend(ws: Workspace, key: string, id: string, at: string, expected: Map<string, string>): Promise<void> {
   const issued = await issueInvoice(ws, id, { now: at });
   if (issued.number !== expected.get(key)) throw new Error(`demo invoice ${key} was issued as ${issued.number}, expected ${expected.get(key)}`);
-  recordSend(ws, id, undefined, at);
+  await recordSend(ws, id, { now: at });
 }
 
 /** Every file under invoices/ of the scratch workspace, keyed by its path in the workspace. */

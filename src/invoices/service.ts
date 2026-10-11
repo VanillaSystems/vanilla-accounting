@@ -4,7 +4,7 @@
  * print a PDF are asynchronous; they run one at a time in this process, so a number is never
  * given twice and nothing saves over another change.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { defaultTexts, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
@@ -245,33 +245,67 @@ function sentTitle(inv: Issued, kind: SentKind, level?: number): string {
   return `${inv.kind === 'credit-note' ? L.credit : L.invoice} ${inv.number}`;
 }
 
-/** Records that the issued PDF went out (by e-mail, or downloaded to be sent otherwise). The first time it is the invoice, later a resend. */
-export function recordSend(ws: Workspace, id: string, to: string | undefined, now = new Date().toISOString()): SentDocument {
-  return updateInvoices(ws, (book) => {
-    const inv = findInvoice(book, id) ?? notFound('Rechnung');
-    if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird erst ausgestellt, dann gesendet.');
-    if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
-    const first = !book.sent.some((d) => d.invoiceId === inv.id && (d.kind === 'invoice' || d.kind === 'credit-note'));
-    const kind: SentKind = first ? (inv.kind === 'credit-note' ? 'credit-note' : 'invoice') : 'resend';
-    const doc: SentDocument = { ...newEnvelope('sd', now), invoiceId: inv.id, kind, title: sentTitle(inv, kind), ...inv.pdf, sentAt: now, to: to?.trim() || inv.customer.email || 'download' };
-    book.sent.push(doc);
-    return doc;
+/**
+ * Hands a stored PDF to its recipient by e-mail (src/invoices/mail.ts) and says to whom, with the
+ * Message-ID. Without one the PDF is downloaded, to be sent by other means.
+ */
+export type Deliver = (doc: { filename: string; pdf: Buffer }) => Promise<{ to: string; messageId: string }>;
+
+/** Who a document went to, and how: what `deliver` reports, else `to` (or the customer's address) as a download. */
+const recipient = (inv: Issued, to: string | undefined, delivered?: { to: string; messageId: string }): Pick<SentDocument, 'to' | 'channel' | 'messageId'> =>
+  delivered ? { to: delivered.to, channel: 'email', messageId: delivered.messageId } : { to: to?.trim() || inv.customer.email || 'download', channel: 'download' };
+
+function sendable(book: InvoiceBook, id: string): Issued {
+  const inv = findInvoice(book, id) ?? notFound('Rechnung');
+  if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird erst ausgestellt, dann gesendet.');
+  if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
+  return inv;
+}
+
+/**
+ * Sends the issued PDF as it was issued (by e-mail with `deliver`, else downloaded) and records it.
+ * The first time it is the invoice, later a resend. A failed e-mail records nothing.
+ */
+export function recordSend(ws: Workspace, id: string, opts: { to?: string; deliver?: Deliver; now?: string } = {}): Promise<SentDocument> {
+  return serial(async () => {
+    const inv = sendable(loadInvoices(ws), id);
+    const delivered = opts.deliver && await opts.deliver({ filename: `${inv.number}.pdf`, pdf: readPdf(ws, inv.pdf) });
+    const now = opts.now ?? new Date().toISOString();
+    return updateInvoices(ws, (book) => {
+      const fresh = sendable(book, id);
+      const first = !book.sent.some((d) => d.invoiceId === fresh.id && (d.kind === 'invoice' || d.kind === 'credit-note'));
+      const kind: SentKind = first ? (fresh.kind === 'credit-note' ? 'credit-note' : 'invoice') : 'resend';
+      const doc: SentDocument = { ...newEnvelope('sd', now), invoiceId: fresh.id, kind, title: sentTitle(fresh, kind), ...fresh.pdf, sentAt: now, ...recipient(fresh, opts.to, delivered) };
+      book.sent.push(doc);
+      return doc;
+    });
   });
 }
 
 const nextNumberTaken = (book: InvoiceBook, number: string) => book.invoices.some((i) => i.status === 'issued' && i.number === number);
 
-/** Prints a document of its own (reminder, cancellation notice) and stores its PDF; the caller records it as sent. */
-async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, sheet: SheetData, to: string | undefined, now: string, printer: Printer, level?: number): Promise<SentDocument> {
+/**
+ * Prints a document of its own (reminder, cancellation notice), stores its PDF and hands it to
+ * `deliver`; the caller records it as sent. A failed e-mail removes the PDF again and throws.
+ */
+async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, sheet: SheetData, to: string | undefined, now: string, printer: Printer, deliver?: Deliver, level?: number): Promise<SentDocument> {
   const env = newEnvelope('sd', now);
   const printed = await printer.pdf(sheet, now);
+  const title = sentTitle(inv, kind, level);
   const pdf = storePdf(ws, `sent/${env.id}.pdf`, printed.pdf);
-  return { ...env, invoiceId: inv.id, kind, title: sentTitle(inv, kind, level), ...pdf, sentAt: now, to: to?.trim() || inv.customer.email || 'download' };
+  let delivered: Awaited<ReturnType<Deliver>> | undefined;
+  try {
+    delivered = deliver && await deliver({ filename: `${title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: printed.pdf });
+  } catch (e) {
+    rmSync(join(ws.paths.root, pdf.file), { force: true });
+    throw e;
+  }
+  return { ...env, invoiceId: inv.id, kind, title, ...pdf, sentAt: now, ...recipient(inv, to, delivered) };
 }
 
 // ─── cancelling, crediting, reminding, commenting ─────────────────────────────
 
-export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string }, opts: { now?: string; printer?: Printer } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
+export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
@@ -279,7 +313,7 @@ export function cancelInvoice(ws: Workspace, id: string, req: { date: string; re
     if (!isDate(req.date)) bad('date ist ein Datum JJJJ-MM-TT.');
     if (typeof req.reason !== 'string') bad('reason ist ein Text.');
     const cancelled = cancel(inv, req);
-    const sent = req.notify ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium) : undefined;
+    const sent = req.notify ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver) : undefined;
     return commit(ws, inv.id, inv, (fresh, at) => {
       fresh.invoices[at] = cancelled;
       if (sent) fresh.sent.push(sent);
@@ -305,7 +339,7 @@ export function draftReminder(ws: Workspace, id: string, date: string, fee?: num
   return reminderDraft(inv, liveInvoices(book), date, fee);
 }
 
-export function sendReminder(ws: Workspace, id: string, req: { date?: string; fee?: number; intro?: string; closing?: string; to?: string }, opts: { now?: string; printer?: Printer } = {}): Promise<{ reminder: Reminder; sent: SentDocument }> {
+export function sendReminder(ws: Workspace, id: string, req: { date?: string; fee?: number; intro?: string; closing?: string; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ reminder: Reminder; sent: SentDocument }> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
@@ -316,7 +350,7 @@ export function sendReminder(ws: Workspace, id: string, req: { date?: string; fe
     const drafted = reminderDraft(inv, liveInvoices(book), date, req.fee);
     const reminder = { ...drafted, ...(req.intro !== undefined ? { intro: req.intro } : {}), ...(req.closing !== undefined ? { closing: req.closing } : {}) };
     const issued = inv as Issued;
-    const sent = await printOwnDocument(ws, issued, 'reminder', reminderSheet(book, issued, reminder, logoSrc(ws, issued.layout.logo)), req.to, now, opts.printer ?? chromium, reminder.level);
+    const sent = await printOwnDocument(ws, issued, 'reminder', reminderSheet(book, issued, reminder, logoSrc(ws, issued.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver, reminder.level);
     const done: Reminder = { ...reminder, documentId: sent.id };
     return commit(ws, inv.id, inv, (fresh, at) => {
       fresh.invoices[at] = { ...issued, reminders: [...issued.reminders, done] };

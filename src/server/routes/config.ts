@@ -7,9 +7,9 @@ import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } 
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { companyInfo } from '../../books/company.js';
 import { WorkspaceError } from '../../workspace/workspace.js';
-import { patchManifest, type BankPatch, type InvoicingPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
+import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
-import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS } from '../../invoices/model.js';
+import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
 import { setAccountName } from '../../workspace/accounts-write.js';
 import type { Address } from '../../invoices/model.js';
 
@@ -99,9 +99,22 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
   if (b.texts !== undefined) {
     const texts = patchBody(b.texts, INVOICE_LANGUAGES);
     out.texts = Object.fromEntries(Object.entries(texts).map(([lang, v]) => {
-      const t = patchBody(v, ['intro', 'closing']);
-      return [lang, { ...(t.intro === undefined ? {} : { intro: optText(t, 'intro') }), ...(t.closing === undefined ? {} : { closing: optText(t, 'closing') }) }];
+      const t = patchBody(v, OWN_TEXTS);
+      return [lang, Object.fromEntries(OWN_TEXTS.filter((k) => t[k] !== undefined).map((k) => [k, optText(t, k)]))];
     }));
+  }
+  return out;
+}
+
+/** The outgoing mailbox; the manifest's reader checks the values. A password is refused: it never goes into the workspace. */
+function mailPatch(raw: unknown): MailPatch | null {
+  if (raw === null) return null;
+  const b = patchBody(raw, ['host', 'port', 'security', 'user', 'fromName', 'fromAddress', 'replyTo']);
+  const out: MailPatch = {};
+  for (const key of ['host', 'security', 'user', 'fromName', 'fromAddress', 'replyTo'] as const) if (b[key] !== undefined) (out as Record<string, unknown>)[key] = optText(b, key);
+  if (b.port !== undefined) {
+    if (b.port !== null && typeof b.port !== 'number') throw new RequestError(400, 'port muss eine Zahl sein.');
+    out.port = b.port as number | null;
   }
   return out;
 }
@@ -128,13 +141,14 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
  * (src/workspace/manifest-write.ts). No record of the books changes, so no period is closed to it.
  */
 router.patch('/api/workspace', (req, res) => {
-  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing']);
+  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing', 'outgoingMail']);
   if (b.banks !== undefined && !Array.isArray(b.banks)) throw new RequestError(400, 'banks: eine Liste erwartet.');
   const patch: ManifestPatch = {
     ...(b.company === undefined ? {} : { company: profilePatch(b.company) }),
     ...(b.banks === undefined ? {} : { banks: (b.banks as unknown[]).map(bankPatch) }),
     ...(b.addBank === undefined ? {} : { addBank: newBank(b.addBank) }),
     ...(b.invoicing === undefined ? {} : { invoicing: invoicingPatch(b.invoicing) }),
+    ...(b.outgoingMail === undefined ? {} : { outgoingMail: mailPatch(b.outgoingMail) }),
   };
   checked(() => patchManifest(WS.paths.manifest, patch));
   reopenWorkspace();

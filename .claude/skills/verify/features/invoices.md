@@ -34,3 +34,8 @@ Rechnungen (`/invoices…`, rebuilt in redesign phase 9) is the invoicing UI ove
 - Text typed into a contenteditable field saves only when the field is left (Tab, Enter, a click elsewhere); `browse type` alone does not save.
 - Times of sent documents show in the browser's time zone; `sentAt` is UTC.
 - The static audit export has no invoicing API: the area says so.
+
+## Sending by e-mail (release C)
+
+- Firma › E-Mail-Versand (`/company/mail`) writes `outgoingMail` into the manifest; the password comes from `VANILLA_SMTP_PASSWORD` in the environment of `up` (`VANILLA_SMTP_PASSWORD=… $S up <run>`). A local SMTP server (smtp-server from node_modules, `allowInsecureAuth`, no STARTTLS) on 127.0.0.1 with security `none` captures the messages.
+- Senden (`[data-act=send]`), the reminder's send (`[data-act=remsend]`) and Stornieren with "Kunde informieren" open the dialog: `input[name=to|subject]`, `textarea[name=body]`, `[data-act=mail]` sends, `[data-act=download]` saves the PDF as before. Check the captured attachment's SHA-256 against the stored PDF and the sent log's `channel`, `to`, `messageId`.
