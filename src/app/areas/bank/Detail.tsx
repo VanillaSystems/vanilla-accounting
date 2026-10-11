@@ -10,6 +10,7 @@ import { ratesUsed } from '../../../accounting/fx-conversion.js';
 import type { RouteOf } from '../../shell/route.js';
 import { sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
+import { monthName } from '../../lib/period-label.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { checkText } from '../../lib/fx-text.js';
@@ -19,10 +20,14 @@ import { I } from '../receipts/icons.js';
 import { matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, pickStatements, setNote, setNoReceipt } from './actions.js';
-import { at, statementName } from './bank.js';
+import { at } from '../receipts/view.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
+
+/** "September 2026" for a calendar month, else its days. */
+export const statementName = (s: Statement) =>
+  s.from.slice(8) === '01' && s.to.slice(0, 7) === s.from.slice(0, 7) && Number(s.to.slice(8)) >= 28 ? monthName(s.from) : `${formatDate(s.from)} – ${formatDate(s.to)}`;
 
 export function Detail(props: Props) {
   const ws = useWorkspace();

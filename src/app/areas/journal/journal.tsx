@@ -60,7 +60,7 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead route={route} period={period} books={books} canEdit={canEdit}>
+      <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts" role="tablist" aria-label={t('journal.filters')}>
           <button type="button" role="tab" aria-selected={!s.filter} className={s.filter ? '' : 'on'} onClick={() => setFilter()}><span className="n">{counts.alle}</span>{t('journal.all')}</button>
           {JOURNAL_FILTERS.filter((f) => counts[f] > 0 || s.filter === f).map((f) => (

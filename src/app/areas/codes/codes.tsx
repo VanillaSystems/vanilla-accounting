@@ -43,7 +43,7 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead route={route} period={period} books={books} canEdit={canEdit}>
+      <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts" role="tablist" aria-label={t('codes.filters')}>
           <button type="button" role="tab" aria-selected={!s.usedOnly} className={s.usedOnly ? '' : 'on'} onClick={() => setCodesUi({ usedOnly: false })}><span className="n">{VAT_CODES.length}</span>{t('codes.all')}</button>
           <button type="button" role="tab" aria-selected={s.usedOnly} className={s.usedOnly ? 'on' : ''} onClick={() => setCodesUi({ usedOnly: true })}><span className="n">{used}</span>{t('codes.used')}</button>

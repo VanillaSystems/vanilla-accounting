@@ -97,7 +97,7 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead route={route} period={period} books={books} canEdit={canEdit} />
+      <ListHead period={period} books={books} canEdit={canEdit} />
       <div className="counts" role="tablist" aria-label={t('reports.report')}>
         {REPORTS.map((r) => (
           <button key={r} type="button" role="tab" aria-selected={r === route.report} className={r === route.report ? 'on' : ''} onClick={() => nav.select({ area: 'reports', report: r })}>{t(REPORT_LABEL[r])}</button>

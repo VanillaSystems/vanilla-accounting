@@ -1,9 +1,15 @@
 import { createContext, useContext } from 'react';
 import type { Theme } from './prefs.js';
 import type { DialogConfig } from '../areas/export/state.js';
+import type { Area } from '../areas/index.js';
 
-/** What the shell offers the pages inside it: its overlays and the viewer's preferences. */
+/**
+ * What the shell offers the pages inside it: the area open now, its overlays and the viewer's
+ * preferences. Shell components an area renders read the area here, not from the registry: an
+ * area importing the registry back would be an import cycle, and Vite's HMR fails on it.
+ */
 export interface ShellUi {
+  area: Area;
   openPeriod(anchor: HTMLElement): void;
   /** The current area's add action (the add button and N). */
   add(): void;

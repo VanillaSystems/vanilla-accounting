@@ -5,8 +5,8 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Index } from '../../../types/index.js';
-import { localToday, openQuarter, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
-import type { Location, Route, RouteOf } from '../../shell/route.js';
+import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
+import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -17,21 +17,14 @@ import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, PaletteItem } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { Kbd } from '../receipts/commands.js';
+import { at } from '../receipts/view.js';
 import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank, type Check, type Statement } from './model.js';
 import { bankFor, listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { importStatements, statementAdd } from './actions.js';
-import { Detail } from './Detail.js';
+import { Detail, statementName } from './Detail.js';
 import './bank.css';
 
 type Props = AreaProps<RouteOf<'bank'>>;
-
-/** "September 2026" for a calendar month, else its days. */
-export const statementName = (s: Statement) =>
-  s.from.slice(8) === '01' && s.to.slice(0, 7) === s.from.slice(0, 7) && Number(s.to.slice(8)) >= 28 ? monthName(s.from) : `${formatDate(s.from)} – ${formatDate(s.to)}`;
-
-/** A place for an object dated `date`: in the current period when it holds the date (urls.md rule 1). */
-export const at = (route: Route, date: string | undefined, current?: Period): Location =>
-  ({ route, query: { period: parsePeriod(periodContaining(date, current), localToday()) ?? undefined } });
 
 /** The words of the receipts linked to each payment, for search. */
 function receiptWords(books: Index): Map<string, string> {
@@ -111,7 +104,7 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead route={route} period={period} books={books} canEdit={canEdit}>
+      <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts stc">
           <span>{t('bank.nStatements', { n: files })}</span>
           {missing > 0 && <span className="warn">{I.dot}{t('bank.nMissing', { n: missing })}</span>}

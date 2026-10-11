@@ -59,7 +59,7 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead route={route} period={v.period} books={books} canEdit={canEdit} />
+      <ListHead period={v.period} books={books} canEdit={canEdit} />
       <div className="counts vst">
         {v.state.kind === 'filed' ? (
           <>

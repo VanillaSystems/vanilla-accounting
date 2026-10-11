@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react';
 import { ICONS } from '../areas/icons.js';
-import { areaOf, type AreaProps } from '../areas/index.js';
+import type { AreaProps } from '../areas/index.js';
 import { periodName } from '../lib/period-label.js';
 import { t } from '../i18n/index.js';
 import { useShellUi } from './ui.js';
 
 /** A list's heading: the area's name, its period (a lock when filed), and its add button. */
-export function ListHead({ route, period, books, canEdit, children, title, noPeriod }: Omit<AreaProps, 'query' | 'nav'> & { children?: ReactNode; title?: string; noPeriod?: boolean }) {
-  const area = areaOf(route);
+export function ListHead({ period, books, canEdit, children, title, noPeriod }: Omit<AreaProps, 'query' | 'nav' | 'route'> & { children?: ReactNode; title?: string; noPeriod?: boolean }) {
   const ui = useShellUi();
+  const { area } = ui;
   const closed = books.config?.closedThrough;
   const filed = !!closed && period.kind !== 'all' && period.to <= closed;
   return (

@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { localToday, openQuarter, parsePeriod } from '../../accounting/periods.js';
-import { AREAS, DOCK, areaOf, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
+import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
 import { useApiStatus } from '../hooks/use-api-status.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
@@ -100,6 +100,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   };
 
   const ui: ShellUi = {
+    area: area as Area,
     openPeriod: (anchor) => setOverlay({ kind: 'period', anchor: anchor.getBoundingClientRect() }),
     add: runAdd,
     openExport,

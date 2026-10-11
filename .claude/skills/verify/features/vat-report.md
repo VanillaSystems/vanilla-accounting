@@ -39,4 +39,3 @@ Preconditions:
 - The UI uses `'` as the thousands separator and the CLI uses `’`. Normalize before comparing.
 - No correction is booked from this page: a correction is a journal entry with `corrects:` in the open quarter (Buchungen, or the CLI); this page shows where it is declared.
 - The filing date is not in the XML the app writes, so a filed quarter says `eingereicht` without a date.
-- Vite HMR cannot hot-swap the areas (they import the shell that imports them): after editing an area's file, open a fresh tab before judging an error in the console.

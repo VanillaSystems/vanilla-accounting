@@ -73,7 +73,7 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead route={route} period={period} books={books} canEdit={canEdit}>
+      <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts" role="tablist" aria-label={t('receipts.filters')}>
           {counts.alle > 0 ? (
             <>
