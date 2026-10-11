@@ -7,11 +7,11 @@
  * The close record is filings/<year>/year-close.json: which guided entries were done or are not
  * needed, and when the year closed and opened. It sits next to the year's returns and seals.
  */
-import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { JournalEntry, QuarterKey } from '../types/index.js';
+import { commitPaths, repositoryAt } from '../workspace/git.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { accountsOf, filedReturnsOf } from '../workspace/reads.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
@@ -174,7 +174,7 @@ export interface CloseResult { closedThrough: string; seal: string; committed: b
  * seals the fourth quarter (the others are sealed already), records the close and commits the
  * workspace when it is a git repository. Running it on a closed year only checks and records.
  */
-export function closeYear(ws: Workspace, year: string, rates: EstvRates = ratesOf(), today = new Date().toISOString().slice(0, 10)): CloseResult {
+export async function closeYear(ws: Workspace, year: string, rates: EstvRates = ratesOf(), today = new Date().toISOString().slice(0, 10)): Promise<CloseResult> {
   const books = loadBooks(ws);
   const close = yearCloseOf(ws, year, rates, books);
   if (close.blockers.length) throw new YearCloseRefused(`${year} cannot close yet: ${close.blockers.length} item(s) open.`);
@@ -187,7 +187,7 @@ export function closeYear(ws: Workspace, year: string, rates: EstvRates = ratesO
   const seal = writeSeal(ws, books, q4, today);
   const state = readState(ws, year);
   if (!state.closedAt) writeState(ws, { ...state, closedAt: today });
-  const committed = commit(ws, `Jahresabschluss ${year}: closed through ${end}, ${q4} sealed`, [ws.paths.books, join(ws.paths.filings, year)]);
+  const committed = await commit(ws, `Jahresabschluss ${year}: closed through ${end}, ${q4} sealed`, [ws.paths.books, join(ws.paths.filings, year)]);
   return { closedThrough: end, seal: seal.file, committed };
 }
 
@@ -214,7 +214,7 @@ export interface OpenResult {
  * the old year changed (only through corrections, its quarters are sealed) updates them.
  * Refuses an open year, and an opening whose Aktiven and Passiven differ.
  */
-export function openYear(ws: Workspace, year: string, rates: EstvRates = ratesOf(), today = new Date().toISOString().slice(0, 10)): OpenResult {
+export async function openYear(ws: Workspace, year: string, rates: EstvRates = ratesOf(), today = new Date().toISOString().slice(0, 10)): Promise<OpenResult> {
   const state = readState(ws, year);
   const books = loadBooks(ws);
   if (!state.closedAt || !books.config.closedThrough || books.config.closedThrough < `${year}-12-31`) {
@@ -235,7 +235,7 @@ export function openYear(ws: Workspace, year: string, rates: EstvRates = ratesOf
   if (!state.openedAt) writeState(ws, { ...state, openedAt: today });
   const firstDay = `${opening.year}-01-01`;
   const ratesReady = foreignAccounts(ws.bankAccounts).every((f) => (rates.on(f.currency, `${opening.year}-12-31`)?.validOn ?? '') >= firstDay);
-  commit(ws, `Eröffnung ${opening.year}: opening balances from the closed ${year}`, [ws.paths.books, join(ws.paths.filings, year)]);
+  await commit(ws, `Eröffnung ${opening.year}: opening balances from the closed ${year}`, [ws.paths.books, join(ws.paths.filings, year)]);
   return { opening, changes, ratesReady, ...(reversal ? { reversal } : {}) };
 }
 
@@ -243,16 +243,7 @@ export function openYear(ws: Workspace, year: string, rates: EstvRates = ratesOf
  * Commits `paths` when the workspace is a git repository of its own (a demo inside the app's
  * repository is not); nothing else is staged or committed.
  */
-function commit(ws: Workspace, message: string, paths: string[]): boolean {
-  const git = (...args: string[]) => execFileSync('git', ['-C', ws.paths.root, ...args], { stdio: 'pipe' }).toString();
-  try {
-    if (realpathSync(git('rev-parse', '--show-toplevel').trim()) !== realpathSync(ws.paths.root)) return false;
-  } catch {
-    return false;
-  }
-  const present = paths.filter((p) => existsSync(p));
-  git('add', '--', ...present);
-  if (git('diff', '--cached', '--name-only', '--', ...present).trim() === '') return false;
-  git('commit', '-m', message, '--', ...present);
-  return true;
+async function commit(ws: Workspace, message: string, paths: string[]): Promise<boolean> {
+  const repo = await repositoryAt(ws.paths.root);
+  return repo ? commitPaths(repo, message, paths) : false;
 }

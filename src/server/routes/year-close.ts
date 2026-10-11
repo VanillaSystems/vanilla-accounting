@@ -19,9 +19,9 @@ function yearOf(param: string | undefined): string {
 }
 
 /** A YearCloseRefused is the user's to fix (409); anything else is the error handler's. */
-function answer(res: Response, run: () => unknown): void {
+async function answer(res: Response, run: () => unknown): Promise<void> {
   try {
-    res.json(run());
+    res.json(await run());
   } catch (e) {
     if (e instanceof YearCloseRefused) throw new RequestError(409, e.message);
     throw e;
@@ -67,12 +67,12 @@ router.post('/api/year-close/:year/entries', (req, res) => {
   answer(res, () => ({ entry: bookEntry(WS, { date, accountDebit, accountCredit, amount, vatCode: vatCode || undefined, description }, template) }));
 });
 
-router.post('/api/year-close/:year/close', (req, res) => {
+router.post('/api/year-close/:year/close', async (req, res) => {
   const year = yearOf(req.params.year);
-  answer(res, () => closeYear(WS, year));
+  await answer(res, () => closeYear(WS, year));
 });
 
-router.post('/api/year-close/:year/open', (req, res) => {
+router.post('/api/year-close/:year/open', async (req, res) => {
   const year = yearOf(req.params.year);
-  answer(res, () => openYear(WS, year));
+  await answer(res, () => openYear(WS, year));
 });

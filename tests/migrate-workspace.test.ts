@@ -41,7 +41,7 @@ test('each business goes to the folder of its role; one nothing tells apart is a
   assert.deepEqual(roleOf({ name: 'Both AG', accounts: ['3400', '4000'] }, undefined), { role: 'supplier', why: 'books to revenue and costs (3400, 4000)', unsure: true });
 });
 
-test('the migration moves files unchanged, with git history, and a rerun changes nothing', () => {
+test('the migration moves files unchanged, with git history, and a rerun changes nothing', async () => {
   const root = oldWorkspace();
   const plan = planMigration(root, appRoles(APP_ROOT));
   assert.deepEqual(plan.map((m) => [m.from, m.to, !!m.unsure]), [
@@ -51,7 +51,7 @@ test('the migration moves files unchanged, with git history, and a rerun changes
     ['counterparties/swiss-post.yaml', 'knowledge/suppliers/swiss-post.yaml', false],
     ['policy/booking.guide.yaml', 'knowledge/rules/booking.guide.yaml', false],
   ]);
-  const first = migrate(root, plan);
+  const first = await migrate(root, plan);
   assert.equal(first.moved.length, 5);
   assert.deepEqual(first.removed, ['counterparties/', 'policy/']);
   for (const m of plan) assert.equal(readFileSync(join(root, m.to), 'utf8'), OLD[m.from], `${m.to} is ${m.from} byte for byte`);
@@ -59,17 +59,17 @@ test('the migration moves files unchanged, with git history, and a rerun changes
   const status = execFileSync('git', ['-C', root, 'status', '--short'], { encoding: 'utf8' });
   assert.match(status, /^R {2}counterparties\/kunde\.yaml -> knowledge\/customers\/kunde\.yaml$/m, 'git sees a rename, so history follows');
 
-  const again = migrate(root, planMigration(root, appRoles(APP_ROOT)));
+  const again = await migrate(root, planMigration(root, appRoles(APP_ROOT)));
   assert.deepEqual([again.moved, again.removed], [[], []]);
 
   const ids = loadKnowledge(APP_ROOT, root).counterparties.filter((c) => c.origin.binding).map((c) => [c.id, c.role]);
   assert.deepEqual(ids, [['ausgleichskasse-muster', 'authority'], ['kunde', 'customer'], ['raetsel', 'supplier'], ['swiss-post', 'supplier']]);
 });
 
-test('a file in both places stops the migration before anything moves', () => {
+test('a file in both places stops the migration before anything moves', async () => {
   const root = oldWorkspace();
   mkdirSync(join(root, 'knowledge/rules'), { recursive: true });
   writeFileSync(join(root, 'knowledge/rules/booking.guide.yaml'), 'steps: {}\n');
-  assert.throws(() => migrate(root, planMigration(root, appRoles(APP_ROOT))), /in both places, keep one: policy\/booking\.guide\.yaml and knowledge\/rules\/booking\.guide\.yaml/);
+  await assert.rejects(() => migrate(root, planMigration(root, appRoles(APP_ROOT))), /in both places, keep one: policy\/booking\.guide\.yaml and knowledge\/rules\/booking\.guide\.yaml/);
   assert.ok(existsSync(join(root, 'counterparties/kunde.yaml')), 'nothing moved');
 });
