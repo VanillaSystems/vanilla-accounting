@@ -20,7 +20,7 @@ import { intake } from '../areas/receipts/intake.js';
 import { IntakeLine, checkIntake, finishedText, watchIntake } from './Intake.js';
 import { checkClaude, onClaudeConnected, toClaudeSetup } from './claude.js';
 import { Chat } from './chat/Chat.js';
-import { onStale, STATIC_EXPORT } from '../lib/api.js';
+import { DEMO, onStale, STATIC_EXPORT } from '../lib/api.js';
 import type { ChangeKind } from '../../types/api-error.js';
 import { readInbox } from '../areas/receipts/state.js';
 import { reloadInvoices } from '../areas/invoices/data.js';
@@ -39,7 +39,7 @@ import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
 import { Splash } from '../brand/Brand.js';
-import { windowTitle } from '../brand/names.js';
+import { DOWNLOAD_URL, windowTitle } from '../brand/names.js';
 import { desktop } from '../desktop/bridge.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 
@@ -246,7 +246,12 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
 
   return (
     <ShellUiContext.Provider value={ui}>
-      {readonly && (
+      {DEMO ? (
+        <div role="status" data-testid="demo-bar" className="auditbar demobar">
+          {t('app.demoBar', { company: workspace?.company.name ?? '' })}
+          <a href={DOWNLOAD_URL} target="_blank" rel="noopener">{t('app.download')}</a>
+        </div>
+      ) : readonly && (
         <div role="status" data-testid="audit-bar" className="auditbar">
           {ICONS.lock} {t('app.auditBar')}
           {snapshot && <span data-testid="audit-snapshot"> · {t('app.snapshot', { date: formatDate(snapshot.createdAt.slice(0, 10)), schema: snapshot.booksSchema, version: snapshot.appVersion })}</span>}

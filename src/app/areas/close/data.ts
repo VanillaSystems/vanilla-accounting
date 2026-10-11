@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Index } from '../../../types/index.js';
 import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
-import { api, errorText, STATIC_EXPORT, type YearCloseView } from '../../lib/api.js';
+import { api, DEMO, errorText, STATIC_EXPORT, type YearCloseView } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 
 interface State { year: string; books: Index | null; data?: YearCloseView; error?: string }
@@ -19,7 +19,7 @@ function load(year: string, books: Index): void {
   if (state.year === year && state.books === books) return;
   const keep = state.year === year ? state.data : undefined;
   state = { year, books, data: keep };
-  if (STATIC_EXPORT) { state = { ...state, error: t('yearClose.apiOnly') }; return; }
+  if (STATIC_EXPORT) { state = { ...state, error: t(DEMO ? 'yearClose.demoOff' : 'yearClose.apiOnly') }; return; }
   api.yearClose(year).then(
     (data) => { if (state.year === year && state.books === books) { state = { ...state, data, error: undefined }; emit(); } },
     (e) => { if (state.year === year && state.books === books) { state = { ...state, error: errorText(e) }; emit(); } },

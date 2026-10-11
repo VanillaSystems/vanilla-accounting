@@ -21,8 +21,11 @@ import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 
-/** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
-export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
+/** The public demo (npm run build:audit -- --demo, vite --mode demo): a static export of a made-up company. */
+export const DEMO = import.meta.env.MODE === 'demo';
+
+/** Built by `npm run build:audit` (vite --mode audit or demo): reads the export's files, never an API. */
+export const STATIC_EXPORT = import.meta.env.MODE === 'audit' || DEMO;
 
 /** Where each read goes: every URL the UI fetches or links to comes from here. */
 export const sources = STATIC_EXPORT ? EXPORT_SOURCES : API_SOURCES;
@@ -68,7 +71,7 @@ export function errorText(e: unknown): string {
   if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
-    case 'readonly': return t('error.readonly');
+    case 'readonly': return t(DEMO ? 'error.demo' : 'error.readonly');
     case 'stale': return t('error.stale');
     case 'localOnly': return t('error.localOnly');
     case 'manualOnly': return t('error.manualOnly');

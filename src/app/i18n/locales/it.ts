@@ -19,6 +19,7 @@ export default {
     'col.name': 'Nome',
 
     'error.readonly': 'Modalità revisione: le modifiche sono disattivate.',
+    'error.demo': 'Demo: sola consultazione. Nell’app puoi modificare tutto.',
     'error.stale': 'Modificato nel frattempo, ricaricato — riprovare per favore.',
     'error.localOnly': 'Accessibile solo da questo computer.',
     'error.periodClosed': 'Periodo chiuso fino al {date}.',
@@ -38,6 +39,8 @@ export default {
 
     'app.auditBar': 'Modalità revisione · sola lettura — le modifiche sono disattivate',
     'app.snapshot': 'Istantanea del {date} · schema dei libri {schema} · app v{version}',
+    'app.demoBar': 'Demo · {company} · sola consultazione',
+    'app.download': 'Scarica l’app',
     'app.periodPicker': 'Scegli periodo / trimestre',
     'app.allPeriods': 'Tutti i periodi',
     'period.today': 'Oggi',
@@ -206,6 +209,7 @@ export default {
     'balance.totalLiabilities': 'Totale passivi',
     'yearClose.loading': 'Calcolo in corso…',
     'yearClose.apiOnly': 'La chiusura annuale richiede il server locale (npm start).',
+    'yearClose.demoOff': 'La chiusura annuale la fai nell’app, la demo non la mostra.',
     'yearClose.check.q4Filed': 'Il rendiconto IVA del 4° trimestre è inoltrato',
     'yearClose.check.quartersSealed': 'T1–T3 sono chiusi e sigillati',
     'yearClose.check.bankReconciled': 'Ogni conto bancario concorda con l’estratto al 31.12.',
@@ -1117,6 +1121,7 @@ export default {
     'export.presetDeleted': 'Modello «{name}» eliminato',
     'export.failed': 'Esportazione non riuscita: {error}',
     'export.staticOff': 'L’esportazione di verifica non crea file: li contiene già, con le loro somme di controllo in manifest.json.',
+    'export.demoOff': 'La demo non crea file. L’app esporta i tuoi libri in PDF, CSV o per Banana.',
     'export.paletteAction': 'Esporta …',
     'export.palettePreset': 'Esportazione: {name}',
     'export.paletteBuiltin': 'Modello',

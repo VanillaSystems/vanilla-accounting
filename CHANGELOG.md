@@ -16,6 +16,11 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Public demo: `npm run build:audit -- <dir> --workspace demo --demo` builds the read-only
+  export of a demo company with a demo bar in the product colour ("Demo · Muster Kaffee GmbH ·
+  nur ansehen") and an **App herunterladen** link, instead of the amber audit bar. It runs under
+  any sub-path, such as `vanillamachines.com/accounting/demo/`, and takes only the app's own demo
+  workspaces, so real books never become a demo. See [docs/audit-export.md](docs/audit-export.md).
 - Claude einrichten: Firma › Claude shows whether Claude Code is installed and signed in (and its
   version). In the Mac app, **Claude einrichten** opens a Terminal window that runs the official
   installer from claude.ai and then `claude auth login`; you install and sign in yourself, the

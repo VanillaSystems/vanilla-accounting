@@ -9,7 +9,7 @@ import type { Index } from '../../../types/index.js';
 import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
 import { GROUPS, ITEMS, PRESETS, countOf, quartersIn, receiptsIn, type Format, type ItemDef, type ItemId } from '../../../export/model.js';
 import { t } from '../../i18n/index.js';
-import { errorText, STATIC_EXPORT } from '../../lib/api.js';
+import { DEMO, errorText, STATIC_EXPORT } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { periodName } from '../../lib/period-label.js';
 import { PeriodPicker } from '../../shell/PeriodPicker.js';
@@ -208,7 +208,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
               </div>
             ))}
             {c.preset === 'audit' && <p className="xnote">{t('export.auditNote', { command: 'npm run build:audit' })}</p>}
-            {STATIC_EXPORT && <p className="xnote">{t('export.staticOff')}</p>}
+            {STATIC_EXPORT && <p className="xnote">{t(DEMO ? 'export.demoOff' : 'export.staticOff')}</p>}
           </div>
         </div>
         <div className="xft">

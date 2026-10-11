@@ -52,8 +52,12 @@ export const EXPORT_SOURCES: Sources = {
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
 };
 
-/** What the export's api/status.json adds to the API's status: when and from what it was made. */
+/** An export for an auditor, or the public read-only demo of a made-up company (--demo). */
+export type ExportPurpose = 'audit' | 'demo';
+
+/** What the export's api/status.json adds to the API's status: when, from what and for whom it was made. */
 export interface AuditSnapshot {
+  purpose: ExportPurpose;
   createdAt: string;
   booksSchema: number;
   appVersion: string;

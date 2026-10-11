@@ -110,6 +110,23 @@ relative.
 npm run build:audit -- site --workspace demo
 ```
 
+## Publish the demo
+
+The public demo on the website is an export of a demo company with `--demo`:
+
+```sh
+npm run build:audit -- ../site/accounting/demo --workspace demo --demo
+```
+
+It is the same export with two differences. A blue demo bar replaces the audit bar and names the
+company, with an **App herunterladen** link (`DOWNLOAD_URL` in `src/app/brand/names.ts`, a page
+of the website that forwards to the latest release). The texts that would speak of an audit say
+"Demo" instead. `--demo` takes only the app's own demo workspaces (`demo/`, `demo-<name>/`) and
+refuses any other folder, since the demo is meant for a public URL.
+
+The demo opens on Belege of the open quarter, as the app does. A link to another view works the
+same way as in an audit export, for example `…/accounting/demo/#/vat`.
+
 ## Verify an export later
 
 The manifest makes an export checkable at any later date. `npm run verify-audit -- <dir>`

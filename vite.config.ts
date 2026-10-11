@@ -4,8 +4,8 @@ import { resolve } from 'path';
 import { devProxy } from './src/server/app-paths';
 
 export default defineConfig(({ mode }) => ({
-  // The static audit export (npm run build:audit) runs under any base path: every URL is relative.
-  base: mode === 'audit' ? './' : '/',
+  // The static export (npm run build:audit, audit or demo) runs under any base path: every URL is relative.
+  base: mode === 'audit' || mode === 'demo' ? './' : '/',
   plugins: [react()],
   resolve: {
     alias: {

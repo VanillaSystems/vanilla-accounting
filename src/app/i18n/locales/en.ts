@@ -19,6 +19,7 @@ export default {
     'col.name': 'Name',
 
     'error.readonly': 'Audit mode: changes are disabled.',
+    'error.demo': 'Demo: view only. In the app you can change everything.',
     'error.stale': 'Changed meanwhile, reloaded — please try again.',
     'error.localOnly': 'Only reachable from this computer.',
     'error.periodClosed': 'Period closed up to {date}.',
@@ -38,6 +39,8 @@ export default {
 
     'app.auditBar': 'Audit mode · read only — changes are disabled',
     'app.snapshot': 'Snapshot of {date} · books schema {schema} · app v{version}',
+    'app.demoBar': 'Demo · {company} · view only',
+    'app.download': 'Download the app',
     'app.periodPicker': 'Choose period / quarter',
     'app.allPeriods': 'All periods',
     'period.today': 'Today',
@@ -206,6 +209,7 @@ export default {
     'balance.totalLiabilities': 'Total liabilities and equity',
     'yearClose.loading': 'Computing…',
     'yearClose.apiOnly': 'The year-end close needs the local server (npm start).',
+    'yearClose.demoOff': 'You do the year-end close in the app; the demo does not show it.',
     'yearClose.check.q4Filed': 'The fourth quarter’s VAT return is filed',
     'yearClose.check.quartersSealed': 'Q1 to Q3 are closed and sealed',
     'yearClose.check.bankReconciled': 'Every bank account matches its statement on 31.12.',
@@ -1117,6 +1121,7 @@ export default {
     'export.presetDeleted': 'Preset “{name}” deleted',
     'export.failed': 'Export failed: {error}',
     'export.staticOff': 'The audit export makes no files: it already holds them, with their checksums in manifest.json.',
+    'export.demoOff': 'The demo makes no files. The app exports your books as PDF, CSV or for Banana.',
     'export.paletteAction': 'Export …',
     'export.palettePreset': 'Export: {name}',
     'export.paletteBuiltin': 'Preset',

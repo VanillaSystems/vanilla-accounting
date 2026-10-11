@@ -16,6 +16,7 @@ export const messages = {
   'col.name': 'Name',
 
   'error.readonly': 'Prüfmodus: Änderungen sind deaktiviert.',
+  'error.demo': 'Demo: nur ansehen. In der App kannst du alles ändern.',
   'error.stale': 'Inzwischen geändert, neu geladen — bitte nochmals.',
   'error.localOnly': 'Nur von diesem Computer aus erreichbar.',
   'error.periodClosed': 'Periode geschlossen bis {date}.',
@@ -35,6 +36,8 @@ export const messages = {
 
   'app.auditBar': 'Prüfmodus · nur Lesen — Änderungen sind deaktiviert',
   'app.snapshot': 'Stand vom {date} · Buchhaltungsdaten Schema {schema} · App v{version}',
+  'app.demoBar': 'Demo · {company} · nur ansehen',
+  'app.download': 'App herunterladen',
   'app.periodPicker': 'Zeitraum / Quartal wählen',
   'app.allPeriods': 'Alle Perioden',
   'period.today': 'Heute',
@@ -203,6 +206,7 @@ export const messages = {
   'balance.totalLiabilities': 'Total Passiven',
   'yearClose.loading': 'Wird berechnet…',
   'yearClose.apiOnly': 'Der Jahresabschluss braucht den lokalen Server (npm start).',
+  'yearClose.demoOff': 'Den Jahresabschluss machst du in der App, die Demo zeigt ihn nicht.',
   'yearClose.check.q4Filed': 'Die MWST-Abrechnung des 4. Quartals ist eingereicht',
   'yearClose.check.quartersSealed': 'Q1 bis Q3 sind abgeschlossen und versiegelt',
   'yearClose.check.bankReconciled': 'Jedes Bankkonto stimmt per 31.12. mit dem Auszug überein',
@@ -1114,6 +1118,7 @@ export const messages = {
   'export.presetDeleted': 'Vorlage «{name}» gelöscht',
   'export.failed': 'Export fehlgeschlagen: {error}',
   'export.staticOff': 'Der Prüfungsexport erstellt keine Dateien: Er enthält sie schon, mit ihren Prüfsummen in manifest.json.',
+  'export.demoOff': 'Die Demo erstellt keine Dateien. Die App exportiert deine Bücher als PDF, CSV oder für Banana.',
   'export.paletteAction': 'Exportieren …',
   'export.palettePreset': 'Export: {name}',
   'export.paletteBuiltin': 'Vorlage',
