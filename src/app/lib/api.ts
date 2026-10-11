@@ -201,6 +201,7 @@ export const api = {
   /** With `email` the PDF goes out through the company's mailbox; without, the send is recorded as a download to `to`. */
   recordSend: (id: string, send: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
   mailStatus: () => request<MailStatus>('GET', '/api/mail'),
+  saveMailPassword: (password: string) => request<{ ok: true }>('PUT', '/api/mail/password', { password }),
   verifyMail: () => request<{ ok: true }>('POST', '/api/mail/verify'),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),

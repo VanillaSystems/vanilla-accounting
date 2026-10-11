@@ -9,6 +9,8 @@ export interface SecretStore {
   get(name: SecretName): Promise<string | undefined>;
   /** Where a person puts the secret, for a message that it is missing (`VANILLA_SMTP_PASSWORD in .env`). */
   where(name: SecretName): string;
+  /** Present when the app keeps the secret itself (the desktop keychain); `.env` is edited by hand. null removes it. */
+  set?(name: SecretName, value: string | null): Promise<void>;
 }
 
 const ENV: Record<SecretName, string> = { smtp: 'VANILLA_SMTP_PASSWORD' };
@@ -20,9 +22,16 @@ export const envSecrets: SecretStore = {
 
 let store: SecretStore = envSecrets;
 
-export const secrets: SecretStore = {
-  get: (name) => store.get(name),
-  where: (name) => store.where(name),
+export const secrets = {
+  get: (name: SecretName) => store.get(name),
+  where: (name: SecretName) => store.where(name),
+  /** Whether the person can save the secret in the app (the desktop app) or puts it into .env. */
+  inApp: () => !!store.set,
+  /** Only where `inApp()`; elsewhere it rejects. */
+  set: async (name: SecretName, value: string | null): Promise<void> => {
+    if (!store.set) throw new Error(`The app does not keep this secret: ${store.where(name)}.`);
+    await store.set(name, value);
+  },
 };
 
 /** The desktop app's seam: its keychain store replaces the environment for the whole process. */

@@ -1,7 +1,7 @@
 /**
  * Firma › E-Mail-Versand: the company's own mailbox that sends invoices, reminders and notices
- * (belege.workspace.yaml `outgoingMail`, ADR 0010). The password is not kept here: `npm start`
- * reads it from .env, the desktop app from the keychain; the section says whether it is there.
+ * (belege.workspace.yaml `outgoingMail`, ADR 0010). The password is not kept in the books: `npm start`
+ * reads it from .env; in the desktop app this form saves it into the keychain store.
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { t } from '../../i18n/index.js';
@@ -28,7 +28,9 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
   const [f, setF] = useState(() => formOf(m));
   const [status, setStatus] = useState<MailStatus>();
   const [checking, setChecking] = useState(false);
-  useEffect(() => { api.mailStatus().then(setStatus, () => setStatus(undefined)); }, [m]);
+  const [password, setPassword] = useState('');
+  const loadStatus = () => api.mailStatus().then(setStatus, () => setStatus(undefined));
+  useEffect(() => { void loadStatus(); }, [m]);
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -38,11 +40,14 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
     };
     try {
       await api.patchWorkspace({ outgoingMail: change });
+      if (password) await api.saveMailPassword(password);
     } catch (err) {
       nav.toast(errorText(err));
       return;
     }
+    setPassword('');
     reloadWorkspace();
+    void loadStatus();
     setEdit(false);
     nav.toast(t('mail.saved'), m ? () => { api.patchWorkspace({ outgoingMail: { ...m, user: m.user ?? null, fromName: m.fromName ?? null, replyTo: m.replyTo ?? null } }).then(reloadWorkspace, (err) => nav.toast(errorText(err))); } : undefined);
   }
@@ -57,12 +62,15 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
       setChecking(false);
     }
   }
-  const begin = () => { setF(formOf(m)); setEdit(true); };
+  const begin = () => { setF(formOf(m)); setPassword(''); setEdit(true); };
   const input = (k: Field, cls = '') => (
     <label className={cls}>{t(`mail.field.${k}`)}<input name={k} className={k === 'port' ? 'mono' : ''} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></label>
   );
   const none = <span className="m">{t('company.notSet')}</span>;
-  const password = !status ? '' : status.password === 'set' ? t('mail.passwordSet', { where: status.where }) : status.password === 'missing' ? t('mail.passwordMissing', { where: status.where }) : t('mail.passwordNone');
+  const where = status?.inApp ? t('mail.keychain') : status?.where ?? '';
+  const passwordText = !status ? '' : status.password === 'set' ? t('mail.passwordSet', { where })
+    : status.password === 'missing' ? (status.inApp ? t('mail.passwordMissingApp') : t('mail.passwordMissing', { where }))
+    : t('mail.passwordNone');
 
   return (
     <>
@@ -70,7 +78,7 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
         <dl className="kv2 wide">
           <dt>{t('mail.server')}</dt><dd><span className="mono">{m.host}:{m.port}</span> <span className="m">{t(`mail.security.${m.security}`)}</span></dd>
           <dt>{t('mail.field.user')}</dt><dd>{m.user ?? none}</dd>
-          <dt>{t('mail.password')}</dt><dd className={status?.password === 'missing' ? 'warnline' : ''}>{password}</dd>
+          <dt>{t('mail.password')}</dt><dd className={status?.password === 'missing' ? 'warnline' : ''}>{passwordText}</dd>
           <dt>{t('mail.sender')}</dt><dd>{m.fromName ? `${m.fromName} <${m.fromAddress}>` : m.fromAddress}</dd>
           <dt>{t('mail.field.replyTo')}</dt><dd>{m.replyTo ?? <span className="m">{t('mail.replyToSender')}</span>}</dd>
         </dl>
@@ -83,8 +91,15 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
               {MAIL_SECURITY.map((s) => <option key={s} value={s}>{t(`mail.security.${s}`)}</option>)}
             </select>
           </label>
-          {input('user', 'wide')}{input('fromName')}{input('fromAddress')}{input('replyTo', 'wide')}
-          <p className="fhint wide">{t('mail.passwordHint', { where: status?.where ?? 'VANILLA_SMTP_PASSWORD' })}</p>
+          {input('user', 'wide')}
+          {status?.inApp && (
+            <label className="wide">{t('mail.password')}
+              <input name="password" type="password" autoComplete="new-password" value={password}
+                placeholder={status.password === 'set' ? t('mail.passwordKept') : ''} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+          )}
+          {input('fromName')}{input('fromAddress')}{input('replyTo', 'wide')}
+          <p className="fhint wide">{status?.inApp ? t('mail.passwordHintApp') : t('mail.passwordHint', { where: status?.where ?? 'VANILLA_SMTP_PASSWORD' })}</p>
           <div className="acts">
             <button type="submit" className="btn primary">{t('common.save')}</button>
             <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>

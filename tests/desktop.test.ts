@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
 import { claudeOn } from '../src/desktop/claude.js';
+import { sealedStore } from '../src/secrets/sealed-store.js';
+import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
 import { ask, modelReady, NoClaudeError } from '../src/llm/ask.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { APP_ROOT, MANIFEST_FILE } from '../src/workspace/workspace.js';
@@ -140,5 +142,26 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
     assert.equal((await call('GET', '/books.json')).text, before);
   } finally {
     delete process.env.CLAUDE_BIN;
+  }
+});
+
+test('the SMTP password: npm start keeps it in .env; the app saves it through Firma into its sealed store, per books', async () => {
+  const mail = { host: 'smtp.example.test', port: 587, security: 'starttls', user: 'rechnungen', fromAddress: 'rechnungen@example.test' };
+  assert.equal((await call('PATCH', '/api/workspace', { outgoingMail: mail })).status, 200);
+  assert.deepEqual((await call('GET', '/api/mail')).json, { configured: true, password: 'missing', where: 'VANILLA_SMTP_PASSWORD in .env', inApp: false });
+  assert.equal((await call('PUT', '/api/mail/password', { password: 'geheim' })).status, 409, 'under npm start the password is not saved by the app');
+
+  const xor = (b: Buffer) => Buffer.from(b.map((x) => x ^ 0x5a));
+  const file = join(home, 'secrets.json');
+  useSecretStore(sealedStore({ file, cipher: { isEncryptionAvailable: () => true, encryptString: (s) => xor(Buffer.from(s)), decryptString: (b) => xor(b).toString() }, books: () => desktop.current()?.root }));
+  try {
+    assert.equal((await call('GET', '/api/mail')).json.inApp, true);
+    assert.equal((await call('PUT', '/api/mail/password', { password: '' })).status, 400);
+    assert.equal((await call('PUT', '/api/mail/password', { password: 'geheim' })).status, 200);
+    assert.equal((await call('GET', '/api/mail')).json.password, 'set');
+    assert.ok(!readFileSync(file, 'utf8').includes('geheim'));
+    assert.ok(!readFileSync(join(desktop.current()!.root, MANIFEST_FILE), 'utf8').includes('geheim'), 'the books never hold it');
+  } finally {
+    useSecretStore(envSecrets);
   }
 });

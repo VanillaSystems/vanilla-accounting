@@ -57,4 +57,6 @@ export interface MailStatus {
   password: 'set' | 'missing' | 'none';
   /** Where the password goes (`VANILLA_SMTP_PASSWORD in .env`, the keychain). */
   where: string;
+  /** The desktop app: the password is saved in Firma › E-Mail-Versand into the keychain store. */
+  inApp: boolean;
 }

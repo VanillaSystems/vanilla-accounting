@@ -1,16 +1,18 @@
 /**
  * The desktop app's main process (ADR 0006, form 3): the local server on 127.0.0.1, one window on
- * the built UI, the native menu, and the few things a page cannot do itself (a folder dialog, links
- * to the browser). Built by tools/desktop/build.mjs into out/desktop/main.mjs, which keeps the
+ * the built UI, the native menu, the passwords in the keychain store, and the few things a page
+ * cannot do itself (a folder dialog, links to the browser). Built by tools/desktop/build.mjs into out/desktop/main.mjs, which keeps the
  * bundle two folders below the app root, as src/workspace/workspace.ts finds APP_ROOT.
  */
 import { createServer, type Server } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { BrowserWindow, Menu, app, dialog, ipcMain, screen, session, shell } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, safeStorage, screen, session, shell } from 'electron';
 import type { Express } from 'express';
 import { usePrintPages } from '../invoices/pdf.js';
+import { sealedStore } from '../secrets/sealed-store.js';
+import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { MenuCommand } from '../types/desktop.js';
 import { findClaude } from './claude.js';
@@ -44,6 +46,7 @@ async function start(): Promise<void> {
     // The start screen opens books through the server; the menu's recent list follows.
     onOpen: () => refreshMenu(),
   });
+  useSecretStore(sealedStore({ file: join(app.getPath('userData'), 'secrets.json'), cipher: safeStorage, books: () => server.current()?.root }));
   const port = await listen(server.app, readState(stateFile).port);
   writeState(stateFile, { ...readState(stateFile), port });
   server.allowHost(`127.0.0.1:${port}`);

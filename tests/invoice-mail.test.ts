@@ -75,7 +75,7 @@ const sentLog = (): SentDocument[] => (JSON.parse(readFileSync(join(api.root, 'i
 const mailbox = { host: '127.0.0.1', security: 'none', user: USER, fromName: 'Muster GmbH', fromAddress: USER, replyTo: 'buchhaltung@muster.example' };
 
 test('Firma › E-Mail: the settings go into the manifest, the password stays out', async () => {
-  assert.deepEqual((await api.send('GET', '/api/mail')).json, { configured: false, password: 'none', where: 'VANILLA_SMTP_PASSWORD in .env' });
+  assert.deepEqual((await api.send('GET', '/api/mail')).json, { configured: false, password: 'none', where: 'VANILLA_SMTP_PASSWORD in .env', inApp: false });
   const refused = await api.send('PATCH', '/api/workspace', { outgoingMail: { ...mailbox, port, password: PASSWORD } });
   assert.equal(refused.status, 400, 'a password is no field of the workspace');
   const set = await api.send('PATCH', '/api/workspace', { outgoingMail: { ...mailbox, port } });
@@ -83,7 +83,7 @@ test('Firma › E-Mail: the settings go into the manifest, the password stays ou
   const manifest = readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8');
   assert.match(manifest, /outgoingMail:/);
   assert.ok(!manifest.includes(PASSWORD), 'no password in belege.workspace.yaml');
-  assert.deepEqual((await api.send('GET', '/api/mail')).json, { configured: true, password: 'set', where: 'VANILLA_SMTP_PASSWORD in .env' });
+  assert.deepEqual((await api.send('GET', '/api/mail')).json, { configured: true, password: 'set', where: 'VANILLA_SMTP_PASSWORD in .env', inApp: false });
   assert.equal((await api.send('POST', '/api/mail/verify')).status, 200);
   assert.ok(logins.includes(`${USER}:${PASSWORD}`), 'logged in with the password from the environment');
 });
