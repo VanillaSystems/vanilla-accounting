@@ -1,5 +1,6 @@
 import type { AuditSnapshot } from '../audit/sources.js';
 import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
+import type { SetupRefusal } from '../workspace/create.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -21,7 +22,11 @@ export type ApiRefusal =
   | { code: 'yearClose' }
   | { code: 'fileExists'; params: { filename: string } }
   | { code: 'statement'; params: { reason: StatementRefusal; detail?: string } }
-  | { code: 'noBrowser' };
+  | { code: 'noBrowser' }
+  | { code: 'noClaude' }
+  | { code: 'noWorkspace' }
+  | { code: 'notWorkspace' }
+  | { code: 'setup'; params: SetupRefusal };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no

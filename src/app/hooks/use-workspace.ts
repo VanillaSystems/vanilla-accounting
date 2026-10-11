@@ -13,8 +13,11 @@ export function reloadWorkspace(): void {
   for (const l of listeners) l();
 }
 
-/** The company, its bank accounts, filed quarters and seals; null until loaded. Fetched once per page and after a change. */
-export function useWorkspace(): WorkspaceInfo | null {
+/**
+ * The company, its bank accounts, filed quarters and seals; null until loaded. Fetched once per page and after a change;
+ * not while `books` is false (the desktop app's start screen, where no books are open).
+ */
+export function useWorkspace(books = true): WorkspaceInfo | null {
   const [info, setInfo] = useState<WorkspaceInfo | null>(loaded ?? null);
   const [version, setVersion] = useState(0);
   useEffect(() => {
@@ -23,10 +26,11 @@ export function useWorkspace(): WorkspaceInfo | null {
     return () => { listeners.delete(bump); };
   }, []);
   useEffect(() => {
+    if (!books) return;
     let live = true;
     (cached ??= api.workspace().then((w) => (loaded = w))).then((w) => { if (live) setInfo(w); }, () => { cached = undefined; });
     return () => { live = false; };
-  }, [version]);
+  }, [version, books]);
   return info;
 }
 

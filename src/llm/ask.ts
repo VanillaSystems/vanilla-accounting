@@ -16,7 +16,7 @@
 import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
 
 export type Model = 'haiku' | 'sonnet' | 'opus';
@@ -47,6 +47,23 @@ export interface LedgerRow {
 
 const DEFAULT_SYSTEM =
   'You are a careful assistant for a Swiss GmbH\'s bookkeeping. Follow the instructions in the message exactly and answer only in the format they ask for.';
+
+/** No `claude` CLI to run: model features say what to install, everything else works without them. */
+export class NoClaudeError extends Error {
+  constructor() {
+    super('Für Belege lesen und Buchungsvorschläge braucht die App Claude Code: von claude.com/claude-code installieren und einmal im Terminal mit "claude" anmelden.');
+  }
+}
+
+/**
+ * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/desktop/claude.ts),
+ * else `claude` on the PATH. Its own folder joins the PATH, so an npm-installed claude finds its node.
+ */
+function claude(): { bin: string; env: NodeJS.ProcessEnv } {
+  const bin = process.env.CLAUDE_BIN;
+  if (!bin) return { bin: 'claude', env: process.env };
+  return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
+}
 
 /** Every model call's cost, appended to the workspace's data/ (gitignored). */
 export const ledgerPath = (): string => join(openWorkspace().paths.data, 'llm-ledger.jsonl');
@@ -93,7 +110,8 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
   const model = opts.model ?? 'sonnet';
   const started = Date.now();
   return new Promise((resolve, reject) => {
-    const child = spawn('claude', args(opts), { cwd: cwd() });
+    const { bin, env } = claude();
+    const child = spawn(bin, args(opts), { cwd: cwd(), env });
     let out = '';
     let err = '';
     const timer = setTimeout(() => {
@@ -102,7 +120,7 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
     }, opts.timeoutMs ?? 360_000);
     child.stdout.on('data', (d) => (out += d));
     child.stderr.on('data', (d) => (err += d));
-    child.on('error', (e) => { clearTimeout(timer); reject(e); });
+    child.on('error', (e: NodeJS.ErrnoException) => { clearTimeout(timer); reject(e.code === 'ENOENT' ? new NoClaudeError() : e); });
     child.on('close', (code) => {
       clearTimeout(timer);
       let parsed: {
@@ -120,7 +138,7 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
       if (ok) resolve((parsed!.result ?? '').trim());
       else reject(new Error(`claude exited ${code}: ${(parsed?.result ?? (err || out)).slice(0, 300)}`));
     });
-    child.stdin.on('error', reject);
+    child.stdin.on('error', () => { /* the child's 'error' or 'close' settles the call, with the reason */ });
     child.stdin.write(prompt);
     child.stdin.end();
   });

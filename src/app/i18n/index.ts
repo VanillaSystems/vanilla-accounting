@@ -43,6 +43,12 @@ export function t<K extends Key>(key: K, ...[vars]: [VarsOf<K>] extends [never] 
 }
 
 /**
+ * A text whose key is made from data without placeholders (a setup question's options, src/workspace/setup.ts);
+ * the key itself when the dictionary lacks it. tests/desktop.test.ts checks that every such key exists.
+ */
+export const tData = (key: string): string => (isKey(key) ? formatIn(current, key, {}) : key);
+
+/**
  * The UI name of a statement section or row that src/accounting names in German (the CLI's
  * language): the balance sheet's and income statement's groups. Unknown names stay as they are.
  */

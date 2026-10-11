@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext } from '../llm/prompts.js';
-import type { AskOptions } from '../llm/ask.js';
+import { NoClaudeError, type AskOptions } from '../llm/ask.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor } from '../accounting/bank-accounts.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
@@ -216,6 +216,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         outcome.classified.push(tx.ref);
       }
     } catch (e) {
+      if (e instanceof NoClaudeError) throw e;
       log(`  [Batch ${batchNum}/${batches.length}]  error: ${e}`);
       for (const tx of batch) if (!outcome.classified.includes(tx.ref)) fail(tx, String(e));
     }

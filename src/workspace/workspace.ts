@@ -136,6 +136,11 @@ export function openWorkspace(): Workspace {
 }
 let opened: Workspace | undefined;
 
+/** Opens the workspace in `root` for the rest of the process: the desktop app switches books without a restart (src/desktop). */
+export function openWorkspaceAt(root: string): Workspace {
+  return (opened = workspaceAt(root));
+}
+
 /** The languages the UI speaks: one dictionary each in src/app/i18n/locales/ (docs/i18n.md). */
 export function appLanguages(): string[] {
   return readdirSync(join(APP_ROOT, 'src/app/i18n/locales')).filter((f) => f.endsWith('.ts')).map((f) => f.slice(0, -3)).sort();

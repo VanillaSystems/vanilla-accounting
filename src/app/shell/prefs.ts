@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
+import { desktop } from '../desktop/bridge.js';
 
 export function stored(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -76,6 +77,8 @@ export function useZoom(): [number, (step: -1 | 0 | 1) => void] {
     addEventListener('keydown', onKey, true);
     return () => removeEventListener('keydown', onKey, true);
   }, []);
+  // The desktop app's View menu: its zoom items show the same keys and step the same zoom.
+  useEffect(() => desktop?.onMenu((c) => step(c === 'zoomIn' ? 1 : c === 'zoomOut' ? -1 : 0)), []);
   return [zoom, step];
 }
 
@@ -92,9 +95,10 @@ export function usePersistedFlag(key: string, fallback: boolean): [boolean, (v: 
  * The UI language: the one picked in the top bar (localStorage), else the workspace's
  * company.language, else the browser's, else German. Links carry no language (docs/urls.md rule 3).
  */
-export function useLanguage(): [string, (code: string) => void] {
+/** `books`: whether books are open, whose company language is the default (not on the desktop app's start screen). */
+export function useLanguage(books = true): [string, (code: string) => void] {
   const [lang, setLang] = useState(() => supportedLanguage(stored('language')));
-  const workspace = useWorkspace();
+  const workspace = useWorkspace(books);
   const resolved = lang
     ?? supportedLanguage(workspace?.company.language)
     ?? navigator.languages.map(supportedLanguage).find(Boolean)

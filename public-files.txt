@@ -33,6 +33,11 @@ tools/vat-codes/**
 examples/**
 demo-consulting/**
 tools/hooks/**
+tools/desktop/**
+desktop/electron-builder.config.cjs
+desktop/entitlements.mac.plist
+desktop/icon.svg
+desktop/icon.png
 
 docs/getting-started.md
 docs/audit-export.md
@@ -48,6 +53,7 @@ docs/casebook.md
 docs/i18n.md
 docs/i18n-review.md
 docs/urls.md
+docs/desktop.md
 docs/runbooks/**
 docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf
 docs/specs/mwst-form-0535-04-2024-de.pdf
