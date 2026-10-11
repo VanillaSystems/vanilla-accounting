@@ -20,6 +20,7 @@ import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
+import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -67,6 +68,7 @@ function List(props: Props) {
   }, [route.id, ids[0], l]);
 
   const select = (id: string) => nav.select({ area: 'receipts', id });
+  useSelectionFollowsRows(route.id, ids, select);
   const row = (v: ReceiptView, same: boolean) => (
     <Row key={v.r.id} v={v} sel={v.r.id === route.id} same={same} canEdit={canEdit} onSelect={select} onAct={(a) => runAct(props, a, v.r.id)} />
   );

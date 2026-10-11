@@ -22,6 +22,7 @@ import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank,
 import { bankFor, listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { importStatements, statementAdd } from './actions.js';
 import { Detail, statementName } from './Detail.js';
+import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './bank.css';
 
 type Props = AreaProps<RouteOf<'bank'>>;
@@ -101,6 +102,7 @@ function List(props: Props) {
   }, [ws, JSON.stringify(route), query.period?.token, keys[0], b]);
 
   const select = (key: string) => nav.select({ area: 'bank', statement: key });
+  useSelectionFollowsRows(route.statement, keys, select);
 
   return (
     <div className="page">
