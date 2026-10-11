@@ -21,7 +21,7 @@ import type { CompanyInfo } from '../../../books/company.js';
 import type { ManifestPatch } from '../../../workspace/manifest-write.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
-import type { Area, AreaProps, Nav } from '../index.js';
+import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
@@ -452,12 +452,19 @@ function Display() {
   );
 }
 
+// Firma has no search: the shell's default legend would offer /.
+const legend = (): LegendItem[] => [
+  [['↑', '↓'], t('keys.select'), t('keys.selectTip')],
+  [['⌘', 'K'], t('keys.all'), t('keys.allTip')],
+];
+
 export const company: Area<RouteOf<'company'>> = {
   id: 'company',
   label: () => t('area.company'),
   dock: { key: 'f', icon: ICONS.company, tip: () => t('area.company.tip') },
   List,
   Detail,
+  legend,
   periodless: true,
   title: (r, books) => sectionLabel(r.section, books),
   keys(e, { route, nav }) {
