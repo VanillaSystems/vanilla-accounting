@@ -3,7 +3,8 @@
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
 // carries Swiss VAT facts. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
 // reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
-// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
+// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once, and so
+// does `auth status`: signed in, or signed out with $CLAUDE_STUB_SIGNED_OUT.
 // $CLAUDE_STUB_PROMPTS: each prompt is appended there.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
@@ -15,6 +16,11 @@ const STUB_ANSWER = { suggestedFilename: '20260812-stub-shop.pdf', date: '2026-0
 if (process.argv.includes('--version')) {
   process.stdout.write('0.0.0 (stub)\n');
   process.exit(0);
+}
+if (process.argv[2] === 'auth' && process.argv[3] === 'status') {
+  const loggedIn = !process.env.CLAUDE_STUB_SIGNED_OUT;
+  process.stdout.write(JSON.stringify({ loggedIn, authMethod: loggedIn ? 'claude.ai' : 'none' }));
+  process.exit(loggedIn ? 0 : 1);
 }
 
 const prompt = readFileSync(0, 'utf8');

@@ -16,7 +16,8 @@ import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { MenuCommand } from '../types/desktop.js';
-import { findClaude } from './claude.js';
+import { resolveClaude } from './claude.js';
+import { launchSetup, type SetupTexts } from './claude-setup.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer } from './server.js';
@@ -37,7 +38,7 @@ async function start(): Promise<void> {
   const stateFile = join(app.getPath('userData'), 'desktop.json');
   const { homepage } = appPackage();
   usePrintPages(electronPage);
-  const claudeFound = findClaude().then((bin) => { if (bin) process.env.CLAUDE_BIN = bin; });
+  const claudeFound = resolveClaude();
   let language = languageOf(app.getLocale());
   let win: BrowserWindow | undefined;
 
@@ -92,6 +93,13 @@ async function start(): Promise<void> {
 
   if (SMOKE) smokeHandles();
   ipcMain.handle('desktop:chooseFolder', (_e, title: unknown) => chooseFolder(typeof title === 'string' ? title : ''));
+  ipcMain.handle('desktop:resolveClaude', async () => { await resolveClaude(); });
+  ipcMain.handle('desktop:setupClaude', () => {
+    if (process.platform !== 'darwin' && process.platform !== 'win32') return false;
+    const texts = [...new Set([language, 'en'])].map(setupTexts);
+    launchSetup(process.platform, app.getPath('userData'), texts);
+    return true;
+  });
   ipcMain.on('desktop:language', (_e, code: unknown) => {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }
@@ -106,6 +114,14 @@ async function start(): Promise<void> {
   app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
+}
+
+function setupTexts(language: string): SetupTexts {
+  const t = textsIn(language);
+  return {
+    title: t('claude.script.title'), install: t('claude.script.install'), signIn: t('claude.script.signIn'),
+    back: t('claude.script.back'), failed: t('claude.script.failed'), done: t('claude.script.done'),
+  };
 }
 
 function smokeHandles(): void {

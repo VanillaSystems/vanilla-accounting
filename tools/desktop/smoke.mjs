@@ -4,7 +4,9 @@
  * start screen → Demo → every area → issue an invoice and check its PDF (one page, the QR-bill
  * decodes) → the SMTP password saved in Firma, the invoice sent by e-mail to a local SMTP server →
  * a PDF, a PNG and a HEIC dropped and read by the inbox job → a camt.053 paying the invoice
- * imported → set up new books and switch back through the File menu → claude missing.
+ * imported → set up new books and switch back through the File menu → claude missing → Firma ›
+ * Claude: "Claude einrichten" writes the setup script and opens it (a recorder stands in for
+ * `open`, so no installer runs), and a claude that appears meanwhile is found on focus, no restart.
  *
  * The release build is fused (no --inspect, no ELECTRON_RUN_AS_NODE): the script reaches the page
  * through --remote-debugging-port and the native menu through `window.vanillaSmoke`, which the app
@@ -17,7 +19,7 @@
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import fs from 'node:fs';
@@ -64,10 +66,10 @@ const smtpPort = smtp.server.address().port;
 const keychainEntry = () => { try { return execFileSync('security', ['find-generic-password', '-s', 'vanilla-accounting Safe Storage'], { encoding: 'utf8' }); } catch { return undefined; } };
 const keychainBefore = keychainEntry();
 
-async function launch(port, shell) {
+async function launch(port, shell, env = {}) {
   const log = join(out, `app-${port}.log`);
   const child = spawn(exe, [`--remote-debugging-port=${port}`, '--vanilla-smoke', `--user-data-dir=${userData}`, ...(keychainBefore ? ['--use-mock-keychain'] : [])], {
-    env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME, SHELL: shell, TMPDIR: process.env.TMPDIR ?? '/tmp', LANG: 'de_CH.UTF-8' },
+    env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME, SHELL: shell, TMPDIR: process.env.TMPDIR ?? '/tmp', LANG: 'de_CH.UTF-8', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let text = '';
@@ -345,8 +347,14 @@ const exited = new Promise((r) => first.child.once('exit', r));
 await page.evaluate(() => window.vanillaSmoke.quit());
 await exited;
 
-// 6. Without claude (a shell that does not find it): a model feature names what to install, the rest works.
-const second = await launch(9334, '/bin/sh');
+// 6. Without claude (a shell that does not find it, a home without ~/.local/bin/claude): a model
+// feature names where to set it up, the rest works.
+const bareHome = mkdtempSync(join(tmpdir(), 'vanilla-smoke-home-'));
+const opened = join(bareHome, 'opened.txt');
+const recorder = join(bareHome, 'open');
+writeFileSync(recorder, `#!/bin/sh\necho "$1" > ${opened}\n`);
+chmodSync(recorder, 0o755);
+const second = await launch(9334, '/bin/sh', { HOME: bareHome, VANILLA_OPEN_COMMAND: recorder });
 page = second.page;
 await settle(page, 'nav.dock');
 check('the next start opens the last books', (await api(page, '/api/workspace')).json?.company?.name === demoName);
@@ -361,9 +369,42 @@ await page.evaluate(() => document.querySelectorAll('.sec > button.sum').forEach
 await sleep(400);
 const clicked = await clickText(page, '.dangers button', 'Neu lesen');
 await sleep(1500);
-const toast = await page.evaluate(() => document.body.innerText.includes('Claude Code'));
-check('the UI says what to install', clicked && toast);
+const toast = await page.evaluate(() => document.body.innerText.includes('Firma › Claude'));
+check('the UI says where to set Claude up', clicked && toast);
 await shot(page, '08-no-claude');
+
+// 7. Firma › Claude: missing; the button writes the script and hands it to the opener; Belege points there.
+await page.goto(`${base}/company/claude`);
+await settle(page, '[data-testid=claude-status][data-state=missing]');
+const desktopNote = !!(await page.$('[data-testid=claude-desktop-app]'));
+check('Firma › Claude says "Nicht installiert", and names Claude Desktop when it is installed',
+  (await page.evaluate(() => document.body.innerText.includes('Nicht installiert'))) && desktopNote === existsSync('/Applications/Claude.app'), `Claude Desktop note: ${desktopNote}`);
+await shot(page, '09-claude-missing');
+await page.click('[data-testid=claude-setup]');
+await settle(page, '[data-testid=claude-opened]');
+const scriptPath = existsSync(opened) ? readFileSync(opened, 'utf8').trim() : '';
+const script = scriptPath && existsSync(scriptPath) ? readFileSync(scriptPath, 'utf8') : '';
+if (script) writeFileSync(join(out, 'claude-einrichten.command'), script);
+check('Claude einrichten writes the .command into the user data folder and opens it',
+  scriptPath === join(realpathSync(userData), 'claude-einrichten.command') && script.includes('curl -fsSL https://claude.ai/install.sh | bash') && script.includes('claude auth login') && script.includes('Claude einrichten für Vanilla Accounting'), scriptPath);
+await shot(page, '10-claude-setup-opened');
+await page.goto(`${base}/receipts?period=2026-Q3`);
+await settle(page, '[data-testid=claude-setup-hint]');
+check('Belege shows "Claude einrichten" next to Eingang verarbeiten', true);
+await shot(page, '11-belege-hint');
+
+// 8. The person installed claude meanwhile (the stub, where the installer puts it): back in the window, it is found.
+await page.goto(`${base}/company/claude`);
+await settle(page, '[data-testid=claude-status][data-state=missing]');
+mkdirSync(join(bareHome, '.local/bin'), { recursive: true });
+copyFileSync('tests/support/stub-bin/claude', join(bareHome, '.local/bin/claude'));
+symlinkSync(process.execPath, join(bareHome, '.local/bin/node'));
+await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+await settle(page, '[data-testid=claude-status][data-state=ready]');
+check('on focus the app finds claude again and says "Claude verbunden"', await page.evaluate(() => document.body.innerText.includes('Claude verbunden')));
+await shot(page, '12-claude-connected');
+const now = await api(page, '/api/vision/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ receiptId: open.id }) });
+check('the model call refused before works now, without a restart', now.status === 200, `${now.status} ${now.json?.code ?? ''}`);
 second.child.kill();
 await new Promise((r) => smtp.close(r));
 

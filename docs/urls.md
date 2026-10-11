@@ -40,7 +40,7 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/reports/income`, `/reports/balance`, `/reports/trial` | Erfolgsrechnung, Bilanz, Saldobilanz |
 | `/reports/<report>/<account>` | one account's ledger inside that report, e.g. `/reports/balance/1021` |
 | `/close` and `/close/<step>` | year-end close and one of its steps |
-| `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `accounts`, `periods`, `opening`, `display` |
+| `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `accounts`, `periods`, `opening`, `claude`, `display` |
 | `/invoices` | Rechnungen; `?status=open\|overdue\|draft\|paid` |
 | `/invoices/<number>` | an issued invoice or credit note, e.g. `/invoices/2026-006` |
 | `/invoices/draft-<id>` | a draft (it has no number until it is issued) |

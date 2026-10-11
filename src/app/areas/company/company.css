@@ -5,3 +5,10 @@
 .ftab.banks .fh, .ftab.banks .fr { grid-template-columns: 56px minmax(140px, 1fr) 250px minmax(170px, auto); }
 .ftab.banks .fr > :nth-child(3), .ftab.banks .fr > :nth-child(4) { white-space: nowrap; }
 .fedit { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+
+/* Firma › Claude */
+.claude-why { max-width: 640px; margin: 14px 0 0; }
+.claude-what { max-width: 640px; margin: 14px 0 0; font-size: 13.5px; }
+.claude-commands { margin: 14px 0 0; max-width: 640px; }
+.claude-commands .cmd { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.claude-commands code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 7px 10px; border-radius: 8px; background: var(--bg); font-size: 12.5px; }

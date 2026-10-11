@@ -7,6 +7,7 @@ import type { ComponentType, ReactNode } from 'react';
 import type { Index } from '../../types/index.js';
 import type { Period } from '../../accounting/periods.js';
 import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js';
+import type { ToastAction } from '../shell/Toast.js';
 import { t } from '../i18n/index.js';
 import { close } from './close/close.js';
 import { company } from './company/company.js';
@@ -26,7 +27,8 @@ export interface Nav {
   select(route: Route): void;
   /** The page's period, search or filter: replaces the history entry. */
   setQuery(query: Query): void;
-  toast(msg: string, undo?: () => void): void;
+  /** `undo` gets the undo button and ⌘Z; `action` a button of its own, as "Claude einrichten". */
+  toast(msg: string, undo?: () => void, action?: ToastAction): void;
   refresh(): void;
 }
 

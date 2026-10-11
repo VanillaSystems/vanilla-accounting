@@ -1,3 +1,4 @@
+import type { ClaudeStatus } from '../../types/claude.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { IntakeStatus } from '../../intake/pipeline.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
@@ -168,6 +169,8 @@ export const api = {
 
   /** How far the inbox processing is (src/intake/); the static export has none. */
   intake: () => (STATIC_EXPORT ? Promise.resolve<IntakeStatus>({ running: false, inbox: [] }) : request<IntakeStatus>('GET', '/api/intake')),
+  /** Whether the inbox job has its model (src/llm/ask.ts claudeStatus). */
+  claudeStatus: () => request<ClaudeStatus>('GET', '/api/claude'),
   /** Starts the inbox processing; while a job runs, one more run after it. */
   startIntake: () => request<IntakeStatus>('POST', '/api/intake'),
 

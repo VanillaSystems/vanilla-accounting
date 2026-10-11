@@ -15,7 +15,7 @@ import { desktopServer } from '../src/desktop/server.js';
 import { claudeOn } from '../src/desktop/claude.js';
 import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
-import { ask, modelReady, NoClaudeError } from '../src/llm/ask.js';
+import { ask, claudeStatus, NoClaudeError } from '../src/llm/ask.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { APP_ROOT, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import de from '../src/app/i18n/locales/de.js';
@@ -123,9 +123,10 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
   process.env.PATH = '/usr/bin:/bin';
   process.env.CLAUDE_BIN = join(found, 'claude');
   try {
-    assert.equal(await modelReady(), true, 'the inbox job finds the CLI by CLAUDE_BIN');
+    assert.deepEqual(await claudeStatus(), { state: 'ready', version: '0.0.0' }, 'the inbox job finds the CLI by CLAUDE_BIN');
+    assert.deepEqual((await call('GET', '/api/claude')).json, { state: 'ready', version: '0.0.0' });
     process.env.CLAUDE_BIN = join(home, 'no-such-claude');
-    assert.equal(await modelReady(), false);
+    assert.equal((await claudeStatus()).state, 'missing');
   } finally {
     process.env.PATH = path;
   }

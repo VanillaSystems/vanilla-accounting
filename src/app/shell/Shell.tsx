@@ -18,6 +18,7 @@ import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
 import { IntakeLine, finishedText, watchIntake } from './Intake.js';
+import { checkClaude, onClaudeConnected, toClaudeSetup } from './claude.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
@@ -113,7 +114,13 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   // The inbox processing runs on the server; the books are loaded again when a job ends.
   const reload = useRef(refresh);
   reload.current = refresh;
-  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => { reload.current(); toast(finishedText(job)); })), [canEdit, toast]);
+  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => {
+    reload.current();
+    if (!job.steps.some((s) => s.notes.some((n) => n.code === 'noModel'))) return toast(finishedText(job));
+    void checkClaude();
+    toast(finishedText(job), undefined, { label: t('claude.setup'), run: () => toClaudeSetup(propsRef.current.nav) });
+  })), [canEdit, toast]);
+  useEffect(() => onClaudeConnected((version) => toast(t('claude.connected', { version }))), [toast]);
 
   useShellKeys({
     overlayOpen: () => overlay !== null,

@@ -19,6 +19,7 @@ import { at, ledgerFor, listed } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
 import { startIntake, useIntake } from '../../shell/Intake.js';
+import { ClaudeHint } from '../../shell/claude.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
@@ -91,6 +92,7 @@ function List(props: Props) {
             </>
           ) : <span>{filed ? t('receipts.filedReadOnly') : t('receipts.stillEmpty')}</span>}
           {canEdit && <RunInbox />}
+          {canEdit && <ClaudeHint nav={nav} />}
           <label className="search">
             {ICONS.search}
             <span className="sr">{t('receipts.searchLabel')}</span>

@@ -6,6 +6,8 @@
 import { Router } from 'express';
 import { IntakeBusyError, runIntake, storePort, type IntakeJob, type IntakeStatus } from '../../intake/pipeline.js';
 import { PIPELINE, askIfReady } from '../../intake/run.js';
+import { claudeStatus } from '../../llm/ask.js';
+import type { ClaudeStatus } from '../../types/claude.js';
 import { WS } from '../books.js';
 import { inboxFiles } from './scan.js';
 
@@ -45,4 +47,9 @@ router.get('/api/intake', (_req, res) => {
 router.post('/api/intake', (_req, res) => {
   start();
   res.json(status());
+});
+
+/** Whether the job would have its model: Firma › Claude and the "Claude einrichten" hints ask this. */
+router.get('/api/claude', async (_req, res) => {
+  res.json(await claudeStatus() satisfies ClaudeStatus);
 });

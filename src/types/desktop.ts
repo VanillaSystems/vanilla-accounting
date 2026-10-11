@@ -14,6 +14,10 @@ export interface DesktopBridge {
   onMenu(listener: (command: MenuCommand) => void): () => void;
   /** The UI's language, so the native menu speaks it too. */
   setLanguage(code: string): void;
+  /** Looks for the `claude` CLI again through the login shell (src/desktop/claude.ts). */
+  resolveClaude(): Promise<void>;
+  /** Opens the setup script in a terminal window; false where the app has none for this system. */
+  setupClaude(): Promise<boolean>;
 }
 
 /**
