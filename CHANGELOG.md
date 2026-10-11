@@ -75,6 +75,18 @@ Two markers flag an entry you must read before you update:
 - **⚠ figures** (demo only): the demo company Muster Kaffee now writes invoices; two of them are
   paid by QR-bill in Q3, which adds their revenue to the demo's Q3 return. Its bank accounts carry
   valid IBANs, so the camt.053 file names changed.
+- Abschluss and Firma rebuilt (redesign phase 7). Abschluss is the year-end in seven steps
+  (`/close/checks`, …): Q4, the checks computed from the books (with the Kursdifferenz, the VAT
+  reconciliation, open invoices and the closing balance sheet), the year-end entries with
+  prefilled forms, closing the year (it books the Kursdifferenz first), opening the next year,
+  the profit allocation and the handover. Invoices still open on 31.12. are proposed as a
+  receivables entry (1100 against the revenue account, no VAT code) to book or mark not needed
+  (ADR 0010). Firma shows the profile, VAT setup, bank accounts with their last statement balance,
+  the chart of accounts, periods with their seals and the opening balances; the profile, a bank
+  account's label and IBAN, a new bank account, and an account's name are changed there
+  (`PATCH /api/workspace`, `PUT /api/accounts/<number>`): `belege.workspace.yaml` keeps its
+  comments, layout and every field the app does not know, and a change its reader refuses is
+  never written. Removed with the old tab: the Jahresabschluss tab and its account combobox.
 
 - VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
   entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it

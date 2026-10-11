@@ -1,0 +1,107 @@
+/**
+ * Changes to belege.workspace.yaml from the Firma page: the company's profile, its bank
+ * accounts' labels and IBANs, a new bank account. ADR 0004: the change is applied to the YAML
+ * document as it is on disk, field by field, so its comments, its layout and every field this
+ * app does not know stay as they were. The result is checked by the same reader the app opens
+ * the workspace with before it replaces the file; a change the reader refuses is never written.
+ */
+import { readFileSync } from 'node:fs';
+import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
+import { writeAtomic } from '../invoices/store.js';
+import type { Address } from '../invoices/model.js';
+import { parseIban } from './banks.js';
+import { parseManifest, type Manifest } from './manifest.js';
+import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
+import { WorkspaceError } from './workspace.js';
+
+/** A text field set, or removed with null; absent: unchanged. */
+type Edit<T> = T | null | undefined;
+
+export interface ProfilePatch {
+  name?: string;
+  uid?: string;
+  owner?: string;
+  business?: Edit<string>;
+  address?: Edit<Address>;
+}
+
+/** A bank account is named by its bank and currency, which the books' transactions carry; only its label and IBAN change. */
+export interface BankPatch {
+  bank: string;
+  currency: string;
+  label?: string;
+  iban?: Edit<string>;
+}
+
+export interface NewBank {
+  bank: string;
+  currency: string;
+  account: string;
+  label: string;
+  iban?: string;
+}
+
+export interface ManifestPatch {
+  company?: ProfilePatch;
+  banks?: BankPatch[];
+  addBank?: NewBank;
+}
+
+const ADDRESS_KEYS = ['street', 'number', 'line2', 'postcode', 'town', 'state', 'country'] as const;
+
+function set(doc: Document, path: Array<string | number>, value: unknown): void {
+  if (value === undefined) return;
+  if (value === null || value === '') doc.deleteIn(path);
+  else doc.setIn(path, value);
+}
+
+/** An IBAN as the manifest keeps it: compact, upper case, checked. */
+function iban(text: Edit<string>, where: string): Edit<string> {
+  if (text === undefined || text === null || text.trim() === '') return text === undefined ? undefined : null;
+  return parseIban(text) ?? (() => { throw new WorkspaceError(`${where}: "${text}" is not an IBAN (wrong length or check digits)`); })();
+}
+
+/** The manifest text with `patch` applied; throws a WorkspaceError for a change the app could not open. */
+export function patchManifestText(text: string, patch: ManifestPatch, path: string): { text: string; manifest: Manifest } {
+  const doc = parseDocument(text);
+  if (schemaOf(doc.get('schema'), path) !== WORKSPACE_SCHEMA) {
+    throw new WorkspaceError(`${path} has an older format: npm run update before changing it here.`);
+  }
+  const c = patch.company;
+  if (c) {
+    for (const key of ['name', 'uid', 'owner', 'business'] as const) set(doc, ['company', key], typeof c[key] === 'string' ? c[key]!.trim() : c[key]);
+    if (c.address === null) doc.deleteIn(['company', 'address']);
+    else if (c.address) {
+      if (!isMap(doc.getIn(['company', 'address']))) doc.setIn(['company', 'address'], doc.createNode({}));
+      for (const key of ADDRESS_KEYS) set(doc, ['company', 'address', key], c.address[key] === undefined ? null : String(c.address[key]).trim());
+    }
+  }
+  const seq = doc.get('bankAccounts');
+  if ((patch.banks?.length || patch.addBank) && !isSeq(seq)) throw new WorkspaceError(`${path}: bankAccounts must be a list`);
+  for (const b of patch.banks ?? []) {
+    const i = isSeq(seq) ? seq.items.findIndex((item) => isMap(item) && item.get('bank') === b.bank && item.get('currency') === b.currency) : -1;
+    if (i < 0) throw new WorkspaceError(`bankAccounts: no account ${b.bank} ${b.currency}`);
+    set(doc, ['bankAccounts', i, 'label'], b.label?.trim());
+    set(doc, ['bankAccounts', i, 'iban'], iban(b.iban, `bankAccounts ${b.bank} ${b.currency}`));
+  }
+  if (patch.addBank && isSeq(seq)) {
+    const a = patch.addBank;
+    const node = doc.createNode({
+      bank: a.bank.trim(), currency: a.currency.trim().toUpperCase(), account: a.account.trim(), label: a.label.trim(),
+      ...(a.iban?.trim() ? { iban: iban(a.iban, `bankAccounts ${a.bank} ${a.currency}`) } : {}),
+    }) as YAMLMap;
+    // The new line looks like its neighbours: one-line `{ … }` when they are.
+    node.flow = seq.items.length > 0 && isMap(seq.items[0]) && !!seq.items[0].flow;
+    seq.items.push(node);
+  }
+  // A one-line `{ … }` stays one line however long it grows, a quoted text with \n in it too.
+  const out = doc.toString({ lineWidth: 0, doubleQuotedAsJSON: true });
+  return { text: out, manifest: parseManifest(out, path) };
+}
+
+/** Applies `patch` to the manifest file; nothing is written when the result would not open. */
+export function patchManifest(path: string, patch: ManifestPatch): Manifest {
+  const { text, manifest } = patchManifestText(readFileSync(path, 'utf8'), patch, path);
+  writeAtomic(path, text);
+  return manifest;
+}

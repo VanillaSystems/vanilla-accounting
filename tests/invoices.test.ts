@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isQRReferenceValid, isSCORReferenceValid, calculateQRReferenceChecksum } from 'swissqrbill/utils';
 import {
-  allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, reminderDraft,
+  allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, openOn, reminderDraft,
   revenueSplit, status, totals, withPayment, InvoiceRuleError,
 } from '../src/invoices/rules.js';
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/invoices/reference.js';
@@ -179,6 +179,17 @@ test('allocate: what is open first, then unpaid reminder fees; more is a surplus
   assert.equal(status(part, [part]), 'partly-paid');
   assert.equal(openAmount(part, [part]), 58.1);
   assert.equal(withPayment(part, { transactionRef: 'T1', date: '2026-11-01', amount: 50, by: 'reference' }), part, 'the same transaction is counted once');
+});
+
+test('open on 31.12.: issued by then, less what was paid and cancelled by then; a later payment still leaves it open', () => {
+  const inv = withPayment(issued(draft([line(1, 100, 8.1)])), { transactionRef: 'T1', date: '2026-12-10', amount: 50, by: 'reference' });
+  const paidLater = withPayment(inv, { transactionRef: 'T2', date: '2027-01-15', amount: 58.1, by: 'reference' });
+  assert.equal(openOn(paidLater, [paidLater], '2026-12-31'), 58.1);
+  assert.equal(openAmount(paidLater, [paidLater]), 0);
+  assert.equal(openOn(paidLater, [paidLater], '2026-10-04'), 0, 'not issued yet');
+  const cancelledLater = cancel(issued(draft([line(1, 100, 8.1)])), { date: '2027-01-05', reason: 'x' });
+  assert.equal(openOn(cancelledLater, [cancelledLater], '2026-12-31'), 108.1, 'cancelled only in the new year');
+  assert.equal(openOn(cancelledLater, [cancelledLater], '2027-01-05'), 0);
 });
 
 test('revenue of a payment: split like the invoice over accounts and rates, the parts add up exactly', () => {

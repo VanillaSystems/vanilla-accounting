@@ -57,6 +57,17 @@ export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: st
   return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - toRappen(paidAmount(inv)) - credited));
 }
 
+/**
+ * What the customer owed at the end of `date`: an invoice issued by then and not cancelled by
+ * then, less the payments and credit notes dated by then. The year-end's receivables (ADR 0010).
+ */
+export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string): number {
+  if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
+  const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
+  const paid = inv.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
+  return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - paid - credited));
+}
+
 /** Reminder fees not paid yet. */
 export function openFees(inv: Issued): number {
   const charged = inv.reminders.reduce((s, r) => s + toRappen(r.fee ?? 0), 0);

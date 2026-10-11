@@ -16,10 +16,17 @@ import { isQrIban } from '../invoices/reference.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatRegistered', 'vatMethod', 'basis', 'period'].includes(k)) as ProfileKey[];
 
-export function readManifest(path: string): { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings } {
+export type Manifest = { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings };
+
+export function readManifest(path: string): Manifest {
   if (!existsSync(path)) throw new WorkspaceError(`${path} not found.`);
+  return parseManifest(readFileSync(path, 'utf8'), path);
+}
+
+/** The manifest's text checked as readManifest checks the file: what a write validates before it lands. */
+export function parseManifest(source: string, path: string): Manifest {
   const fail = (msg: string): never => { throw new WorkspaceError(`${path}: ${msg}`); };
-  const doc = parseDocument(readFileSync(path, 'utf8'));
+  const doc = parseDocument(source);
   const found = doc.toJS() as Record<string, unknown> | null;
   if (!found || typeof found !== 'object' || Array.isArray(found)) return fail('not a YAML mapping');
   let raw: Record<string, unknown>;

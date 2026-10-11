@@ -144,6 +144,11 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'M2026-005' && j.vatCode === 'I81' && j.origin === 'manual') },
   { method: 'POST', path: '/api/journal-entries', body: { id: 'jr', transactionRef: 'O1', date: '2026-08-02', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'Korrektur', exchangeCurrency: 'EUR', exchangeRate: 0.93, corrects: '2026-Q2', origin: 'classify' },
     check: (i) => { const j = i.journalEntries!.find((x) => x.id === 'jr'); return j?.transactionRef === 'O1' && j.corrects === '2026-Q2' && j.exchangeRate === 0.93 && j.origin === 'classify'; } },
+  // The manifest and the chart hold no dated record: no period is closed to them.
+  { method: 'PATCH', path: '/api/workspace', body: { company: { business: 'Kaffeerösterei' } },
+    check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('business: Kaffeerösterei') },
+  { method: 'PUT', path: '/api/accounts/1100', body: { name: 'Debitoren' },
+    check: () => readFileSync(join(api.root, 'accounts.json'), 'utf8').includes('"Debitoren"') },
 ];
 
 for (const call of allowed) {

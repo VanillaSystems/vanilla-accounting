@@ -26,9 +26,3 @@ export function filedReturnsOf(ws: Workspace, year: string): ReturnFigures[] {
     .sort()
     .map((f) => parseFiledReturn(readFileSync(join(dir, f), 'utf8')));
 }
-
-/** Who the company is and which ledger account each bank books on (belege.workspace.yaml). */
-export const workspaceInfo = (ws: Workspace): Pick<Workspace, 'company' | 'bankAccounts'> => ({
-  company: ws.company,
-  bankAccounts: ws.bankAccounts,
-});

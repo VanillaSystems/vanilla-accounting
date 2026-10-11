@@ -335,6 +335,8 @@ export interface EntryTemplate {
   vatCode?: string;
   /** Dated in the next year (after the shareholders' resolution), not on 31.12. */
   nextYear?: boolean;
+  /** A proposed amount the books computed (open invoices); absent: the user's figure. */
+  amount?: number;
 }
 
 export const YEAR_END_TEMPLATES: readonly EntryTemplate[] = [
@@ -365,6 +367,32 @@ export interface DividendSplit { net: number; withholdingTax: number }
 export function dividendSplit(gross: number): DividendSplit {
   const withholdingTax = roundCHF(gross * WITHHOLDING_TAX_RATE);
   return { net: roundCHF(gross - withholdingTax), withholdingTax };
+}
+
+/**
+ * Invoices still open on 31.12. as receivables (Debitoren, ADR 0010): proposed only when the
+ * year has open invoices, credited to the revenue account, without a VAT code. On the cash
+ * basis their VAT is declared when the customer pays; the next year reverses the entry.
+ */
+export const RECEIVABLES: EntryTemplate = { id: 'receivables', accountDebit: '1100', accountCredit: '' };
+
+/** An invoice the customer still owed on 31.12.: issued by then, not cancelled by then, less what was paid and credited by then. */
+export interface OpenInvoice {
+  number: string;
+  customer: string;
+  date: string;
+  currency: string;
+  open: number;
+  /** In CHF at the ESTV rate of 31.12. (the latest one published before, while 31.12. has none yet). */
+  chf: number;
+}
+
+export interface Receivables {
+  invoices: OpenInvoice[];
+  /** Sum of the CHF amounts. */
+  total: number;
+  /** The revenue account the entry credits: invoicing.revenueAccount. */
+  revenueAccount?: string;
 }
 
 export type TemplateState = 'done' | 'na';
@@ -422,6 +450,8 @@ export interface YearCloseInput {
   doctor: readonly string[];
   rates: EstvRates;
   state: YearCloseState;
+  /** Absent or empty: no invoice was open on 31.12. (or the company writes none). */
+  receivables?: Receivables;
 }
 
 export interface YearClose {
@@ -435,6 +465,7 @@ export interface YearClose {
   revaluations: Revaluation[];
   vat: VatCheck;
   templates: Array<EntryTemplate & { state?: TemplateState }>;
+  receivables: Receivables;
   ledger: ClosingLedger;
   /** Why "Jahr abschliessen" refuses; empty when it may run. */
   blockers: Problem[];
@@ -532,7 +563,11 @@ export function yearClose(input: YearCloseInput): YearClose {
   const checks = preconditions(input);
   const reval = revaluations(books, year, foreignAccounts(input.bankAccounts), input.rates);
   const ledger = closingLedger(books, year, input.chart, accounts);
-  const templates = YEAR_END_TEMPLATES.map((t) => ({ ...t, state: state.templates[t.id] }));
+  const receivables = input.receivables ?? { invoices: [], total: 0 };
+  const proposed = receivables.invoices.length
+    ? [{ ...RECEIVABLES, accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
+    : [];
+  const templates = [...YEAR_END_TEMPLATES, ...proposed].map((t) => ({ ...t, state: state.templates[t.id] }));
 
   const blockers: Problem[] = checks.flatMap((c) => c.problems);
   for (const r of reval) {
@@ -553,6 +588,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     revaluations: reval,
     vat: vatCheck(books, year, input.filed, accounts),
     templates,
+    receivables,
     ledger,
     blockers: dedupe(blockers),
     state,

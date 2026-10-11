@@ -37,6 +37,7 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 - [MWST report](./vat-report.md) covers the new MWST area: the Ziffern of a return, the Ziffer detail with its sum or entries, filed quarters with their differences, the Korrekturabrechnung (0535) with its correction cases, and the `vat-report` / `vat-xml` CLIs. **Driven on 2026-10-11.**
 - [Bilanz & ER](./reports.md) covers Erfolgsrechnung, Bilanz, Saldobilanz, all accounts, the account search, the gap of one-sided entries, and the account ledger. **Driven on 2026-10-11.**
 - [Export](./export.md) covers the export dialog (presets, own presets, period, parts, formats, checksums), the ZIP from `POST /api/export`, audit mode, and the ledger's download menu. **Driven on 2026-10-11.**
+- [Abschluss and Firma](./close-and-company.md) covers the year-end in seven steps (checks, entries with the receivables of open invoices, close, opening, profit allocation, handover) and the Firma sections with their edits of the manifest and the chart. **Driven on 2026-10-11.**
 - [Static audit export](./audit-export.md) covers `npm run build:audit` served by a plain static server: every tab, search, PDFs, the snapshot line, no `/api/*` request. **Driven on 2026-10-09.**
 
 ## Not mapped yet

@@ -10,10 +10,10 @@ The examples close 2026 and open 2027. Put in your own year.
 |---|---|---|---|
 | 1 | [File the fourth quarter, do not close it](#1-file-the-fourth-quarter-do-not-close-it) | `npm run vat-xml -- 2026-Q4` | by end of February |
 | 2 | [Check what is still open](#2-check-what-is-still-open) | `npm run year:close -- 2026 --dry-run` | after the December statements |
-| 3 | [Book the year-end entries](#3-book-the-year-end-entries) | the Jahresabschluss tab | with your Treuhänder |
+| 3 | [Book the year-end entries](#3-book-the-year-end-entries) | Abschluss (`/close`) | with your Treuhänder |
 | 4 | [Close the year](#4-close-the-year) | `npm run year:close -- 2026` | when nothing is open |
 | 5 | [Open the new year](#5-open-the-new-year) | `npm run year:open -- 2027` | right after |
-| 6 | [Allocate the profit](#6-allocate-the-profit) | the Jahresabschluss tab | after the shareholders decide |
+| 6 | [Allocate the profit](#6-allocate-the-profit) | Abschluss (`/close`) | after the shareholders decide |
 | 7 | [Hand over to the auditor](#7-hand-over-to-the-auditor) | `npm run build:audit -- <folder>` | when asked |
 
 The same steps for agents: [`year-close.flow.yaml`](../processes/year-close.flow.yaml).
@@ -39,7 +39,7 @@ a private share (Privatanteil) corrects input tax. Book it before you file the f
 npm run year:close -- 2026 --dry-run
 ```
 
-This prints the checklist and writes nothing. The Jahresabschluss tab in the app shows the
+This prints the checklist and writes nothing. Abschluss (`/close`) in the app shows the
 same list. Every item is computed from the books:
 
 - **The fourth quarter is filed.** Its XML is in `filings/2026/`.
@@ -66,7 +66,7 @@ same list. Every item is computed from the books:
 
 ## 3. Book the year-end entries
 
-The Jahresabschluss tab lists the entries a year-end may need. Your Treuhänder tells you
+Abschluss (`/close`) lists the entries a year-end may need. Your Treuhänder tells you
 which ones apply. For each one, click **Erfassen** to open a prefilled entry form, or mark it
 **Nicht nötig** (not needed). Booking one marks it done.
 
@@ -83,6 +83,7 @@ which ones apply. For each one, click **Erfassen** to open a prefilled entry for
 | Inventory change | stock or work in progress on 31.12. |
 | Social insurance (5700 / 2270) | AHV, BVG and UVG final statements against advance payments |
 | Doubtful accounts (3805 / 1109) | a client invoice that may not be paid |
+| Receivables (1100, Debitoren) | invoices still open on 31.12.: proposed only when there are some, the open amount in CHF prefilled, credited to `invoicing.revenueAccount` without a VAT code (the VAT is declared when the customer pays); reverse it in the new year (ADR 0010) |
 
 `npm run year:close` books the exchange difference itself, on 31.12., to Kursdifferenzen
 (6960), with no VAT. Run it again after a change and it replaces its own entry. It never adds a
@@ -100,7 +101,7 @@ npm run year:close -- 2026 --done depreciation,provision --na inventoryChange,do
 npm run year:close -- 2026
 ```
 
-Or click **Jahr abschliessen** in the Jahresabschluss tab. It refuses while anything is open,
+Or click **Jahr abschliessen** in Abschluss (`/close`). It refuses while anything is open,
 and says what. When nothing is open, it:
 
 1. books the exchange difference,
@@ -118,7 +119,7 @@ every correction is ([quarter workflow](quarter-workflow.md), step 11).
 npm run year:open -- 2027
 ```
 
-Or click **Neues Jahr eröffnen** in the Jahresabschluss tab. It derives the opening balances
+Or click **Neues Jahr eröffnen** in Abschluss (`/close`). It derives the opening balances
 of 2027 from your closed 2026:
 
 - Every balance-sheet account (classes 1 and 2) carries its balance of 31.12.
@@ -139,7 +140,7 @@ Fetch the rates of the new year when you start booking it:
 ## 6. Allocate the profit
 
 The shareholders' meeting decides what happens with the profit, within six months of the
-year-end. After it, use **Gewinnverwendung** in the Jahresabschluss tab, dated on the day of
+year-end. After it, use **Gewinnverwendung** in Abschluss (`/close`), dated on the day of
 the decision:
 
 - a part to the statutory reserve (2950),
@@ -165,5 +166,5 @@ See [audit-export.md](audit-export.md).
 The Bilanz and Erfolgsrechnung tabs show your entries as booked, VAT included. The year-end
 close and the opening split the VAT off by code, as Banana does. So for a VAT-registered
 company the Bilanz tab on 31.12. differs from the opening balances on 1.1. in the VAT account
-(2201), in assets bought with input tax, and in the result. The Jahresabschluss tab's closing
+(2201), in assets bought with input tax, and in the result. Abschluss's closing
 balance sheet is the one that carries over.

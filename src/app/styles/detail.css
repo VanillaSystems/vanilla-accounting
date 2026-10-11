@@ -142,3 +142,45 @@
 .confirm .file { font: 12px "Geist Mono"; color: var(--ink-2); margin: 10px 0 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; }
 .confirm .btn.danger { background: var(--neg); color: #fff; }
+
+/* Pages of text (Abschluss, Firma): a lead, key/value rows, quarter cards, small tables, inline forms */
+.docbody { max-width: 760px; margin-top: 18px; }
+.docbody p.m, .docbody .m { color: var(--muted); font-size: 12.5px; }
+.docbody .lead { font-size: 13.5px; color: var(--ink-2); margin: 0 0 18px; max-width: 64ch; line-height: 1.55; }
+.docbody h3 { font: 600 14.5px "Hanken Grotesk"; margin: 28px 0 4px; }
+.docbody h3 + .m { margin: 0 0 10px; }
+.src-note { margin-top: 18px !important; font-size: 12px; color: var(--faint) !important; }
+.kv2 { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 7px 16px; margin: 0; font-size: 13.5px; }
+.kv2.wide { max-width: 760px; }
+.kv2 dt { color: var(--muted); }
+.kv2 dd { margin: 0; }
+.kv2 .m { color: var(--muted); font-size: 12.5px; }
+.quiet2 { font-size: 12px; color: var(--muted); }
+.quiet2:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.clink { font-size: 13px; color: var(--accent); }
+.clink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.warnline { color: var(--warn); font-size: 12.5px; display: flex; gap: 8px; align-items: center; margin: 12px 0 0; }
+.okline { color: var(--pos); font-size: 12.5px; display: flex; gap: 6px; align-items: center; margin: 12px 0 0; }
+.okline .i { width: 14px; height: 14px; }
+.qgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; max-width: 760px; margin: 14px 0; }
+.qcard { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); text-align: left; font-size: 12.5px; }
+button.qcard:hover { background: var(--hover); }
+.qcard b { font: 700 15px "Hanken Grotesk"; }
+.qcard .m { color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+.qcard .m .i { width: 13px; height: 13px; }
+.qcard .sha { font-size: 11px; color: var(--faint); }
+.qcard .bad { color: var(--warn); }
+.ftab { max-width: 820px; }
+.ftab .fh, .ftab .fr { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 14px; align-items: baseline; padding: 6px 10px; font-size: 13px; width: 100%; text-align: left; }
+.ftab .fh { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); }
+.ftab button.fr, .ftab .fr.go { border-radius: 8px; cursor: pointer; }
+.ftab button.fr:hover, .ftab .fr.go:hover { background: var(--hover); }
+.ftab .fr.unused { color: var(--muted); }
+.ftab .fr.tot { font-weight: 600; border-top: 1px solid var(--line-2); }
+.ftab .fg { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 16px 10px 4px; }
+.ftab .r { text-align: right; }
+.ftab .warn { color: var(--warn); }
+.ftab .pos { color: var(--pos); }
+.form.inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: end; max-width: 760px; padding: 12px 14px; margin: 6px 0 10px; border: 1px solid var(--line); border-radius: 12px; }
+.form.inline .wide { grid-column: 1 / -1; }
+.form.inline .acts { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
