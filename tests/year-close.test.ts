@@ -302,3 +302,22 @@ test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 a
   assert.deepEqual(config.openingBalancesNative?.['2027'], { 1021: { amount: 1500, currency: 'EUR' } });
   assert.deepEqual(openYear(ws, '2026', RATES).changes, [], 'a rerun finds nothing to update');
 });
+
+test('receivables: booked on 31.12. under the year\'s id, once; opening the next year reverses them on 1.1., a rerun keeps one reversal', () => {
+  const ws = readyToClose();
+  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451', '1100'].map((number) => ({ number, name: number }))));
+  bookRevaluation(ws, '2026', RATES);
+  for (const t of YEAR_END_TEMPLATES) markTemplate(ws, '2026', t.id, 'na');
+  const input = { date: '2026-12-31', accountDebit: '1100', accountCredit: '3400', amount: 540.5, description: 'Debitoren per 31.12.2026: 2026-004' };
+  const booked = bookEntry(ws, input, 'receivables');
+  assert.equal(booked.id, 'yc-2026-receivables');
+  assert.throws(() => bookEntry(ws, input, 'receivables'), /booked already/);
+  closeYear(ws, '2026', RATES, '2027-03-01');
+
+  const opened = openYear(ws, '2026', RATES, '2027-03-01');
+  assert.equal(opened.opening.balances['1100'], 540.5, 'the receivables open 2027');
+  const reversal = { id: 'yc-2027-receivables-reversal', transactionRef: 'yc-2027-receivables-reversal', date: '2027-01-01', accountDebit: '3400', accountCredit: '1100', amount: 540.5, description: `Auflösung Debitoren per 31.12.2026 (${booked.transactionRef})`, origin: 'year-close' };
+  assert.deepEqual(opened.reversal, reversal);
+  openYear(ws, '2026', RATES, '2027-03-02');
+  assert.deepEqual(loadBooks(ws).journalEntries.filter((x) => x.id.includes('receivables')), [booked, reversal]);
+});

@@ -20,7 +20,7 @@ import { estvRates, type EstvRates } from '../accounting/fx-conversion.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import {
   applyRevaluation, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, revaluationEntries,
-  yearClose, yearEndAccounts, YEAR_END_TEMPLATES, PROFIT_ALLOCATION, RECEIVABLES,
+  yearClose, yearEndAccounts, YEAR_END_TEMPLATES, PROFIT_ALLOCATION, RECEIVABLES, receivablesEntryId, receivablesReversal,
   type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState,
 } from '../accounting/year-close.js';
 import { roundCHF } from '../accounting/rappen.js';
@@ -145,8 +145,11 @@ export function bookEntry(ws: Workspace, input: EntryInput, template?: string): 
   const books = loadBooks(ws);
   const entry = mutateJournal(books, (b) => {
     const year = input.date.slice(0, 4);
+    if (template === RECEIVABLES.id && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {
+      throw new YearCloseRefused(`The receivables of ${year} are booked already.`);
+    }
     const entry: JournalEntry = {
-      id: randomBytes(8).toString('hex'),
+      id: template === RECEIVABLES.id ? receivablesEntryId(year) : randomBytes(8).toString('hex'),
       transactionRef: nextManualRef(b, year),
       date: input.date,
       accountDebit: input.accountDebit,
@@ -201,10 +204,13 @@ export interface OpenResult {
   changes: Array<{ account: string; before: number; after: number }>;
   /** False when the ESTV rates do not reach into the new year yet: npm run fetch-rates -- --year <new>. */
   ratesReady: boolean;
+  /** The receivables of the closed year, reversed on 1.1. (booked again on a rerun, never twice). */
+  reversal?: JournalEntry;
 }
 
 /**
- * Writes the opening balances of `year`+1 from the closed `year`. Idempotent: a rerun after
+ * Writes the opening balances of `year`+1 from the closed `year` and reverses its receivables
+ * entry on 1.1. Idempotent: a rerun after
  * the old year changed (only through corrections, its quarters are sealed) updates them.
  * Refuses an open year, and an opening whose Aktiven and Passiven differ.
  */
@@ -217,7 +223,10 @@ export function openYear(ws: Workspace, year: string, rates: EstvRates = ratesOf
   const opening = openingFor(ws, year, rates, books);
   if (opening.residual !== 0) throw new YearCloseRefused(`The opening of ${opening.year} does not balance: Aktiven − Passiven = ${opening.residual.toFixed(2)}.`);
   const changes = openingChanges(books.config.openingBalances?.[opening.year], opening.balances);
-  mutateJournal(books, ({ config }) => {
+  const reversal = receivablesReversal(books.journalEntries, year);
+  mutateJournal(books, (b) => {
+    const { config } = b;
+    if (reversal) b.journalEntries = [...b.journalEntries.filter((x) => x.id !== reversal.id), reversal];
     config.openingBalances = { ...config.openingBalances, [opening.year]: opening.balances };
     const previous = config.openingBalancesNative?.[opening.year] ?? {};
     config.openingBalancesNative = { ...config.openingBalancesNative, [opening.year]: { ...previous, ...opening.native } };
@@ -227,7 +236,7 @@ export function openYear(ws: Workspace, year: string, rates: EstvRates = ratesOf
   const firstDay = `${opening.year}-01-01`;
   const ratesReady = foreignAccounts(ws.bankAccounts).every((f) => (rates.on(f.currency, `${opening.year}-12-31`)?.validOn ?? '') >= firstDay);
   commit(ws, `Eröffnung ${opening.year}: opening balances from the closed ${year}`, [ws.paths.books, join(ws.paths.filings, year)]);
-  return { opening, changes, ratesReady };
+  return { opening, changes, ratesReady, ...(reversal ? { reversal } : {}) };
 }
 
 /**

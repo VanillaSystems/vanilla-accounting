@@ -376,6 +376,30 @@ export function dividendSplit(gross: number): DividendSplit {
  */
 export const RECEIVABLES: EntryTemplate = { id: 'receivables', accountDebit: '1100', accountCredit: '' };
 
+/** The receivables entry of `year` carries this id, so the opening of the next year finds it. */
+export const receivablesEntryId = (year: string) => `yc-${year}-receivables`;
+
+/**
+ * The entry that reverses `year`'s receivables on 1.1. of the next year (ADR 0010): the revenue
+ * is booked again, with its VAT, when the customer pays. Undefined when no receivables entry was booked.
+ */
+export function receivablesReversal(entries: readonly JournalEntry[], year: string): JournalEntry | undefined {
+  const booked = entries.find((x) => x.id === receivablesEntryId(year));
+  if (!booked) return undefined;
+  const next = String(Number(year) + 1);
+  const id = `yc-${next}-receivables-reversal`;
+  return {
+    id,
+    transactionRef: id,
+    date: `${next}-01-01`,
+    accountDebit: booked.accountCredit,
+    accountCredit: booked.accountDebit,
+    amount: booked.amount,
+    description: `Auflösung Debitoren per 31.12.${year} (${booked.transactionRef})`,
+    origin: 'year-close',
+  };
+}
+
 /** An invoice the customer still owed on 31.12.: issued by then, not cancelled by then, less what was paid and credited by then. */
 export interface OpenInvoice {
   number: string;
