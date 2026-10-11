@@ -31,7 +31,7 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 
 ## Features
 
-- [Journal entries (Buchungen)](./journal-entries.md) covers inline edit and the Periodensperre refusals (edit, delete, reclassify). **Driven end to end on 2026-10-08.**
+- [Journal entries (Buchungen) and MWST-Codes](./journal-entries.md) covers the rebuilt Buchungen (grid, filters, `?vat=`, detail, edit, new entry, correction, delete and re-classify with undo, the filed-quarter refusals) and the VAT code card, histogram and catalogue. **Driven end to end on 2026-10-11 (redesign phase 4).**
 - [Transactions and receipt linking](./transactions.md) covers the transaction detail, description and note edits, the "kein Beleg nötig" toggle, and linking or unlinking a receipt. **Unlink, relink, toggle and closed-period refusal driven on 2026-10-08.**
 - [Receipts (Belege)](./receipts.md) covers the new Belege area: groups, filters, search, the paper, linking with the ranked dialog, private outlay, edit, kind, undo, delete, preview, download and intake. **Driven end to end on 2026-10-11.**
 - [MWST report](./vat-report.md) covers the Ziffern per period, the Ziffer detail, the Korrekturabrechnung (0535) with its correction cases, and the `vat-report` / `vat-xml` CLIs. **Driven on 2026-10-08.**

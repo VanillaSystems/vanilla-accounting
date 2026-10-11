@@ -10,7 +10,9 @@ import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js'
 import { t } from '../i18n/index.js';
 import { company } from './company/company.js';
 import { invoices } from './invoices.js';
-import { legacyArea, journalPalette } from './legacy.js';
+import { legacyArea } from './legacy.js';
+import { journal } from './journal/journal.js';
+import { codes } from './codes/codes.js';
 import { receipts } from './receipts/receipts.js';
 import { ICONS } from './icons.js';
 
@@ -76,9 +78,9 @@ export const AREAS: Registry = {
   receipts,
   invoices,
   bank: legacyArea('bank', { label: () => t('area.bank'), dock: { key: 'k', icon: ICONS.bank, tip: () => t('area.bank.tip') }, title: (r) => r.payment }),
-  journal: legacyArea('journal', { label: () => t('area.journal'), dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') }, palette: journalPalette, title: (r) => r.id, wide: true }),
+  journal,
   vat: legacyArea('vat', { label: () => t('area.vat'), dock: { key: 'm', icon: ICONS.vat, tip: () => t('area.vat.tip') }, title: (r) => r.ziffer }),
-  codes: legacyArea('codes', { label: () => t('area.codes'), dockAs: 'vat', title: (r) => r.code, periodless: true }),
+  codes,
   reports: legacyArea('reports', { label: () => t('area.reports'), dock: { key: 'r', icon: ICONS.reports, tip: () => t('area.reports.tip') }, title: (r) => r.account, wide: true }),
   close: legacyArea('close', { label: () => t('area.close'), dock: { key: 'a', icon: ICONS.close, tip: () => t('area.close.tip') }, title: (r) => r.step }),
   company,

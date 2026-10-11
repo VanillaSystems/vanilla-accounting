@@ -35,17 +35,20 @@ router.patch('/api/journal-entries/:id', (req, res) => {
   });
 });
 
+type Origin = NonNullable<JournalEntry['origin']>;
+const ORIGINS: readonly Origin[] = ['manual', 'classify', 'invoice', 'year-close'];
+
 /** A ref of its own (M2026-004) needs no transaction: a manual entry stands alone. */
 const MANUAL_REF = /^M\d{4}-\d{3,}$/;
 
 /**
  * A new entry booked by hand, dated in the open period. Without `transactionRef` it gets the next
  * free M<year>-NNN; with one it joins that payment's entries, which must be open too. `id` and the
- * exchange fields let an undo put a deleted entry back as it was; `corrects` names the filed
+ * exchange fields and `origin` let an undo put a deleted entry back as it was; `corrects` names the filed
  * quarter whose Korrekturabrechnung (0535) declares it.
  */
 router.post('/api/journal-entries', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id']);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin']);
   const date = stringField(b, 'date');
   if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
   const amount = amountField(b);
@@ -64,6 +67,8 @@ router.post('/api/journal-entries', (req, res) => {
   if (corrects && !/^\d{4}-Q[1-4]$/.test(corrects)) throw new RequestError(400, 'corrects: YYYY-Qn.');
   const transactionRef = optional('transactionRef');
   const id = optional('id');
+  const origin = optional('origin') ?? 'manual';
+  if (!ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
 
   return withBooks(res, (books) => {
     assertOpen(books, [date], 'newEntry');
@@ -86,7 +91,7 @@ router.post('/api/journal-entries', (req, res) => {
       description,
       ...(exchangeCurrency && { exchangeCurrency, exchangeRate }),
       ...(corrects && { corrects: corrects as QuarterKey }),
-      origin: 'manual',
+      origin: origin as Origin,
     };
     books.journalEntries.push(entry);
     return { entry };

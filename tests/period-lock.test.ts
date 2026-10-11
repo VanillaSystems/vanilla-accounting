@@ -142,8 +142,8 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'OI' && j.vatCode === 'V81' && j.origin === 'invoice') && i.mappings.some((m) => m.transactionRef === 'OI' && m.rule === 'invoice-reference') },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-31', accountDebit: '6800', accountCredit: '1020', amount: 10, vatCode: 'I81', description: 'von Hand' },
     check: (i) => i.journalEntries!.some((j) => j.transactionRef === 'M2026-005' && j.vatCode === 'I81' && j.origin === 'manual') },
-  { method: 'POST', path: '/api/journal-entries', body: { id: 'jr', transactionRef: 'O1', date: '2026-08-02', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'Korrektur', exchangeCurrency: 'EUR', exchangeRate: 0.93, corrects: '2026-Q2' },
-    check: (i) => { const j = i.journalEntries!.find((x) => x.id === 'jr'); return j?.transactionRef === 'O1' && j.corrects === '2026-Q2' && j.exchangeRate === 0.93; } },
+  { method: 'POST', path: '/api/journal-entries', body: { id: 'jr', transactionRef: 'O1', date: '2026-08-02', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'Korrektur', exchangeCurrency: 'EUR', exchangeRate: 0.93, corrects: '2026-Q2', origin: 'classify' },
+    check: (i) => { const j = i.journalEntries!.find((x) => x.id === 'jr'); return j?.transactionRef === 'O1' && j.corrects === '2026-Q2' && j.exchangeRate === 0.93 && j.origin === 'classify'; } },
 ];
 
 for (const call of allowed) {

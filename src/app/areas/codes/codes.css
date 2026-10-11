@@ -1,0 +1,71 @@
+/* The VAT code card, the histogram and the catalogue (the mockup's CSS). */
+/* MWST code card + histogram */
+/* the cell spans the whole column, so the hint underlines only the text, not the cell */
+.rows.je .vc[data-vat], .vlink { cursor: help; text-decoration: underline dotted transparent; text-underline-offset: 4px; }
+.rows.je .vc[data-vat]:hover, .vlink:hover { text-decoration-color: currentColor; color: var(--ink); }
+.vcard { position: fixed; z-index: 60; width: 320px; padding: 14px 16px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 13px; color: var(--ink-2); animation: fade .15s ease; }
+.vcard .vh { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.vcard .code { font-size: 17px; font-weight: 500; color: var(--ink); }
+.vcard .rate { font-size: 12.5px; color: var(--muted); }
+.vcard p { margin: 0 0 8px; line-height: 1.45; }
+.vcard .m { color: var(--muted); font-size: 12.5px; }
+.vcard dl { display: grid; grid-template-columns: 36px 1fr; gap: 3px 8px; margin: 0 0 10px; font-size: 12.5px; }
+.vcard dt { color: var(--muted); font-size: 12px; }
+.vcard dd { margin: 0; }
+.vcard .vf { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.vcard .vf .m { flex-basis: 100%; font-size: 12px; }
+.vcard .vf button { color: var(--accent); font-size: 12.5px; }
+[data-theme="dark"] .vcard .vf button { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.vcard .vf button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.vchip { font-size: 12.5px; color: var(--ink); background: var(--accent-soft); border-radius: 6px; padding: 1px 8px; }
+.vchip b { font-weight: 500; }
+.vhbtn { color: var(--faint); display: grid; place-items: center; margin-left: auto; opacity: .7; }
+.vhbtn:hover { color: var(--ink); opacity: 1; }
+.vhbtn + .search { margin-left: 8px; }
+.vhist { width: min(760px, 92vw); }
+.vhist .ctx { display: flex; justify-content: space-between; align-items: flex-end; padding: 16px 20px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.vhist .ctx .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
+.vhist .seg { display: flex; gap: 2px; background: var(--hover); border-radius: 8px; padding: 2px; }
+.vhist .seg button { font-size: 12px; padding: 3px 10px; border-radius: 6px; color: var(--muted); }
+.vhist .seg button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.vhist .res { max-height: 60vh; overflow: auto; padding: 6px 8px; }
+.vhist .hr { display: grid; grid-template-columns: 64px minmax(0, 1fr) 44px 92px 76px; gap: 12px; align-items: center; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.vhist .hr.on, .vhist .hr:hover { background: var(--accent-soft); }
+.vhist .hr .code { font-size: 12.5px; }
+.vhist .bar { position: relative; height: 22px; display: flex; align-items: center; min-width: 0; }
+.vhist .bar i { position: absolute; left: 0; top: 3px; bottom: 3px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+[data-theme="dark"] .vhist .bar i { background: #2a2a2a; }
+.vhist .bar em { position: relative; font-style: normal; font-size: 12px; color: var(--ink-2); padding-left: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vhist .num { font-size: 12px; text-align: right; }
+.vhist .tax { color: var(--muted); }
+.vhist .foot { display: flex; justify-content: space-between; padding: 10px 20px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.vhist .foot .mono { font-size: 11px; color: var(--faint); }
+
+/* MWST-Codes erklärt */
+.row.code { grid-template-columns: 76px minmax(0, 1fr) auto; }
+.row.code .d { color: var(--ink); font-size: 13px; }
+.row.code.unused .t, .row.code.unused .d { color: var(--muted); }
+.detail-in.doc .who { max-width: 34ch; }
+.docbody { max-width: 680px; margin-top: 18px; }
+.docbody section { padding: 16px 0; border-top: 1px solid var(--line); }
+.docbody h3 { margin: 0 0 6px; font: 600 11px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.docbody p { margin: 0; line-height: 1.55; color: var(--ink-2); max-width: 64ch; }
+.docbody p.m { color: var(--muted); }
+.docbody .zf { display: grid; grid-template-columns: 44px 1fr; gap: 4px 10px; margin: 0; }
+.docbody .zf dt { color: var(--muted); }
+.docbody .zf dd { margin: 0; color: var(--ink-2); }
+.docbody .ex { padding: 10px 12px; border-radius: 10px; background: var(--hover); margin-bottom: 8px; }
+.docbody .ext { font-size: 13px; color: var(--ink); }
+.docbody .exl { display: flex; gap: 18px; font-size: 12.5px; color: var(--ink-2); margin-top: 4px; }
+.docbody .exd { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.docbody .rl { font-size: 12px; color: var(--muted); }
+.docbody .cj { margin: 0 -10px; }
+.docbody .cj .tx { width: 100%; text-align: left; }
+.docbody .more { margin-top: 8px; font-size: 12.5px; color: var(--accent); }
+[data-theme="dark"] .docbody .more { color: var(--ink); }
+.clink { font: inherit; color: var(--accent); border-bottom: 1px solid transparent; }
+.clink:hover { border-bottom-color: currentColor; }
+[data-theme="dark"] .clink { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.vhist .hr .clink { font-size: 12.5px; }
+.src-note { margin-top: 18px !important; font-size: 12px; color: var(--faint) !important; }
+button.vlink { font: inherit; color: inherit; }

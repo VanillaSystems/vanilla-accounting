@@ -13,7 +13,7 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 - [x] 1. Shell: tokens, fonts, theme, zoom, dock, top bar, list/detail with divider, keys, ⌘K, toast with undo, URL sync, add button with N.
 - [x] 2. Belege.
 - [ ] 3. Kontoauszüge.
-- [ ] 4. Buchungen and MWST-Codes.
+- [x] 4. Buchungen and MWST-Codes.
 - [ ] 5. MWST and Bilanz & ER.
 - [ ] 6. Export.
 - [ ] 7. Abschluss and Firma.
@@ -75,6 +75,17 @@ Browser proof: `.claude/skills/verify/` sandbox on `demo`, evidence in `.verify/
 | 2026-10-11 | Invoice fonts: Inter and Arimo (as Liberation Sans for the QR-bill) from @fontsource, Latin subsets inlined; layout fonts are Inter and Helvetica (Arimo) for now. | ADR 0012: the same pages on every machine; phase 9 can add fonts to INVOICE_FONTS. |
 | 2026-10-11 | The demo's IBANs are valid (CH65 8080 …, BE29 9670 …) and the QR-IBAN is SIX's example; its PDFs are printed by the generator, so `demo:generate` is byte-stable per machine and browser. | The manifest refuses an IBAN with wrong check digits; a PDF depends on the Chromium build (ADR 0012). |
 | 2026-10-11 | Not built in phase 8: e-mail sending, the git finalization at issue (ADR 0010 rule D), open invoices in the year-end checklist, the chrome-headless-shell download, agent tools. | Each needs a part that does not exist yet (mail settings, sync, the phase 9 UI, the registry). |
+| 2026-10-11 | Journal filters `ohne Beleg` and `Korrekturen`, the closed months, the open detail sections and the catalogue's "verwendet" are per viewer (memory or this browser), not in the link; `?vat=` is, and `?vat=none` means entries without a code. | urls.md names only `vat` and `q` for the journal; a filter that empties the list would make a shared link look broken. |
+| 2026-10-11 | `POST /api/journal-entries` books an entry by hand (next `M<year>-NNN`) in the open period; with `id`, `transactionRef`, FX fields, `corrects` and `origin` it puts a deleted entry back as it was (the undo). `corrects` must name a filed quarter. PATCH takes `amount`. Re-classify answers with its new entries. | The mockup's add button was a toast; undo of delete and re-classify needs an exact restore, and the classifier's own entries must stay `classify` so `classify --force` still rebooks them. |
+| 2026-10-11 | Delete of an entry asks nothing and has an undo; re-classify's undo deletes the new entries and restores the old ones (several calls, not one transaction). | Every entry write is reversible through the API; a receipt's delete removes a file and still asks. |
+| 2026-10-11 | A correction of a filed entry starts as its reversal: Soll and Haben swapped, the VAT code's sign turned, dated today (or the open quarter's first day), `corrects` = the entry's quarter. | Golden rule 1: corrections go in the open period with `corrects`; a reversal is the usual start and is edited before booking. |
+| 2026-10-11 | Correction entries (with `corrects`) in the open period stay editable; the mockup showed them read only. | They are open-period entries the API accepts; a wrong correction must be fixable before the quarter is filed. |
+| 2026-10-11 | The account field is a combobox of its own in the mockup's style over `filterAccounts` (number prefix or name), with the account's name under it; the old Tailwind `AccountCombobox` stays for year-close and the ledger tab until phase 10. VAT codes use a datalist of the catalogue. | New code has no Tailwind; the filter logic is reused. |
+| 2026-10-11 | The VAT card and histogram are one shared module, `src/app/areas/codes/vat-card.tsx`: any element with `data-vat` gets the card once the page renders `<VatCards>`. Figures come from `vatLine`/`chfAmount`. | Phase 5 (MWST) and others show codes too; one listener at the document, as in the mockup. |
+| 2026-10-11 | MWST-Codes shows the period (counts and entries are per period); the area has no `periodless` flag any more. | The mockup's codes heading has the period button "Zeitraum für die Buchungszahlen". |
+| 2026-10-11 | An entry without a receipt shows a link to its statement (`/payments/<ref>`), not the statement excerpt with the highlighted line. | The statement renderer is phase 3's (built in parallel); the link lands on the same payment. |
+| 2026-10-11 | The entry title is its text split at the first `, ` / ` — ` / ` - ` / `: `; correction texts keep their "Korrektur …" prefix (the mockup stripped it). | The list shows no other mark for a correction. |
+| 2026-10-11 | `conversionText`/`checkText` moved to `src/app/lib/fx-text.ts`; `.acts button` in shell.css is scoped to `.row .acts` (it squeezed the receipt delete dialog's buttons to 28 px). | The new detail needs the FX texts without the Tailwind component; the CSS fix is a phase 2 defect found here. |
 
 ## API inventory against the mockup
 
@@ -88,7 +99,7 @@ Missing for the mockup, to add in their phase:
 
 - Belege: done in phase 2 (receipt PATCH `kind` and nulls, `GET /api/inbox`).
 - Kontoauszüge: statement import (camt.053 and PDF upload) from the UI; today it is a CLI step.
-- Buchungen: new manual entry (route exists only through year-close entries).
+- Buchungen: done in phase 4 (`POST /api/journal-entries`, PATCH `amount`).
 - Export: the export bundle (CSV, XLSX, JSON, PDF, ZIP with LIESMICH and SHA-256 sums).
 - Firma: write company profile, banks, periods, display and invoice layout to `belege.workspace.yaml`.
 - Rechnungen: everything (phase 8).
@@ -125,3 +136,13 @@ Missing for the mockup, to add in their phase:
   uses QRR (QR-IBAN) where the mockup shows RF; the EUR invoice to a BE IBAN has no QR-bill.
   Found and fixed: `npm run extract` failed on both demos (filed transactions generated with parts
   and reference). Left for phase 9: every screen; later: e-mail, finalization at issue, year-end list.
+- 2026-10-11 phase 4 (branch `redesign-p4`): Buchungen and MWST-Codes. `src/app/areas/journal/` (model.ts pure rows,
+  filters, search and "ohne Beleg", with tests; the grid list by month with joined payments; the detail with
+  Buchungssatz, FX line, payment, receipt and paper; the form with account fields; new entry and correction dialog;
+  delete, edit and re-classify with undo; keys ↵ ⇧↵ E D Delete; ⌘K entries) and `src/app/areas/codes/` (catalogue,
+  code page, the shared hover card and histogram). API: POST /api/journal-entries, PATCH amount, re-classify returns
+  its entries, closed reason `newEntry`. Old journal tab deleted; `vat-codes-view.tsx`, `vat-code.tsx` and
+  `vat-entry-table.tsx` stay: the old MWST tab (phase 5) and transaction detail (phase 3) import them; phase 10
+  deletes what is left. Evidence: .verify/evidence/redesign/phase-4/NOTES.md. Differs from the mockup: no statement
+  excerpt (link instead), corrections editable, correction texts unstripped, "Betrag" only for codes with a rate.
+

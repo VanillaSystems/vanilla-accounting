@@ -5,29 +5,26 @@
  */
 import { useRef, useState } from 'react';
 import { seedLegacyParams } from '../lib/location.js';
-import { fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
-import { localToday, parsePeriod, periodContaining, type Period } from '../../accounting/periods.js';
+import { localToday, parsePeriod } from '../../accounting/periods.js';
 import { ListHead } from '../shell/ListHead.js';
 import type { AreaId, Route, RouteOf } from '../shell/route.js';
-import type { Area, AreaProps, PaletteItem } from './index.js';
+import type { Area, AreaProps } from './index.js';
 import { LegacyTabs, type LegacyTab } from './legacy-tabs.js';
 
-type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts'>;
+type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'journal' | 'codes'>;
 
 /** Each area's old tabs; the first is shown unless the route names another. */
 const TABS: Record<LegacyArea, LegacyTab[]> = {
   bank: ['bank-statements', 'transactions', 'bank-reconciliation'],
-  journal: ['journal-entries'],
   vat: ['vat-report'],
-  codes: ['vat-report'],
   reports: ['income-statement', 'balance-sheet', 'trial-balance', 'account-ledger'],
   close: ['year-close'],
 };
 
 const TAB_LABEL = {
 'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
-  'journal-entries': 'tab.journalEntries', 'trial-balance': 'tab.trialBalance', 'balance-sheet': 'tab.balanceSheet',
+  'trial-balance': 'tab.trialBalance', 'balance-sheet': 'tab.balanceSheet',
   'income-statement': 'tab.incomeStatement', 'vat-report': 'tab.vat', 'account-ledger': 'tab.accountLedger',
   'bank-reconciliation': 'tab.bankReconciliation', 'year-close': 'tab.yearClose',
 } as const satisfies Record<LegacyTab, string>;
@@ -44,10 +41,8 @@ function routeTab(route: Route): LegacyTab | undefined {
 /** The query keys the old tabs read their selection from. */
 function legacyParams(route: Route): URLSearchParams {
   const p = new URLSearchParams();
-  if (route.area === 'journal' && route.id) p.set('je', route.id);
   if (route.area === 'reports' && route.account) p.set('account', route.account);
   if (route.area === 'vat' && route.ziffer) p.set('ziffer', route.ziffer);
-  if (route.area === 'codes') { p.set('view', 'codes'); if (route.code) p.set('code', route.code); }
   return p;
 }
 
@@ -55,9 +50,8 @@ function legacyParams(route: Route): URLSearchParams {
 function routeOfParams(route: Route, p: URLSearchParams): Route {
   const get = (k: string) => p.get(k) || undefined;
   switch (route.area) {
-    case 'journal': return { area: 'journal', ...(get('je') && { id: get('je') }) };
     case 'reports': return { area: 'reports', report: route.report, ...(get('account') && { account: get('account') }) };
-    case 'vat': case 'codes': return get('view') === 'codes'
+    case 'vat': return get('view') === 'codes'
       ? { area: 'codes', ...(get('code') && { code: get('code') }) }
       : { area: 'vat', ...(get('ziffer') && { ziffer: get('ziffer') }) };
     default: return route;
@@ -123,16 +117,3 @@ function parsePeriodToken(token: string) {
 export function legacyArea<A extends LegacyArea>(id: A, rest: Omit<Area<RouteOf<A>>, 'id' | 'List'>): Area<RouteOf<A>> {
   return { id: id as RouteOf<A>['area'], List: LegacyPage, ...rest };
 }
-
-/** A place for an object dated `date`: in the current period when it holds the date (urls.md rule 1). */
-const at = (route: Route, date: string | undefined, current: Period) =>
-  ({ route, query: { period: parsePeriod(periodContaining(date, current), localToday()) ?? undefined } });
-
-export function journalPalette({ books, nav, period }: AreaProps): PaletteItem[] {
-  return [...(books.journalEntries ?? [])].sort((a, b) => b.date.localeCompare(a.date)).map((e) => ({
-    label: [e.id, e.description].filter(Boolean).join(' · '),
-    side: `${formatDate(e.date)}  ${fmt(e.amount)}`,
-    run: () => nav.go(at({ area: 'journal', id: e.id }, e.date, period)),
-  }));
-}
-

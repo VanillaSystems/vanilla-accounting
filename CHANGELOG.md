@@ -36,6 +36,16 @@ Two markers flag an entry you must read before you update:
   Space previews, D downloads, E edits. A receipt paid in a filed quarter is read only. Dropped
   PDFs show as "wird gelesen" until `npm run extract` reads them, then the receipt takes their
   place. Removed with the old tab: batch rename and the manual-transaction batch.
+- Buchungen rebuilt (redesign phase 4): the period's entries month by month as one grid of Datum,
+  Text, Soll, Haben, MWST and amount, the entries of one payment joined; filters `ohne Beleg` and
+  `Korrekturen`, a search over text, accounts, code, ref and amount, and `?vat=<code>`. An entry
+  shows its Buchungssatz with the account names, the FX conversion with the ESTV check, its payment,
+  receipt and paper. Soll, Haben (pick by number or name), MWST, amount and text are edited in
+  place; N books a new entry by hand (`POST /api/journal-entries`); a filed entry offers a
+  correction in the open quarter, pre-filled as its reversal with `corrects`. Edit, new entry,
+  delete and Neu klassifizieren can be undone (⌘Z). Hovering a VAT code anywhere explains it; the
+  histogram shows the period's codes by count or CHF. MWST-Codes (`/vat/codes/<code>`) is the
+  catalogue by family with each code's use, Ziffern, example and the period's entries.
 - Invoices (ADR 0010, ADR 0012): customers, invoices and credit notes with VAT per line in CHF or
   EUR and in German, French, Italian or English, numbered when issued (2026-001, never for a
   draft), checked against Art. 26 MWSTG before issue, frozen once issued. A draft is deleted; an

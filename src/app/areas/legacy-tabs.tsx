@@ -6,7 +6,6 @@ import { FxProvider } from '../hooks/use-fx.js';
 import { SearchBar } from '../components/search-bar.js';
 import { TransactionsTable } from '../components/transactions-table.js';
 import { BankStatementsTab } from '../components/bank-statements-tab.js';
-import { JournalEntriesTab } from '../components/journal-entries-tab.js';
 import { TrialBalanceTab } from '../components/trial-balance-tab.js';
 import { BalanceSheetTab } from '../components/balance-sheet-tab.js';
 import { IncomeStatementTab } from '../components/income-statement-tab.js';
@@ -22,7 +21,7 @@ import { cn } from '../lib/utils.js';
 import { api, orAlert, sources } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 
-export type LegacyTab = 'transactions' | 'bank-statements' | 'journal-entries' | 'trial-balance' | 'balance-sheet'
+export type LegacyTab = 'transactions' | 'bank-statements' | 'trial-balance' | 'balance-sheet'
   | 'income-statement' | 'vat-report' | 'account-ledger' | 'bank-reconciliation' | 'year-close';
 type FilterMode = 'all' | 'linked' | 'unlinked';
 
@@ -180,11 +179,6 @@ export function LegacyTabs({ tab, period, index, refresh, canEdit, onPeriod, ini
           {/* Bank Statements tab */}
           {tab === 'bank-statements' && (<div className="flex-1 flex overflow-hidden min-h-0">
             <BankStatementsTab index={index} />
-          </div>)}
-
-          {/* Journal Entries tab */}
-          {tab === 'journal-entries' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <JournalEntriesTab index={index} period={period} onRefresh={refresh} canEdit={canEdit} />
           </div>)}
 
           {/* Saldobilanz tab */}
