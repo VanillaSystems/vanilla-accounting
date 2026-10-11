@@ -268,6 +268,9 @@ test('the sheet on screen: a draft edited in place names each field; texts-only 
   const page = assembleSheets({ ...draft, screen }, blocks, { pages: [blocks.map((_, i) => i)], qrOwnPage: false });
   assert.match(page, /<select class="ed edsel" data-ed="customer"><option value="cu_1" selected>Kunde AG<\/option><option value="\+">/);
   assert.match(page, /<div class="qrb ph"><span>QR-Zahlteil beim Ausstellen<\/span>/);
+  const abroad: SheetData = { ...draft, screen, sender: { ...draft.sender, payTo: { account: '1023', iban: 'BE29967000000164', bank: 'Wise' } } };
+  const noBill = sheetBlocks(abroad);
+  assert.doesNotMatch(assembleSheets(abroad, noBill, { pages: [noBill.map((_, i) => i)], qrOwnPage: false }), /qrb/, 'a draft paid to an IBAN outside CH and LI keeps no place for a QR-bill');
 
   const texts = sheetBlocks({ ...sheet(2), screen: { ...screen, edit: { ...screen.edit, scope: 'texts' } } }).map((b) => b.html).join('');
   assert.deepEqual([...texts.matchAll(/data-ed="([^"]+)"/g)].map((m) => m[1]), ['intro', 'closing']);

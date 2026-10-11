@@ -110,7 +110,8 @@ function payment(d: SheetData): { iban: string; qr: boolean } | undefined {
 
 /** The sheet ends with a QR-bill (printed, or its place kept on a draft): it takes the bottom 105 mm of the last sheet. */
 export function hasQrBill(d: SheetData): boolean {
-  return !!payment(d)?.qr || (d.kind === 'invoice' && !d.number && d.layout.show.qrBill);
+  const pay = payment(d);
+  return !!pay?.qr || (d.kind === 'invoice' && !d.number && d.layout.show.qrBill && !!pay && isQrBillIban(pay.iban));
 }
 
 const prettyIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})(?!$)/g, '$1 ');
