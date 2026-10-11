@@ -1,4 +1,4 @@
-import type { BankTransaction, InboxFile, Index, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
@@ -45,6 +45,12 @@ export function errorText(e: unknown): string {
     case 'manualOnly': return t('error.manualOnly');
     case 'yearClose': return t('error.yearClose');
     case 'fileExists': return t('error.fileExists', b.params);
+    case 'statement': {
+      const { reason, detail = '' } = b.params;
+      if (reason === 'duplicate') return t('error.statement.duplicate', { detail });
+      if (reason === 'account') return detail ? b.error : t('error.statement.account');
+      return t(`error.statement.${reason}`);
+    }
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;
@@ -106,6 +112,15 @@ export const api = {
     const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Captured-At': capturedAt.toISOString() }, body: pdf });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return (await res.json()) as { filename: string };
+  },
+
+  /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
+  importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {
+    if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
+    const qs = new URLSearchParams({ name, ...into });
+    const res = await fetch(`/api/statements?${qs}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+    if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
+    return (await res.json()) as StatementImport;
   },
 
   /** The PDFs waiting in the inbox to be read; none in the static export. */

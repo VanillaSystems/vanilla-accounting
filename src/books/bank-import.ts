@@ -8,7 +8,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { assignUniqueRefs, transactionsOf } from '../parsers/camt053.js';
+import { transactionsOf } from '../parsers/camt053.js';
 import { wiseReferences } from '../parsers/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';

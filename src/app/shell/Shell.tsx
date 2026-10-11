@@ -127,7 +127,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const topRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLElement>(null);
   useEdges(topRef, dockRef, overlay !== null || dropping);
-  useDrop(canEdit, setDropping, (files) => intake(files, nav));
+  useDrop(canEdit, setDropping, (files) => (area.drop ? area.drop.run(files, propsRef.current) : intake(files, nav)));
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;
@@ -224,8 +224,8 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
         <div className="box"><div>
           {ICONS.upload}
           <h2>{t('drop.title')}</h2>
-          <p>{t('drop.text')}</p>
-          <p style={{ marginTop: 4, fontSize: 12.5, color: 'var(--faint)' }}>{t('drop.formats')}</p>
+          <p>{area.drop?.text() ?? t('drop.text')}</p>
+          <p style={{ marginTop: 4, fontSize: 12.5, color: 'var(--faint)' }}>{area.drop?.formats() ?? t('drop.formats')}</p>
         </div></div>
       </div>
 

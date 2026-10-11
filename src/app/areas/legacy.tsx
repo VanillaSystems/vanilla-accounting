@@ -13,11 +13,10 @@ import type { AreaId, Route, RouteOf } from '../shell/route.js';
 import type { Area, AreaProps, PaletteItem } from './index.js';
 import { LegacyTabs, type LegacyTab } from './legacy-tabs.js';
 
-type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts'>;
+type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'bank'>;
 
 /** Each area's old tabs; the first is shown unless the route names another. */
 const TABS: Record<LegacyArea, LegacyTab[]> = {
-  bank: ['bank-statements', 'transactions', 'bank-reconciliation'],
   journal: ['journal-entries'],
   vat: ['vat-report'],
   codes: ['vat-report'],
@@ -26,10 +25,9 @@ const TABS: Record<LegacyArea, LegacyTab[]> = {
 };
 
 const TAB_LABEL = {
-'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
   'journal-entries': 'tab.journalEntries', 'trial-balance': 'tab.trialBalance', 'balance-sheet': 'tab.balanceSheet',
   'income-statement': 'tab.incomeStatement', 'vat-report': 'tab.vat', 'account-ledger': 'tab.accountLedger',
-  'bank-reconciliation': 'tab.bankReconciliation', 'year-close': 'tab.yearClose',
+  'year-close': 'tab.yearClose',
 } as const satisfies Record<LegacyTab, string>;
 
 const REPORT_TAB = { income: 'income-statement', balance: 'balance-sheet', trial: 'trial-balance' } as const;
@@ -37,7 +35,6 @@ const REPORT_TAB = { income: 'income-statement', balance: 'balance-sheet', trial
 /** The tab a route names, if it names one. */
 function routeTab(route: Route): LegacyTab | undefined {
   if (route.area === 'reports') return REPORT_TAB[route.report];
-  if (route.area === 'bank' && route.payment) return 'transactions';
   return undefined;
 }
 
@@ -85,7 +82,7 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
     if (route.area === 'reports') {
       const report = (Object.keys(REPORT_TAB) as Array<keyof typeof REPORT_TAB>).find((r) => REPORT_TAB[r] === next);
       if (report) nav.select({ area: 'reports', report });
-    } else if (route.area === 'bank' && route.payment) nav.select({ area: 'bank' });
+    }
   }
 
   return (
@@ -107,10 +104,6 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
         refresh={nav.refresh}
         canEdit={canEdit}
         onPeriod={(token) => nav.setQuery({ period: parsePeriodToken(token) })}
-        initial={route.area === 'bank' ? { txRef: route.payment } : {}}
-        onSelect={({ txRef }) => {
-          if (route.area === 'bank' && tab === 'transactions' && txRef !== route.payment) nav.select({ area: 'bank', ...(txRef && { payment: txRef }) });
-        }}
       />
     </div>
   );

@@ -7,7 +7,7 @@ import type { AuditSnapshot } from '../audit/sources.js';
  */
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
-  'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry',
+  'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
@@ -17,7 +17,15 @@ export type ApiRefusal =
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason } }
   | { code: 'manualOnly' }
   | { code: 'yearClose' }
-  | { code: 'fileExists'; params: { filename: string } };
+  | { code: 'fileExists'; params: { filename: string } }
+  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string } };
+
+/**
+ * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no
+ * camt.053, no bank account takes it (detail: the manifest's problem), a PDF whose name gives no
+ * month, or a camt.053 already read (detail: that file).
+ */
+export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate';
 
 export type ApiErrorBody = { error: string } & (ApiRefusal | { code?: undefined });
 

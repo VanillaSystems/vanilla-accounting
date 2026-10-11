@@ -1,0 +1,46 @@
+/* Kontoauszüge: the mockup's statements list, payment bar, payment list and the marked statement page. */
+.row .a .inc, .pay .a .inc { color: var(--pos); }
+.src { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; display: flex; gap: 6px; align-items: baseline; max-width: 640px; }
+.src button { color: var(--ink-2); border-bottom: 1px solid var(--line-2); }
+.src button:hover { color: var(--ink); border-bottom-color: currentColor; }
+.src .pgno { margin-left: auto; font: 12px "Geist Mono"; color: var(--faint); }
+.paper.stmt { max-width: 640px; }
+.pgw { position: relative; width: 100%; }
+.pgw .pg { width: 100%; height: auto; }
+.pgw .hl { position: absolute; left: 2.5%; right: 2.5%; border-radius: 4px; background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); pointer-events: none; animation: hlin .5s ease; }
+[data-theme="dark"] .pgw .hl { background: rgba(255,255,255,.07); box-shadow: 0 0 0 1.5px #8f8f8f; }
+@keyframes hlin { from { opacity: 0; transform: scale(1.02); } }
+
+.counts.stc { gap: 6px 16px; flex-wrap: wrap; }
+.counts.stc > span { white-space: nowrap; }
+.counts.stc .ok { color: var(--pos); display: inline-flex; align-items: center; gap: 5px; }
+.counts.stc .warn { color: var(--warn); display: inline-flex; align-items: center; gap: 6px; }
+.counts.stc .i { width: 14px; height: 14px; }
+.row .wn, .paybar .wn { color: var(--warn); }
+.row.missing .t { color: var(--warn); }
+.paybar { min-height: 22px; flex-wrap: wrap; align-items: center; color: var(--ink-2); }
+.paybar .payhint { color: var(--faint); }
+.paybar .golink { color: var(--ink-2); border-bottom: 1px solid var(--line-2); }
+.paybar .x { color: var(--faint); margin-left: 6px; font-size: 15px; line-height: 1; }
+.paybar .x:hover { color: var(--ink); }
+.paylist { max-height: 62vh; overflow: auto; margin: 0 -10px; scrollbar-width: thin; }
+.pay { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 8px; width: 100%; text-align: left; padding: 5px 10px; border-radius: 7px; font-size: 12.5px; color: var(--ink-2); align-items: baseline; }
+.pay:hover { background: var(--hover); }
+.pay.on { background: var(--accent-soft); color: var(--ink); }
+.pay.dim { opacity: .35; }
+.pay .d { font: 11.5px "Geist Mono"; color: var(--date); }
+.pay .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pay .a { font: 12px "Geist Mono"; }
+.pay .dot { margin-right: 6px; }
+.margin:has(.paylist) { opacity: 1; }
+.kv.rates dd .dot { margin-right: 6px; }
+
+.seg.gb { display: inline-flex; gap: 2px; background: var(--hover); border-radius: 7px; padding: 2px; margin-left: auto; }
+.seg.gb button { font-size: 12px; padding: 1px 9px; border-radius: 5px; color: var(--muted); }
+.seg.gb button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 400; }
+.seg.gb + .search { margin-left: 10px; }
+
+.desk .well { height: 180px; border: 1.5px dashed var(--line-2); border-radius: 14px; display: grid; place-items: center; text-align: center; color: var(--faint); font-size: 13px; }
+.desk .well b { display: block; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+.desk .well:hover { border-color: var(--muted); }
+.page > .notice { margin: 0 0 14px; }

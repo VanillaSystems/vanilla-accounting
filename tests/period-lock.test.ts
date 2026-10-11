@@ -6,7 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { issue } from '../src/invoices/rules.js';
@@ -144,6 +144,39 @@ for (const call of allowed) {
     assert.ok(call.check(JSON.parse(readFileSync(api.indexPath, 'utf8'))), 'the change is in the index');
   });
 }
+
+/** A camt.053 of the demo's Raiffeisen account with one payment on `date`. */
+const camt = (id: string, date: string) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>${id}</MsgId><CreDtTm>${date}T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>${id}</Id><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Ntry><Amt Ccy="CHF">12.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>${date}</Dt></BookgDt><AcctSvcrRef>REF-${id}</AcctSvcrRef><AddtlNtryInf>Upload ${id}</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+
+const upload = (name: string, body: string) => fetch(`http://127.0.0.1:${api.port}/api/statements?name=${encodeURIComponent(name)}`, { method: 'POST', body })
+  .then(async (r) => ({ status: r.status, json: await r.json() as Record<string, unknown> }));
+
+test('refused: POST /api/statements with a statement wholly inside the filed quarter -> 403, index unchanged, no file kept', async () => {
+  const before = readFileSync(api.indexPath);
+  const { status, json } = await upload('mai.xml', camt('S-MAI', '2026-05-20'));
+  assert.equal(status, 403, json.error as string);
+  assert.equal(json.code, 'periodClosed');
+  assert.equal((json.params as { reason: string }).reason, 'newStatement');
+  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+  assert.equal(existsSync(join(api.root, 'bank-statements/Raiffeisen/mai.xml')), false);
+});
+
+test('open period: POST /api/statements reads the statement in, keeps every payment it does not hold', async () => {
+  const { status, json } = await upload('august.xml', camt('S-AUG', '2026-08-25'));
+  assert.equal(status, 200, json.error as string);
+  assert.deepEqual(json, { file: 'Raiffeisen/august.xml', account: '1021', month: '2026-08', added: 1 });
+  const now: Index = JSON.parse(readFileSync(api.indexPath, 'utf8'));
+  assert.ok(now.transactions.some((t) => t.ref === 'REF-S-AUG' && t.date === '2026-08-25' && t.amount === 12));
+  assert.ok(['C1', 'O1', 'CI', 'OI'].every((ref) => now.transactions.some((t) => t.ref === ref)), 'payments of no file stay');
+  const again = await upload('august-2.xml', camt('S-AUG', '2026-08-25'));
+  assert.equal(again.status, 409, 'the same statement under another name is read once');
+  assert.equal((again.json.params as { reason: string }).reason, 'duplicate');
+  assert.equal(existsSync(join(api.root, 'bank-statements/Raiffeisen/august-2.xml')), false);
+});
 
 test('the closed period is still exactly as in the fixture', () => {
   const fixture: Index = JSON.parse(readFileSync(join(REPO, 'tests/fixtures/period-lock-index.json'), 'utf8'));
