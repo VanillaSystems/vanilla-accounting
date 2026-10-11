@@ -13,20 +13,19 @@ import type { AreaId, Route, RouteOf } from '../shell/route.js';
 import type { Area, AreaProps, PaletteItem } from './index.js';
 import { LegacyTabs, type LegacyTab } from './legacy-tabs.js';
 
-type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'vat' | 'reports'>;
+type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'vat' | 'reports' | 'close'>;
 
 /** Each area's old tabs; the first is shown unless the route names another. */
 const TABS: Record<LegacyArea, LegacyTab[]> = {
   bank: ['bank-statements', 'transactions', 'bank-reconciliation'],
   journal: ['journal-entries'],
   codes: ['vat-codes'],
-  close: ['year-close'],
 };
 
 const TAB_LABEL = {
 'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
   'journal-entries': 'tab.journalEntries', 'vat-codes': 'vatCodes.title',
-  'bank-reconciliation': 'tab.bankReconciliation', 'year-close': 'tab.yearClose',
+  'bank-reconciliation': 'tab.bankReconciliation',
 } as const satisfies Record<LegacyTab, string>;
 
 /** The tab a route names, if it names one. */

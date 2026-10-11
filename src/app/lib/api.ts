@@ -2,7 +2,8 @@ import type { BankTransaction, InboxFile, Index, JournalEntry, Receipt, ReceiptP
 import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
-import type { Workspace } from '../../workspace/workspace.js';
+import type { CompanyInfo } from '../../books/company.js';
+import type { ManifestPatch } from '../../workspace/manifest-write.js';
 import type { ApiErrorBody, ApiStatus } from '../../types/api-error.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t } from '../i18n/index.js';
@@ -115,7 +116,9 @@ export const api = {
   books: () => request<Index>('GET', `${sources.books()}?t=${Date.now()}`),
   status: () => request<ApiStatus>('GET', sources.status()),
   accounts: () => request<Account[]>('GET', sources.accounts()),
-  workspace: () => request<Pick<Workspace, 'company' | 'bankAccounts'>>('GET', sources.workspace()),
+  workspace: () => request<CompanyInfo>('GET', sources.workspace()),
+  patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
+  setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
   fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),
 };

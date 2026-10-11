@@ -10,7 +10,6 @@ import { JournalEntriesTab } from '../components/journal-entries-tab.js';
 import { VatCodesView } from '../components/vat-codes-view.js';
 import { useUrlParam } from '../hooks/use-url-state.js';
 import { BankReconciliationTab } from '../components/bank-reconciliation-tab.js';
-import { YearCloseTab } from '../components/year-close-tab.js';
 import { SplitPane } from '../components/split-pane.js';
 import { TransactionDetail } from '../components/transaction-detail.js';
 import { PdfFrame } from '../components/pdf-frame.js';
@@ -19,7 +18,7 @@ import { cn } from '../lib/utils.js';
 import { api, orAlert, sources } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 
-export type LegacyTab = 'transactions' | 'bank-statements' | 'journal-entries' | 'vat-codes' | 'bank-reconciliation' | 'year-close';
+export type LegacyTab = 'transactions' | 'bank-statements' | 'journal-entries' | 'vat-codes' | 'bank-reconciliation';
 type FilterMode = 'all' | 'linked' | 'unlinked';
 
 export interface Selection { txRef?: string }
@@ -191,9 +190,6 @@ export function LegacyTabs({ tab, period, index, refresh, canEdit, initial, onSe
             <BankReconciliationTab index={index} period={period} />
           </div>)}
 
-          {tab === 'year-close' && (<div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <YearCloseTab period={period} canEdit={canEdit} onRefresh={refresh} />
-          </div>)}
         </FxProvider>
 
     </div>

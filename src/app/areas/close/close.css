@@ -1,0 +1,56 @@
+/* Abschluss: the year-end in seven steps. Shared page classes are in styles/detail.css. */
+.ytag { font-size: 20px; color: var(--muted); font-weight: 400; margin-left: 6px; border-radius: 8px; padding: 0 4px; }
+.ytag:hover { background: var(--hover); color: var(--ink); }
+.row.ystep { grid-template-columns: 28px minmax(0, 1fr) auto; }
+.row.ystep .d { color: var(--muted); }
+.row.ystep .pill { display: inline-flex; align-items: center; gap: 5px; font: 12px "Instrument Sans"; color: var(--muted); }
+.row.ystep.st-ok .pill { color: var(--pos); }
+.row.ystep.st-warn .pill { color: var(--warn); }
+.row.ystep.st-later .t { color: var(--muted); }
+.row.ystep .pill .i { width: 13px; height: 13px; }
+.checks { display: grid; gap: 2px; max-width: 720px; }
+.chk { display: grid; grid-template-columns: 26px minmax(0, 1fr) 20px; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 10px; text-align: left; width: 100%; }
+button.chk:hover { background: var(--hover); }
+.chk .ic { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 12px "Geist Mono"; color: var(--faint); border: 1.5px solid var(--line-2); }
+.chk .ic .i { width: 12px; height: 12px; }
+.chk.st-ok .ic { background: var(--pos); border-color: var(--pos); color: #fff; }
+.chk.st-warn .ic { border-color: var(--warn); color: var(--warn); }
+.chk.st-open .ic { border-color: var(--ink-2); color: var(--ink-2); }
+.chk .cx b { display: block; font-weight: 500; font-size: 13.5px; }
+.chk .cx span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.chk.st-warn .cx span { color: var(--warn); }
+.chk .arr { color: var(--faint); }
+.yel { display: grid; gap: 2px; max-width: 760px; }
+.ye { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 10px; }
+.ye:hover { background: var(--hover); }
+.ye .cx { flex: 1; min-width: 0; }
+.ye .cx b { display: block; font-weight: 500; font-size: 13.5px; }
+.ye .cx span { display: block; font-size: 12.5px; color: var(--muted); }
+.ye .acc { font-size: 12px; color: var(--muted); min-width: 92px; }
+.ye.done .cx b { color: var(--muted); }
+.ye .st { font-size: 12.5px; color: var(--pos); display: inline-flex; gap: 4px; align-items: center; min-width: 92px; }
+.ye .st.na { color: var(--muted); }
+.ye .st .i { width: 13px; height: 13px; }
+.ye-inv { margin: 0 12px 6px; font-size: 12.5px; color: var(--muted); }
+.btn.big { font-size: 14px; height: auto; padding: 9px 18px; margin: 4px 0 12px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.blk { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+.prev, .gv { max-width: 560px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.prev { margin-bottom: 14px; }
+.prev .ph { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 8px; }
+.gv { display: grid; gap: 2px; margin-bottom: 14px; }
+.gvrow { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 6px 0; font-size: 13.5px; }
+.gvrow input { font: 13px "Geist Mono"; text-align: right; width: 140px; padding: 5px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.gvrow.sub { color: var(--muted); font-size: 12.5px; padding-left: 14px; }
+.gvrow.tot { border-top: 1.5px solid var(--ink); margin-top: 4px; padding-top: 9px; }
+.gvrow .neg { color: var(--neg); }
+.hand { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 760px; }
+.hcard { text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; }
+.hcard:hover { background: var(--hover); border-color: var(--line-2); }
+.hcard b { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.hcard span { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.hcard code { font: 11.5px "Geist Mono"; color: var(--ink-2); }
+.ftab.fx .fh, .ftab.fx .fr { grid-template-columns: minmax(0, 1fr) repeat(5, minmax(84px, auto)); }
+.ftab.vatq .fh, .ftab.vatq .fr { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(110px, auto)); }
+.ftab.sums .fr { grid-template-columns: minmax(0, 1fr) auto; }
+.ftab.open .fh, .ftab.open .fr { grid-template-columns: 64px minmax(0, 1fr) minmax(130px, auto); }

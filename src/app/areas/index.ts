@@ -8,6 +8,7 @@ import type { Index } from '../../types/index.js';
 import type { Period } from '../../accounting/periods.js';
 import type { AreaId, Location, Query, Route, RouteOf } from '../shell/route.js';
 import { t } from '../i18n/index.js';
+import { close } from './close/close.js';
 import { company } from './company/company.js';
 import { invoices } from './invoices.js';
 import { legacyArea, journalPalette } from './legacy.js';
@@ -82,7 +83,7 @@ export const AREAS: Registry = {
   vat,
   codes: legacyArea('codes', { label: () => t('area.codes'), dockAs: 'vat', title: (r) => r.code, periodless: true }),
   reports,
-  close: legacyArea('close', { label: () => t('area.close'), dock: { key: 'a', icon: ICONS.close, tip: () => t('area.close.tip') }, title: (r) => r.step }),
+  close,
   company,
 };
 
