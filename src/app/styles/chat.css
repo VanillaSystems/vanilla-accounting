@@ -1,0 +1,70 @@
+/* The chat composer (shell/chat/Chat.tsx): bottom centre, above the dock while it shows; the answers above it. */
+.chat { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(680px, calc(100vw - 32px)); z-index: 36; display: flex; flex-direction: column; gap: 10px; transition: bottom .3s cubic-bezier(.2,.8,.2,1); animation: pop .16s ease; }
+.chat[hidden] { display: none; }
+.dock.show ~ .chat { bottom: 100px; }
+.chat:not([hidden]) ~ .toast { bottom: auto; top: 22px; }
+
+.chat .composer { position: relative; border-radius: 18px; padding: 12px 10px 8px 16px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--line-2); box-shadow: var(--shadow); transition: border-color .15s, box-shadow .15s; }
+.chat .composer.drag { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+.chat textarea { display: block; width: 100%; min-height: 46px; max-height: 200px; border: 0; outline: 0; resize: none; background: transparent; padding: 3px 4px 0 2px; font-size: 15px; line-height: 1.45; }
+.chat textarea::placeholder { color: var(--muted); }
+.chat textarea.listening::placeholder { font-style: italic; }
+.chat textarea:read-only { color: var(--muted); }
+
+.chat .bar { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-height: 36px; }
+.chat .grow { flex: 1; }
+.chat .ib { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--ink); transition: background .12s; }
+.chat .ib:hover { background: var(--hover); }
+.chat .ib:disabled { color: var(--faint); cursor: default; background: none; }
+.chat .ib svg { width: 20px; height: 20px; stroke-width: 1.5; }
+.chat .sq { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent); transition: background .12s; }
+.chat .sq:hover { background: var(--hover); }
+.chat .sq svg { width: 18px; height: 18px; stroke-width: 1.5; }
+
+/* recording: the microphone's level, newest on the right */
+.chat .meter { display: inline-flex; align-items: center; gap: 4px; height: 26px; margin-right: 10px; }
+.chat .meter i { width: 2.5px; height: calc(5px + var(--h, 0) * 19px); border-radius: 2px; background: var(--ink); transition: height .07s linear; }
+
+/* busy: transcribing, or Claude working */
+.chat .busy { display: inline-flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; }
+.chat .busy .m { font-size: 12px; color: var(--muted); }
+.chat .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--ink-2); animation: spin .8s linear infinite; flex: none; }
+.chat .spin.sm { width: 12px; height: 12px; border-width: 1.5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.chat .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.chat .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; height: 26px; padding: 0 4px 0 10px; border-radius: 8px; background: var(--hover); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
+.chat .chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat .chip button { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; color: var(--muted); }
+.chat .chip button:hover { background: var(--line); color: var(--ink); }
+.chat .chip button svg { width: 12px; height: 12px; }
+.chat .chip.job { background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.chat .chip.failed { color: var(--neg); }
+.chat .turn .chip { padding-right: 10px; }
+
+/* solid: a backdrop filter inside the composer's own does not blur (Chromium) */
+.chat .skills { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 340px; overflow: auto; padding: 6px; border-radius: 14px; background: var(--bg); border: 1px solid var(--line-2); box-shadow: var(--shadow); animation: pop .16s ease; }
+.chat .skills .o { display: flex; flex-direction: column; gap: 1px; padding: 8px 12px; border-radius: 9px; cursor: pointer; }
+.chat .skills .o.on { background: var(--accent-soft); }
+.chat .skills .n { font-size: 13.5px; font-weight: 500; }
+.chat .skills .l { font-size: 12px; color: var(--muted); }
+.chat .skills .none { padding: 8px 12px; font-size: 13px; color: var(--muted); }
+
+.chat .needs { display: flex; align-items: center; gap: 12px; margin: 6px 0 2px; font-size: 13px; color: var(--warn); }
+.chat .err { margin-top: 4px; font-size: 12.5px; color: var(--neg); }
+.chat .dropping { position: absolute; inset: -1px; display: grid; place-items: center; border-radius: 18px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--bg) 88%, transparent); color: var(--accent); font-weight: 600; pointer-events: none; }
+
+.chat .answers { display: flex; flex-direction: column; max-height: min(52vh, 520px); border-radius: 16px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: pop .16s ease; }
+.chat .answers .head { display: flex; align-items: center; gap: 4px; padding: 6px 6px 6px 16px; border-bottom: 1px solid var(--line); }
+.chat .answers .head .t { font-size: 13px; font-weight: 600; }
+.chat .answers .head .ib { width: 30px; height: 30px; }
+.chat .answers .head .ib svg { width: 16px; height: 16px; }
+.chat .answers .log { overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+.chat .turn.me { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.chat .turn.me .chips { justify-content: flex-end; margin: 0; max-width: 85%; }
+.chat .turn.me .tx { max-width: 85%; padding: 8px 12px; border-radius: 12px; background: var(--hover); white-space: pre-wrap; }
+.chat .turn.claude { display: flex; flex-direction: column; gap: 4px; }
+.chat .turn.claude .tx { white-space: pre-wrap; line-height: 1.55; }
+.chat .tool { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat .tool .mono { font-size: 11.5px; color: var(--ink-2); }
+.chat .tool.denied, .chat .tool.denied .mono { color: var(--warn); }

@@ -1,6 +1,6 @@
 /**
  * The keyboard model of the mockup. Typing in a field never triggers it. The shell's own keys:
- * ⌘K palette, G + letter area, N add, T light/dark, ⇧E export, / search, ? key help, ⌘Z undo,
+ * ⌘K palette, ⌘J the chat, G + letter area, N add, T light/dark, ⇧E export, / search, ? key help, ⌘Z undo,
  * Esc back to the list; ↑/↓ and J/K belong to the area (moveKey), ⌘+/⌘−/⌘0 to the zoom (prefs.ts).
  */
 import { useEffect, useRef } from 'react';
@@ -18,6 +18,8 @@ export interface ShellKeys {
   overlayOpen(): boolean;
   closeOverlay(): void;
   palette(): void;
+  /** ⌘J: opens or closes the chat composer, also from inside it. */
+  chat(): void;
   undo(): boolean;
   /** The dock's letters; G shows them, the letter goes there. */
   area(letter: string): boolean;
@@ -45,6 +47,7 @@ export function useShellKeys(keys: ShellKeys) {
       const target = e.target as HTMLElement | null;
       const typing = !!target?.closest?.('input, textarea, select, [contenteditable]');
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); k.palette(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); k.chat(); return; }
       if (k.overlayOpen()) {
         if (e.key === 'Escape') { e.preventDefault(); k.closeOverlay(); }
         return;

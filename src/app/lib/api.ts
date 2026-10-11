@@ -1,4 +1,5 @@
 import type { ClaudeStatus } from '../../types/claude.js';
+import type { ChatEvent, ChatFile, ChatSend, ChatSkill, TranscribeEvent } from '../../types/chat.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { IntakeStatus } from '../../intake/pipeline.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
@@ -120,6 +121,22 @@ async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Posts `body` and hands each NDJSON line of the answer to `onEvent` as it arrives. */
+async function stream<E>(path: string, init: RequestInit, onEvent: (e: E) => void): Promise<void> {
+  if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
+  const res = await fetch(path, { method: 'POST', ...init });
+  if (!res.ok || !res.body) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let pending = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const lines = (pending + value).split('\n');
+    pending = lines.pop() ?? '';
+    for (const line of lines) if (line.trim()) onEvent(JSON.parse(line) as E);
+  }
+}
+
 export const api = {
   patchReceipt: (id: string, patch: ReceiptPatch) =>
     request<{ receipt: Receipt }>('PATCH', `/api/receipts/${id}`, patch).then((r) => r.receipt),
@@ -171,6 +188,17 @@ export const api = {
   intake: () => (STATIC_EXPORT ? Promise.resolve<IntakeStatus>({ running: false, inbox: [] }) : request<IntakeStatus>('GET', '/api/intake')),
   /** Whether the inbox job has its model (src/llm/ask.ts claudeStatus). */
   claudeStatus: () => request<ClaudeStatus>('GET', '/api/claude'),
+  /** The jobs of the chat's "/" menu: processes/*.flow.yaml. */
+  chatSkills: () => request<ChatSkill[]>('GET', '/api/chat/skills'),
+  /** A file for the conversation, kept under the workspace's data/chat/<conversation>/. */
+  chatFile: (conversation: string, file: File) =>
+    upload<ChatFile>(`/api/chat/files?${new URLSearchParams({ conversation, name: file.name })}`, file, 'application/octet-stream').then((r) => r.path),
+  /** A message to Claude; the answer streams to `onEvent` until it is done (or `signal` stops it). */
+  chat: (send: ChatSend, onEvent: (e: ChatEvent) => void, signal: AbortSignal) =>
+    stream<ChatEvent>('/api/chat', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(send), signal }, onEvent),
+  /** Speech (mono, 16 kHz) to text on this computer; the speech model's download reports its progress first. */
+  transcribe: (audio: Float32Array<ArrayBuffer>, language: string, onEvent: (e: TranscribeEvent) => void) =>
+    stream<TranscribeEvent>(`/api/transcribe?language=${language}`, { headers: { 'Content-Type': 'application/octet-stream' }, body: new Blob([audio]) }, onEvent),
   /** Starts the inbox processing; while a job runs, one more run after it. */
   startIntake: () => request<IntakeStatus>('POST', '/api/intake'),
 

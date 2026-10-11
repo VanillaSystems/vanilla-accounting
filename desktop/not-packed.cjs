@@ -15,6 +15,8 @@ const NOT_PACKED = {
   // Receipt collection from mailboxes is a CLI (npm run collect, npm run doctor -- --mail).
   imapflow: 'src/collect/imap.ts',
   mailparser: 'src/collect/imap.ts',
+  // transformers.js's browser runtime; the app runs the speech model on Node (onnxruntime-node).
+  'onnxruntime-web': '@huggingface/transformers (browser build)',
 };
 
 /** The lockfile paths (node_modules/…) of the packages reachable from the app's dependencies without passing `skip`. */

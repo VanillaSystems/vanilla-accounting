@@ -20,6 +20,7 @@ import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
+import { router as chat } from './routes/chat.js';
 import { NoClaudeError } from '../llm/ask.js';
 
 export const app = express();
@@ -61,7 +62,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail, chat);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

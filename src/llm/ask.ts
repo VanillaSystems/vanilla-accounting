@@ -60,7 +60,7 @@ export class NoClaudeError extends Error {
  * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/desktop/claude.ts),
  * else `claude` on the PATH. Its own folder joins the PATH, so an npm-installed claude finds its node.
  */
-function claude(): { bin: string; env: NodeJS.ProcessEnv } {
+export function claudeCommand(): { bin: string; env: NodeJS.ProcessEnv } {
   const bin = process.env.CLAUDE_BIN;
   if (!bin) return { bin: 'claude', env: process.env };
   return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
@@ -92,7 +92,7 @@ function args(opts: AskOptions): string[] {
   return a;
 }
 
-function record(row: LedgerRow): void {
+export function record(row: LedgerRow): void {
   try {
     const path = ledgerPath();
     mkdirSync(dirname(path), { recursive: true });
@@ -111,7 +111,7 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
   const model = opts.model ?? 'sonnet';
   const started = Date.now();
   return new Promise((resolve, reject) => {
-    const { bin, env } = claude();
+    const { bin, env } = claudeCommand();
     const child = spawn(bin, args(opts), { cwd: cwd(), env });
     let out = '';
     let err = '';
@@ -171,7 +171,7 @@ const CLAUDE_DESKTOP_APPS = process.platform === 'win32'
 
 function run(argv: string[], timeoutMs: number): Promise<{ code: number | null; stdout: string } | undefined> {
   return new Promise((resolve) => {
-    const { bin, env } = claude();
+    const { bin, env } = claudeCommand();
     const child = spawn(bin, argv, { cwd: cwd(), env, stdio: ['ignore', 'pipe', 'ignore'] });
     let stdout = '';
     child.stdout.on('data', (d) => (stdout += d));
