@@ -8,7 +8,7 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import puppeteer, { type Browser } from 'puppeteer-core';
+import type { Browser } from 'puppeteer-core';
 import { invoiceFontCss } from './fonts.js';
 import { MEASURE_SCRIPT, assembleSheets, hasQrBill, measureHtml, paginate, sheetBlocks, sheetDocument, sheetTitle, type SheetData } from './sheet.js';
 
@@ -45,9 +45,10 @@ function browser(): Promise<Browser> {
   const executablePath = findBrowser();
   if (!executablePath) return Promise.reject(new NoBrowserError());
   // The process decides when it ends (src/server/main.ts closes the browser on a signal); puppeteer would keep it alive.
-  launched ??= puppeteer.launch({
+  // Imported only here: the desktop app prints without it and does not pack it (desktop/not-packed.cjs).
+  launched ??= import('puppeteer-core').then(({ default: puppeteer }) => puppeteer.launch({
     executablePath, headless: true, args: ['--font-render-hinting=none', '--no-first-run'], handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false,
-  }).catch((e) => {
+  })).catch((e) => {
     launched = undefined;
     throw e;
   });

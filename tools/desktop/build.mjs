@@ -1,11 +1,14 @@
 /**
  * Builds the desktop app's main process and preload (src/desktop) into out/desktop/. The bundle
  * holds the app's own code; packages stay in node_modules, and each one it imports must be a
- * dependency in package.json, since electron-builder packs only those.
+ * dependency in package.json, since electron-builder packs only those. A package the app does not
+ * pack (desktop/not-packed.cjs) may only be imported dynamically, on a path the app does not take.
  */
 import { readFileSync } from 'node:fs';
-import { builtinModules } from 'node:module';
+import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
+
+const { NOT_PACKED } = createRequire(import.meta.url)('../../desktop/not-packed.cjs');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const common = { bundle: true, platform: 'node', target: 'node22', packages: 'external', sourcemap: 'linked', logLevel: 'warning', metafile: true };
@@ -22,6 +25,13 @@ const imported = new Set(results.flatMap((r) => Object.values(r.metafile.inputs)
 const missing = [...imported].filter((p) => p !== 'electron' && !(p in (pkg.dependencies ?? {})));
 if (missing.length) {
   console.error(`The desktop bundle imports ${missing.join(', ')}, which package.json lists not under dependencies: the packed app would not find it.`);
+  process.exit(1);
+}
+const loadedAtStart = new Set(results.flatMap((r) => Object.values(r.metafile.inputs).flatMap((i) => i.imports))
+  .filter((i) => i.external && i.kind !== 'dynamic-import').map((i) => packageOf(i.path)));
+const unpacked = Object.keys(NOT_PACKED).filter((p) => loadedAtStart.has(p));
+if (unpacked.length) {
+  console.error(`The desktop bundle imports ${unpacked.join(', ')} at start, which desktop/not-packed.cjs leaves out of the app: import it dynamically where it is used.`);
   process.exit(1);
 }
 console.log(`out/desktop: main.mjs, preload.cjs (packages: ${[...imported].sort().join(', ')})`);

@@ -17,7 +17,6 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { getDocument, VerbosityLevel } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { TextItem } from 'pdfjs-dist/types/src/display/api.js';
 
 export type TextMode = 'reading' | 'raw' | 'layout';
@@ -47,12 +46,26 @@ const FONT_OPTIONS = {
   cMapUrl: `${pathToFileURL(PDFJS_DIR).href}/cmaps/`,
   cMapPacked: true,
   isEvalSupported: false,
-  verbosity: VerbosityLevel.ERRORS,
 };
+
+/**
+ * pdf.js, loaded on first use. It creates a DOMMatrix as it loads, for drawing pages; Node has
+ * none, and pdf.js would load @napi-rs/canvas to get one. The engine only reads text and never
+ * draws a page, so an empty class stands in: the canvas binary is not needed, and the desktop app
+ * does not ship it (desktop/not-packed.cjs). A dynamic import, so the stand-in is in place first
+ * also where a bundle hoists its packages' imports (the desktop app's).
+ */
+let pdfjs: Promise<typeof import('pdfjs-dist/legacy/build/pdf.mjs')> | undefined;
+function loadPdfjs() {
+  const g = globalThis as { DOMMatrix?: unknown };
+  g.DOMMatrix ??= class DOMMatrix {};
+  return (pdfjs ??= import('pdfjs-dist/legacy/build/pdf.mjs'));
+}
 
 /** The runs of every page of a PDF. */
 export async function pdfRuns(pdfPath: string): Promise<PageRuns[]> {
-  const doc = await getDocument({ data: new Uint8Array(readFileSync(pdfPath)), ...FONT_OPTIONS }).promise;
+  const { getDocument, VerbosityLevel } = await loadPdfjs();
+  const doc = await getDocument({ data: new Uint8Array(readFileSync(pdfPath)), ...FONT_OPTIONS, verbosity: VerbosityLevel.ERRORS }).promise;
   try {
     const pages: PageRuns[] = [];
     for (let n = 1; n <= doc.numPages; n++) {

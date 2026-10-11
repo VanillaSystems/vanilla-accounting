@@ -3,6 +3,9 @@
  * Signed and notarized only when the variables are set (docs/desktop.md); without them the app is
  * built unsigned, and macOS asks once before the first start.
  */
+const { join } = require('node:path');
+const { excludedPaths } = require('./not-packed.cjs');
+
 const env = process.env;
 const signed = Boolean(env.CSC_LINK);
 const notarize = signed && Boolean(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID);
@@ -28,8 +31,35 @@ module.exports = {
     'public-files.txt',
     '!node_modules/{react,react-dom,scheduler}/**/*',
     '!node_modules/@fontsource/{geist-mono,hanken-grotesk,instrument-sans}/**/*',
+    // Packages the desktop app does not use (not-packed.cjs) and the parts of packages it does
+    // not load: pdf.js runs its legacy build only, pdf-lib its CommonJS one, the invoice sheet
+    // inlines the Latin woff2 files only (src/invoices/fonts.ts).
+    ...excludedPaths(join(__dirname, '..')).map((p) => `!${p}/**/*`),
+    '!node_modules/pdfjs-dist/{build,web,image_decoders,types}/**/*',
+    '!node_modules/pdfjs-dist/legacy/{web,image_decoders}/**/*',
+    '!node_modules/pdfjs-dist/legacy/build/{*.min.mjs,pdf.sandbox*}',
+    '!node_modules/pdf-lib/{dist,es,src,ts3.4}/**/*',
+    '!node_modules/@pdf-lib/*/{dist,es,src}/**/*',
+    '!node_modules/@fontsource/*/files/{*.woff,*-italic.woff2,*-{cyrillic,cyrillic-ext,greek,greek-ext,vietnamese,hebrew}-*}',
+    '!node_modules/**/*.{map,d.ts,d.mts,d.cts}',
   ],
   asar: true,
+  // Chromium's own translations only for the app's languages.
+  electronLanguages: ['de', 'fr', 'it', 'en'],
+  // Hardening of the release build: the app's binary cannot be run as Node, takes no NODE_OPTIONS
+  // or --inspect, loads its code only from app.asar and checks that archive's hash at start.
+  // tools/desktop/smoke.mjs drives the fused build through the renderer (docs/desktop.md).
+  electronFuses: {
+    runAsNode: false,
+    enableCookieEncryption: true,
+    enableNodeOptionsEnvironmentVariable: false,
+    enableNodeCliInspectArguments: false,
+    enableEmbeddedAsarIntegrityValidation: true,
+    onlyLoadAppFromAsar: true,
+    grantFileProtocolExtraPrivileges: false,
+    // An unsigned build is signed ad hoc again after the fuses change the binary, or macOS kills it.
+    resetAdHocDarwinSignature: !signed,
+  },
   mac: {
     category: 'public.app-category.finance',
     icon: 'desktop/icon.png',

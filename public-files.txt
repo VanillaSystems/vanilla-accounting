@@ -37,6 +37,7 @@ tools/pdf-text/compare.ts
 tools/desktop/**
 desktop/electron-builder.config.cjs
 desktop/entitlements.mac.plist
+desktop/not-packed.cjs
 desktop/icon.svg
 desktop/icon.png
 
