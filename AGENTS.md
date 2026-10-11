@@ -83,9 +83,9 @@ UI texts (src/app/):
 - An API refusal the UI shows carries a `code` (src/types/api-error.ts) besides its German `error`; add one when a new refusal needs words in the UI.
 
 UI links (src/app/):
-- Every object listed in a sidebar or panel links to its detail view. Build the link with the helpers in src/app/lib/location.ts (`entryHref`, `txHref`, `receiptHref`, `accountHref`, or `EntryLinks` in components/open-in-tab-link.tsx) or `hrefOf` (src/app/shell/history.ts): they keep a period that holds the object's date, and work in the static export.
-- List + detail views use `SplitPane`: the right column is always there (a placeholder until a row is selected), so selecting a row never moves the layout.
-- With nothing selected, a list + detail view selects its first visible row (a URL selection wins). Use `useAutoSelectFirst` (src/app/hooks/use-auto-select-first.ts).
+- Every object listed in a sidebar or panel links to its detail view. Build the link with `hrefOf` (src/app/shell/history.ts) on a location whose period holds the object's date (as `at` in src/app/areas/receipts/view.ts and `entryAt` in src/app/areas/vat/links.tsx): it works in the static export.
+- An area is a list and a detail beside it (the shell lays them out, src/app/shell/Split.tsx): the detail column is always there (a placeholder until a row is selected), so selecting a row never moves the layout.
+- With nothing selected, a list + detail view selects its first visible row (a URL selection wins).
 - The URL is a path of docs/urls.md (`/journal/<id>?period=2026-Q3`), parsed and written only by src/app/shell/route.ts; old `/<lang>/<period>/<tab>` links redirect. The language is a per-viewer preference, never in a link. Every period token is parsed by src/accounting/periods.ts (`parsePeriod`); an area receives a resolved `Period`, never a token string.
 - The new UI (docs/redesign/architecture.md): areas are registered in src/app/areas/index.ts; plain CSS with the mockup's tokens and class names (src/app/styles/), no Tailwind in new code.
 
