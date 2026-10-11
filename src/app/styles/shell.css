@@ -4,7 +4,7 @@ main { height: calc(100vh / var(--z, 1)); display: grid; grid-template-columns: 
 main[data-area="journal"], main[data-area="reports"] { grid-template-columns: var(--lw, minmax(560px, 50%)) 1fr; }
 .split { position: fixed; top: 0; bottom: 0; width: 11px; margin-left: -5px; cursor: col-resize; z-index: 6; outline: 0; }
 .split::after { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1px; background: transparent; transition: background .15s; }
-.split:hover::after, .split:focus-visible::after, .split.drag::after { background: var(--accent, #0067b1); width: 2px; left: 4px; }
+.split:hover::after, .split:focus-visible::after, .split.drag::after { background: var(--accent); width: 2px; left: 4px; }
 [data-theme="dark"] .split:hover::after, [data-theme="dark"] .split:focus-visible::after, [data-theme="dark"] .split.drag::after { background: var(--muted); }
 body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe, body.resizing canvas { pointer-events: none; }
 .list { padding: 33px 32px 140px 56px; overflow: auto; border-right: 1px solid var(--line); scrollbar-width: thin; }

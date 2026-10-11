@@ -33,7 +33,7 @@ import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
 import { PeriodPicker } from './PeriodPicker.js';
-import { usePalette, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
+import { usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
 import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
@@ -53,7 +53,6 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const workspace = useWorkspace();
   const [loc, go] = useLocationState();
   const [theme, setTheme, dark] = useTheme();
-  const [palette, setPalette] = usePalette();
   const [zoom, zoomStep] = useZoom();
   const { toast, undo, node: toastNode } = useToast();
   const [overlay, setOverlay] = useState<Overlay | null>(null);
@@ -116,7 +115,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     openPeriod: (anchor) => setOverlay({ kind: 'period', anchor: anchor.getBoundingClientRect() }),
     add: runAdd,
     openExport,
-    theme, setTheme, dark, palette, setPalette, zoom, language,
+    theme, setTheme, dark, zoom, language,
   };
 
   // The inbox processing runs on the server; the books are loaded again when a job ends.

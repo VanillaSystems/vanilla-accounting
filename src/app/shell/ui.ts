@@ -1,6 +1,5 @@
 import { createContext, useContext } from 'react';
 import type { Theme } from './prefs.js';
-import type { Palette } from '../brand/palette.js';
 import type { DialogConfig } from '../areas/export/state.js';
 import type { Area } from '../areas/index.js';
 import type { Route } from './route.js';
@@ -22,9 +21,6 @@ export interface ShellUi {
   setTheme(theme: Theme): void;
   /** The page is dark now (the preference, or the OS under System). */
   dark: boolean;
-  /** The colour test while the brand red is being judged (prefs.ts). */
-  palette: Palette;
-  setPalette(palette: Palette): void;
   zoom: number;
   language: string;
 }
