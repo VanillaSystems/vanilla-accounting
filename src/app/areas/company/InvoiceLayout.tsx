@@ -5,7 +5,7 @@
  * was issued with.
  */
 import { useMemo, useState } from 'react';
-import { INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceLanguage, type InvoiceLayout, type LayoutElement } from '../../../invoices/model.js';
+import { INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
 import { TEXTS } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -26,7 +26,8 @@ const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
 const DAYS = '{days}';
 /** The app's own texts of a language, the payment term left as {days}. */
-const builtIn = (lang: InvoiceLanguage) => ({ intro: TEXTS[lang].intro, closing: TEXTS[lang].closing(9999).replace('9999', DAYS) });
+const builtIn = (lang: InvoiceLanguage): Record<OwnText, string> => ({ intro: TEXTS[lang].intro, closing: TEXTS[lang].closing(9999).replace('9999', DAYS), mailSubject: TEXTS[lang].mailSubject, mailBody: TEXTS[lang].mailBody });
+type OwnText = (typeof OWN_TEXTS)[number];
 
 export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
   const settings = ws.invoicing;
@@ -57,13 +58,13 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   const own = settings.texts[lang] ?? {};
   const texts = { ...builtIn(lang), ...own };
   const changed = Object.keys(own).length;
-  function saveText(key: 'intro' | 'closing', value: string) {
+  function saveText(key: OwnText, value: string) {
     if (value === texts[key]) return;
     void patch({ texts: { [lang]: { [key]: value === builtIn(lang)[key] ? null : value } } });
   }
   function resetTexts() {
     const was = { ...own };
-    void patch({ texts: { [lang]: { intro: null, closing: null } } });
+    void patch({ texts: { [lang]: { intro: null, closing: null, mailSubject: null, mailBody: null } } });
     nav.toast(t('invoiceLayout.textsReset'), () => { void patch({ texts: { [lang]: was } }); });
   }
 
@@ -107,6 +108,11 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
               <label><input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} /> {t('invoiceLayout.windowGuide')} <span className="sub">{t('invoiceLayout.previewOnly')}</span></label>
             </span>
           </div>
+        </div>
+        <div className="lkf lkmail" key={lang}>
+          <div className="lkr"><span>{t('invoiceLayout.mail')}</span><span className="m">{t('invoiceLayout.mailHint', { document: '{document}', company: '{company}' })}</span></div>
+          <label className="lkr"><span>{t('invoiceLayout.mailSubject')}</span><input name="mailSubject" defaultValue={texts.mailSubject} disabled={!canEdit} onBlur={(e) => saveText('mailSubject', e.target.value)} /></label>
+          <label className="lkr top"><span>{t('invoiceLayout.mailBody')}</span><textarea name="mailBody" rows={6} defaultValue={texts.mailBody} disabled={!canEdit} onBlur={(e) => saveText('mailBody', e.target.value)} /></label>
         </div>
         <p className="m src-note">{t('invoiceLayout.note')}</p>
       </div>

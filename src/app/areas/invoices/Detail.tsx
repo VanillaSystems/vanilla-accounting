@@ -267,7 +267,7 @@ function Actions({ d, inv, state, reminderLevel, nav, canEdit }: DetailProps & {
     return (
       <div className="ivacts">
         {preview}
-        <button type="button" className="btn primary" data-act="remsend" onClick={() => void sendReminder(nav, inv, { ...(r.fee ? { fee: r.fee } : {}), ...(r.intro !== undefined ? { intro: r.intro } : {}), ...(r.closing !== undefined ? { closing: r.closing } : {}) }).then((ok) => { if (ok) setUi({ reminder: null, preview: false }); })}>
+        <button type="button" className="btn primary" data-act="remsend" onClick={() => setUi({ dialog: { kind: 'send', reminder: { level: reminderLevel, ...(r.fee ? { fee: r.fee } : {}), ...(r.intro !== undefined ? { intro: r.intro } : {}), ...(r.closing !== undefined ? { closing: r.closing } : {}) } } })}>
           {t('invoices.sendReminder', { level: reminderLevel })}
         </button>
         <button type="button" className="btn ghost" onClick={() => setUi({ reminder: null, preview: false })}>{t('common.cancel')}</button>
@@ -275,7 +275,7 @@ function Actions({ d, inv, state, reminderLevel, nav, canEdit }: DetailProps & {
     );
   }
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
-  const sendBtn = <button type="button" className={`btn ${sentOnce || state === 'overdue' ? 'ghost' : 'primary'}`} data-act="send" title={t('invoices.sendTip')} onClick={() => void send(nav, inv)}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>;
+  const sendBtn = <button type="button" className={`btn ${sentOnce || state === 'overdue' ? 'ghost' : 'primary'}`} data-act="send" title={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>;
   const copy = <button type="button" className="btn ghost" data-act="copy" title={t('invoices.copyTip')} onClick={() => void copyAsDraft(nav, inv)}>{t('invoices.copy')}</button>;
   const credit = <button type="button" className="btn ghost" data-act="credit" onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.credit')}</button>;
   const cancel = <button type="button" className="btn ghost danger" data-act="cancel" onClick={() => setUi({ dialog: { kind: 'cancel' } })}>{t('invoices.cancel')}</button>;

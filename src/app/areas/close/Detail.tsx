@@ -19,7 +19,7 @@ import type { AreaProps, Nav } from '../index.js';
 import { closeYear as yearOfPage, useYearClose } from './data.js';
 import { useShellUi } from '../../shell/ui.js';
 import { configOf } from '../export/state.js';
-import { STEPS, causeText, checkRows, closeBlockers, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
+import { STEPS, stepGone, causeText, checkRows, closeBlockers, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -42,6 +42,7 @@ export function Detail(props: Props) {
   const { route, query, books } = props;
   const year = yearOfPage(query.period, books);
   const { data, error } = useYearClose(year, books);
+  if (stepGone(route.step)) return <div className="detail-empty"><div>{t('close.stepGone')}</div></div>;
   const step = stepOf(route.step);
   return (
     <div className="detail-in" key={step}>

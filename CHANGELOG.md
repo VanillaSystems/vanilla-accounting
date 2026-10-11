@@ -196,6 +196,20 @@ Two markers flag an entry you must read before you update:
   Verrechnungssteuer, as guided entries in the new year.
 - `npm run fetch-rates -- --year <year>`: one ESTV rate file per year
   (`reference/estv-daily-rates-<year>.json`); every year's file is read.
+- **The app processes the inbox itself.** A dropped or added receipt, a statement upload and a
+  scan from the phone start reading, the VAT facts, naming and linking, and booking the new
+  payments (`POST /api/intake`, one job at a time); a line at the bottom left says what it does,
+  and Belege has **Eingang verarbeiten** (also in ⌘K). A second run changes nothing. Without a
+  working `claude` CLI the text is read, statements are imported and invoice payments matched by
+  reference; the rest waits and the app says so. `npm run extract`, `extract-vat`, `match` and
+  `classify` run the same steps (src/intake/) and wait for each other and for the app.
+- **Invoices by e-mail** through the company's own mailbox. Firma › E-Mail-Versand holds the
+  SMTP server, port, encryption, user, sender and reply-to (`outgoingMail` in
+  belege.workspace.yaml); the password is not in the workspace: `VANILLA_SMTP_PASSWORD` in .env
+  (.env.example). Senden, a reminder and a cancellation notice open a dialog with recipient,
+  subject and text (defaults per language in Rechnungslayout); the stored PDF goes out byte for
+  byte and the sent log records channel, recipient, time and Message-ID. A message the server
+  refuses records nothing. PDF herunterladen stays.
 
 ### Removed
 
@@ -219,6 +233,11 @@ Two markers flag an entry you must read before you update:
 - **⚠ figures** Saldobilanz and Kontoauszug of a period that starts after 1 January (a quarter,
   the last 30 days) open with the balance on the period's first day, not with the 1 January
   opening balance. Only these two views change; VAT figures, returns and `test:books` do not.
+- `npm run extract` read a PDF under 1 KB as an iCloud placeholder and dropped it from the books
+  (eight demo receipts); a file is skipped now only when it is no PDF yet. The books keep their
+  receipt order, so a second run writes the same file.
+- A link to an unknown Ziffer, Abschluss step or Firma section keeps its place and says it does
+  not exist (urls.md rule 5); Rechnungslayout keeps logo, upload and remove on one row.
 
 ## [0.2.0] - 2026-10-09
 

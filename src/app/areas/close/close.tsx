@@ -13,7 +13,7 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { closeYear, useYearClose } from './data.js';
-import { GROUPS, STEPS, stepLabel, stepOf, stepState } from './steps.js';
+import { GROUPS, STEPS, stepGone, stepLabel, stepOf, stepState } from './steps.js';
 import { Detail } from './Detail.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
@@ -22,7 +22,7 @@ function List({ route, query, books, nav }: Props) {
   const ui = useShellUi();
   const year = closeYear(query.period, books);
   const { data } = useYearClose(year, books);
-  const step = stepOf(route.step);
+  const step = stepGone(route.step) ? undefined : stepOf(route.step);
   const today = localToday();
   const yearOver = today > `${year}-12-31`;
   return (
@@ -75,7 +75,7 @@ export const close: Area<RouteOf<'close'>> = {
   Detail,
   legend,
   periodless: true,
-  title: (r, books) => stepLabel(stepOf(r.step), closeYear(undefined, books)),
+  title: (r, books) => (stepGone(r.step) ? '' : stepLabel(stepOf(r.step), closeYear(undefined, books))),
   keys(e, { route, nav }) {
     if (e.key === 'Enter') {
       document.querySelector<HTMLElement>('.detail button:not(:disabled), .detail input')?.focus();

@@ -1,10 +1,12 @@
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { IntakeStatus } from '../../intake/pipeline.js';
 import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
 import type { CompanyInfo } from '../../books/company.js';
 import type { ManifestPatch } from '../../workspace/manifest-write.js';
-import type { ApiErrorBody, ApiStatus } from '../../types/api-error.js';
+import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
+import type { MailMessage } from '../../invoices/mail.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t } from '../i18n/index.js';
 import { formatDate } from './utils.js';
@@ -45,6 +47,7 @@ export function errorText(e: unknown): string {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
   if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
+  if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
@@ -88,7 +91,7 @@ export type YearCloseView = YearClose & { opening?: Opening };
 export interface InvoiceList { today: string; invoices: Invoice[]; customers: Customer[]; sent: SentDocument[] }
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
-export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string }
+export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string; email?: MailMessage }
 
 /** Raw bytes to a route that takes a file; the static export refuses unsent. */
 async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
@@ -145,6 +148,11 @@ export const api = {
     return (await res.json()) as StatementImport;
   },
 
+  /** How far the inbox processing is (src/intake/); the static export has none. */
+  intake: () => (STATIC_EXPORT ? Promise.resolve<IntakeStatus>({ running: false, inbox: [] }) : request<IntakeStatus>('GET', '/api/intake')),
+  /** Starts the inbox processing; while a job runs, one more run after it. */
+  startIntake: () => request<IntakeStatus>('POST', '/api/intake'),
+
   /** The PDFs waiting in the inbox to be read; none in the static export. */
   inbox: () => (STATIC_EXPORT ? Promise.resolve([]) : request<InboxFile[]>('GET', '/api/inbox')),
   inboxFile: (id: string) => `/api/inbox/${id}`,
@@ -166,8 +174,11 @@ export const api = {
   patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),
   issue: (id: string) => request<Issued>('POST', `/api/invoices/${id}/issue`),
-  recordSend: (id: string, to?: string) => request<SentDocument>('POST', `/api/invoices/${id}/send`, to ? { to } : {}),
-  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string }) =>
+  /** With `email` the PDF goes out through the company's mailbox; without, the send is recorded as a download to `to`. */
+  recordSend: (id: string, send: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
+  mailStatus: () => request<MailStatus>('GET', '/api/mail'),
+  verifyMail: () => request<{ ok: true }>('POST', '/api/mail/verify'),
+  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
   sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),

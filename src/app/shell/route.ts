@@ -8,7 +8,7 @@ import { localToday, parsePeriod, type IsoDate, type Period } from '../../accoun
 export const REPORTS = ['income', 'balance', 'trial'] as const;
 export type Report = typeof REPORTS[number];
 
-export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'accounts', 'periods', 'opening', 'display'] as const;
+export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'accounts', 'periods', 'opening', 'display'] as const;
 export type CompanySection = typeof COMPANY_SECTIONS[number];
 
 export const RECEIPT_FILTERS = ['zugeordnet', 'offen', 'ohneDatum'] as const;
@@ -26,7 +26,8 @@ export type Route =
   | { area: 'codes'; code?: string }
   | { area: 'reports'; report: Report; account?: string }
   | { area: 'close'; step?: string }
-  | { area: 'company'; section: CompanySection }
+  /** An unknown section stays in the route, so the area can say it does not exist (urls.md rule 5). */
+  | { area: 'company'; section: CompanySection | (string & {}) }
   | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string };
 
 export type AreaId = Route['area'];
@@ -109,7 +110,7 @@ function routeOf([a, b, c]: string[]): Route {
     case 'vat': return b === 'codes' ? defined({ area: 'codes', code: c }) : defined({ area: 'vat', ziffer: b });
     case 'reports': return isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
     case 'close': return defined({ area: 'close', step: b });
-    case 'company': return { area: 'company', section: isOneOf(COMPANY_SECTIONS, b) ? b : 'profile' };
+    case 'company': return { area: 'company', section: b ?? 'profile' };
     case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
     default: return { area: 'receipts' };
   }
@@ -163,6 +164,9 @@ function legacyLocation(segs: string[], params: URLSearchParams, today: IsoDate)
   const route = (LEGACY_TABS[tab] ?? LEGACY_TABS.receipts)((k) => params.get(k) || undefined);
   return { route, query: defined({ ...queryOf(params, today), period }) };
 }
+
+/** The section a company route names, or undefined when there is none of that name. */
+export const companySection = (s: string): CompanySection | undefined => (isOneOf(COMPANY_SECTIONS, s) ? s : undefined);
 
 function isOneOf<T extends string>(values: readonly T[], v: string | undefined): v is T {
   return (values as readonly (string | undefined)[]).includes(v);

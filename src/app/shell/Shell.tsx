@@ -17,6 +17,8 @@ import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
+import { IntakeLine, finishedText, watchIntake } from './Intake.js';
+import { STATIC_EXPORT } from '../lib/api.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
 import { PRESETS } from '../../export/model.js';
@@ -107,6 +109,11 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     openExport,
     theme, setTheme, dark, zoom, language,
   };
+
+  // The inbox processing runs on the server; the books are loaded again when a job ends.
+  const reload = useRef(refresh);
+  reload.current = refresh;
+  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => { reload.current(); toast(finishedText(job)); })), [canEdit, toast]);
 
   useShellKeys({
     overlayOpen: () => overlay !== null,
@@ -232,6 +239,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
       <Dock ref={dockRef} current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       <div className="hint" aria-hidden="true" />
       {toastNode}
+      <IntakeLine onOpen={() => goArea('receipts')} />
       {legend && (
         <div className="legend">
           {t('shell.edges')}<br />

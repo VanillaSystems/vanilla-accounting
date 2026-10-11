@@ -9,14 +9,14 @@ import { WorkspaceError, appLanguages, type Company, type LedgerBankAccount, typ
 import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
 import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
 import {
-  DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS,
-  type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings,
+  DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, OWN_TEXTS,
+  type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail,
 } from '../invoices/model.js';
 import { isQrIban } from '../invoices/reference.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatRegistered', 'vatMethod', 'basis', 'period'].includes(k)) as ProfileKey[];
 
-export type Manifest = { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings };
+export type Manifest = { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail };
 
 export function readManifest(path: string): Manifest {
   if (!existsSync(path)) throw new WorkspaceError(`${path} not found.`);
@@ -86,7 +86,29 @@ export function parseManifest(source: string, path: string): Manifest {
     bankAccounts,
     ...(raw.profile === undefined ? {} : { profile: readProfile(raw.profile, fail) }),
     ...(raw.invoicing === undefined ? {} : { invoicing: readInvoicing(raw.invoicing, bankAccounts, fail) }),
+    ...(raw.outgoingMail === undefined ? {} : { outgoingMail: readOutgoingMail(raw.outgoingMail, fail) }),
   };
+}
+
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/** The mailbox that sends documents: host, port, security, login, sender. No password: src/secrets/. */
+function readOutgoingMail(raw: unknown, fail: (msg: string) => never): OutgoingMail {
+  if (!isMap(raw)) return fail('outgoingMail must be a mapping (host, port, security, user, fromName, fromAddress, replyTo)');
+  if ('password' in raw) fail('outgoingMail.password does not belong in the workspace: VANILLA_SMTP_PASSWORD in .env, or the keychain in the app');
+  const host = optText(raw.host, 'outgoingMail.host', fail)?.trim();
+  if (!host) fail('outgoingMail.host is missing');
+  const port = Number(raw.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) fail('outgoingMail.port must be a port number (465, 587, …)');
+  const security = (raw.security ?? (port === 465 ? 'tls' : 'starttls')) as MailSecurity;
+  if (!MAIL_SECURITY.includes(security)) fail(`outgoingMail.security must be one of ${MAIL_SECURITY.join(', ')}`);
+  const fromAddress = optText(raw.fromAddress, 'outgoingMail.fromAddress', fail)?.trim();
+  if (!fromAddress || !EMAIL.test(fromAddress)) fail('outgoingMail.fromAddress must be an e-mail address');
+  const replyTo = optText(raw.replyTo, 'outgoingMail.replyTo', fail)?.trim();
+  if (replyTo && !EMAIL.test(replyTo)) fail('outgoingMail.replyTo must be an e-mail address');
+  const user = optText(raw.user, 'outgoingMail.user', fail)?.trim();
+  const fromName = optText(raw.fromName, 'outgoingMail.fromName', fail)?.trim();
+  return { host: host!, port, security, fromAddress: fromAddress!, ...(user ? { user } : {}), ...(fromName ? { fromName } : {}), ...(replyTo ? { replyTo } : {}) };
 }
 
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -144,11 +166,11 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
   if (!/^#[0-9a-f]{6}$/i.test(accent)) fail('invoicing.layout.accent must be a colour like #141a26');
   const texts: InvoicingSettings['texts'] = {};
   if (raw.texts !== undefined) {
-    if (!isMap(raw.texts)) fail('invoicing.texts must map a language to { intro, closing }');
+    if (!isMap(raw.texts)) fail('invoicing.texts must map a language to { intro, closing, mailSubject, mailBody }');
     for (const [lang, v] of Object.entries(raw.texts as Record<string, unknown>)) {
       if (!INVOICE_LANGUAGES.includes(lang as InvoiceLanguage) || !isMap(v)) fail(`invoicing.texts.${lang}: one of ${INVOICE_LANGUAGES.join(', ')}, with intro and closing`);
       const t = v as Record<string, unknown>;
-      texts[lang as InvoiceLanguage] = { ...(t.intro === undefined ? {} : { intro: String(t.intro) }), ...(t.closing === undefined ? {} : { closing: String(t.closing) }) };
+      texts[lang as InvoiceLanguage] = Object.fromEntries(OWN_TEXTS.filter((k) => t[k] !== undefined).map((k) => [k, String(t[k])]));
     }
   }
   return {

@@ -47,12 +47,12 @@ router.post('/api/upload', express.raw({ type: 'application/pdf', limit: '50mb' 
 
 /**
  * The PDFs in the inbox (beleg-import/) that the books do not hold yet: dropped or scanned, not
- * read by `npm run extract` so far. Each carries the id its receipt will have (the first 16 hex
+ * read by the inbox processing (src/intake/) so far. Each carries the id its receipt will have (the first 16 hex
  * of its SHA-256, as extract computes it), so a link to it keeps working once it is read.
  */
-function inboxFiles(): InboxFile[] {
+export function inboxFiles({ withRead = false } = {}): InboxFile[] {
   if (!existsSync(WS.paths.inbox)) return [];
-  const known = new Set(readBooks().receipts.filter((r) => r.location === 'staged').map((r) => r.filename));
+  const known = new Set(withRead ? [] : readBooks().receipts.filter((r) => r.location === 'staged').map((r) => r.filename));
   return readdirSync(WS.paths.inbox)
     .filter((f) => f.toLowerCase().endsWith('.pdf') && !known.has(f))
     .map((filename) => {
@@ -66,8 +66,9 @@ router.get('/api/inbox', (_req, res) => {
   res.json(inboxFiles());
 });
 
+// A page that still shows the file as waiting may ask for it after the processing has read it.
 router.get('/api/inbox/:id', (req, res) => {
-  const file = inboxFiles().find((f) => f.id === req.params.id);
+  const file = inboxFiles({ withRead: true }).find((f) => f.id === req.params.id);
   if (!file) throw new RequestError(404, 'Not in the inbox');
   res.setHeader('Content-Type', 'application/pdf');
   res.sendFile(join(WS.paths.inbox, file.filename));

@@ -14,11 +14,16 @@ import { router as files } from './files.js';
 import { router as invoices } from './routes/invoices.js';
 import { router as statements } from './routes/statements.js';
 import { router as exportBundle } from './routes/export.js';
+import { router as intake } from './routes/intake.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
+import { MailError, type MailRefusal } from '../invoices/mail.js';
+import { router as mail } from './routes/mail.js';
 
 export const app = express();
+
+const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPassword: 409, recipient: 400, failed: 502 };
 
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409,
@@ -55,7 +60,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {
@@ -65,6 +70,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   else if (err instanceof InvoiceRuleError) {
     res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
   } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
+  else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
   else if (err instanceof NoBrowserError) res.status(503).json({ error: err.message, invoiceRefusal: 'noBrowser' } satisfies InvoiceErrorBody);
   else {
     console.error(err);

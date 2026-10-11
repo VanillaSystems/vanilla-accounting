@@ -29,7 +29,11 @@ function freePort(): Promise<number> {
   });
 }
 
-/** `env` is added to the server's environment. The temp workspace has the demo manifest and a stub prior-year history/ for classify's prompt. */
+/**
+ * `env` is added to the server's environment. The temp workspace has the demo manifest and a stub
+ * prior-year history/ for classify's prompt. The server finds tests/support/no-model-bin/claude
+ * first unless `env.PATH` says otherwise.
+ */
 export async function startApi(fixture: string, env: Record<string, string> = {}): Promise<ApiServer> {
   const { paths } = tempWorkspace('belege-api-');
   const root = paths.root;
@@ -43,7 +47,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   const base = `http://127.0.0.1:${port}`;
   const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(REPO, 'src/server/main.ts')], {
     cwd: root,
-    env: { ...process.env, VANILLA_WORKSPACE: root, PORT: String(port), READONLY: '', ...env },
+    env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, PORT: String(port), READONLY: '', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise<void>((resolve, reject) => {

@@ -15,7 +15,9 @@ export type Dialog =
   | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string } }
   | { kind: 'cancel' }
   | { kind: 'credit' }
-  | { kind: 'delete' };
+  | { kind: 'delete' }
+  /** Sending the invoice, or the reminder written on the sheet, by e-mail or as a download. */
+  | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number } };
 
 /** A reminder written on the sheet before it is sent: for this invoice, with these texts and fee. */
 export interface ReminderEdit { invoiceId: string; fee?: number; intro?: string; closing?: string }

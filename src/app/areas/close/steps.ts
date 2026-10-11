@@ -11,6 +11,8 @@ export const STEPS = ['q4', 'checks', 'entries', 'close', 'open', 'profit', 'han
 export type Step = (typeof STEPS)[number];
 export const DEFAULT_STEP: Step = 'checks';
 export const stepOf = (s: string | undefined): Step => (STEPS as readonly string[]).includes(s ?? '') ? s as Step : DEFAULT_STEP;
+/** A link names a step there is none of (urls.md rule 5). */
+export const stepGone = (s: string | undefined): boolean => s !== undefined && !(STEPS as readonly string[]).includes(s);
 
 export const GROUPS = [['close.groupBefore', ['q4', 'checks', 'entries']], ['close.groupClose', ['close', 'open']], ['close.groupAfter', ['profit', 'handover']]] as const;
 

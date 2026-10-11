@@ -43,11 +43,12 @@ function List(props: Props) {
   listed.ids = ids;
   listed.v = v;
 
-  // A list with no Ziffer selected selects the result; so does a Ziffer the form does not have.
-  const known = route.ziffer === FORM_0535 ? v.state.kind === 'filed' : v.report.ziffern.some((z) => z.number === route.ziffer);
+  // A list with no Ziffer selected selects the result; so does the 0535 of a quarter not filed (a
+  // period switch keeps the Ziffer). A Ziffer the form does not have stays: the detail says so.
+  const noForm = route.ziffer === FORM_0535 && v.state.kind !== 'filed';
   useEffect(() => {
-    if (!route.ziffer || !known) nav.select({ area: 'vat', ziffer: resultZiffer(v) });
-  }, [route.ziffer, known, v]);
+    if (!route.ziffer || noForm) nav.select({ area: 'vat', ziffer: resultZiffer(v) });
+  }, [route.ziffer, noForm, v]);
 
   const toggleAll = () => {
     setAll(!all);
