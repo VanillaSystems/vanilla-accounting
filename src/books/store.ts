@@ -9,6 +9,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
+import { versionOf, wrote } from '../workspace/own-writes.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
 
@@ -22,6 +23,7 @@ export class SealBrokenError extends ClosedPeriodError {}
 /** Keys loadBooks filled in, so saveBooks leaves them off the disk again while still empty. */
 const filledDefaults = new WeakMap<Books, Array<'journalEntries' | 'config'>>();
 const seals = new WeakMap<Books, SealReport>();
+const versions = new WeakMap<Books, string>();
 const warned = new Set<string>();
 
 /**
@@ -31,9 +33,11 @@ const warned = new Set<string>();
 export function loadBooks(ws: Workspace): Books {
   const path = ws.paths.books;
   if (!existsSync(path)) throw new Error(`No ${path} found. Run \`npm run extract\` first.`);
-  const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  const text = readFileSync(path, 'utf8');
+  const raw = JSON.parse(text) as Record<string, unknown>;
   const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, path), BOOKS_SCHEMA, BOOKS_MIGRATIONS, path, (d) => structuredClone(d));
   const books = withDefaults({ ...current, schema: BOOKS_SCHEMA } as unknown as Index);
+  versions.set(books, versionOf(text));
   const report = checkSeals(ws, books);
   seals.set(books, report);
   for (const c of report.checks) {
@@ -49,6 +53,9 @@ export function sealsOf(books: Books): SealReport {
   return seals.get(books) ?? { checks: [], unsealed: [] };
 }
 
+/** The version of books.json these books were loaded from (src/workspace/own-writes.ts versionOf). */
+export const booksVersion = (books: Books): string | undefined => versions.get(books);
+
 /** The books before the first `npm run extract`. */
 export const emptyBooks = (): Books => withDefaults({ receipts: [], transactions: [], mappings: [], bankStatements: [] });
 
@@ -61,7 +68,8 @@ function withDefaults(index: Index): Books {
   return books;
 }
 
-export function saveBooks(ws: Workspace, books: Books): void {
+/** Writes the books and returns the version written. */
+export function saveBooks(ws: Workspace, books: Books): string {
   const broken = sealsOf(books).checks.find((c) => c.status === 'broken');
   if (broken) throw new SealBrokenError(`Siegel ${broken.quarter} gebrochen, nichts gespeichert: ${broken.problem}. Restore books.json from git.`);
   guards.get(books)?.();
@@ -72,8 +80,13 @@ export function saveBooks(ws: Workspace, books: Books): void {
   if (filled.includes('config') && Object.keys(books.config).length === 0) delete onDisk.config;
   const path = ws.paths.books;
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(onDisk, null, 2));
+  const text = JSON.stringify(onDisk, null, 2);
+  writeFileSync(tmp, text);
   renameSync(tmp, path);
+  const version = versionOf(text);
+  wrote(path, version);
+  versions.set(books, version);
+  return version;
 }
 
 export interface PeriodLock {

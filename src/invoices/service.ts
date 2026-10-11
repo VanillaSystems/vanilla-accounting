@@ -23,6 +23,7 @@ import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, w
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
+import { wrote } from '../workspace/own-writes.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -298,6 +299,7 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
     delivered = deliver && await deliver({ filename: `${title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: printed.pdf });
   } catch (e) {
     rmSync(join(ws.paths.root, pdf.file), { force: true });
+    wrote(join(ws.paths.root, pdf.file));
     throw e;
   }
   return { ...env, invoiceId: inv.id, kind, title, ...pdf, sentAt: now, ...recipient(inv, to, delivered) };

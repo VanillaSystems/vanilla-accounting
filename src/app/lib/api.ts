@@ -5,7 +5,7 @@ import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { Account } from './accounts.js';
 import type { CompanyInfo } from '../../books/company.js';
 import type { ManifestPatch } from '../../workspace/manifest-write.js';
-import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
+import { BOOKS_VERSION, type ApiErrorBody, type ApiStatus, type MailStatus } from '../../types/api-error.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
@@ -30,19 +30,33 @@ export class ApiError extends Error {
   constructor(readonly body: ApiErrorBody) { super(body.error); }
 }
 
-/** Every call throws an ApiError when the response is not ok. The static export refuses every write unsent. */
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  if (STATIC_EXPORT && method !== 'GET') throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-  const res = await fetch(path, body === undefined ? { method } : {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+/** The version of the books this page loaded or last wrote, sent with every write (BOOKS_VERSION). */
+let booksVersion: string | undefined;
+const staleListeners = new Set<() => void>();
+
+/** Runs `fn` when the API refused a write because the books changed since this page loaded them. */
+export function onStale(fn: () => void): () => void {
+  staleListeners.add(fn);
+  return () => { staleListeners.delete(fn); };
+}
+
+/** Every call throws an ApiError when the response is not ok. */
+async function send<T>(path: string, init: RequestInit): Promise<T> {
+  const write = init.method !== undefined && init.method !== 'GET';
+  const res = await fetch(path, write && booksVersion ? { ...init, headers: { ...init.headers, [BOOKS_VERSION]: booksVersion } } : init);
+  booksVersion = res.headers.get(BOOKS_VERSION) ?? booksVersion;
   if (!res.ok) {
     const err = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    if (err?.code === 'stale') staleListeners.forEach((l) => l());
     throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
   return res.json() as Promise<T>;
+}
+
+/** The static export refuses every write unsent. */
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (STATIC_EXPORT && method !== 'GET') throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
+  return send<T>(path, body === undefined ? { method } : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 
 /** What to tell the user about a failed call: a coded refusal in their language, else the API's own text. */
@@ -53,6 +67,7 @@ export function errorText(e: unknown): string {
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
     case 'readonly': return t('error.readonly');
+    case 'stale': return t('error.stale');
     case 'localOnly': return t('error.localOnly');
     case 'manualOnly': return t('error.manualOnly');
     case 'hasEntries': return t('error.hasEntries');
@@ -114,9 +129,7 @@ export interface ReminderInput { date?: string; fee?: number; intro?: string; cl
 /** Raw bytes to a route that takes a file; the static export refuses unsent. */
 async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
   if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': type }, body });
-  if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
-  return res.json() as Promise<T>;
+  return send<T>(path, { method: 'POST', headers: { 'Content-Type': type }, body });
 }
 
 export const api = {
@@ -152,18 +165,14 @@ export const api = {
   /** A PDF or photo into the workspace's inbox (beleg-import/), as the phone app sends it. */
   upload: async (file: Blob, type: ReceiptType, capturedAt: Date) => {
     if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-    const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': capturedAt.toISOString() }, body: file });
-    if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
-    return (await res.json()) as { filename: string };
+    return send<{ filename: string }>('/api/upload', { method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': capturedAt.toISOString() }, body: file });
   },
 
   /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
   importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {
     if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
     const qs = new URLSearchParams({ name, ...into });
-    const res = await fetch(`/api/statements?${qs}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
-    if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
-    return (await res.json()) as StatementImport;
+    return send<StatementImport>(`/api/statements?${qs}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
   },
 
   /** How far the inbox processing is (src/intake/); the static export has none. */

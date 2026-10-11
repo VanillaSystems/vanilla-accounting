@@ -1,15 +1,19 @@
 /** The workspace's files the UI reads directly, served by the API (Vite proxies them in dev). */
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { Router } from 'express';
 import { WS } from './books.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { isAppPath } from './app-paths.js';
+import { BOOKS_VERSION } from '../types/api-error.js';
+import { versionOf } from '../workspace/own-writes.js';
 
 export const router = Router();
 
 router.get('/books.json', (_req, res) => {
-  res.sendFile(WS.paths.books);
+  if (!existsSync(WS.paths.books)) { res.sendStatus(404); return; }
+  const text = readFileSync(WS.paths.books);
+  res.type('json').set(BOOKS_VERSION, versionOf(text)).send(text);
 });
 /** The folder of the books open now: the desktop app switches them while the server runs. */
 function staticOf(dir: () => string): express.RequestHandler {

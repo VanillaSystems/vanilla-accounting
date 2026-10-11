@@ -11,6 +11,7 @@ import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/pro
 import type { BankTransaction, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
+import { wrote } from '../workspace/own-writes.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -138,6 +139,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     change(r, index);
     Object.assign(r, { filename: target, location: 'archived' });
     renameSync(srcPath, join(RECEIPTS_DIR, target));
+    wrote(srcPath);
+    wrote(join(RECEIPTS_DIR, target));
     return target;
   });
 

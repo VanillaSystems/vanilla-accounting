@@ -5,6 +5,7 @@ import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { receiptDir, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { wrote } from '../../workspace/own-writes.js';
 
 export const router = Router();
 
@@ -88,6 +89,7 @@ router.delete('/api/receipts/:id', (req, res) => {
     return { ok: true };
   });
   try { unlinkSync(pdfPath); } catch {}
+  wrote(pdfPath);
 });
 
 /**
@@ -153,5 +155,7 @@ function renameReceiptFile(receipt: Receipt, filename: string): () => void {
   }
   if (!existsSync(from)) return () => {};
   renameSync(from, to);
-  return () => renameSync(to, from);
+  wrote(from);
+  wrote(to);
+  return () => { renameSync(to, from); wrote(from); wrote(to); };
 }

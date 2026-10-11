@@ -19,6 +19,7 @@ export default {
     'col.name': 'Name',
 
     'error.readonly': 'Audit mode: changes are disabled.',
+    'error.stale': 'Changed meanwhile, reloaded — please try again.',
     'error.localOnly': 'Only reachable from this computer.',
     'error.periodClosed': 'Period closed up to {date}.',
     'error.closed.editTransaction': 'Transactions in a closed period cannot be changed.',

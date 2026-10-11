@@ -4,16 +4,19 @@
  */
 import type { Response } from 'express';
 import type { Index } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
-import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
+import { booksVersion, ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
+import { BOOKS_VERSION, type ApiRefusal, type ClosedReason } from '../types/api-error.js';
 import { openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { receiptDirOf } from '../workspace/reads.js';
+import { follow } from './events.js';
 
 /** Live: a route that changes the manifest reopens it, the desktop app opens other books, and every route reads the new one. */
 export let WS = openWorkspace();
+follow(WS);
 
 export function reopenWorkspace(root: string = WS.paths.root): void {
   WS = openWorkspaceAt(root);
+  follow(WS);
 }
 
 export const receiptDir = (location?: string): string => receiptDirOf(WS, location);
@@ -24,23 +27,22 @@ export const readBooks = (): Books => loadBooks(WS);
 type Sync<T> = T extends PromiseLike<unknown> ? never : T;
 
 /**
- * One change to the books: load, run `fn` inside mutateJournal, save, and return what `fn`
- * returns. Nothing is saved when `fn` throws. `fn` is synchronous: a route that asks a model
- * awaits it first and applies the answer here, to books loaded after the answer came.
- */
-export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
-  const books = readBooks();
-  const result = mutateJournal(books, fn);
-  saveBooks(WS, books);
-  return result;
-}
-
-/**
- * One request's change to the books, sent as the response. The error handler in api.ts turns
- * a ClosedPeriodError into 403 and a RequestError into its status.
+ * One request's change to the books, sent as the response: load, run `fn` inside mutateJournal,
+ * save. Nothing is saved when `fn` throws. `fn` is synchronous: a route that asks a model awaits
+ * it first and applies the answer here, to books loaded after the answer came. A request that
+ * names the books version it was made on (BOOKS_VERSION) is refused with `stale` when the books
+ * changed since; the answer names the version saved. The error handler in api.ts turns a
+ * ClosedPeriodError into 403 and a RequestError into its status.
  */
 export function withBooks<T>(res: Response, fn: (books: Books) => Sync<T>): void {
-  res.json(updateBooks(fn));
+  const books = readBooks();
+  const seen = res.req.get(BOOKS_VERSION);
+  if (seen && seen !== booksVersion(books)) {
+    throw new RequestError(409, 'Die Buchhaltung wurde inzwischen geändert. Neu laden und nochmals versuchen.', { code: 'stale' });
+  }
+  const result = mutateJournal(books, fn);
+  res.set(BOOKS_VERSION, saveBooks(WS, books));
+  res.json(result);
 }
 
 // Golden rule 1 (AGENTS.md): nothing dated on or before config.closedThrough may change.

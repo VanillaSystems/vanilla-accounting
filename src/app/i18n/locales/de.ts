@@ -16,6 +16,7 @@ export const messages = {
   'col.name': 'Name',
 
   'error.readonly': 'Prüfmodus: Änderungen sind deaktiviert.',
+  'error.stale': 'Inzwischen geändert, neu geladen — bitte nochmals.',
   'error.localOnly': 'Nur von diesem Computer aus erreichbar.',
   'error.periodClosed': 'Periode geschlossen bis {date}.',
   'error.closed.editTransaction': 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',

@@ -19,6 +19,7 @@ export default {
     'col.name': 'Nom',
 
     'error.readonly': 'Mode révision: les modifications sont désactivées.',
+    'error.stale': 'Modifié entre-temps, rechargé — veuillez réessayer.',
     'error.localOnly': 'Accessible uniquement depuis cet ordinateur.',
     'error.periodClosed': 'Période clôturée jusqu’au {date}.',
     'error.closed.editTransaction': 'Les transactions d’une période clôturée ne peuvent pas être modifiées.',
