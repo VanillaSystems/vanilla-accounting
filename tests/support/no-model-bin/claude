@@ -1,0 +1,6 @@
+#!/bin/sh
+# Stands in for a missing or logged-out `claude` CLI: every API test server finds it first
+# (tests/support/api-server.ts), so no test reaches a real model by accident.
+cat >/dev/null
+echo "no model in tests" >&2
+exit 1

@@ -2,13 +2,18 @@
 // Stands in for the `claude` CLI that src/llm/ask.ts spawns, so a test runs the real code with
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
 // carries Swiss VAT facts. A call with the Read tool (vision) answers STUB_OCR_TEXT; any other
-// prompt answers STUB_ANSWER (JSON).
+// prompt answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
 // $CLAUDE_STUB_PROMPTS: each prompt is appended there.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 const STUB_OCR_TEXT = 'Stub-OCR\n\nBeleg vom Stub gelesen';
 const STUB_ANSWER = { suggestedFilename: '20260812-stub-shop.pdf', date: '2026-08-12', description: 'Stub Shop', amount: 50, currency: 'EUR' };
+
+if (process.argv.includes('--version')) {
+  process.stdout.write('0.0.0 (stub)\n');
+  process.exit(0);
+}
 
 const prompt = readFileSync(0, 'utf8');
 if (process.env.CLAUDE_STUB_PROMPTS) appendFileSync(process.env.CLAUDE_STUB_PROMPTS, prompt + '\n\0\n');
@@ -31,5 +36,5 @@ function classify() {
 
 const result = prompt.includes('## Chart of Accounts') ? classify()
   : process.argv.includes('Read') ? STUB_OCR_TEXT
-  : JSON.stringify(STUB_ANSWER);
+  : process.env.CLAUDE_STUB_ANSWER ?? JSON.stringify(STUB_ANSWER);
 process.stdout.write(JSON.stringify({ result, is_error: false, usage: { input_tokens: 7, output_tokens: 3 }, num_turns: 1 }));

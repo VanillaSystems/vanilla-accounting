@@ -11,6 +11,9 @@ import { join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { issue } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type InvoiceBook } from '../src/invoices/model.js';
+import type { Books } from '../src/books/store.js';
+import { closedPart } from '../src/books/seal.js';
+import type { IntakeStatus } from '../src/intake/pipeline.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
 const REPO = process.cwd();
@@ -224,4 +227,20 @@ test('open period: POST /api/workspace/logo succeeds: a logo is no dated record,
   assert.equal(res.status, 200);
   assert.match(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), /logo: invoices\/logo-[0-9a-f]{12}\.png/);
   assert.equal(readFileSync(api.indexPath, 'utf8'), before);
+});
+
+test('open period: POST /api/intake runs the inbox processing; the filed quarter keeps its entries, payments and links', async () => {
+  const fixture = JSON.parse(readFileSync(join(REPO, 'tests/fixtures/period-lock-index.json'), 'utf8')) as Books;
+  const { status } = await send({ method: 'POST', path: '/api/intake' });
+  assert.equal(status, 200);
+  let job: IntakeStatus['job'];
+  for (let i = 0; i < 500; i++) {
+    const s = (await api.send('GET', '/api/intake')).json as unknown as IntakeStatus;
+    if (!s.running && s.job?.finishedAt) { job = s.job; break; }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  assert.ok(job, 'the job finished');
+  assert.equal(job.steps[0].state, 'done', JSON.stringify(job.steps[0].notes));
+  const now = JSON.parse(readFileSync(api.indexPath, 'utf8')) as Books;
+  assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
 });

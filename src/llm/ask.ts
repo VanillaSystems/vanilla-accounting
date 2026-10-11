@@ -125,3 +125,16 @@ export function ask(prompt: string, opts: AskOptions): Promise<string> {
     child.stdin.end();
   });
 }
+
+/**
+ * Whether a working `claude` CLI answers here: found on PATH and exits 0 for `--version`. Steps
+ * that need the model skip their model part without it and say so, instead of failing each call.
+ */
+export function modelReady(timeoutMs = 15_000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn('claude', ['--version'], { cwd: cwd(), stdio: ['ignore', 'ignore', 'ignore'] });
+    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(false); }, timeoutMs);
+    child.on('error', () => { clearTimeout(timer); resolve(false); });
+    child.on('close', (code) => { clearTimeout(timer); resolve(code === 0); });
+  });
+}

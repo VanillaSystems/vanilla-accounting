@@ -50,7 +50,7 @@ router.post('/api/upload', express.raw({ type: 'application/pdf', limit: '50mb' 
  * read by `npm run extract` so far. Each carries the id its receipt will have (the first 16 hex
  * of its SHA-256, as extract computes it), so a link to it keeps working once it is read.
  */
-function inboxFiles(): InboxFile[] {
+export function inboxFiles(): InboxFile[] {
   if (!existsSync(WS.paths.inbox)) return [];
   const known = new Set(readBooks().receipts.filter((r) => r.location === 'staged').map((r) => r.filename));
   return readdirSync(WS.paths.inbox)
