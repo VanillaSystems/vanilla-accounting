@@ -115,4 +115,6 @@ workspace       invoices.json, invoices/<number>.pdf, invoices/sent/<id>.pdf, an
 ```
 
 The UI (phase 9) renders sheets with `sheetBlocks`, measures the blocks in its own DOM, places them
-with `paginate` and writes them with `assembleSheets`: the same code that prints the PDF.
+with `paginate` and writes them with `assembleSheets`: the same code that prints the PDF. A draft
+is edited in place through `SheetData.screen` (fields marked `data-ed`, buttons `data-ia`, the
+UI's words); a printed sheet never carries it. src/app/areas/invoices/ holds the area.

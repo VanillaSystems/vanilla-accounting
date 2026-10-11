@@ -8,8 +8,8 @@ Abschluss (`/close[/<step>]`, rebuilt in redesign phase 7) is the year-end in se
 - `close-checks`: `.chk[data-check]` rows: the engine's checks, then `fx`, `vat`, `entries`, `invoices` (open on 31.12.), `balance`; a row with `→` goes to its step or area. Below: the VAT reconciliation table.
 - `close-entries`: `[data-template=<id>]` rows with `Nicht nötig`, `Erfassen` (an inline form prefilled from the template), `zurück`. `receivables` appears only with invoices open on 31.12., amount and revenue account prefilled; booking it marks it done; the toast's Rückgängig deletes the entry and resets the mark.
 - `close-close`: the Kursdifferenz table with `Kursdifferenz buchen`, the closing balance sheet, `Jahr <year> abschliessen` (disabled with the blocking problems listed; when only the Kursdifferenz is open it books it first, after a confirm dialog).
-- `close-open`, `close-profit`, `close-handover`: the opening preview or table with `Neues Jahr eröffnen` / `Eröffnungssaldi aktualisieren`; the profit allocation (date, reserve, dividend, 35 % split; booking only after the close); three handover cards.
-- `company-sections`: `.row.fset[data-section]`: `profile`, `vat`, `banks`, `invoice-layout` (im Bau), `accounts`, `periods`, `opening`, `display`.
+- `close-open`, `close-profit`, `close-handover`: the opening preview or table with `Neues Jahr eröffnen` / `Eröffnungssaldi aktualisieren`; the profit allocation (date, reserve, dividend, 35 % split; booking only after the close); three handover cards; the Banana and Prüfung cards open the export dialog with the year.
+- `company-sections`: `.row.fset[data-section]`: `profile`, `vat`, `banks`, `invoice-layout` (features/invoices.md), `accounts`, `periods`, `opening`, `display`.
 - `company-edit`: profile (`Bearbeiten`, inline form, Rückgängig), banks (`Bezeichnung und IBAN bearbeiten`, `Bankkonto hinzufügen`), accounts (number + name: rename an existing account or add a new one; a rename can be undone). A change the manifest's reader refuses is shown in the toast and nothing is written.
 
 ## How to get to it (user POV)

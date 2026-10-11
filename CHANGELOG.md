@@ -87,6 +87,20 @@ Two markers flag an entry you must read before you update:
   (`PATCH /api/workspace`, `PUT /api/accounts/<number>`): `belege.workspace.yaml` keeps its
   comments, layout and every field the app does not know, and a change its reader refuses is
   never written. Removed with the old tab: the Jahresabschluss tab and its account combobox.
+- Rechnungen rebuilt (redesign phase 9). The invoices of a period by state (Überfällig first, then
+  Offen, Entwürfe, Bezahlt, Gutschriften, Storniert) with `?status=`, the open total in CHF, the
+  customers (`/invoices/customers`) and every document sent (`/invoices/sent`, the stored PDF as it
+  went out). An invoice shows on its A4 sheet, laid out by the same renderer as its PDF; a draft is
+  edited on the sheet itself (customer, dates, texts, each line's text, quantity, unit, price and
+  VAT rate, the reason for 0 %), with Vorschau, Ausstellen (what Art. 26 MWSTG still needs is
+  named), Senden (the PDF is downloaded and the send recorded; no e-mail yet), copy, credit note
+  (whole or part, refund or set off), cancellation with a notice, reminders written on the sheet
+  with a fee, comments, and payment proposals to confirm. The customer form takes addresses of any
+  country (postcode, state, house number first, VAT number, language). New invoice with N or
+  `/invoices/new?customer=<id>`; ⌘K finds invoices and customers. Firma › Rechnungslayout sets
+  font, colour, logo (uploaded, `POST /api/workspace/logo`), envelope window and elements, and the
+  texts above and below the table per language, edited on a sample sheet (`PATCH /api/workspace`
+  writes the `invoicing` block).
 - Opening the next year reverses the receivables entry of 31.12. on 1.1. (revenue against 1100),
   so an invoice's revenue counts in the year it is paid, with its VAT; a rerun keeps one reversal.
   The handover cards of Abschluss open the export dialog: the journal for Banana, and the
