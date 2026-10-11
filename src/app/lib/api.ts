@@ -75,17 +75,6 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser', missing?: Missin
   return t(`invoice.refusal.${code}`);
 }
 
-/** Awaits an API call and shows its refusal in an alert instead of throwing. True when it succeeded. */
-export async function orAlert(call: Promise<unknown>): Promise<boolean> {
-  try {
-    await call;
-    return true;
-  } catch (e) {
-    alert(errorText(e));
-    return false;
-  }
-}
-
 type Ok = { ok: true };
 type Link = { receiptId: string; transactionRef: string };
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount'>>;

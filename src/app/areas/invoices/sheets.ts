@@ -45,7 +45,3 @@ export function reminderData(d: InvoiceList, inv: Issued, edit: ReminderEdit, to
   const r = { ...drafted, ...(edit.intro !== undefined ? { intro: edit.intro } : {}), ...(edit.closing !== undefined ? { closing: edit.closing } : {}) };
   return { ...reminderSheet(bookOf(d), inv, r, logo(inv.layout.logo)), screen: screenOf(d, editing ? 'texts' : undefined) };
 }
-
-export function sheetData(d: InvoiceList, ws: CompanyInfo, inv: Invoice, editing: boolean): SheetData {
-  return inv.status === 'draft' ? draftData(d, ws, inv, editing) : issuedData(d, inv);
-}

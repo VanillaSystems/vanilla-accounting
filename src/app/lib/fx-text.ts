@@ -4,11 +4,6 @@ import { fmt, formatDate } from './utils.js';
 
 const rateText = (rate: number | undefined) => (rate === undefined ? '—' : String(rate));
 
-/** "EUR <amount> × <rate> = CHF <amount>" */
-export function conversionText(c: Conversion): string {
-  return t('fx.conversion', { currency: c.currency, amount: fmt(c.amount), rate: rateText(c.rate), chf: fmt(c.chf) });
-}
-
 /** Where the rate comes from, or why it is not the ESTV rate of the payment date. */
 export function checkText(c: Conversion): string {
   const { check } = c;

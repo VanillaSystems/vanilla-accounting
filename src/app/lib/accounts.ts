@@ -22,8 +22,3 @@ export function getAccountMap(): Record<string, string> {
 export function getAccounts(): Account[] {
   return accountsCache ?? [];
 }
-
-export function accountTitle(code: string): string {
-  const map = getAccountMap();
-  return map[code] ? `${code} ${map[code]}` : code;
-}
