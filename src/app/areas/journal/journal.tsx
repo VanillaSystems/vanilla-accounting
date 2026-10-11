@@ -159,6 +159,7 @@ const legend = (): LegendItem[] => [
 
 export const journal: Area<RouteOf<'journal'>> = {
   id: 'journal',
+  periodRows: true,
   label: () => t('area.journal'),
   dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') },
   List,

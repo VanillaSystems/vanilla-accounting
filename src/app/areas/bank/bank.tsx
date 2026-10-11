@@ -206,6 +206,7 @@ function palette({ books, nav, period }: AreaProps): PaletteItem[] {
 
 export const bank: Area<RouteOf<'bank'>> = {
   id: 'bank',
+  periodRows: true,
   label: () => t('area.bank'),
   dock: {
     key: 'k',

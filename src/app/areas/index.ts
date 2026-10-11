@@ -75,6 +75,8 @@ export interface Area<R extends Route = Route> {
   wide?: boolean;
   /** Pages without a period (company, codes): no period in the top bar or the heading. */
   periodless?: boolean;
+  /** Its rows belong to a period: another period opens the new list at its first row instead of keeping the object. */
+  periodRows?: boolean;
 }
 
 type Registry = { [A in AreaId]: Area<RouteOf<A>> };

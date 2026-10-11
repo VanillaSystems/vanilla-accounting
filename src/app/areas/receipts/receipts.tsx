@@ -229,6 +229,7 @@ const legend = (): LegendItem[] => [
 
 export const receipts: Area<RouteOf<'receipts'>> = {
   id: 'receipts',
+  periodRows: true,
   label: () => t('area.receipts'),
   dock: { key: 'b', icon: ICONS.receipts, tip: () => t('area.receipts.tip'), badge: (books) => badgeCount(ledgerFor(books)) },
   List,

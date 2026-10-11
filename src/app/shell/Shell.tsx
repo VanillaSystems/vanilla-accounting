@@ -276,7 +276,12 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
           years={[...new Set(quarters.map((q) => q.slice(0, 4)))]}
           closedThrough={books.config?.closedThrough}
           onClose={() => setOverlay(null)}
-          onApply={(token) => { setOverlay(null); nav.setQuery({ period: parsePeriod(token, localToday()) ?? undefined }); }}
+          onApply={(token) => {
+            setOverlay(null);
+            const next = parsePeriod(token, localToday()) ?? undefined;
+            if (area.periodRows) nav.go({ route: AREA_HOME[area.id], query: { ...loc.query, period: next } });
+            else nav.setQuery({ period: next });
+          }}
         />
       )}
     </ShellUiContext.Provider>
