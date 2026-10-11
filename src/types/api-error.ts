@@ -18,7 +18,8 @@ export type ApiRefusal =
   | { code: 'manualOnly' }
   | { code: 'yearClose' }
   | { code: 'fileExists'; params: { filename: string } }
-  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string } };
+  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string } }
+  | { code: 'noBrowser' };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no

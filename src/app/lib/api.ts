@@ -51,6 +51,7 @@ export function errorText(e: unknown): string {
       if (reason === 'account') return detail ? b.error : t('error.statement.account');
       return t(`error.statement.${reason}`);
     }
+    case 'noBrowser': return t('error.noBrowser');
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;

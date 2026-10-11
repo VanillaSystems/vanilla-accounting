@@ -5,6 +5,7 @@
  * language (lib/utils.ts): CHF, 1'234.56, dd.mm.yyyy.
  */
 import type { Key, Locale, Vars, VarsOf } from './types.js';
+import { accountingNameIn, formatIn } from './core.js';
 
 const modules = import.meta.glob<{ default: Locale }>('./locales/*.ts', { eager: true });
 
@@ -36,43 +37,13 @@ export function isKey(key: string): key is Key {
   return key in current.messages;
 }
 
+/** The text of `key` in the current language, `{placeholders}` filled from `vars`. */
+export function t<K extends Key>(key: K, ...[vars]: [VarsOf<K>] extends [never] ? [] : [Vars<K>]): string {
+  return formatIn(current, key, (vars ?? {}) as Record<string, string | number>);
+}
+
 /**
  * The UI name of a statement section or row that src/accounting names in German (the CLI's
  * language): the balance sheet's and income statement's groups. Unknown names stay as they are.
  */
-export function accountingName(german: string): string {
-  const key = ACCOUNTING_NAMES[german];
-  return key ? format(key, {}) : german;
-}
-
-const ACCOUNTING_NAMES: Record<string, Key> = {
-  'Umlaufvermögen': 'statement.currentAssets',
-  'Anlagevermögen': 'statement.fixedAssets',
-  'Kurzfristiges Fremdkapital': 'statement.shortTermLiabilities',
-  'Langfristiges Fremdkapital': 'statement.longTermLiabilities',
-  'Eigenkapital': 'statement.equity',
-  'Jahresergebnis (noch nicht abgeschlossen)': 'statement.openYearResult',
-  'Erlöse': 'statement.revenue',
-  'Aufwand für Material und Waren': 'statement.costOfGoods',
-  'Betriebsaufwand': 'statement.operatingExpenses',
-  'Nebenbetrieblicher Ertrag': 'statement.otherIncome',
-  'Nebenbetrieblicher Aufwand': 'statement.otherExpenses',
-  'Ausserordentliches': 'statement.extraordinary',
-  'Normalsatz': 'vat.rateStandard',
-  'Reduzierter Satz': 'vat.rateReduced',
-  'Beherbergungssatz': 'vat.rateAccommodation',
-  'Bezugsteuer': 'vat.rateAcquisition',
-};
-
-/** The text of `key` in the current language, `{placeholders}` filled from `vars`. */
-export function t<K extends Key>(key: K, ...[vars]: [VarsOf<K>] extends [never] ? [] : [Vars<K>]): string {
-  return format(key, (vars ?? {}) as Record<string, string | number>);
-}
-
-function format(key: Key, values: Record<string, string | number>): string {
-  const entry = current.messages[key];
-  const text = typeof entry === 'string'
-    ? entry
-    : entry[new Intl.PluralRules(`${current.code}-CH`).select(Number(values.n)) === 'one' ? 'one' : 'other'];
-  return text.replace(/\{(\w+)\}/g, (hole, name: string) => (name in values ? String(values[name]) : hole));
-}
+export const accountingName = (german: string): string => accountingNameIn(current, german);

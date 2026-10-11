@@ -1,11 +1,14 @@
 import { createContext, useContext } from 'react';
 import type { Theme } from './prefs.js';
+import type { DialogConfig } from '../areas/export/state.js';
 
 /** What the shell offers the pages inside it: its overlays and the viewer's preferences. */
 export interface ShellUi {
   openPeriod(anchor: HTMLElement): void;
   /** The current area's add action (the add button and N). */
   add(): void;
+  /** The export dialog; without a config, preset for the page (⇧E). */
+  openExport(config?: DialogConfig): void;
   theme: Theme;
   setTheme(theme: Theme): void;
   /** The page is dark now (the preference, or the OS under System). */

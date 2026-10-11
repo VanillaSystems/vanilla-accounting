@@ -1,0 +1,58 @@
+/* The export dialog and the download menu, as the mockup draws them. */
+.xdlg { width: min(980px, 94vw); top: 7vh; max-height: 86vh; display: flex; flex-direction: column; }
+.xdlg .xhd { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 16px 20px 14px; border-bottom: 1px solid var(--line); }
+.xdlg .xhd .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 2px; }
+.xdlg .xhd b { font: 700 17px "Hanken Grotesk"; }
+.xper { display: flex; flex-wrap: wrap; gap: 2px; background: var(--hover); border-radius: 9px; padding: 2px; }
+.xper button { font: 12px "Geist Mono"; padding: 4px 9px; border-radius: 7px; color: var(--muted); }
+.xper button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.xdlg .xbody { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 0; flex: 1; }
+.xdlg .gh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 14px 10px 6px; }
+.xpre { border-right: 1px solid var(--line); padding: 0 10px 12px; overflow: auto; }
+.xpre button, .xown { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 9px; }
+.xpre button b { display: block; font-weight: 500; font-size: 13px; }
+.xpre button span { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.35; margin-top: 1px; }
+.xpre button:hover, .xown:hover { background: var(--hover); }
+.xpre button.on, .xown.on { background: var(--accent-soft); }
+.xown { display: flex; padding: 0; }
+.xown > button:first-child { flex: 1; }
+.xown .del { width: auto; color: var(--faint); padding: 0 10px; opacity: 0; }
+.xown:hover .del { opacity: 1; }
+.xown .del:hover { color: var(--neg); }
+.xcfg { padding: 0 20px 14px; overflow: auto; }
+.xrow { display: flex; align-items: center; gap: 12px; padding: 6px 10px; margin: 0 -10px; border-radius: 8px; }
+.xrow:hover { background: var(--hover); }
+.xrow label { flex: 1; display: flex; align-items: baseline; gap: 10px; min-width: 0; cursor: pointer; font-size: 13px; }
+.xrow label small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.xrow input { accent-color: var(--accent); }
+.xrow.empty label { color: var(--faint); }
+.xrow:not(.on) .xf { opacity: .45; }
+.xf { display: flex; gap: 2px; flex: none; }
+.xf button { font: 500 11px "Geist Mono"; padding: 3px 8px; border-radius: 6px; color: var(--muted); border: 1px solid var(--line); }
+.xf button.on { background: var(--accent-soft); color: var(--ink); border-color: transparent; }
+[data-theme="dark"] .xf button.on { background: #2a2a2a; }
+.xf button:hover:not(:disabled) { border-color: var(--line-2); color: var(--ink); }
+.xf .orig { font-size: 12px; color: var(--muted); }
+.xnote { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); max-width: 68ch; }
+.xdlg .xft { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--line); }
+.xopt { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: var(--ink-2); }
+.xopt input { accent-color: var(--accent); margin-right: 6px; }
+.xsum { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.xname { display: inline-flex; gap: 6px; align-items: center; }
+/* the palette's search-field style must not reach the dialog's own inputs */
+.xdlg input[type="checkbox"] { all: revert; accent-color: var(--accent); margin: 0; flex: none; width: 14px; height: 14px; }
+.xdlg .xopt label { display: flex; align-items: center; gap: 8px; }
+.xdlg:focus { outline: none; }
+.xdlg .xname input { all: revert; font: 13px "Instrument Sans"; padding: 5px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); width: 180px; }
+.xrow label { justify-content: flex-start; text-align: left; }
+.xname input { font: inherit; font-size: 13px; padding: 5px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); width: 180px; }
+.xper .xcal { display: inline-flex; align-items: center; gap: 5px; font-family: "Instrument Sans"; color: var(--ink-2); }
+.xper .xcal .i { width: 14px; height: 14px; }
+.xper .xcal:hover { color: var(--ink); background: var(--bg); }
+.dlpop { min-width: 260px; }
+.dlpop .mh { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); padding: 6px 10px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.dlpop button b { font-weight: 500; min-width: 44px; }
+.dlpop .sep2 { height: 1px; background: var(--line); margin: 4px 6px; }
+.ldl { display: flex; justify-content: flex-end; gap: 4px; max-width: 900px; margin-top: 10px; }
+.ldl .dl.inline { margin-left: 14px; }
+button.dl { font: 500 12px "Instrument Sans"; }

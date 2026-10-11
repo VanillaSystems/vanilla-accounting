@@ -202,6 +202,7 @@ export const reports: Area<RouteOf<'reports'>> = {
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     if (e.key === 'Escape' && p.query.q) { p.nav.setQuery({ q: undefined }); return true; }
+    if (e.key === 'd') { document.querySelector<HTMLElement>('[data-dlpop]')?.click(); return true; }
     if (e.key !== 'Enter') return false;
     const a = accountOfRoute(p.route);
     const first = a === undefined ? undefined : ledgerOf(p.books, a, p.period).rows[0]?.entry;

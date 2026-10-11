@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
 import type { AuditSnapshot } from './sources.js';
+import { APP_ROOT } from '../workspace/workspace.js';
 
 export const MANIFEST = 'manifest.json';
 export const MANIFEST_FORMAT = 'vanilla-accounting-audit-export/1';
@@ -68,3 +69,6 @@ export function verifyExport(dir: string): string[] {
 
 /** The manifest's own hash: sent apart from the export, it proves the manifest itself was not replaced. */
 export const manifestHash = (dir: string) => sha256(readFileSync(join(dir, MANIFEST)));
+
+/** The app's version (package.json), written into every export. */
+export const appVersion = (): string => (JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as { version: string }).version;

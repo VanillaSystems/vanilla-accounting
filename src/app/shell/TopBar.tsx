@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { t } from '../i18n/index.js';
 import { ZOOM_STEPS } from './prefs.js';
+import { ICONS } from '../areas/icons.js';
 
 interface Props {
   company?: string;
@@ -11,11 +12,12 @@ interface Props {
   onPeriod(anchor: HTMLElement): void;
   onZoom(step: -1 | 0 | 1): void;
   onTheme(): void;
+  onExport(): void;
   language: string;
   onLanguage(anchor: HTMLElement): void;
 }
 
-/** The context bar at the top edge: company, search, period, zoom, theme and language. */
+/** The context bar at the top edge: company, search, period, zoom, export, theme and language. */
 export const TopBar = forwardRef<HTMLDivElement, Props>(function TopBar(p, ref) {
   return (
     <div className="topbar" ref={ref} role="toolbar" aria-label={t('shell.toolbar')}>
@@ -30,6 +32,7 @@ export const TopBar = forwardRef<HTMLDivElement, Props>(function TopBar(p, ref) 
         <button type="button" className="chip" title={t('shell.zoomIn')} aria-label={t('shell.zoomIn')} disabled={p.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} onClick={() => p.onZoom(1)}>+</button>
       </span>
       <span className="sep" />
+      <button type="button" className="chip" title={t('export.chipTip')} aria-label={t('export.dialog')} onClick={p.onExport}>{ICONS.download}</button>
       <button type="button" className="chip" title={t('shell.theme')} aria-label={t('shell.theme')} onClick={p.onTheme}>◐</button>
       <button type="button" className="chip" aria-label={t('app.language')} aria-haspopup="menu" onClick={(e) => p.onLanguage(e.currentTarget)}>{p.language.toUpperCase()}</button>
     </div>
