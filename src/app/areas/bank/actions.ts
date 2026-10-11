@@ -3,6 +3,7 @@
  * statements added from a file (the add button, N, a drop, or a missing month's well) through
  * POST /api/statements, which reads them into the books as `npm run extract` would.
  */
+import { startIntake } from '../../shell/Intake.js';
 import type { BankTransaction } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
@@ -57,6 +58,7 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
   if (skipped.length) nav.toast([last && t('bank.imported', { n: added }), t('bank.importSkipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '));
   else if (last) nav.toast(t('bank.imported', { n: added }));
   if (!last) return;
+  void startIntake();
   forgetPages();
   nav.refresh();
   nav.go({ route: { area: 'bank', statement: `${last.account}-${last.month}` }, query: {} });

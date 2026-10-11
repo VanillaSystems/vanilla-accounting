@@ -18,6 +18,7 @@ import { pollInbox, setUi, toggleGroup, ui, useUi } from './state.js';
 import { at, ledgerFor, listed } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
+import { startIntake, useIntake } from '../../shell/Intake.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
@@ -89,6 +90,7 @@ function List(props: Props) {
               ))}
             </>
           ) : <span>{filed ? t('receipts.filedReadOnly') : t('receipts.stillEmpty')}</span>}
+          {canEdit && <RunInbox />}
           <label className="search">
             {ICONS.search}
             <span className="sr">{t('receipts.searchLabel')}</span>
@@ -208,6 +210,16 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
   );
 }
 
+/** "Eingang verarbeiten": reads the inbox and statements, the VAT facts, names, links and books (src/intake/). */
+function RunInbox() {
+  const { running } = useIntake();
+  return (
+    <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} title={t('intake.runTip')} onClick={() => void startIntake()}>
+      {I.spark}{running ? t('intake.running') : t('intake.run')}
+    </button>
+  );
+}
+
 function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; onSelect(id: string): void }) {
   return (
     <div className={`row reading${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} title={t('receipts.readingTip')} onClick={() => onSelect(file.id)}>
@@ -239,11 +251,13 @@ export const receipts: Area<RouteOf<'receipts'>> = {
   add: intakeAdd,
   legend,
   title: (r, books) => { const v = r.id ? ledgerFor(books).byId.get(r.id) : undefined; return v && (v.vendor || v.r.filename); },
-  palette: ({ books, nav, period }) => [...ledgerFor(books).views].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).map((v) => ({
+  palette: ({ books, nav, period, canEdit }) => [
+    ...(canEdit ? [{ label: t('intake.run'), side: t('area.receipts'), run: () => void startIntake() }] : []),
+    ...[...ledgerFor(books).views].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).map((v) => ({
     label: v.desc ? `${v.vendor} · ${v.desc}` : v.vendor,
     side: [v.date && formatDate(v.date), v.r.amount != null && formatAmount(v.r.amount, v.r.currency)].filter(Boolean).join('  '),
     run: () => nav.go(at({ area: 'receipts', id: v.r.id }, v.day, period)),
-  })),
+  }))],
   keys(e, p) {
     const s = ui();
     if (s.overlay === 'quick') {

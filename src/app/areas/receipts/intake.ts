@@ -1,12 +1,14 @@
 /**
  * Files added by the add button, N or a drop on any page: PDFs go to the workspace's inbox
- * (beleg-import/). Belege opens on the first one, shown as being read until `npm run extract`
- * reads it into the books; it keeps its id (its checksum), so it stays selected.
+ * (beleg-import/) and the inbox processing starts. Belege opens on the first one, shown as being
+ * read until the processing reads it into the books; it keeps its id (its checksum), so it stays
+ * selected.
  */
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
 import { pollInbox } from './state.js';
+import { startIntake } from '../../shell/Intake.js';
 
 /** The id extract gives the file: the first 16 hex characters of its SHA-256. */
 async function idOf(file: File): Promise<string | undefined> {
@@ -26,6 +28,7 @@ export async function intake(files: File[], nav: Nav): Promise<void> {
   }
   nav.toast([pdfs.length && t('intake.done', { n: pdfs.length }), skipped.length && t('intake.skipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '));
   if (!pdfs.length) return;
+  void startIntake();
   const id = await idOf(pdfs[0]).catch(() => undefined);
   await pollInbox(nav.refresh);
   nav.go({ route: { area: 'receipts', ...(id && { id }) }, query: {} });
