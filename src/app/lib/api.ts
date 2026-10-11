@@ -222,6 +222,8 @@ export const api = {
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
+    /** Marks the books that open at every start; null removes the mark. */
+    autoOpen: (root: string | null) => request<DesktopInfo>('PUT', '/api/desktop/auto-open', { root }),
   },
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),

@@ -4,7 +4,10 @@
  * start screen → Demo → every area → issue an invoice and check its PDF (one page, the QR-bill
  * decodes) → the SMTP password saved in Firma, the invoice sent by e-mail to a local SMTP server →
  * a PDF, a PNG and a HEIC dropped and read by the inbox job → a camt.053 paying the invoice
- * imported → set up new books and switch back through the File menu → claude missing → Firma ›
+ * imported → set up new books and switch back through the File menu → mark the demo "Immer diese
+ * Buchhaltung öffnen" → it opens at the next start → File › Buchhaltung wechseln… shows the start screen
+ * with the mark → the mark removed in Firma › Darstellung → marked books moved away: the start screen
+ * names them → claude missing → Firma ›
  * Claude: "Claude einrichten" writes the setup script and opens it (a recorder stands in for
  * `open`, so no installer runs), and a claude that appears meanwhile is found on focus, no restart.
  *
@@ -19,7 +22,7 @@
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import fs from 'node:fs';
@@ -342,6 +345,16 @@ await settle(page, 'nav.dock');
 const back = (await api(page, '/api/workspace')).json?.company?.name;
 check('File menu switches back to the demo (menu clicked)', back === demoName, back);
 await shot(page, '07-back-to-demo');
+// The start screen lists the books, newest first; the demo is marked to open at every start.
+await page.goto(`${base}/start`);
+await settle(page, '.st-recent');
+const order = await page.evaluate(() => [...document.querySelectorAll('.st-recent-row .mono')].map((e) => e.textContent));
+check('the start screen lists the recent books, newest first', order[0]?.endsWith('/Demo') && order[1] === root, order.join(', '));
+await page.evaluate(() => [...document.querySelectorAll('.st-recent-row')].find((r) => r.querySelector('.mono')?.textContent.endsWith('/Demo'))?.querySelector('input[data-testid=auto-open]')?.click());
+await sleep(600);
+const markedDemo = (await api(page, '/api/desktop')).json?.autoOpen;
+check('"Immer diese Buchhaltung öffnen" marks the demo in desktop.json', markedDemo?.endsWith('/Demo') && JSON.parse(readFileSync(join(userData, 'desktop.json'), 'utf8')).autoOpen === markedDemo, markedDemo);
+await shot(page, '07b-start-demo-marked');
 // Quit as the menu's Beenden does, so the page's storage is written.
 const exited = new Promise((r) => first.child.once('exit', r));
 await page.evaluate(() => window.vanillaSmoke.quit());
@@ -357,7 +370,12 @@ chmodSync(recorder, 0o755);
 const second = await launch(9334, '/bin/sh', { HOME: bareHome, VANILLA_OPEN_COMMAND: recorder });
 page = second.page;
 await settle(page, 'nav.dock');
-check('the next start opens the last books', (await api(page, '/api/workspace')).json?.company?.name === demoName);
+check('the marked books open at the next start, without the start screen', (await api(page, '/api/workspace')).json?.company?.name === demoName && !(await page.$('.st-choices')));
+check('the File menu has Buchhaltung wechseln…', (await menu(page)).file.includes('Buchhaltung wechseln…'), (await menu(page)).file.join(', '));
+await Promise.all([page.waitForNavigation({ timeout: 20000 }), clickMenu(page, 'switch')]);
+await settle(page, '.st-recent');
+check('Buchhaltung wechseln… shows the start screen with the mark', await page.evaluate(() => [...document.querySelectorAll('input[data-testid=auto-open]')].some((i) => i.checked)));
+await shot(page, '07c-switch-books');
 check('the next start keeps the page\'s origin and with it the language', second.base === base && (await page.evaluate(() => document.documentElement.lang)) === 'de', `${second.base} ${await page.evaluate(() => document.documentElement.lang)}`);
 const receipts = (await api(page, '/books.json')).json.receipts;
 const open = receipts.find((r) => r.date >= '2026-07-01' && r.location === 'archived');
@@ -405,7 +423,29 @@ check('on focus the app finds claude again and says "Claude verbunden"', await p
 await shot(page, '12-claude-connected');
 const now = await api(page, '/api/vision/extract', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ receiptId: open.id }) });
 check('the model call refused before works now, without a restart', now.status === 200, `${now.status} ${now.json?.code ?? ''}`);
-second.child.kill();
+
+// 9. Firma › Darstellung says which books open by themselves and takes the mark away; then marked books moved away.
+await page.goto(`${base}/company/display`);
+await settle(page, '[data-testid=auto-open-setting]');
+await shot(page, '13-display-auto-open');
+await page.click('[data-testid=auto-open-stop]');
+await sleep(600);
+check('Firma › Darstellung: "Nicht mehr automatisch öffnen" removes the mark', (await api(page, '/api/desktop')).json?.autoOpen === null);
+await page.goto(`${base}/start`);
+await settle(page, '.st-recent');
+await page.evaluate((root) => [...document.querySelectorAll('.st-recent-row')].find((r) => r.querySelector('.mono')?.textContent === root)?.querySelector('input[data-testid=auto-open]')?.click(), root);
+await sleep(600);
+check('the new books are marked instead', (await api(page, '/api/desktop')).json?.autoOpen === root);
+const exitedSecond = new Promise((r) => second.child.once('exit', r));
+await page.evaluate(() => window.vanillaSmoke.quit());
+await exitedSecond;
+renameSync(root, `${root}-moved`);
+const third = await launch(9335, stubShell);
+page = third.page;
+await settle(page, '.st-choices');
+check('marked books that moved away: the start screen names them', await page.evaluate((root) => document.querySelector('[data-testid=auto-open-missing]')?.textContent.includes(root), root));
+await shot(page, '14-start-marked-missing');
+third.child.kill();
 await new Promise((r) => smtp.close(r));
 
 writeFileSync(join(out, 'smoke.json'), JSON.stringify({ app: appPath, userData, results }, null, 2));

@@ -109,13 +109,23 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               </button>
             </div>
             {error && <p className="warnline" role="alert">{error}</p>}
+            {info?.autoOpenMissing && <p className="warnline" role="status" data-testid="auto-open-missing">{t('desktop.autoOpenMissing', { root: info.autoOpenMissing })}</p>}
             {!!info?.recent.length && (
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" disabled={busy || !b.name} onClick={() => void run(() => api.desktop.open(b.root))}>
-                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t('desktop.missing')}</b><span className="mono">{b.root}</span>
-                  </button>
+                  <div key={b.root} className="st-recent-row">
+                    <button type="button" className="st-book" disabled={busy || !b.name} onClick={() => void run(() => api.desktop.open(b.root))}>
+                      <b>{b.demo ? t('desktop.demoName') : b.name ?? t('desktop.missing')}</b><span className="mono">{b.root}</span>
+                    </button>
+                    {(b.name || info.autoOpen === b.root) && (
+                      <label className="st-auto">
+                        <input type="checkbox" data-testid="auto-open" checked={info.autoOpen === b.root} disabled={busy}
+                          onChange={(e) => void api.desktop.autoOpen(e.target.checked ? b.root : null).then(setInfo, (x) => setError(errorText(x)))} />
+                        {t('desktop.autoOpen')}
+                      </label>
+                    )}
+                  </div>
                 ))}
               </section>
             )}

@@ -53,7 +53,7 @@ test('the app menu\'s About opens the app\'s own About page, which carries the s
   const { menuTemplate } = await import('../src/desktop/menu.js');
   const commands: string[] = [];
   const noop = () => {};
-  const [appMenu] = menuTemplate('de', [], { openBooks: noop, newBooks: noop, demo: noop, openRecent: noop, command: (c) => commands.push(c) }, false);
+  const [appMenu] = menuTemplate('de', [], { openBooks: noop, newBooks: noop, switchBooks: noop, demo: noop, openRecent: noop, command: (c) => commands.push(c) }, false);
   const about = (appMenu.submenu as Array<{ id?: string; label?: string; role?: string; click?: () => void }>).find((i) => i.id === 'about')!;
   assert.equal(about.label, 'Über Vanilla Accounting');
   assert.equal(about.role, undefined, 'not the native panel');

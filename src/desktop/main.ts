@@ -8,20 +8,21 @@
 import { createServer, type Server } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { BrowserWindow, Menu, app, dialog, ipcMain, safeStorage, screen, session, shell } from 'electron';
 import type { Express } from 'express';
 import { usePrintPages } from '../invoices/pdf.js';
 import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
-import { APP_ROOT } from '../workspace/workspace.js';
+import { APP_ROOT, MANIFEST_FILE } from '../workspace/workspace.js';
 import type { MenuCommand } from '../types/desktop.js';
 import { resolveClaude } from './claude.js';
 import { launchSetup, type SetupTexts } from './claude-setup.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer } from './server.js';
-import { readState, writeState, type Bounds } from './state.js';
+import { launchDecision, readState, writeState, type Bounds } from './state.js';
 import { PRODUCT } from '../app/brand/names.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,7 @@ async function start(): Promise<void> {
         if (root) await opening(() => server.open(root))();
       },
       newBooks: () => show('/start?new'),
+      switchBooks: () => show('/start'),
       demo: opening(() => server.openDemo()),
       openRecent: (root) => void opening(() => server.open(root))(),
       command: (command: MenuCommand) => win?.webContents.send('desktop:menu', command),
@@ -108,8 +110,9 @@ async function start(): Promise<void> {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }
   });
-  const last = readState(stateFile).recent[0];
-  if (last) await server.open(last).catch(() => undefined);
+  const launch = launchDecision(readState(stateFile), optionHeld(), (root) => existsSync(join(root, MANIFEST_FILE)));
+  if (launch.kind === 'open') await server.open(launch.root).catch(() => server.autoOpenMissing(launch.root));
+  else if (launch.missing) server.autoOpenMissing(launch.missing);
   refreshMenu();
   // The page starts the inbox job as it loads; the job checks for claude once, so it must be known by then.
   await claudeFound;
@@ -118,6 +121,17 @@ async function start(): Promise<void> {
   app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
+}
+
+/** ⌥ held while the app starts (macOS): the start screen once, whatever books are marked. AppKit's flags, read through JXA. */
+function optionHeld(): boolean {
+  if (process.platform !== 'darwin') return false;
+  try {
+    const flags = Number(execFileSync('/usr/bin/osascript', ['-l', 'JavaScript', '-e', "ObjC.import('AppKit'); $.NSEvent.modifierFlags"], { encoding: 'utf8', timeout: 3000 }));
+    return (flags & 0x80000) !== 0;
+  } catch {
+    return false;
+  }
 }
 
 function setupTexts(language: string): SetupTexts {

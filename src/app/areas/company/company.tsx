@@ -4,7 +4,7 @@
  * periods and seals are read only (a quarter closes with the seal CLI, the year with Abschluss);
  * Claude is the computer's (src/app/shell/claude.tsx); Darstellung is this browser's own.
  */
-import { Fragment, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
 import { COMPANY_SECTIONS, companySection, type CompanySection, type RouteOf } from '../../shell/route.js';
 import { reloadWorkspace, useWorkspace } from '../../hooks/use-workspace.js';
@@ -16,6 +16,8 @@ import { useShellUi } from '../../shell/ui.js';
 import { moveKey } from '../../shell/keyboard.js';
 import type { Theme } from '../../shell/prefs.js';
 import { About } from '../../brand/Brand.js';
+import { desktop } from '../../desktop/bridge.js';
+import type { DesktopInfo } from '../../../types/desktop.js';
 import { version } from '../../../../package.json';
 import { addDays, localToday, openQuarter, parsePeriod } from '../../../accounting/periods.js';
 import type { Address } from '../../../invoices/model.js';
@@ -443,9 +445,24 @@ function Opening({ books, nav }: Props) {
 
 function Display() {
   const ui = useShellUi();
+  const [launch, setLaunch] = useState<DesktopInfo | null>(null);
+  useEffect(() => { if (desktop) void api.desktop.info().then(setLaunch, () => setLaunch(null)); }, []);
+  const marked = launch?.autoOpen ? launch.recent.find((b) => b.root === launch.autoOpen) : undefined;
   return (
     <>
       <dl className="kv2 wide">
+        {launch && (
+          <>
+            <dt>{t('display.atStart')}</dt>
+            <dd data-testid="auto-open-setting">
+              {launch.autoOpen
+                ? <><b>{marked?.demo ? t('desktop.demoName') : marked?.name ?? launch.autoOpen}</b>{' '}
+                  <button type="button" className="clink" data-testid="auto-open-stop" onClick={() => void api.desktop.autoOpen(null).then(setLaunch)}>{t('display.autoOpenStop')}</button>
+                  <span className="m"> {t('display.autoOpenHint')}</span></>
+                : <>{t('display.atStartScreen')} <span className="m">{t('display.atStartHint')}</span></>}
+            </dd>
+          </>
+        )}
         <dt>{t('display.color')}</dt>
         <dd>
           <span className="seg2" role="radiogroup" aria-label={t('company.display')}>

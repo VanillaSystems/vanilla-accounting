@@ -42,4 +42,8 @@ export interface DesktopInfo {
   recent: KnownBooks[];
   /** Where new books go unless the person picks another folder. */
   booksHome: string;
+  /** The books that open at every start ("Immer diese Buchhaltung öffnen"), or null: the start screen shows. */
+  autoOpen: string | null;
+  /** This start wanted to open the marked books, but their folder holds none any more. */
+  autoOpenMissing: string | null;
 }

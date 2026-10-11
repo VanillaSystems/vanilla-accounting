@@ -27,6 +27,8 @@ export const textsIn = (language: string) => (key: Key, values: Record<string, s
 export interface MenuActions {
   openBooks(): void;
   newBooks(): void;
+  /** The start screen, also when books are open or marked to open by themselves. */
+  switchBooks(): void;
   demo(): void;
   openRecent(root: string): void;
   command(command: MenuCommand): void;
@@ -57,6 +59,7 @@ export function menuTemplate(language: string, recent: readonly KnownBooks[], ac
       submenu: [
         { id: 'open', label: t('desktop.menu.open'), accelerator: 'CmdOrCtrl+O', click: actions.openBooks },
         { id: 'new', label: t('desktop.menu.new'), click: actions.newBooks },
+        { id: 'switch', label: t('desktop.menu.switch'), accelerator: 'Shift+CmdOrCtrl+O', click: actions.switchBooks },
         { id: 'demo', label: t('desktop.menu.demo'), click: actions.demo },
         {
           id: 'recent',

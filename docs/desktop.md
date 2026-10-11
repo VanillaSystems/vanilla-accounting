@@ -7,16 +7,36 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 
 | Part | File | What it does |
 |---|---|---|
-| Main process | `src/desktop/main.ts` | One instance; starts the server on 127.0.0.1; opens the window; the native menu; window place, port and last books in `desktop.json` of the user data folder. |
+| Main process | `src/desktop/main.ts` | One instance; starts the server on 127.0.0.1; opens the window; the native menu; window place, port, recent books and the books marked to open at start in `desktop.json` of the user data folder. |
 | Server | `src/desktop/server.ts` | `/api/desktop` (the start screen's routes), the built UI, and the books API (`src/server/api.ts`) once books are open. Opening other books switches the API in place. Requests naming another host are refused. |
 | Start screen | `src/app/desktop/StartScreen.tsx` | At `/start` and whenever no books are open: open a folder, set up new books (the questions of `npm run init`, checked by `src/workspace/create.ts`), or open a copy of the demo. |
-| Preload | `src/desktop/preload.ts` | The page's only bridge, `window.vanilla`: the folder dialog, menu commands (zoom), the UI language for the menu, and Claude: look for the CLI again, open the setup window. Context isolation and the sandbox are on; the page has no Node. |
+| Preload | `src/desktop/preload.ts` | The page's only bridge, `window.vanilla`: the folder dialog, menu commands (zoom, About), the UI language for the menu, and Claude: look for the CLI again, open the setup window. Context isolation and the sandbox are on; the page has no Node. |
 | PDFs | `src/desktop/print.ts` | Invoice and report PDFs printed by Electron's own Chromium in a hidden window (ADR 0012), so no browser has to be installed. `npm start` and the CLI keep printing with puppeteer-core. |
 | claude CLI | `src/desktop/claude.ts` | Found through the person's login shell (an app from the Finder gets PATH `/usr/bin:/bin`), else in `~/.local/bin` where the official installer puts it, before the window opens; only its path is taken (`CLAUDE_BIN`), and the inbox job uses it. Without it, model features point to Firma › Claude (`noClaude`), the inbox job does the steps that need no model, and everything else works. The page asks for it again each time the window gets the focus back while Claude is not ready, so a CLI installed meanwhile is used without a restart. |
 | Claude einrichten | `src/desktop/claude-setup.ts`, `src/app/shell/claude.tsx` | See [Claude einrichten](#claude-einrichten). |
 | Passwords | `src/secrets/sealed-store.ts` | The SMTP password, sealed by Electron's `safeStorage` (its key is the keychain item "vanilla-accounting Safe Storage") into `secrets.json` in the user data folder, per books. Firma › E-Mail-Versand saves it there; under `npm start` it stays in `.env`. |
 | What is packed | `desktop/not-packed.cjs` | puppeteer-core, the canvas binary pdf.js would load, and the mail client of receipt collection (imapflow, mailparser) stay out, with every package only they need. The engine imports them only dynamically or from CLI code the bundle does not reach; `tools/desktop/build.mjs` fails when the bundle imports one at start. |
 | Photos | `src/parsers/image-pdf.ts` | A JPG, PNG or HEIC in the inbox becomes a one-page PDF, turned upright by its EXIF orientation; HEIC is decoded by `/usr/bin/sips`. |
+
+## At start
+
+Every start shows the start screen (the brand's: lockup, "by Vanilla Machines", seal) with the
+recent books, newest first, and the three choices. A recent row can be marked "Immer diese
+Buchhaltung öffnen"; one at most (`autoOpen` in `desktop.json`, `PUT /api/desktop/auto-open`). With
+a mark the app opens those books directly. `launchDecision` in `src/desktop/state.ts` decides, as a
+pure function (tests/desktop-launch.test.ts):
+
+| Mark | ⌥ held at start | Folder still holds the books | Shows |
+|---|---|---|---|
+| none (also a `desktop.json` from before the mark) | any | any | the start screen |
+| set | yes | any | the start screen, once; the mark stays |
+| set | no | yes | the marked books |
+| set | no | no | the start screen, with a notice naming the folder |
+
+⌥ is read from AppKit's modifier flags through `osascript -l JavaScript` as the app starts (macOS
+only). File › Buchhaltung wechseln… (⇧⌘O) always shows the start screen, where the mark is visible
+and can be removed; Firma › Darstellung says which books open at start and has "Nicht mehr
+automatisch öffnen". The marked books stay on the recent list even when eight others are newer.
 
 The port is kept from one start to the next, because the page stores theme, zoom and language
 per origin. The page's zoom is its own (`src/app/shell/prefs.ts`); View › Vergrössern,

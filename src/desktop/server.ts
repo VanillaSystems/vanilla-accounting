@@ -39,12 +39,15 @@ export interface DesktopServer {
   info(): DesktopInfo;
   /** Only requests to this host reach the books (a page elsewhere cannot rebind its name to this port). */
   allowHost(host: string): void;
+  /** The marked books were not there at this start: the start screen says so. */
+  autoOpenMissing(root: string): void;
 }
 
 export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   let books: express.Express | undefined;
   let open: KnownBooks | null = null;
   let host: string | undefined;
+  let missing: string | null = null;
 
   const known = (root: string): KnownBooks => {
     const demo = resolve(root) === resolve(opts.demoRoot);
@@ -62,6 +65,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     }
     writeState(opts.stateFile, opened(readState(opts.stateFile), root));
     open = known(root);
+    missing = null;
     opts.onOpen?.(open);
     return open;
   }
@@ -71,11 +75,10 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     return openBooks(opts.demoRoot);
   }
 
-  const info = (): DesktopInfo => ({
-    open,
-    recent: readState(opts.stateFile).recent.map(known),
-    booksHome: opts.booksHome,
-  });
+  const info = (): DesktopInfo => {
+    const state = readState(opts.stateFile);
+    return { open, recent: state.recent.map(known), booksHome: opts.booksHome, autoOpen: state.autoOpen ?? null, autoOpenMissing: missing };
+  };
 
   const app = express();
   app.use((req, res, next) => {
@@ -95,6 +98,17 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       res.json(await openBooks(created.root));
     } catch (e) { refuse(res, e); }
   });
+  // One mark at most: setting it moves it, null removes it.
+  app.put('/api/desktop/auto-open', (req, res) => {
+    const root = (req.body as { root?: unknown }).root;
+    if (root !== null && (typeof root !== 'string' || !readState(opts.stateFile).recent.includes(resolve(root)))) {
+      return refuse(res, new WorkspaceError('Only books from the recent list open by themselves.'));
+    }
+    const { autoOpen: _, ...state } = readState(opts.stateFile);
+    writeState(opts.stateFile, root === null ? state : { ...state, autoOpen: resolve(root) });
+    if (root === null || resolve(root) !== missing) missing = null;
+    res.json(info());
+  });
   app.post('/api/desktop/demo', async (_req, res) => {
     try { res.json(await openDemo()); } catch (e) { refuse(res, e); }
   });
@@ -110,6 +124,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     app, open: openBooks, openDemo, info,
     current: () => open,
     allowHost: (h) => { host = h; },
+    autoOpenMissing: (root) => { missing = root; },
   };
 }
 

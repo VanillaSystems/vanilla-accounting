@@ -62,7 +62,7 @@ test('every setup question, option, stop and note has words on the start screen'
 });
 
 test('without books: the start screen is served, the books API answers noWorkspace, a folder without a manifest is refused', async () => {
-  assert.deepEqual((await call('GET', '/api/desktop')).json, { open: null, recent: [], booksHome: join(home, 'Documents') });
+  assert.deepEqual((await call('GET', '/api/desktop')).json, { open: null, recent: [], booksHome: join(home, 'Documents'), autoOpen: null, autoOpenMissing: null });
   assert.match((await call('GET', '/start')).text, /<title>app<\/title>/);
   const status = await call('GET', '/api/status');
   assert.deepEqual([status.status, status.json.code], [409, 'noWorkspace']);

@@ -94,7 +94,9 @@ Applications and start it. You need no Node.js, Homebrew or terminal.
 
 The app starts on a screen with three choices: open existing books (a workspace folder), set up
 new books (the questions of `npm run init`, as a form), or look at a copy of the demo company.
-It opens the last books at the next start; File switches.
+Every start shows this screen with the books opened recently, newest first. Mark one
+"Immer diese Buchhaltung öffnen" and the app opens it directly at each start; File › Buchhaltung
+wechseln… (⇧⌘O), or ⌥ held while it starts, brings the start screen back.
 
 Reading, matching and booking receipts call Claude: install
 [Claude Code](https://claude.com/claude-code) and log in with a Claude subscription. Without it,
