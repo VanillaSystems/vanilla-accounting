@@ -63,6 +63,7 @@ docs/brand.md
 docs/logo.svg
 docs/swiss-engineering.svg
 docs/social-preview.png
+docs/deploy-button.svg
 docs/chat.md
 docs/runbooks/**
 docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf

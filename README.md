@@ -1,4 +1,10 @@
-# Vanilla Accounting
+<p align="center">
+  <img src="docs/logo.svg" alt="Vanilla Accounting" width="320">
+</p>
+<p align="center">AI-powered bookkeeping for Swiss companies. Free and open source.<br>
+<sub>by Vanilla Machines</sub></p>
+<p align="center"><img src="docs/swiss-engineering.svg" alt="Swiss engineering" height="20"></p>
+<p align="center"><a href="https://vanillamachines.com/deploy/accounting"><img src="docs/deploy-button.svg" alt="Deploy to Vanilla Machines" height="36"></a></p>
 
 Bookkeeping for a Swiss GmbH on cash-basis VAT (effective method). Vanilla Accounting imports
 bank statements, collects receipts, matches each receipt to its bank transaction, books the

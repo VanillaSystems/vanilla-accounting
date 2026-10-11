@@ -56,5 +56,17 @@ writeFileSync(join(APP, appicon, 'Contents.json'), JSON.stringify({
   info: { author: 'xcode', version: 1 },
 }, null, 2) + '\n');
 
+// The README's deploy button (the brand's Applications page): a black pill, the white wave on the
+// left, Instrument Sans 600, 8 px radius. GitHub shows an SVG as an image, so the font travels inside.
+const wave = readFileSync(join(brandRoot, 'assets/mark/wave-white.svg'), 'utf8').match(/<path [^>]*\/>/)[0];
+const font = readFileSync(join(APP, 'node_modules/@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff2')).toString('base64');
+writeFileSync(join(APP, 'docs/deploy-button.svg'), `<svg xmlns="http://www.w3.org/2000/svg" width="252" height="36" viewBox="0 0 252 36" role="img" aria-label="Deploy to Vanilla Machines">
+<style>@font-face{font-family:"Instrument Sans";font-weight:600;src:url(data:font/woff2;base64,${font}) format("woff2")}</style>
+<rect width="252" height="36" rx="8" fill="#000000"/>
+<svg x="14" y="11" width="19" height="14" viewBox="0.437 -0.001 41.473 30.612">${wave}</svg>
+<text x="42" y="22.5" textLength="196" lengthAdjust="spacingAndGlyphs" fill="#FFFFFF" font-family="Instrument Sans, sans-serif" font-weight="600" font-size="14">Deploy to Vanilla Machines</text>
+</svg>
+`);
+
 const { version } = JSON.parse(readFileSync(join(brandRoot, 'brand.json'), 'utf8'));
 console.log(`brand ${version}: ${Object.keys(FILES).length} files copied, the iPhone icon set written`);
