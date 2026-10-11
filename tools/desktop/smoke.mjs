@@ -68,17 +68,18 @@ async function launch(port, shell) {
   child.stdout.on('data', (d) => { text += d; });
   child.stderr.on('data', (d) => { text += d; });
   child.on('exit', () => writeFileSync(log, text));
-  let browser;
-  for (let i = 0; i < 240 && !browser; i++) {
-    await sleep(500);
-    browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: null }).catch(() => undefined);
-  }
-  if (!browser) throw new Error(`the app did not open its debugging port (log: ${log})`);
-  let page;
-  for (let i = 0; i < 40 && !page; i++) {
-    page = (await browser.pages()).find((p) => p.url().startsWith('http://127.0.0.1'));
-    if (!page) await sleep(250);
-  }
+  // A build signed otherwise than the one that made the keychain item waits on macOS's prompt
+  // for it (cookie encryption reads it at start), with no window.
+  const stuck = `the app opened no window on its server (log: ${log}). A keychain prompt? An unsigned build of another signature `
+    + 'asks before it reads "vanilla-accounting Safe Storage"; remove that item (security delete-generic-password -s ...) and run again.';
+  const listed = async () => (await fetch(`http://127.0.0.1:${port}/json/list`).then((r) => r.json()).catch(() => []))
+    .some((t) => t.type === 'page' && t.url.startsWith('http://127.0.0.1'));
+  let ready = false;
+  for (let i = 0; i < 360 && !ready; i++) { await sleep(500); ready = await listed(); }
+  if (!ready) throw new Error(stuck);
+  const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: null });
+  const page = (await browser.pages()).find((p) => p.url().startsWith('http://127.0.0.1'));
+  if (!page) throw new Error(stuck);
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

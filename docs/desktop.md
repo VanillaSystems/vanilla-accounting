@@ -12,7 +12,9 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 | Start screen | `src/app/desktop/StartScreen.tsx` | At `/start` and whenever no books are open: open a folder, set up new books (the questions of `npm run init`, checked by `src/workspace/create.ts`), or open a copy of the demo. |
 | Preload | `src/desktop/preload.ts` | The page's only bridge, `window.vanilla`: the folder dialog, menu commands (zoom), the UI language for the menu. Context isolation and the sandbox are on; the page has no Node. |
 | PDFs | `src/desktop/print.ts` | Invoice and report PDFs printed by Electron's own Chromium in a hidden window (ADR 0012), so no browser has to be installed. `npm start` and the CLI keep printing with puppeteer-core. |
-| claude CLI | `src/desktop/claude.ts` | Found through the person's login shell (an app from the Finder gets PATH `/usr/bin:/bin`); only its path is taken. Without it, model features answer with what to install (`noClaude`), everything else works. |
+| claude CLI | `src/desktop/claude.ts` | Found through the person's login shell (an app from the Finder gets PATH `/usr/bin:/bin`) before the window opens; only its path is taken (`CLAUDE_BIN`), and the inbox job uses it. Without it, model features answer with what to install (`noClaude`), the inbox job does the steps that need no model, and everything else works. |
+| Passwords | `src/secrets/sealed-store.ts` | The SMTP password, sealed by Electron's `safeStorage` (its key is the keychain item "vanilla-accounting Safe Storage") into `secrets.json` in the user data folder, per books. Firma › E-Mail-Versand saves it there; under `npm start` it stays in `.env`. |
+| What is packed | `desktop/not-packed.cjs` | puppeteer-core and the canvas binary pdf.js would load stay out, with every package only they need. The engine imports them only dynamically; `tools/desktop/build.mjs` fails when the bundle imports one at start. |
 
 The port is kept from one start to the next, because the page stores theme, zoom and language
 per origin. The page's zoom is its own (`src/app/shell/prefs.ts`); View › Vergrössern,
@@ -31,8 +33,19 @@ dependency in `package.json`, since only those are packed. `tools/desktop/icon.m
 
 The smoke test starts the packaged app with only `/usr/bin:/bin` on its PATH and a fresh user data
 folder (so it never opens books of the machine), and drives it: start screen, Demo, every area,
-issuing an invoice (one page, the QR-bill decodes), new books, File › Demo through the menu, a
-restart, and a start without claude. Screenshots and `smoke.json` go to the evidence folder.
+issuing an invoice (one page, the QR-bill decodes), the SMTP password saved in Firma and the
+invoice sent to a local SMTP server (the attachment's hash is the stored PDF's), a PDF, a PNG and
+a HEIC dropped and read by the inbox job, a camt.053 that pays the invoice, new books (committed
+to git), File › Demo through the menu, a restart, and a start without claude. claude is
+`tests/support/stub-bin/claude`, found through a login shell whose PATH holds it. Screenshots and
+`smoke.json` go to the evidence folder.
+
+The release build is fused (`electronFuses` in the builder config): no `ELECTRON_RUN_AS_NODE`,
+no `NODE_OPTIONS`, no `--inspect`, code only from `app.asar` with its hash checked, encrypted
+cookies. So the smoke reaches the page through Chromium's `--remote-debugging-port`, and the
+native menu through `window.vanillaSmoke`, which the preload exposes only when the app is started
+with `--vanilla-smoke`. Both are command-line switches: a person opening the app from the Finder
+has neither, and whoever can start it with switches could drive the page anyway.
 
 ## Signing, notarization, updates
 

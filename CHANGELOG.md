@@ -217,8 +217,13 @@ Two markers flag an entry you must read before you update:
   File opens others, sets up new ones, opens the demo and lists the recent ones; the window keeps
   its place. Invoice PDFs are printed by the app's own Chromium, so no browser has to be
   installed. The `claude` CLI is found through the login shell; without it, reading receipts and
-  booking suggestions say what to install and everything else works. Signing, notarization and
+  booking suggestions say what to install and everything else works. The SMTP password is saved
+  in Firma › E-Mail-Versand into the Mac's keychain (sealed by the system, per books); new books
+  are committed to a git repository as `npm run init` does. The release build is fused (no Node
+  mode, no NODE_OPTIONS, no inspector, its code checked at start). Signing, notarization and
   updates from GitHub releases are configured and stay off until their variables are set.
+- Belege takes photos: JPG, PNG and HEIC (iPhone) from the drop and the add button go into the
+  inbox and become PDFs as they are read.
 - Without the `claude` CLI, a model feature (Neu lesen, Klassifizieren) answers with what to
   install instead of a failed process, also under `npm start`.
 

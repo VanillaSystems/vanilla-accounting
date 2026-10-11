@@ -1,8 +1,9 @@
 /**
  * The desktop app's main process (ADR 0006, form 3): the local server on 127.0.0.1, one window on
  * the built UI, the native menu, the passwords in the keychain store, and the few things a page
- * cannot do itself (a folder dialog, links to the browser). Built by tools/desktop/build.mjs into out/desktop/main.mjs, which keeps the
- * bundle two folders below the app root, as src/workspace/workspace.ts finds APP_ROOT.
+ * cannot do itself (a folder dialog, links to the browser). Built by tools/desktop/build.mjs into
+ * out/desktop/main.mjs, which keeps the bundle two folders below the app root, as
+ * src/workspace/workspace.ts finds APP_ROOT.
  */
 import { createServer, type Server } from 'node:http';
 import { dirname, join } from 'node:path';
