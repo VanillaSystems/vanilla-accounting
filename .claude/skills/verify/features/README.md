@@ -32,7 +32,7 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 ## Features
 
 - [Journal entries (Buchungen)](./journal-entries.md) covers inline edit and the Periodensperre refusals (edit, delete, reclassify). **Driven end to end on 2026-10-08.**
-- [Transactions and receipt linking](./transactions.md) covers the transaction detail, description and note edits, the "kein Beleg nötig" toggle, and linking or unlinking a receipt. **Unlink, relink, toggle and closed-period refusal driven on 2026-10-08.**
+- [Bank statements (Kontoauszüge)](./bank.md) covers the new Kontoauszüge area: statements by account or month, missing months, the balance check against the bank and the books, the payment's line on the PDF, links to receipt and entry, `/payments/<ref>`, `kein Beleg nötig` with undo, and the statement import (`POST /api/statements`) with its closed-quarter refusal. **Driven end to end on 2026-10-11.**
 - [Receipts (Belege)](./receipts.md) covers the new Belege area: groups, filters, search, the paper, linking with the ranked dialog, private outlay, edit, kind, undo, delete, preview, download and intake. **Driven end to end on 2026-10-11.**
 - [MWST report](./vat-report.md) covers the new MWST area: the Ziffern of a return, the Ziffer detail with its sum or entries, filed quarters with their differences, the Korrekturabrechnung (0535) with its correction cases, and the `vat-report` / `vat-xml` CLIs. **Driven on 2026-10-11.**
 - [Bilanz & ER](./reports.md) covers Erfolgsrechnung, Bilanz, Saldobilanz, all accounts, the account search, the gap of one-sided entries, and the account ledger. **Driven on 2026-10-11.**
@@ -41,5 +41,5 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 ## Not mapped yet
 
 - Scan PWA (`/scan`), which needs a camera. Its upload endpoint is `POST /api/upload` (`Content-Type: application/pdf`) and writes to `$SB/beleg-import/`. The iOS app (`ios/`) uses the same endpoint.
-- The reports `Saldobilanz`, `Bilanz`, `Erfolgsrechnung`, `Kontoauszug`, `Kontenabgleich`, and `Kontoauszüge` are read-only views.
+- The reports `Saldobilanz`, `Bilanz`, `Erfolgsrechnung` and `Kontoauszug` are read-only views.
 - `Kontoauszug` (`/<lang>/<period>/account-ledger?account=<nr>&je=<id>&receipt=<id>`): the account is picked in the combobox `[data-testid=account-combobox]` (type a number prefix or part of the name, Enter): the `Belege` column counts the receipts mapped to each entry's `transactionRef`; clicking a row (`tr[data-rowid="<entry id>"]`) opens the right pane with the receipt list (or `Keine Belege`) and the first PDF in an `iframe`. Headless screenshots show the iframe blank; prove the PDF with `curl -sI $API/api/receipts/<id>` (`application/pdf`).

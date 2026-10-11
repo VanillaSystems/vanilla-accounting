@@ -21,14 +21,13 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { assignUniqueRefs, transactionsOf } from '../parsers/camt053.js';
+import { assignUniqueRefs } from '../parsers/camt053.js';
 import { ask } from '../llm/ask.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
-import { wiseReferences } from '../parsers/wise-statement-pdf.js';
-import type { Receipt, BankTransaction, BankStatement, Index, Mapping } from '../types/index.js';
-import { emptyBooks, loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
+import type { Receipt, BankTransaction } from '../types/index.js';
+import { emptyBooks, loadBooks, mutateJournal, saveBooks } from '../books/store.js';
+import { mergeIndex, readStatementPdfs, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
 import { openWorkspace } from '../workspace/workspace.js';
-import { readBankStatements } from '../workspace/bank-statements.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
@@ -87,12 +86,10 @@ function createPool(concurrency: number) {
 const ws = openWorkspace();
 const RECEIPTS_DIR = ws.paths.receipts;
 const IMPORT_DIR = ws.paths.inbox;
-const BANK_STATEMENTS_DIR = ws.paths.statements;
 
-// ─── Transactions from camt053 XML ──────────────────────────────────────────
-
+/** The camt053 transactions; a statement that belongs to no bank account stops the run before anything is written. */
 function loadTransactions(): BankTransaction[] {
-  const files = readBankStatements(ws);
+  const { files, transactions } = readTransactions(ws);
   for (const f of files) {
     if (f.status === 'duplicate') console.log(`  skip ${f.file}: statement ${f.statement.id} is already read from ${f.of}`);
     if (f.status === 'skipped') console.log(`  skip ${f.file}: ${f.reason}`);
@@ -103,55 +100,7 @@ function loadTransactions(): BankTransaction[] {
     for (const f of unmatched) console.error(`  bank-statements/${f.file}: ${f.problem}`);
     process.exit(1);
   }
-  return files.flatMap((f) => (f.status === 'read' ? transactionsOf(f.statement, f.account) : []));
-}
-
-/**
- * The books open on 1 January of the first year with opening balances. A bank export often
- * starts a few days earlier; those rows belong to the prior year's books, whose result the
- * opening balances already carry. Books without opening balances keep every row.
- */
-export function withinBooks(transactions: BankTransaction[], config: Index['config']): { kept: BankTransaction[]; before?: string } {
-  const years = Object.keys(config?.openingBalances ?? {}).sort();
-  if (years.length === 0) return { kept: transactions };
-  const opens = `${years[0]}-01-01`;
-  return { kept: transactions.filter((t) => t.date >= opens), before: opens };
-}
-
-// ─── Bank statements from PDF filenames ─────────────────────────────────────
-
-function parseRaiffeisenDate(filename: string): { fromDate: string; toDate: string } | null {
-  // "Kontoauszug 01.01.2026 - 31.01.2026 - CH... - 2026-01-31.pdf"
-  const m = filename.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
-  if (!m) return null;
-  const fromDate = `${m[3]}-${m[2]}-${m[1]}`;
-  const toDate = `${m[6]}-${m[5]}-${m[4]}`;
-  return { fromDate, toDate };
-}
-
-function parseWiseDates(filename: string): {
-  fromDate: string;
-  toDate: string;
-  currency: string;
-} | null {
-  // "statement_12345678_CHF_2026-01-01_2026-01-31.pdf"
-  const m = filename.match(/statement_\d+_([A-Z]{3})_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})\.pdf/);
-  if (!m) return null;
-  return { currency: m[1], fromDate: m[2], toDate: m[3] };
-}
-
-/** The monthly statement PDFs in each bank's folder, named the way Raiffeisen or Wise name them. */
-function loadBankStatements(): BankStatement[] {
-  const statements: BankStatement[] = [];
-  for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements).map((a) => a.bank))) {
-    const dir = join(BANK_STATEMENTS_DIR, bank);
-    if (!existsSync(dir)) continue;
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.pdf'))) {
-      const parsed = parseRaiffeisenDate(file) ?? parseWiseDates(file);
-      if (parsed) statements.push({ bank, filename: file, ...parsed });
-    }
-  }
-  return statements.sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+  return transactions;
 }
 
 // ─── PDF scanning helpers ────────────────────────────────────────────────────
@@ -231,90 +180,6 @@ function scanPdfs(dir: string, location: 'staged' | 'archived'): FoundFile[] {
     })
     .sort()
     .map((f) => ({ filename: f, filepath: join(dir, f), location }));
-}
-
-// ─── Merge: previous index + what is on disk now → new index ──────────────────
-
-export interface Scan {
-  /** Every receipt file on disk, already extracted. */
-  receipts: Receipt[];
-  /** Transactions parsed from the camt053 files, refs already unique. */
-  bankTransactions: BankTransaction[];
-  /** Wise transaction id → transfer reference, from the monthly statement PDFs of the `wise` accounts. */
-  wiseRefs: Map<string, string>;
-  bankStatements: BankStatement[];
-}
-
-/**
- * Where each transaction field comes from. A rebuild takes the 'bank' fields from the camt053
- * (and the Wise PDFs) and keeps every other field from the previous index: a remark, "no
- * receipt needed", whatever a later step adds. A new BankTransaction field does not compile
- * until it is listed here.
- */
-const TRANSACTION_FIELD_SOURCE = {
-  ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
-  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank',
-  source: 'kept', remarks: 'kept', noReceiptNeeded: 'kept',
-} as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
-
-function keptFields(t: BankTransaction): Partial<BankTransaction> {
-  return Object.fromEntries(
-    Object.entries(t).filter(([k]) => TRANSACTION_FIELD_SOURCE[k as keyof BankTransaction] !== 'bank'),
-  );
-}
-
-export interface Merged {
-  index: Index;
-  /** Links in a filed quarter whose receipt file is gone. Kept: a person must re-link them. */
-  brokenClosedLinks: Mapping[];
-  /** Filed-quarter bank transactions no camt053 file contains any more. Kept as they were. */
-  vanishedClosedTransactions: BankTransaction[];
-}
-
-export function mergeIndex(previous: Index, scan: Scan): Merged {
-  // Golden rule 1: whatever is dated in a filed quarter stays exactly as filed.
-  const lock = periodLock(previous);
-  const isClosed = (t: BankTransaction | undefined) => lock.isClosed(t?.date);
-
-  const previousByRef = new Map(previous.transactions.map((t) => [t.ref, t]));
-  const freshRefs = new Set(scan.bankTransactions.map((t) => t.ref));
-  const fromBank = scan.bankTransactions.map((t) => {
-    const before = previousByRef.get(t.ref);
-    return before ? { ...t, ...keptFields(before) } : t;
-  });
-  const vanishedClosedTransactions = previous.transactions.filter(
-    (t) => t.source !== 'manual' && !freshRefs.has(t.ref) && isClosed(t),
-  );
-  const manual = previous.transactions.filter((t) => t.source === 'manual');
-
-  const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual].map((t) => {
-    const out = { ...t };
-    // Wise drops transfer references from camt053; its monthly PDFs keep them. The map holds
-    // Wise transaction ids only (CARD-…, TRANSFER-…), read from the folders of `wise` accounts.
-    const fromPdf = scan.wiseRefs.get(t.ref.split('~')[0]);
-    if (fromPdf && !out.reference) out.reference = fromPdf;
-    // A closed transaction stays exactly as filed, so batch parts and references are only
-    // attached in open periods.
-    if (isClosed(out)) { delete out.parts; delete out.reference; }
-    return out;
-  });
-
-  const receiptIds = new Set(scan.receipts.map((r) => r.id));
-  const byRef = new Map(transactions.map((t) => [t.ref, t]));
-  const brokenClosedLinks: Mapping[] = [];
-  const mappings = previous.mappings.filter((m) => {
-    if (m.transactionRef === undefined) return false;
-    if (receiptIds.has(m.receiptId)) return true;
-    if (!isClosed(byRef.get(m.transactionRef))) return false;
-    brokenClosedLinks.push(m);
-    return true;
-  });
-
-  return {
-    index: { ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings },
-    brokenClosedLinks,
-    vanishedClosedTransactions,
-  };
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -436,18 +301,7 @@ async function main() {
   const extractedReceipts = await Promise.all(extractionPromises);
   newReceipts.push(...extractedReceipts);
 
-  // Wise drops transfer references from camt053; its monthly PDFs keep them.
-  const wiseRefs = new Map<string, string>();
-  for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements === 'wise').map((a) => a.bank))) {
-    const wiseDir = join(BANK_STATEMENTS_DIR, bank);
-    if (!existsSync(wiseDir)) continue;
-    for (const f of readdirSync(wiseDir).filter((x) => x.endsWith('.pdf'))) {
-      try {
-        const { stdout } = await execFileAsync('pdftotext', ['-raw', join(wiseDir, f), '-']);
-        for (const [id, ref] of wiseReferences(stdout)) wiseRefs.set(id, ref);
-      } catch (e) { console.warn(`  warn: ${f}: ${e}`); }
-    }
-  }
+  const wiseRefs = await readWiseReferences(ws, (msg) => console.warn(`  warn: ${msg}`));
 
   const { kept, before } = withinBooks(parsed, index.config);
   if (kept.length < parsed.length) {
@@ -457,7 +311,7 @@ async function main() {
     receipts: newReceipts,
     bankTransactions: assignUniqueRefs(kept),
     wiseRefs,
-    bankStatements: loadBankStatements(),
+    bankStatements: readStatementPdfs(ws),
   };
   // Paid invoices first (ADR 0010): a payment with an invoice's reference is booked from the invoice, before classify sees it.
   const invoices = loadInvoices(ws);

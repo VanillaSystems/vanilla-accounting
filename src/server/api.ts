@@ -13,6 +13,7 @@ import { router as config } from './routes/config.js';
 import { router as yearClose } from './routes/year-close.js';
 import { router as files } from './files.js';
 import { router as invoices } from './routes/invoices.js';
+import { router as statements } from './routes/statements.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
@@ -54,7 +55,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose, invoices);
+app.use(files, scan, receipts, rename, transactions, mappings, journal, config, classify, yearClose, invoices, statements);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

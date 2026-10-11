@@ -3,37 +3,19 @@
  * area's route into the old tab, its selection and its period, and the old tab's selection back
  * into the route. Deleted in phase 10 with legacy-tabs.tsx.
  */
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { seedLegacyParams } from '../lib/location.js';
 import { fmt, formatDate } from '../lib/utils.js';
-import { t } from '../i18n/index.js';
 import { localToday, parsePeriod, periodContaining, type Period } from '../../accounting/periods.js';
 import { ListHead } from '../shell/ListHead.js';
 import type { AreaId, Route, RouteOf } from '../shell/route.js';
 import type { Area, AreaProps, PaletteItem } from './index.js';
 import { LegacyTabs, type LegacyTab } from './legacy-tabs.js';
 
-type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'vat' | 'reports'>;
+type LegacyArea = Exclude<AreaId, 'company' | 'invoices' | 'receipts' | 'bank' | 'vat' | 'reports'>;
 
-/** Each area's old tabs; the first is shown unless the route names another. */
-const TABS: Record<LegacyArea, LegacyTab[]> = {
-  bank: ['bank-statements', 'transactions', 'bank-reconciliation'],
-  journal: ['journal-entries'],
-  codes: ['vat-codes'],
-  close: ['year-close'],
-};
-
-const TAB_LABEL = {
-'transactions': 'tab.transactions', 'bank-statements': 'tab.bankStatements',
-  'journal-entries': 'tab.journalEntries', 'vat-codes': 'vatCodes.title',
-  'bank-reconciliation': 'tab.bankReconciliation', 'year-close': 'tab.yearClose',
-} as const satisfies Record<LegacyTab, string>;
-
-/** The tab a route names, if it names one. */
-function routeTab(route: Route): LegacyTab | undefined {
-  if (route.area === 'bank' && route.payment) return 'transactions';
-  return undefined;
-}
+/** Each area's old tab. */
+const TAB: Record<LegacyArea, LegacyTab> = { journal: 'journal-entries', codes: 'vat-codes', close: 'year-close' };
 
 /** The query keys the old tabs read their selection from. */
 function legacyParams(route: Route): URLSearchParams {
@@ -56,9 +38,7 @@ function routeOfParams(route: Route, p: URLSearchParams): Route {
 }
 
 function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
-  const tabs = TABS[route.area as LegacyArea];
-  const [picked, setPicked] = useState<LegacyTab>();
-  const tab = routeTab(route) ?? (picked && tabs.includes(picked) ? picked : tabs[0]);
+  const tab = TAB[route.area as LegacyArea];
 
   // An old tab reads its selection once: it mounts again when the route changes from outside it.
   const key = JSON.stringify(route);
@@ -71,22 +51,9 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
     if (own.current !== key) nav.select(next);
   });
 
-  function pick(next: LegacyTab) {
-    setPicked(next);
-    if (route.area === 'bank' && route.payment) nav.select({ area: 'bank' });
-  }
-
   return (
     <div className="page">
-      <ListHead route={route} period={period} books={books} canEdit={canEdit}>
-        {tabs.length > 1 && (
-          <div className="counts" role="tablist">
-            {tabs.map((x) => (
-              <button key={x} role="tab" aria-selected={x === tab} className={x === tab ? 'on' : ''} onClick={() => pick(x)}>{t(TAB_LABEL[x])}</button>
-            ))}
-          </div>
-        )}
-      </ListHead>
+      <ListHead route={route} period={period} books={books} canEdit={canEdit} />
       <LegacyTabs
         key={`${tab}:${mounts.current.n}`}
         tab={tab}
@@ -94,10 +61,6 @@ function LegacyPage({ route, period, books, nav, canEdit }: AreaProps) {
         index={books}
         refresh={nav.refresh}
         canEdit={canEdit}
-        initial={route.area === 'bank' ? { txRef: route.payment } : {}}
-        onSelect={({ txRef }) => {
-          if (route.area === 'bank' && tab === 'transactions' && txRef !== route.payment) nav.select({ area: 'bank', ...(txRef && { payment: txRef }) });
-        }}
       />
     </div>
   );

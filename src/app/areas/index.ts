@@ -12,6 +12,7 @@ import { company } from './company/company.js';
 import { invoices } from './invoices.js';
 import { legacyArea, journalPalette } from './legacy.js';
 import { receipts } from './receipts/receipts.js';
+import { bank } from './bank/bank.js';
 import { reports } from './reports/reports.js';
 import { vat } from './vat/vat.js';
 import { ICONS } from './icons.js';
@@ -59,6 +60,8 @@ export interface Area<R extends Route = Route> {
   Detail?: ComponentType<AreaProps<R>>;
   /** The add button and N; absent when the area has nothing to add. */
   add?: { label(): string; title(): string; run(props: AreaProps): void };
+  /** Files dropped on the page while this area is open, and what the drop zone says; absent: they go to the receipts' inbox. */
+  drop?: { text(): string; formats(): string; run(files: File[], props: AreaProps): void };
   /** The objects ⌘K finds in this area, under the area's name. */
   palette?(props: AreaProps): PaletteItem[];
   /** Keys handled while this area is open, beyond the shell's own; true when handled. */
@@ -77,7 +80,7 @@ type Registry = { [A in AreaId]: Area<RouteOf<A>> };
 export const AREAS: Registry = {
   receipts,
   invoices,
-  bank: legacyArea('bank', { label: () => t('area.bank'), dock: { key: 'k', icon: ICONS.bank, tip: () => t('area.bank.tip') }, title: (r) => r.payment }),
+  bank,
   journal: legacyArea('journal', { label: () => t('area.journal'), dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') }, palette: journalPalette, title: (r) => r.id, wide: true }),
   vat,
   codes: legacyArea('codes', { label: () => t('area.codes'), dockAs: 'vat', title: (r) => r.code, periodless: true }),

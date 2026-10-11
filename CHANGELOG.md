@@ -128,6 +128,19 @@ Two markers flag an entry you must read before you update:
   quarters, and `npm run verify-audit -- <folder>` checks it later. Real books on a public URL
   publish them: `docs/audit-export.md` says how to hand an export over or host it behind access
   protection.
+- Kontoauszüge rebuilt (redesign phase 3): each bank account's monthly statements, grouped by
+  account or by month; a month that ended without its statement shows as missing, the running
+  month with its payments. A statement shows the bank's opening and closing balance, whether its
+  payments add up to them, and the books' balance of the account beside the bank's; its PDF with
+  the chosen payment's line marked; its payments, each with its receipt, its entry, a folded Wise
+  fee or "kein Beleg" (mark it "braucht keinen", ⌘Z undoes); and for a foreign account the ESTV
+  rates its entries were booked at. Links: `/bank/1021-2026-09`, `/bank/1021-2026-09/<ref>`,
+  `/payments/<ref>`. The add button (N), a drop on the page or a missing month's field read a
+  camt.053 or a statement PDF into `bank-statements/<bank>/` and the books, as `npm run extract`
+  would; a statement wholly inside a filed quarter is refused. The dock counts statements that
+  are missing or do not add up. Removed with the old tabs: Transaktionen (editing a payment's text
+  or note, the manual-transaction form) and Kontenabgleich, whose checks and rates live in each
+  statement now.
 
 ### Fixed
 

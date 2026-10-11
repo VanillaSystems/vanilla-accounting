@@ -82,6 +82,14 @@ export interface BankStatement {
   currency?: string;
 }
 
+/** POST /api/statements read a statement in: its file, the statement to open (account and month it ends in), the payments new to the books. */
+export interface StatementImport {
+  file: string;
+  account: string;
+  month: string;
+  added: number;
+}
+
 export interface JournalEntry {
   id: string;
   transactionRef: string;
