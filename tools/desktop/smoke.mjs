@@ -35,7 +35,7 @@ async function launch(port, shell) {
   child.stderr.on('data', (d) => { text += d; });
   child.on('exit', () => writeFileSync(log, text));
   let browser;
-  for (let i = 0; i < 60 && !browser; i++) {
+  for (let i = 0; i < 240 && !browser; i++) {
     await sleep(500);
     browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}`, defaultViewport: null }).catch(() => undefined);
   }

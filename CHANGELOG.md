@@ -181,6 +181,17 @@ Two markers flag an entry you must read before you update:
   Verrechnungssteuer, as guided entries in the new year.
 - `npm run fetch-rates -- --year <year>`: one ESTV rate file per year
   (`reference/estv-daily-rates-<year>.json`); every year's file is read.
+- **The Mac app** (docs/desktop.md). `npm run desktop:build` makes a `.dmg` each for Apple
+  silicon and Intel; the app needs no Node.js, Homebrew or terminal. It starts on a start screen:
+  open existing books, set up new ones with the questions of `npm run init` as a form (it refuses
+  what the wizard refuses), or look at a copy of the demo. The last books open at the next start;
+  File opens others, sets up new ones, opens the demo and lists the recent ones; the window keeps
+  its place. Invoice PDFs are printed by the app's own Chromium, so no browser has to be
+  installed. The `claude` CLI is found through the login shell; without it, reading receipts and
+  booking suggestions say what to install and everything else works. Signing, notarization and
+  updates from GitHub releases are configured and stay off until their variables are set.
+- Without the `claude` CLI, a model feature (Neu lesen, Klassifizieren) answers with what to
+  install instead of a failed process, also under `npm start`.
 
 ### Removed
 
