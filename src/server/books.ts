@@ -6,10 +6,15 @@ import type { Response } from 'express';
 import type { Index } from '../types/index.js';
 import { ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
-import { openWorkspace } from '../workspace/workspace.js';
+import { openWorkspace, workspaceAt } from '../workspace/workspace.js';
 import { receiptDirOf } from '../workspace/reads.js';
 
-export const WS = openWorkspace();
+/** Live: a route that changes the manifest reopens it, and every route reads the new one. */
+export let WS = openWorkspace();
+
+export function reopenWorkspace(): void {
+  WS = workspaceAt(WS.paths.root);
+}
 
 export const receiptDir = (location?: string): string => receiptDirOf(WS, location);
 

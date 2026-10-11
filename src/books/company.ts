@@ -1,0 +1,54 @@
+/**
+ * What the Firma page shows besides books.json: the manifest (company, bank accounts,
+ * invoicing), every filed return and seal by quarter, and each bank account's last balance
+ * as its statement shows it. The API answers it at /api/workspace; the audit export writes it.
+ */
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { QuarterKey } from '../types/index.js';
+import type { Workspace } from '../workspace/workspace.js';
+import type { Seal } from './seal.js';
+import { sealsOf, type Books } from './store.js';
+import { bankBalances } from './year-close.js';
+
+/** A quarter's seal file as checked against today's books. */
+export type SealView =
+  | ({ status: 'intact' } & Pick<Seal, 'quarter' | 'through' | 'sha256' | 'sealedAt' | 'records'>)
+  | { status: 'broken'; quarter: QuarterKey; problem: string };
+
+export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing'> {
+  /** The quarters whose return lies in filings/<year>/ as filed with the ESTV. */
+  filed: QuarterKey[];
+  seals: SealView[];
+  /** The latest balance a statement shows, per ledger account, in the account's currency. */
+  statementBalances: Array<{ account: string; date: string; amount: number }>;
+}
+
+function filedQuarters(ws: Workspace): QuarterKey[] {
+  const dir = ws.paths.filings;
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((y) => /^\d{4}$/.test(y)).flatMap((y) => readdirSync(join(dir, y))
+    .map((f) => /^mwst-ech0217-(\d{4}-Q[1-4])\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
+    .filter((q): q is QuarterKey => !!q)).sort();
+}
+
+export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
+  const seals = sealsOf(books).checks.map((c): SealView => {
+    if (c.status === 'broken') return { status: 'broken', quarter: c.quarter, problem: c.problem };
+    const s = JSON.parse(readFileSync(c.file, 'utf8')) as Seal;
+    return { status: 'intact', quarter: c.quarter, through: s.through, sha256: s.sha256, sealedAt: s.sealedAt, records: s.records };
+  });
+  const latest = new Map<string, { account: string; date: string; amount: number }>();
+  for (const b of bankBalances(ws, books)) {
+    const was = latest.get(b.account);
+    if (!was || b.date > was.date) latest.set(b.account, { account: b.account, date: b.date, amount: b.amount });
+  }
+  return {
+    company: ws.company,
+    bankAccounts: ws.bankAccounts,
+    ...(ws.invoicing ? { invoicing: ws.invoicing } : {}),
+    filed: filedQuarters(ws),
+    seals,
+    statementBalances: [...latest.values()],
+  };
+}

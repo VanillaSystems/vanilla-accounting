@@ -8,7 +8,8 @@ import { build } from 'vite';
 import { loadBooks, sealsOf } from '../books/store.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import type { ApiStatus } from '../types/api-error.js';
-import { accountsOf, filedReturnsOf, receiptDirOf, workspaceInfo } from '../workspace/reads.js';
+import { accountsOf, filedReturnsOf, receiptDirOf } from '../workspace/reads.js';
+import { companyInfo } from '../books/company.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
@@ -38,7 +39,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   copyOut(out, EXPORT_FILES.books(), ws.paths.books);
   write(EXPORT_FILES.status(), { ok: true, readonly: true, snapshot } satisfies ApiStatus);
   write(EXPORT_FILES.accounts(), accountsOf(ws));
-  write(EXPORT_FILES.workspace(), workspaceInfo(ws));
+  write(EXPORT_FILES.workspace(), companyInfo(ws, books));
   for (const year of yearsOf(ws, books)) write(EXPORT_FILES.filedReturns(year), filedReturnsOf(ws, year));
   write(EXPORT_FILES.fxRates(), readEstvRateTable());
 
