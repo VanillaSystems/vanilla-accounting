@@ -154,8 +154,10 @@ Download camt.053, not camt.054 or camt.052. A camt.054 is a booking notificatio
 camt.052 an intraday report. Their bookings come again in the camt.053, so the import skips
 them, and `npm run doctor` names each skipped file.
 
-After the first import, check the Bank tab: the transactions, and that the closing balance
-matches your bank (`npm run reconcile-balances`).
+After the first import, open Kontoauszüge in the app (`/bank`): each statement shows the bank's
+opening and closing balance, whether its payments add up to them, and the books' balance beside
+the bank's (`npm run reconcile-balances` checks the same from the command line). You can also add
+a statement there: the add button (N), or drop the camt.053 or statement PDF on the page.
 
 An incoming payment that carries the QR or creditor reference of an invoice you issued in the app
 is booked by the import itself, from the invoice's lines and VAT rates, with the invoice PDF as its
@@ -164,8 +166,8 @@ receipt (see [Invoices](#invoices)).
 ## 5. Add receipts
 
 Put receipts (PDF; photos as PNG or JPG need ImageMagick: `brew install imagemagick`) into
-`beleg-import/`. Every invoice, every till
-slip, every customs bill. A receipt is what lets you deduct the VAT you paid.
+`beleg-import/`, or drop them on the app's page. Every invoice, every till slip, every customs
+bill. A receipt is what lets you deduct the VAT you paid.
 
 ## 6. Read, match, book
 
@@ -175,19 +177,62 @@ Start the app:
 npm start
 ```
 
-Open http://localhost:5173. The buttons in the app run the same steps as these commands:
+Open http://localhost:5173. Then run, in a second terminal:
 
-1. `npm run extract`: reads the statements and the receipts.
+1. `npm run extract`: reads the statements and the receipts. A PDF dropped on the app shows as
+   "wird gelesen" until this has read it.
 2. `npm run match`: links each receipt to its payment, with Claude. Receipts move from
    `beleg-import/` to `receipts/`.
 3. `npm run classify`: books each payment (accounts, VAT code, exchange rate), with Claude.
+   **Neu klassifizieren** on an entry in Buchungen books that one payment again.
 
-Check the payments without a receipt in the app, and add what is missing.
+Then check the result in the app. Belege lists first what needs you ("Braucht dich"): a receipt
+without a payment (L links one, or books it as paid privately), a payment without a receipt. Add
+what is missing.
+
+### Find your way in the app
+
+The page is a list on the left and the selected item on the right; drag the divider to resize
+it. The areas sit in the dock at the bottom edge of the window; press `G` and then a letter:
+
+| Key | Area | Link |
+|---|---|---|
+| `G B` | Belege: the receipts | `/receipts`, `/receipts/<id>` |
+| `G I` | Rechnungen: invoices, customers, sent documents | `/invoices`, `/invoices/2026-006` |
+| `G K` | Kontoauszüge: the bank statements and their payments | `/bank`, `/bank/1021-2026-09` |
+| `G U` | Buchungen: the journal | `/journal`, `/journal/<entry-id>` |
+| `G M` | MWST: the VAT return of a quarter, and the VAT codes | `/vat`, `/vat/405`, `/vat/codes/I81` |
+| `G R` | Bilanz & ER: Erfolgsrechnung, Bilanz, Saldobilanz and each account's ledger | `/reports/balance/1021` |
+| `G A` | Abschluss: the year-end in seven steps | `/close`, `/close/<step>` |
+| `G F` | Firma: profile, VAT, banks, chart of accounts, periods, invoice layout, display | `/company/<section>` |
+
+Every page has its own link, so the address bar always names what is on screen; `?period=2026-Q3`
+(or `2026`, `2026-09`, `2026-07-01_2026-09-30`) picks the period, and without it a list shows the
+open quarter. [urls.md](urls.md) lists every path. The language is no part of a link: choose it
+in the top bar, which shows when you move the mouse to the top edge, with search, the period,
+the export, zoom and light or dark.
+
+The keys that work everywhere:
+
+| Key | Does |
+|---|---|
+| `⌘K` | Find a receipt, entry, invoice, account, area or action |
+| `↑` `↓` or `J` `K` | Move through the list; `Esc` goes back from the detail to the list |
+| `N` | Add: a receipt, a statement, an entry, an invoice, depending on the area |
+| `/` | Search the list |
+| `⌘Z` | Undo the last change (the toast says what it was) |
+| `⇧E` | Export: reports, journal, receipts, a package for your Treuhand |
+| `T` | Light or dark |
+| `⌘+` `⌘−` `⌘0` | Zoom |
+| `?` | Show or hide the key help at the bottom |
+
+The key help lists the keys of the area you are in, such as `L` (link a payment), `Space`
+(preview), `D` (download) and `E` (edit) in Belege.
 
 ## 7. File the VAT return
 
-Open the MWST tab. It shows the figures (Ziffern) of each quarter and the bookings behind
-them. When they are right:
+Open MWST (`G M`). It shows the return of the quarter: the figures (Ziffern) with the amount to
+pay on top, and for each Ziffer the bookings behind it, grouped by VAT code. When they are right:
 
 ```sh
 npm run vat-xml -- 2026-Q3
@@ -202,8 +247,10 @@ npm run seal -- 2026-Q3 --close
 ```
 
 This sets `config.closedThrough` in `books.json` to the last day of the quarter and seals it.
-From then on, that quarter never changes: corrections are booked in the next open quarter (see
-the app's `AGENTS.md`, golden rule 1).
+From then on, that quarter never changes: the app shows it with a lock and refuses every edit
+in it. Corrections are booked in the next open quarter (in Buchungen, a filed entry offers
+**Korrektur in … erfassen**), and MWST shows them on the Korrekturabrechnung (form 0535, `/vat/0535`); see the
+app's `AGENTS.md`, golden rule 1.
 
 ## 8. Update the app
 
@@ -244,6 +291,11 @@ invoicing:
 - `layout` and `texts` (the text above and below the table, per language, `{days}` for the payment
   term) are optional.
 
+Write invoices in Rechnungen (`G I`, then `N`). A draft is edited on the A4 sheet itself;
+**Ausstellen** numbers it after checking what Art. 26 MWSTG requires, and **Senden** downloads
+the PDF and records the send (no e-mail yet). Firma › Rechnungslayout sets the font, colour,
+logo and texts.
+
 Printing an invoice needs Google Chrome, Microsoft Edge, Brave or Chromium on the computer (or
 `CHROME_PATH` set to one). An issued invoice is stored as `invoices/<number>.pdf` and never printed
 again; `invoices.json` holds the customers, the invoices and what was sent.
@@ -254,13 +306,14 @@ again; `invoices.json` holds the customers, the invoices and what was sent.
   vereinbarte Entgelte, no books without VAT, no fiscal year other than the calendar year.
 - **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement.
-- **Invoicing:** invoices, credit notes, reminders and cancellations are written through the API;
-  their screens and sending by e-mail come later. A sale is booked when its payment arrives, also
-  for an invoice; open invoices are not receivables in the books.
+- **Invoicing:** invoices, credit notes, reminders and cancellations are written in the app;
+  sending by e-mail comes later. A sale is booked when its payment arrives, also for an invoice.
+  Invoices still open on 31 December are booked as receivables at the year-end close and reversed
+  on 1 January.
 - **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and
   Wise; for another bank, check the first statement's transactions and closing balance. camt.054
   notifications and PayPal and credit card statements are not imported: book those by hand.
 - **Year-end:** `npm run year:close` checks the year, books the exchange difference, guides the
   year-end entries and closes the year; `npm run year:open` opens the next one
-  ([year-end.md](year-end.md)). Your Treuhand still signs off the annual accounts, and the
-  Bilanz and Erfolgsrechnung tabs show amounts VAT included.
+  ([year-end.md](year-end.md)). Your Treuhand still signs off the annual accounts, and
+  Bilanz & ER shows amounts VAT included.

@@ -14,47 +14,110 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- **The redesign.** The app is one window: a list on the left and the selected item on the right
+  with a resizable divider (drag, ←/→, double-click resets; kept per area). Nine areas sit in a
+  dock at the bottom edge (`G` + letter), and a bar at the top edge holds search, the period, the
+  export, zoom, light/dark/system and the language. ⌘K finds receipts, entries, invoices,
+  customers, accounts, areas and actions; `N` (or the add button) adds in every area; a toast
+  offers Rückgängig (⌘Z); `?` hides the key help. Every page has its own link
+  (`/journal/M2026-001`, `/vat/405?period=2026-Q3`, `/reports/balance/1021`; docs/urls.md).
+  The language is no part of a link: it is chosen per viewer, and old `/<lang>/<period>/<tab>`
+  links and bookmarks redirect. PDFs dropped on the page go to the inbox. A filed quarter shows
+  with a lock and every edit in it is refused. The areas:
+  - **Belege** (`/receipts/<id>?filter=offen&q=…`): what needs you comes first ("Braucht dich"),
+    then month by month; filters `zugeordnet`, `offen`, `ohne Datum` and a search. A receipt shows
+    its paper (each PDF page cut to its ink), one line of facts (date, amount, Swiss VAT, VAT
+    number), its payment with links to the statement and the entry, and Zahlung, Angaben and Datei
+    in the margin. `L` opens Zahlung verknüpfen with the open payments ranked by amount, date and
+    currency, and "privat oder bar bezahlt" books a private outlay; an exact fit is offered as a
+    suggestion (↵). A receipt paid privately by mistake is released with **Privat bezahlt
+    aufheben**, which deletes its private payment (⌘Z pays it again); a private payment that is
+    already booked is not deleted, its entry goes first. Link, unlink, edits and "kein Beleg" take
+    effect at once and can be undone; a delete asks first. Space previews, D downloads, E edits. A
+    receipt paid in a filed quarter is read only. Dropped PDFs show as "wird gelesen" until
+    `npm run extract` reads them, then the receipt takes their place.
+  - **Kontoauszüge** (`/bank/1021-2026-09`, `/bank/1021-2026-09/<ref>`, `/payments/<ref>`): each
+    bank account's monthly statements, grouped by account or by month; a month that ended without
+    its statement shows as missing, the running month with its payments. A statement shows the
+    bank's opening and closing balance, whether its payments add up to them, and the books' balance
+    of the account beside the bank's; its PDF with the chosen payment's line marked; its payments,
+    each with its receipt, its entry, a folded Wise fee or "kein Beleg" (mark it "braucht keinen",
+    ⌘Z undoes); and for a foreign account the ESTV rates its entries were booked at. A payment's
+    note is written in the payment bar (Notiz, ↵ saves, Esc cancels, ⌘Z undoes). The add button,
+    a drop on the page or a missing month's field read a camt.053 or a statement PDF into
+    `bank-statements/<bank>/` and the books, as `npm run extract` would (`POST /api/statements`);
+    a statement wholly inside a filed quarter is refused. The dock counts statements that are
+    missing or do not add up.
+  - **Buchungen** (`/journal/<id>`, `?vat=<code>`): the period's entries month by month as one grid
+    of Datum, Text, Soll, Haben, MWST and amount, the entries of one payment joined; filters
+    `ohne Beleg` and `Korrekturen`, and a search over text, accounts, code, ref and amount. An entry
+    shows its Buchungssatz with the account names, the FX conversion with the ESTV check, its
+    payment, receipt and paper (or the statement's excerpt when it has no receipt). Soll, Haben
+    (pick by number or name), MWST, amount and text are edited in place; `N` books a new entry by
+    hand (`POST /api/journal-entries`); a filed entry offers a correction in the open quarter,
+    pre-filled as its reversal with `corrects`. Edit, new entry, delete and Neu klassifizieren can
+    be undone. The histogram shows the period's VAT codes by count or CHF.
+  - **MWST** (`/vat/<ziffer>`): one return per page, the Ziffern by part of the form with Zu
+    bezahlen or Guthaben on top, and for the selected Ziffer its formula or its entries grouped by
+    VAT code. An open quarter shows its due date; a filed one its lock, marks every Ziffer that
+    differs from the filed return and why, and ends with the Korrekturabrechnung (form 0535,
+    `/vat/0535`) with its correction cases and a print button. A return shows only for a quarter,
+    half-year or year; for any other range the page offers the quarters it touches.
+  - **MWST-Codes** (`/vat/codes/<code>`, **Codes erklärt** in MWST): every VAT code the app shows
+    (Buchungen, a payment's entries, the entries behind a Ziffer, the cases of a
+    Korrekturabrechnung) explains itself on hover: what it means, its rate, the Ziffern it feeds and
+    when to use it. A click opens the catalogue by family with a search, when to use each code and
+    when not, an example from the casebook, and the period's entries that use it. A code the app
+    does not declare in any Ziffer (VS, F, Z codes, V81-B) shows in amber. The Ziffern come from the
+    engine, so the explanation cannot drift from the return (tests/vat-codes.test.ts).
+    `docs/vat-codes.md` is the same catalogue as a document; `npm run vat-codes` regenerates it and
+    its data from `reference/MWST-codes.txt` and the casebook.
+  - **Bilanz & ER** (`/reports/income|balance|trial[/<account>]`): the Erfolgsrechnung, Bilanz or
+    Saldobilanz of any period with the selected account's ledger beside it (opening and closing
+    balance, its entries). It finds an account by number ("40" finds 4000 to 4099) or name in
+    whichever report holds it, shows all accounts of the chart on request, and names the entries
+    booked on one side when Aktiven and Passiven differ. The Bilanz states its date ("per
+    30.06.2026"). ⌘K finds every account.
+  - **Abschluss** (`/close/<step>`): the year-end in seven steps: Q4, the checks computed from the
+    books (with the Kursdifferenz, the VAT reconciliation, open invoices and the closing balance
+    sheet), the year-end entries with prefilled forms, closing the year (it books the Kursdifferenz
+    first), opening the next year, the profit allocation and the handover, whose cards open the
+    export dialog (the journal for Banana, the Prüfung ESTV / AHV preset for the year).
+  - **Firma** (`/company/<section>`): the profile, VAT setup, bank accounts with their last
+    statement balance, the chart of accounts, periods with their seals, the opening balances,
+    Rechnungslayout and Darstellung. The profile, a bank account's label and IBAN, a new bank
+    account, and an account's name are changed there (`PATCH /api/workspace`,
+    `PUT /api/accounts/<number>`): `belege.workspace.yaml` keeps its comments, layout and every
+    field the app does not know, and a change its reader refuses is never written.
+  - **Rechnungen** (`/invoices`, `?status=`): the invoices of a period by state (Überfällig first,
+    then Offen, Entwürfe, Bezahlt, Gutschriften, Storniert), the open total in CHF, the customers
+    (`/invoices/customers`) and every document sent (`/invoices/sent`, the stored PDF as it went
+    out). An invoice shows on its A4 sheet, laid out by the same renderer as its PDF; a draft is
+    edited on the sheet itself (customer, dates, texts, each line's text, quantity, unit, price and
+    VAT rate, the reason for 0 %), with Vorschau, Ausstellen (what Art. 26 MWSTG still needs is
+    named), Senden (the PDF is downloaded and the send recorded; no e-mail yet), copy, credit note
+    (whole or part, refund or set off), cancellation with a notice, reminders written on the sheet
+    with a fee, comments, and payment proposals to confirm. The customer form takes addresses of
+    any country (postcode, state, house number first, VAT number, language). New invoice with `N`
+    or `/invoices/new?customer=<id>`. Firma › Rechnungslayout sets font, colour, logo (uploaded,
+    `POST /api/workspace/logo`), envelope window and elements, and the texts above and below the
+    table per language, edited on a sample sheet (`PATCH /api/workspace` writes the `invoicing`
+    block).
+- Periods: the period button opens a picker with presets (today, yesterday, last 7/30/90/365
+  days, last week/month/quarter/12 months/year, week/month/quarter/year to date), the quarters and
+  years of the books (filed ones with a lock), and a two-month calendar with typed start and end
+  dates. A month (`2026-09`) and any date range (`2026-07-01_2026-09-30`) work like a quarter.
+  Relative presets stay relative in a bookmark: "quarter to date" is always the current quarter.
+- Exchange rates: every foreign amount explains itself on hover as "EUR amount × rate = CHF amount ·
+  ESTV Devisenkurs Verkauf <date>", and Buchungen spells it out. An entry whose rate is not the
+  ESTV sell rate of its payment date (a stale or flat rate) gets a warning naming the right rate;
+  `npm run restamp-fx` sets it. Each foreign statement lists the rates its entries used. The audit
+  export carries the rate table (`data/fx-rates.json`).
+
 ### Added
 
-- The new shell (redesign phase 1): the page is a list and a detail with a resizable divider
-  (drag, ←/→, double-click resets; kept per area), the areas sit in a dock at the bottom edge
-  (`G` + letter), and a bar at the top edge holds search, the period, zoom, light/dark/system and
-  the language. ⌘K finds receipts, entries, areas and actions; a toast offers Rückgängig (⌘Z);
-  `?` hides the key help. Every page has its own link (`/journal/M2026-001`, `/vat/405`,
-  `/reports/balance/1021`, docs/urls.md); old `/<lang>/<period>/<tab>` links and bookmarks
-  redirect. The language no longer sits in the link: it is chosen per viewer. PDFs dropped on the
-  page or added with the add button (N) go to the inbox. Until each area is rebuilt it shows its
-  old tab.
-- Belege rebuilt (redesign phase 2): what needs you comes first ("Braucht dich"), then month by
-  month; filters `zugeordnet`, `offen`, `ohne Datum` and a search sit in the link
-  (`/receipts/<id>?filter=offen&q=…`). A receipt shows its paper (each PDF page cut to its ink),
-  one line of facts (date, amount, Swiss VAT, VAT number), its payment with links to the
-  statement and the entry, and Zahlung, Angaben and Datei in the margin. L opens Zahlung
-  verknüpfen with the open payments ranked by amount, date and currency, and "privat oder bar
-  bezahlt" books a private outlay; an exact fit is offered as a suggestion (↵). Link, unlink,
-  edits and "kein Beleg" take effect at once and can be undone (⌘Z); a delete asks first.
-  Space previews, D downloads, E edits. A receipt paid in a filed quarter is read only. Dropped
-  PDFs show as "wird gelesen" until `npm run extract` reads them, then the receipt takes their
-  place. Removed with the old tab: batch rename and the manual-transaction batch.
-- MWST and Bilanz & ER rebuilt (redesign phase 5). MWST shows one return per page: the Ziffern
-  by part of the form with Zu bezahlen or Guthaben on top, and for the selected Ziffer its formula
-  or its entries grouped by VAT code (`/vat/405?period=2026-Q3`). An open quarter shows its due
-  date, a filed one its lock, marks every Ziffer that differs from the filed return and why, and
-  ends with the Korrekturabrechnung (form 0535, `/vat/0535`) with its correction cases and a print
-  button. Bilanz & ER lists the Erfolgsrechnung, Bilanz or Saldobilanz of any period with the
-  selected account's ledger beside it (`/reports/balance/1021`), finds an account by number or
-  name in whichever report holds it, shows all accounts of the chart on request, and names the
-  entries booked on one side when Aktiven and Passiven differ. ⌘K finds every account.
-- Buchungen rebuilt (redesign phase 4): the period's entries month by month as one grid of Datum,
-  Text, Soll, Haben, MWST and amount, the entries of one payment joined; filters `ohne Beleg` and
-  `Korrekturen`, a search over text, accounts, code, ref and amount, and `?vat=<code>`. An entry
-  shows its Buchungssatz with the account names, the FX conversion with the ESTV check, its payment,
-  receipt and paper. Soll, Haben (pick by number or name), MWST, amount and text are edited in
-  place; N books a new entry by hand (`POST /api/journal-entries`); a filed entry offers a
-  correction in the open quarter, pre-filled as its reversal with `corrects`. Edit, new entry,
-  delete and Neu klassifizieren can be undone (⌘Z). Hovering a VAT code anywhere explains it; the
-  histogram shows the period's codes by count or CHF. MWST-Codes (`/vat/codes/<code>`) is the
-  catalogue by family with each code's use, Ziffern, example and the period's entries.
 - Invoices (ADR 0010, ADR 0012): customers, invoices and credit notes with VAT per line in CHF or
   EUR and in German, French, Italian or English, numbered when issued (2026-001, never for a
   draft), checked against Art. 26 MWSTG before issue, frozen once issued. A draft is deleted; an
@@ -75,127 +138,61 @@ Two markers flag an entry you must read before you update:
 - **⚠ figures** (demo only): the demo company Muster Kaffee now writes invoices; two of them are
   paid by QR-bill in Q3, which adds their revenue to the demo's Q3 return. Its bank accounts carry
   valid IBANs, so the camt.053 file names changed.
-- Abschluss and Firma rebuilt (redesign phase 7). Abschluss is the year-end in seven steps
-  (`/close/checks`, …): Q4, the checks computed from the books (with the Kursdifferenz, the VAT
-  reconciliation, open invoices and the closing balance sheet), the year-end entries with
-  prefilled forms, closing the year (it books the Kursdifferenz first), opening the next year,
-  the profit allocation and the handover. Invoices still open on 31.12. are proposed as a
-  receivables entry (1100 against the revenue account, no VAT code) to book or mark not needed
-  (ADR 0010). Firma shows the profile, VAT setup, bank accounts with their last statement balance,
-  the chart of accounts, periods with their seals and the opening balances; the profile, a bank
-  account's label and IBAN, a new bank account, and an account's name are changed there
-  (`PATCH /api/workspace`, `PUT /api/accounts/<number>`): `belege.workspace.yaml` keeps its
-  comments, layout and every field the app does not know, and a change its reader refuses is
-  never written. Removed with the old tab: the Jahresabschluss tab and its account combobox.
-- Rechnungen rebuilt (redesign phase 9). The invoices of a period by state (Überfällig first, then
-  Offen, Entwürfe, Bezahlt, Gutschriften, Storniert) with `?status=`, the open total in CHF, the
-  customers (`/invoices/customers`) and every document sent (`/invoices/sent`, the stored PDF as it
-  went out). An invoice shows on its A4 sheet, laid out by the same renderer as its PDF; a draft is
-  edited on the sheet itself (customer, dates, texts, each line's text, quantity, unit, price and
-  VAT rate, the reason for 0 %), with Vorschau, Ausstellen (what Art. 26 MWSTG still needs is
-  named), Senden (the PDF is downloaded and the send recorded; no e-mail yet), copy, credit note
-  (whole or part, refund or set off), cancellation with a notice, reminders written on the sheet
-  with a fee, comments, and payment proposals to confirm. The customer form takes addresses of any
-  country (postcode, state, house number first, VAT number, language). New invoice with N or
-  `/invoices/new?customer=<id>`; ⌘K finds invoices and customers. Firma › Rechnungslayout sets
-  font, colour, logo (uploaded, `POST /api/workspace/logo`), envelope window and elements, and the
-  texts above and below the table per language, edited on a sample sheet (`PATCH /api/workspace`
-  writes the `invoicing` block).
-- Opening the next year reverses the receivables entry of 31.12. on 1.1. (revenue against 1100),
-  so an invoice's revenue counts in the year it is paid, with its VAT; a rerun keeps one reversal.
-  The handover cards of Abschluss open the export dialog: the journal for Banana, and the
-  Prüfung ESTV / AHV preset for the year.
-
-- VAT codes explained: every VAT code the app shows (Buchungen, a transaction's entries, the
-  entries behind a Ziffer, the cases of a Korrekturabrechnung) explains itself on hover: what it
-  means, its rate, the Ziffern it feeds and when to use it. A click, or **Codes erklärt** in the
-  MWST tab, opens the list of all codes by family with a search, when to use each code and when
-  not, an example from the casebook, and the period's entries that use it. A code the app does
-  not declare in any Ziffer (VS, F, Z codes, V81-B) shows in amber. The Ziffern come from the
-  engine, so the explanation cannot drift from the return (tests/vat-codes.test.ts).
-  `docs/vat-codes.md` is the same catalogue as a document; `npm run vat-codes` regenerates it
-  and its data from `reference/MWST-codes.txt` and the casebook.
-- Year-end close: `npm run year:close -- <year> [--dry-run]` and a Jahresabschluss tab (de, fr,
-  it, en). A checklist computed from the books: the fourth quarter filed, Q1 to Q3 sealed, every
-  bank account matching its statement on 31.12., the statements covering the year, every
-  transaction booked, `npm run doctor` clean. It books the exchange difference (Kursdifferenz)
-  of each foreign-currency account on 31.12. at the ESTV rate of that day (rerunning replaces it),
-  reconciles the VAT accounts with the year's returns, guides the year-end entries (depreciation,
-  accruals and deferrals, provisions, tax provision, private use, inventory, social insurance,
-  doubtful accounts) as prefilled entries or "not needed", and shows the closing balance sheet
-  with the VAT split off by code. "Jahr abschliessen" closes through 31.12., seals the fourth
-  quarter and commits the workspace. See docs/year-end.md.
-- Opening the next year: `npm run year:open -- <year>` and a button after the close. Opening
-  balances from the app's own closed books: balance-sheet accounts carried, the result to 2970,
-  foreign accounts at their native balance and the 31.12. rate. Rerunning updates them.
-  `npm run import-opening` stays the way to open from Banana.
-- Profit allocation after the shareholders' resolution: reserve and dividend with 35%
-  Verrechnungssteuer, as guided entries in the new year.
-- `npm run fetch-rates -- --year <year>`: one ESTV rate file per year
-  (`reference/estv-daily-rates-<year>.json`); every year's file is read.
-
-- Exchange rates: every foreign amount (Buchungen, MWST Ziffer detail, Kontoauszug, the account
-  panel, a transaction's entries) explains itself on hover as "EUR amount × rate = CHF amount ·
-  ESTV Devisenkurs Verkauf <date>", and the Buchungen and transaction details spell it out.
-  An entry whose rate is not the ESTV sell rate of its payment date (a stale or flat rate) gets a
-  warning naming the right rate; `npm run restamp-fx` sets it. Kontenabgleich lists the rates the
-  period used per currency (validity date, rate, entries, ESTV publication), each opening its
-  entries, and the 31.12. rate for the Kursdifferenz once the ESTV has published it. The audit
-  export carries the rate table (`data/fx-rates.json`).
-- Periods: the header's period button opens a picker with presets (today, yesterday, last 7/30/90/365
-  days, last week/month/quarter/12 months/year, week/month/quarter/year to date), the quarters and
-  years of the books (filed ones with a lock), and a two-month calendar with typed start and end
-  dates. A month (`2026-09`) and any date range (`2026-10-01..2026-10-09`) work like a quarter.
-  Relative presets stay relative in a bookmark: "quarter to date" is always the current quarter.
-  The MWST tab shows a return only for a quarter, half-year or year; for any other range it offers
-  the quarters the range touches. The Bilanz states its date ("per 30.06.2026"), the
-  Kontenabgleich lists the month ends inside the range.
-- The language is part of every link: `/fr/2026-Q3/vat-report`, and `#/fr/2026-Q3/vat-report` in
-  an audit export. A shared link opens in its language; old links without one still work.
-- Bilanz, Erfolgsrechnung and Saldobilanz: a click on an account opens its entries beside the
-  statement, with opening and closing balance and a link to the full Kontoauszug. The account is
-  in the link (`?account=1020`).
-- Every entry, transaction and receipt listed in a side panel links to its own view: the MWST
-  Ziffer list, the Korrekturabrechnung and its correction cases, the Kontoauszug, the transaction
-  detail (now with its journal entries) and each month of the Kontenabgleich.
-- Kontoauszug: the account field is a search box. Type a number ("40" finds 4000 to 4099) or part
-  of the name ("büro", "mwst"); a tick shows the chart's accounts without entries too.
-
-- Audit export: `npm run build:audit -- <folder>` writes a read-only copy of the books that
-  runs from any static file server, without Node.js or the API. Search, filters, every report
-  and the receipt PDFs work in it; the audit bar names the snapshot's date, books schema and app
-  version. Its `manifest.json` holds the SHA-256 of every file and the seals of the filed
-  quarters, and `npm run verify-audit -- <folder>` checks it later. Real books on a public URL
-  publish them: `docs/audit-export.md` says how to hand an export over or host it behind access
-  protection.
-- Kontoauszüge rebuilt (redesign phase 3): each bank account's monthly statements, grouped by
-  account or by month; a month that ended without its statement shows as missing, the running
-  month with its payments. A statement shows the bank's opening and closing balance, whether its
-  payments add up to them, and the books' balance of the account beside the bank's; its PDF with
-  the chosen payment's line marked; its payments, each with its receipt, its entry, a folded Wise
-  fee or "kein Beleg" (mark it "braucht keinen", ⌘Z undoes); and for a foreign account the ESTV
-  rates its entries were booked at. Links: `/bank/1021-2026-09`, `/bank/1021-2026-09/<ref>`,
-  `/payments/<ref>`. The add button (N), a drop on the page or a missing month's field read a
-  camt.053 or a statement PDF into `bank-statements/<bank>/` and the books, as `npm run extract`
-  would; a statement wholly inside a filed quarter is refused. The dock counts statements that
-  are missing or do not add up. Removed with the old tabs: Transaktionen (editing a payment's text
-  or note, the manual-transaction form) and Kontenabgleich, whose checks and rates live in each
-  statement now.
-
-- Export (redesign phase 6): one dialog for every export, from the top bar's export chip, ⇧E or
-  ⌘K. Presets Treuhänder-Paket (the open quarter: reports as PDF, the journal for Banana and as
-  CSV, payments, every original), Prüfung ESTV / AHV and Jahresarchiv (the year, with SHA-256
-  checksums and the filed returns and seals), Excel-Rohdaten (one workbook); save your own preset
-  (kept in your browser, also in ⌘K). Choose the period (a quarter, the year, any range), the
-  parts (Erfolgsrechnung, Bilanz, Saldobilanz, MWST-Abrechnungen, Kontoblatt, all Kontoblätter,
-  journal, payments, receipt list, chart of accounts, the receipts, statements and filed returns
-  as originals) and the formats (PDF, CSV, Excel, JSON, Banana). The app builds the files
+- Export: one dialog for every export, from the top bar's export chip, ⇧E or ⌘K. Presets
+  Treuhänder-Paket (the open quarter: reports as PDF, the journal for Banana and as CSV, payments,
+  every original), Prüfung ESTV / AHV and Jahresarchiv (the year, with SHA-256 checksums and the
+  filed returns and seals), Excel-Rohdaten (one workbook); save your own preset (kept in your
+  browser, also in ⌘K). Choose the period (a quarter, the year, any range), the parts
+  (Erfolgsrechnung, Bilanz, Saldobilanz, MWST-Abrechnungen, Kontoblatt, all Kontoblätter, journal,
+  payments, receipt list, chart of accounts, the receipts, statements and filed returns as
+  originals) and the formats (PDF, CSV, Excel, JSON, Banana). The app builds the files
   (`POST /api/export`): one ZIP with folders, a LIESMICH in your language, and on request
   SHA256SUMS.txt and manifest.json (`shasum -a 256 -c SHA256SUMS.txt` checks them); a single file
   is downloaded as it is. PDFs need Chrome, Edge, Brave or Chromium, as invoices do. The export
   only reads the books and works in audit mode (`npm run start:audit`). A ledger's `Herunterladen`
   (D) gives it as CSV, Excel or PDF in one click. `npm run export` writes the same Banana file;
   it now also lists entries without a bank payment (private outlays, Eigenverbrauch).
+- Audit export: `npm run build:audit -- <folder>` writes a read-only copy of the books that
+  runs from any static file server, without Node.js or the API. Search, filters, every report
+  and the receipt PDFs work in it; the audit bar names the snapshot's date, books schema and app
+  version. Its `manifest.json` holds the SHA-256 of every file and the seals of the filed
+  quarters, and `npm run verify-audit -- <folder>` checks it later. Real books on a public URL
+  publish them: `docs/audit-export.md` says how to hand an export over or host it behind access
+  protection. Links into an export keep the path after `#`.
+- Year-end close: `npm run year:close -- <year> [--dry-run]` and the Abschluss area (de, fr, it,
+  en). A checklist computed from the books: the fourth quarter filed, Q1 to Q3 sealed, every bank
+  account matching its statement on 31.12., the statements covering the year, every transaction
+  booked, `npm run doctor` clean. It books the exchange difference (Kursdifferenz) of each
+  foreign-currency account on 31.12. at the ESTV rate of that day (rerunning replaces it),
+  reconciles the VAT accounts with the year's returns, guides the year-end entries (depreciation,
+  accruals and deferrals, provisions, tax provision, private use, inventory, social insurance,
+  doubtful accounts) as prefilled entries or "not needed", and shows the closing balance sheet
+  with the VAT split off by code. Invoices still open on 31.12. are proposed as a receivables
+  entry (1100 against the revenue account, no VAT code) to book or mark not needed (ADR 0010).
+  "Jahr abschliessen" closes through 31.12., seals the fourth quarter and commits the workspace.
+  See docs/year-end.md.
+- Opening the next year: `npm run year:open -- <year>` and a step after the close. Opening
+  balances from the app's own closed books: balance-sheet accounts carried, the result to 2970,
+  foreign accounts at their native balance and the 31.12. rate. It reverses the receivables entry
+  of 31.12. on 1.1. (revenue against 1100), so an invoice's revenue counts in the year it is paid,
+  with its VAT. Rerunning updates the balances and keeps one reversal. `npm run import-opening`
+  stays the way to open from Banana.
+- Profit allocation after the shareholders' resolution: reserve and dividend with 35%
+  Verrechnungssteuer, as guided entries in the new year.
+- `npm run fetch-rates -- --year <year>`: one ESTV rate file per year
+  (`reference/estv-daily-rates-<year>.json`); every year's file is read.
+
+### Removed
+
+- The old tabs and what only they used: Transaktionen (its manual-transaction form; a payment's
+  text and note are edited in Kontoauszüge), Kontenabgleich (its checks and rates live in each
+  statement), the Jahresabschluss tab and its account combobox, batch rename and the
+  manual-transaction batch.
+- API routes no screen and no CLI calls: batch rename and rename suggest (`npm run match` names
+  the files), a receipt's date suggestion and the Auslage suggestion (Belege reads both from the
+  receipt), and the duplicate approval.
+- Tailwind and its helpers (clsx, tailwind-merge, class-variance-authority, lucide-react): the
+  styles are `tokens.css` and plain CSS per area.
 
 ### Fixed
 

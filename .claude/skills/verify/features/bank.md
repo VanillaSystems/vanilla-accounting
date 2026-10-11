@@ -27,6 +27,9 @@ rows in tests/period-lock.test.ts).
   (`[data-testid=go-receipt]` → `/receipts/<id>`), the entry (`[data-testid=go-entry]` → `/journal/<id>`), a folded Wise
   fee (`Gebühr …`), or `kein Beleg` with `braucht keinen` (`PATCH /api/transactions/<ref>` noReceiptNeeded; ⌘Z undoes;
   `zurücksetzen` clears it). `×` or Esc clears the choice.
+- `bk-note`: `[data-testid=payment-note]` in `.paybar` (`Notiz`, or the note itself) opens `input.note`; ↵ or leaving
+  the field saves (`PATCH /api/transactions/<ref>` remarks; an empty note removes it), Esc cancels. Toast `Notiz
+  gespeichert` or `Notiz entfernt`, ⌘Z restores the old note. A payment of a filed quarter shows its note as text.
 - `bk-links`: `/payments/<ref>` resolves to `/bank/<key>/<ref>` in a period holding it, to its entry when paid privately,
   else the list with a notice. A statement link outside the period opens the period holding it.
 - `bk-missing`: a missing month's detail shows `Dieser Auszug fehlt …` and `.desk .well`; a click picks a file that is read
@@ -67,6 +70,8 @@ Wise EUR (1023), January to September 2026.
   shows the refusal toast and `$S diff` is unchanged, the file is not kept.
 - **No receipt needed.** Choose a payment with `kein Beleg`, click `braucht keinen`, read the book, ⌘Z, read it again
   (`noReceiptNeeded` gone).
+- **Note.** Choose a payment of the open quarter, click `[data-testid=payment-note]`, `$B fill 'input.note' "Test"`,
+  `$B press Enter`; `$S diff` shows `~ transactions <ref> .remarks: … -> "Test"`. ⌘Z, and the diff is empty again.
 
 ## Gotchas
 

@@ -44,7 +44,7 @@ The doctor is read-only. Every line must say `ok`. It checks that the PIDs are a
 
 ```bash
 B=$(command -v browse)
-$B newtab "$UI/de/$OPEN_Q/journal-entries"  # URL = /<lang>/<period>/<tab>?filter=&q=&receipt=<id>&tx=<ref>
+$B newtab "$UI/journal?period=$OPEN_Q"      # the paths of docs/urls.md, e.g. /receipts/<id>?filter=offen&q=
 $B wait --networkidle
 $B snapshot -i -c                            # interactive elements as @e refs
 $B click @e14 ; $B fill <sel> "text" ; $B press Enter
@@ -57,10 +57,10 @@ $B closetab
 These are the stable handles. They come from the source, not from coordinates.
 
 - **Routes:** the paths of `docs/urls.md`, parsed only by `src/app/shell/route.ts`: `/receipts[/<id>]`, `/bank[/<account>-<yyyy-mm>[/<ref>]]`, `/payments/<ref>`, `/journal[/<id>]`, `/vat[/<ziffer>]`, `/vat/codes[/<code>]`, `/reports/income|balance|trial[/<account>]`, `/close[/<step>]`, `/company/<section>`, `/invoices…`. Query: `period=` (`2026`, `2026-Q1`, `2026-09`, `2026-07-01_2026-09-30`, `ytd`, `all`; absent = the open quarter after `closedThrough`), `q=`, `filter=zugeordnet|offen|ohneDatum`, `vat=`, `status=`. The language is no part of a link (a per-viewer preference, top bar › DE). Old `/<lang>/<period>/<tab>?receipt=&tx=&je=&account=&ziffer=&view=codes&code=` links redirect (replaceState) to the new path, so the recipes' old URLs still land on the right object. Changing area pushes a history entry, selecting a row replaces it. The heading's period button (`[data-testid=period-picker]`) and the top bar's period chip open the picker (`.pp`; `.pp .btn2.primary` applies). The static export keeps the path after `#`.
-- **Areas and tabs:** the dock (`nav.dock`, shown near the bottom edge; `G` + letter: B Belege, I Rechnungen, K Kontoauszüge, U Buchungen, M MWST, R Bilanz & ER, A Abschluss, F Firma). Belege, Kontoauszüge, Buchungen, MWST-Codes, MWST and Bilanz & ER are rebuilt (features/receipts.md, bank.md, journal-entries.md, vat-report.md, reports.md). Until Abschluss is rebuilt it shows its old tab under a heading `.lhead h1`. ⌘K opens the palette (`.palette`), the top bar shows near the top edge (`.topbar`; mousemove with `clientY < 10`).
+- **Areas and tabs:** the dock (`nav.dock`, shown near the bottom edge; `G` + letter: B Belege, I Rechnungen, K Kontoauszüge, U Buchungen, M MWST, R Bilanz & ER, A Abschluss, F Firma). MWST-Codes has no letter: `/vat/codes`, or **Codes erklärt** in MWST. Each area has its feature file (features/README.md). The list's heading is `.lhead h1`. ⌘K opens the palette (`.palette`), the top bar shows near the top edge (`.topbar`; mousemove with `clientY < 10`).
 - **Journal rows:** `.rows.je .row[data-id="<journalEntry.id>"]`; its cells `.d`, `.t`, `.dr` (Soll), `.cr` (Haben), `.vc[data-vat]` (MWST), `.cu`, `.a`. The detail's form fields are `input[name=accountDebit|accountCredit|vatCode|amount|description]` (features/journal-entries.md).
 - **Double-click:** `browse` has no dblclick command. Dispatch the event with `$B js "document.querySelector('<sel>').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))"`. That fires the app's own React `onDoubleClick` handler.
-- **Buttons by title:** `Neu klassifizieren`, `Löschen`, `Zuordnen`, `Zuordnung entfernen`, `Beschreibung bearbeiten`, `Notiz bearbeiten`, and `Beleg löschen`. Search fields by placeholder: `Dateiname, Text suchen…`, `Ref, Beschreibung suchen…`, `Beleg suchen (Dateiname, Beschreibung)…`, and `Suchen…` on Buchungen.
+- **Buttons by title or label:** `Neu klassifizieren` and `Löschen` (Buchungen), `Zahlung verknüpfen` and `Beleg löschen?` (Belege), `braucht keinen` and `Notiz` (Kontoauszüge), `Ausstellen` and `Senden` (Rechnungen). The search of Belege, Kontoauszüge, Buchungen, MWST-Codes, Bilanz & ER and of Rechnungen' customers and sent log is `.list .search input`; `/` focuses it.
 
 **API:** `curl -s "$API/api/config"` and similar. Use it for side-effect checks and preconditions, never as a stand-in for the UI path you are verifying.
 

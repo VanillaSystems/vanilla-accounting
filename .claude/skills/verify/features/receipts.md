@@ -25,6 +25,10 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   (`POST /api/transactions/manual` + mapping). A unique exact fit shows as `.sug` with
   `[data-accept]` (Enter accepts and selects the next receipt that needs you).
 - `rc-unlink`: `.status .quiet` (`lösen`) or `.tx .un` in Zahlung (`POST /api/mapping/remove`).
+  When the payment is a private one only this receipt holds, the same place says `Privat bezahlt
+  aufheben`: it deletes that payment (`DELETE /api/transactions/<ref>`) and its link; ⌘Z pays the
+  receipt privately again (a new manual payment with a new ref). A private payment that is already
+  booked is refused (`Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.`).
 - `rc-edit`: `E` opens Angaben (`.sec[data-sec=angaben]`) and focuses the date. `form.form`
   fields `filename`, `date` (TT.MM.JJJJ), `currency`, `amount`, `description`, `remarks` (a
   textarea); Enter or leaving the form saves only the changed fields in one

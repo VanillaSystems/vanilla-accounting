@@ -29,4 +29,4 @@ The Bilanz & ER area (`/reports/income|balance|trial`, rebuilt in redesign phase
 - The Erfolgsrechnung lists only accounts of the chart (accounts.json), as `computeIncomeStatement` does; the Saldobilanz lists every account with a movement.
 - A ledger's opening balance is the year's opening balances plus the year's entries before the period, also for income accounts (a Q3 ledger of an expense account starts at its January–June total).
 - A link to a known account without an amount keeps it selected though the list hides the row; an unknown account number selects the first row.
-- Export and download (the mockup's `Export` and `Herunterladen`) come with the export dialog (redesign phase 6).
+- A ledger's `Herunterladen` (D) and the export dialog are driven in features/export.md.

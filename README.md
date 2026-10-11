@@ -40,7 +40,7 @@ the ESTV in 2026, and it prepares the year-end close, updated when the year turn
 - **The VAT codes** (V81, I0, B81-1, -I81, …) on every journal entry are Banana's MWST codes.
   [`docs/vat-codes.md`](docs/vat-codes.md) explains each one: what it means, which Ziffern of
   the VAT return it feeds, and when to use it. In the app, hover or click any code, or open
-  **Codes erklärt** in the MWST tab.
+  **Codes erklärt** in MWST (`/vat/codes`).
 - **The demos** are complete workspaces of made-up companies, January to September 2026, with
   Q1 filed and corrected:
   - `demo/`: Muster Kaffee GmbH, a coffee roaster with a café and a webshop (reduced rates,
@@ -50,6 +50,31 @@ the ESTV in 2026, and it prepares the year-end close, updated when the year turn
     private outlays back each month, and declares a private share of his phone.
 
   `npm run demo:generate` writes both from `tools/demo/`. Do not edit them by hand.
+
+## The app
+
+One window, a list on the left and the selected item on the right. Nine areas sit in a dock at
+the bottom edge (`G` and a letter); a bar at the top edge holds search, the period, the export,
+zoom, light or dark, and the language (German, French, Italian, English).
+
+- **Belege**: the receipts, what needs you first. A receipt shows its paper, its facts (date,
+  amount, Swiss VAT, VAT number) and its payment; `L` links one, or books it as paid privately.
+- **Rechnungen**: invoices and credit notes with the Swiss QR-bill, edited on the A4 sheet,
+  checked against Art. 26 MWSTG before they are issued; customers, reminders, every document sent.
+- **Kontoauszüge**: each bank account's monthly statements, whether their payments add up to the
+  bank's balances, a missing month, and each payment with its receipt and entry.
+- **Buchungen**: the journal as one grid, edited in place, with corrections of a filed quarter
+  booked in the open one.
+- **MWST** and **MWST-Codes**: the return of a quarter with the entries behind each Ziffer, the
+  Korrekturabrechnung (form 0535), and every VAT code explained.
+- **Bilanz & ER**: Erfolgsrechnung, Bilanz and Saldobilanz of any period, each account's ledger.
+- **Abschluss**: the year-end in seven steps. **Firma**: the company's profile, VAT setup, bank
+  accounts, chart of accounts, periods, opening balances and invoice layout.
+
+`⌘K` finds anything, `N` adds, `⌘Z` undoes, `⇧E` exports (a package for your Treuhand, the
+audit, the year's archive). Every page has its own link, such as `/journal/M2026-001` or
+`/vat/405?period=2026-Q3` ([docs/urls.md](docs/urls.md)). A filed quarter shows with a lock, and
+the app refuses every edit in it.
 
 ## Quick start
 
