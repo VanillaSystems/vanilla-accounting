@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Stands in for the `claude` CLI that src/llm/ask.ts spawns, so a test runs the real code with
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
-// carries Swiss VAT facts. A VAT facts prompt gets STUB_VAT (no Swiss VAT). A call with the Read
-// tool (vision) answers STUB_OCR_TEXT; any other prompt answers STUB_ANSWER (JSON), or
-// $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
+// carries Swiss VAT facts. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
+// reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
+// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
 // $CLAUDE_STUB_PROMPTS: each prompt is appended there.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
@@ -38,6 +38,6 @@ function classify() {
 
 const result = prompt.includes('## Chart of Accounts') ? classify()
   : prompt.includes('Extract ONLY the VAT (MWST) facts') ? JSON.stringify(STUB_VAT)
-  : process.argv.includes('Read') ? STUB_OCR_TEXT
+  : prompt.includes('Extrahiere den vollständigen Text') ? STUB_OCR_TEXT
   : process.env.CLAUDE_STUB_ANSWER ?? JSON.stringify(STUB_ANSWER);
 process.stdout.write(JSON.stringify({ result, is_error: false, usage: { input_tokens: 7, output_tokens: 3 }, num_turns: 1 }));
