@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeIndex, withinBooks, type Scan } from '../src/cli/extract.js';
+import { mergeIndex, withinBooks, type Scan } from '../src/books/bank-import.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 
 const CLOSED_THROUGH = '2026-06-30';
