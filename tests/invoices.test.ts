@@ -254,3 +254,24 @@ test('pagination: a table header never ends a page alone', () => {
   const { pages } = paginate(blocks, [177, 8, 7, 7], { footer: true, qrBill: false });
   assert.deepEqual(pages, [[0], [1, 2, 3]]);
 });
+
+test('the sheet on screen: a draft edited in place names each field; texts-only editing leaves the lines alone; a printed sheet has neither', () => {
+  const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', addLine: 'Position', removeLine: 'Position entfernen', intro: 'Text vor der Tabelle', closing: 'Text nach den Kosten', desc: 'Beschreibung', noExemption: 'Grund für 0 %' };
+  const draft: SheetData = { ...sheet(2), number: undefined, reference: undefined, lines: [line(1, 10, 8.1, 'A'), line(2, 5, 0, 'B')] };
+  const screen = { qrPlaceholder: 'QR-Zahlteil beim Ausstellen', edit: { scope: 'draft' as const, customers: [{ id: 'cu_1', name: 'Kunde AG' }], customerId: 'cu_1', words } };
+  const edited = sheetBlocks({ ...draft, screen }).map((b) => b.html).join('');
+  const keys = [...edited.matchAll(/data-ed="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(keys, ['date', 'dueDate', 'intro', 'l:0:text', 'l:0:quantity', 'l:0:unit', 'l:0:price', 'l:0:vatRate', 'l:1:text', 'l:1:quantity', 'l:1:unit', 'l:1:price', 'l:1:vatRate', 'exemption', 'closing']);
+  assert.match(edited, /data-ia="addline"/);
+  assert.equal((edited.match(/data-ia="rmline"/g) ?? []).length, 2);
+  const blocks = sheetBlocks({ ...draft, screen });
+  const page = assembleSheets({ ...draft, screen }, blocks, { pages: [blocks.map((_, i) => i)], qrOwnPage: false });
+  assert.match(page, /<select class="ed edsel" data-ed="customer"><option value="cu_1" selected>Kunde AG<\/option><option value="\+">/);
+  assert.match(page, /<div class="qrb ph"><span>QR-Zahlteil beim Ausstellen<\/span>/);
+
+  const texts = sheetBlocks({ ...sheet(2), screen: { ...screen, edit: { ...screen.edit, scope: 'texts' } } }).map((b) => b.html).join('');
+  assert.deepEqual([...texts.matchAll(/data-ed="([^"]+)"/g)].map((m) => m[1]), ['intro', 'closing']);
+
+  const printed = sheetBlocks(draft).map((b) => b.html).join('');
+  assert.doesNotMatch(printed, /data-ed|contenteditable|data-ia/);
+});
