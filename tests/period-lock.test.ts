@@ -158,6 +158,18 @@ for (const call of allowed) {
   });
 }
 
+test('refused: DELETE of a manual payment that is booked -> 409 hasEntries, index unchanged', async () => {
+  const made = await send({ method: 'POST', path: '/api/transactions/manual', body: { date: '2026-08-03', description: 'privat', amount: 7, currency: 'CHF' } });
+  const ref = made.json.ref as string;
+  const booked = await send({ method: 'POST', path: '/api/journal-entries', body: { transactionRef: ref, date: '2026-08-03', accountDebit: '6800', accountCredit: '2100', amount: 7, description: 'privat' } });
+  assert.equal(booked.status, 200, booked.error);
+  const before = readFileSync(api.indexPath);
+  const { status, json } = await send({ method: 'DELETE', path: `/api/transactions/${ref}` });
+  assert.equal(status, 409);
+  assert.equal(json.code, 'hasEntries');
+  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+});
+
 /** A camt.053 of the demo's Raiffeisen account with one payment on `date`. */
 const camt = (id: string, date: string) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
 <GrpHdr><MsgId>${id}</MsgId><CreDtTm>${date}T06:00:00</CreDtTm></GrpHdr>

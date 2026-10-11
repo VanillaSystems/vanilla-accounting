@@ -17,6 +17,7 @@ export type ApiRefusal =
   | { code: 'localOnly' }
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason } }
   | { code: 'manualOnly' }
+  | { code: 'hasEntries' }
   | { code: 'yearClose' }
   | { code: 'fileExists'; params: { filename: string } }
   | { code: 'statement'; params: { reason: StatementRefusal; detail?: string } }

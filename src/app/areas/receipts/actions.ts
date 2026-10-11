@@ -3,7 +3,7 @@
  * again. Every change but a delete says what it did in the toast and can be taken back there
  * (or with ⌘Z); the undo is the opposite write.
  */
-import type { ReceiptKind, ReceiptPatch } from '../../../types/index.js';
+import type { BankTransaction, ReceiptKind, ReceiptPatch } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
@@ -44,6 +44,14 @@ export async function privateOutlay(nav: Nav, v: ReceiptView): Promise<boolean> 
     ref = await api.createManualTransaction({ date: v.date!, description: r.description || r.filename, amount: Math.abs(r.amount!), currency: r.currency || 'CHF' });
     await api.addMapping(pair(r.id, ref));
   }, t('receipts.privateDone'), () => api.deleteTransaction(ref));
+}
+
+/** A private payment made by mistake goes with its link; undo pays the receipt privately again. */
+export function undoPrivate(nav: Nav, v: ReceiptView, tx: BankTransaction, what: string) {
+  return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), async () => {
+    const ref = await api.createManualTransaction({ date: tx.date, description: tx.description, amount: tx.amount, currency: tx.currency });
+    await api.addMapping(pair(v.r.id, ref));
+  });
 }
 
 export function setKind(nav: Nav, v: ReceiptView, kind: ReceiptKind) {

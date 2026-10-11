@@ -4,7 +4,7 @@
  * payments, the exchange rates its foreign entries were booked at, and its file. A month without
  * its statement shows where to add it.
  */
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
 import type { RouteOf } from '../../shell/route.js';
@@ -18,7 +18,7 @@ import type { AreaProps } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
-import { importStatements, pickStatements, setNoReceipt } from './actions.js';
+import { importStatements, pickStatements, setNote, setNoReceipt } from './actions.js';
 import { at, statementName } from './bank.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 
@@ -166,10 +166,25 @@ function PayBar({ b, tx, nav, canEdit, closed, onClear }: Props & { b: Bank; tx?
           {t('bank.entry', { debit: entry.accountDebit || '–', credit: entry.accountCredit || '–' })}
         </button></>
       ) : tx.amount ? <> · <span className="wn">{t('bank.notBooked')}</span></> : null}
-      {tx.remarks && <> · <span title={t('bank.remarks')}>{tx.remarks}</span></>}
+      <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {' '}<button type="button" className="x" title={t('bank.clear')} aria-label={t('bank.clear')} onClick={onClear}>×</button>
     </>
   );
+}
+
+/** The payment's note, written in place: ↵ or leaving the field saves, Esc cancels. */
+function Note({ tx, nav, edit }: { tx: BankTransaction; nav: Props['nav']; edit: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const cancelled = useRef(false);
+  if (editing) {
+    const done = (text: string) => { setEditing(false); if (!cancelled.current) void setNote(nav, tx, text.trim()); };
+    return <> · <input className="note" autoFocus defaultValue={tx.remarks ?? ''} aria-label={t('bank.remarks')} title={t('bank.noteTip')}
+      onFocus={() => { cancelled.current = false; }}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { cancelled.current = true; setEditing(false); } }}
+      onBlur={(e) => done(e.currentTarget.value)} /></>;
+  }
+  if (!edit) return tx.remarks ? <> · <span title={t('bank.remarks')}>{tx.remarks}</span></> : null;
+  return <> · <button type="button" className={tx.remarks ? 'golink' : 'golink addnote'} data-testid="payment-note" title={t('bank.noteTip')} onClick={() => setEditing(true)}>{tx.remarks || t('bank.addNote')}</button></>;
 }
 
 function Sec({ k, label, val, children }: { k: Section; label: string; val: ReactNode; children: ReactNode }) {

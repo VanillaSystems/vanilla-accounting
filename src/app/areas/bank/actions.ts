@@ -1,5 +1,5 @@
 /**
- * What Kontoauszüge writes: a payment marked as needing no receipt (undo through the toast), and
+ * What Kontoauszüge writes: a payment marked as needing no receipt and a payment's note (undo through the toast), and
  * statements added from a file (the add button, N, a drop, or a missing month's well) through
  * POST /api/statements, which reads them into the books as `npm run extract` would.
  */
@@ -19,6 +19,20 @@ export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, u
   }
   nav.refresh();
   if (!undoing) nav.toast(t(on ? 'bank.noReceiptSet' : 'bank.noReceiptCleared'), () => setNoReceipt(nav, tx, !on, true));
+}
+
+/** The payment's note; an empty one removes it. */
+export async function setNote(nav: Nav, tx: BankTransaction, text: string, undoing = false): Promise<void> {
+  const before = tx.remarks ?? '';
+  if (text === before) return;
+  try {
+    await api.patchTransaction(tx.ref, { remarks: text });
+  } catch (e) {
+    nav.toast(errorText(e));
+    return;
+  }
+  nav.refresh();
+  if (!undoing) nav.toast(t(text ? 'bank.noteSaved' : 'bank.noteCleared'), () => setNote(nav, { ...tx, remarks: text }, before, true));
 }
 
 const STATEMENT_FILE = /\.(xml|pdf)$/i;

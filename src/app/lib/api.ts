@@ -49,6 +49,7 @@ export function errorText(e: unknown): string {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
     case 'manualOnly': return t('error.manualOnly');
+    case 'hasEntries': return t('error.hasEntries');
     case 'yearClose': return t('error.yearClose');
     case 'fileExists': return t('error.fileExists', b.params);
     case 'statement': {

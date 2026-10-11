@@ -3,7 +3,7 @@
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { InboxFile } from '../../../types/index.js';
+import type { BankTransaction, InboxFile } from '../../../types/index.js';
 import { parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
@@ -17,7 +17,7 @@ import type { Ledger, ReceiptView } from './model.js';
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
-import { deleteReceipt, readAgain, saveFields, unlinkPayment, type Field } from './actions.js';
+import { deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { Paper } from './Paper.js';
 import { I } from './icons.js';
@@ -130,6 +130,9 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   );
 }
 
+/** A private payment only this receipt holds: releasing it deletes the payment, as unlinking would leave it orphaned. */
+const ownPrivate = (l: Ledger, tx: BankTransaction) => tx.bank === 'manual' && (l.receiptsByRef.get(tx.ref)?.length ?? 0) <= 1;
+
 function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   const { v, l, nav, canEdit } = props;
   const sug = listed.suggestions.get(v.r.id);
@@ -155,7 +158,9 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
           </button>
         </span>
         {entry && <button type="button" className="golink jl" data-testid="go-entry" title={t('receipts.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.entry')}</button>}
-        {canEdit && !v.locked && <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx))}>{t('receipts.unlink')}</button>}
+        {canEdit && !v.locked && (ownPrivate(l, tx)
+          ? <button type="button" className="quiet" title={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
+          : <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx))}>{t('receipts.unlink')}</button>)}
       </>
     );
   }
@@ -219,7 +224,9 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
             <span className="d">{formatDate(tx.date)} · {bankOf(tx)}</span>
             <span className="am">{amountOf(tx)}</span>
             <span className="tt">{tx.description}</span>
-            {edit && <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>}
+            {edit && (ownPrivate(l, tx)
+              ? <button type="button" className="un" title={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
+              : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>)}
           </div>
         );
       })}

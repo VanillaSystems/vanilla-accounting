@@ -71,6 +71,9 @@ router.delete('/api/transactions/:ref', (req, res) => {
       throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).', { code: 'manualOnly' });
     }
     assertOpen(books, refDates(books, ref), 'deleteTransaction');
+    if (books.journalEntries?.some((e) => e.transactionRef === ref)) {
+      throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung löschen.', { code: 'hasEntries' });
+    }
 
     books.transactions = books.transactions.filter((t) => t.ref !== ref);
     books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
