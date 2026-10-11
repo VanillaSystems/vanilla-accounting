@@ -3,7 +3,7 @@
  * else the page does goes through the local server, as in the browser.
  */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import type { DesktopBridge, MenuCommand } from '../types/desktop.js';
+import type { DesktopBridge, MenuCommand, SmokeBridge } from '../types/desktop.js';
 
 const bridge: DesktopBridge = {
   chooseFolder: (title) => ipcRenderer.invoke('desktop:chooseFolder', title),
@@ -16,3 +16,12 @@ const bridge: DesktopBridge = {
 };
 
 contextBridge.exposeInMainWorld('vanilla', bridge);
+
+if (process.argv.includes('--vanilla-smoke')) {
+  const smoke: SmokeBridge = {
+    menu: () => ipcRenderer.invoke('smoke:menu'),
+    click: (id) => ipcRenderer.invoke('smoke:click', id),
+    quit: () => ipcRenderer.send('smoke:quit'),
+  };
+  contextBridge.exposeInMainWorld('vanillaSmoke', smoke);
+}

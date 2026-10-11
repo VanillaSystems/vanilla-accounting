@@ -16,6 +16,18 @@ export interface DesktopBridge {
   setLanguage(code: string): void;
 }
 
+/**
+ * `window.vanillaSmoke`, only when the app was started with --vanilla-smoke (tools/desktop/smoke.mjs):
+ * the native menu for a script, since the fused release build takes no --inspect.
+ */
+export interface SmokeBridge {
+  /** The labels of the File menu and of its recent list. */
+  menu(): Promise<{ file: string[]; recent: string[] }>;
+  /** Clicks the menu item with this id; false when there is none. */
+  click(id: string): Promise<boolean>;
+  quit(): void;
+}
+
 /** Books the app knows: their folder and, when it still holds a workspace, the company's name. */
 export interface KnownBooks { root: string; name?: string; demo: boolean }
 

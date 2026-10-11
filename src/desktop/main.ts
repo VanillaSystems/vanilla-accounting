@@ -22,6 +22,8 @@ import { desktopServer } from './server.js';
 import { readState, writeState, type Bounds } from './state.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
+const SMOKE = app.commandLine.hasSwitch('vanilla-smoke');
 
 // The sheet's text is laid out as puppeteer prints it (src/invoices/pdf.ts launches Chrome so).
 app.commandLine.appendSwitch('font-render-hinting', 'none');
@@ -87,6 +89,7 @@ async function start(): Promise<void> {
     }, !app.isPackaged)));
   }
 
+  if (SMOKE) smokeHandles();
   ipcMain.handle('desktop:chooseFolder', (_e, title: unknown) => chooseFolder(typeof title === 'string' ? title : ''));
   ipcMain.on('desktop:language', (_e, code: unknown) => {
     const next = languageOf(typeof code === 'string' ? code : undefined);
@@ -104,6 +107,20 @@ async function start(): Promise<void> {
   void checkForUpdates();
 }
 
+function smokeHandles(): void {
+  const menu = () => Menu.getApplicationMenu();
+  ipcMain.handle('smoke:menu', () => ({
+    file: menu()?.items[1]?.submenu?.items.map((i) => i.label) ?? [],
+    recent: menu()?.getMenuItemById('recent')?.submenu?.items.map((i) => i.label) ?? [],
+  }));
+  ipcMain.handle('smoke:click', (_e, id: unknown) => {
+    const item = typeof id === 'string' ? menu()?.getMenuItemById(id) : null;
+    item?.click();
+    return !!item;
+  });
+  ipcMain.on('smoke:quit', () => app.quit());
+}
+
 function listen(app: Express, preferred: number | undefined): Promise<number> {
   const attempt = (port: number) => new Promise<Server>((resolve, reject) => {
     const s = createServer(app);
@@ -119,7 +136,10 @@ function createWindow(stateFile: string): BrowserWindow {
   const win = new BrowserWindow({
     ...(saved ?? { width: 1440, height: 900 }),
     minWidth: 900, minHeight: 600, show: false, title: 'Vanilla Accounting',
-    webPreferences: { preload: join(HERE, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: {
+      preload: join(HERE, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,
+      additionalArguments: SMOKE ? ['--vanilla-smoke'] : [],
+    },
   });
   if (saved?.maximized) win.maximize();
   void win.webContents.setVisualZoomLevelLimits(1, 1);
