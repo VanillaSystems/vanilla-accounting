@@ -1,11 +1,11 @@
 /**
- * The standard chart of accounts the app ships (reference/charts/ch-kmu.yaml), and the chart a
+ * The standard chart of accounts the app ships (modules/ch/accounts.yaml), and the chart a
  * new workspace starts from: the accounts of its business profile and legal form.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { REFERENCE_DIR } from './workspace.js';
+import { APP_ROOT } from './workspace.js';
 import { LEGAL_FORMS, type BusinessProfile, type LegalForm } from './setup.js';
 
 export const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'revenue', 'expense', 'closing'] as const;
@@ -48,7 +48,7 @@ export interface WorkspaceAccount {
   line: string;
 }
 
-export const KMU_CHART = join(REFERENCE_DIR, 'charts', 'ch-kmu.yaml');
+export const KMU_CHART = join(APP_ROOT, 'modules', 'ch', 'accounts.yaml');
 
 /** The statement each account type is shown on, and the account class it must be in. */
 const TYPE_RULES: Record<AccountType, { statement: Statement; classes: string }> = {

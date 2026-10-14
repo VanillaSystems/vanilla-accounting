@@ -172,7 +172,7 @@ export function loadCases(dir: string = CASES_DIR): BookingCase[] {
     .sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id));
 }
 
-/** The casebook's chart, the app's one KMU chart (reference/charts/ch-kmu.yaml): account number → name. */
+/** The casebook's chart, the app's one KMU chart (modules/ch/accounts.yaml): account number → name. */
 export function loadCaseChart(): Map<string, string> {
   return new Map(loadChart().accounts.map((a) => [a.number, a.name]));
 }
@@ -232,7 +232,7 @@ export function validateCase(c: BookingCase, ctx: { chart: ReadonlyMap<string, s
 
   c.lines.forEach((l, i) => {
     const at = `lines[${i + 1}]`;
-    for (const a of [l.debit, l.credit]) if (a && !ctx.chart.has(a)) err(`${at}: account ${a} is not in reference/charts/ch-kmu.yaml — use a KMU account or add it there`);
+    for (const a of [l.debit, l.credit]) if (a && !ctx.chart.has(a)) err(`${at}: account ${a} is not in modules/ch/accounts.yaml — use a KMU account or add it there`);
     const info = l.vatCode ? vat().codes.parse(l.vatCode) : null;
     if (l.vatCode && !info) err(`${at}: VAT code ${l.vatCode} is not one the engine knows (reference/MWST-codes.txt)`);
     if (!l.debit && !l.credit) err(`${at}: both accounts are empty`);

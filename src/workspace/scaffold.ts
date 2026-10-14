@@ -12,7 +12,7 @@ import type { Preset, SupportedAnswers } from './setup.js';
 import { WORKSPACE_SCHEMA } from './schema.js';
 import { MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
 
-/** The chart's bank accounts per currency (reference/charts/ch-kmu.yaml); a further account takes the next free number. */
+/** The chart's bank accounts per currency (modules/ch/accounts.yaml); a further account takes the next free number. */
 const BANK_BY_CURRENCY: Record<string, string> = { CHF: '1020', EUR: '1021', USD: '1022' };
 const NEXT_FREE = { bank: 1023, card: 2101 } as const;
 
