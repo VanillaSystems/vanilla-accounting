@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { config as loadEnv } from 'dotenv';
 import { hasBooks, loadBooks, periodLock } from '../books/store.js';
-import { loadMailConfig, loginOf, mailConfigured } from '../collect/mail-config.js';
+import { loadMailConfig, loginOf, mailConfigured, missingText, passwordOf } from '../collect/mail-config.js';
+import { useKeychain } from '../secrets/keychain-store.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { fail, ok, warn, workspaceChecks, type Result } from '../workspace/checks.js';
@@ -78,28 +79,25 @@ async function mailChecks(ws: Workspace, login: boolean): Promise<Result[]> {
   }
   // The collector reads the app's .env (dotenv, from the app folder); so does this check.
   loadEnv({ path: join(APP_ROOT, '.env'), quiet: true });
+  useKeychain(() => ws.paths.root);
   const { checkLogin } = login ? await import('../collect/imap.js') : { checkLogin: undefined };
   const results: Result[] = [];
   for (const m of mailboxes) {
     const label = `Mailbox ${m.label} (${m.address})`;
-    const creds = loginOf(m, process.env);
+    const creds = await loginOf(m, process.env);
     if (creds.status === 'missing') {
-      const add = `Add to ${join(APP_ROOT, '.env')}: ${creds.keys.map((k) => `${k}=…`).join('  ')} (docs/mail-setup.md).`;
-      // Blanking the app password between collections is the advice in docs/mail-setup.md, so that alone is a note.
-      const onlyPassword = creds.keys.every((k) => k.endsWith('_IMAP_PASSWORD'));
-      results.push(onlyPassword && !login
-        ? warn(`${label}: no app password set (fine between collections)`, `Before collecting: ${add}`)
-        : fail(`${label}: ${creds.keys.join(', ')} not set`, add));
+      const fix = `${missingText(creds)[0].toUpperCase()}${missingText(creds).slice(1)} (docs/mail-setup.md).`;
+      results.push(fail(`${label}: ${[creds.user, creds.secret].filter(Boolean).join(', ')} not set`, fix));
       continue;
     }
-    if (!checkLogin) { results.push(ok(`${label}: credentials in .env (npm run doctor -- --mail logs in)`)); continue; }
+    if (!checkLogin) { results.push(ok(`${label}: login name in .env, password in the keychain (npm run doctor -- --mail logs in)`)); continue; }
     try {
       await checkLogin({ label: m.label, ...creds });
       results.push(ok(`${label}: logs in to ${creds.host}:${creds.port}`));
     } catch (e) {
       const err = e as Error & { authenticationFailed?: boolean; responseText?: string; code?: string };
       results.push(err.authenticationFailed
-        ? fail(`${label}: ${creds.host} refused the login (${err.responseText ?? err.message})`, `Create a new app-specific password and put it in ${m.env}_IMAP_PASSWORD; check ${m.env}_IMAP_USER is the full address (docs/mail-setup.md).`)
+        ? fail(`${label}: ${creds.host} refused the login (${err.responseText ?? err.message})`, `Create a new app-specific password and set it with npm run secret -- ${passwordOf(m)}; check ${m.env}_IMAP_USER is the full address (docs/mail-setup.md).`)
         : fail(`${label}: cannot reach ${creds.host}:${creds.port} (${err.code ?? err.message})`, `Check host in mail.yaml or ${m.env}_IMAP_HOST / ${m.env}_IMAP_PORT, and that IMAP is enabled for the mailbox (docs/mail-setup.md).`));
     }
   }

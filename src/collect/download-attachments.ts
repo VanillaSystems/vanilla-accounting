@@ -3,9 +3,11 @@ import { classifyDomain, loadMailConfig } from './mail-config.js';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
+import { useKeychain } from '../secrets/keychain-store.js';
 
+useKeychain(() => openWorkspace().paths.root);
 const MAIL = loadMailConfig(openWorkspace());
-const ACCOUNTS = mailAccounts(MAIL);
+const ACCOUNTS = await mailAccounts(MAIL);
 
 const { inbox: IMPORT_DIR, data: JOURNAL_DIR } = openWorkspace().paths;
 const JOURNAL_PATH = join(JOURNAL_DIR, 'download-journal.json');
@@ -39,7 +41,7 @@ async function main() {
   console.log(`${quarter}:`, from.toISOString(), 'to', to.toISOString());
 
   // Collect all business + ambiguous emails with attachments
-  const toFetch: { account: ReturnType<typeof mailAccounts>[number]; summary: EmailSummary }[] = [];
+  const toFetch: { account: Awaited<ReturnType<typeof mailAccounts>>[number]; summary: EmailSummary }[] = [];
 
   // COLLECT_ACCOUNTS=<label>,<label> restricts the run to specific
   // accounts — needed because Gmail app-specific passwords get revoked between

@@ -63,27 +63,31 @@ const MAIL_YAML = `mailboxes:
   - { label: private, address: me@example.com, env: TESTPRIVATE, host: 127.0.0.1, mixed: true }
 `;
 
-test('doctor: missing mailbox keys are named; --mail logs in and reports a refused password', { skip: !hasOpenssl && 'openssl is needed for the test server certificate' }, async () => {
+test('doctor: a missing login name or password is named with its fix; --mail logs in and reports a refused password', { skip: !hasOpenssl && 'openssl is needed for the test server certificate' }, async () => {
   const ws = tempWorkspace('doctor-mail-');
   const dir = ws.paths.root;
   writeFileSync(ws.paths.mail, MAIL_YAML);
   const server = await fakeImap(dir, 'app-password');
   const port = String((server.address() as AddressInfo).port);
+  // The passwords are secrets (ADR 0014): a secrets file stands in for the keychain.
+  const secretsFile = join(dir, '..', `${dir.split('/').pop()}-secrets.json`);
+  writeFileSync(secretsFile, JSON.stringify({ 'source:testoffice:mail': 'app-password', 'source:testshop:mail': 'browser-password' }));
   const env = {
-    TESTOFFICE_IMAP_USER: 'office@example.com', TESTOFFICE_IMAP_PASSWORD: 'app-password', TESTOFFICE_IMAP_PORT: port,
-    TESTSHOP_IMAP_USER: 'shop@example.com', TESTSHOP_IMAP_PASSWORD: 'browser-password', TESTSHOP_IMAP_PORT: port,
+    VANILLA_SECRETS_FILE: secretsFile,
+    TESTOFFICE_IMAP_USER: 'office@example.com', TESTOFFICE_IMAP_PORT: port,
+    TESTSHOP_IMAP_USER: 'shop@example.com', TESTSHOP_IMAP_PORT: port,
     TESTPRIVATE_IMAP_USER: 'me@example.com',
   };
   try {
     const keysOnly = await doctor(dir, env);
-    assert.match(keysOnly, /✓ Mailbox office \(office@example\.com\): credentials in \.env/);
-    assert.match(keysOnly, /! Mailbox private \(me@example\.com\): no app password set \(fine between collections\): Before collecting: Add to .*\.env: TESTPRIVATE_IMAP_PASSWORD=…/);
+    assert.match(keysOnly, /✓ Mailbox office \(office@example\.com\): login name in \.env, password in the keychain/);
+    assert.match(keysOnly, /✗ Mailbox private \(me@example\.com\): source:testprivate:mail not set\n {4}fix: Set the password with npm run secret -- source:testprivate:mail/);
     assert.doesNotMatch(keysOnly, /logs in to/, 'no login without --mail');
 
     const login = await doctor(dir, env, '--mail');
     assert.match(login, new RegExp(`✓ Mailbox office \\(office@example\\.com\\): logs in to 127\\.0\\.0\\.1:${port}`));
-    assert.match(login, /✗ Mailbox shop \(shop@example\.com\): 127\.0\.0\.1 refused the login \(Invalid credentials\)\n {4}fix: Create a new app-specific password and put it in TESTSHOP_IMAP_PASSWORD/);
-    assert.match(login, /✗ Mailbox private \(me@example\.com\): TESTPRIVATE_IMAP_PASSWORD not set/);
+    assert.match(login, /✗ Mailbox shop \(shop@example\.com\): 127\.0\.0\.1 refused the login \(Invalid credentials\)\n {4}fix: Create a new app-specific password and set it with npm run secret -- source:testshop:mail/);
+    assert.match(login, /✗ Mailbox private \(me@example\.com\): source:testprivate:mail not set/);
   } finally {
     server.close();
     rmSync(dir, { recursive: true, force: true });

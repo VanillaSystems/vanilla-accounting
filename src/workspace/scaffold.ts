@@ -107,13 +107,14 @@ beleg-import/
 `;
 
 const MAIL_YAML = `# Mailboxes receipts are collected from (npm run collect). Uncomment and fill in to use it.
-# Passwords never go here: put <env>_IMAP_USER and <env>_IMAP_PASSWORD (an app password) in .env.
+# Passwords never go here: the login name goes into .env as <env>_IMAP_USER, the app password into
+# the keychain with npm run secret -- source:<env in small letters>:mail.
 # See the app's docs/runbooks/receipt-collection.md.
 #
 # mailboxes:
 #   - label: Business
 #     address: you@example.com
-#     env: WORK                  # .env keys WORK_IMAP_USER, WORK_IMAP_PASSWORD
+#     env: WORK                  # .env key WORK_IMAP_USER; password: npm run secret -- source:work:mail
 #     host: imap.example.com
 #     mixed: false               # true when business and private mail share the box
 # skipDomains: []                # senders of a mixed mailbox that never send receipts

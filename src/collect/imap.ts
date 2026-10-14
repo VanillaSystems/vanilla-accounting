@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ImapFlow, type SearchObject } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { loginOf, type MailConfig } from './mail-config.js';
+import { loginOf, missingText, type MailConfig } from './mail-config.js';
 
 export interface EmailAccount {
   label: string;
@@ -34,14 +34,14 @@ export interface EmailFull {
   attachments: { filename: string; contentType: string; content: Buffer }[];
 }
 
-/** The workspace's mailboxes (mail.yaml) with their credentials from the app's .env. Throws naming the missing keys. */
-export function mailAccounts(cfg: MailConfig): (EmailAccount & { mixed: boolean })[] {
-  return cfg.mailboxes.map((m) => {
-    const login = loginOf(m, process.env);
-    if (login.status === 'missing') throw new Error(`${m.label}: add ${login.keys.join(' and ')} to the app's .env (docs/mail-setup.md).`);
+/** The workspace's mailboxes (mail.yaml) with their logins (the name from .env, the password from the keychain). Throws naming what is missing. */
+export async function mailAccounts(cfg: MailConfig): Promise<(EmailAccount & { mixed: boolean })[]> {
+  return Promise.all(cfg.mailboxes.map(async (m) => {
+    const login = await loginOf(m, process.env);
+    if (login.status === 'missing') throw new Error(`${m.label}: ${missingText(login)} (docs/mail-setup.md).`);
     const { status: _, ...credentials } = login;
     return { label: m.label, ...credentials, ...(m.filterTo ? { filterTo: m.filterTo } : {}), mixed: m.mixed };
-  });
+  }));
 }
 
 function createClient(account: EmailAccount, timeouts: { connectionTimeout?: number; greetingTimeout?: number } = {}): ImapFlow {

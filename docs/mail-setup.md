@@ -31,7 +31,7 @@ your mailboxes. Each mailbox has these fields:
 |---|---|---|
 | `label` | yes | A short name, shown in the output: `office`, `gmail`. |
 | `address` | yes | The mail address, shown in the output and in `npm run doctor`. |
-| `env` | yes | The prefix of this mailbox's keys in `.env`, in capitals. `OFFICE` means `OFFICE_IMAP_USER` and `OFFICE_IMAP_PASSWORD`. |
+| `env` | yes | The prefix of this mailbox's login name in `.env`, in capitals, and in small letters the name of its password in the keychain. `OFFICE` means `OFFICE_IMAP_USER` and the secret `source:office:mail`. |
 | `host` | yes | The IMAP server, for example `imap.gmail.com`. |
 | `filterTo` | no | Collect only mail sent to this address. Use it when several addresses share one login (an alias). |
 | `mixed` | no | `true` when business and private mail share the mailbox. Then `skipDomains` decides which senders to ignore. Default `false`. |
@@ -134,25 +134,31 @@ tenants since 2022, Outlook.com and Hotmail since 2024). It requires a sign-in t
 Microsoft (OAuth), which Vanilla Accounting does not do yet. See
 [When IMAP is not possible](#when-imap-is-not-possible).
 
-## 2. Put the credentials into the app's `.env`
+## 2. The login name into `.env`, the password into the keychain
 
-Open `.env` in the **app** folder (the one with `package.json`; `npm run init` created it).
-Add two lines per mailbox, with the `env` prefix of that mailbox:
+Open `.env` in the **app** folder (the one with `package.json`; `npm run init` created it). Add
+the login name per mailbox, with the `env` prefix of that mailbox:
 
 ```sh
 GMAIL_IMAP_USER=you@gmail.com
-GMAIL_IMAP_PASSWORD=abcdabcdabcdabcd
 ```
 
-Two more keys are optional:
+The password never goes into a file. Put it into the Mac's keychain, typed without echo:
+
+```sh
+npm run secret -- source:gmail:mail
+```
+
+`npm run secret -- source:gmail:mail --delete` removes it again. A password that is still in
+`.env` from an earlier version moves into the keychain with `npm run secret -- --import`, which
+then deletes its line from `.env`.
+
+Two more keys of `.env` are optional:
 
 | Key | When |
 |---|---|
 | `<ENV>_IMAP_HOST` | Overrides `host` from `mail.yaml`, for example to test another server. |
 | `<ENV>_IMAP_PORT` | The provider uses a port other than 993. |
-
-`.env` is in `.gitignore`, so the passwords never get into git. Do not copy them into
-`mail.yaml` or into any file of the workspace.
 
 ## 3. Check the setup
 
@@ -174,7 +180,7 @@ This logs in to each mailbox and logs out again. It reads no mail. Each mailbox 
 | Line | Meaning | What to do |
 |---|---|---|
 | ✓ … logs in to imap.gmail.com:993 | The setup works. | Go on to step 4. |
-| ✗ … refused the login | The server is reached, but the user name or password is wrong. | Create a new app password and replace `<ENV>_IMAP_PASSWORD`. Check that `<ENV>_IMAP_USER` is the full address. |
+| ✗ … refused the login | The server is reached, but the user name or password is wrong. | Create a new app password and set it with `npm run secret -- source:<env>:mail`. Check that `<ENV>_IMAP_USER` is the full address. |
 | ✗ … cannot reach | The server does not answer. | Check `host` in `mail.yaml` and your network. Check that IMAP is turned on for the mailbox. |
 
 Signed in to the mailbox in the browser is not the same as IMAP access. A mailbox can work in

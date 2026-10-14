@@ -177,15 +177,14 @@ Before collecting:
 1. Open the provider's app-password page (Google: https://myaccount.google.com/apppasswords)
 2. Name it "vanilla-accounting-collect"
 3. Copy the generated password
-4. Add it to the **app's** `.env` (the app folder, where `npm` runs; dotenv reads it from
-   there, a workspace `.env` is not read): `<ENV>_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx` (the
-   `env` prefix of that mailbox in mail.yaml)
+4. Put it into the keychain, typed without echo: `npm run secret -- source:<env>:mail` (the
+   `env` prefix of that mailbox in mail.yaml, in small letters)
 5. `npm run doctor -- --mail`: every mailbox shows ✓ logs in
 
 After collecting:
 1. Open the same app-password page
 2. Delete the "vanilla-accounting-collect" app password
-3. Remove or blank the password in the app's `.env`
+3. Remove it from the keychain: `npm run secret -- source:<env>:mail --delete`
 
 **Claude: always remind the user to revoke the app password after the collection run completes.**
 

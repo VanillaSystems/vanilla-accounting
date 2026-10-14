@@ -3,9 +3,11 @@ import { classifyDomain, loadMailConfig } from './mail-config.js';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
+import { useKeychain } from '../secrets/keychain-store.js';
 
+useKeychain(() => openWorkspace().paths.root);
 const MAIL = loadMailConfig(openWorkspace());
-const ACCOUNTS = mailAccounts(MAIL);
+const ACCOUNTS = await mailAccounts(MAIL);
 
 // Subject patterns that suggest invoices/receipts (not marketing)
 const RECEIPT_SUBJECT_PATTERNS = [
@@ -25,7 +27,7 @@ async function main() {
   const quarter = getQuarterArg();
   const { from, to } = parseQuarter(quarter);
 
-  const candidates: { account: ReturnType<typeof mailAccounts>[number]; summary: EmailSummary }[] = [];
+  const candidates: { account: Awaited<ReturnType<typeof mailAccounts>>[number]; summary: EmailSummary }[] = [];
 
   for (const account of ACCOUNTS) {
     console.log(`Fetching from ${account.label}...`);

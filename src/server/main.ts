@@ -4,6 +4,11 @@ import { networkInterfaces } from 'node:os';
 import { app, READONLY } from './api.js';
 import { closeBrowser } from '../invoices/pdf.js';
 import { engine, outsideArrivals } from './routes/automation.js';
+import { WS } from './books.js';
+import { useKeychain } from '../secrets/keychain-store.js';
+
+// npm start keeps its secrets in the Mac's keychain (the desktop app sets its own store).
+useKeychain(() => WS.paths.root);
 
 // PORT=0 lets the system choose. Without VANILLA_API_HOST the server listens on every interface,
 // so the phone app reaches it on the LAN.

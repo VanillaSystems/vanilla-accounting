@@ -1,12 +1,13 @@
 /**
  * The workspace's mail.yaml: which mailboxes receipts are collected from, and how the senders of
  * a mailbox that mixes business and private mail are sorted. One company's facts, so they live in
- * its workspace. Credentials are secrets, so they stay out of it: in the app's .env, which dotenv
- * reads from the app folder (<env>_IMAP_USER, <env>_IMAP_PASSWORD). See docs/mail-setup.md.
+ * its workspace. The login name comes from the app's .env (<env>_IMAP_USER); the password is a
+ * secret (ADR 0014), in the keychain under source:<env in small letters>:mail. See docs/mail-setup.md.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import type { Workspace } from '../workspace/workspace.js';
+import { mailSecret, secrets, type SecretName } from '../secrets/secrets.js';
 
 export interface Mailbox {
   label: string;
@@ -31,19 +32,27 @@ export interface MailConfig {
   linkReceiptDomains: Set<string>;
 }
 
-/** A mailbox with what IMAP needs to log in, or the .env keys still missing. */
+/** A mailbox with what IMAP needs to log in, or what is still missing: the .env key of the login name, the secret of the password. */
 export type MailboxLogin =
   | { status: 'ready'; host: string; port: number; user: string; password: string }
-  | { status: 'missing'; keys: string[] };
+  | { status: 'missing'; user?: string; secret?: SecretName };
 
-/** The login of a mailbox from the app's environment: host and port fall back to mail.yaml and 993. */
-export function loginOf(m: Mailbox, env: NodeJS.ProcessEnv): MailboxLogin {
-  const [user, password] = [env[`${m.env}_IMAP_USER`], env[`${m.env}_IMAP_PASSWORD`]];
-  if (!user || !password) {
-    return { status: 'missing', keys: [!user && `${m.env}_IMAP_USER`, !password && `${m.env}_IMAP_PASSWORD`].filter((k): k is string => !!k) };
-  }
+/** The secret of a mailbox's password. */
+export const passwordOf = (m: Mailbox): SecretName => mailSecret(m.env.toLowerCase());
+
+/** The login of a mailbox: its name from the app's environment, its password from the secret store; host and port fall back to mail.yaml and 993. */
+export async function loginOf(m: Mailbox, env: NodeJS.ProcessEnv): Promise<MailboxLogin> {
+  const user = env[`${m.env}_IMAP_USER`];
+  const password = await secrets.get(passwordOf(m));
+  if (!user || !password) return { status: 'missing', ...(!user ? { user: `${m.env}_IMAP_USER` } : {}), ...(!password ? { secret: passwordOf(m) } : {}) };
   return { status: 'ready', host: env[`${m.env}_IMAP_HOST`] || m.host, port: parseInt(env[`${m.env}_IMAP_PORT`] || '993'), user, password };
 }
+
+/** What a person does about a missing login, in one line. */
+export const missingText = (login: Extract<MailboxLogin, { status: 'missing' }>): string => [
+  login.user && `add ${login.user} to the app's .env`,
+  login.secret && `set the password with npm run secret -- ${login.secret}`,
+].filter(Boolean).join(' and ');
 
 /** mail.yaml names mailboxes. The template npm run init writes is all comments, so it does not. */
 export function mailConfigured(ws: Workspace): boolean {
