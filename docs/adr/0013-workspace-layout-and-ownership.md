@@ -77,21 +77,46 @@ what apps of different makers can share:
   `vanilla-accounting/knowledge/`. When a second app arrives, the shared part moves: the partner
   itself to `master-data/partners/`, the booking rules for it stay in the app.
 - **Inside an app, the same split holds, with the same names:** the app's own master data in its
-  `master-data/`, its transactional data in its `transactional-data/`.
+  `master-data/`, its transactional data in its `transactional-data/`, and its customizing (the
+  settings and rules a person or an LLM changes through the change workflow) at the app's top
+  level.
 - **Transactional data stays in its app's folder.** Its rules belong to the app that writes it (a
   filed quarter never changes, the seals), and one app's records reach another through that app's
   interface: an HR app books salaries through Vanilla Accounting's write door, as all modules of
   a large system post into its one journal through the ledger's own logic.
 
+### Customizing apart from records, so a large company can cut there
+
+Large systems separate three kinds of data: **customizing** (configuration and rules),
+**master data** and **transactional data**. The layout keeps the same cut, because it is where a
+large company splits its repository:
+
+- **A small or medium company keeps everything in one repository.** Everyone who works on the
+  books may read all of it.
+- **A large company keeps code and customizing in the company's repository,** which every
+  contributor reads and changes (with an LLM, through review), **and moves master and
+  transactional data to records repositories,** one per access domain (the books apart from
+  payroll), with the same layout (`master-data/`, `transactional-data/<year>/`). Only the platform
+  clones them; people reach them through the web UI and the API, by role. Its changes to the
+  financial apps pass review by a second person, the tests and an approval before they go live
+  (the change management of an internal control system, OR 728a).
+- **The app reads and writes records the same way in both;** only where the records repository
+  lies differs.
+
+So `knowledge/` (the booking rules and precedents per supplier, customer and authority) is
+customizing and lies at the app's top level, not in `master-data/`. A partner's identity (name,
+UID, bank account) is master data; it moves out of `knowledge/` to `master-data/partners/` when a
+second app needs it, and the rules for booking it stay in `knowledge/`.
+
 ### Inside the app's folder: master data, and transactional data by fiscal year
 
 ```
 vanilla-accounting/
-  belege.workspace.yaml  mail.yaml  secret-terms.txt  VERSION  AGENTS.md   the app's settings
+  belege.workspace.yaml  mail.yaml  secret-terms.txt  VERSION  AGENTS.md   settings  ┐ customizing
+  knowledge/        rules per supplier, customer, authority, and per step   ┘
   beleg-import/   data/   history/   invoices.json
   master-data/
     accounts.json     the chart of accounts
-    knowledge/        suppliers, customers, authorities, rules
   transactional-data/
     2026/
       books/            entries.jsonl, transactions.jsonl, mappings.jsonl (ADR 0003 §3)
@@ -115,11 +140,12 @@ vanilla-accounting/
   jurisdiction files monthly or yearly (the `xx` swap test files yearly). The fiscal year exists
   in every jurisdiction and is the period that closes for good: the fourth quarter stays open
   after its filing for the year-end entries. Quarters remain in file names (`filings/`).
-- **What outlives a year is master data** and lies in `master-data/`: the chart of accounts and
-  `knowledge/`. The same name as at the repository's root, one level down: the root's is shared
+- **What outlives a year and describes a thing is master data** and lies in `master-data/`: the
+  chart of accounts. The same name as at the repository's root, one level down: the root's is shared
   by the apps, the app's is its own.
-- **What is neither stays in the app's folder:** the settings (the manifest, the mail and
-  secret-term lists, `VERSION`, the agents' files), the inbox (`beleg-import/`), the app's working
+- **Customizing lies at the app's top level:** the settings (the manifest, the mail and
+  secret-term lists, `VERSION`, the agents' files) and `knowledge/`.
+- **The rest also stays at the top level:** the inbox (`beleg-import/`), the app's working
   files outside git (`data/`), the exports of an earlier program (`history/`), and the records not
   yet split (`invoices.json`: customers and invoices; its split into customers in `master-data/`
   and invoices by year is a later step).
@@ -162,7 +188,7 @@ Accounting's folder may hold, in its own top level, in `master-data/` and in a y
 | Owner | Meaning | `vanilla-accounting/` | `master-data/` | `transactional-data/<year>/` |
 |---|---|---|---|---|
 | `app` | written by the app; a person changes it only through the app | `invoices.json`, `data/`, `VERSION` | | `books/`, `filings/`, `invoices/`, `expected/` |
-| `company` | added or edited by a person, read by the app | `belege.workspace.yaml`, `beleg-import/`, `history/`, `mail.yaml`, `secret-terms.txt`, `AGENTS.md`, `CLAUDE.md` | `accounts.json`, `knowledge/` | `receipts/`, `bank-statements/` |
+| `company` | added or edited by a person, read by the app | `belege.workspace.yaml`, `beleg-import/`, `history/`, `mail.yaml`, `secret-terms.txt`, `knowledge/`, `AGENTS.md`, `CLAUDE.md` | `accounts.json` | `receipts/`, `bank-statements/` |
 
 A year folder's name is a four-digit year; `transactional-data/` holds nothing else. The migration, the leak guard, the workspace check and
 the audit export read this list instead of keeping their own.
@@ -204,7 +230,7 @@ workspace is migrated once.
 - No folder grows without end: a year's folders stop growing when the year closes, and
   `transactional-data/` gains one folder per year.
 - One migration changes paths in a workspace: the books move into `vanilla-accounting/` (with
-  `git mv`, history kept); inside it `accounts.json` and `knowledge/` → `master-data/`;
+  `git mv`, history kept); inside it `accounts.json` → `master-data/`;
   `books.json` → `transactional-data/<year>/books/…`, `receipts/` and `bank-statements/` →
   `transactional-data/<year>/…` by the rule above, `filings/<year>/` →
   `transactional-data/<year>/filings/`, `invoices/` → `transactional-data/<year>/invoices/`,
@@ -218,6 +244,8 @@ workspace is migrated once.
 - The step's gate: `npm test` and `npm run test:books` give the same figures before and after,
   with no update of the expected figures; every seal still verifies; `check-public` stays at 0.
 - `invoices.json` stays one file for now and grows with every invoice.
+- A large company's split (records repositories per access domain behind the platform) is the
+  direction, not built; this step only keeps the cut between customizing and records clean.
 - The company's identity moves from `belege.workspace.yaml` to `master-data/company.yaml` with
   the second app that needs it, not in this step.
 
