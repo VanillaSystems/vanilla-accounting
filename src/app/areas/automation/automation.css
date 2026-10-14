@@ -78,3 +78,6 @@
 .wftask { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
 .wftask.sel { border-color: var(--accent); }
 .wftask p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
+.wfbuttons { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
+.wfbuttons .btn { display: inline-flex; align-items: center; gap: 5px; }
+.runlink { display: inline-flex; align-items: center; gap: 5px; }

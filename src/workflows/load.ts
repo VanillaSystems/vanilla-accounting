@@ -12,8 +12,8 @@ import { parse } from 'yaml';
 import { mergeOverlay } from '../core/modules/load.js';
 import { ACTIONS } from './actions.js';
 import {
-  ITEM_KINDS, PHASES, RESERVED_WORKFLOW_IDS, STEP_CAP,
-  type ItemKind, type Phase, type StepBody, type StepDecl, type StepKind, type Target, type TaskDecl, type Text, type Trigger, type WorkflowDecl,
+  ITEM_FACTS, ITEM_KINDS, PHASES, RESERVED_WORKFLOW_IDS, STEP_CAP,
+  type ItemFact, type ItemKind, type Phase, type StepBody, type StepDecl, type StepKind, type Target, type TaskDecl, type Text, type Trigger, type WorkflowDecl,
 } from './model.js';
 
 export class WorkflowError extends Error {}
@@ -99,6 +99,7 @@ function readWorkflow(id: string, appDir: string | undefined, companyDir: string
     steps,
     ...(w.guide ? { guide: String(w.guide) } : {}),
     ...(w.lane === 'account' ? { lane: 'account' as const } : {}),
+    ...(w.deadline ? { deadline: String(w.deadline) } : {}),
     version: createHash('sha256').update(sources.join('\n---\n')).digest('hex').slice(0, 16),
     origin: !appDir ? 'company' : companyDir ? 'overlaid' : 'app',
     runnable: { ok: true },
@@ -170,11 +171,15 @@ function kindOf(body: StepBody, effects: string[], outcomes: string[]): StepKind
 }
 
 function trigger(t: Raw): Trigger {
+  const fail = (msg: string): never => { throw new WorkflowError(msg); };
   const [kind, v] = Object.entries(t)[0] ?? [];
   const o = (v ?? {}) as Raw;
   const off = o.off === true ? { off: true } : {};
   switch (kind) {
-    case 'manual': return { kind: 'manual', for: String(o.for) as ItemKind, label: text(o.label, 'manual trigger label'), ...off };
+    case 'manual': {
+      const when = o.when === undefined ? {} : (ITEM_FACTS as readonly string[]).includes(String(o.when)) ? { when: String(o.when) as ItemFact } : fail(`manual trigger: when "${o.when}" is none of ${ITEM_FACTS.join(', ')}`);
+      return { kind: 'manual', for: String(o.for) as ItemKind, label: text(o.label, 'manual trigger label'), ...when, ...off };
+    }
     case 'event': return { kind: 'event', name: String(o.name), ...off };
     case 'schedule': return { kind: 'schedule', cron: String(o.cron), ...off };
     case 'outside': return { kind: 'outside', accepts: list(o.accepts) as Array<'receipt' | 'statement'>, ...off };

@@ -3,6 +3,7 @@ desc: {"de": "Rechnet die Periode ab, erzeugt das eCH-0217-XML, archiviert die A
 phase: quarter
 cadence: {"de": "je Abrechnungsperiode", "en": "per filing period", "fr": "par période de décompte", "it": "per periodo di rendiconto"}
 for: period
+deadline: P60D
 triggers:
   - manual: {"for": "period", "label": {"de": "Abrechnung erstellen", "en": "Prepare the return", "fr": "Établir le décompte", "it": "Preparare il rendiconto"}}
 emits: ["period.filed"]

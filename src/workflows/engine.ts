@@ -15,7 +15,7 @@ import { ACTIONS, type Effects } from './actions.js';
 import { cronMatches } from './cron.js';
 import { loadWorkflows, type Loaded } from './load.js';
 import {
-  outputsOf, stepOf, transition,
+  outputsOf, plusDuration, stepOf, transition,
   type AutomationCommand, type CommandResult, type EffectRecord, type ItemRef, type QueueReason, type Run, type RunState, type StartedBy, type StepRecord, type WorkflowDecl,
 } from './model.js';
 import { listRuns, saveRun } from './store.js';
@@ -413,12 +413,4 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     tick,
     idle: () => new Promise<void>((resolve) => { waiters.push(resolve); notifyIdle(); }),
   };
-}
-
-/** An ISO duration (P30D, PT5M) added to an ISO time. */
-export function plusDuration(iso: string, duration: string): string {
-  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/.exec(duration);
-  if (!m) return iso;
-  const ms = ((Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 60_000;
-  return new Date(Date.parse(iso) + ms).toISOString();
 }

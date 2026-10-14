@@ -1947,5 +1947,11 @@ export default {
     'automation.outcome.decided': 'Decided',
     'automation.outcome.books': 'The books',
     'automation.outcome.return': 'The return',
+    'marks.runOpen': '{workflow}: run {status} · open',
+    'marks.started': '{workflow} started. See Automation.',
+    'marks.byAi': 'booked by AI · Why booked like this? Run {run}',
+    'marks.byRun': 'booked by a workflow · Run {run}',
+    'journal.run': 'Run',
+    'automation.overdue': 'overdue',
   },
 } satisfies Locale;

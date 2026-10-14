@@ -53,8 +53,9 @@ export function automationView(): AutomationView {
   const loaded = loadWorkflows(APP_ROOT, WS.paths.root);
   const runs = e.runs();
   const byId = new Map(loaded.workflows.map((w) => [w.id, w]));
-  const tasks = runs.map((r) => (byId.has(r.workflow) ? taskOf(byId.get(r.workflow)!, r) : undefined)).filter((t): t is Task => !!t);
-  const summaries = runs.map(summaryOf).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
+  const tasks = runs.map((r) => (byId.has(r.workflow) ? taskOf(byId.get(r.workflow)!, r) : undefined)).filter((t): t is Task => !!t)
+    .sort((a, b) => Number(!!b.overdue) - Number(!!a.overdue) || a.since.localeCompare(b.since));
+  const summaries = runs.map((r) => summaryOf(r, byId.get(r.workflow))).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
   const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused])).digest('hex').slice(0, 16);
   return { rev, ...loaded, runs: summaries, tasks, paused: e.paused, limits: e.limits };
 }
@@ -67,7 +68,7 @@ router.get('/api/automation', (req, res) => {
 router.get('/api/automation/runs/:id', (req, res) => {
   const run = engine().run(req.params.id);
   if (!run) throw new RequestError(404, `Lauf ${req.params.id} gibt es nicht.`);
-  const detail: RunDetail = { ...summaryOf(run), steps: run.steps };
+  const detail: RunDetail = { ...summaryOf(run, loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === run.workflow)), steps: run.steps };
   res.json(detail);
 });
 

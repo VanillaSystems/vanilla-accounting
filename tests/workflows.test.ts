@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { loadWorkflows } from '../src/workflows/load.js';
-import { buttonsFor, graphOf, happyPath, hasAi, LANGUAGES, processMap, stepOf, type Text, type WorkflowDecl } from '../src/workflows/model.js';
+import { buttonsFor, graphOf, happyPath, hasAi, LANGUAGES, overdue, processMap, stepOf, type Run, type Text, type WorkflowDecl } from '../src/workflows/model.js';
 
 const app = loadWorkflows(APP_ROOT);
 const byId = (id: string, ws = app.workflows) => ws.find((w) => w.id === id)!;
@@ -98,7 +98,19 @@ test('the process map is read from the declarations: phases as columns, events a
 });
 
 test('a manual trigger puts a button on its kind of object, marked when an AI decides in it', () => {
-  const onTx = buttonsFor(app.workflows, 'transaction');
+  const onTx = buttonsFor(app.workflows, 'transaction', ['unbooked']);
   assert.deepEqual(onTx.map((b) => [b.workflow.id, b.label.de, b.ai, b.runnable]), [['booking', 'Buchen', true, true]]);
+  assert.deepEqual(buttonsFor(app.workflows, 'transaction', ['booked']), [], 'a booked payment shows no «Buchen»');
   assert.deepEqual(buttonsFor(app.workflows, 'year').map((b) => b.workflow.id), ['year-close']);
+});
+
+test('a run still open after its workflow\'s deadline is overdue; a finished one never', () => {
+  const vat = byId('vat-filing');
+  assert.equal(vat.deadline, 'P60D');
+  const run = (state: Run['state']) => ({ startedAt: '2026-10-01T08:00:00.000Z', state } as Run);
+  const waiting = run({ status: 'waiting', at: 'review', since: '2026-10-01T09:00:00.000Z' });
+  assert.equal(overdue(waiting, vat, '2026-11-29T00:00:00.000Z'), false);
+  assert.equal(overdue(waiting, vat, '2026-12-01T00:00:00.000Z'), true);
+  assert.equal(overdue(run({ status: 'done', finishedAt: '2026-12-02T00:00:00.000Z' }), vat, '2026-12-03T00:00:00.000Z'), false);
+  assert.equal(overdue(waiting, byId('booking'), '2027-12-01T00:00:00.000Z'), false, 'no deadline, never overdue');
 });

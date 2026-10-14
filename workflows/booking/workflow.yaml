@@ -7,7 +7,7 @@ cadence: {"de": "laufend", "en": "ongoing", "fr": "en continu", "it": "continuo"
 for: transaction
 lane: account
 triggers:
-  - manual: {"for": "transaction", "label": {"de": "Buchen", "en": "Book", "fr": "Comptabiliser", "it": "Registra"}}
+  - manual: {"for": "transaction", "when": "unbooked", "label": {"de": "Buchen", "en": "Book", "fr": "Comptabiliser", "it": "Registra"}}
   - event: {"name": "transaction.settled", "off": true}
 emits: ["entry.booked"]
 start: open

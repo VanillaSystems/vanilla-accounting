@@ -1944,6 +1944,12 @@ export const messages = {
   'automation.outcome.decided': 'Entschieden',
   'automation.outcome.books': 'Die Bücher',
   'automation.outcome.return': 'Die Abrechnung',
+  'marks.runOpen': '{workflow}: Lauf {status} · öffnen',
+  'marks.started': '{workflow} gestartet. Siehe Automatisierung.',
+  'marks.byAi': 'von KI gebucht · Warum so gebucht? Lauf {run}',
+  'marks.byRun': 'von einem Ablauf gebucht · Lauf {run}',
+  'journal.run': 'Lauf',
+  'automation.overdue': 'überfällig',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

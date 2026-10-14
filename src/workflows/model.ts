@@ -22,9 +22,13 @@ export const ITEM_KINDS = ['transaction', 'receipt', 'file', 'statement', 'entry
 export type ItemKind = typeof ITEM_KINDS[number];
 export interface ItemRef { kind: ItemKind; id: string }
 
+/** A state of an object an area knows and a manual trigger may require ("when: unbooked"). */
+export const ITEM_FACTS = ['unbooked', 'booked'] as const;
+export type ItemFact = typeof ITEM_FACTS[number];
+
 export type Trigger =
-  /** A button on every object of kind `for` in the areas (screen 4). */
-  | { kind: 'manual'; for: ItemKind; label: Text; off?: boolean }
+  /** A button on every object of kind `for` in the areas (screen 4); `when` limits it to objects in that state. */
+  | { kind: 'manual'; for: ItemKind; label: Text; when?: ItemFact; off?: boolean }
   /** Another run emitted `name`. */
   | { kind: 'event'; name: string; off?: boolean }
   /** cron in the company's time zone; the run is for `company`. */
@@ -96,6 +100,8 @@ export interface WorkflowDecl {
   guide?: string;
   /** Runs of one lane run one after another, in item order (one bank account's transactions by date). */
   lane?: 'account';
+  /** How long a run may take from its start (ISO 8601, P5D); a run still open after it is overdue. */
+  deadline?: string;
   /** sha16 of all declaration files, the company's overlay included. */
   version: string;
   /** Where it comes from: the app alone, or the app with the company's overlay, or the company alone. */
@@ -199,10 +205,10 @@ export function processMap(ws: readonly WorkflowDecl[]): {
   return { phases: PHASES.map((phase) => ({ phase, workflows: ws.filter((w) => w.phase === phase).map((w) => w.id) })), arrows };
 }
 
-/** The manual triggers that put a button on an object of `kind` (screen 4). */
-export function buttonsFor(ws: readonly WorkflowDecl[], kind: ItemKind): Array<{ workflow: WorkflowDecl; label: Text; ai: boolean; runnable: boolean }> {
+/** The manual triggers that put a button on an object of `kind` in the state `facts` names (screen 4). */
+export function buttonsFor(ws: readonly WorkflowDecl[], kind: ItemKind, facts: readonly ItemFact[] = []): Array<{ workflow: WorkflowDecl; label: Text; ai: boolean; runnable: boolean }> {
   return ws.flatMap((w) => w.triggers
-    .filter((t): t is Extract<Trigger, { kind: 'manual' }> => t.kind === 'manual' && t.for === kind && !t.off)
+    .filter((t): t is Extract<Trigger, { kind: 'manual' }> => t.kind === 'manual' && t.for === kind && !t.off && (!t.when || facts.includes(t.when)))
     .map((t) => ({ workflow: w, label: t.label, ai: hasAi(w, ws), runnable: w.runnable.ok })));
 }
 
@@ -322,9 +328,25 @@ export interface RunSummary {
   /** Why it stopped, when it is stuck. */
   error?: string;
   reason?: QueueReason;
+  /** Still open past its workflow's deadline. */
+  overdue?: boolean;
 }
 
-export function summaryOf(run: Run): RunSummary {
+/** An ISO duration (P30D, PT5M, P1DT2H) added to an ISO time. */
+export function plusDuration(iso: string, duration: string): string {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/.exec(duration);
+  if (!m) return iso;
+  const ms = ((Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 60_000;
+  return new Date(Date.parse(iso) + ms).toISOString();
+}
+
+/** A run still open (queued, waiting, parked, stuck) after its workflow's deadline from its start. */
+export function overdue(run: Run, w: WorkflowDecl | undefined, now: string): boolean {
+  if (!w?.deadline || run.state.status === 'done' || run.state.status === 'discarded' || run.state.status === 'running') return false;
+  return now > plusDuration(run.startedAt, w.deadline);
+}
+
+export function summaryOf(run: Run, w?: WorkflowDecl, now = new Date().toISOString()): RunSummary {
   const s = run.state;
   return {
     id: run.id, workflow: run.workflow, item: run.item, mode: run.mode, startedAt: run.startedAt,
@@ -333,6 +355,7 @@ export function summaryOf(run: Run): RunSummary {
     ...('at' in s && s.status !== 'discarded' ? { at: s.at } : {}),
     ...(s.status === 'stuck' ? { error: s.reason } : s.status === 'discarded' ? { error: s.reason } : {}),
     ...(s.status === 'queued' && s.reason ? { reason: s.reason } : {}),
+    ...(overdue(run, w, now) ? { overdue: true } : {}),
   };
 }
 
@@ -351,9 +374,10 @@ export interface Task {
   since: string;
   /** The person step's outcomes: the task's buttons. */
   outcomes: string[];
+  overdue?: boolean;
 }
 
-export function taskOf(w: WorkflowDecl, run: Run): Task | undefined {
+export function taskOf(w: WorkflowDecl, run: Run, now = new Date().toISOString()): Task | undefined {
   if (run.state.status !== 'waiting') return undefined;
   const step = stepOf(w, run.state.at);
   if (step?.body.kind !== 'person') return undefined;
@@ -361,6 +385,7 @@ export function taskOf(w: WorkflowDecl, run: Run): Task | undefined {
   return {
     run: run.id, workflow: w.id, step: step.id, item: run.item, title: task.title, ...(task.why ? { why: task.why } : {}),
     ...(task.do ? { do: task.do } : {}), ...(task.due ? { due: task.due } : {}), since: run.state.since, outcomes: Object.keys(step.outcomes),
+    ...(overdue(run, w, now) ? { overdue: true } : {}),
   };
 }
 

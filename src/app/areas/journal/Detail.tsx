@@ -26,6 +26,7 @@ import type { EntryView, Journal } from './model.js';
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
+import { RunLink } from '../../automation/marks.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
@@ -131,6 +132,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
               <dt>{t('journal.booked')}</dt><dd>{t(`journal.originText.${e.origin ?? 'other'}`)}</dd>
+              {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} nav={nav} /></dd></> : null}
             </dl>
             {edit && (
               <div className="dangers">

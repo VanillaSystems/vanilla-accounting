@@ -1947,5 +1947,11 @@ export default {
     'automation.outcome.decided': 'Deciso',
     'automation.outcome.books': 'I libri',
     'automation.outcome.return': 'Il rendiconto',
+    'marks.runOpen': '{workflow}: esecuzione {status} · apri',
+    'marks.started': '{workflow} avviato. Vedi Automazione.',
+    'marks.byAi': 'registrato dall’IA · Perché così? Esecuzione {run}',
+    'marks.byRun': 'registrato da un processo · Esecuzione {run}',
+    'journal.run': 'Esecuzione',
+    'automation.overdue': 'in ritardo',
   },
 } satisfies Locale;

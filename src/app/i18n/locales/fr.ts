@@ -1947,5 +1947,11 @@ export default {
     'automation.outcome.decided': 'Décidé',
     'automation.outcome.books': 'Les livres',
     'automation.outcome.return': 'Le décompte',
+    'marks.runOpen': '{workflow} : exécution {status} · ouvrir',
+    'marks.started': '{workflow} lancé. Voir Automatisation.',
+    'marks.byAi': 'comptabilisé par l’IA · Pourquoi ainsi ? Exécution {run}',
+    'marks.byRun': 'comptabilisé par un processus · Exécution {run}',
+    'journal.run': 'Exécution',
+    'automation.overdue': 'en retard',
   },
 } satisfies Locale;

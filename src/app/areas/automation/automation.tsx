@@ -193,7 +193,7 @@ function RunList({ runs, nav }: { runs: RunSummary[]; nav: Nav }) {
     <div className="wfruns">
       {runs.map((r) => (
         <button key={r.id} type="button" className="wfrun" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: r.id }, query: {} })}>
-          <span className={`wfpill st-${r.status}`}>{status(r.status)}</span>
+          <span className={`wfpill st-${r.status}`}>{status(r.status)}{r.overdue ? ` · ${t('automation.overdue')}` : ''}</span>
           <span className="mono">{r.item.id}</span>
           <span className="m">{r.path.join(' → ')}</span>
           <span className="m date">{when(r.startedAt)}</span>
@@ -301,7 +301,7 @@ function TasksPage({ view, nav, run }: { view: AutomationView; nav: Nav; run?: s
             const w = view.workflows.find((x) => x.id === task.workflow);
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
-                <b>{fillTask(tx(task.title), task.item)}</b>
+                <b>{fillTask(tx(task.title), task.item)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item)}</p> : null}
                 <span className="wfactions">
