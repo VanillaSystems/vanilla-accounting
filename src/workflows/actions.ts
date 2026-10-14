@@ -15,6 +15,7 @@ import { vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
 import { classifyStep } from '../intake/classify.js';
 import { FILING_ACTIONS } from './filing.js';
+import { YEAR_END_ACTIONS } from './year-end.js';
 
 export interface ActionContext {
   ws: Workspace;
@@ -97,7 +98,7 @@ export const ACTIONS: Record<string, Action> = {
   },
 
   ...FILING_ACTIONS,
-  'books.close-year': declared(['ok'], { effects: ['books.close-year'] }),
+  ...YEAR_END_ACTIONS,
   'source.due': declared(['due', 'none']),
   'source.pull': declared(['ok', 'login-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited', 'person-needed'], { effects: ['inbox.add', 'records.import', 'collected.append'] }),
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
@@ -114,6 +115,4 @@ export const ACTIONS: Record<string, Action> = {
   'knowledge.add-precedent': declared(['ok'], { effects: ['knowledge.write'] }),
   'knowledge.check': declared(['valid', 'invalid']),
   'accounting.tax.vat-correction': declared(['ok']),
-  'accounting.ledger.currencies': declared(['ok'], { effects: ['ledger.book'] }),
-  'accounting.ledger.opening-balances': declared(['ok'], { effects: ['ledger.book'] }),
 };

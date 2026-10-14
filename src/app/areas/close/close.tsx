@@ -15,10 +15,11 @@ import type { Area, AreaProps, LegendItem } from '../index.js';
 import { closeYear, useYearClose } from './data.js';
 import { GROUPS, STEPS, stepGone, stepLabel, stepOf, stepState } from './steps.js';
 import { Detail } from './Detail.js';
+import { WorkflowButtons } from '../../automation/marks.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
-function List({ route, query, books, nav }: Props) {
+function List({ route, query, books, nav, canEdit }: Props) {
   const ui = useShellUi();
   const year = closeYear(query.period, books);
   const { data } = useYearClose(year, books);
@@ -31,7 +32,7 @@ function List({ route, query, books, nav }: Props) {
         {t('area.close')}
         <button type="button" className="ytag mono" title={t('close.chooseYear')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>{year}</button>
       </h1>
-      <div className="counts"><span>{yearOver ? t('close.yearOver') : t('close.yearRuns', { year })}</span></div>
+      <div className="counts"><span>{yearOver ? t('close.yearOver') : t('close.yearRuns', { year })}</span>{yearOver && (books.config?.closedThrough ?? '') < `${year}-12-31` ? <WorkflowButtons kind="year" id={String(year)} nav={nav} canEdit={canEdit} /> : null}</div>
       <div className="rows" role="listbox" aria-label={t('close.steps')}>
         {GROUPS.map(([group, steps]) => (
           <Fragment key={group}>

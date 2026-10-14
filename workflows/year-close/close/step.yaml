@@ -2,4 +2,5 @@ label: {"de": "Jahr sperren", "en": "Lock the year", "fr": "Verrouiller lâ€™annÃ
 uses: books.close-year
 reads: ["year"]
 effects: ["books.close-year"]
+emits: ["closed"]
 outcomes: {"ok": "open"}

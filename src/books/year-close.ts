@@ -70,8 +70,8 @@ export function receivablesOf(ws: Workspace, year: string, rates: EstvRates): Re
   return { invoices: open, total: roundCHF(open.reduce((s, i) => s + i.chf, 0)), revenueAccount: ws.invoicing?.revenueAccount };
 }
 
-/** `ratesDir` points at another reference/ (a test, a rehearsal with a stand-in 31.12. rate). */
-export function ratesOf(ratesDir?: string): EstvRates {
+/** `ratesDir`, else VANILLA_RATES_DIR, points at another reference/ (a test, a rehearsal with a stand-in 31.12. rate). */
+export function ratesOf(ratesDir: string | undefined = process.env.VANILLA_RATES_DIR): EstvRates {
   return estvRates(ratesDir ? readEstvRateTable(ratesDir) : readEstvRateTable());
 }
 

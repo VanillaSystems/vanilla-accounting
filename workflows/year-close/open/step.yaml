@@ -1,5 +1,6 @@
 label: {"de": "Eröffnungssalden buchen", "en": "Book the opening balances", "fr": "Comptabiliser les soldes d’ouverture", "it": "Registrare i saldi di apertura"}
 uses: accounting.ledger.opening-balances
 reads: ["year"]
-effects: ["ledger.book"]
+effects: ["books.open-year"]
+emits: ["opened"]
 outcomes: {"ok": "done"}

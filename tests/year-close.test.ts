@@ -6,14 +6,11 @@
 import { test } from 'node:test';
 import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initRepository } from '../src/workspace/git.js';
-import type { Index, JournalEntry } from '../src/types/index.js';
-import { estvRates, type EstvRates } from '../src/accounting/fx-conversion.js';
-import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
-import { writeSeal } from '../src/books/seal.js';
+import { loadBooks, sealsOf } from '../src/books/store.js';
 import {
   applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
   vatPostings, yearClose, yearEndAccounts, yearEndTemplates, RECEIVABLES_ID, type Books, type YearCloseInput,
@@ -21,46 +18,13 @@ import {
 import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, YearCloseRefused } from '../src/books/year-close.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import type { LedgerBankAccount, Workspace } from '../src/workspace/workspace.js';
-import { APP_ROOT, yearPaths } from '../src/workspace/workspace.js';
-import { tempWorkspace, writeIndex } from './support/workspace.js';
+import { yearPaths } from '../src/workspace/workspace.js';
+import { BANKS, CHART, NO_YEAR_END_RATE, RATES, books, e, readyToClose, workspace } from './support/year-close.js';
 
-const CHART = ['1020', '1021', '1170', '1171', '2201', '2800', '2970', '3400', '6570', '6960'];
 const ACCOUNTS = yearEndAccounts(CHART);
-const BANKS: LedgerBankAccount[] = [
-  { bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', statements: 'camt053' },
-  { bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise EUR', statements: 'wise' },
-];
 
-const e = (id: string, date: string, accountDebit: string, accountCredit: string, amount: number, more: Partial<JournalEntry> = {}): JournalEntry =>
-  ({ id, transactionRef: id, date, accountDebit, accountCredit, amount, ...more });
 
-function books(): Books & Pick<Index, 'receipts' | 'mappings'> {
-  return {
-    receipts: [],
-    mappings: [],
-    transactions: ['sale', 'buy', 'eur', 'vat'].map((ref) => ({ ref, bank: ref === 'eur' ? 'Wise' : 'Raiffeisen', date: '2026-02-10', amount: 1, currency: ref === 'eur' ? 'EUR' : 'CHF', direction: 'CRDT' as const, description: ref })),
-    bankStatements: [
-      { bank: 'Raiffeisen', filename: 'r.xml', fromDate: '2026-01-01', toDate: '2026-12-31', currency: 'CHF' },
-      { bank: 'Wise', filename: 'w.xml', fromDate: '2026-01-01', toDate: '2026-12-31', currency: 'EUR' },
-    ],
-    statementBalances: [],
-    journalEntries: [
-      e('sale', '2026-02-10', '1020', '3400', 1081, { vatCode: 'V81' }),
-      e('buy', '2026-02-11', '6570', '1020', 108.1, { vatCode: 'I81' }),
-      e('eur', '2026-03-01', '1021', '3400', 500, { vatCode: 'V0-E', exchangeCurrency: 'EUR', exchangeRate: 0.95 }),
-      e('vat', '2026-05-01', '2201', '1020', 72.9),
-    ],
-    config: {
-      closedThrough: '2026-09-30',
-      openingBalances: { 2026: { 1020: 10000, 1021: 940, 2800: 10000, 2970: 940 } },
-      openingBalancesNative: { 2026: { 1021: { amount: 1000, currency: 'EUR' } } },
-    },
-  };
-}
 
-/** A stand-in ESTV table: EUR 0.93 on 31.12.2026, fetched after the year ended. */
-const RATES: EstvRates = estvRates({ fetchedAt: '2027-01-05T08:00:00Z', rates: { '2026-12-31': { EUR: 0.93, src: 'stand-in' }, '2027-01-04': { EUR: 0.931, src: 'stand-in' } } });
-const NO_YEAR_END_RATE: EstvRates = estvRates({ fetchedAt: '2026-10-01T08:00:00Z', rates: { '2026-09-30': { EUR: 0.94 } } });
 
 const input = (b: Books, over: Partial<YearCloseInput> = {}): YearCloseInput => ({
   year: '2026',
@@ -235,13 +199,6 @@ test('profit allocation: a dividend of 10000 owes 3500 Verrechnungssteuer, 6500 
 
 // ─── On a workspace ───────────────────────────────────────────────────────────
 
-function workspace(inRepository = false): Workspace {
-  const ws = tempWorkspace('year-close-', join(APP_ROOT, 'demo-consulting'), { inRepository });
-  writeIndex(ws, books());
-  mkdirSync(ws.paths.masterData, { recursive: true });
-  writeFileSync(ws.paths.accounts, JSON.stringify(CHART.map((number) => ({ number, name: number }))));
-  return ws;
-}
 
 test('bookRevaluation on a workspace: refuses without the 31.12. rate, books once however often it runs', () => {
   const ws = workspace();
@@ -266,25 +223,7 @@ test('bookEntry: an accrual gets the next M-ref, marks its template done, and is
   assert.throws(() => bookEntry(ws, { date: '2026-09-30', accountDebit: '6570', accountCredit: '2300', amount: 1, description: 'zu spät' }), /geschlossen/);
 });
 
-const Q4_FILED = `<VATDeclaration><generalInformation><reportingPeriodFrom>2026-10-01</reportingPeriodFrom><reportingPeriodTill>2026-12-31</reportingPeriodTill></generalInformation>
-<turnoverComputation><totalConsideration>0</totalConsideration></turnoverComputation><effectiveReportingMethod><grossOrNet>2</grossOrNet></effectiveReportingMethod><payableTax>0</payableTax></VATDeclaration>`;
 
-/** The state a real year reaches in February: Q1 to Q3 filed, closed and sealed, Q4 filed, December's bank balances in. */
-function readyToClose(inRepository = false): Workspace {
-  const ws = workspace(inRepository);
-  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451'].map((number) => ({ number, name: number }))));
-  const y = yearPaths(ws.paths, '2026');
-  for (const dir of [y.receipts, join(y.statements, 'Raiffeisen'), join(y.statements, 'Wise'), y.filings]) mkdirSync(dir, { recursive: true });
-  writeFileSync(join(y.filings, 'mwst-ech0217-2026-Q4.xml'), Q4_FILED);
-  const b = loadBooks(ws);
-  b.statementBalances = [
-    { account: '1020', bank: 'Raiffeisen', currency: 'CHF', date: '2026-12-31', amount: 10900, source: 'pdf', sourceFile: 'r.pdf' },
-    { account: '1021', bank: 'Wise', currency: 'EUR', date: '2026-12-31', amount: 1500, source: 'pdf', sourceFile: 'w.pdf' },
-  ];
-  saveBooks(ws, b);
-  for (const q of ['2026-Q1', '2026-Q2', '2026-Q3'] as const) writeSeal(ws, loadBooks(ws), q, '2026-10-15');
-  return ws;
-}
 
 test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 at the closing balances, reruns change nothing', async () => {
   const ws = readyToClose();

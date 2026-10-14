@@ -20,8 +20,8 @@ test('every app workflow loads with no problem', () => {
   assert.deepEqual(app.workflows.map((w) => w.id).sort(), ['bank-import', 'booking', 'collect', 'collection', 'correction', 'evidence', 'new-case', 'receipt-intake', 'vat-filing', 'year-close']);
 });
 
-test('booking, the inbox and the VAT filing run; every other workflow names the actions it still lacks', () => {
-  const RUNS = ['booking', 'receipt-intake', 'vat-filing'];
+test('booking, the inbox, the VAT filing and the year close run; every other workflow names the actions it still lacks', () => {
+  const RUNS = ['booking', 'receipt-intake', 'vat-filing', 'year-close'];
   for (const id of RUNS) assert.deepEqual(byId(id).runnable, { ok: true }, id);
   for (const w of app.workflows.filter((x) => !RUNS.includes(x.id))) {
     assert.equal(w.runnable.ok, false, `${w.id} should not be runnable yet`);
