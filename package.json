@@ -34,7 +34,6 @@
     "export": "tsx src/cli/export.ts",
     "collect": "tsx src/collect/download-attachments.ts",
     "collect-links": "tsx src/collect/extract-links.ts",
-    "collect-missed": "tsx src/collect/find-missed-pdfs.ts",
     "import-opening": "tsx src/cli/import-opening-balances.ts",
     "vat-report": "tsx src/cli/vat-report.ts",
     "vat-report-html": "tsx src/cli/vat-report-html.ts",

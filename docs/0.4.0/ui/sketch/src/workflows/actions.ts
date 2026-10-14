@@ -82,8 +82,6 @@ export const ACTIONS: Record<string, ActionSpec> = {
   'providers.ech-0217': { outcomes: ['ok'], effects: [], ai: false },
   'books.seal': { outcomes: ['ok'], effects: ['books.seal'], ai: false },
   'knowledge.add-precedent': { outcomes: ['ok'], effects: ['knowledge.write'], ai: false },
-  'collect.imap': { outcomes: ['ok'], effects: [], ai: false },
-  'collect.portal': { outcomes: ['ok', 'login-needed'], effects: [], ai: true },
   'inbox.stage': { outcomes: ['ok'], effects: ['files.write'], ai: false },
   // … year-close, correction: declared with their workflows in unit 2
 };

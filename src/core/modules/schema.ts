@@ -11,7 +11,7 @@ export type BoxId = string;
 /** module.yaml: what a module is. */
 export interface ModuleManifest {
   id: string;
-  kind: 'jurisdiction' | 'integration' | 'layout' | 'capability';
+  kind: 'jurisdiction' | 'layout' | 'capability';
   /** The module's own version (CalVer for law data). */
   version: string;
   /** The format of its data files; climbs like books.json (src/workspace/schema.ts). */

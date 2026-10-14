@@ -14,7 +14,7 @@
                 │ queries · commands               │ actions
  ┌──────────────┴──────────────────────────────────┴───────────────┐
  │ modules     domain rules as DATA, optional CODE                 │ replaceable,
- │             jurisdiction (ch), integrations, layouts            │ overlayable
+ │             jurisdiction (ch), layouts, capabilities           │ overlayable
  ├─────────────────────────────────────────────────────────────────┤
  │ providers   code a module names by id: bytes in or out          │ replaceable
  │             eCH-0217 XML, QR-bill, camt.053, ESTV rates         │
@@ -31,7 +31,7 @@
 |---|---|---|
 | **Core** | The books (entries, transactions, mappings, receipts), periods, `closedThrough`, seals, money arithmetic (Rappen), the actor/ownership table, `update(actor, fn)`, the module loader, the run store | name a country, a currency, a vendor or an account number |
 | **Engines** | Pure functions over module data: decode a tax code, compute a return from a form definition, build statements from chart metadata, close a year from a template | write, fetch, or know which jurisdiction they serve |
-| **Modules** | Data files (YAML) and, where needed, code. One jurisdiction module per workspace; any number of integration modules | import another module, or write except through the core |
+| **Modules** | Data files (YAML) and, where needed, code. One jurisdiction module per workspace; collection from outside places is a source (ADR 0014), not a module | import another module, or write except through the core |
 | **Providers** | Code a module names by id: file formats, network fetches, parsers of other systems' documents | run in the browser |
 | **Views** | The UI areas. They read through queries, make direct edits through the write door, and show the buttons that workflows declare | contain a process or a business rule |
 | **Workflows** | Declared processes. Triggers, steps, outcomes, effects, waits, approvals | hold financial truth: the ledger checks every booking a workflow makes |

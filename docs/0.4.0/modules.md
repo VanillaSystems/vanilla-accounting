@@ -32,7 +32,7 @@ a-company-workspace/                    THE COMPANY (one per company)
 ├── knowledge/                          suppliers, customers, authorities, rules per step
 ├── modules/
 │   ├── ch/              overlay        only the files or keys it changes, e.g. invoice/sheet.html
-│   └── webshop/         own module     an integration upstream does not have
+│   └── webshop/         own module     a layout or capability upstream does not have
 ├── workflows/           overlay        e.g. a trigger switched on, a schedule moved
 └── modules.lock.json                   written by the app: what each overlay is based on
 ```
@@ -66,7 +66,7 @@ is expected:
 | `accounting.expenses.classification` | capability | the first replacement experiment of the research: a company's own classifier |
 | providers (file formats, rate download, filing XML) | by id | bytes in or out differ by bank, country and authority |
 | document layouts | layout, one per document type | every company wants its own invoice |
-| integrations | module, many | a web shop, a card issuer, a mail account |
+| collection from outside | a source (ADR 0014), not a module | a web shop, a card issuer, a mail account: each a folder `sources/<id>/` |
 | workflows | overlay | triggers, schedules, guide rules differ per company |
 
 Everything else is ordinary code inside the core or an engine. It can become a replacement point
@@ -131,7 +131,6 @@ modules/ch/                          shipped with the app
 | Kind | Slots per workspace | Examples |
 |---|---|---|
 | `jurisdiction` | exactly one | `ch`; later `de`, `at`; a fictional `xx` for the swap test |
-| `integration` | many | web shop payouts, a card issuer, mail collection |
 | `layout` | one per document type | invoice sheet, reminder letter |
 | `capability` | one implementation per capability | `accounting.expenses.classification` |
 

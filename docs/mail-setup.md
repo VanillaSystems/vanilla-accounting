@@ -180,17 +180,15 @@ This logs in to each mailbox and logs out again. It reads no mail. Each mailbox 
 Signed in to the mailbox in the browser is not the same as IMAP access. A mailbox can work in
 the browser and still refuse the IMAP login.
 
-## 4. Do a test fetch
+## 4. Check the login
 
 ```sh
-npx tsx src/collect/test-imap.ts 2026-Q3
+npm run doctor -- --mail
 ```
 
-This reads the envelopes (sender, subject, date) of the quarter's mail, with 14 days before
-and after, and downloads nothing. It prints every sender domain with its number of mails, most
-first, and saves the list as `email-summaries-2026-Q3.json` in `beleg-import/`. Use it to
-fill in `skipDomains` and `includeDomains` of a mixed mailbox. Delete the JSON file when you
-are done.
+This signs in to every mailbox of `mail.yaml` and reads nothing. Which senders a mixed mailbox
+should take is set in `skipDomains` and `includeDomains`; once the mailbox is a source
+(ADR 0014), its Probelauf shows what a fetch would deliver before anything is delivered.
 
 ## 5. Collect
 
