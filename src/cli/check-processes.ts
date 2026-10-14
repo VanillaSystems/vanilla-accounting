@@ -26,6 +26,7 @@ import { loadCaseChart, loadCases, validateCase } from '../knowledge/cases.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { namesOf, mentionIn, counterpartiesNamedIn } from '../knowledge/mentions.js';
 import { APP_ROOT, identityIn, openWorkspace } from '../workspace/workspace.js';
+import { loadWorkflow } from '../workflows/load.js';
 
 const ws = openWorkspace();
 const DIR = join(APP_ROOT, 'processes');
@@ -382,6 +383,17 @@ try {
   if (twice !== undefined) errors.push(`examples/cases: rank ${twice} is used twice — every case has its own place in the casebook`);
 } catch (e) {
   errors.push((e as Error).message);
+}
+
+// ─── Workflows (docs/0.4.0/workflows.md): each folder parses and passes checkWorkflow ─────────
+
+const workflowsDir = join(APP_ROOT, 'workflows');
+for (const id of existsSync(workflowsDir) ? readdirSync(workflowsDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name) : []) {
+  try {
+    loadWorkflow(APP_ROOT, id);
+  } catch (e) {
+    errors.push((e as Error).message);
+  }
 }
 
 // ─── Report ─────────────────────────────────────────────────────────────────

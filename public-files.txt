@@ -32,6 +32,7 @@ tools/cases/**
 tools/vat-codes/**
 tools/layers/**
 modules/**
+workflows/**
 examples/**
 demo-consulting/**
 tools/hooks/**

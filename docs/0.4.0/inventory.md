@@ -13,7 +13,8 @@ and the providers.
 | provider | 12 | 8 |
 | split | 47 | 26 |
 | infrastructure | 11 | 4 |
-| view | 159 | 60 |
+| workflow | 4 | 0 |
+| view | 160 | 60 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -35,6 +36,7 @@ Layers are assigned by path prefix, most specific first:
 - `src/invoices/` → split
 - `src/knowledge/` → split
 - `src/collect/` → split
+- `src/workflows/` → workflow
 - `src/llm/` → infrastructure
 - `src/audit/` → infrastructure
 - `src/secrets/` → infrastructure

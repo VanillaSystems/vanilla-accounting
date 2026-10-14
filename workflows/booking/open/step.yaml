@@ -1,0 +1,7 @@
+label: Is the transaction open and still unbooked?
+uses: ledger.transaction-state
+reads: [transaction, books]
+outcomes:
+  open: classify
+  booked: done
+  closed: done

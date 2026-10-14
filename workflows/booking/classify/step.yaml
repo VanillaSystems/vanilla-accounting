@@ -1,0 +1,8 @@
+label: Choose the accounts and the VAT code
+uses: accounting.expenses.classification
+reads: [transaction, books]
+emits: [entries]
+outcomes:
+  decided: book
+  undecided: wait
+guide: booking.guide.yaml#classify

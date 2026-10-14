@@ -14,7 +14,20 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- `npm run workflow -- booking <ref>` (or `--open`) books a transaction by a run of
+  `workflows/booking/`: each step, its outcome and the model's answer are recorded outside the
+  workspace, and `--replay <run-id>` shows what a recorded run would book today without writing.
+  `npm run classify` books as before.
+- A workspace can change the Swiss rules for itself in `modules/ch/` (an overlay): its own VAT
+  codes, the base currency, a half-yearly return for the net tax rate method. Nothing changes for
+  a workspace without one.
+
 ### Changed
+
+- A module, a workflow run or the inbox processing can no longer change or delete an entry a
+  person booked by hand; only a person can.
 
 - The Mac app has no title bar: the page reaches the window's top edge under the traffic
   lights, and a strip along the top moves the window (a double-click zooms it).

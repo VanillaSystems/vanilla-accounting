@@ -1,0 +1,6 @@
+label: Book the entries
+uses: ledger.book
+reads: [transaction, entries]
+effects: [ledger.book]
+outcomes:
+  booked: done

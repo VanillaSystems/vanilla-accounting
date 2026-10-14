@@ -28,6 +28,7 @@
     "match": "tsx src/cli/match.ts",
     "rename": "tsx src/cli/rename.ts",
     "classify": "tsx src/cli/classify.ts",
+    "workflow": "tsx src/cli/workflow.ts",
     "rebook-shopify": "tsx src/cli/rebook-shopify-orders.ts",
     "reconcile": "tsx src/cli/reconcile.ts",
     "export": "tsx src/cli/export.ts",

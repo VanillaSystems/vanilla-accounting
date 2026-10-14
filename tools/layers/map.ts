@@ -6,7 +6,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
-export type Layer = 'core' | 'engine' | 'provider' | 'split' | 'infrastructure' | 'view';
+export type Layer = 'core' | 'engine' | 'provider' | 'split' | 'infrastructure' | 'workflow' | 'view';
 
 /** "split" holds generic logic and Swiss data together until migration step 10 takes it apart. */
 export const LAYER_OF: [prefix: string, layer: Layer][] = [
@@ -28,6 +28,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/invoices/', 'split'],
   ['src/knowledge/', 'split'],
   ['src/collect/', 'split'],
+  ['src/workflows/', 'workflow'],
   ['src/llm/', 'infrastructure'],
   ['src/audit/', 'infrastructure'],
   ['src/secrets/', 'infrastructure'],
@@ -46,7 +47,8 @@ export const MAY_IMPORT: Record<Layer, Layer[]> = {
   provider: ['provider', 'core'],
   split: ['split', 'engine', 'provider', 'core', 'infrastructure'],
   infrastructure: ['infrastructure', 'split', 'engine', 'provider', 'core'],
-  view: ['view', 'infrastructure', 'split', 'engine', 'provider', 'core'],
+  workflow: ['workflow', 'infrastructure', 'split', 'engine', 'provider', 'core'],
+  view: ['view', 'workflow', 'infrastructure', 'split', 'engine', 'provider', 'core'],
 };
 
 export function layerOf(file: string): Layer {

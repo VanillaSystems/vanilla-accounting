@@ -19,7 +19,9 @@ imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`),
 the year-end, setup, provider and parser sites follow in step 10), 6 (`modules/ch/periods.yaml`:
 return length and due days; the seals, the filed-return archive and year-close still name
 quarters, `QuarterKey`, and follow with step 10), 7, 8 (`update(books, actor, fn)` in `src/books/store.ts`; ownership by
-`origin`: a person's entries change only by a person).
+`origin`: a person's entries change only by a person), 9 (`workflows/booking/`, `src/workflows/`,
+`npm run workflow`; runs in a local store outside the workspace; `npm run classify` stays the
+batch path until the queue batches model calls).
 
 | # | Step | Ends when | Needs |
 |---|---|---|---|

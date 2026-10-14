@@ -22,7 +22,7 @@ export const SWISS: [name: string, pattern: RegExp][] = [
   ['Rappen', /\bRappen\b/],
 ];
 
-const ORDER: Layer[] = ['core', 'engine', 'provider', 'split', 'infrastructure', 'view'];
+const ORDER: Layer[] = ['core', 'engine', 'provider', 'split', 'infrastructure', 'workflow', 'view'];
 
 export function inventory(root: string): string {
   const files = sourceFiles(root).sort();
