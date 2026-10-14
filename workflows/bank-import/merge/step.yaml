@@ -1,0 +1,5 @@
+label: {"de": "Mit den Büchern zusammenführen", "en": "Merge into the books", "fr": "Fusionner avec les livres", "it": "Unire ai libri"}
+uses: books.merge-statement
+reads: ["transactions"]
+effects: ["books.transactions"]
+outcomes: {"ok": "balance"}

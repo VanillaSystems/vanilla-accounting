@@ -11,7 +11,7 @@ import type { AskOptions } from '../llm/ask.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { ACTIONS, type Effects } from './actions.js';
-import type { Workflow } from './load.js';
+import { stepOf, type WorkflowDecl } from './model.js';
 
 export interface LlmCall { promptSha: string; answer: string }
 
@@ -57,7 +57,7 @@ export interface RunDeps {
 const sha = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
 /** One live run: books what its steps decide, through the write door, with the run as actor. */
-export function runWorkflow(w: Workflow, ref: string, deps: RunDeps): Promise<Run> {
+export function runWorkflow(w: WorkflowDecl, ref: string, deps: RunDeps): Promise<Run> {
   return execute(w, ref, deps, 'live');
 }
 
@@ -65,7 +65,7 @@ export function runWorkflow(w: Workflow, ref: string, deps: RunDeps): Promise<Ru
  * The recorded case of `recorded` on today's workflow: the model answers from the recording, in
  * order, and nothing is written. The would-be bookings are in the replay's effect records.
  */
-export function replayRun(w: Workflow, recorded: Run, deps: RunDeps): Promise<Run> {
+export function replayRun(w: WorkflowDecl, recorded: Run, deps: RunDeps): Promise<Run> {
   const answers = recorded.steps.flatMap((s) => s.llm.map((c) => c.answer));
   const ask = async () => {
     const next = answers.shift();
@@ -75,7 +75,7 @@ export function replayRun(w: Workflow, recorded: Run, deps: RunDeps): Promise<Ru
   return execute(w, recorded.item.ref, { ...deps, ask }, 'replay', recorded.id);
 }
 
-async function execute(w: Workflow, ref: string, deps: RunDeps, mode: Run['mode'], of?: string): Promise<Run> {
+async function execute(w: WorkflowDecl, ref: string, deps: RunDeps, mode: Run['mode'], of?: string): Promise<Run> {
   const now = deps.now ?? (() => new Date().toISOString());
   const run: Run = {
     id: `${w.id}-${randomBytes(4).toString('hex')}`, workflow: w.id, version: w.version, item: { kind: 'transaction', ref },
@@ -88,9 +88,12 @@ async function execute(w: Workflow, ref: string, deps: RunDeps, mode: Run['mode'
 
   let at = w.start;
   for (let hops = 0; hops < 50; hops++) {
-    const step = w.steps[at];
+    const step = stepOf(w, at)!;
     const record: StepRecord = { step: at, llm: [], effects: [] };
     run.steps.push(record);
+    if (step.body.kind === 'person') { run.status = 'waiting'; break; }
+    const action = step.body.kind === 'action' ? ACTIONS[step.body.uses] : undefined;
+    if (!action?.run) { record.error = `${at}: ${step.body.kind === 'action' ? `${step.body.uses} is not built yet` : `a ${step.body.kind} step does not run yet`}`; break; }
     const snapshot = read();
     const available: Record<string, unknown> = { ...state, books: snapshot, transaction: transaction(snapshot) };
     if (!available.transaction) { record.error = `no transaction ${ref}`; break; }
@@ -116,7 +119,7 @@ async function execute(w: Workflow, ref: string, deps: RunDeps, mode: Run['mode'
       };
     }
     try {
-      const result = await ACTIONS[step.uses].run(input, effects, { ws: deps.ws, ask });
+      const result = await action.run(input, effects, { ws: deps.ws, ask });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));
@@ -129,8 +132,8 @@ async function execute(w: Workflow, ref: string, deps: RunDeps, mode: Run['mode'
     }
     const target = step.outcomes[record.outcome];
     if (target === undefined) break;
-    if (target === 'done' || target === 'wait') { run.status = target === 'done' ? 'done' : 'waiting'; break; }
-    at = target;
+    if (target.to === 'end') { run.status = 'done'; break; }
+    at = target.step;
   }
   run.finishedAt = now();
   return run;

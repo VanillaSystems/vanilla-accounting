@@ -1,0 +1,10 @@
+label: {"de": "Quelle abholen", "en": "Fetch a source", "fr": "Relever une source", "it": "Raccogliere una fonte"}
+desc: {"de": "Holt die fälligen Feeds einer Quelle: Dokumente in die Inbox, Datensätze in die Bücher. Anmelden, Passwort und Reparatur sind Aufgaben für eine Person.", "en": "Fetches the due feeds of one source: documents to the inbox, records to the books. Signing in, a password and a repair are tasks for a person.", "fr": "Relève les flux dus d’une source : documents dans la boîte d’entrée, enregistrements dans les livres. Connexion, mot de passe et réparation sont des tâches pour une personne.", "it": "Raccoglie i flussi dovuti di una fonte: documenti nella casella, record nei libri. Accesso, password e riparazione sono compiti per una persona."}
+phase: collect
+cadence: {"de": "wenn fällig", "en": "when due", "fr": "quand dû", "it": "quando dovuto"}
+for: source
+triggers:
+  - manual: {"for": "source", "label": {"de": "Jetzt holen", "en": "Fetch now", "fr": "Relever maintenant", "it": "Raccogli ora"}}
+emits: ["documents.delivered", "records.imported"]
+start: pull
+steps: ["pull", "login", "secret", "repair"]

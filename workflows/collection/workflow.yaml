@@ -1,0 +1,11 @@
+label: {"de": "Belege und Daten holen", "en": "Collect documents and data", "fr": "Récupérer pièces et données", "it": "Raccogliere documenti e dati"}
+desc: {"de": "Startet für jede Quelle mit fälligen Feeds einen Lauf «Quelle abholen»: Mailboxen, Händlerportale, APIs.", "en": "Starts one «Fetch a source» run for every source with a feed that is due: mailboxes, vendor portals, APIs.", "fr": "Lance une exécution « Relever une source » pour chaque source dont un flux est dû : boîtes mail, portails, API.", "it": "Avvia un’esecuzione «Raccogliere una fonte» per ogni fonte con un flusso dovuto: caselle, portali, API."}
+phase: collect
+cadence: {"de": "stündlich, je Feed täglich oder monatlich", "en": "hourly, daily or monthly per feed", "fr": "toutes les heures, quotidien ou mensuel par flux", "it": "ogni ora, giornaliero o mensile per flusso"}
+for: company
+triggers:
+  - schedule: {"cron": "0 * * * *"}
+  - manual: {"for": "company", "label": {"de": "Belege holen", "en": "Collect now", "fr": "Récupérer", "it": "Raccogli"}}
+emits: []
+start: due
+steps: ["due", "collect"]

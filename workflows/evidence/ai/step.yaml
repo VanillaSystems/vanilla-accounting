@@ -1,0 +1,5 @@
+label: {"de": "KI schlägt vor", "en": "The AI proposes", "fr": "L’IA propose", "it": "L’IA propone"}
+uses: evidence.match-ai
+reads: ["transaction", "receipts"]
+emits: ["match"]
+outcomes: {"sure": "settle", "unsure": "person", "none": "wait"}

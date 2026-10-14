@@ -1,0 +1,5 @@
+label: {"de": "Abrechnung prüfen", "en": "Review the return", "fr": "Vérifier le décompte", "it": "Verificare il rendiconto"}
+by: person
+task: {"title": {"de": "Abrechnung {period} prüfen", "en": "Review the {period} return", "fr": "Vérifier le décompte {period}", "it": "Verificare il rendiconto {period}"}, "do": "decide", "due": "end-of-period"}
+reads: ["return"]
+outcomes: {"approved": "xml", "back": "compute"}

@@ -1,0 +1,4 @@
+label: {"de": "Auf Beleg warten", "en": "Wait for the receipt", "fr": "Attendre la pièce", "it": "Attendere il documento"}
+wait: {"for": "receipt.archived", "timeout": {"after": "P30D", "outcome": "timeout"}}
+reads: []
+outcomes: {"arrived": "rules", "timeout": "person"}

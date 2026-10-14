@@ -1,0 +1,5 @@
+label: {"de": "Differenz klären", "en": "Resolve the difference", "fr": "Éclaircir l’écart", "it": "Chiarire la differenza"}
+by: person
+task: {"title": {"de": "Saldodifferenz auf {statement}", "en": "Balance difference on {statement}", "fr": "Écart de solde sur {statement}", "it": "Differenza di saldo su {statement}"}, "do": "open-item"}
+reads: ["statement"]
+outcomes: {"resolved": "done"}

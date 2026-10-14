@@ -1,0 +1,10 @@
+label: {"de": "MWST abrechnen", "en": "File the VAT return", "fr": "Déclarer la TVA", "it": "Dichiarare l’IVA"}
+desc: {"de": "Rechnet die Periode ab, erzeugt das eCH-0217-XML, archiviert die Abrechnung und sperrt die Periode.", "en": "Computes the period’s return, writes the eCH-0217 XML, files the return and locks the period.", "fr": "Calcule le décompte de la période, produit le XML eCH-0217, archive le décompte et verrouille la période.", "it": "Calcola il rendiconto del periodo, produce l’XML eCH-0217, archivia il rendiconto e blocca il periodo."}
+phase: quarter
+cadence: {"de": "je Abrechnungsperiode", "en": "per filing period", "fr": "par période de décompte", "it": "per periodo di rendiconto"}
+for: period
+triggers:
+  - manual: {"for": "period", "label": {"de": "Abrechnung erstellen", "en": "Prepare the return", "fr": "Établir le décompte", "it": "Preparare il rendiconto"}}
+emits: ["period.filed"]
+start: compute
+steps: ["compute", "review", "xml", "submit", "seal"]

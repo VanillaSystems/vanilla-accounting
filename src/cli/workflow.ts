@@ -20,7 +20,7 @@ if (!id || !arg) {
   process.exit(1);
 }
 const ws = openWorkspace();
-const workflow = loadWorkflow(APP_ROOT, id);
+const workflow = loadWorkflow(APP_ROOT, id, ws.paths.root);
 const line = (r: Run) => `${r.id}  ${r.mode.padEnd(6)}  ${r.status.padEnd(7)}  ${r.item.ref}  ${r.steps.map((s) => `${s.step}:${s.outcome ?? s.error ?? '?'}`).join(' → ')}`;
 
 if (arg === '--runs') {

@@ -1,0 +1,5 @@
+label: {"de": "MWST-Fakten lesen", "en": "Read the VAT facts", "fr": "Lire les faits TVA", "it": "Leggere i dati IVA"}
+uses: intake.extract-vat
+reads: ["text"]
+emits: ["vatFacts"]
+outcomes: {"ok": "archive"}

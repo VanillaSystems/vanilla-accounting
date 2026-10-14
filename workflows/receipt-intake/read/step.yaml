@@ -1,0 +1,5 @@
+label: {"de": "Text lesen", "en": "Read the text", "fr": "Lire le texte", "it": "Leggere il testo"}
+uses: parsers.pdf-text
+reads: ["file"]
+emits: ["text"]
+outcomes: {"ok": "kind"}

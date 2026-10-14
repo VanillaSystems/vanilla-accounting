@@ -1,0 +1,5 @@
+label: {"de": "Abschluss freigeben", "en": "Approve the close", "fr": "Approuver la clôture", "it": "Approvare la chiusura"}
+by: person
+task: {"title": {"de": "Abschluss {year} freigeben", "en": "Approve the {year} close", "fr": "Approuver la clôture {year}", "it": "Approvare la chiusura {year}"}, "do": "decide"}
+reads: ["year"]
+outcomes: {"approved": "close", "back": "revalue"}

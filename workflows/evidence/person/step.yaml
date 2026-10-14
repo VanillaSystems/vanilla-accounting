@@ -1,0 +1,6 @@
+label: {"de": "Von Hand zuordnen", "en": "Match by hand", "fr": "Rapprocher à la main", "it": "Abbinare a mano"}
+by: person
+task: {"title": {"de": "Beleg zu {transaction} zuordnen", "en": "Match a receipt to {transaction}", "fr": "Rapprocher une pièce de {transaction}", "it": "Abbinare un documento a {transaction}"}, "do": "open-item", "due": "end-of-month"}
+reads: ["transaction"]
+emits: ["match"]
+outcomes: {"matched": "settle"}

@@ -1,0 +1,5 @@
+label: {"de": "In der Korrekturabrechnung zeigen", "en": "Show it on the correction return", "fr": "Le montrer dans le décompte rectificatif", "it": "Mostrarlo nel rendiconto di correzione"}
+uses: accounting.tax.vat-correction
+reads: ["entry", "period"]
+emits: ["correction"]
+outcomes: {"ok": "done"}

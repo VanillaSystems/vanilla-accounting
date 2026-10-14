@@ -1,7 +1,4 @@
-label: Is the transaction open and still unbooked?
+label: {"de": "Bewegung offen und noch nicht gebucht?", "en": "Is the transaction open and still unbooked?", "fr": "Mouvement ouvert et pas encore comptabilisé ?", "it": "Movimento aperto e non ancora registrato?"}
 uses: ledger.transaction-state
-reads: [transaction, books]
-outcomes:
-  open: classify
-  booked: done
-  closed: done
+reads: ["transaction", "books"]
+outcomes: {"open": "classify", "booked": "done", "closed": "done"}

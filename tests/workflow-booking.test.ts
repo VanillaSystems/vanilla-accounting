@@ -46,14 +46,14 @@ function prepared(): { ws: Workspace; ask: Ask; refs: string[] } {
 const comparable = (entries: JournalEntry[]) => entries.map(({ id: _, ...e }) => JSON.stringify(e)).sort();
 
 test('workflows/booking/ passes its lint', () => {
-  assert.deepEqual(checkWorkflow(workflow), []);
+  assert.deepEqual(checkWorkflow(workflow, [workflow]), []);
 });
 
 test('the lint finds an outcome that leads nowhere and an effect the action needs', () => {
   const broken = structuredClone(workflow);
-  delete broken.steps.classify.outcomes.undecided;
-  broken.steps.book.effects = [];
-  const problems = checkWorkflow(broken);
+  delete broken.steps.find((s) => s.id === 'classify')!.outcomes.undecided;
+  broken.steps.find((s) => s.id === 'book')!.effects = [];
+  const problems = checkWorkflow(broken, [broken]);
   assert.ok(problems.includes('classify: outcome undecided of accounting.expenses.classification leads nowhere'), problems.join('\n'));
   assert.ok(problems.includes('book: ledger.book needs effect ledger.book, not declared'), problems.join('\n'));
 });

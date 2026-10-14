@@ -1,0 +1,5 @@
+label: {"de": "Unter receipts/ ablegen", "en": "File it under receipts/", "fr": "Ranger sous receipts/", "it": "Archiviare in receipts/"}
+uses: receipts.archive
+reads: ["file", "vatFacts"]
+effects: ["files.write"]
+outcomes: {"ok": "done"}

@@ -1,0 +1,5 @@
+label: {"de": "Als belegt markieren", "en": "Mark as evidenced", "fr": "Marquer comme justifié", "it": "Segnare come documentato"}
+uses: books.map
+reads: ["match"]
+effects: ["books.mappings"]
+outcomes: {"ok": "done"}

@@ -1,0 +1,10 @@
+label: {"de": "Beleg aufnehmen", "en": "Take in a receipt", "fr": "Enregistrer une pièce", "it": "Acquisire un documento"}
+desc: {"de": "Liest eine neue Datei, erkennt ihre Art und die MWST-Fakten und legt sie unter receipts/ ab.", "en": "Reads a new file, recognises its kind and VAT facts, and files it under receipts/.", "fr": "Lit un nouveau fichier, reconnaît sa nature et les faits TVA, et le range sous receipts/.", "it": "Legge un nuovo file, ne riconosce il tipo e i dati IVA e lo archivia in receipts/."}
+phase: collect
+cadence: {"de": "laufend", "en": "ongoing", "fr": "en continu", "it": "continuo"}
+for: file
+triggers:
+  - outside: {"accepts": ["receipt"]}
+emits: ["receipt.archived"]
+start: read
+steps: ["read", "kind", "ask", "facts", "archive"]

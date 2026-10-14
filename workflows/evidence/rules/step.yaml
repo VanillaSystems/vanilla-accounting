@@ -1,0 +1,5 @@
+label: {"de": "Nach Regeln zuordnen", "en": "Match by rules", "fr": "Rapprocher selon les règles", "it": "Abbinare con le regole"}
+uses: evidence.match-rules
+reads: ["transaction", "receipts"]
+emits: ["match"]
+outcomes: {"unique": "settle", "open": "ai"}

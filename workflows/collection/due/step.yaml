@@ -1,0 +1,5 @@
+label: {"de": "Welche Quellen sind fällig?", "en": "Which sources are due?", "fr": "Quelles sources sont dues ?", "it": "Quali fonti sono dovute?"}
+uses: source.due
+reads: ["sources"]
+emits: ["sources"]
+outcomes: {"due": "collect", "none": "done"}

@@ -1,0 +1,4 @@
+label: {"de": "Regeln gültig?", "en": "Rules valid?", "fr": "Règles valides ?", "it": "Regole valide?"}
+uses: knowledge.check
+reads: ["rule"]
+outcomes: {"valid": "done", "invalid": "ask"}

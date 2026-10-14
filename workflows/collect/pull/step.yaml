@@ -1,0 +1,6 @@
+label: {"de": "Feeds abholen", "en": "Fetch the feeds", "fr": "Relever les flux", "it": "Raccogliere i flussi"}
+uses: source.pull
+reads: ["source"]
+effects: ["inbox.add", "records.import", "collected.append"]
+outcomes: {"ok": "done", "login-needed": "login", "person-needed": "login", "missing-secret": "secret", "changed": "repair", "over-reach": "repair", "rate-limited": "done"}
+retry: {"on": ["network", "timeout", "unavailable"], "times": 3, "backoff": "PT5M"}

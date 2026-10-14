@@ -1,0 +1,5 @@
+label: {"de": "Von Hand buchen", "en": "Book by hand", "fr": "Comptabiliser à la main", "it": "Registrare a mano"}
+by: person
+task: {"title": {"de": "Bewegung von Hand buchen", "en": "Book the transaction by hand", "fr": "Comptabiliser le mouvement à la main", "it": "Registrare il movimento a mano"}, "why": {"de": "Keine Regel hat entschieden, oder das Modell war nicht erreichbar.", "en": "No rule decided, or the model could not be reached.", "fr": "Aucune règle n’a décidé, ou le modèle était injoignable.", "it": "Nessuna regola ha deciso, o il modello non era raggiungibile."}, "do": "open-item", "due": "end-of-month"}
+reads: ["transaction"]
+outcomes: {"booked": "done"}
