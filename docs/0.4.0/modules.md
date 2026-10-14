@@ -3,6 +3,109 @@
 **Status: proposed.** The manifest syntax below is a first draft. Migration step 3 settles it
 with the `ch` module as the only real user.
 
+## The structure at a glance
+
+Two repositories: the app (upstream, the same for every company) and the company's workspace.
+The lock marks what nobody replaces; everything else can be overlaid, replaced or added.
+
+```
+vanilla-accounting/                     THE APP (upstream)
+├── src/core/            🔒             records, periods + seals, money, ownership and the
+│                                        write door, module loader, run store
+├── src/engines/         upstream only  tax-codes · return · statements · year-end ·
+│                                        invoice-rules · setup · text
+├── src/providers/       replaceable    by id: ech-0217 · swiss-qr-bill · estv-daily-sell ·
+│                        by id          uid-check · camt053 · wise-pdf · imap · banana-export
+├── modules/
+│   └── ch/              jurisdiction   tax-codes.yaml · rates.yaml · return.yaml · chart.yaml ·
+│                        (one slot)     statements.yaml · periods.yaml · year-end.yaml ·
+│                                        invoicing.yaml · setup.yaml · fx.yaml · texts/ ·
+│                                        invoice/sheet.html · module.yaml
+└── workflows/           overlayable    receipt-collection · receipt-intake · bank-import ·
+                                         evidence · booking · new-case · vat-filing ·
+                                         correction · year-close
+                                         (each: workflow.yaml + one folder per step)
+
+a-company-workspace/                    THE COMPANY (one per company)
+├── belege.workspace.yaml               identity, banks, jurisdiction: ch
+├── books/ receipts/ bank-statements/ filings/        the books
+├── knowledge/                          suppliers, customers, authorities, rules per step
+├── modules/
+│   ├── ch/              overlay        only the files or keys it changes, e.g. invoice/sheet.html
+│   └── webshop/         own module     an integration upstream does not have
+├── workflows/           overlay        e.g. a trigger switched on, a schedule moved
+└── modules.lock.json                   written by the app: what each overlay is based on
+```
+
+## How granular a change can be
+
+From the smallest change to the largest. Each level keeps everything below it following
+upstream.
+
+| Level | What the company changes | Example | Upstream changes to it |
+|---|---|---|---|
+| 1 · a key | one value in a module's data | the rate's label, a closing template line | flow in, unless the key was overlaid (then a notice) |
+| 2 · a file | one file of a module | `invoice/sheet.html`, `texts/de.yaml` | the other files of the module flow in |
+| 3 · a workflow setting | a trigger, a schedule, a step's guide rules | evidence: automatic on; collection at 07:00 | the workflow's steps and code flow in |
+| 4 · an implementation | a provider or a capability by id | an own `accounting.expenses.classification`, an own bank parser | the parent module and its other providers flow in |
+| 5 · a fork | a whole module under a new id | `ch-acme` | nothing flows; a three-way diff on request |
+| 6 · a new module | a module upstream lacks | `webshop`, later `de` | checked against each release's contracts |
+| — · the core | nothing | closed periods, seals, the write door | upstream contribution only |
+
+## How many replacement points in 0.4.0
+
+The 54 capability ids in [inspiration/capabilities.yaml](inspiration/capabilities.yaml)
+(`accounting.ledger.journal`, `accounting.tax.vat-return`, …) are the vocabulary: they name what
+an accounting program does, so programs can be compared and modules can say what they provide.
+They are **not** 54 replacement points. 0.4.0 publishes a boundary only where real customization
+is expected:
+
+| Replacement point | Kind | Why it is replaceable |
+|---|---|---|
+| the jurisdiction (`ch`) | module, one slot | another country is another module; the swap is proven with the fictional `xx` |
+| `accounting.expenses.classification` | capability | the first replacement experiment of the research: a company's own classifier |
+| providers (file formats, rate download, filing XML) | by id | bytes in or out differ by bank, country and authority |
+| document layouts | layout, one per document type | every company wants its own invoice |
+| integrations | module, many | a web shop, a card issuer, a mail account |
+| workflows | overlay | triggers, schedules, guide rules differ per company |
+
+Everything else is ordinary code inside the core or an engine. It can become a replacement point
+later, when a second implementation is real; a boundary nobody uses only costs.
+
+## Names, and how the workspace swaps an implementation
+
+The names follow the research proposal (`architecture/modules.md`): dotted, like Java packages,
+without reversed domains.
+
+| Name | Says | Example |
+|---|---|---|
+| **capability** | what the app needs, no publisher | `accounting.expenses.classification` |
+| **implementation** | who provides it: publisher + capability | `vanilla.accounting.expenses.classification` (upstream), `acme.accounting.expenses.classification` (the company) |
+| **module id** | a folder of data and code | `ch`, `webshop`; a fork gets a new id, `ch-acme` |
+
+Callers ask for the capability, never for an implementation. **The workspace chooses**, in its
+overlay of the module that declares the slot, with one key (decisions.md D2, leaning (b): one
+mechanism, overlays; no second lock file):
+
+```yaml
+# a-company-workspace/modules/ch/module.yaml          (the overlay)
+overlays: ch
+basedOn: 2026.4.0
+providers:
+  accounting.expenses.classification: acme.accounting.expenses.classification
+
+# a-company-workspace/modules/acme-classifier/module.yaml   (the implementation)
+id: acme-classifier
+kind: capability
+provides: [acme.accounting.expenses.classification@1]   # implements accounting.expenses.classification, contract 1
+```
+
+At start the app resolves every capability to exactly one implementation, writes the result to
+`modules.lock.json`, and refuses with a sentence when an implementation's contract version is
+not supported. Without the overlay key, the upstream `vanilla.…` implementation runs. `vanilla`
+and the company's slug are the only publishers in 0.4.0; publisher verification and a registry
+are later questions (research, "Namespace convention").
+
 ## What a module is
 
 A module is a folder with a `module.yaml` and data files. Code is optional. The app ships its
