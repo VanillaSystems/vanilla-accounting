@@ -19,6 +19,7 @@ import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
 import { IntakeLine, finishedText, watchIntake } from './Intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
+import { noTitleBar } from '../desktop/bridge.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
 import { PRESETS } from '../../export/model.js';
@@ -297,6 +298,9 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   );
 }
 
+// Without a title bar the top 28 px drag the window and send the page no mouse moves.
+const TOP_EDGE = noTitleBar ? 34 : 10;
+
 /** The top bar shows near the top edge, the dock near the bottom edge; both stay while hovered or held. */
 function useEdges(top: React.RefObject<HTMLElement>, dock: React.RefObject<HTMLElement>, hold: boolean) {
   const holdRef = useRef(hold);
@@ -314,7 +318,7 @@ function useEdges(top: React.RefObject<HTMLElement>, dock: React.RefObject<HTMLE
       if (document.querySelector('.drop.show')) return;
       const d = dock.current, b = top.current;
       show(d, innerHeight - e.clientY < 80 || !!d?.matches(':hover'), 'dock');
-      show(b, e.clientY < 10 || !!b?.matches(':hover') || !!document.querySelector('.menu'), 'top');
+      show(b, e.clientY < TOP_EDGE || !!b?.matches(':hover') || !!document.querySelector('.menu'), 'top');
       if (d?.classList.contains('show')) for (const it of d.querySelectorAll<HTMLElement>('.it')) {
         const r = it.getBoundingClientRect();
         const dx = Math.abs(e.clientX - (r.left + r.width / 2));

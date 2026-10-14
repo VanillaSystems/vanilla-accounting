@@ -14,6 +14,11 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- The Mac app has no title bar: the page reaches the window's top edge under the traffic
+  lights, and a strip along the top moves the window (a double-click zooms it).
+
 ## [0.3.0] - 2026-10-11
 
 The redesign and the Mac app. The app is one window with nine areas, each page with its own

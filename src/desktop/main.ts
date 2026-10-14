@@ -137,6 +137,8 @@ function createWindow(stateFile: string): BrowserWindow {
   const win = new BrowserWindow({
     ...(saved ?? { width: 1440, height: 900 }),
     minWidth: 900, minHeight: 600, show: false, title: 'Vanilla Accounting',
+    // On the Mac the page runs up to the top edge under the traffic lights; no title bar.
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const } : {}),
     webPreferences: {
       preload: join(HERE, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,
       additionalArguments: SMOKE ? ['--vanilla-smoke'] : [],
