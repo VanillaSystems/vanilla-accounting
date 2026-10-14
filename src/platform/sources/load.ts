@@ -129,7 +129,7 @@ const walkBound = (folder: string): string[] => {
 
 const IMPORT = /^\s*(import|export)\s+(type\s+)?[^'"]*?from\s+['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]/;
 const FORBIDDEN: Array<[RegExp, string]> = [
-  [/\bimport\s*\(/, 'a dynamic import'], [/\brequire\s*\(/, 'require'], [/\beval\s*\(/, 'eval'], [/\bnew\s+Function\b/, 'new Function'],
+  [/\bimport\s*\(/, 'a dynamic import'], [/\brequire\s*\(/, 'require'], [/\beval\s*\(/, 'eval'], [/\bFunction\s*\(/, 'Function(…)'], [/\.constructor\s*\(/, '.constructor(…)'],
   [/\bprocess\b/, 'process'], [/\bglobalThis\s*\[/, 'globalThis[…]'], [/\bgetBuiltinModule\b/, 'getBuiltinModule'],
 ];
 

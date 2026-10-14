@@ -62,3 +62,25 @@ export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: '
 
 /** The keychain name of a channel's secret: derived, never listed. */
 export const secretKey = (source: string, channel: 'mail' | 'api') => `source:${source}:${channel}` as const;
+
+// ---------------------------------------------------------------------------------------------
+// The child protocol: the only door between a source's code and the host
+// ---------------------------------------------------------------------------------------------
+
+/** What a feed yields: a document the host fetched (by its file reference), a record the code composed, or a checkpoint. */
+export type Yielded =
+  | { kind: 'document'; file: string; key: string; date?: string }
+  | { kind: 'record'; record: unknown; key: string }
+  | { kind: 'checkpoint'; cursor: unknown };
+
+export type ParentMessage =
+  | { type: 'start'; entry: string; feed: string; from: unknown; settings: Record<string, unknown> }
+  | { type: 'reply'; id: number; ok: boolean; value?: unknown; error?: string }
+  | { type: 'next' };
+
+export type ChildMessage =
+  | { type: 'yield'; item: Yielded }
+  | { type: 'call'; id: number; channel: Channel; method: string; args: unknown[] }
+  | { type: 'log'; text: string }
+  | { type: 'end' }
+  | { type: 'error'; message: string; code?: string };
