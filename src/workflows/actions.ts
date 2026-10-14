@@ -14,6 +14,7 @@ import { readStep } from '../intake/read.js';
 import { vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
 import { classifyStep } from '../intake/classify.js';
+import { FILING_ACTIONS } from './filing.js';
 
 export interface ActionContext {
   ws: Workspace;
@@ -95,6 +96,8 @@ export const ACTIONS: Record<string, Action> = {
     },
   },
 
+  ...FILING_ACTIONS,
+  'books.close-year': declared(['ok'], { effects: ['books.close-year'] }),
   'source.due': declared(['due', 'none']),
   'source.pull': declared(['ok', 'login-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited', 'person-needed'], { effects: ['inbox.add', 'records.import', 'collected.append'] }),
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
@@ -108,9 +111,6 @@ export const ACTIONS: Record<string, Action> = {
   'evidence.match-rules': declared(['unique', 'open']),
   'evidence.match-ai': declared(['sure', 'unsure', 'none'], { ai: true }),
   'books.map': declared(['ok'], { effects: ['books.mappings'] }),
-  'accounting.tax.vat-return': declared(['ok']),
-  'providers.ech-0217': declared(['ok']),
-  'books.seal': declared(['ok'], { effects: ['files.filings', 'books.seal'] }),
   'knowledge.add-precedent': declared(['ok'], { effects: ['knowledge.write'] }),
   'knowledge.check': declared(['valid', 'invalid']),
   'accounting.tax.vat-correction': declared(['ok']),

@@ -209,6 +209,14 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         return move(run, { status: 'queued', at: step.id, since: now(), reason: 'busy' });
       }
     }
+    // An effect the engine holds no handle for (a seal, a filing) cannot be checked on a copy: a dry run or a replay skips the step and says so.
+    const unchecked = step.effects.filter((e) => e !== 'ledger.book' && e !== 'books.write');
+    if (run.mode !== 'live' && unchecked.length) {
+      record.effects.push(...unchecked.map((effect) => ({ effect, key: `${w.id}:${run.item.id}:${step.id}`, applied: false, wrote: {}, would: 'skipped: not run in a dry run' })));
+      const done = { ...run, steps: [...run.steps, { ...record, outcome: action.outcomes[0], finishedAt: now() }] };
+      const target = step.outcomes[action.outcomes[0]];
+      return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
+    }
     try {
       const result = await action.run(inputs, effects, { ws, ask });
       record.outcome = result.outcome;

@@ -8,6 +8,7 @@ import './vat.css';
 import { localToday, openFilingPeriod } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
+import { WorkflowButtons } from '../../automation/marks.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -37,7 +38,7 @@ const listed: { ids: string[]; v?: VatReturn } = { ids: [] };
 
 function List(props: Props) {
   const { route, period, books, nav, canEdit } = props;
-  const { v, filed } = useReturn({ books, period });
+  const { v, filed, key } = useReturn({ books, period });
   const [all, setAll] = useState(readAll);
   const rows = shownZiffern(v, filed, all);
   const ids = [...rows, ...(filed ? [FORM_0535] : [])];
@@ -61,7 +62,9 @@ function List(props: Props) {
 
   return (
     <div className="page">
-      <ListHead period={v.period} books={books} canEdit={canEdit} />
+      <ListHead period={v.period} books={books} canEdit={canEdit}>
+        {v.state.kind !== 'filed' ? <WorkflowButtons kind="period" id={String(key)} nav={nav} canEdit={canEdit} /> : null}
+      </ListHead>
       <div className="counts vst">
         {v.state.kind === 'filed' ? (
           <>

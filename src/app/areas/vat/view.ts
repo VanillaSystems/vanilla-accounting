@@ -21,7 +21,7 @@ export function useReturn({ books, period }: { books: Index; period: Period }) {
   const key = vatKeyOf(period, openFilingPeriod(books.config?.closedThrough, localToday(), filing().length));
   const v = useMemo(() => vatReturn(books, key), [books, key]);
   const filed = useFiledReturn(key);
-  return { v, filed };
+  return { v, filed, key };
 }
 
 /** Korrigiert minus filed tax: what the 0535 changes (positive: more to pay). */

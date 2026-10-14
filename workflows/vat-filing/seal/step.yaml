@@ -1,5 +1,6 @@
 label: {"de": "Archivieren und sperren", "en": "File and lock", "fr": "Archiver et verrouiller", "it": "Archiviare e bloccare"}
 uses: books.seal
-reads: ["return"]
+reads: ["return", "xml"]
 effects: ["files.filings", "books.seal"]
+emits: ["seal"]
 outcomes: {"ok": "done"}

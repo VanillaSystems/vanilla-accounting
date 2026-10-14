@@ -1,5 +1,5 @@
 label: {"de": "Jahr sperren", "en": "Lock the year", "fr": "Verrouiller l’année", "it": "Bloccare l’anno"}
-uses: books.seal
+uses: books.close-year
 reads: ["year"]
-effects: ["files.filings", "books.seal"]
+effects: ["books.close-year"]
 outcomes: {"ok": "open"}
