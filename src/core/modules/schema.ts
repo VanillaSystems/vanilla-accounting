@@ -164,6 +164,12 @@ export interface YearEndData {
   withholdingTaxRate: number;
 }
 
+/** invoicing.yaml: the rates an invoice line offers, and a 0 % line's deduction box by exemption. */
+export interface InvoicingData {
+  rates: number[];
+  exemptions: Record<'abroad' | 'export', BoxId>;
+}
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
@@ -174,4 +180,5 @@ export interface Jurisdiction {
   periods: PeriodsData;
   statements: StatementsData;
   yearEnd: YearEndData;
+  invoicing: InvoicingData;
 }

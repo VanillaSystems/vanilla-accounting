@@ -63,6 +63,13 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   for (const [prefix, type] of Object.entries(j.chart.classes)) {
     if (!j.chart.types[type]) add('chart.yaml', `classes.${prefix}`, `type "${type}" is not one of types`);
   }
+  const named = Object.entries(j.taxCodes.codes);
+  for (const rate of j.invoicing.rates) {
+    if (rate !== 0 && !named.some(([, m]) => m.revenue && m.rate === rate)) add('invoicing.yaml', 'rates', `no code in tax-codes.yaml books a sale at ${rate} %`);
+  }
+  for (const [why, box] of Object.entries(j.invoicing.exemptions)) {
+    if (!named.some(([, m]) => m.deduction === box)) add('invoicing.yaml', `exemptions.${why}`, `no code in tax-codes.yaml deducts its turnover in Ziffer ${box}`);
+  }
   for (const s of INCOME_SECTIONS) if (!j.statements.income[s]) add('statements.yaml', `income.${s}`, 'missing');
   if (!FILING_LENGTHS.includes(j.periods.vat.length)) add('periods.yaml', 'vat.length', `"${j.periods.vat.length}" is not one of ${FILING_LENGTHS.join(', ')}`);
   if (!(j.periods.vat.dueDays >= 0)) add('periods.yaml', 'vat.dueDays', 'must be a number of days');

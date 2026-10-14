@@ -11,10 +11,11 @@
  * Pure strings, no Node module: the UI imports it as it is.
  */
 import { SwissQRBill } from 'swissqrbill/svg';
-import { UNITS, VAT_RATES, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
+import { UNITS, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
 import { lineAmount, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
+import { invoicing } from '../engines/index.js';
 
 /** Everything a sheet shows, whatever document it is: a draft, an issued invoice, a credit note, a reminder, a cancellation notice. */
 export interface SheetData {
@@ -153,7 +154,7 @@ export function sheetBlocks(d: SheetData): Block[] {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
         qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
         price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, VAT_RATES.map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
+        rate: pick(`l:${k}:vatRate`, invoicing().rates.map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
         remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
       }
       : { text: esc(l.text), qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %`, remove: '' };

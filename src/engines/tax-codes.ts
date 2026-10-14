@@ -24,6 +24,10 @@ export interface TaxCodeEngine {
   named: readonly string[];
   /** The boxes an entry with this code feeds, the turnover box first. */
   sourceBoxes(info: TaxCodeInfo): BoxId[];
+  /** By meaning: the first catalogue code that books a sale at `rate`. */
+  saleAt(rate: number): string | undefined;
+  /** By meaning: the first catalogue code whose turnover is deducted in `box`. */
+  deductedIn(box: BoxId): string | undefined;
 }
 
 export function taxCodeEngine(data: TaxCodesData, turnoverBox: BoxId): TaxCodeEngine {
@@ -49,8 +53,11 @@ export function taxCodeEngine(data: TaxCodesData, turnoverBox: BoxId): TaxCodeEn
     return null;
   }
 
+  const entries = Object.entries(data.codes);
   return {
     named: Object.keys(data.codes),
+    saleAt: (rate) => entries.find(([, m]) => m.revenue && m.rate === rate)?.[0],
+    deductedIn: (box) => entries.find(([, m]) => m.deduction === box)?.[0],
     parse(code) {
       if (!code) return null;
       const isNegative = code.startsWith(data.negativePrefix);

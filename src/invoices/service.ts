@@ -9,7 +9,7 @@ import { extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { defaultTexts, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
-  INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, VAT_RATES, DEFAULT_LAYOUT,
+  INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, DEFAULT_LAYOUT,
   type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
   type InvoiceLine, type Issued, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
@@ -23,6 +23,7 @@ import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, w
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
+import { invoicing } from '../engines/index.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -82,7 +83,7 @@ function parseLines(v: unknown): InvoiceLine[] {
     const l = (raw ?? {}) as Record<string, unknown>;
     if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`);
     if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`);
-    if (!VAT_RATES.includes(l.vatRate as never)) bad(`Position ${i + 1}: vatRate ist einer von ${VAT_RATES.join(', ')}.`);
+    if (!invoicing().rates.includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoicing().rates.join(', ')}.`);
     if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
     if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
     return {

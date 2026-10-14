@@ -1,0 +1,10 @@
+# What an invoice may charge (Art. 25, 26 MWSTG): the rates a line offers, and for a line at 0 %
+# the deduction box its turnover goes to, by why it carries no Swiss VAT. The code each one books
+# with is asked from tax-codes.yaml by meaning.
+
+# The first is the normal rate, a new line's default.
+rates: [8.1, 2.6, 3.8, 0]
+
+exemptions:
+  abroad: "221"   # a service whose place of supply is abroad (Art. 8 MWSTG)
+  export: "220"   # an export of goods (Art. 23 MWSTG)

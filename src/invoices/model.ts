@@ -12,9 +12,8 @@ export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
 export const INVOICE_CURRENCIES = ['CHF', 'EUR'] as const;
 export type InvoiceCurrency = (typeof INVOICE_CURRENCIES)[number];
 
-/** The Swiss VAT rates since 2024: normal, reduced, accommodation, and 0 for an exempt supply. */
-export const VAT_RATES = [8.1, 2.6, 3.8, 0] as const;
-export type VatRate = (typeof VAT_RATES)[number];
+/** A line's VAT rate in percent: one of the jurisdiction's (modules/ch/invoicing.yaml), 0 for an exempt supply. */
+export type VatRate = number;
 
 export const UNITS = ['h', 'day', 'pcs', 'flat', 'km'] as const;
 export type Unit = (typeof UNITS)[number];

@@ -9,7 +9,7 @@ import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
-import { VAT_RATES } from './model.js';
+import { invoicing, vat } from '../engines/index.js';
 import { referenceFor } from '../providers/qr-bill/reference.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
   draft.lines.forEach((l, line) => {
     if (!l.text.trim()) out.push({ field: 'line.text', line });
     if (!Number.isFinite(l.quantity) || l.quantity === 0 || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
-    if (!VAT_RATES.includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
+    if (!invoicing().rates.includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
   });
   if (draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
   if (draft.kind === 'credit-note') {
@@ -305,8 +305,9 @@ export function allocate(inv: Issued, invoices: readonly Invoice[], amount: numb
 
 /** The VAT code a rate books revenue with (cash basis: when the money arrives). */
 export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined): string {
-  if (rate === 0) return exemption === 'abroad' ? 'V0-E' : 'V0';
-  return `V${String(rate).replace('.', '')}`;
+  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate);
+  if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}`);
+  return code;
 }
 
 /**

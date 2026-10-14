@@ -13,6 +13,7 @@ import {
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/providers/qr-bill/reference.js';
 import { PAGE, addressLines, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type Sender } from '../src/invoices/model.js';
+import './support/jurisdiction.js';
 
 const QR_IBAN = 'CH4431999123000889012';
 const sender: Sender = {

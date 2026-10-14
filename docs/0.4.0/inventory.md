@@ -60,7 +60,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/books/bank-import.ts` | camt.053 9 |
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
-| `src/core/modules/check.ts` | Ziffer 5 |
+| `src/core/modules/check.ts` | Ziffer 6 |
 | `src/core/modules/schema.ts` | eCH-0217 1 |
 | `src/types/api-error.ts` | camt.053 2 |
 | `src/types/index.ts` | CHF 2, MWST 3, ESTV 2, Ziffer 2, form 0535 2, camt.053 2 |
@@ -118,7 +118,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/model.ts` | CHF 1, MWST 2, Ziffer 1, QR-bill 7 |
 | `src/invoices/payments.ts` | ESTV 1, camt.053 1, QR-bill 1 |
 | `src/invoices/pdf.ts` | QR-bill 1 |
-| `src/invoices/rules.ts` | MWST 1, tax code 1, QR-bill 3, Rappen 2 |
+| `src/invoices/rules.ts` | MWST 1, QR-bill 3, Rappen 2 |
 | `src/invoices/service.ts` | CHF 2, Ziffer 1 |
 | `src/invoices/sheet.ts` | QR-bill 18 |
 | `src/invoices/texts.ts` | MWST 5 |
