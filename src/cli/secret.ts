@@ -47,7 +47,7 @@ if (args[0] === '--import') {
     if (!m) { keep.push(line); continue; }
     const value = m[2].replace(/^(['"])(.*)\1$/, '$2');
     if (value) {
-      const name = mailSecret(m[1].toLowerCase());
+      const name = mailSecret(m[1].toLowerCase().replace(/_/g, '-'));
       await secrets.set(name, value);
       if ((await secrets.get(name)) !== value) { console.error(`⛔ ${name}: the keychain did not keep it; .env is left as it was.`); process.exit(1); }
       moved.push(name);

@@ -38,7 +38,7 @@ export type MailboxLogin =
   | { status: 'missing'; user?: string; secret?: SecretName };
 
 /** The secret of a mailbox's password. */
-export const passwordOf = (m: Mailbox): SecretName => mailSecret(m.env.toLowerCase());
+export const passwordOf = (m: Mailbox): SecretName => mailSecret(m.env.toLowerCase().replace(/_/g, '-'));
 
 /** The login of a mailbox: its name from the app's environment, its password from the secret store; host and port fall back to mail.yaml and 993. */
 export async function loginOf(m: Mailbox, env: NodeJS.ProcessEnv): Promise<MailboxLogin> {

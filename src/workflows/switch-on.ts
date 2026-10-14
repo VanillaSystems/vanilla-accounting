@@ -138,6 +138,8 @@ export function baseline(ws: Ws, workflows: WorkflowDecl[], now = () => new Date
  * at once. `before` and `after` are the file's contents.
  */
 export function classifyChange(path: string, before: string, after: string, workflows: WorkflowDecl[]): ChangeEffect {
+  // A source's code is the company's own and expected (ADR 0014): it is switched on like a rule, not handed to a maintainer.
+  if (path.startsWith('sources/')) return 'needs-switch-on';
   if (/\.(ts|tsx|js|mjs|cjs)$/.test(path)) return 'needs-maintainer';
   if (/^workflows\//.test(path)) return behaviour(path, before) === behaviour(path, after) ? 'applies-now' : 'needs-switch-on';
   return workflows.some((w) => citations(w).some((c) => within(path, c))) ? 'needs-switch-on' : 'applies-now';

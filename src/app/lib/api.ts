@@ -23,6 +23,7 @@ import type { ReturnFigures } from '../../engines/return.js';
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 import type { Conversation, ConversationSummary } from '../../types/assistant.js';
 import type { DropAction, DropSession } from '../../types/drop.js';
+import type { SourceRow } from '../../platform/sources/model.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -156,6 +157,7 @@ export const api = {
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
+  sources: () => request<SourceRow[]>('GET', '/api/sources'),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
     const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });

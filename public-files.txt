@@ -33,6 +33,7 @@ tools/vat-codes/**
 tools/layers/**
 modules/**
 workflows/**
+sources/**
 examples/**
 demo-consulting/**
 tools/hooks/**

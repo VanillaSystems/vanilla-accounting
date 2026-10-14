@@ -18,6 +18,7 @@ import { router as automation, queueCommit } from './routes/automation.js';
 import { router as changes } from './routes/changes.js';
 import { router as assistant } from './routes/assistant.js';
 import { router as drop } from './routes/drop.js';
+import { router as sourcesRoute } from './routes/sources.js';
 import { openRecordsCommitter } from '../saving/records.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
@@ -78,7 +79,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, sourcesRoute);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

@@ -25,12 +25,13 @@ import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
 import { MailSection } from './MailSection.js';
+import { SourcesSection } from './SourcesSection.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
-  ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail']],
+  ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources']],
   ['company.groupBooks', ['accounts', 'periods', 'opening']],
   ['company.groupApp', ['display']],
 ];
@@ -126,6 +127,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'banks': return <Banks {...p} />;
     case 'invoice-layout': return <InvoiceLayoutSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'mail': return <MailSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
+    case 'sources': return <SourcesSection />;
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;

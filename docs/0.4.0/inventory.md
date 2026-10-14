@@ -12,9 +12,9 @@ and the providers.
 | engine | 4 | 1 |
 | provider | 13 | 11 |
 | split | 47 | 26 |
-| infrastructure | 18 | 4 |
+| infrastructure | 23 | 4 |
 | workflow | 14 | 0 |
-| view | 179 | 60 |
+| view | 181 | 60 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -46,6 +46,7 @@ Layers are assigned by path prefix, most specific first:
 - `src/publish/` → infrastructure
 - `src/reconcile/` → infrastructure
 - `src/saving/` → infrastructure
+- `src/platform/` → infrastructure
 - `src/app/` → view
 - `src/server/` → view
 - `src/cli/` → view

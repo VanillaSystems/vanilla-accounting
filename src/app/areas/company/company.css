@@ -5,3 +5,11 @@
 .ftab.banks .fh, .ftab.banks .fr { grid-template-columns: 56px minmax(140px, 1fr) 250px minmax(170px, auto); }
 .ftab.banks .fr > :nth-child(3), .ftab.banks .fr > :nth-child(4) { white-space: nowrap; }
 .fedit { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+/* Firma › Quellen */
+.srcs { display: flex; flex-direction: column; gap: 18px; }
+.srchead { display: flex; align-items: baseline; gap: 10px; font-size: 15px; margin: 0 0 6px; }
+.srchead .mono { font-size: 11.5px; }
+.srchead .wfpill { margin-left: auto; }
+.srclines { font-size: 12px; line-height: 1.5; }
+.srclines summary { cursor: pointer; color: var(--accent); }
+.srcproblems { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--neg); }
