@@ -174,8 +174,7 @@ on agreed payments (vereinbart). The folder follows the method; there is no rule
 Moving the files costs no sealed data. The seals hash journal entries, bank transactions and
 mappings (`src/books/seal.ts`); a mapping names its receipt by id (`receiptId`); the path is the
 `filename` of the receipt record, which no seal covers. No journal entry and no filed return names
-a receipt's or statement's path (checked on the demo and on a real workspace, 0 of 1,194
-entries). The filed returns and seals keep their content and change only their folder
+a receipt's or statement's path (checked on the demo and on a real workspace: none). The filed returns and seals keep their content and change only their folder
 (`filings/2026/` → `2026/filings/`). Paths inside the workspace are relative to it, so moving the
 whole workspace into `vanilla-accounting/` changes no record either.
 

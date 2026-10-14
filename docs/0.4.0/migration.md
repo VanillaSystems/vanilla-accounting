@@ -48,6 +48,20 @@ Steps 4, 5 and 6 come first because the research found the swap blocked by three
 the core, not by the tax code: the normal side from the account number, CHF as the implicit base
 currency, and quarters as the only period.
 
+## Figure changes after the steps
+
+These change figures on purpose, so they come after the last step, each with its own expected
+update and a CHANGELOG entry marked **⚠ figures**.
+
+- **The statements split off the VAT.** The Reports area (`src/app/areas/reports/model.ts`) and
+  `tests/statements-golden.test.ts` compute the income statement and the balance sheet from the
+  journal alone; only the year close adds the tax the VAT codes split off (`vatPostings`,
+  `src/accounting/year-close.ts`). So the balance sheet does not balance once a single-leg `-2`
+  correction exists (off by exactly the tax of those corrections; the leg they lack goes to
+  2201), and revenue and expenses carry their tax, so the net result is off too. Fix:
+  compute both from the journal plus `vatPostings`, as the year close does. The VAT return is
+  not affected; it reads the codes.
+
 ## What is not in 0.4.0
 
 - A second real jurisdiction (`de`, `at`). The `xx` fixture proves the swap; a real one follows
