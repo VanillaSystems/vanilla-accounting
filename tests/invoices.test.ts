@@ -10,7 +10,7 @@ import {
   allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, openOn, reminderDraft,
   revenueSplit, status, totals, withPayment, InvoiceRuleError,
 } from '../src/invoices/rules.js';
-import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/invoices/reference.js';
+import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/providers/qr-bill/reference.js';
 import { PAGE, addressLines, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type Sender } from '../src/invoices/model.js';
 

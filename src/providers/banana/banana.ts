@@ -3,8 +3,8 @@
  * entry dated in the range, in CHF with the foreign amount and rate beside it. `npm run export`
  * and the export dialog write the same file.
  */
-import type { Index, JournalEntry } from '../types/index.js';
-import { chfAmount } from '../accounting/ledger.js';
+import type { Index, JournalEntry } from '../../types/index.js';
+import { chfAmount } from '../../accounting/ledger.js';
 
 const BANANA_COLUMNS = [
   'Date', 'Description', 'AccountDebit', 'AccountCredit', 'Amount', 'AmountCurrency',

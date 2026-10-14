@@ -13,7 +13,7 @@ import { addComment, cancelInvoice, createCreditNote, createCustomer, createDraf
 import { closeBrowser } from '../../src/invoices/pdf.js';
 import { idSource, updateInvoices } from '../../src/invoices/store.js';
 import type { Issued } from '../../src/invoices/model.js';
-import { qrReference } from '../../src/invoices/reference.js';
+import { qrReference } from '../../src/providers/qr-bill/reference.js';
 import { totals, withPayment } from '../../src/invoices/rules.js';
 import { TEXTS } from '../../src/invoices/texts.js';
 import { mulberry32, YEAR, type DemoInvoicing, type Payment } from './kit.js';

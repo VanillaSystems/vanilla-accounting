@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../../src/types/index.js';
-import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/parsers/camt053.js';
+import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/providers/camt053/camt053.js';
 import { bankKind } from '../../src/workspace/banks.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
 import { sealOf } from '../../src/books/seal.js';

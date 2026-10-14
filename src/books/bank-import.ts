@@ -6,9 +6,9 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { transactionsOf } from '../parsers/camt053.js';
+import { transactionsOf } from '../providers/camt053/camt053.js';
 import { pdfText } from '../parsers/pdf-text.js';
-import { wiseReferences } from '../parsers/wise-statement-pdf.js';
+import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import type { Workspace } from '../workspace/workspace.js';

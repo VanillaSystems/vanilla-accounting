@@ -12,7 +12,7 @@
  */
 
 import { loadBooks } from '../books/store.js';
-import { parseStatementBalances, BalanceSnapshot } from '../parsers/statement-balances.js';
+import { parseStatementBalances, BalanceSnapshot } from '../providers/camt053/statement-balances.js';
 import { reconcileBankBalances, closingDates, ReconcileRow } from '../accounting/reconcile-bank.js';
 import { openWorkspace } from '../workspace/workspace.js';
 import { readBankStatements } from '../workspace/bank-statements.js';

@@ -14,7 +14,7 @@ import { bankAccountFor } from '../accounting/bank-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { InvoiceBook, Issued, PaymentAllocation } from './model.js';
-import { parseReference } from './reference.js';
+import { parseReference } from '../providers/qr-bill/reference.js';
 import { allocate, liveInvoices, openAmount, openFees, revenueSplit, totals, withPayment } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';

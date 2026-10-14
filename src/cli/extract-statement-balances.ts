@@ -8,7 +8,7 @@
 
 import { join } from 'node:path';
 import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
-import { extractStatementBalances } from '../parsers/statement-pdf-balances.js';
+import { extractStatementBalances } from '../providers/statement-pdf/statement-pdf-balances.js';
 import { reconcileMonthly } from '../accounting/reconcile-bank.js';
 import { openWorkspace } from '../workspace/workspace.js';
 

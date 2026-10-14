@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { wiseReferences } from '../src/parsers/wise-statement-pdf.js';
+import { wiseReferences } from '../src/providers/wise-pdf/wise-statement-pdf.js';
 
 test('transfer ids map to their payment reference; card lines carry none', () => {
   const raw = readFileSync(join(process.cwd(), 'tests/fixtures/wise-statement-eur.txt'), 'utf8');

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BankTransaction } from '../src/types/index.js';
-import { assignUniqueRefs, readCamt, transactionsOf } from '../src/parsers/camt053.js';
+import { assignUniqueRefs, readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import type { StatementKind } from '../src/workspace/banks.js';
 
 const RAIFFEISEN = 'uuid_camt053_001_08_raiffeisen.xml';

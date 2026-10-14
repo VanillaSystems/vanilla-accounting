@@ -11,10 +11,10 @@
 
 import { readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { StatementClosingBalance } from '../types/index.js';
-import { findBankAccount } from '../accounting/bank-accounts.js';
-import type { LedgerBankAccount } from '../workspace/workspace.js';
-import { pdfText } from './pdf-text.js';
+import type { StatementClosingBalance } from '../../types/index.js';
+import { findBankAccount } from '../../accounting/bank-accounts.js';
+import type { LedgerBankAccount } from '../../workspace/workspace.js';
+import { pdfText } from '../../parsers/pdf-text.js';
 
 function parseSwissNumber(s: string): number {
   return parseFloat(s.replace(/'/g, ''));

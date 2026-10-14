@@ -17,7 +17,7 @@ import { appVersion } from '../audit/manifest.js';
 import { invoiceFontCss } from '../invoices/fonts.js';
 import { filedReturnsOf, receiptDirOf } from '../workspace/reads.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { bananaTsv } from './banana.js';
+import { bananaTsv } from '../providers/banana/banana.js';
 import { ITEMS, quartersIn, receiptsIn, statementsIn, type ExportRequest, type Format, type ItemId } from './model.js';
 import { tableOf, type Table, type Words } from './tables.js';
 import { wordsIn } from './texts.js';

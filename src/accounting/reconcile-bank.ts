@@ -15,7 +15,7 @@
 import type { Index, JournalEntry, StatementClosingBalance } from '../types/index.js';
 import { toRappen, fromRappen } from './rappen.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import type { BalanceSnapshot } from '../parsers/statement-balances.js';
+import type { BalanceSnapshot } from '../providers/camt053/statement-balances.js';
 import { baseCurrency } from '../engines/index.js';
 
 export interface ReconcileRow {

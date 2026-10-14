@@ -10,8 +10,8 @@
  */
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
-import type { BankTransaction } from '../types/index.js';
-import type { StatementKind } from '../workspace/banks.js';
+import type { BankTransaction } from '../../types/index.js';
+import type { StatementKind } from '../../workspace/banks.js';
 
 /** The ISO 20022 cash-management message a file holds: only camt.053 is a statement. */
 export type CamtMessage = 'camt.053' | 'camt.052' | 'camt.054' | 'other';

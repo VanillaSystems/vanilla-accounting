@@ -12,7 +12,7 @@ import {
   DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, OWN_TEXTS,
   type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail,
 } from '../invoices/model.js';
-import { isQrIban } from '../invoices/reference.js';
+import { isQrIban } from '../providers/qr-bill/reference.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatRegistered', 'vatMethod', 'basis', 'period'].includes(k)) as ProfileKey[];
 

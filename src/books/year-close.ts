@@ -15,7 +15,7 @@ import { commitPaths, repositoryAt } from '../workspace/git.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { accountsOf, filedReturnsOf } from '../workspace/reads.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
-import { parseStatementBalances } from '../parsers/statement-balances.js';
+import { parseStatementBalances } from '../providers/camt053/statement-balances.js';
 import { estvRates, type EstvRates } from '../accounting/fx-conversion.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import {

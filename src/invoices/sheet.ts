@@ -12,7 +12,7 @@
  */
 import { SwissQRBill } from 'swissqrbill/svg';
 import { UNITS, VAT_RATES, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
-import { isQrBillIban, prettyReference } from './reference.js';
+import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
 import { lineAmount, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
 

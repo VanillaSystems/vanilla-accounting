@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseStatementBalances } from '../src/parsers/statement-balances.js';
-import { readCamt, transactionsOf } from '../src/parsers/camt053.js';
+import { parseStatementBalances } from '../src/providers/camt053/statement-balances.js';
+import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { DEMO_ROOTS } from './support/workspace.js';
 
 const FIXTURES = join(import.meta.dirname, 'fixtures/camt053');

@@ -10,7 +10,7 @@ import type {
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
 import { VAT_RATES } from './model.js';
-import { referenceFor } from './reference.js';
+import { referenceFor } from '../providers/qr-bill/reference.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────
 

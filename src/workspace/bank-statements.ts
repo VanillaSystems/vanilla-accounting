@@ -11,7 +11,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { accountForStatement, type StatementMatch } from '../accounting/bank-accounts.js';
-import { readCamt, type CamtMessage, type CamtStatement } from '../parsers/camt053.js';
+import { readCamt, type CamtMessage, type CamtStatement } from '../providers/camt053/camt053.js';
 import type { Workspace } from './workspace.js';
 
 type Matched = Extract<StatementMatch, { account: unknown }>;

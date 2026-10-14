@@ -8,7 +8,7 @@ import { localToday, parseSwissDate } from '../../../accounting/periods.js';
 import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
 import { missingForIssue, openAmount, paidAmount, reminderDraft, totals } from '../../../invoices/rules.js';
-import { prettyReference } from '../../../invoices/reference.js';
+import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { RouteOf } from '../../shell/route.js';

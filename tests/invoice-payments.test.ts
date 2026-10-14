@@ -6,12 +6,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readCamt, transactionsOf } from '../src/parsers/camt053.js';
+import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { camt053Xml, type CamtEntry } from '../tools/demo/camt053.js';
 import { confirmPayment, matchPayments, paymentProposals, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
 import { cancel, issue, status, totals } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
-import { scorReference } from '../src/invoices/reference.js';
+import { scorReference } from '../src/providers/qr-bill/reference.js';
 import type { Books } from '../src/books/store.js';
 import type { BankTransaction } from '../src/types/index.js';
 import './support/jurisdiction.js';

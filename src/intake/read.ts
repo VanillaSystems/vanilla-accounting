@@ -12,7 +12,7 @@
 import { closeSync, openSync, readSync, readdirSync, readFileSync, statSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import { assignUniqueRefs } from '../parsers/camt053.js';
+import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
 import { pdfText } from '../parsers/pdf-text.js';
 import { detectVatProofIssue } from '../parsers/receipt-text.js';

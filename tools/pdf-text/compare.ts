@@ -26,8 +26,8 @@ import { documentTypeOf, uidsIn, type Counterparty } from '../../src/knowledge/c
 import { loadKnowledge } from '../../src/knowledge/layers.js';
 import { pdfText, type TextMode } from '../../src/parsers/pdf-text.js';
 import { detectVatProofIssue, hasSwissUid, hasVatIndicator } from '../../src/parsers/receipt-text.js';
-import { closingBalance } from '../../src/parsers/statement-pdf-balances.js';
-import { wiseReferences } from '../../src/parsers/wise-statement-pdf.js';
+import { closingBalance } from '../../src/providers/statement-pdf/statement-pdf-balances.js';
+import { wiseReferences } from '../../src/providers/wise-pdf/wise-statement-pdf.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
 
 const execFileAsync = promisify(execFile);

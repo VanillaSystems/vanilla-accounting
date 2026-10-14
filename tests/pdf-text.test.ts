@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { textPdf } from '../tools/demo/pdf.js';
 import { pdfText, textOf, type Run } from '../src/parsers/pdf-text.js';
-import { closingBalance } from '../src/parsers/statement-pdf-balances.js';
-import { wiseReferences } from '../src/parsers/wise-statement-pdf.js';
+import { closingBalance } from '../src/providers/statement-pdf/statement-pdf-balances.js';
+import { wiseReferences } from '../src/providers/wise-pdf/wise-statement-pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 const run = (text: string, x: number, y: number, size = 10, angle = 0): Run => ({ text, x, xMax: x + text.length * size * 0.5, y, size, angle });
