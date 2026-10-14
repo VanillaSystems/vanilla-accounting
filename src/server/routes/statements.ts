@@ -22,7 +22,7 @@ import type { StatementRefusal } from '../../types/api-error.js';
 import type { StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
-import { RequestError, WS, assertOpen, readBooks, withBooks } from '../books.js';
+import { RequestError, WS, assertOpen, readBooks, updateBooks } from '../books.js';
 import { baseCurrency } from '../../engines/index.js';
 
 export const router = Router();
@@ -94,9 +94,18 @@ function mergeBalances(old: StatementClosingBalance[] = [], fresh: StatementClos
 router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   const body = req.body as unknown;
   if (!Buffer.isBuffer(body) || body.length === 0) throw new RequestError(400, 'Keine Datei erhalten.');
-  const name = basename(String(req.query.name ?? '')).trim();
-  const hint = imported().find((a) => a.account === req.query.account);
   const month = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
+  res.json(await importStatement(body, String(req.query.name ?? ''), typeof req.query.account === 'string' ? req.query.account : undefined, month));
+});
+
+/**
+ * Reads one statement file (camt.053 or a PDF) into the books: placed by its account and month,
+ * refused as a RequestError when it belongs to no account, lies in a closed period or is read
+ * already. The Bank area's upload and the drop dialog both take this one way in.
+ */
+export async function importStatement(body: Buffer, given: string, accountHint?: string, month?: string): Promise<StatementImport> {
+  const name = basename(given).trim();
+  const hint = imported().find((a) => a.account === accountHint);
   const xml = /\.xml$/i.test(name);
   if (!xml && !/\.pdf$/i.test(name)) refuse(400, 'Nur camt.053 (XML) oder PDF.', 'format');
   const placed = xml ? placeCamt(body, name, hint) : placePdf(name, hint, month);
@@ -127,7 +136,7 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
     const balances = xml ? undefined : (await extractStatementBalances(partDirs(WS.paths, 'statements'), WS.bankAccounts)).balances;
     const invoices = loadInvoices(WS);
     const payments = paymentContext(WS);
-    withBooks(res, (books): StatementImport => {
+    return updateBooks((books): StatementImport => {
       assertOpen(books, [placed.last], 'newStatement');
       const before = new Set(books.transactions.map((t) => t.ref));
       const fresh = assignUniqueRefs(withinBooks(bank.transactions, books.config).kept);
@@ -154,4 +163,4 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
     rmSync(path, { force: true });
     throw e;
   }
-});
+}

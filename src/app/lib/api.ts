@@ -22,6 +22,7 @@ import type { ReturnFigures } from '../../engines/return.js';
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 import type { Conversation, ConversationSummary } from '../../types/assistant.js';
+import type { DropAction, DropSession } from '../../types/drop.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -155,6 +156,15 @@ export const api = {
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
+  dropOpen: () => request<DropSession>('POST', '/api/drop'),
+  dropAdd: async (session: string, file: File): Promise<DropSession> => {
+    const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+    if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
+    return res.json() as Promise<DropSession>;
+  },
+  dropRow: (session: string, key: string, action: DropAction) => request<DropSession>('POST', `/api/drop/${session}/rows/${key}`, action),
+  dropCommit: (session: string) => request<DropSession>('POST', `/api/drop/${session}/commit`),
+  dropClose: (session: string) => request<{ ok: true }>('DELETE', `/api/drop/${session}`),
   changesCommand: (cmd: SavingCommand) => request<SavingResult>('POST', '/api/changes', cmd),
   changesDiff: (source: string, path: string) => request<FileDiff>('GET', `/api/changes/diff?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`),
   bookRevaluation: (year: string) => request<{ entries: JournalEntry[] }>('POST', `/api/year-close/${year}/revaluation`),

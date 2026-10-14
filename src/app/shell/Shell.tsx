@@ -17,7 +17,7 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
-import { intake } from '../areas/receipts/intake.js';
+import { DropDialog, closeDrop, dropFiles, dropOpen } from './DropDialog.js';
 import { watchIntakeRuns } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
@@ -137,8 +137,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   useEffect(() => (STATIC_EXPORT ? undefined : watchIntakeRuns((run) => { reload.current(); toast(run.status === 'done' ? t('intake.finished') : t('intake.note.error', { detail: run.error ?? run.status })); })), [toast]);
 
   useShellKeys({
-    overlayOpen: () => overlay !== null,
-    closeOverlay: () => { setOverlay(null); focusSelectedRow(); },
+    overlayOpen: () => overlay !== null || dropOpen(),
+    closeOverlay: () => { if (dropOpen()) closeDrop(); setOverlay(null); focusSelectedRow(); },
     palette: () => setOverlay({ kind: 'palette' }),
     undo,
     area: (letter) => {
@@ -170,7 +170,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const listRef = useRef<HTMLElement>(null);
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
 
-  useDrop(canEdit, setDropping, (files) => (area.drop ? area.drop.run(files, propsRef.current) : intake(files, nav)));
+  // The drop dialog takes every drop; the Bank area keeps its own, where the open account places a statement.
+  useDrop(canEdit, setDropping, (files) => (area.drop && !dropOpen() ? area.drop.run(files, propsRef.current) : void dropFiles(files)));
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;
@@ -252,6 +253,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         onAssistant={toggleAssistant}
       />
       <Sidebar page={pageContext(loc.route, books)} onGo={(route) => nav.go({ route, query: {} })} />
+      <DropDialog onGo={(route) => nav.go({ route, query: {} })} />
       <Corner onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}

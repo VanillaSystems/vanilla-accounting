@@ -17,6 +17,7 @@ import { router as exportBundle } from './routes/export.js';
 import { router as automation, queueCommit } from './routes/automation.js';
 import { router as changes } from './routes/changes.js';
 import { router as assistant } from './routes/assistant.js';
+import { router as drop } from './routes/drop.js';
 import { openRecordsCommitter } from '../saving/records.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
@@ -69,7 +70,7 @@ app.get('/api/status', (_req, res) => {
 const RECORDS: Array<[RegExp, string]> = [
   [/^\/api\/receipts/, 'Beleg bearbeitet'], [/^\/api\/vision/, 'Beleg gelesen'], [/^\/api\/transactions/, 'Bewegung bearbeitet'],
   [/^\/api\/mapping/, 'Zuordnung bearbeitet'], [/^\/api\/journal-entries/, 'Buchung bearbeitet'], [/^\/api\/statements/, 'Kontoauszug eingelesen'],
-  [/^\/api\/year-close/, 'Jahresabschluss'], [/^\/api\/invoices/, 'Rechnung bearbeitet'], [/^\/api\/customers/, 'Kunde bearbeitet'],
+  [/^\/api\/year-close/, 'Jahresabschluss'], [/^\/api\/invoices/, 'Rechnung bearbeitet'], [/^\/api\/customers/, 'Kunde bearbeitet'], [/^\/api\/drop\/[^/]+\/commit$/, 'Kontoauszug eingelesen'],
 ];
 app.use((req, res, next) => {
   const hit = req.method !== 'GET' ? RECORDS.find(([re]) => re.test(req.path)) : undefined;
@@ -77,7 +78,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {
