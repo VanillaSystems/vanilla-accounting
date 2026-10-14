@@ -14,18 +14,35 @@ import { askIfReady } from '../../intake/run.js';
 import { lockIntake } from '../../intake/pipeline.js';
 import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import { summaryOf, taskOf, type AutomationCommand, type AutomationView, type RunDetail, type Task } from '../../workflows/model.js';
+import { openRecordsCommitter } from '../../saving/records.js';
+import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type RunDetail, type Task } from '../../workflows/model.js';
 
 export const router = Router();
 
 const engines = new Map<string, Engine>();
+let commits: Promise<unknown> = Promise.resolve();
 
-/** The engine of the open workspace; a workspace opened later gets its own. */
+/** Commits run one after another: isomorphic-git takes the index for each. A failed commit is logged, never thrown at a run. */
+export function queueCommit(f: () => Promise<boolean>): Promise<unknown> {
+  commits = commits.then(f).catch((e) => console.error(`commit failed: ${(e as Error).message}`));
+  return commits;
+}
+
+/** The engine of the open workspace; a workspace opened later gets its own. Opening it commits what a crash left uncommitted. */
 export function engine(): Engine {
   const ws = WS;
   let e = engines.get(ws.paths.root);
   if (!e) {
-    e = openEngine(ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws) });
+    const records = openRecordsCommitter(ws);
+    void queueCommit(() => records.recover());
+    e = openEngine(ws, {
+      appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws),
+      onRest: (run, line) => {
+        if (!line) return;
+        const w = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((x) => x.id === run.workflow);
+        void queueCommit(() => records.commitRun({ id: run.id, workflow: run.workflow, label: w ? textIn(w.label, 'de') : run.workflow, item: run.item.id }));
+      },
+    });
     engines.set(ws.paths.root, e);
   }
   return e;

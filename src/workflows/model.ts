@@ -295,6 +295,8 @@ export interface Run {
   state: RunState;
   /** Append-only: one record per executed step. Finished records never change. */
   steps: StepRecord[];
+  /** How many step records the run log already covers (runlog.ts). */
+  logged?: number;
 }
 
 /** What a step can read: the outputs of the steps before it, in order. Derived, never stored twice. */

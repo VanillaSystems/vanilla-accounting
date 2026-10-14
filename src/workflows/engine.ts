@@ -19,6 +19,7 @@ import {
   type AutomationCommand, type CommandResult, type EffectRecord, type ItemRef, type QueueReason, type Run, type RunState, type StartedBy, type StepRecord, type WorkflowDecl,
 } from './model.js';
 import { listRuns, saveRun } from './store.js';
+import { appendLine, lineFor, type RunLogLine } from './runlog.js';
 
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
 
@@ -30,8 +31,10 @@ export interface EngineDeps {
   limits?: { ai: number; other: number };
   /** A company version of a workflow runs live only when approved; the app's are approved by definition. */
   isApproved?: (w: WorkflowDecl) => boolean;
-  /** Called once a run came to rest (done, waiting, parked, stuck, discarded): the records path commits here. */
-  onRest?: (run: Run) => void;
+  /** Called once a run came to rest and its run-log line (if any) is written: the records path commits here. */
+  onRest?: (run: Run, line: RunLogLine | undefined) => void | Promise<void>;
+  /** Where this engine runs, written on each run-log line. */
+  host?: RunLogLine['host'];
   /** Takes the workspace's one-writer lock for a step that writes; throws when another process holds it. */
   lock?: () => () => void;
 }
@@ -83,8 +86,15 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   // A run the process left running when it stopped goes back into the queue at its step.
   for (const r of runs.values()) if (r.state.status === 'running') move(r, { status: 'queued', at: r.state.at, since: now() });
 
+  /** A run came to rest: its run-log line (rule 1 in runlog.ts decides whether there is one), then the commit hook. */
   const settle = (run: Run) => {
-    if (['done', 'waiting', 'parked', 'stuck', 'discarded'].includes(run.state.status)) deps.onRest?.(run);
+    if (!['done', 'waiting', 'parked', 'stuck', 'discarded'].includes(run.state.status)) return;
+    const line = lineFor(run, run.logged ?? 0, deps.host);
+    if (line) {
+      appendLine(ws, line, loadBooks(ws).config.closedThrough);
+      save({ ...run, logged: run.steps.length });
+    }
+    void deps.onRest?.(runs.get(run.id)!, line);
   };
 
   /** The slot a queued run needs: an AI slot when its next step is an AI step. */

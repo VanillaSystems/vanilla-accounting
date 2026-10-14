@@ -36,6 +36,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/secrets/', 'infrastructure'],
   ['src/publish/', 'infrastructure'],
   ['src/reconcile/', 'infrastructure'],
+  ['src/saving/', 'infrastructure'],
   ['src/app/', 'view'],
   ['src/server/', 'view'],
   ['src/cli/', 'view'],

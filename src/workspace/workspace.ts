@@ -89,7 +89,7 @@ export const LAYOUT = {
     VERSION: 'app', 'ledger.json': 'app', 'invoices.json': 'app', logos: 'app', data: 'app', 'master-data': 'app', 'transactional-data': 'app',
   },
   masterData: { 'accounts.json': 'company' },
-  year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', receipts: 'company', 'bank-statements': 'company' },
+  year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', 'runs.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },
 } as const satisfies Record<string, Record<string, Owner>>;
 
 /** The names a company repository's root holds besides the apps' folders: git and agent files, the shared master-data/, own/. */
@@ -143,6 +143,8 @@ export interface YearPaths {
   invoices: string;
   /** The figures npm run test:books compares the books against. */
   expected: string;
+  /** The run log: one line per event of a run that wrote, waited for a person, got stuck or was discarded (src/workflows/runlog.ts). */
+  runLog: string;
 }
 
 export interface Workspace {
@@ -190,6 +192,7 @@ export function yearPaths(paths: Pick<WorkspacePaths, 'transactional'>, year: st
     filings: join(root, 'filings'),
     invoices: join(root, 'invoices'),
     expected: join(root, 'expected'),
+    runLog: join(root, 'runs.jsonl'),
   };
 }
 

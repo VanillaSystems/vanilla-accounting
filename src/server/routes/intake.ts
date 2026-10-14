@@ -4,6 +4,8 @@
  * file dropped meanwhile is read too. The UI starts it after every intake and on its button.
  */
 import { Router } from 'express';
+import { queueCommit } from './automation.js';
+import { openRecordsCommitter } from '../../saving/records.js';
 import { IntakeBusyError, runIntake, storePort, type IntakeJob, type IntakeStatus } from '../../intake/pipeline.js';
 import { PIPELINE, askIfReady } from '../../intake/run.js';
 import { WS } from '../books.js';
@@ -34,7 +36,10 @@ function start(): void {
         busy = true;
       }
     } while (again);
-  })().catch((e) => console.error('intake:', e)).finally(() => { running = undefined; });
+  })().catch((e) => console.error('intake:', e)).finally(() => {
+    running = undefined;
+    void queueCommit(() => openRecordsCommitter(WS).commitEdit('Belege aufgenommen'));
+  });
 }
 
 const status = (): IntakeStatus => ({ running: !!running, job: last, ...(busy ? { busy } : {}), inbox: inboxFiles({ photos: true }).map((f) => f.id) });
