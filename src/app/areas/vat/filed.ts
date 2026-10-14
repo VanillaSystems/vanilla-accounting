@@ -1,7 +1,7 @@
 /** The returns as filed with the ESTV (filings/<year>/), read once per year and kept. */
 import { useEffect, useState } from 'react';
-import type { ReturnFigures } from '../../../accounting/index.js';
 import { api } from '../../lib/api.js';
+import type { ReturnFigures } from '../../../engines/return.js';
 
 const years = new Map<string, Promise<ReturnFigures[]>>();
 

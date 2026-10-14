@@ -14,11 +14,11 @@ import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
 import { chfAmount, computeBalances, isDebitNormal } from './ledger.js';
-import { parseVatCode, vatLine } from './vat-report.js';
-import { figuresFromBooks, type ReturnFigures } from './return-figures.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { derivePeriod } from './periods.js';
+import { vat } from '../engines/index.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
   journalEntries: JournalEntry[];
@@ -75,8 +75,8 @@ export function yearEndAccounts(chart: readonly string[]): YearEndAccounts {
 export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): JournalEntry[] {
   const out: JournalEntry[] = [];
   for (const e of entries) {
-    const info = e.vatCode ? parseVatCode(e.vatCode) : null;
-    const line = vatLine(e);
+    const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
+    const line = vat().vatLine(e);
     if (!info || !line || line.tax === 0 || info.acquisitionZiffer) continue;
     const owed = !!(info.revenueZiffer || info.correctionZiffer);
     if (!owed && !info.inputTaxZiffer) continue;
@@ -314,7 +314,7 @@ export function vatCheck(books: Books, year: string, filed: readonly ReturnFigur
   const owed = roundCHF(opening + booked - paid);
   const adjustments = books.config.vatAdjustments ?? [];
   const quarters = quartersOf(year).map((quarter): VatQuarter => {
-    const fromBooks = figuresFromBooks(books.journalEntries, quarter, adjustments).payable;
+    const fromBooks = vat().figures(books.journalEntries, quarter, adjustments).payable;
     const asFiled = filed.find((f) => f.period === quarter);
     const filedPayable = asFiled ? roundCHF((asFiled.ziffern['500'] ?? 0) - (asFiled.ziffern['510'] ?? 0)) : undefined;
     return { quarter, filed: filedPayable, books: fromBooks, correction: roundCHF(fromBooks - (filedPayable ?? 0)) };

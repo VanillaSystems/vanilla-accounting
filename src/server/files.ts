@@ -4,12 +4,16 @@ import { join } from 'node:path';
 import express, { Router } from 'express';
 import { WS } from './books.js';
 import { APP_ROOT } from '../workspace/workspace.js';
+import { workspaceModules } from '../core/modules/load.js';
 import { isAppPath } from './app-paths.js';
 
 export const router = Router();
 
 router.get('/books.json', (_req, res) => {
   res.sendFile(WS.paths.books);
+});
+router.get('/modules.json', (_req, res) => {
+  res.json(workspaceModules(APP_ROOT, WS.paths.root));
 });
 /** The folder of the books open now: the desktop app switches them while the server runs. */
 function staticOf(dir: () => string): express.RequestHandler {

@@ -11,12 +11,11 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { parse } from 'yaml';
-import { figuresFromBooks } from '../accounting/return-figures.js';
-import { parseVatCode } from '../accounting/vat-report.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { BankTransaction, JournalEntry, QuarterKey, Receipt } from '../types/index.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { loadChart } from '../workspace/chart.js';
+import { vat } from '../engines/index.js';
 
 export const CASES_DIR = join(APP_ROOT, 'examples', 'cases');
 /** The KMU accounts the casebook books on (Kontenrahmen KMU), number → name. */
@@ -206,7 +205,7 @@ const UNDECLARED = new Set(['500', '510']);
 
 /** The case's own return: every Ziffer it moves, and the tax payable. What `ziffern`/`payable` must say. */
 export function zifferEffect(c: BookingCase): { ziffern: Record<string, number>; payable: number } {
-  const figures = figuresFromBooks(caseEntries(c), casePeriod(c), []);
+  const figures = vat().figures(caseEntries(c), casePeriod(c), []);
   const ziffern = Object.fromEntries(Object.entries(figures.ziffern)
     .filter(([z, v]) => v !== 0 && !UNDECLARED.has(z))
     .sort(([a], [b]) => Number(a) - Number(b)));
@@ -233,7 +232,7 @@ export function validateCase(c: BookingCase, ctx: { chart: ReadonlyMap<string, s
   c.lines.forEach((l, i) => {
     const at = `lines[${i + 1}]`;
     for (const a of [l.debit, l.credit]) if (a && !ctx.chart.has(a)) err(`${at}: account ${a} is not in reference/charts/ch-kmu.yaml — use a KMU account or add it there`);
-    const info = l.vatCode ? parseVatCode(l.vatCode) : null;
+    const info = l.vatCode ? vat().codes.parse(l.vatCode) : null;
     if (l.vatCode && !info) err(`${at}: VAT code ${l.vatCode} is not one the engine knows (reference/MWST-codes.txt)`);
     if (!l.debit && !l.credit) err(`${at}: both accounts are empty`);
     if ((!l.debit || !l.credit) && info?.amountIs !== 'tax') err(`${at}: a single-leg row needs a -2 code (the amount is the VAT itself); otherwise fill both accounts`);

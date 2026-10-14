@@ -5,9 +5,7 @@
  */
 import { Fragment, useMemo } from 'react';
 import type { CorrectionCase, JournalEntry } from '../../../types/index.js';
-import {
-  caseEffect, figuresFromBooks, reconcileCases, roundCHF, vatLine, type ReturnFigures,
-} from '../../../accounting/index.js';
+import { caseEffect, reconcileCases, roundCHF } from '../../../accounting/index.js';
 import { derivePeriod } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -19,6 +17,8 @@ import { FORM_0535, SUMS, byCode, correctedPeriod, filedDiff, formAmount, rateOf
 import { effectLines, formSections } from './form0535.js';
 import { CodeLink, Go, codeName, entryAt } from './links.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
+import { vat } from '../../../engines/index.js';
+import type { ReturnFigures } from '../../../engines/return.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -136,7 +136,7 @@ const sum = (xs: number[]) => roundCHF(xs.reduce((s, x) => s + x, 0));
 function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; filed: ReturnFigures }) {
   const uid = useWorkspace()?.company.uid ?? '';
   const entries = books.journalEntries ?? [];
-  const corrected = useMemo(() => figuresFromBooks(entries, filed.period, books.config?.vatAdjustments ?? []), [entries, filed.period, books.config?.vatAdjustments]);
+  const corrected = useMemo(() => vat().figures(entries, filed.period, books.config?.vatAdjustments ?? []), [entries, filed.period, books.config?.vatAdjustments]);
   const cases = (books.config?.correctionCases ?? []).filter((c) => c.period === filed.period);
   const check = useMemo(() => reconcileCases(cases, entries, filed, corrected), [cases, entries, filed, corrected]);
   const { from, to } = derivePeriod(filed.period)!;
@@ -259,7 +259,7 @@ function Entries({ title, entries, nav, period }: { title: string; entries: Jour
     <div className="vlines">
       <div className="vh"><span>{t('col.date')}</span><span>{title}</span><span className="r">{t('col.amount')}</span><span className="r">{t('vat.colTax')}</span></div>
       {entries.map((e) => {
-        const l = vatLine(e);
+        const l = vat().vatLine(e);
         return (
           <div key={e.id} className="vl">
             <span className="mono d">{formatDate(e.date)}</span>

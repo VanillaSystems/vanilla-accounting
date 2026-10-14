@@ -5,9 +5,8 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
-import { lookupVatCode, VAT_CODES } from '../../../accounting/vat-codes.js';
+import { lookupVatCode, vatCodes } from '../../../accounting/vat-codes.js';
 import type { BankTransaction } from '../../../types/index.js';
-import { vatLine } from '../../../accounting/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { sources } from '../../lib/api.js';
@@ -30,6 +29,7 @@ import { reclassify, saveEntry, type Field } from './actions.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
+import { vat } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -50,7 +50,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const fx = useFx().convert(e);
   const acName = getAccountMap();
   const found = e.vatCode ? lookupVatCode(e.vatCode) : null;
-  const tax = vatLine(e)?.tax;
+  const tax = vat().vatLine(e)?.tax;
   const cur = e.exchangeCurrency || 'CHF';
   const edit = canEdit && !v.locked && e.origin !== 'year-close';
   const siblings = (j.byRef.get(e.transactionRef) ?? []).filter((x) => x !== v);
@@ -220,7 +220,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
 
 /** The codes a VAT field offers as you type. */
 export function VatCodeList() {
-  return <datalist id="vat-codes">{VAT_CODES.map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
+  return <datalist id="vat-codes">{vatCodes().map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
 }
 
 /** No receipt: the strip of the payment's statement that shows it, as in Kontoauszüge. */

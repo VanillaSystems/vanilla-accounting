@@ -4,12 +4,13 @@
  * the engine or the books use has an entry, and its derived files are current.
  */
 import { test } from 'node:test';
+import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { computeVatReport, NAMED_VAT_CODES, parseVatCode } from '../src/accounting/vat-report.js';
-import { lookupVatCode, VAT_CODE_FAMILIES, VAT_CODE_KINDS, VAT_CODES } from '../src/accounting/vat-codes.js';
+import { lookupVatCode, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodes } from '../src/accounting/vat-codes.js';
 import { BANANA_VAT_CODES } from '../src/accounting/vat-codes.source.js';
 import { loadCases } from '../src/knowledge/cases.js';
 import { loadBooks } from '../src/books/store.js';
@@ -31,7 +32,7 @@ function moved(code: string): Array<[string, number]> {
 }
 
 test('the Ziffern of every catalogue entry are what computeVatReport books for an entry with its code', () => {
-  for (const c of VAT_CODES) {
+  for (const c of vatCodes()) {
     const expected = c.ziffern?.map((z) => z.ziffer) ?? [];
     assert.deepEqual(moved(c.code), expected.map((z) => [z, 1]), c.code);
     assert.deepEqual(moved(`-${c.code}`), expected.map((z) => [z, -1]), `-${c.code}`);
@@ -39,14 +40,14 @@ test('the Ziffern of every catalogue entry are what computeVatReport books for a
 });
 
 test('a code is "not declared" exactly when the engine does not parse it', () => {
-  for (const c of VAT_CODES) assert.equal(c.ziffern === null, parseVatCode(c.code) === null, c.code);
-  const undeclared = VAT_CODES.filter((c) => c.ziffern === null).map((c) => c.code);
+  for (const c of vatCodes()) assert.equal(c.ziffern === null, parseVatCode(c.code) === null, c.code);
+  const undeclared = vatCodes().filter((c) => c.ziffern === null).map((c) => c.code);
   assert.ok(undeclared.includes('VS81') && undeclared.includes('Z0') && undeclared.includes('V81-B'), undeclared.join(' '));
 });
 
 test('every code the engine knows by name, and every K code of a Swiss rate, has a catalogue entry', () => {
   const k = ['77', '81'].flatMap((r) => ['A', 'B', 'C'].map((x) => `K${r}-${x}`));
-  const codes = new Set(VAT_CODES.map((c) => c.code));
+  const codes = new Set(vatCodes().map((c) => c.code));
   for (const code of [...NAMED_VAT_CODES, ...k]) assert.ok(codes.has(code), code);
   for (const b of BANANA_VAT_CODES) assert.ok(codes.has(b.code), `Banana's ${b.code}`);
 });
@@ -71,12 +72,12 @@ test('Banana and the engine agree on rate and amount type; the engine declares a
     if (!info) continue;
     if (b.rate !== undefined) assert.equal(info.rate, b.rate, b.code);
     assert.equal(info.amountIs, b.amountType === '2' ? 'tax' : b.amountType === '1' ? 'net' : 'gross', b.code);
-    const engine = VAT_CODES.find((c) => c.code === b.code)!.ziffern!.map((z) => z.ziffer);
+    const engine = vatCodes().find((c) => c.code === b.code)!.ziffern!.map((z) => z.ziffer);
     for (const z of b.ziffern) assert.ok(engine.includes(z), `${b.code}: Banana declares ${z}, the engine ${engine.join(', ')}`);
   }
   // The one place the engine goes beyond Banana: Bezugsteuer is deducted again as input tax.
-  assert.deepEqual(VAT_CODES.find((c) => c.code === 'B81-1')!.ziffern, [{ ziffer: '383', figure: 'tax' }, { ziffer: '405', figure: 'tax' }]);
-  assert.deepEqual(VAT_CODES.find((c) => c.code === 'V81')!.ziffern, [{ ziffer: '200', figure: 'turnover' }, { ziffer: '303', figure: 'taxable' }]);
+  assert.deepEqual(vatCodes().find((c) => c.code === 'B81-1')!.ziffern, [{ ziffer: '383', figure: 'tax' }, { ziffer: '405', figure: 'tax' }]);
+  assert.deepEqual(vatCodes().find((c) => c.code === 'V81')!.ziffern, [{ ziffer: '200', figure: 'turnover' }, { ziffer: '303', figure: 'taxable' }]);
 });
 
 test('every kind has its texts, every family its name, and every rule id exists in the guides', () => {

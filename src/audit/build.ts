@@ -13,6 +13,7 @@ import { companyInfo } from '../books/company.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
+import { workspaceModules } from '../core/modules/load.js';
 import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 
 export class ExportError extends Error {}
@@ -37,6 +38,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.books), appVersion: appVersion() };
 
   copyOut(out, EXPORT_FILES.books(), ws.paths.books);
+  write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root));
   write(EXPORT_FILES.status(), { ok: true, readonly: true, snapshot } satisfies ApiStatus);
   write(EXPORT_FILES.accounts(), accountsOf(ws));
   write(EXPORT_FILES.workspace(), companyInfo(ws, books));

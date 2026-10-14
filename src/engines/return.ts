@@ -5,7 +5,7 @@
  * period lock rule and money in rappen come from the core.
  */
 import type { JournalEntry, QuarterKey, VatAdjustment } from '../types/index.js';
-import type { BoxId, Formula, Jurisdiction, RateRow } from '../core/modules/schema.js';
+import type { BoxId, Formula, Jurisdiction, RateRow, ReturnData } from '../core/modules/schema.js';
 import { derivePeriod } from '../accounting/periods.js';
 import { entriesForReturn, reportRange } from '../accounting/declarations.js';
 import { fromRappen, roundCHF, toRappen } from '../accounting/rappen.js';
@@ -50,7 +50,11 @@ export interface ReturnFigures {
 
 export interface ReturnEngine {
   codes: TaxCodeEngine;
+  /** The return form as the module declares it: deductions, input tax, derived boxes. */
+  form: ReturnData;
   rateRows: RateRowAt[];
+  /** Whether a rate is one of the jurisdiction's own (current or superseded); a foreign 19 % is not. */
+  isDomesticRate(rate: number): boolean;
   /** An entry's VAT amounts, signed as they count, or null when its code declares nothing. */
   vatLine(entry: JournalEntry): VatLine | null;
   /** The declaration adjustments a report counts (skipped where the report already holds their entries). */
@@ -181,7 +185,8 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
     return complete(period, declared);
   }
 
-  return { codes, rateRows, vatLine, adjustmentsFor, lines, report, complete, figures };
+  const domestic = new Set(rateRows.map((row) => row.rate));
+  return { codes, form: r, rateRows, isDomesticRate: (rate) => domestic.has(rate), vatLine, adjustmentsFor, lines, report, complete, figures };
 }
 
 /** The tax in an entry's amount, in rappen; the amount is gross unless the code says net or tax. */

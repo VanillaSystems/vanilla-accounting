@@ -1,7 +1,7 @@
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { IntakeStatus } from '../../intake/pipeline.js';
-import type { ReturnFigures } from '../../accounting/return-figures.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
+import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
 import type { CompanyInfo } from '../../books/company.js';
 import type { ManifestPatch } from '../../workspace/manifest-write.js';
@@ -18,6 +18,7 @@ import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
+import type { ReturnFigures } from '../../engines/return.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -176,6 +177,7 @@ export const api = {
   inboxFile: (id: string) => `/api/inbox/${id}`,
 
   books: () => request<Index>('GET', `${sources.books()}?t=${Date.now()}`),
+  modules: () => request<WorkspaceModules>('GET', `${sources.modules()}?t=${Date.now()}`),
   status: () => request<ApiStatus>('GET', sources.status()),
   accounts: () => request<Account[]>('GET', sources.accounts()),
   workspace: () => request<CompanyInfo>('GET', sources.workspace()),

@@ -5,6 +5,8 @@
  */
 export interface Sources {
   books(): string;
+  /** The workspace's jurisdiction as the engines use it (modules/ch with its overlay). */
+  modules(): string;
   status(): string;
   accounts(): string;
   workspace(): string;
@@ -17,6 +19,7 @@ export interface Sources {
 
 export const API_SOURCES: Sources = {
   books: () => '/books.json',
+  modules: () => '/modules.json',
   status: () => '/api/status',
   accounts: () => '/api/accounts',
   workspace: () => '/api/workspace',
@@ -29,6 +32,7 @@ export const API_SOURCES: Sources = {
 /** Paths relative to the export's index.html, so it runs under any base path and from a zip. */
 export const EXPORT_FILES: Sources = {
   books: () => 'books.json',
+  modules: () => 'modules.json',
   status: () => 'data/status.json',
   accounts: () => 'data/accounts.json',
   workspace: () => 'data/workspace.json',
@@ -43,6 +47,7 @@ const encodePath = (path: string) => path.split('/').map(encodeURIComponent).joi
 /** EXPORT_FILES as URLs: a file name with a space or a '#' still loads. */
 export const EXPORT_SOURCES: Sources = {
   books: () => encodePath(EXPORT_FILES.books()),
+  modules: () => encodePath(EXPORT_FILES.modules()),
   status: () => encodePath(EXPORT_FILES.status()),
   accounts: () => encodePath(EXPORT_FILES.accounts()),
   workspace: () => encodePath(EXPORT_FILES.workspace()),

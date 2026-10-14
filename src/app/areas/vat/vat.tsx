@@ -5,7 +5,6 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import './vat.css';
-import type { ReturnFigures } from '../../../accounting/index.js';
 import { localToday, openQuarter } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
@@ -23,6 +22,7 @@ import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
 import { entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
+import type { ReturnFigures } from '../../../engines/return.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 

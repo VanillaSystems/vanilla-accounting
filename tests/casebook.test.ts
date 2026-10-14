@@ -5,6 +5,7 @@
  * synthetic transactions.
  */
 import { test } from 'node:test';
+import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

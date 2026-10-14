@@ -7,9 +7,9 @@
  * expense a code is, and the guide rules that choose it. The texts are in the UI dictionaries
  * (vatCodes.kind.<kind>.*), so the app, docs/vat-codes.md and the CLI explain a code alike.
  */
-import { NAMED_VAT_CODES, parseVatCode, sourceZiffern, type VatCodeInfo } from './vat-report.js';
-import { TAX_RATE_ROWS } from './ziffern.js';
 import { BANANA_VAT_CODES, VAT_CODE_EXAMPLES, type VatCodeExample } from './vat-codes.source.js';
+import { vat } from '../engines/index.js';
+import type { TaxCodeInfo } from '../engines/tax-codes.js';
 
 /** Banana's families (MWST-codes.txt, "Erläuterungen"), in the order of the ESTV form. */
 export const VAT_CODE_FAMILIES = ['V', 'VS', 'F', 'B', 'M', 'I', 'K', 'Z'] as const;
@@ -73,24 +73,22 @@ export interface VatCodeEntry {
   rate: number | null;
   /** A rate that ended on 31.12.2023. */
   superseded: boolean;
-  amountIs: VatCodeInfo['amountIs'];
+  amountIs: TaxCodeInfo['amountIs'];
   /** What the engine books for the code, in form order; null when the app does not declare it at all. */
   ziffern: VatCodeZiffer[] | null;
   rules: readonly string[];
   examples: readonly VatCodeExample[];
 }
 
-const SUPERSEDED_RATES = new Set(TAX_RATE_ROWS.filter((r) => r.superseded).map((r) => r.rate));
-const SUPPLY_ROW_ZIFFERN = new Set(TAX_RATE_ROWS.filter((r) => r.kind === 'supply').map((r) => r.ziffer));
 const BANANA = new Map(BANANA_VAT_CODES.map((b) => [b.code, b]));
 
 /** The ESTV's name of a rate (Normalsatz, Reduzierter Satz, Beherbergungssatz), from the form's rate rows. */
 export function vatCodeRateName(rate: number): string | undefined {
-  return TAX_RATE_ROWS.find((r) => r.kind === 'supply' && r.rate === rate)?.name;
+  return vat().rateRows.find((r) => r.kind === 'supply' && r.rate === rate)?.name;
 }
 
 function figureOf(ziffer: string): VatCodeZiffer['figure'] {
-  if (SUPPLY_ROW_ZIFFERN.has(ziffer)) return 'taxable';
+  if (vat().rateRows.some((r) => r.kind === 'supply' && r.ziffer === ziffer)) return 'taxable';
   return Number(ziffer) < 300 ? 'turnover' : 'tax';
 }
 
@@ -98,7 +96,7 @@ function describe(code: string): VatCodeEntry | null {
   const spec = VAT_CODE_KINDS.find((k) => k.match.test(code));
   if (!spec) return null;
   const banana = BANANA.get(code);
-  const info = parseVatCode(code);
+  const info = vat().codes.parse(code);
   const rate = info ? info.rate : banana?.rate ?? null;
   return {
     code,
@@ -107,9 +105,9 @@ function describe(code: string): VatCodeEntry | null {
     bananaText: banana?.text,
     bananaZiffern: banana?.ziffern ?? [],
     rate,
-    superseded: rate !== null && SUPERSEDED_RATES.has(rate),
+    superseded: rate !== null && vat().rateRows.some((r) => r.superseded && r.rate === rate),
     amountIs: info?.amountIs ?? (banana?.amountType === '2' ? 'tax' : banana?.amountType === '1' ? 'net' : 'gross'),
-    ziffern: info ? sourceZiffern(info).sort((a, b) => Number(a) - Number(b)).map((ziffer) => ({ ziffer, figure: figureOf(ziffer) })) : null,
+    ziffern: info ? vat().codes.sourceBoxes(info).sort((a, b) => Number(a) - Number(b)).map((ziffer) => ({ ziffer, figure: figureOf(ziffer) })) : null,
     rules: spec.rules,
     examples: VAT_CODE_EXAMPLES[code] ?? [],
   };
@@ -117,15 +115,21 @@ function describe(code: string): VatCodeEntry | null {
 
 const familyOrder = (c: VatCodeEntry) => VAT_CODE_FAMILIES.indexOf(c.family) * 100 + VAT_CODE_KINDS.findIndex((k) => k.kind === c.kind && k.family === c.family);
 
-/** Banana's codes and every code the engine knows by name, by family and kind, Banana's order within. */
-export const VAT_CODES: readonly VatCodeEntry[] = [...new Set([...BANANA_VAT_CODES.map((b) => b.code), ...NAMED_VAT_CODES])]
-  .map((code) => describe(code))
-  .filter((c): c is VatCodeEntry => c !== null)
-  .map((c, i) => ({ c, i }))
-  .sort((a, b) => familyOrder(a.c) - familyOrder(b.c) || a.i - b.i)
-  .map(({ c }) => c);
+let catalogue: { engine: ReturnType<typeof vat>; codes: readonly VatCodeEntry[]; byCode: Map<string, VatCodeEntry> } | undefined;
 
-const BY_CODE = new Map(VAT_CODES.map((c) => [c.code, c]));
+/** Banana's codes and every code the jurisdiction knows by name, by family and kind, Banana's order within. */
+export function vatCodes(): readonly VatCodeEntry[] {
+  if (catalogue?.engine !== vat()) {
+    const codes = [...new Set([...BANANA_VAT_CODES.map((b) => b.code), ...vat().codes.named])]
+      .map((code) => describe(code))
+      .filter((c): c is VatCodeEntry => c !== null)
+      .map((c, i) => ({ c, i }))
+      .sort((a, b) => familyOrder(a.c) - familyOrder(b.c) || a.i - b.i)
+      .map(({ c }) => c);
+    catalogue = { engine: vat(), codes, byCode: new Map(codes.map((c) => [c.code, c])) };
+  }
+  return catalogue.codes;
+}
 
 /**
  * The catalogue entry of a code as booked, and whether it carries a minus (a refund or reversal:
@@ -135,6 +139,7 @@ const BY_CODE = new Map(VAT_CODES.map((c) => [c.code, c]));
 export function lookupVatCode(code: string): { entry: VatCodeEntry; negative: boolean } | null {
   const negative = code.startsWith('-');
   const unsigned = negative ? code.slice(1) : code;
-  const entry = BY_CODE.get(unsigned) ?? describe(unsigned);
+  vatCodes();
+  const entry = catalogue!.byCode.get(unsigned) ?? describe(unsigned);
   return entry ? { entry, negative } : null;
 }

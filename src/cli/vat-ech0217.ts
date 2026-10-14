@@ -22,9 +22,9 @@ import { join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod } from '../accounting/periods.js';
-import { figuresFromBooks } from '../accounting/return-figures.js';
 import { TAX_RATE_ROWS, TURNOVER_DEDUCTIONS, INPUT_TAX } from '../accounting/ziffern.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { vat } from '../engines/index.js';
 
 const ws = openWorkspace();
 const index = loadBooks(ws);
@@ -46,7 +46,7 @@ function utcStamp(): string {
 
 function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
   const { from, to } = derivePeriod(periodKey)!;
-  const { ziffern, payable } = figuresFromBooks(entries, periodKey, adjustments);
+  const { ziffern, payable } = vat().figures(entries, periodKey, adjustments);
   const z = (n: string) => ziffern[n] ?? 0;
   // variousDeduction (280) is a complex type, and 0 in this dataset, so it is guarded, not written.
   if (z('280') !== 0) {

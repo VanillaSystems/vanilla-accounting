@@ -1,7 +1,7 @@
 /**
  * Extract the Swiss VAT return (MWST-Abrechnung) figures per quarter, ready to file.
  *
- * Uses the same computeVatReport() engine as the UI's MWST tab, so the numbers match
+ * Uses the same vat().report() engine as the UI's MWST tab, so the numbers match
  * what you see on screen. Prints each quarter's Ziffern (form line numbers) plus the
  * amount to pay (500) or credit (510).
  *
@@ -10,10 +10,11 @@
  */
 import type { Index } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
-import { computeVatReport, computeVatReportLines, type VatLine } from '../accounting/vat-report.js';
 import { derivePeriod } from '../accounting/periods.js';
 import { TAX_RATE_ROWS } from '../accounting/ziffern.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { vat } from '../engines/index.js';
+import type { VatLine } from '../engines/return.js';
 
 // Which per-entry value is the one that sums to the Ziffer's reported amount.
 const ZIFFER_FIELD: Record<string, 'gross' | 'base' | 'tax'> = {
@@ -31,8 +32,8 @@ function fmt(n: number): string {
 function printPeriod(label: string, index: Index, from: string, to: string, detail: boolean) {
   const entries = index.journalEntries ?? [];
   const adjustments = index.config?.vatAdjustments ?? [];
-  const rep = computeVatReport(entries, label, adjustments);
-  const lines = detail ? computeVatReportLines(entries, label, adjustments) : {};
+  const rep = vat().report(entries, label, adjustments);
+  const lines = detail ? vat().lines(entries, label, adjustments) : {};
   console.log(`\n${'='.repeat(72)}`);
   console.log(`  MWST-Abrechnung  ${label}   (${from} … ${to})`);
   console.log('='.repeat(72));

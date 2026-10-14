@@ -4,6 +4,7 @@
  * the VAT payment. Its closing ledger and opening are worked out by hand in the test names.
  */
 import { test } from 'node:test';
+import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -3,7 +3,7 @@
  * /receipts/<id>) answers with index.html; the API, the books and every file go to the API.
  * /receipts/<id> and the file /receipts/<name>.pdf share a prefix (so do /invoices/<number> and its PDF): a file has an extension.
  */
-const API_PREFIXES = ['/api', '/scan', '/books.json'];
+const API_PREFIXES = ['/api', '/scan', '/books.json', '/modules.json'];
 const FILE = /\.[A-Za-z0-9]+$/;
 
 export function isAppPath(path: string): boolean {

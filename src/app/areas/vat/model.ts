@@ -4,12 +4,10 @@
  * file only arranges them.
  */
 import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../types/index.js';
-import {
-  adjustmentsForReturn, computeVatReport, entriesForReturn, parseVatCode, sourceZiffern, vatLine,
-  type ReturnFigures, type VatReport, type VatReportRate,
-} from '../../../accounting/index.js';
-import type { VatLine } from '../../../accounting/vat-report.js';
+import { entriesForReturn } from '../../../accounting/index.js';
 import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period } from '../../../accounting/periods.js';
+import { vat } from '../../../engines/index.js';
+import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
 
 /** The four parts of the return, as the form groups its Ziffern. */
 export const SECTIONS = ['turnover', 'tax', 'input', 'result'] as const;
@@ -68,23 +66,23 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
     : { kind: 'open', due, overdue: due < today };
   const lines: Record<string, EntryLine[]> = {};
   for (const entry of entriesForReturn(entries, key)) {
-    const line = vatLine(entry);
+    const line = vat().vatLine(entry);
     if (!line) continue;
-    for (const z of sourceZiffern(parseVatCode(line.code)!)) (lines[z] ??= []).push({ ...line, entry });
+    for (const z of vat().codes.sourceBoxes(vat().codes.parse(line.code)!)) (lines[z] ??= []).push({ ...line, entry });
   }
   return {
     key,
     period: parsePeriod(key, today)!,
     state,
-    report: computeVatReport(entries, key, all),
+    report: vat().report(entries, key, all),
     lines,
-    adjustments: adjustmentsForReturn(all, entries, key),
+    adjustments: vat().adjustmentsFor(all, entries, key),
     corrections: quarter ? entries.filter((e) => e.corrects === key) : [],
   };
 }
 
 export const amountOf = (v: VatReturn, n: string) => v.report.ziffern.find((z) => z.number === n)?.amount ?? 0;
-export const rateOf = (v: VatReturn, n: string): VatReportRate | undefined => v.report.rates.find((r) => r.row.ziffer === n);
+export const rateOf = (v: VatReturn, n: string): VatReport['rates'][number] | undefined => v.report.rates.find((r) => r.row.ziffer === n);
 
 /** A Ziffer's figure as the filed form holds it: a rate row is its turnover, with the tax for supplies, net for Bezugsteuer. */
 export function formAmount(v: VatReturn, n: string): number {

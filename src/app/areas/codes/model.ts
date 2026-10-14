@@ -5,8 +5,9 @@
  */
 import type { JournalEntry } from '../../../types/index.js';
 import type { Period } from '../../../accounting/periods.js';
-import { chfAmount, vatLine } from '../../../accounting/index.js';
-import { VAT_CODES, VAT_CODE_FAMILIES, VAT_CODE_KINDS, lookupVatCode, type VatCodeEntry, type VatCodeFamily } from '../../../accounting/vat-codes.js';
+import { chfAmount } from '../../../accounting/index.js';
+import { vatCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, lookupVatCode, type VatCodeEntry, type VatCodeFamily } from '../../../accounting/vat-codes.js';
+import { vat } from '../../../engines/index.js';
 
 /** The `?vat=` of the entries without a code. */
 export const NO_VAT = 'none';
@@ -31,7 +32,7 @@ export function vatStats(entries: readonly JournalEntry[], period: Period): Code
     const s = by.get(code) ?? by.set(code, { code, n: 0, chf: 0, tax: 0 }).get(code)!;
     s.n++;
     s.chf = round(s.chf + chfAmount(e));
-    s.tax = round(s.tax + (vatLine(e)?.tax ?? 0));
+    s.tax = round(s.tax + (vat().vatLine(e)?.tax ?? 0));
   }
   return [...by.values()].sort((a, b) => b.n - a.n || a.code.localeCompare(b.code));
 }
@@ -60,7 +61,7 @@ const unsigned = (code: string) => code.replace(/^-/, '');
  */
 export function codeGroups(stats: readonly CodeStat[], text: (r: CodeRow) => string, q?: string, usedOnly?: boolean): CodeGroup[] {
   const used = new Map(stats.map((s) => [s.code, s.n]));
-  const codes = [...new Set([...VAT_CODES.map((c) => c.code), ...stats.map((s) => s.code).filter((c) => c !== NO_VAT)])];
+  const codes = [...new Set([...vatCodes().map((c) => c.code), ...stats.map((s) => s.code).filter((c) => c !== NO_VAT)])];
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const rows = codes.flatMap((code): CodeRow[] => {
     const found = lookupVatCode(code);

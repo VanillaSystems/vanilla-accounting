@@ -5,12 +5,12 @@
  */
 import type { Index } from '../types/index.js';
 import type { Key } from '../app/i18n/types.js';
-import type { ReturnFigures } from '../accounting/return-figures.js';
 import { chfAmount } from '../accounting/ledger.js';
 import type { Period } from '../accounting/periods.js';
 import { NO_ACCOUNT, ledgerOf, reportView } from '../app/areas/reports/model.js';
 import { formAmount, rateOf, shownZiffern, vatReturn } from '../app/areas/vat/model.js';
 import { accountsWithActivity, entriesIn, paymentsIn, quartersIn, receiptsIn, type ItemId } from './model.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 export type Cell = string | number;
 /** How the PDF sets a row: a total whose label spans the row, a bold row, the opening balance. */

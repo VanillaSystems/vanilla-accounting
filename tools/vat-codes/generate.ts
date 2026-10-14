@@ -88,7 +88,9 @@ export const VAT_CODE_EXAMPLES: Readonly<Record<string, readonly VatCodeExample[
 
 /** docs/vat-codes.md, from the catalogue and the English texts. */
 export async function renderDocs(): Promise<string> {
-  const { VAT_CODES, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodeRateName } = await import('../../src/accounting/vat-codes.js');
+  const { vatCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodeRateName } = await import('../../src/accounting/vat-codes.js');
+  (await import('../../src/workspace/workspace.js')).workspaceAt(join(APP_ROOT, 'demo'));
+  const VAT_CODES = vatCodes();
   const en = ((await import('../../src/app/i18n/locales/en.js')) as { default: { messages: Messages } }).default.messages;
   const text = (key: string, vars: Record<string, string | number> = {}) =>
     String(en[key as keyof Messages]).replace(/\{(\w+)\}/g, (_, n: string) => String(vars[n]));

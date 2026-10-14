@@ -2,8 +2,9 @@
  * Form 0535 (Korrekturabrechnung, effective method): its lines in the ESTV form's order, and what
  * a correction case changes on them. Figures come from figuresFromBooks and the filed XML.
  */
-import { roundCHF, taxOf, TAX_RATE_ROWS, type ReturnFigures, type TaxRateRow, type ZifferEffect } from '../../../accounting/index.js';
+import { roundCHF, taxOf, TAX_RATE_ROWS, type TaxRateRow, type ZifferEffect } from '../../../accounting/index.js';
 import { accountingName, t } from '../../i18n/index.js';
+import type { ReturnFigures } from '../../../engines/return.js';
 
 export interface FormLine {
   ziffer: string;

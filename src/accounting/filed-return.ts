@@ -1,8 +1,9 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { QuarterKey } from '../types/index.js';
 import { derivePeriod } from './periods.js';
-import { completeFigures, type ReturnFigures } from './return-figures.js';
 import { INPUT_TAX, TAX_RATE_ROWS, TURNOVER_DEDUCTIONS } from './ziffern.js';
+import { vat } from '../engines/index.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 type Node = Record<string, unknown>;
 
@@ -62,7 +63,7 @@ export function parseFiledReturn(xml: string): ReturnFigures {
 
   // 500/510 are what was filed, not a recomputation.
   const payable = num(root.payableTax);
-  const { ziffern } = completeFigures(period, declared);
+  const { ziffern } = vat().complete(period, declared);
   return { period, ziffern: { ...ziffern, '500': Math.max(0, payable), '510': Math.max(0, -payable) } };
 }
 

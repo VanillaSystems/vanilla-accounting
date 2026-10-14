@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
+import { workspaceModules } from '../core/modules/load.js';
+import { setJurisdiction } from '../engines/index.js';
 import type { LegalForm, Preset, QuestionKey, SupportedAnswers } from './setup.js';
 import type { Iban, StatementKind } from './banks.js';
 import type { Address, InvoicingSettings, OutgoingMail } from '../invoices/model.js';
@@ -119,9 +121,10 @@ export function workspacePaths(root: string): WorkspacePaths {
   };
 }
 
-/** The workspace whose manifest is in `root`. */
+/** The workspace whose manifest is in `root`; from now on the engines compute with its jurisdiction (modules/ch with its overlay). */
 export function workspaceAt(root: string): Workspace {
   const paths = workspacePaths(resolve(root));
+  setJurisdiction(workspaceModules(APP_ROOT, paths.root).effective);
   return { ...readManifest(paths.manifest), paths };
 }
 

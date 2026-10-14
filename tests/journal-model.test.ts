@@ -4,6 +4,7 @@
  * payments still wait for a receipt, and how the catalogue groups and counts the codes.
  */
 import { test } from 'node:test';
+import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index, JournalEntry } from '../src/types/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';

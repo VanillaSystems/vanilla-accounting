@@ -1,6 +1,7 @@
 import type { CorrectionCase, JournalEntry } from '../types/index.js';
-import { figuresFromBooks, type ReturnFigures } from './return-figures.js';
 import { roundCHF } from './rappen.js';
+import { vat } from '../engines/index.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 /** A set of entries' effect on a quarter's return, per form Ziffer; zero Ziffern are left out. */
 export type ZifferEffect = Record<string, number>;
@@ -22,7 +23,7 @@ const NOT_ADDITIVE = new Set(['399', '500', '510']);
 
 function effectOf(entries: JournalEntry[], ids: string[], c: CorrectionCase): ZifferEffect {
   const wanted = new Set(ids);
-  const { ziffern } = figuresFromBooks(entries.filter((e) => wanted.has(e.id)), c.period, []);
+  const { ziffern } = vat().figures(entries.filter((e) => wanted.has(e.id)), c.period, []);
   return Object.fromEntries(Object.entries(ziffern).filter(([n, v]) => v !== 0 && n !== '500' && n !== '510'));
 }
 

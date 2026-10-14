@@ -71,3 +71,14 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
     hash: createHash('sha256').update(JSON.stringify(jurisdiction)).digest('hex'),
   };
 }
+
+/** A workspace's jurisdiction as the app serves it (/modules.json) and the engines use it. */
+export interface WorkspaceModules extends LoadedJurisdiction {
+  /** What the engines compute with: the workspace's overlay when it has no problems, else the shipped module. */
+  effective: Jurisdiction;
+}
+
+export function workspaceModules(appRoot: string, workspaceRoot: string, id = 'ch'): WorkspaceModules {
+  const loaded = loadJurisdiction(appRoot, id, workspaceRoot);
+  return { ...loaded, effective: loaded.problems.length ? loadJurisdiction(appRoot, id).jurisdiction : loaded.jurisdiction };
+}

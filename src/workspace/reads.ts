@@ -5,8 +5,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFiledReturn } from '../accounting/filed-return.js';
-import type { ReturnFigures } from '../accounting/return-figures.js';
 import type { Workspace } from './workspace.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 /** Where a receipt's PDF lies: beleg-import/ until it is matched, receipts/ after. */
 export function receiptDirOf(ws: Workspace, location?: string): string {

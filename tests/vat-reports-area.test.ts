@@ -4,6 +4,7 @@
  * how the reports arrange the app's figures, search across them and read one account's ledger.
  */
 import { test } from 'node:test';
+import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import type { Index, JournalEntry } from '../src/types/index.js';
 import { computeIncomeStatement } from '../src/accounting/index.js';
