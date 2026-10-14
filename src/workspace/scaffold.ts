@@ -106,20 +106,25 @@ beleg-import/
 .llm-concurrency.json
 `;
 
-const MAIL_YAML = `# Mailboxes receipts are collected from (npm run collect). Uncomment and fill in to use it.
-# Passwords never go here: the login name goes into .env as <env>_IMAP_USER, the app password into
-# the keychain with npm run secret -- source:<env in small letters>:mail.
-# See the app's docs/runbooks/receipt-collection.md.
-#
-# mailboxes:
-#   - label: Business
-#     address: you@example.com
-#     env: WORK                  # .env key WORK_IMAP_USER; password: npm run secret -- source:work:mail
-#     host: imap.example.com
-#     mixed: false               # true when business and private mail share the box
-# skipDomains: []                # senders of a mixed mailbox that never send receipts
-# includeDomains: []             # senders whose mail always is collected
-# linkReceiptDomains: []         # senders that send receipts as a link
+const SOURCES_README = `# Sources
+
+Each folder here is a place the app collects documents from (ADR 0014 of the app): a mailbox, a
+vendor's portal, an API. A mailbox needs no code; it binds the app's IMAP source:
+
+\`\`\`yaml
+# sources/work/source.yaml
+label: Business
+code: app:imap
+settings:
+  boxes: [{ label: Business, address: you@example.com }]
+reach:
+  mail: { host: imap.example.com, account: you@example.com, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
+\`\`\`
+
+The password goes into the keychain, never here: npm run secret -- source:work:mail. Firma ›
+Quellen shows each source, and a new one runs once you switch it on there.
 `;
 
 /** Commented templates, one per knowledge folder. A file starting with _ is never read as knowledge. */
@@ -231,7 +236,7 @@ export function planWorkspace(input: InitInput, chart: Chart, root: string, appR
       ...KNOWLEDGE_TEMPLATES.map(([path, text]): [string, string] => [app(path), text]),
       [app('master-data/accounts.json'), JSON.stringify(accounts, null, 2) + '\n'],
       [app('ledger.json'), JSON.stringify({ schema: BOOKS_SCHEMA, config: {} }, null, 2) + '\n'],
-      [app('mail.yaml'), MAIL_YAML],
+      [app('sources/README.md'), SOURCES_README],
       ['AGENTS.md', agentsMd(input, appRel)],
       ['CLAUDE.md', '@AGENTS.md\n'],
       ['.gitignore', GITIGNORE],

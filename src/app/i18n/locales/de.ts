@@ -2114,6 +2114,8 @@ export const messages = {
   'sources.every.on-demand': 'auf Abruf',
   'sources.newReachTitle': 'Neu erreichbar, wenn eingeschaltet:',
   'sources.more': 'und {n} weitere',
+  'sources.approve': 'Einschalten',
+  'sources.approveWhy': 'Eingeschaltet holt die Quelle live, mit genau dieser Reichweite. Jede Änderung an ihr wartet wieder aufs Einschalten.',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

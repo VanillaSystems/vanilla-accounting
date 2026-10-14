@@ -25,7 +25,8 @@ const folderOf = (id: string) => ['sources', id].join('/');
 export function SourcesSection() {
   const [rows, setRows] = useState<SourceRow[]>();
   const [error, setError] = useState<string>();
-  useEffect(() => { api.sources().then(setRows, (e) => setError(errorText(e))); }, []);
+  const reload = () => { api.sources().then(setRows, (e) => setError(errorText(e))); };
+  useEffect(reload, []);
   if (error) return <p className="warnline">{error}</p>;
   if (!rows) return <p className="m">{t('changes.loading')}</p>;
   if (!rows.length) return <p className="m">{t('sources.none')}</p>;
@@ -44,8 +45,12 @@ export function SourcesSection() {
               <ul className="srcproblems">{verdict.problems.map((p, i) => <li key={i}><span className="mono">{p.file}{p.line ? `:${p.line}` : ''}</span> {p.message}</li>)}</ul>
             ) : (
               <>
-                {verdict.kind === 'pending' && verdict.reachDiff.added.length ? (
-                  <div className="m">{t('sources.newReachTitle')}<Lines lines={verdict.reachDiff.added.map((l) => `${l.channel} · ${l.what}`)} /></div>
+                {verdict.kind === 'pending' ? (
+                  <div className="srcon">
+                    {verdict.reachDiff.added.length ? <div className="m">{t('sources.newReachTitle')}<Lines lines={verdict.reachDiff.added.map((l) => `${l.channel} · ${l.what}`)} /></div> : null}
+                    <button type="button" className="btn primary" onClick={() => api.approveSource(verdict.decl.id, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.approve')}</button>
+                    <span className="m">{t('sources.approveWhy')}</span>
+                  </div>
                 ) : null}
                 <dl className="kv">
                   <dt>{t('sources.feeds')}</dt>

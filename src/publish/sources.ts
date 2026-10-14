@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parse as parseEnv } from 'dotenv';
 import { loadBooks } from '../books/store.js';
-import { loadMailConfig } from '../collect/mail-config.js';
+import { loadMailConfig, mailboxesOf } from '../platform/sources/mail.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT, appFolderIn, filesOfPart, openWorkspace, type Workspace } from '../workspace/workspace.js';
 import { isAllowed, parseAllowlist, scan, secretsOf, type Allowlist, type Finding, type PublicFile, type Secret } from './leak-guard.js';
@@ -46,13 +46,15 @@ export function workspaceSecrets(ws: Workspace): Secret[] {
   const terms = existsSync(ws.paths.secretTerms)
     ? readFileSync(ws.paths.secretTerms, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
     : [];
+  // The mailboxes are secret wherever they are written: a mail.yaml not converted yet, and the mail sources (ADR 0014).
   const mail = existsSync(ws.paths.mail) ? loadMailConfig(ws).mailboxes : [];
   const envFile = join(ws.paths.repository, '.env');
   const env = existsSync(envFile) ? parseEnv(readFileSync(envFile, 'utf8')) : {};
   const logins = mail.map((m) => env[`${m.env}_IMAP_USER`]).filter((u): u is string => !!u?.includes('@'));
+  const boxes = mailboxesOf(ws, APP_ROOT).flatMap((b) => [b.address, b.account, ...(b.to ? [b.to] : [])]).filter((a) => a.includes('@'));
   return secretsOf({
     company: ws.company,
-    mailboxes: [...new Set([...mail.flatMap((m) => [m.address, ...(m.filterTo ? [m.filterTo] : [])]), ...logins])],
+    mailboxes: [...new Set([...mail.flatMap((m) => [m.address, ...(m.filterTo ? [m.filterTo] : [])]), ...logins, ...boxes])],
     books: loadBooks(ws),
     counterparties: knowledge.counterparties,
     bindings: knowledge.counterpartyFiles.filter((f) => f.layer === 'workspace').map((f) => f.body),

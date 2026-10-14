@@ -16,9 +16,12 @@ import { matchStep } from '../intake/match.js';
 import { classifyStep } from '../intake/classify.js';
 import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
+import { COLLECT_ACTIONS } from './collect.js';
 
 export interface ActionContext {
   ws: Workspace;
+  /** The run the step belongs to: its id for what it writes, its mode (a dry run delivers nothing). */
+  run?: { id: string; mode: 'live' | 'dry' | 'replay' };
   /** The model, recorded by the runner; a replay answers from the recording. */
   ask?: (prompt: string, opts: AskOptions) => Promise<string>;
 }
@@ -99,8 +102,7 @@ export const ACTIONS: Record<string, Action> = {
 
   ...FILING_ACTIONS,
   ...YEAR_END_ACTIONS,
-  'source.due': declared(['due', 'none']),
-  'source.pull': declared(['ok', 'login-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited', 'person-needed'], { effects: ['inbox.add', 'records.import', 'collected.append'] }),
+  ...COLLECT_ACTIONS,
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
   'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep) },
   'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep()) },

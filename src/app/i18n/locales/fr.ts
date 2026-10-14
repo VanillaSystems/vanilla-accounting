@@ -2117,5 +2117,7 @@ export default {
     'sources.every.on-demand': 'sur demande',
     'sources.newReachTitle': 'Nouvellement accessible une fois activée :',
     'sources.more': 'et {n} de plus',
+    'sources.approve': 'Activer',
+    'sources.approveWhy': 'Activée, la source relève en réel, avec exactement cette portée. Toute modification attend d’être réactivée.',
   },
 } satisfies Locale;

@@ -1,18 +1,20 @@
 /**
- * npm run doctor and the mailboxes of mail.yaml: a mailbox without its keys in the app's .env
- * fails naming the keys to add; `--mail` logs in to each over IMAP (TLS) and reports the server's
- * refusal. The IMAP server is a local stand-in, so no mail leaves the machine.
+ * npm run doctor and the mail sources (ADR 0014): a source without its password in the keychain
+ * fails naming the command that sets it; `--mail` logs in to each
+ * over IMAP (TLS) and reports the server's refusal. The IMAP server is a local stand-in and a
+ * secrets file stands in for the keychain, so no mail leaves the machine and no keychain is touched.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:tls';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { tempWorkspace } from './support/workspace.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
+import { approveSource, sources } from '../src/platform/sources/index.js';
 
 const hasOpenssl = spawnSync('openssl', ['version']).status === 0;
 
@@ -57,37 +59,39 @@ function doctor(dir: string, env: Record<string, string>, ...args: string[]): Pr
   });
 }
 
-const MAIL_YAML = `mailboxes:
-  - { label: office, address: office@example.com, env: TESTOFFICE, host: 127.0.0.1 }
-  - { label: shop, address: shop@example.com, env: TESTSHOP, host: 127.0.0.1 }
-  - { label: private, address: me@example.com, env: TESTPRIVATE, host: 127.0.0.1, mixed: true }
+const source = (account: string) => `label: ${account}
+code: app:imap
+settings: { boxes: [{ label: ${account}, address: ${account} }] }
+reach:
+  mail: { host: 127.0.0.1, account: ${account}, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
 `;
 
-test('doctor: a missing login name or password is named with its fix; --mail logs in and reports a refused password', { skip: !hasOpenssl && 'openssl is needed for the test server certificate' }, async () => {
+test('doctor: a missing password is named with its fix; --mail logs in and reports a refused password', { skip: !hasOpenssl && 'openssl is needed for the test server certificate' }, async () => {
   const ws = tempWorkspace('doctor-mail-');
   const dir = ws.paths.root;
-  writeFileSync(ws.paths.mail, MAIL_YAML);
+  for (const [id, account] of [['office', 'office@example.com'], ['shop', 'shop@example.com'], ['private', 'me@example.com']]) {
+    mkdirSync(join(dir, 'sources', id), { recursive: true });
+    writeFileSync(join(dir, 'sources', id, 'source.yaml'), source(account));
+  }
+  const approvals = mkdtempSync(join(tmpdir(), 'doctor-approvals-'));
+  process.env.VANILLA_APPROVALS_DIR = approvals;
+  for (const v of sources(ws, APP_ROOT)) if (v.kind !== 'invalid' && v.decl.id !== 'private') approveSource(ws, v.decl);
   const server = await fakeImap(dir, 'app-password');
   const port = String((server.address() as AddressInfo).port);
-  // The passwords are secrets (ADR 0014): a secrets file stands in for the keychain.
-  const secretsFile = join(dir, '..', `${dir.split('/').pop()}-secrets.json`);
-  writeFileSync(secretsFile, JSON.stringify({ 'source:testoffice:mail': 'app-password', 'source:testshop:mail': 'browser-password' }));
-  const env = {
-    VANILLA_SECRETS_FILE: secretsFile,
-    TESTOFFICE_IMAP_USER: 'office@example.com', TESTOFFICE_IMAP_PORT: port,
-    TESTSHOP_IMAP_USER: 'shop@example.com', TESTSHOP_IMAP_PORT: port,
-    TESTPRIVATE_IMAP_USER: 'me@example.com',
-  };
+  const secretsFile = join(approvals, 'secrets.json');
+  writeFileSync(secretsFile, JSON.stringify({ 'source:office:mail': 'app-password', 'source:shop:mail': 'browser-password' }));
+  const env = { VANILLA_SECRETS_FILE: secretsFile, VANILLA_APPROVALS_DIR: approvals, OFFICE_IMAP_PORT: port, SHOP_IMAP_PORT: port, PRIVATE_IMAP_PORT: port };
   try {
     const keysOnly = await doctor(dir, env);
-    assert.match(keysOnly, /✓ Mailbox office \(office@example\.com\): login name in \.env, password in the keychain/);
-    assert.match(keysOnly, /✗ Mailbox private \(me@example\.com\): source:testprivate:mail not set\n {4}fix: Set the password with npm run secret -- source:testprivate:mail/);
+    assert.match(keysOnly, /✓ Mail source office \(office@example\.com\): password in the keychain/);
+    assert.match(keysOnly, /✗ Mail source private \(me@example\.com\): source:private:mail not set\n {4}fix: Set the password with npm run secret -- source:private:mail/);
     assert.doesNotMatch(keysOnly, /logs in to/, 'no login without --mail');
 
     const login = await doctor(dir, env, '--mail');
-    assert.match(login, new RegExp(`✓ Mailbox office \\(office@example\\.com\\): logs in to 127\\.0\\.0\\.1:${port}`));
-    assert.match(login, /✗ Mailbox shop \(shop@example\.com\): 127\.0\.0\.1 refused the login \(Invalid credentials\)\n {4}fix: Create a new app-specific password and set it with npm run secret -- source:testshop:mail/);
-    assert.match(login, /✗ Mailbox private \(me@example\.com\): source:testprivate:mail not set/);
+    assert.match(login, new RegExp(`✓ Mail source office \\(office@example\\.com\\): logs in to 127\\.0\\.0\\.1:${port}`));
+    assert.match(login, /✗ Mail source shop \(shop@example\.com\): 127\.0\.0\.1 refused the login \(Invalid credentials\)\n {4}fix: Create a new app-specific password and set it with npm run secret -- source:shop:mail/);
   } finally {
     server.close();
     rmSync(dir, { recursive: true, force: true });

@@ -2,7 +2,7 @@
 
 Vanilla Accounting is the app; one company's books are a workspace: the folder `vanilla-accounting/`
 of the company's repository (ADR 0013), opened by `VANILLA_WORKSPACE` (the repository or that
-folder) or found from the cwd. Inside it: the settings (`belege.workspace.yaml`, `mail.yaml`, …) and
+folder) or found from the cwd. Inside it: the settings (`belege.workspace.yaml`, `sources/`, …) and
 `knowledge/` at the top, `ledger.json` (closedThrough and the rest of the config),
 `master-data/accounts.json`, and per fiscal year `transactional-data/<year>/` (`books/*.jsonl`,
 `receipts/`, `bank-statements/`, `filings/`, `invoices/`, `expected/`); the one list of these names

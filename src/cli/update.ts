@@ -17,6 +17,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
+import { convertMail, mailConfigured } from '../platform/sources/mail.js';
+import { config as loadEnv } from 'dotenv';
 import { APP_ROOT, openWorkspace, openWorkspaceAt, partDirs } from '../workspace/workspace.js';
 
 type Outcome = { ok: true; note?: string } | { ok: false; problem: string; fix: string };
@@ -108,6 +110,17 @@ const afterPull: Step[] = [
       } catch (e) {
         return failed((e as Error).message.split('\n')[0], 'Each file is written whole, and a rerun finishes the rest: fix what the message names, then run npm run update again.');
       }
+    },
+  },
+  {
+    name: 'Mailboxes as sources (ADR 0014)',
+    run() {
+      const ws = openWorkspace();
+      if (!mailConfigured(ws)) return done(existsSync(join(ws.paths.root, 'sources')) ? 'sources/ already' : 'no mail.yaml');
+      loadEnv({ path: join(APP_ROOT, '.env'), quiet: true });
+      const { sources: made, backup } = convertMail(ws, process.env);
+      const at = (f: string) => relative(ws.paths.repository, f);
+      return done(`mail.yaml → ${made.map((id) => `sources/${id}/`).join(', ') || 'nothing new'} (backup ${at(backup)}). Switch each on in Firma › Quellen; their passwords: npm run secret -- source:<id>:mail.`);
     },
   },
   {

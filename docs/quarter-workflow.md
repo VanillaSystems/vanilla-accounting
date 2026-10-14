@@ -14,7 +14,7 @@ The examples use the third quarter, `2026-Q3`. Put in your own quarter.
 | # | Step | You run | Typical time |
 |---|---|---|---|
 | 1 | [Import the bank statements](#1-import-the-bank-statements) | `npm run extract` | 30 minutes |
-| 2 | [Collect the receipts](#2-collect-the-receipts) | `npm run collect`, the phone, the import folder | 1 to 3 days |
+| 2 | [Collect the receipts](#2-collect-the-receipts) | the mail sources (daily), the phone, the import folder | 1 to 3 days |
 | 3 | [Read the receipts](#3-read-the-receipts) | `npm run extract`, `npm run extract-vat` | minutes |
 | 4 | [Match receipts to payments](#4-match-receipts-to-payments) | `npm run match`, `npm run evidence` | hours |
 | 5 | [Book](#5-book) | `npm run classify` | hours |
@@ -54,9 +54,9 @@ employees paid in cash or with a private card. A receipt is what lets you deduct
 paid. Collecting is usually the most tedious part of the quarter. There are three ways in, and
 all three end in the same folder, `beleg-import/` of your workspace:
 
-- **Mailbox.** `npm run collect -- 2026-Q3` reads your mailboxes over IMAP and saves every PDF
-  attachment of the quarter, with 14 days on each side, because an invoice often arrives after
-  the payment. Set it up once: [Set up a mailbox](mail-setup.md).
+- **Mailbox.** Each mailbox is a source: the workflow «Belege und Daten holen» takes the PDF
+  attachments of new mail every day, and `npm run pull -- <source>` does it by hand. Set it up
+  once: [Set up a mailbox](mail-setup.md).
 - **Phone.** Photograph paper receipts with the phone app and import them to the laptop.
 - **Folder.** Drag and drop PDFs into `beleg-import/`: downloads from vendor portals, scans,
   anything else.

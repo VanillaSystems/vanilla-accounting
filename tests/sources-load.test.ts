@@ -7,15 +7,16 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { matches, parseHostPath, parseSender, senderAllowed } from '../src/platform/sources/reach.js';
 import { readDecl } from '../src/platform/sources/load.js';
 import { approveSource, sources } from '../src/platform/sources/index.js';
-import { mailFromSources, sourcesFromMail } from '../src/platform/sources/mail.js';
+import { convertMail, mailFromSources, sourcesFromMail } from '../src/platform/sources/mail.js';
+import { readLedger } from '../src/platform/sources/ledger.js';
 import type { SourceDecl } from '../src/platform/sources/model.js';
-import type { MailConfig } from '../src/collect/mail-config.js';
+import type { MailConfig } from '../src/platform/sources/mail.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { tempWorkspace } from './support/workspace.js';
 
@@ -130,4 +131,24 @@ test('a company source waits to be switched on and shows what its reach adds; th
   writeFileSync(join(ws.paths.root, 'sources', 'shop', 'source.yaml'), YAML.replace('allow: [GET orders.json]', 'allow: [GET orders.json, GET payouts.json]'));
   [shop] = sources(ws, APP_ROOT);
   assert.deepEqual(shop.kind === 'pending' && shop.reachDiff.added.map((l) => l.what), ['GET https://shop.example.com/api/payouts.json'], 'only what the change adds');
+});
+
+test('the update converts mail.yaml: one source per login, each cursor where the old collector stopped, mail.yaml kept as a backup', () => {
+  const ws = tempWorkspace('convert-mail-');
+  writeFileSync(ws.paths.mail, `mailboxes:
+  - { label: office, address: office@example.com, env: OFFICE, host: imap.example.com }
+  - { label: shop, address: shop@example.com, env: SHARED, host: imap.example.net, filterTo: shop@example.com }
+  - { label: info, address: info@example.com, env: SHARED, host: imap.example.net, filterTo: info@example.com }
+skipDomains: []
+includeDomains: []
+`);
+  mkdirSync(ws.paths.data, { recursive: true });
+  writeFileSync(join(ws.paths.data, 'download-journal.json'), JSON.stringify([{ account: 'office', uid: 40 }, { account: 'shop', uid: 7 }, { account: 'info', uid: 12 }, { account: 'office', uid: 41 }]));
+  const r = convertMail(ws, { SHARED_IMAP_USER: 'login@example.net' }, () => new Date('2026-10-15T06:00:00Z'));
+  assert.deepEqual(r.sources, ['office', 'shared']);
+  assert.ok(!existsSync(ws.paths.mail) && existsSync(r.backup));
+  assert.deepEqual(readLedger(ws, 'office'), [{ at: '2026-10-15T06:00:00.000Z', run: 'update', feed: 'attachments', cursor: { validity: '', uid: 41 } }]);
+  assert.deepEqual((readLedger(ws, 'shared')[0] as { cursor: unknown }).cursor, { validity: '', uid: 12 }, 'both boxes of the shared login');
+  const shared = sources(ws, APP_ROOT).find((v) => v.kind !== 'invalid' && v.decl.id === 'shared');
+  assert.equal(shared?.kind !== 'invalid' && shared?.decl.reach.mail?.account, 'login@example.net');
 });

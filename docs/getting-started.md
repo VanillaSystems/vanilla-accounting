@@ -106,7 +106,7 @@ company; the books lie in its `vanilla-accounting/` ([ADR 0013](adr/0013-workspa
 |---|---|
 | `belege.workspace.yaml` | Who the company is, your answers, and which ledger account each bank books on |
 | `knowledge/` | What the app learns about your suppliers (`suppliers/`), customers (`customers/`), authorities (`authorities/`) and your own rules (`rules/`); each folder starts with a commented `_example.yaml` |
-| `mail.yaml` | Mailboxes to collect receipts from (optional, commented template) |
+| `sources/` | Places to collect receipts from: one folder per mailbox, portal or API (see sources/README.md) |
 | `beleg-import/` | Where new receipts arrive |
 | `ledger.json` | The books' settings: up to which day they are closed, opening balances, corrections |
 | `master-data/accounts.json` | Your chart of accounts, taken from the Swiss KMU chart for your profile |

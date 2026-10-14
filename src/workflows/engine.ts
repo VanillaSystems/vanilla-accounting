@@ -218,7 +218,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }
     try {
-      const result = await action.run(inputs, effects, { ws, ask });
+      const result = await action.run(inputs, effects, { ws, ask, run: { id: run.id, mode: run.mode } });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));

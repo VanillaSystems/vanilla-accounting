@@ -9,9 +9,10 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBooks } from '../books/store.js';
-import { filesOfPart, openWorkspace, partDirs } from '../workspace/workspace.js';
+import { APP_ROOT, filesOfPart, openWorkspace, partDirs } from '../workspace/workspace.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
-import { loadMailConfig } from '../collect/mail-config.js';
+import { mailboxesOf } from '../platform/sources/mail.js';
+import { readLedger } from '../platform/sources/ledger.js';
 
 const ws = openWorkspace();
 const quarter = process.argv[2] ?? (() => {
@@ -78,9 +79,10 @@ bankRows.push({
 // ── email ──────────────────────────────────────────────────────────────────
 const journalPath = join(ws.paths.data, 'download-journal.json');
 const journal: any[] = existsSync(journalPath) ? JSON.parse(readFileSync(journalPath, 'utf8')) : [];
-const mailboxes = existsSync(ws.paths.mail) ? loadMailConfig(ws).mailboxes : [];
-const emailRows: Row[] = mailboxes.map(({ label: lbl, address: addr }) => {
-  const n = journal.filter((e) => e.account === lbl && inQ((e.date ?? '').slice(0, 10))).length;
+// The mail sources (ADR 0014): what each delivered this quarter by its ledger, and before sources by the old download journal.
+const emailRows: Row[] = mailboxesOf(ws, APP_ROOT).map(({ source, label: lbl, address: addr }) => {
+  const got = readLedger(ws, source).filter((l) => 'got' in l && inQ(l.at.slice(0, 10))).length;
+  const n = got + journal.filter((e) => e.account === lbl && inQ((e.date ?? '').slice(0, 10))).length;
   return { label: addr, state: n ? DONE : BLOCK, note: n ? `${n} attachments` : 'not collected' };
 });
 

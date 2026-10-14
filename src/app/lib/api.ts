@@ -158,6 +158,7 @@ export const api = {
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
   sources: () => request<SourceRow[]>('GET', '/api/sources'),
+  approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
     const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });

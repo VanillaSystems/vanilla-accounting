@@ -2117,5 +2117,7 @@ export default {
     'sources.every.on-demand': 'on demand',
     'sources.newReachTitle': 'Newly reachable once switched on:',
     'sources.more': 'and {n} more',
+    'sources.approve': 'Switch on',
+    'sources.approveWhy': 'Switched on, the source collects live, with exactly this reach. Any change to it waits to be switched on again.',
   },
 } satisfies Locale;

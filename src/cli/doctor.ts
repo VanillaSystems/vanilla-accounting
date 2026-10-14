@@ -14,7 +14,11 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { config as loadEnv } from 'dotenv';
 import { hasBooks, loadBooks, periodLock } from '../books/store.js';
-import { loadMailConfig, loginOf, mailConfigured, missingText, passwordOf } from '../collect/mail-config.js';
+import { mailConfigured } from '../platform/sources/mail.js';
+import { sources } from '../platform/sources/index.js';
+import { secretKey } from '../platform/sources/model.js';
+import { imapBackend } from '../platform/sources/mail-channel.js';
+import { secrets } from '../secrets/secrets.js';
 import { useKeychain } from '../secrets/keychain-store.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -68,37 +72,32 @@ function knowledgeCheck(ws: Workspace): Result[] {
   }
 }
 
-/** Each mailbox of mail.yaml: its keys in the app's .env, and with `login` a real IMAP login and logout. */
+/** Each mail source (ADR 0014): its password in the keychain, switched on, and with `login` a real IMAP login and logout. */
 async function mailChecks(ws: Workspace, login: boolean): Promise<Result[]> {
-  if (!mailConfigured(ws)) {
-    return [login ? fail('--mail: mail.yaml lists no mailboxes', 'Set up the mailboxes first: docs/mail-setup.md.') : ok('No mailboxes in mail.yaml: receipts are not collected from a mailbox (docs/mail-setup.md sets one up)')];
-  }
-  let mailboxes;
-  try { mailboxes = loadMailConfig(ws).mailboxes; } catch (e) {
-    return [fail((e as Error).message, 'Fix mail.yaml as docs/mail-setup.md shows.')];
-  }
-  // The collector reads the app's .env (dotenv, from the app folder); so does this check.
-  loadEnv({ path: join(APP_ROOT, '.env'), quiet: true });
   useKeychain(() => ws.paths.root);
-  const { checkLogin } = login ? await import('../collect/imap.js') : { checkLogin: undefined };
   const results: Result[] = [];
-  for (const m of mailboxes) {
-    const label = `Mailbox ${m.label} (${m.address})`;
-    const creds = await loginOf(m, process.env);
-    if (creds.status === 'missing') {
-      const fix = `${missingText(creds)[0].toUpperCase()}${missingText(creds).slice(1)} (docs/mail-setup.md).`;
-      results.push(fail(`${label}: ${[creds.user, creds.secret].filter(Boolean).join(', ')} not set`, fix));
-      continue;
-    }
-    if (!checkLogin) { results.push(ok(`${label}: login name in .env, password in the keychain (npm run doctor -- --mail logs in)`)); continue; }
+  if (mailConfigured(ws)) results.push(warn('mail.yaml is not converted into sources yet', 'npm run update turns each login into sources/<id>/ (docs/mail-setup.md).'));
+  const mail = sources(ws, APP_ROOT).filter((v) => v.kind !== 'invalid' && v.decl.reach.mail);
+  if (!mail.length) return [...results, login ? fail('--mail: no mail source', 'Set one up: docs/mail-setup.md.') : ok('No mail source: receipts are not collected from a mailbox (docs/mail-setup.md sets one up)')];
+  for (const v of mail) {
+    if (v.kind === 'invalid') continue;
+    const { decl } = v;
+    const r = decl.reach.mail!;
+    const label = `Mail source ${decl.id} (${r.account})`;
+    const name = secretKey(decl.id, 'mail');
+    const password = await secrets.get(name);
+    if (!password) { results.push(fail(`${label}: ${name} not set`, `Set the password with npm run secret -- ${name} (docs/mail-setup.md).`)); continue; }
+    if (v.kind === 'pending') results.push(warn(`${label}: not switched on`, 'Firma › Quellen shows what it may reach; switch it on there.'));
+    if (!login) { results.push(ok(`${label}: password in the keychain (npm run doctor -- --mail logs in)`)); continue; }
     try {
-      await checkLogin({ label: m.label, ...creds });
-      results.push(ok(`${label}: logs in to ${creds.host}:${creds.port}`));
+      const port = Number(process.env[`${decl.id.toUpperCase().replace(/-/g, '_')}_IMAP_PORT`] || 993);
+      await (await imapBackend(r, password, port)).close();
+      results.push(ok(`${label}: logs in to ${r.host}:${port}`));
     } catch (e) {
       const err = e as Error & { authenticationFailed?: boolean; responseText?: string; code?: string };
       results.push(err.authenticationFailed
-        ? fail(`${label}: ${creds.host} refused the login (${err.responseText ?? err.message})`, `Create a new app-specific password and set it with npm run secret -- ${passwordOf(m)}; check ${m.env}_IMAP_USER is the full address (docs/mail-setup.md).`)
-        : fail(`${label}: cannot reach ${creds.host}:${creds.port} (${err.code ?? err.message})`, `Check host in mail.yaml or ${m.env}_IMAP_HOST / ${m.env}_IMAP_PORT, and that IMAP is enabled for the mailbox (docs/mail-setup.md).`));
+        ? fail(`${label}: ${r.host} refused the login (${err.responseText ?? err.message})`, `Create a new app-specific password and set it with npm run secret -- ${name}; check the account in sources/${decl.id}/source.yaml (docs/mail-setup.md).`)
+        : fail(`${label}: cannot reach ${r.host} (${err.code ?? err.message})`, `Check reach.mail.host in sources/${decl.id}/source.yaml, and that IMAP is enabled for the mailbox (docs/mail-setup.md).`));
     }
   }
   return results;
