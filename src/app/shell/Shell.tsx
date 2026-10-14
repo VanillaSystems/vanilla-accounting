@@ -4,9 +4,10 @@
  * Areas own only their list, detail and keys (docs/redesign/architecture.md §3).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { localToday, openQuarter, parsePeriod } from '../../accounting/periods.js';
+import { localToday, openFilingPeriod, parsePeriod } from '../../accounting/periods.js';
 import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
+import type { Index } from '../../types/index.js';
 import { useApiStatus } from '../hooks/use-api-status.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { FxProvider } from '../hooks/use-fx.js';
@@ -34,6 +35,7 @@ import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
+import { filing } from '../../engines/index.js';
 
 type Overlay =
   | { kind: 'palette' }
@@ -41,8 +43,22 @@ type Overlay =
   | { kind: 'language'; anchor: DOMRect }
   | { kind: 'export'; config: DialogConfig };
 
-export function Shell({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
-  const { data: books, loading, error, refresh } = useIndex();
+interface ShellProps { language: string; onLanguage(code: string): void }
+
+/** Waits for the books and their jurisdiction (/modules.json): no area computes before both are there. */
+export function Shell(props: ShellProps) {
+  const { data, loading, error, refresh } = useIndex();
+  if (loading || error) {
+    return (
+      <main className="full">
+        <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint', { command: 'npm run extract' })}</p><p>{error}</p></div>}</div>
+      </main>
+    );
+  }
+  return <Workbench {...props} books={data} refresh={refresh} />;
+}
+
+function Workbench({ language, onLanguage, books, refresh }: ShellProps & { books: Index; refresh(): void }) {
   const { online, readonly, snapshot } = useApiStatus();
   const canEdit = online && !readonly;
   const workspace = useWorkspace();
@@ -56,7 +72,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const [dropping, setDropping] = useState(false);
 
   const area = areaOf(loc.route);
-  const open = openQuarter(books.config?.closedThrough, localToday());
+  const open = openFilingPeriod(books.config?.closedThrough, localToday(), filing().length);
   const period = loc.query.period ?? open;
 
   const current = useRef(loc);
@@ -96,7 +112,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const runAdd = () => { if (area.add && canEdit) area.add.run(propsRef.current); };
 
   // The palette's search keeps the first render's closure: the open quarter is read from the props of now.
-  const openNow = () => openQuarter(propsRef.current.books.config?.closedThrough, localToday());
+  const openNow = () => openFilingPeriod(propsRef.current.books.config?.closedThrough, localToday(), filing().length);
   const openExport = (config?: DialogConfig) => {
     const { route, period } = propsRef.current;
     setOverlay({ kind: 'export', config: config ?? presetFor(route, period, openNow()) });
@@ -143,7 +159,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   useLayoutEffect(() => {
     const a = document.activeElement;
     if (!a || a === document.body || a.classList.contains('row')) focusSelectedRow();
-  }, [loc.route, loading]);
+  }, [loc.route]);
 
   const listRef = useRef<HTMLElement>(null);
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
@@ -206,23 +222,17 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
         </div>
       )}
       <a className="skip" href="#list">{t('shell.skip')}</a>
-      {loading || error ? (
-        <main className="full">
-          <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint', { command: 'npm run extract' })}</p><p>{error}</p></div>}</div>
-        </main>
-      ) : (
-        <FxProvider index={books}>
-          {Detail ? (
-            <main data-area={loc.route.area} style={mainStyle}>
-              <section className="list" id="list" ref={listRef} aria-label={area.label()}><List {...props} /></section>
-              <section className="detail" aria-live="polite"><Detail {...props} /></section>
-              <Split list={listRef} width={listWidth} onWidth={setListWidth} />
-            </main>
-          ) : (
-            <main className="full" id="list" data-area={loc.route.area}><List {...props} /></main>
-          )}
-        </FxProvider>
-      )}
+      <FxProvider index={books}>
+        {Detail ? (
+          <main data-area={loc.route.area} style={mainStyle}>
+            <section className="list" id="list" ref={listRef} aria-label={area.label()}><List {...props} /></section>
+            <section className="detail" aria-live="polite"><Detail {...props} /></section>
+            <Split list={listRef} width={listWidth} onWidth={setListWidth} />
+          </main>
+        ) : (
+          <main className="full" id="list" data-area={loc.route.area}><List {...props} /></main>
+        )}
+      </FxProvider>
 
       <TopBar
         ref={topRef}
