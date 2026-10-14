@@ -13,6 +13,9 @@ marked *decided*.
 
 ## Steps
 
+Done on branch `0.4.0`: 0, 1 ([inventory.md](inventory.md)), 2 (`tests/layers.test.ts`, 40 wrong-way
+imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`), 7.
+
 | # | Step | Ends when | Needs |
 |---|---|---|---|
 | 0 | **Freeze figures.** Snapshot the golden masters and a 0.3.0 demo workspace as an upgrade fixture. | the fixture opens in a test | — |

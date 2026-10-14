@@ -30,7 +30,7 @@ demo-consulting/**
 tools/demo/**
 tools/cases/**
 tools/vat-codes/**
-tools/modules/**
+tools/layers/**
 modules/**
 examples/**
 demo-consulting/**
