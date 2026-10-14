@@ -10,7 +10,10 @@ import { Router } from 'express';
 import { RequestError, WS } from '../books.js';
 import { fileDiff, saveDetail } from '../../saving/changes.js';
 import { openSaving } from '../../saving/saving.js';
-import type { SavingCommand, SavingResult } from '../../saving/model.js';
+import type { ChangesView, FileChange, SavingCommand, SavingResult } from '../../saving/model.js';
+import { loadWorkflows } from '../../workflows/load.js';
+import { classifyChange } from '../../workflows/switch-on.js';
+import { APP_ROOT } from '../../workspace/workspace.js';
 import { ask } from '../../llm/ask.js';
 import { queueCommit } from './automation.js';
 
@@ -18,9 +21,23 @@ export const router = Router();
 
 const saving = () => openSaving(WS, { ask: (prompt, opts) => ask(prompt, { ...opts, model: 'sonnet' }) });
 
+/** Each waiting change with how it will take effect: the structure decides (switch-on.ts). */
+async function withEffects(view: ChangesView): Promise<ChangesView> {
+  const workflows = loadWorkflows(APP_ROOT, WS.paths.root).workflows;
+  const effect = async (source: 'draft' | 'outside', f: FileChange): Promise<FileChange> => {
+    const d = await fileDiff(WS, source, f.path);
+    return { ...f, effect: classifyChange(f.path, d?.before ?? '', d?.after ?? '', workflows) };
+  };
+  return {
+    ...view,
+    draft: await Promise.all(view.draft.map((f) => effect('draft', f))),
+    outside: await Promise.all(view.outside.map((f) => effect('outside', f))),
+  };
+}
+
 router.get('/api/changes', async (req, res) => {
   const view = await saving().view();
-  res.json(req.query.since === view.rev ? { unchanged: true } : view);
+  res.json(req.query.since === view.rev ? { unchanged: true } : await withEffects(view));
 });
 
 const KINDS = new Set<SavingCommand['kind']>(['prepare', 'talk', 'refresh', 'save', 'sync', 'discard', 'undo']);

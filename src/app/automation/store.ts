@@ -70,3 +70,10 @@ export async function automationCommand(cmd: AutomationCommand): Promise<Command
   await poll();
   return result;
 }
+
+/** The direct way: a workflow's schedule, or null to switch it off; the view is fetched again at once. */
+export async function setSchedule(workflow: string, schedule: string | null): Promise<void> {
+  await api.automationSchedule(workflow, schedule);
+  clearTimeout(timer);
+  await poll();
+}

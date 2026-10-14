@@ -3,14 +3,15 @@
  * runs and files; the process map; the queue and the tasks. Everything comes from the declarations
  * and the stored runs (GET /api/automation); nothing here is a list of its own.
  */
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
+import { errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { language, t, tData } from '../../i18n/index.js';
-import { automationCommand, automationNow, useAutomation, useRun } from '../../automation/store.js';
-import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type RunSummary, type StepDecl, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
+import { automationCommand, automationNow, setSchedule, useAutomation, useRun } from '../../automation/store.js';
+import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunSummary, type StepDecl, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
@@ -121,6 +122,7 @@ function WorkflowPage({ w, view, route, nav }: { w: WorkflowDecl; view: Automati
         <AskAi context={{ kind: 'workflow', id: w.id, label: label(w) }} />
       </div>
       <p className="lead">{tx(w.desc)}</p>
+      <Pending w={w} view={view} nav={nav} />
       {!w.runnable.ok ? <p className="warnline">{t('automation.missing', { steps: w.runnable.missing.map((m) => `${tx(stepOf(w, m.step)?.label ?? { en: m.step })} (${m.action})`).join(', ') })}</p> : null}
       <div className="wftabs" role="tablist">
         {AUTOMATION_TABS.map((tab) => (
@@ -133,7 +135,7 @@ function WorkflowPage({ w, view, route, nav }: { w: WorkflowDecl; view: Automati
           {step ? <StepPanel w={w} step={step} view={view} nav={nav} /> : null}
         </>
       ) : route.tab === 'triggers' ? (
-        <Triggers w={w} />
+        <Triggers w={w} nav={nav} />
       ) : route.tab === 'runs' ? (
         <RunList runs={view.runs.filter((r) => r.workflow === w.id)} nav={nav} />
       ) : (
@@ -180,12 +182,76 @@ function triggerText(tr: Trigger): string {
   }
 }
 
-function Triggers({ w }: { w: WorkflowDecl }) {
-  if (!w.triggers.length) return <p className="m">{t('automation.noTriggers')}</p>;
+function Triggers({ w, nav }: { w: WorkflowDecl; nav: Nav }) {
+  const schedule = w.triggers.find((tr): tr is Extract<Trigger, { kind: 'schedule' }> => tr.kind === 'schedule');
+  const [cron, setCron] = useState(schedule?.cron ?? '');
+  const save = (value: string | null) => setSchedule(w.id, value).then(() => nav.toast(t('automation.scheduleSaved')), (e) => nav.toast(errorText(e)));
   return (
-    <ul className="wftriggers">
-      {w.triggers.map((tr, i) => <li key={i} className={tr.off ? 'off' : ''}>{triggerText(tr)}{tr.off ? <span className="wfpill muted">{t('automation.trigger.off')}</span> : null}</li>)}
-    </ul>
+    <>
+      {w.triggers.length ? (
+        <ul className="wftriggers">
+          {w.triggers.map((tr, i) => <li key={i} className={tr.off ? 'off' : ''}>{triggerText(tr)}{tr.off ? <span className="wfpill muted">{t('automation.trigger.off')}</span> : null}</li>)}
+        </ul>
+      ) : <p className="m">{t('automation.noTriggers')}</p>}
+      {schedule ? (
+        <form className="wfsched" onSubmit={(e) => { e.preventDefault(); void save(cron.trim()); }}>
+          <label>{t('automation.schedule')}<input className="mono" value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 7 * * *" aria-describedby={`sched-${w.id}`} /></label>
+          <button type="submit" className="btn" disabled={!cron.trim() || (cron.trim() === schedule.cron && !schedule.off)}>{t('automation.scheduleSave')}</button>
+          {!schedule.off ? <button type="button" className="btn ghost" onClick={() => void save(null)}>{t('automation.scheduleOff')}</button> : null}
+          <span id={`sched-${w.id}`} className="m">{t('automation.scheduleTip')}</span>
+        </form>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A version waiting to be switched on (screen 6): what changed, the cases checked against it, and
+ * the two decisions apart from saving: check the cases, then switch it on.
+ */
+function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav: Nav }) {
+  const p = view.pending.find((x) => x.workflow === w.id);
+  const [busy, setBusy] = useState(false);
+  if (!p) return null;
+  const act = (cmd: AutomationCommand, done?: string) => async () => {
+    setBusy(true);
+    try {
+      const r = await automationCommand(cmd);
+      nav.toast(r.ok ? done ?? t('automation.done') : t(`automation.refusal.${r.refusal}` as 'automation.refusal.not-found', { detail: r.detail ?? '' }));
+    } catch (e) {
+      nav.toast(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const count = (s: CaseCheck['status']) => p.checks.filter((c) => c.status === s).length;
+  const open = (run: string) => nav.go({ route: { area: 'automation', view: 'run', run }, query: {} });
+  return (
+    <div className="wfpending">
+      <b>{t('automation.pending.title')}</b>
+      <span className="m">{t('automation.pending.files', { files: p.files.slice(0, 4).join(', ') + (p.files.length > 4 ? ` +${p.files.length - 4}` : '') })}</span>
+      {p.checks.length ? (
+        <>
+          <span>{t('automation.pending.checked', { same: count('same'), different: count('different'), stuck: count('stuck'), running: count('running') })}</span>
+          <ul className="wfcases">
+            {p.checks.filter((c) => c.status !== 'same').map((c) => (
+              <li key={c.run}>
+                <span className={`wfpill ${c.status === 'running' ? 'st-running' : c.status === 'stuck' ? 'st-stuck' : 'warn'}`}>{t(`automation.case.${c.status}` as 'automation.case.same')}</span>
+                <span className="mono">{c.item.id}</span>
+                {c.detail ? <span className="m mono">{c.detail}</span> : null}
+                <button type="button" className="linkbtn" onClick={() => open(c.of)}>{t('automation.case.before')}</button>
+                <button type="button" className="linkbtn" onClick={() => open(c.run)}>{t('automation.case.after')}</button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : <span className="m">{t('automation.pending.unchecked')}</span>}
+      <span className="wfactions">
+        <button type="button" className="btn" disabled={busy} onClick={act({ kind: 'check', workflow: w.id }, t('automation.pending.checking'))}><BotIcon />{t('automation.pending.check')}</button>
+        <button type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'))}>{t('automation.pending.approve')}</button>
+      </span>
+      <span className="m">{t('automation.pending.why')}</span>
+    </div>
   );
 }
 

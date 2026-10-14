@@ -38,7 +38,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   writeIndex(ws, source.endsWith('.json') ? JSON.parse(readFileSync(source, 'utf8')) : JSON.parse(JSON.stringify(loadBooks(workspaceAt(source)))));
   const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(REPO, 'src/server/main.ts')], {
     cwd: root,
-    env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, VANILLA_API_HOST: '127.0.0.1', PORT: '0', READONLY: '', ...env },
+    env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, VANILLA_APPROVALS_DIR: join(root, '..', `${root.split('/').pop()}-approvals`), VANILLA_API_HOST: '127.0.0.1', PORT: '0', READONLY: '', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   // The server takes the port the system gives 127.0.0.1 and names it: a port probed here and

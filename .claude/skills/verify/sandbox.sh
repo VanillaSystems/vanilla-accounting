@@ -90,7 +90,7 @@ EOF
 
   # API: VANILLA_WORKSPACE names the sandbox, and cwd = the sandbox so no .env of the repo is loaded.
   # READONLY=1 in the caller's environment starts it in audit mode, as `npm run start:audit` does.
-  (cd "$SB" && VANILLA_WORKSPACE="$SB" PATH="$SB/bin:$PATH" PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
+  (cd "$SB" && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" PATH="$SB/bin:$PATH" PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
   echo $! >"$SB/api.pid"
   # UI: cwd = the repo; data comes through the API proxy.
   (cd "$REPO" && exec node "$REPO/node_modules/vite/bin/vite.js" --config "$VITE_CONFIG" </dev/null >"$SB/ui.log" 2>&1) &
@@ -211,7 +211,7 @@ cmd_down() {
   for pid in "$UI_PID" "$API_PID"; do alive "$pid" && kill -KILL "$pid" 2>/dev/null || true; done
   # Keep the logs with the evidence before the sandbox goes.
   mkdir -p "$EVIDENCE"; cp "$SB/api.log" "$SB/ui.log" "$EVIDENCE/" 2>/dev/null || true
-  rm -rf "$SB" "$VITE_CONFIG" "$BASE/.ports/$API_PORT" "$BASE/.ports/$UI_PORT"
+  rm -rf "$SB" "$SB.approvals" "$SB.runs" "$VITE_CONFIG" "$BASE/.ports/$API_PORT" "$BASE/.ports/$UI_PORT"
   port_free "$API_PORT" && port_free "$UI_PORT" || echo "warning: port $API_PORT or $UI_PORT still listening (not ours? check lsof)"
   echo "down: $RUN removed; evidence kept at $EVIDENCE"
 }

@@ -12,6 +12,8 @@ import { askIfReady } from '../intake/run.js';
 import { lockIntake } from '../intake/pipeline.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
 import { openEngine } from '../workflows/engine.js';
+import { baseline, openSwitch } from '../workflows/switch-on.js';
+import { loadWorkflows } from '../workflows/load.js';
 import { summaryOf, type AutomationCommand, type CommandResult, type Run } from '../workflows/model.js';
 import { listRuns, runsDir } from '../workflows/store.js';
 
@@ -51,7 +53,9 @@ if (arg === '--runs') {
     for (const c of commands) console.log(JSON.stringify(await remote(c)));
     console.log(`Sent to the app's engine (${API}); see Automatisierung.`);
   } else {
-    const engine = openEngine(ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws) });
+    const sw = openSwitch(ws);
+    baseline(ws, loadWorkflows(APP_ROOT, ws.paths.root).workflows);
+    const engine = openEngine(ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws), isApproved: sw.isApproved });
     const started: string[] = [];
     for (const c of commands) {
       const result = await engine.command(c);

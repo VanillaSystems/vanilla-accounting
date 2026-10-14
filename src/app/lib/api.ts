@@ -151,6 +151,7 @@ export const api = {
   automation: (since?: string) => request<AutomationView | { unchanged: true }>('GET', `/api/automation${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   automationRun: (id: string) => request<RunDetail>('GET', `/api/automation/runs/${encodeURIComponent(id)}`),
   automationCommand: (cmd: AutomationCommand) => request<CommandResult>('POST', '/api/automation', cmd),
+  automationSchedule: (workflow: string, schedule: string | null) => request<{ ok: true }>('PATCH', `/api/automation/workflows/${encodeURIComponent(workflow)}`, { schedule }),
   changes: (since?: string) => request<ChangesView | { unchanged: true }>('GET', `/api/changes${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),

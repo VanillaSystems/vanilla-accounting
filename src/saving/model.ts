@@ -7,12 +7,17 @@
 
 export type ChangeSource = 'draft' | 'outside';
 
+/** How a saved change takes effect (workflows.md "Changing a workflow"): at once, once switched on, or after its maintainer's review. */
+export type ChangeEffect = 'applies-now' | 'needs-switch-on' | 'needs-maintainer';
+
 export interface FileChange {
   /** Relative to the app's folder (vanilla-accounting/). */
   path: string;
   state: 'added' | 'modified' | 'deleted';
   added: number;
   removed: number;
+  /** For a change waiting in Änderungen: how it will take effect once saved. */
+  effect?: ChangeEffect;
 }
 
 export interface SaveSummary {

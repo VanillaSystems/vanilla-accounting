@@ -43,3 +43,5 @@
 .chpage .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
 .chpage .linkbtn:hover { text-decoration: underline; }
 .chpage .linkbtn:disabled { opacity: .45; cursor: default; text-decoration: none; }
+.chkind.e-needs-switch-on { background: var(--warn-soft); color: var(--warn); }
+.chkind.e-needs-maintainer { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }

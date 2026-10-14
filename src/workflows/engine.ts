@@ -31,6 +31,8 @@ export interface EngineDeps {
   limits?: { ai: number; other: number };
   /** A company version of a workflow runs live only when approved; the app's are approved by definition. */
   isApproved?: (w: WorkflowDecl) => boolean;
+  /** Switches a workflow's waiting version on (app-local, out of the workspace's reach). */
+  approve?: (w: WorkflowDecl) => void;
   /** Called once a run came to rest and its run-log line (if any) is written: the records path commits here. */
   onRest?: (run: Run, line: RunLogLine | undefined) => void | Promise<void>;
   /** Where this engine runs, written on each run-log line. */
@@ -170,7 +172,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     const step = stepOf(w, state.at);
     if (!step) return move(run, { status: 'stuck', at: state.at, since: now(), reason: `${w.id} has no step ${state.at}` });
     const body = step.body;
-    const books = loadBooks(ws);
+    const books = booksFor(run);
     const available: Record<string, unknown> = { ...outputsOf(run), books, item: run.item, [run.item.kind]: itemValue(run.item, books) };
     const input = Object.fromEntries(step.reads.map((k) => [k, short(available[k])]));
     const record: StepRecord = { step: step.id, startedAt: now(), input, llm: [], effects: [] };
@@ -235,7 +237,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       const stamped = entries.map((e) => ({ ...e, run: run.id }));
       const before = [...runs.values()].some((r) => r.mode === 'live' && r.steps.some((s) => s.effects.some((x) => x.key === key && x.applied)));
       if (run.mode !== 'live') {
-        const copy = structuredClone(loadBooks(ws));
+        const copy = booksFor(run);
         let refused: string | undefined;
         try { update(copy, actor, (b) => { b.journalEntries.push(...stamped); }); } catch (e) { refused = (e as Error).message; }
         record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {}, would: stamped, ...(refused ? { refused } : {}) });
@@ -327,6 +329,17 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     };
   }
 
+  /**
+   * The books a step sees. A check sees them as they were before its case: without what the
+   * case's run booked and mapped, so the case can go its way again on the waiting version.
+   */
+  function booksFor(run: Run): Books {
+    const books = loadBooks(ws);
+    if (run.startedBy.kind !== 'check') return books;
+    const of = run.startedBy.of;
+    return { ...books, journalEntries: books.journalEntries.filter((e) => e.run !== of), mappings: books.mappings.filter((m) => m.run !== of) };
+  }
+
   function itemValue(item: ItemRef, books: Books): unknown {
     if (item.kind === 'transaction') return books.transactions.find((t: BankTransaction) => t.ref === item.id);
     if (item.kind === 'entry') return books.journalEntries.find((e) => e.id === item.id);
@@ -388,6 +401,32 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         const r = runs.get(cmd.run);
         if (!r) return { ok: false, refusal: 'not-found' };
         return start(r.workflow, r.item, { kind: 'replay', of: r.id }, 'replay');
+      }
+      case 'check': {
+        // The latest finished live case of each item, newest first.
+        const seen = new Set<string>();
+        const cases = [...runs.values()]
+          .filter((r) => r.workflow === cmd.workflow && r.mode === 'live' && r.state.status === 'done' && r.item.kind !== 'company')
+          .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+          .filter((r) => !seen.has(r.item.id) && !!seen.add(r.item.id))
+          .slice(0, Math.min(cmd.limit ?? 10, 25));
+        if (!cases.length) return { ok: false, refusal: 'no-cases' };
+        const started: string[] = [];
+        for (const c of cases) {
+          const r = await start(c.workflow, c.item, { kind: 'check', of: c.id }, 'dry');
+          if (!r.ok) return r;
+          started.push(r.run!);
+        }
+        return { ok: true, runs: started };
+      }
+      case 'approve': {
+        declared = loadWorkflows(deps.appRoot, ws.paths.root);
+        const w = workflow(cmd.workflow);
+        if (!w) return { ok: false, refusal: 'not-found' };
+        deps.approve?.(w);
+        counter++;
+        pump();
+        return { ok: true };
       }
     }
   }

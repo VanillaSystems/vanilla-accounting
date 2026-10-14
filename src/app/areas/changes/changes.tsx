@@ -45,7 +45,7 @@ function List({ route, nav }: Props) {
     return (
       <div key={source + f.path} className={`row chrow${on ? ' sel' : ''}`} role="option" aria-selected={on} tabIndex={on ? 0 : -1} onClick={() => nav.select(r)}>
         <span className="t mono">{f.path}</span>
-        <span className="a"><span className="chcount"><span className="plus">+{f.added}</span> <span className="minus">−{f.removed}</span></span><span className="m">{stateLabel(f.state)}</span></span>
+        <span className="a">{f.effect && f.effect !== 'applies-now' ? <span className={`chkind e-${f.effect}`}>{t(`changes.effect.${f.effect}` as 'changes.effect.applies-now')}</span> : null}<span className="chcount"><span className="plus">+{f.added}</span> <span className="minus">−{f.removed}</span></span><span className="m">{stateLabel(f.state)}</span></span>
       </div>
     );
   };

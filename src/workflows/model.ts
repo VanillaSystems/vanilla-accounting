@@ -285,7 +285,9 @@ export type StartedBy =
   | { kind: 'schedule'; cron: string }
   | { kind: 'outside'; file: string }
   | { kind: 'parent'; run: string; step: string }
-  | { kind: 'replay'; of: string };
+  | { kind: 'replay'; of: string }
+  /** A dry run of a case, to check a version waiting to be switched on against how the case went. */
+  | { kind: 'check'; of: string };
 
 export interface Run {
   schema: 2;
@@ -403,6 +405,25 @@ export interface AutomationView {
   tasks: Task[];
   paused: boolean;
   limits: { ai: number; other: number };
+  /** Workflows whose company part changed since it was switched on, with the cases checked against it. */
+  pending: PendingVersion[];
+}
+
+export interface PendingVersion {
+  workflow: string;
+  /** The workspace files of the company's part. */
+  files: string[];
+  checks: CaseCheck[];
+}
+
+/** One case of a check: its original run, the dry run on the waiting version, and whether they agree. */
+export interface CaseCheck {
+  of: string;
+  run: string;
+  item: ItemRef;
+  status: 'running' | 'same' | 'different' | 'stuck';
+  /** What differs, in short. */
+  detail?: string;
 }
 
 /** The status corner (views.md "Status, top right"): exactly three states. */
@@ -423,8 +444,12 @@ export type AutomationCommand =
   | { kind: 'resume'; run: string }
   | { kind: 'replay'; run: string }
   | { kind: 'discard'; run: string; reason?: string }
-  | { kind: 'pause'; on: boolean };
+  | { kind: 'pause'; on: boolean }
+  /** Dry runs of the workflow's latest finished cases, on the version as it is now. */
+  | { kind: 'check'; workflow: string; limit?: number }
+  /** Switch the waiting version on: from now on it runs live. */
+  | { kind: 'approve'; workflow: string };
 
 export type CommandResult =
-  | { ok: true; run?: string }
-  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal'; detail?: string };
+  | { ok: true; run?: string; runs?: string[] }
+  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases'; detail?: string };
