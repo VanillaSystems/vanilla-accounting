@@ -1,0 +1,87 @@
+# The shared capability list. Every inspiration repo fills a features.yaml keyed by these ids,
+# so the programs compare line by line. The ids are the module capability names of 0.4.0
+# (../modules.md), so a comparison lands on the module that would implement it.
+#
+# Add an id here when a program has a capability none of these covers; never rename one.
+# `jurisdictional: true` means the rules differ by country, so features.yaml answers per country.
+
+schema: 1
+
+capabilities:
+  # Ledger core
+  accounting.ledger.journal:            { label: "Double-entry journal, splits, multi-line entries" }
+  accounting.ledger.accounts:           { label: "Chart of accounts, account types, normal side, subaccounts" }
+  accounting.ledger.chart-templates:    { label: "Shipped charts (KMU, SKR03/04/07, US templates)", jurisdictional: true }
+  accounting.ledger.periods:            { label: "Fiscal years, periods, closing periods (13/14)" }
+  accounting.ledger.period-lock:        { label: "Locking a period, what a lock forbids, how corrections are booked" }
+  accounting.ledger.reversal:           { label: "Storno / reversal / void, and its audit trail" }
+  accounting.ledger.currencies:         { label: "Foreign currencies, rate sources, revaluation (Kursdifferenz)" }
+  accounting.ledger.dimensions:         { label: "Cost centres, classes, jobs, projects" }
+  accounting.ledger.audit-trail:        { label: "Who changed what, immutable log (GoBD, audit trail)", jurisdictional: true }
+  accounting.ledger.opening-balances:   { label: "Carry-forward, new year, Saldenvortrag" }
+
+  # Tax
+  accounting.tax.vat-codes:             { label: "Tax codes and how one entry splits into tax lines", jurisdictional: true }
+  accounting.tax.rates:                 { label: "Rates with validity dates, rate changes mid-year", jurisdictional: true }
+  accounting.tax.basis:                 { label: "Cash vs accrual VAT basis (vereinnahmt/vereinbart, Ist/Soll)", jurisdictional: true }
+  accounting.tax.vat-return:            { label: "The return form, boxes and their sums", jurisdictional: true }
+  accounting.tax.vat-filing:            { label: "Electronic filing format (eCH-0217, ELSTER, FinanzOnline)", jurisdictional: true }
+  accounting.tax.vat-correction:        { label: "Correcting a filed return (0535, berichtigte UStVA)", jurisdictional: true }
+  accounting.tax.reverse-charge:        { label: "Reverse charge, Bezugsteuer, §13b, EU trade, OSS", jurisdictional: true }
+  accounting.tax.import-vat:            { label: "Import VAT and duties", jurisdictional: true }
+  accounting.tax.discount-vat:          { label: "VAT correction on early-payment discount (Skonto)", jurisdictional: true }
+  accounting.tax.sales-tax:             { label: "US-style sales tax: items, groups, agencies, liability", jurisdictional: true }
+
+  # Documents
+  accounting.documents.ingestion:       { label: "Receipt import, mail, scan, OCR" }
+  accounting.documents.linking:         { label: "Receipt ↔ entry ↔ transaction links" }
+  accounting.documents.retention:       { label: "Retention rules and archive format", jurisdictional: true }
+  accounting.documents.e-invoice:       { label: "Structured e-invoices (ZUGFeRD, XRechnung, QR-bill)", jurisdictional: true }
+
+  # Expenses and purchases
+  accounting.expenses.classification:   { label: "Suggesting account and tax code for an expense" }
+  accounting.purchases.bills:           { label: "Supplier invoices, open payables" }
+  accounting.purchases.payments:        { label: "Paying suppliers, payment files (pain.001, SEPA)", jurisdictional: true }
+
+  # Sales
+  accounting.sales.invoices:            { label: "Customer invoices, numbering, mandatory fields", jurisdictional: true }
+  accounting.sales.receivables:         { label: "Open items, customer payments, allocation" }
+  accounting.sales.dunning:             { label: "Reminders and dunning levels" }
+  accounting.sales.estimates-orders:    { label: "Quotes, sales orders, credit notes" }
+
+  # Banking
+  accounting.banking.import:            { label: "Statement import (camt.053, MT940, CSV, bank feeds)" }
+  accounting.banking.matching:          { label: "Matching transactions to documents and open items, grouped payments" }
+  accounting.banking.reconciliation:    { label: "Statement reconciliation to the cent" }
+
+  # Assets and inventory
+  accounting.assets.register:           { label: "Fixed assets, depreciation methods (AfA), disposals", jurisdictional: true }
+  accounting.inventory.items:           { label: "Items, stock on hand, costing (average, FIFO), COGS" }
+
+  # Payroll
+  accounting.payroll.runs:              { label: "Pay runs, deductions, social insurance", jurisdictional: true }
+  accounting.payroll.reporting:         { label: "Year-end payroll reports (Lohnausweis, W-2, L16)", jurisdictional: true }
+
+  # Reporting and closing
+  accounting.reporting.trial-balance:   { label: "Trial balance" }
+  accounting.reporting.statements:      { label: "Balance sheet and income statement layouts", jurisdictional: true }
+  accounting.reporting.general-ledger:  { label: "General ledger and account statements" }
+  accounting.reporting.cash-vs-accrual: { label: "Reports on cash or accrual basis; EÜR", jurisdictional: true }
+  accounting.reporting.budgets:         { label: "Budgets and budget vs actual" }
+  accounting.closing.year-end:          { label: "Year-end close, closing entries, profit allocation", jurisdictional: true }
+
+  # Exchange
+  accounting.exchange.export:           { label: "Export to other programs or the tax adviser (DATEV, Banana, IIF)", jurisdictional: true }
+  accounting.exchange.import:           { label: "Import from other programs" }
+  accounting.exchange.audit-export:     { label: "Export for an auditor or tax office (GDPdU/IDEA, SAF-T)", jurisdictional: true }
+
+  # Company and users
+  accounting.company.setup:             { label: "Creating a company, the choices fixed at creation" }
+  accounting.company.users:             { label: "Users, roles, permissions" }
+  accounting.company.multi-company:     { label: "Several companies, consolidation" }
+
+  # Extensibility (what 0.4.0 is about)
+  platform.extensions:                  { label: "Scripts, plugins, extensions, and how they upgrade" }
+  platform.customization:               { label: "What a user can change without code, and what survives an update" }
+  platform.automation:                  { label: "Rules, memorized transactions, recurring entries, workflows" }
+  platform.upgrades:                    { label: "How the program and the data file are upgraded, and what breaks" }

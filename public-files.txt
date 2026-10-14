@@ -52,6 +52,7 @@ docs/year-end.md
 docs/adr/**
 docs/personas/**
 docs/redesign/**
+docs/0.4.0/**
 docs/casebook.md
 docs/i18n.md
 docs/i18n-review.md
