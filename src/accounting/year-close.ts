@@ -17,7 +17,7 @@ import { chfAmount, computeBalances } from './ledger.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { derivePeriod } from './periods.js';
-import { chart, vat, baseCurrency } from '../engines/index.js';
+import { chart, vat, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -43,22 +43,17 @@ export interface YearEndAccounts {
   vatAccounts: string[];
 }
 
-const ROLES = {
-  retainedEarnings: ['2970'],
-  fxDifference: ['6960', '6950'],
-  vatSettlement: ['2201', '2200'],
-} as const;
-const VAT_ACCOUNTS = ['1170', '1171', '2200', '2201'];
 
 export function yearEndAccounts(chart: readonly string[]): YearEndAccounts {
   const has = new Set(chart);
   const pick = (candidates: readonly string[]) => candidates.find((a) => has.has(a)) ?? candidates[0];
-  const vatSettlement = pick(ROLES.vatSettlement);
+  const roles = yearEndData().accounts;
+  const vatSettlement = pick(roles.vatSettlement);
   return {
-    retainedEarnings: pick(ROLES.retainedEarnings),
-    fxDifference: pick(ROLES.fxDifference),
+    retainedEarnings: pick(roles.retainedEarnings),
+    fxDifference: pick(roles.fxDifference),
     vatSettlement,
-    vatAccounts: [...new Set([...VAT_ACCOUNTS.filter((a) => has.has(a)), vatSettlement])].sort(),
+    vatAccounts: [...new Set([...roles.vat.filter((a) => has.has(a)), vatSettlement])].sort(),
   };
 }
 
@@ -340,33 +335,21 @@ export interface EntryTemplate {
   amount?: number;
 }
 
-export const YEAR_END_TEMPLATES: readonly EntryTemplate[] = [
-  { id: 'depreciation', accountDebit: '6800', accountCredit: '' },
-  { id: 'accruedExpense', accountDebit: '', accountCredit: '2300' },
-  { id: 'prepaidExpense', accountDebit: '1300', accountCredit: '' },
-  { id: 'accruedIncome', accountDebit: '1301', accountCredit: '' },
-  { id: 'deferredIncome', accountDebit: '', accountCredit: '2301' },
-  { id: 'provision', accountDebit: '', accountCredit: '2330' },
-  { id: 'taxProvision', accountDebit: '8900', accountCredit: '2208' },
-  { id: 'privateUse', accountDebit: '2451', accountCredit: '', vatCode: 'K81-B' },
-  { id: 'inventoryChange', accountDebit: '', accountCredit: '' },
-  { id: 'socialInsurance', accountDebit: '5700', accountCredit: '2270' },
-  { id: 'doubtfulAccounts', accountDebit: '3805', accountCredit: '1109' },
-];
+/** The jurisdiction's guided year-end entries (modules/ch/year-end.yaml). */
+export const yearEndTemplates = (): EntryTemplate[] => yearEndData().templates.map((t) => ({ ...t }));
 
 /**
  * The profit allocation after the shareholders' resolution, dated in the new year: reserves,
  * and a dividend with the 35% Verrechnungssteuer the company owes on it. Guided, never automatic.
  */
-export const PROFIT_ALLOCATION: EntryTemplate = { id: 'profitAllocation', accountDebit: '2970', accountCredit: '2950', nextYear: true };
-
-export const WITHHOLDING_TAX_RATE = 0.35;
+export const PROFIT_ALLOCATION_ID = 'profitAllocation';
+export const profitAllocation = (): EntryTemplate => ({ id: PROFIT_ALLOCATION_ID, ...yearEndData().profitAllocation, nextYear: true });
 
 export interface DividendSplit { net: number; withholdingTax: number }
 
 /** A gross dividend split into what the shareholders are paid and the 35% Verrechnungssteuer (2206). */
 export function dividendSplit(gross: number): DividendSplit {
-  const withholdingTax = roundCHF(gross * WITHHOLDING_TAX_RATE);
+  const withholdingTax = roundCHF(gross * yearEndData().withholdingTaxRate);
   return { net: roundCHF(gross - withholdingTax), withholdingTax };
 }
 
@@ -375,7 +358,8 @@ export function dividendSplit(gross: number): DividendSplit {
  * year has open invoices, credited to the revenue account, without a VAT code. On the cash
  * basis their VAT is declared when the customer pays; the next year reverses the entry.
  */
-export const RECEIVABLES: EntryTemplate = { id: 'receivables', accountDebit: '1100', accountCredit: '' };
+export const RECEIVABLES_ID = 'receivables';
+export const receivablesTemplate = (): EntryTemplate => ({ id: RECEIVABLES_ID, accountDebit: yearEndData().receivables.accountDebit, accountCredit: '' });
 
 /** The receivables entry of `year` carries this id, so the opening of the next year finds it. */
 export const receivablesEntryId = (year: string) => `yc-${year}-receivables`;
@@ -590,9 +574,9 @@ export function yearClose(input: YearCloseInput): YearClose {
   const ledger = closingLedger(books, year, input.chart, accounts);
   const receivables = input.receivables ?? { invoices: [], total: 0 };
   const proposed = receivables.invoices.length
-    ? [{ ...RECEIVABLES, accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
+    ? [{ ...receivablesTemplate(), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
-  const templates = [...YEAR_END_TEMPLATES, ...proposed].map((t) => ({ ...t, state: state.templates[t.id] }));
+  const templates = [...yearEndTemplates(), ...proposed].map((t) => ({ ...t, state: state.templates[t.id] }));
 
   const blockers: Problem[] = checks.flatMap((c) => c.problems);
   for (const r of reval) {

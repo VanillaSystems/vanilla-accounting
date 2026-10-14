@@ -24,6 +24,9 @@ export const vat = (): ReturnEngine => loaded().vat;
 /** The open workspace's chart: what an account is. */
 export const chart = (): ChartEngine => loaded().chart;
 
+/** The jurisdiction's year close: its accounts, entry forms and withholding tax. */
+export const yearEnd = (): Jurisdiction['yearEnd'] => loaded().source.yearEnd;
+
 /** The open workspace's statement layout. */
 export const statements = (): Jurisdiction['statements'] => loaded().source.statements;
 

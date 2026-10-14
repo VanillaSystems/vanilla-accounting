@@ -20,7 +20,7 @@ import { estvRates, type EstvRates } from '../accounting/fx-conversion.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import {
   applyRevaluation, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, revaluationEntries,
-  yearClose, yearEndAccounts, YEAR_END_TEMPLATES, PROFIT_ALLOCATION, RECEIVABLES, receivablesEntryId, receivablesReversal,
+  yearClose, yearEndAccounts, yearEndTemplates, PROFIT_ALLOCATION_ID, RECEIVABLES_ID, receivablesEntryId, receivablesReversal,
   type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState,
 } from '../accounting/year-close.js';
 import { roundCHF } from '../accounting/rappen.js';
@@ -116,7 +116,7 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
 }
 
 export function markTemplate(ws: Workspace, year: string, id: string, state: TemplateState | null): YearCloseState {
-  const known = [...YEAR_END_TEMPLATES, RECEIVABLES].map((t) => t.id);
+  const known = [...yearEndTemplates().map((t) => t.id), RECEIVABLES_ID];
   if (!known.includes(id)) throw new YearCloseRefused(`Unknown year-end entry "${id}". Known: ${known.join(', ')}`);
   const current = readState(ws, year);
   if (current.closedAt) throw new YearCloseRefused(`${year} is closed: its checklist no longer changes.`);
@@ -145,11 +145,11 @@ export function bookEntry(ws: Workspace, input: EntryInput, template?: string): 
   const books = loadBooks(ws);
   const entry = update(books, PERSON, (b) => {
     const year = input.date.slice(0, 4);
-    if (template === RECEIVABLES.id && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {
+    if (template === RECEIVABLES_ID && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {
       throw new YearCloseRefused(`The receivables of ${year} are booked already.`);
     }
     const entry: JournalEntry = {
-      id: template === RECEIVABLES.id ? receivablesEntryId(year) : randomBytes(8).toString('hex'),
+      id: template === RECEIVABLES_ID ? receivablesEntryId(year) : randomBytes(8).toString('hex'),
       transactionRef: nextManualRef(b, year),
       date: input.date,
       accountDebit: input.accountDebit,
@@ -163,7 +163,7 @@ export function bookEntry(ws: Workspace, input: EntryInput, template?: string): 
     return entry;
   });
   saveBooks(ws, books);
-  if (template && template !== PROFIT_ALLOCATION.id) markTemplate(ws, input.date.slice(0, 4), template, 'done');
+  if (template && template !== PROFIT_ALLOCATION_ID) markTemplate(ws, input.date.slice(0, 4), template, 'done');
   return entry;
 }
 

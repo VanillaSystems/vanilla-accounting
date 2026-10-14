@@ -152,6 +152,18 @@ export interface StatementsData {
   income: Record<(typeof INCOME_SECTIONS)[number], AccountGroup>;
 }
 
+/** A guided year-end entry; a blank account is the user's pick. */
+export interface YearEndTemplate { id: string; accountDebit: string; accountCredit: string; vatCode?: string }
+
+/** year-end.yaml: the accounts the year close books on, its entry forms, the dividend's withholding tax. */
+export interface YearEndData {
+  accounts: { retainedEarnings: string[]; fxDifference: string[]; vatSettlement: string[]; vat: string[] };
+  templates: YearEndTemplate[];
+  profitAllocation: { accountDebit: string; accountCredit: string };
+  receivables: { accountDebit: string };
+  withholdingTaxRate: number;
+}
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
@@ -161,4 +173,5 @@ export interface Jurisdiction {
   chart: ChartData;
   periods: PeriodsData;
   statements: StatementsData;
+  yearEnd: YearEndData;
 }

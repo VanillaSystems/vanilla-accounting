@@ -108,7 +108,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/reconcile-bank.ts` | CHF 3, camt.053 2 |
 | `src/accounting/vat-codes.source.ts` | MWST 3, ESTV 1, Ziffer 4, tax code 90 |
 | `src/accounting/vat-codes.ts` | MWST 3, ESTV 2, Ziffer 6 |
-| `src/accounting/year-close.ts` | CHF 12, MWST 2, ESTV 3, Ziffer 1, tax code 1, form 0535 3, camt.053 1, Rappen 1 |
+| `src/accounting/year-close.ts` | CHF 12, MWST 2, ESTV 3, Ziffer 1, form 0535 3, camt.053 1, Rappen 1 |
 | `src/booking/classify.ts` | MWST 1, ESTV 1 |
 | `src/collect/tutti.ts` | CHF 8, MWST 1 |
 | `src/intake/match.ts` | CHF 2 |

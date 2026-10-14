@@ -1,0 +1,31 @@
+# The Swiss year close (OR Art. 957 ff.): the accounts it books on, the entries it offers as
+# prefilled forms, and the Verrechnungssteuer on a dividend (VStG Art. 13). An account role lists
+# candidates; the first one the workspace's chart has wins.
+
+accounts:
+  retainedEarnings: ["2970"]
+  fxDifference: ["6960", "6950"]
+  vatSettlement: ["2201", "2200"]
+  vat: ["1170", "1171", "2200", "2201"]
+
+# Blank accounts are the user's pick.
+templates:
+  - { id: depreciation, accountDebit: "6800", accountCredit: "" }
+  - { id: accruedExpense, accountDebit: "", accountCredit: "2300" }
+  - { id: prepaidExpense, accountDebit: "1300", accountCredit: "" }
+  - { id: accruedIncome, accountDebit: "1301", accountCredit: "" }
+  - { id: deferredIncome, accountDebit: "", accountCredit: "2301" }
+  - { id: provision, accountDebit: "", accountCredit: "2330" }
+  - { id: taxProvision, accountDebit: "8900", accountCredit: "2208" }
+  - { id: privateUse, accountDebit: "2451", accountCredit: "", vatCode: K81-B }
+  - { id: inventoryChange, accountDebit: "", accountCredit: "" }
+  - { id: socialInsurance, accountDebit: "5700", accountCredit: "2270" }
+  - { id: doubtfulAccounts, accountDebit: "3805", accountCredit: "1109" }
+
+# After the shareholders' resolution, dated in the new year.
+profitAllocation: { accountDebit: "2970", accountCredit: "2950" }
+
+# Invoices still open on 31.12. (ADR 0010); the credit is the invoices' revenue account.
+receivables: { accountDebit: "1100" }
+
+withholdingTaxRate: 0.35

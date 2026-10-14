@@ -14,7 +14,7 @@ import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
 import { writeSeal } from '../src/books/seal.js';
 import {
   applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
-  vatPostings, yearClose, yearEndAccounts, YEAR_END_TEMPLATES, RECEIVABLES, type Books, type YearCloseInput,
+  vatPostings, yearClose, yearEndAccounts, yearEndTemplates, RECEIVABLES_ID, type Books, type YearCloseInput,
 } from '../src/accounting/year-close.js';
 import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, YearCloseRefused } from '../src/books/year-close.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
@@ -78,7 +78,7 @@ const input = (b: Books, over: Partial<YearCloseInput> = {}): YearCloseInput => 
   seals: { checks: (['2026-Q1', '2026-Q2', '2026-Q3'] as const).map((quarter) => ({ quarter, file: `${quarter}.json`, status: 'intact' as const })), unsealed: [] },
   doctor: [],
   rates: RATES,
-  state: { ...emptyState('2026'), templates: Object.fromEntries(YEAR_END_TEMPLATES.map((t) => [t.id, 'na' as const])) },
+  state: { ...emptyState('2026'), templates: Object.fromEntries(yearEndTemplates().map((t) => [t.id, 'na' as const])) },
   ...over,
 });
 
@@ -156,13 +156,13 @@ test('the checklist: nothing blocks once Q4 is filed, Q1 to Q3 sealed, the banks
 test('open invoices on 31.12.: proposed as a receivables entry (1100 / the revenue account, no VAT code) that must be decided; none, no proposal', () => {
   const b = books();
   applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
-  assert.ok(!yearClose(input(b)).templates.some((t) => t.id === RECEIVABLES.id));
+  assert.ok(!yearClose(input(b)).templates.some((t) => t.id === RECEIVABLES_ID));
   const receivables = { invoices: [{ number: '2026-004', customer: 'Kunde', date: '2026-12-01', currency: 'CHF', open: 540.5, chf: 540.5 }], total: 540.5, revenueAccount: '3400' };
   const close = yearClose(input(b, { receivables }));
-  const proposed = close.templates.find((t) => t.id === RECEIVABLES.id);
+  const proposed = close.templates.find((t) => t.id === RECEIVABLES_ID);
   assert.deepEqual(proposed, { id: 'receivables', accountDebit: '1100', accountCredit: '3400', amount: 540.5, state: undefined });
   assert.deepEqual(close.blockers, [{ code: 'undecided', templates: ['receivables'] }]);
-  const decided = yearClose(input(b, { receivables, state: { ...emptyState('2026'), templates: { ...Object.fromEntries(YEAR_END_TEMPLATES.map((t) => [t.id, 'na' as const])), receivables: 'done' } } }));
+  const decided = yearClose(input(b, { receivables, state: { ...emptyState('2026'), templates: { ...Object.fromEntries(yearEndTemplates().map((t) => [t.id, 'na' as const])), receivables: 'done' } } }));
   assert.deepEqual(decided.blockers, []);
 });
 
@@ -286,7 +286,7 @@ test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 a
   const ws = readyToClose();
   await assert.rejects(() => closeYear(ws, '2026', RATES), YearCloseRefused, 'the Kursdifferenz and the guided entries are open');
   bookRevaluation(ws, '2026', RATES);
-  for (const t of YEAR_END_TEMPLATES) markTemplate(ws, '2026', t.id, 'na');
+  for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
   const result = await closeYear(ws, '2026', RATES, '2027-03-01');
   assert.equal(result.closedThrough, '2026-12-31');
   assert.equal(result.committed, false, 'a temp folder is no git repository');
@@ -308,7 +308,7 @@ test('receivables: booked on 31.12. under the year\'s id, once; opening the next
   const ws = readyToClose();
   writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451', '1100'].map((number) => ({ number, name: number }))));
   bookRevaluation(ws, '2026', RATES);
-  for (const t of YEAR_END_TEMPLATES) markTemplate(ws, '2026', t.id, 'na');
+  for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
   const input = { date: '2026-12-31', accountDebit: '1100', accountCredit: '3400', amount: 540.5, description: 'Debitoren per 31.12.2026: 2026-004' };
   const booked = bookEntry(ws, input, 'receivables');
   assert.equal(booked.id, 'yc-2026-receivables');
