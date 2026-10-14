@@ -10,7 +10,7 @@ and the providers.
 |---|---:|---:|
 | core | 35 | 22 |
 | engine | 4 | 1 |
-| provider | 10 | 8 |
+| provider | 11 | 9 |
 | split | 47 | 26 |
 | infrastructure | 13 | 4 |
 | workflow | 4 | 0 |
@@ -91,6 +91,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/providers/banana/banana.ts` | CHF 2 |
 | `src/providers/camt053/camt053.ts` | CHF 5, camt.053 5 |
 | `src/providers/camt053/statement-balances.ts` | CHF 1, camt.053 3 |
+| `src/providers/ech0217/xml.ts` | MWST 4, ESTV 1, Ziffer 1, eCH-0217 31, Rappen 1 |
 | `src/providers/qr-bill/reference.ts` | camt.053 1, QR-bill 13 |
 | `src/providers/statement-pdf/statement-pdf-balances.ts` | CHF 2 |
 | `src/providers/wise-pdf/wise-statement-pdf.ts` | camt.053 1, QR-bill 1 |
@@ -188,7 +189,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/rebook-shopify-orders.ts` | CHF 5, MWST 3, ESTV 2, tax code 4 |
 | `src/cli/reconcile-balances.ts` | camt.053 3 |
 | `src/cli/restamp-fx-rates.ts` | CHF 2, ESTV 3 |
-| `src/cli/vat-ech0217.ts` | CHF 1, MWST 7, ESTV 1, Ziffer 1, eCH-0217 31, form 0535 1, Rappen 1 |
+| `src/cli/vat-ech0217.ts` | CHF 1, MWST 2, ESTV 1, eCH-0217 1, form 0535 1 |
 | `src/cli/vat-report-html.ts` | CHF 2, MWST 5, ESTV 3, Ziffer 9 |
 | `src/cli/vat-report.ts` | CHF 2, MWST 3, Ziffer 5, form 0535 1 |
 | `src/cli/year-close-text.ts` | CHF 7, ESTV 1, camt.053 1 |
