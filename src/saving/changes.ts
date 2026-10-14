@@ -20,7 +20,7 @@ export function customizingNames(): string[] {
 }
 
 /** The records: committed by the app (records.ts), never through Änderungen. */
-export const recordsPaths = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.transactional, ws.paths.invoices];
+export const recordsPaths = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.transactional, ws.paths.invoices, join(ws.paths.root, 'collected')];
 
 export const draftDir = (ws: Ws): string => join(ws.paths.data, 'draft');
 

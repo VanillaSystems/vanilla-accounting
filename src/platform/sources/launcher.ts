@@ -58,14 +58,15 @@ export interface FeedRun {
 /** One feed of a source, item by item. `call` runs a channel's method on the host; the child never holds a connection. */
 export async function* runFeed(launcher: Launcher, run: FeedRun, call: (channel: Channel, method: string, args: unknown[]) => Promise<unknown>, log: (text: string) => void = () => {}): AsyncGenerator<Yielded> {
   const child = launcher.start(run.folder);
-  const queue: Array<ChildMessage | { type: 'exit'; code: number | null; stderr: string }> = [];
+  const queue: Array<ChildMessage | { type: 'exit'; code: number | null; stderr: string } | { type: 'host'; error: unknown }> = [];
   let wake: (() => void) | undefined;
   const push = (m: (typeof queue)[number]) => { queue.push(m); const w = wake; wake = undefined; w?.(); };
   child.onMessage((m) => {
     if (m.type === 'call') {
+      // A failure of the host (a dropped connection, a reach refused) is the host's, not the code's: it ends the feed as itself.
       call(m.channel, m.method, m.args).then(
         (value) => child.send({ type: 'reply', id: m.id, ok: true, value }),
-        (e: Error) => child.send({ type: 'reply', id: m.id, ok: false, error: e.message }),
+        (error: unknown) => push({ type: 'host', error }),
       );
     } else if (m.type === 'log') log(m.text);
     else push(m);
@@ -79,6 +80,7 @@ export async function* runFeed(launcher: Launcher, run: FeedRun, call: (channel:
       if (m.type === 'yield') { yield m.item; child.send({ type: 'next' }); }
       else if (m.type === 'end') return;
       else if (m.type === 'error') throw new SourceError(m.message);
+      else if (m.type === 'host') throw m.error;
       else if (m.type === 'exit') throw new ChildCrashed(`the source's code stopped (${m.code ?? 'killed'}): ${m.stderr.split('\n').find((l) => /Error|ERR_/.test(l)) ?? m.stderr.slice(-300)}`);
     }
   } finally {

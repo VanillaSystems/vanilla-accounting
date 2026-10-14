@@ -49,21 +49,24 @@ export const layered = (first: Required<SecretStore>, then: SecretStore): Requir
   set: first.set,
 });
 
-let store: SecretStore = process.env.VANILLA_SECRETS_FILE ? fileSecrets(process.env.VANILLA_SECRETS_FILE) : envSecrets;
+let chosen: SecretStore | undefined;
+/** The store in use: the one set at start, else a secrets file (tests), else the environment. Chosen at the first use, not at import. */
+const store = (): SecretStore => (chosen ??= process.env.VANILLA_SECRETS_FILE ? fileSecrets(process.env.VANILLA_SECRETS_FILE) : envSecrets);
 
 export const secrets = {
-  get: (name: SecretName) => store.get(name),
-  where: (name: SecretName) => store.where(name),
+  get: (name: SecretName) => store().get(name),
+  where: (name: SecretName) => store().where(name),
   /** Whether the person can save the secret in the app (the desktop app) or puts it into .env. */
-  inApp: () => !!store.set,
+  inApp: () => !!store().set,
   /** Only where `inApp()`; elsewhere it rejects. */
   set: async (name: SecretName, value: string | null): Promise<void> => {
-    if (!store.set) throw new Error(`The app does not keep this secret: ${store.where(name)}.`);
-    await store.set(name, value);
+    const s = store();
+    if (!s.set) throw new Error(`The app does not keep this secret: ${s.where(name)}.`);
+    await s.set(name, value);
   },
 };
 
 /** The desktop app's seam: its keychain store replaces the environment for the whole process. */
 export function useSecretStore(next: SecretStore): void {
-  store = next;
+  chosen = next;
 }
