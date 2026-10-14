@@ -1,6 +1,12 @@
 /**
  * Änderungen (saving.md) as data. Browser-safe.
  *
+ * Revised 2026-10-14 (owner decision, design.md "Two paths into git"): the books no longer wait
+ * here. The app commits them per run and per direct edit (records.ts). Änderungen shows the
+ * customizing on the draft branch (rules, workflows, knowledge, settings the AI or Claude Code
+ * wrote) and edits made outside the app; `byRun` and record-level saves below apply to those
+ * outside edits of books files only, which the app commits as one "outside the app" save.
+ *
  * Single sources of truth:
  * - WHAT changed: the git working tree of the company's repository against HEAD. Nothing else
  *   records changes; a file the AI, a run, the UI or Claude Code wrote shows the same way.
