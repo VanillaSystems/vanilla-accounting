@@ -52,6 +52,18 @@ const CANONICAL = [
   '/journal?period=ytd',
   '/journal?period=all',
   '/receipts?q=a+b%26c',
+  '/automation',
+  '/automation/booking',
+  '/automation/booking/runs',
+  '/automation/booking/graph/classify',
+  '/automation/runs/booking-1a2b3c4d',
+  '/automation/map',
+  '/automation/map/events',
+  '/automation/queue',
+  '/automation/tasks',
+  '/automation/tasks/booking-1a2b3c4d',
+  '/changes',
+  '/changes/3f2a9c0',
 ];
 
 test('every path of urls.md parses and formats back to itself', () => {
@@ -73,6 +85,18 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/company/banks'), { area: 'company', section: 'banks' });
   assert.deepEqual(route('/invoices/2026-006'), { area: 'invoices', view: 'list', id: '2026-006' });
   assert.deepEqual(route('/invoices/sent/d-42'), { area: 'invoices', view: 'sent', id: 'd-42' });
+  assert.deepEqual(route('/automation'), { area: 'automation', view: 'workflow', tab: 'graph' });
+  assert.deepEqual(route('/automation/booking/triggers'), { area: 'automation', view: 'workflow', workflow: 'booking', tab: 'triggers' });
+  assert.deepEqual(route('/automation/booking/graph/classify'), { area: 'automation', view: 'workflow', workflow: 'booking', tab: 'graph', step: 'classify' });
+  assert.deepEqual(route('/automation/runs/booking-1a2b'), { area: 'automation', view: 'run', run: 'booking-1a2b' });
+  assert.deepEqual(route('/automation/map/events'), { area: 'automation', view: 'map', map: 'events' });
+  assert.deepEqual(route('/automation/tasks/booking-1a2b'), { area: 'automation', view: 'tasks', run: 'booking-1a2b' });
+  assert.deepEqual(route('/changes/3f2a9c0'), { area: 'changes', commit: '3f2a9c0' });
+});
+
+test('automation: the default tab leaves no segment, an unknown tab is the graph', () => {
+  assert.equal(formatLocation((parse('/automation/booking/graph') as { redirect: Location }).redirect), '/automation/booking');
+  assert.equal(formatLocation((parse('/automation/booking/nonsense') as { redirect: Location }).redirect), '/automation/booking');
 });
 
 test('the period leaves the parser as a Period, a range in either spelling', () => {

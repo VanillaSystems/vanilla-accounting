@@ -8,6 +8,8 @@ export const ICONS = {
   reports: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17" /><rect x="5" y="11" width="3.2" height="6.5" rx="1" /><rect x="10.4" y="5.5" width="3.2" height="12" rx="1" /><rect x="15.8" y="13.5" width="3.2" height="4" rx="1" /></svg>,
   close: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3" /><path d="M3.5 10h17M8 3v4M16 3v4" /><path d="m9 15.2 2 2 4-4" /></svg>,
   company: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5V21" /><path d="M16 9h2.5A1.5 1.5 0 0 1 20 10.5V21" /><path d="M2.5 21h19" /><path d="M8 7.5h4M8 11.5h4M8 15.5h4" /></svg>,
+  automation: <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5" /><rect x="15" y="15" width="6" height="6" rx="1.5" /><path d="M9 6h4a2 2 0 0 1 2 2v7" /><path d="m12.5 12.5 2.5 2.5 2.5-2.5" /></svg>,
+  changes: <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>,
   plus: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>,
   down: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>,
   search: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>,

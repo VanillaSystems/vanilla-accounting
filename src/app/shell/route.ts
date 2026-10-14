@@ -14,6 +14,13 @@ export type CompanySection = typeof COMPANY_SECTIONS[number];
 export const RECEIPT_FILTERS = ['zugeordnet', 'offen', 'ohneDatum'] as const;
 export type ReceiptFilter = typeof RECEIPT_FILTERS[number];
 
+/** The tabs of a workflow in Automatisierung; `graph` is the default and leaves no segment. */
+export const AUTOMATION_TABS = ['graph', 'triggers', 'runs', 'files'] as const;
+export type AutomationTab = typeof AUTOMATION_TABS[number];
+
+/** Segments under /automation that name a page, not a workflow: no workflow may take these ids. */
+export const AUTOMATION_PAGES = ['runs', 'map', 'queue', 'tasks'] as const;
+
 export const INVOICE_STATUSES = ['open', 'overdue', 'draft', 'paid'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 
@@ -28,7 +35,15 @@ export type Route =
   | { area: 'close'; step?: string }
   /** An unknown section stays in the route, so the area can say it does not exist (urls.md rule 5). */
   | { area: 'company'; section: CompanySection | (string & {}) }
-  | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string };
+  | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string }
+  /** Automatisierung (docs/0.4.0/ui/design.md): a workflow with its tab, one run, the process map, the queue, the tasks. */
+  | { area: 'automation'; view: 'workflow'; workflow?: string; tab: AutomationTab; step?: string }
+  | { area: 'automation'; view: 'run'; run: string }
+  | { area: 'automation'; view: 'map'; map: 'phases' | 'events' }
+  | { area: 'automation'; view: 'queue' }
+  | { area: 'automation'; view: 'tasks'; run?: string }
+  /** Änderungen: what is not saved yet, or one save of Verlauf. */
+  | { area: 'changes'; commit?: string };
 
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
@@ -44,6 +59,8 @@ export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
   reports: { area: 'reports', report: 'income' },
   close: { area: 'close' },
   company: { area: 'company', section: 'profile' },
+  automation: { area: 'automation', view: 'workflow', tab: 'graph' },
+  changes: { area: 'changes' },
 };
 
 export interface Query {
@@ -98,10 +115,12 @@ function segmentsOf(r: Route): Array<string | undefined> {
     case 'close': return ['close', r.step];
     case 'company': return ['company', r.section];
     case 'invoices': return ['invoices', r.view === 'list' ? undefined : r.view, r.id];
+    case 'automation': return automationSegments(r);
+    case 'changes': return ['changes', r.commit];
   }
 }
 
-function routeOf([a, b, c]: string[]): Route {
+function routeOf([a, b, c, d]: string[]): Route {
   switch (a) {
     case 'receipts': return defined({ area: 'receipts', id: b });
     case 'bank': return defined({ area: 'bank', statement: b, payment: b && c });
@@ -112,8 +131,30 @@ function routeOf([a, b, c]: string[]): Route {
     case 'close': return defined({ area: 'close', step: b });
     case 'company': return { area: 'company', section: b ?? 'profile' };
     case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
+    case 'automation': return automationRoute(b, c, d);
+    case 'changes': return defined({ area: 'changes', commit: b });
     default: return { area: 'receipts' };
   }
+}
+
+function automationSegments(r: RouteOf<'automation'>): Array<string | undefined> {
+  switch (r.view) {
+    case 'workflow': return r.step ? ['automation', r.workflow, 'graph', r.step] : ['automation', r.workflow, r.tab === 'graph' ? undefined : r.tab];
+    case 'run': return ['automation', 'runs', r.run];
+    case 'map': return ['automation', 'map', r.map === 'phases' ? undefined : r.map];
+    case 'queue': return ['automation', 'queue'];
+    case 'tasks': return ['automation', 'tasks', r.run];
+  }
+}
+
+function automationRoute(b?: string, c?: string, d?: string): Route {
+  if (b === 'runs' && c) return { area: 'automation', view: 'run', run: c };
+  if (b === 'map') return { area: 'automation', view: 'map', map: c === 'events' ? 'events' : 'phases' };
+  if (b === 'queue') return { area: 'automation', view: 'queue' };
+  if (b === 'tasks') return defined({ area: 'automation', view: 'tasks', run: c });
+  if (!b || b === 'runs') return { area: 'automation', view: 'workflow', tab: 'graph' };
+  if (c === 'graph' && d) return { area: 'automation', view: 'workflow', workflow: b, tab: 'graph', step: d };
+  return { area: 'automation', view: 'workflow', workflow: b, tab: isOneOf(AUTOMATION_TABS, c) ? c : 'graph' };
 }
 
 function queryOf(params: URLSearchParams, today: IsoDate): Query {
