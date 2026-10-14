@@ -13,11 +13,11 @@ import type { Index, JournalEntry, QuarterKey } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
-import { chfAmount, computeBalances, isDebitNormal } from './ledger.js';
+import { chfAmount, computeBalances } from './ledger.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { derivePeriod } from './periods.js';
-import { vat } from '../engines/index.js';
+import { chart, vat } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -124,24 +124,25 @@ export type DifferenceCause =
   | { code: 'outsideStatements'; account: string; amount: number }
   | { code: 'notInChart'; account: string; amount: number };
 
-const digit = (account: string) => account.charAt(0);
-const isBalanceSheet = (account: string) => digit(account) === '1' || digit(account) === '2';
-const isProfitAndLoss = (account: string) => '345678'.includes(digit(account)) && account !== '';
+const side = (account: string) => chart().sideOf(account);
+const isDebitNormal = (account: string) => chart().isDebitNormal(account);
+const isBalanceSheet = (account: string) => side(account) === 'assets' || side(account) === 'liabilities';
+const isProfitAndLoss = (account: string) => side(account) === 'result';
 
 /** The year's ledger as Banana would close it: opening + the year's entries + their VAT postings. */
 export function closingLedger(books: Books, year: string, chart: readonly string[], accounts: YearEndAccounts): ClosingLedger {
   const opening = books.config.openingBalances?.[year] ?? {};
   const entries = books.journalEntries.filter((e) => inYear(year)(e.date));
   const vat = vatPostings(entries, accounts.vatSettlement);
-  const rows = computeBalances([...entries, ...vat], `${year}-01-01`, yearEnd(year), opening);
+  const rows = computeBalances([...entries, ...vat], `${year}-01-01`, yearEnd(year), opening, isDebitNormal);
   const balances: Record<string, number> = {};
   for (const r of rows) if (toRappen(r.balance) !== 0) balances[r.account] = r.balance;
 
   let assets = 0, liabilities = 0, result = 0;
   for (const [account, balance] of Object.entries(balances)) {
     const rappen = toRappen(balance);
-    if (digit(account) === '1') assets += rappen;
-    else if (digit(account) === '2') liabilities += rappen;
+    if (side(account) === 'assets') assets += rappen;
+    else if (side(account) === 'liabilities') liabilities += rappen;
     else if (isProfitAndLoss(account)) result += isDebitNormal(account) ? -rappen : rappen;
   }
   const residual = assets - liabilities - result;
@@ -149,8 +150,8 @@ export function closingLedger(books: Books, year: string, chart: readonly string
   const causes: DifferenceCause[] = [];
   let openAssets = 0, openLiabilities = 0;
   for (const [account, value] of Object.entries(opening)) {
-    if (digit(account) === '1') openAssets += toRappen(value);
-    else if (digit(account) === '2') openLiabilities += toRappen(value);
+    if (side(account) === 'assets') openAssets += toRappen(value);
+    else if (side(account) === 'liabilities') openLiabilities += toRappen(value);
   }
   if (openAssets !== openLiabilities) causes.push({ code: 'openingUnbalanced', amount: fromRappen(openAssets - openLiabilities) });
   // A booking of several lines (Banana's split entry) has one-leg lines that balance under its ref.
@@ -233,7 +234,7 @@ export function revaluations(books: Books, year: string, foreign: readonly Forei
   const opening = books.config.openingBalances?.[year] ?? {};
   return foreign.map((f) => {
     const native = bookBalanceNative(others, f.account, f.currency, year, yearEnd(year), nativeOpening(books, f.account, f.currency, year));
-    const chf = computeBalances(others, `${year}-01-01`, yearEnd(year), { [f.account]: opening[f.account] ?? 0 }).find((b) => b.account === f.account)?.balance ?? (opening[f.account] ?? 0);
+    const chf = computeBalances(others, `${year}-01-01`, yearEnd(year), { [f.account]: opening[f.account] ?? 0 }, isDebitNormal).find((b) => b.account === f.account)?.balance ?? (opening[f.account] ?? 0);
     const bookChf = roundCHF(chf);
     const booked = fromRappen(ownEntries.filter((e) => e.id === revaluationId(year, f.account))
       .reduce((s, e) => s + (e.accountDebit === f.account ? toRappen(e.amount) : -toRappen(e.amount)), 0));
@@ -302,7 +303,7 @@ export interface VatCheck {
 }
 
 export function vatCheck(books: Books, year: string, filed: readonly ReturnFigures[], accounts: YearEndAccounts): VatCheck {
-  const owedSign = (account: string) => (digit(account) === '2' ? 1 : -1);
+  const owedSign = (account: string) => (side(account) === 'liabilities' ? 1 : -1);
   const group = new Set(accounts.vatAccounts);
   const opening = fromRappen(accounts.vatAccounts.reduce((s, a) => s + owedSign(a) * toRappen(books.config.openingBalances?.[year]?.[a] ?? 0), 0));
   const entries = books.journalEntries.filter((e) => inYear(year)(e.date));
@@ -673,7 +674,7 @@ export function openingOf(closing: ClosingLedger, books: Books, foreign: readonl
 
   let assets = 0, liabilities = 0;
   for (const [account, value] of Object.entries(balances)) {
-    if (digit(account) === '1') assets += toRappen(value);
+    if (side(account) === 'assets') assets += toRappen(value);
     else liabilities += toRappen(value);
   }
   const sorted = Object.fromEntries(Object.entries(balances).sort(([a], [b]) => a.localeCompare(b)));

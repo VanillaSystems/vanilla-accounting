@@ -59,5 +59,8 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   };
   for (const z of Object.keys(r.derived)) visit(z, []);
   for (const key of ['payable', 'credit'] as const) if (!(r[key] in r.derived)) add('return.yaml', key, `Ziffer ${r[key]} is not a derived Ziffer`);
+  for (const [prefix, type] of Object.entries(j.chart.classes)) {
+    if (!j.chart.types[type]) add('chart.yaml', `classes.${prefix}`, `type "${type}" is not one of types`);
+  }
   return problems;
 }

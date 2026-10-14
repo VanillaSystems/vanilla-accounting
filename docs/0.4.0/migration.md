@@ -14,7 +14,7 @@ marked *decided*.
 ## Steps
 
 Done on branch `0.4.0`: 0, 1 ([inventory.md](inventory.md)), 2 (`tests/layers.test.ts`, 40 wrong-way
-imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`), 7.
+imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`), 4 (`modules/ch/chart.yaml`), 7.
 
 | # | Step | Ends when | Needs |
 |---|---|---|---|

@@ -1,5 +1,6 @@
 import type { JournalEntry } from '../types/index.js';
 import { computeBalances } from './ledger.js';
+import { chart } from '../engines/index.js';
 import { roundCHF } from './rappen.js';
 
 export interface IncomeStatementSection {
@@ -26,7 +27,7 @@ export function computeIncomeStatement(
   to: string,
   accountNames: Record<string, string>,
 ): IncomeStatement {
-  const balances = computeBalances(entries, from, to);
+  const balances = computeBalances(entries, from, to, {}, chart().isDebitNormal);
   const balanceMap = new Map(balances.map(b => [b.account, b.balance]));
 
   const allAccounts = Object.keys(accountNames).sort();

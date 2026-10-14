@@ -1,6 +1,7 @@
 import type { JournalEntry } from '../types/index.js';
 import { computeBalances, type AccountBalance } from './ledger.js';
 import { roundCHF } from './rappen.js';
+import { chart } from '../engines/index.js';
 
 export interface TrialBalanceRow extends AccountBalance {
   name: string;
@@ -20,7 +21,7 @@ export function computeTrialBalance(
   openingBalances: Record<string, number>,
   accountNames: Record<string, string>,
 ): TrialBalance {
-  const balances = computeBalances(entries, from, to, openingBalances);
+  const balances = computeBalances(entries, from, to, openingBalances, chart().isDebitNormal);
 
   const rows: TrialBalanceRow[] = balances
     .filter(b => b.debitTotal !== 0 || b.creditTotal !== 0 || b.balance !== 0)

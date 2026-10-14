@@ -1,6 +1,7 @@
 import type { JournalEntry } from '../types/index.js';
 import { toRappen, fromRappen } from './rappen.js';
-import { chfAmount, isDebitNormal } from './ledger.js';
+import { chfAmount } from './ledger.js';
+import { chart } from '../engines/index.js';
 
 export interface AccountLedgerRow {
   date: string;
@@ -26,7 +27,7 @@ export function computeAccountLedger(
     })
     .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 
-  const debitNormal = isDebitNormal(account);
+  const debitNormal = chart().isDebitNormal(account);
   let balanceRappen = toRappen(openingBalance);
   const rows: AccountLedgerRow[] = [];
 

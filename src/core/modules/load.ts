@@ -7,10 +7,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import type { Jurisdiction, ModuleManifest, RatesData, ReturnData, TaxCodesData } from './schema.js';
+import type { ChartData, Jurisdiction, ModuleManifest, RatesData, ReturnData, TaxCodesData } from './schema.js';
 import { checkJurisdiction, type ModuleProblem } from './check.js';
 
-const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml' } as const;
+const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', chart: 'chart.yaml' } as const;
 
 /** Merges an overlay onto a shipped value: maps key by key, `null` (YAML `~`) removes a key, anything else replaces. */
 export function mergeOverlay<T>(shipped: T, overlay: unknown): T {
@@ -62,6 +62,7 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
     rates: part<RatesData>(FILES.rates, 'rates'),
     taxCodes: part<TaxCodesData>(FILES.taxCodes, 'taxCodes'),
     vatReturn: part<ReturnData>(FILES.vatReturn, 'vatReturn'),
+    chart: part<ChartData>(FILES.chart, 'chart'),
   };
   if (overlayManifest) overlaid.push('manifest');
   return {

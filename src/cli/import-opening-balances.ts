@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
 import { loadBooks, mutateJournal, saveBooks } from '../books/store.js';
 import { toRappen, fromRappen } from '../accounting/rappen.js';
-import { isDebitNormal } from '../accounting/ledger.js';
+import { chart } from '../engines/index.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
@@ -104,7 +104,7 @@ function parseAccounts(xmlPath: string): ParsedAccount[] {
 
 /** Convert Banana's debit-positive signed CHF balance into the app's natural direction. */
 function naturalBalance(account: string, bananaBalanceCHF: number): number {
-  return isDebitNormal(account) ? bananaBalanceCHF : -bananaBalanceCHF;
+  return chart().isDebitNormal(account) ? bananaBalanceCHF : -bananaBalanceCHF;
 }
 
 function fmt(n: number): string {

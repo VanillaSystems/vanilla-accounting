@@ -21,21 +21,8 @@ export function chfAmount(entry: JournalEntry): number {
   return entry.amount;
 }
 
-/**
- * Determine if an account has a "debit normal" balance.
- * Swiss KMU Kontenrahmen:
- * 1xxx = Assets (debit normal)
- * 2xxx = Liabilities + Equity (credit normal)
- * 3xxx = Revenue (credit normal)
- * 4xxx-8xxx = Expenses (debit normal)
- */
-export function isDebitNormal(account: string): boolean {
-  const prefix = parseInt(account.charAt(0));
-  if (prefix === 1) return true;
-  if (prefix === 2) return false;
-  if (prefix === 3) return false;
-  return true;
-}
+/** Whether an account's balance grows on the debit side: the chart decides (src/engines/chart.ts). */
+export type DebitNormal = (account: string) => boolean;
 
 /**
  * Compute balances for all accounts from journal entries within a date range.
@@ -44,7 +31,8 @@ export function computeBalances(
   entries: JournalEntry[],
   from: string,
   to: string,
-  openingBalances: Record<string, number> = {},
+  openingBalances: Record<string, number>,
+  isDebitNormal: DebitNormal,
 ): AccountBalance[] {
   const filtered = entries.filter(e => {
     const date = e.date;
@@ -98,9 +86,10 @@ export function computeAccountBalance(
   account: string,
   from: string,
   to: string,
-  openingBalance: number = 0,
+  openingBalance: number,
+  isDebitNormal: DebitNormal,
 ): AccountBalance {
-  const balances = computeBalances(entries, from, to, { [account]: openingBalance });
+  const balances = computeBalances(entries, from, to, { [account]: openingBalance }, isDebitNormal);
   return balances.find(b => b.account === account) ?? {
     account,
     debitTotal: 0,
@@ -118,11 +107,13 @@ export function computeAccountBalance(
 export function openingBalancesAt(
   entries: JournalEntry[],
   from: string,
-  openingByYear: Record<string, Record<string, number>> = {},
+  openingByYear: Record<string, Record<string, number>> | undefined,
+  isDebitNormal: DebitNormal,
 ): Record<string, number> {
+  openingByYear ??= {};
   const year = from.slice(0, 4);
   const first = Object.keys(openingByYear).sort()[0];
   if (first && year < first) return openingByYear[first];
-  const balances = computeBalances(entries, `${year}-01-01`, addDays(from, -1), openingByYear[year] ?? {});
+  const balances = computeBalances(entries, `${year}-01-01`, addDays(from, -1), openingByYear[year] ?? {}, isDebitNormal);
   return Object.fromEntries(balances.map((b) => [b.account, b.balance]));
 }

@@ -1,5 +1,6 @@
 import type { JournalEntry } from '../types/index.js';
-import { computeBalances, isDebitNormal } from './ledger.js';
+import { computeBalances } from './ledger.js';
+import { chart } from '../engines/index.js';
 import { toRappen, fromRappen, roundCHF } from './rappen.js';
 
 export interface BalanceSheetSection {
@@ -35,18 +36,17 @@ export function computeBalanceSheet(
 ): BalanceSheet {
   const year = asOfDate.slice(0, 4);
   const from = `${year}-01-01`;
-  const balances = computeBalances(entries, from, asOfDate, openingBalances);
+  const balances = computeBalances(entries, from, asOfDate, openingBalances, chart().isDebitNormal);
   const balanceMap = new Map(balances.map(b => [b.account, b.balance]));
 
   // Compute P&L result (3xxx-8xxx) to show as "Jahresergebnis" on the balance sheet
   let plResultRappen = 0;
   for (const b of balances) {
-    const prefix = parseInt(b.account.charAt(0));
-    if (prefix >= 3 && prefix <= 8) {
+    if (chart().sideOf(b.account) === 'result') {
       // For credit-normal (revenue 3xxx): positive balance = revenue
       // For debit-normal (expenses 4-8xxx): positive balance = expense
       // Net result = revenue - expenses
-      if (isDebitNormal(b.account)) {
+      if (chart().isDebitNormal(b.account)) {
         plResultRappen -= toRappen(b.balance); // expenses reduce result
       } else {
         plResultRappen += toRappen(b.balance); // revenue increases result

@@ -6,6 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openQuarter } from '../src/accounting/periods.js';
+import './support/jurisdiction.js';
+import { chart } from '../src/engines/index.js';
 
 const range = (token: string, today = '2026-10-09') => {
   const p = parsePeriod(token, today);
@@ -124,10 +126,10 @@ test('openingBalancesAt: a range that starts mid-year carries the year so far', 
     ({ id, date, accountDebit: debit, accountCredit: credit, amount, description: id }) as never;
   const entries = [e('a', '2026-02-10', '1020', '3200', 100), e('b', '2026-07-05', '6500', '1020', 30), e('c', '2026-07-20', '1020', '3200', 5)];
   const openings = { '2026': { '1020': 1000 } };
-  assert.deepEqual(openingBalancesAt(entries, '2026-01-01', openings), { '1020': 1000 });
-  assert.deepEqual(openingBalancesAt(entries, '2026-07-01', openings), { '1020': 1100, '3200': 100 });
-  assert.deepEqual(openingBalancesAt(entries, '2026-07-10', openings), { '1020': 1070, '3200': 100, '6500': 30 });
-  assert.deepEqual(openingBalancesAt(entries, '0000-01-01', openings), { '1020': 1000 }, "the period 'all' starts at the first openings");
+  assert.deepEqual(openingBalancesAt(entries, '2026-01-01', openings, chart().isDebitNormal), { '1020': 1000 });
+  assert.deepEqual(openingBalancesAt(entries, '2026-07-01', openings, chart().isDebitNormal), { '1020': 1100, '3200': 100 });
+  assert.deepEqual(openingBalancesAt(entries, '2026-07-10', openings, chart().isDebitNormal), { '1020': 1070, '3200': 100, '6500': 30 });
+  assert.deepEqual(openingBalancesAt(entries, '0000-01-01', openings, chart().isDebitNormal), { '1020': 1000 }, "the period 'all' starts at the first openings");
 });
 
 test('parseSwissDate: typed dd.mm.yyyy, with or without leading zeros; no impossible days', async () => {

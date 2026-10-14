@@ -8,3 +8,4 @@ provides:
   - accounting.tax.vat-codes@1
   - accounting.tax.rates@1
   - accounting.tax.vat-return@1
+  - accounting.ledger.chart@1

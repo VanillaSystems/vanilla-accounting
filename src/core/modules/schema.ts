@@ -110,10 +110,29 @@ export interface ReturnData {
   credit: BoxId;
 }
 
+export type AccountType = 'asset' | 'liability' | 'revenue' | 'expense' | 'closing';
+
+/** Which side of the statements an account's balance counts on; `none` keeps it off both. */
+export type StatementSide = 'assets' | 'liabilities' | 'result' | 'none';
+
+export interface AccountTypeRule {
+  normal: 'debit' | 'credit';
+  side: StatementSide;
+}
+
+/** chart.yaml: an account's type from its leading digits (longest prefix wins), and what each type means. */
+export interface ChartData {
+  classes: Record<string, AccountType>;
+  types: Record<AccountType, AccountTypeRule>;
+  /** An account no class matches. */
+  unclassified: AccountTypeRule;
+}
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
   rates: RatesData;
   taxCodes: TaxCodesData;
   vatReturn: ReturnData;
+  chart: ChartData;
 }

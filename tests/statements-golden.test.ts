@@ -12,6 +12,7 @@ import { computeIncomeStatement, type IncomeStatementSection } from '../src/acco
 import { computeTrialBalance } from '../src/accounting/trial-balance.js';
 import { openingBalancesAt } from '../src/accounting/ledger.js';
 import { goldenSet } from './support/golden.js';
+import { chart } from '../src/engines/index.js';
 
 const { books, expect: golden } = goldenSet();
 const entries = books.journalEntries as JournalEntry[];
@@ -54,7 +55,7 @@ test('balance sheet at the end of each period', () => {
 
 test('trial balance per period, carrying the year before it', () => {
   for (const [key, from, to] of PERIODS) {
-    const t = computeTrialBalance(entries, from, to, openingBalancesAt(entries, from, openingByYear), names);
+    const t = computeTrialBalance(entries, from, to, openingBalancesAt(entries, from, openingByYear, chart().isDebitNormal), names);
     golden(`trial-${key}`, {
       rows: t.rows.map((r) => [r.account, r.debitTotal, r.creditTotal, r.balance]),
       totalDebits: t.totalDebits, totalCredits: t.totalCredits, isBalanced: t.isBalanced,

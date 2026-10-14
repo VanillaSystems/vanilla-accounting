@@ -10,6 +10,7 @@ import {
 } from '../../../accounting/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import type { Report } from '../../shell/route.js';
+import { chart } from '../../../engines/index.js';
 
 /** The account of entries booked on one side only (a code that books the VAT itself, M81-2): no number. */
 export const NO_ACCOUNT = '';
@@ -84,7 +85,7 @@ export function reportView(report: Report, books: Index, period: Period, names: 
       gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, oneSided },
     };
   }
-  const opening = openingBalancesAt(entries, period.from, books.config?.openingBalances);
+  const opening = openingOf(books, entries, period.from);
   const tb = computeTrialBalance(entries, period.from, period.to, opening, names);
   const rows: AccountRow[] = tb.rows.map((r) => ({ account: r.account, value: r.balance, open: opening[r.account] ?? 0, debit: r.debitTotal, credit: r.creditTotal }));
   if (all) for (const a of Object.keys(names)) if (!rows.some((r) => r.account === a)) rows.push({ account: a, value: 0, open: 0, debit: 0, credit: 0 });
@@ -141,9 +142,13 @@ export interface Ledger {
   closing: number;
 }
 
+/** Each account's balance when `from` begins, its normal side from the workspace's chart. */
+export const openingOf = (books: Index, entries: JournalEntry[], from: string) =>
+  openingBalancesAt(entries, from, books.config?.openingBalances, chart().isDebitNormal);
+
 export function ledgerOf(books: Index, account: string, period: Period): Ledger {
   const entries = entriesOf(books);
-  const opening = openingBalancesAt(entries, period.from, books.config?.openingBalances)[account] ?? 0;
+  const opening = openingOf(books, entries, period.from)[account] ?? 0;
   const { rows } = computeAccountLedger(entries, account, period.from, period.to, opening);
   const byId = new Map(entries.map((e) => [e.id, e]));
   const out = rows.map((r) => {

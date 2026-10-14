@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { loadJurisdiction, mergeOverlay } from '../src/core/modules/load.js';
 import { returnEngine } from '../src/engines/return.js';
+import { chartEngine } from '../src/engines/chart.js';
 
 function workspaceWith(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'modules-overlay-'));
@@ -56,12 +57,27 @@ test('a broken overlay is reported with its file, path and reason', () => {
     'module.yaml': 'overlays: ch\n',
     'return.yaml': 'derived:\n  "299":\n    label: Steuerbarer Umsatz\n    formula:\n      minus: ["200", "999"]\n  "289":\n    label: x\n    formula:\n      sum: ["289"]\n',
     'tax-codes.yaml': 'codes:\n  V99:\n    rate: 9.9\n    revenue: "304"\n',
+    'chart.yaml': 'classes:\n  "9": result\n',
   });
   try {
     const messages = loadJurisdiction(APP_ROOT, 'ch', ws).problems.map((p) => `${p.file} ${p.path}: ${p.message}`);
     assert.ok(messages.includes('return.yaml derived.299.formula: Ziffer 999 does not exist'), messages.join('\n'));
     assert.ok(messages.some((m) => m.startsWith('return.yaml derived.289.formula: depends on itself')), messages.join('\n'));
     assert.ok(messages.includes('tax-codes.yaml codes.V99.revenue: Ziffer 304 is not a revenue Ziffer of return.yaml'), messages.join('\n'));
+    assert.ok(messages.includes('chart.yaml classes.9: type "result" is not one of types'), messages.join('\n'));
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test('a workspace whose chart puts class 4 on the credit side changes that normal side only', () => {
+  const ws = workspaceWith({ 'module.yaml': 'overlays: ch\n', 'chart.yaml': 'classes:\n  "4": revenue\n' });
+  try {
+    const chart = chartEngine(loadJurisdiction(APP_ROOT, 'ch', ws).jurisdiction.chart);
+    assert.equal(chart.isDebitNormal('4200'), false);
+    assert.equal(chart.isDebitNormal('6500'), true);
+    assert.equal(chart.sideOf('1020'), 'assets');
+    assert.equal(chart.sideOf('9200'), 'none');
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
