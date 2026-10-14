@@ -7,8 +7,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { JournalEntry } from '../src/types/index.js';
-import { computeVatReport } from '../src/accounting/vat-report.js';
-import { figuresFromBooks } from '../src/accounting/return-figures.js';
+import './support/jurisdiction.js';
+import { vat } from '../src/engines/index.js';
 
 const booked = (vatCode: string, amount: number, debit: string, credit: string): JournalEntry => ({
   id: `synthetic-${vatCode}`, transactionRef: `SYN-${vatCode}`, date: '2026-11-02',
@@ -23,7 +23,7 @@ const entries = [
   sale('V77', 1077), sale('V25-N', 1025), sale('V37', 1037),
   purchase('M38', 103.8), purchase('I26', 102.6),
 ];
-const report = computeVatReport(entries, '2026-Q4', []);
+const report = vat().report(entries, '2026-Q4', []);
 const z = (n: string) => report.ziffern.find((x) => x.number === n)?.amount;
 
 test('a sale at each Swiss rate lands in its own Ziffer', () => {
@@ -46,7 +46,7 @@ test('the tax owed counts every rate', () => {
 });
 
 test('the report agrees with what vat-xml files', () => {
-  const filed = figuresFromBooks(entries, '2026-Q4', []);
+  const filed = vat().figures(entries, '2026-Q4', []);
   assert.equal(filed.ziffern['343'], 1038);
   assert.equal(z('399'), filed.ziffern['399']);
   assert.equal(z('500'), filed.ziffern['500']);

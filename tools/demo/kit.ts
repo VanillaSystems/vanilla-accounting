@@ -129,7 +129,7 @@ export function chf(n: number): string {
   return `${n < 0 ? '-' : ''}${int.replace(/\B(?=(\d{3})+(?!\d))/g, '’')}.${dec}`;
 }
 
-/** The tax inside a gross amount, the way src/accounting/vat-report.ts extracts it. */
+/** The tax inside a gross amount, the way src/engines/return.ts extracts it. */
 export function taxIn(gross: number, rate: number): number {
   const g = Math.round(gross * 100);
   return (g - Math.round(g * 100 / (100 + rate))) / 100;

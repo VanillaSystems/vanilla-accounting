@@ -10,12 +10,11 @@ import { readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../src/types/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
-import { computeVatReport, computeVatReportLines } from '../src/accounting/vat-report.js';
-import { figuresFromBooks } from '../src/accounting/return-figures.js';
 import { parseFiledReturn } from '../src/accounting/filed-return.js';
 import { reconcileCases, caseEffect } from '../src/accounting/correction-cases.js';
 import { goldenSet } from './support/golden.js';
 import { tempWorkspace } from './support/workspace.js';
+import { vat } from '../src/engines/index.js';
 
 const { ws, books, expect: golden } = goldenSet();
 const entries = books.journalEntries;
@@ -36,21 +35,21 @@ test('the frozen books span one year with a filed and an open quarter', () => {
 
 test('VAT report Ziffern per period', () => {
   for (const key of REPORT_KEYS) {
-    const r = computeVatReport(entries, key, adjustments);
+    const r = vat().report(entries, key, adjustments);
     golden(`report-${key}`, { ziffern: r.ziffern.map((z) => [z.number, z.amount]), toPay: r.toPay, credit: r.credit });
   }
 });
 
 test('VAT report lines per Ziffer (which entries feed which Ziffer)', () => {
   for (const key of QUARTERS) {
-    const lines = computeVatReportLines(entries, key, adjustments);
+    const lines = vat().lines(entries, key, adjustments);
     const compact = Object.fromEntries(Object.entries(lines).map(([z, ls]) => [z, ls.map((l) => [l.date, l.ref, l.code, l.gross, l.base, l.tax])]));
     golden(`lines-${key}`, compact);
   }
 });
 
 test('return figures (what vat-xml would file, and the 0535 «korrigiert» column)', () => {
-  for (const q of QUARTERS) golden(`figures-${q}`, figuresFromBooks(entries, q, adjustments));
+  for (const q of QUARTERS) golden(`figures-${q}`, vat().figures(entries, q, adjustments));
 });
 
 test('filed returns parse to their Ziffern', () => {
@@ -59,7 +58,7 @@ test('filed returns parse to their Ziffern', () => {
 
 test('correction cases explain every franc of each Korrekturabrechnung', () => {
   for (const q of FILED) {
-    const corrected = figuresFromBooks(entries, q, adjustments);
+    const corrected = vat().figures(entries, q, adjustments);
     const r = reconcileCases(books.config.correctionCases, entries, parseFiledReturn(filedXml(q)), corrected);
     assert.deepEqual(r.unexplained, [], `${q}: unexplained 0535 difference`);
     assert.deepEqual(r.orphans.map((e) => e.id), [], `${q}: correction entries in no case`);

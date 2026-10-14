@@ -1,6 +1,6 @@
 /**
  * The VAT-code catalogue (src/accounting/vat-codes.ts) cannot drift from the engine: the Ziffern
- * it shows for a code are the ones computeVatReport moves for an entry with that code, every code
+ * it shows for a code are the ones vat().report moves for an entry with that code, every code
  * the engine or the books use has an entry, and its derived files are current.
  */
 import { test } from 'node:test';
@@ -9,7 +9,6 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { computeVatReport, NAMED_VAT_CODES, parseVatCode } from '../src/accounting/vat-report.js';
 import { lookupVatCode, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodes } from '../src/accounting/vat-codes.js';
 import { BANANA_VAT_CODES } from '../src/accounting/vat-codes.source.js';
 import { loadCases } from '../src/knowledge/cases.js';
@@ -19,6 +18,7 @@ import { DEMO_ROOTS } from './support/workspace.js';
 import { DOCS_FILE, SOURCE_FILE, renderDocs, renderSource } from '../tools/vat-codes/generate.js';
 import de from '../src/app/i18n/locales/de.js';
 import type { JournalEntry } from '../src/types/index.js';
+import { vat } from '../src/engines/index.js';
 
 /** Totals the return derives from the source Ziffern: they move with any figure. */
 const DERIVED = new Set(['289', '299', '399', '479', '500', '510']);
@@ -26,12 +26,12 @@ const DERIVED = new Set(['289', '299', '399', '479', '500', '510']);
 /** The Ziffern an entry of `code` moves in its quarter's return, with the sign of each figure. */
 function moved(code: string): Array<[string, number]> {
   const entry: JournalEntry = { id: 'e1', transactionRef: 't1', date: '2026-08-20', accountDebit: '1020', accountCredit: '3400', amount: 1081, vatCode: code };
-  return computeVatReport([entry], '2026-Q3', []).ziffern
+  return vat().report([entry], '2026-Q3', []).ziffern
     .filter((z) => z.amount !== 0 && !DERIVED.has(z.number))
     .map((z) => [z.number, Math.sign(z.amount)]);
 }
 
-test('the Ziffern of every catalogue entry are what computeVatReport books for an entry with its code', () => {
+test('the Ziffern of every catalogue entry are what vat().report books for an entry with its code', () => {
   for (const c of vatCodes()) {
     const expected = c.ziffern?.map((z) => z.ziffer) ?? [];
     assert.deepEqual(moved(c.code), expected.map((z) => [z, 1]), c.code);
@@ -40,7 +40,7 @@ test('the Ziffern of every catalogue entry are what computeVatReport books for a
 });
 
 test('a code is "not declared" exactly when the engine does not parse it', () => {
-  for (const c of vatCodes()) assert.equal(c.ziffern === null, parseVatCode(c.code) === null, c.code);
+  for (const c of vatCodes()) assert.equal(c.ziffern === null, vat().codes.parse(c.code) === null, c.code);
   const undeclared = vatCodes().filter((c) => c.ziffern === null).map((c) => c.code);
   assert.ok(undeclared.includes('VS81') && undeclared.includes('Z0') && undeclared.includes('V81-B'), undeclared.join(' '));
 });
@@ -48,7 +48,7 @@ test('a code is "not declared" exactly when the engine does not parse it', () =>
 test('every code the engine knows by name, and every K code of a Swiss rate, has a catalogue entry', () => {
   const k = ['77', '81'].flatMap((r) => ['A', 'B', 'C'].map((x) => `K${r}-${x}`));
   const codes = new Set(vatCodes().map((c) => c.code));
-  for (const code of [...NAMED_VAT_CODES, ...k]) assert.ok(codes.has(code), code);
+  for (const code of [...vat().codes.named, ...k]) assert.ok(codes.has(code), code);
   for (const b of BANANA_VAT_CODES) assert.ok(codes.has(b.code), `Banana's ${b.code}`);
 });
 
@@ -68,7 +68,7 @@ test('every code the demo books and the casebook use is explained, minus codes b
 
 test('Banana and the engine agree on rate and amount type; the engine declares at least Banana\'s Ziffern', () => {
   for (const b of BANANA_VAT_CODES) {
-    const info = parseVatCode(b.code);
+    const info = vat().codes.parse(b.code);
     if (!info) continue;
     if (b.rate !== undefined) assert.equal(info.rate, b.rate, b.code);
     assert.equal(info.amountIs, b.amountType === '2' ? 'tax' : b.amountType === '1' ? 'net' : 'gross', b.code);

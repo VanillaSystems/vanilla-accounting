@@ -22,7 +22,6 @@ import { join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod } from '../accounting/periods.js';
-import { TAX_RATE_ROWS, TURNOVER_DEDUCTIONS, INPUT_TAX } from '../accounting/ziffern.js';
 import { openWorkspace } from '../workspace/workspace.js';
 import { vat } from '../engines/index.js';
 
@@ -53,12 +52,12 @@ function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
     console.error(`⚠ ${periodKey}: Ziffer 280 (variousDeduction) is non-zero and needs the complex variousDeductionType — add it manually.`);
   }
 
-  const deductionEls = TURNOVER_DEDUCTIONS
+  const deductionEls = Object.entries(vat().form.deductions).flatMap(([nr, d]) => (d.element ? [[nr, d.element] as const] : []))
     .filter(([nr]) => z(nr) !== 0)
     .map(([nr, el]) => `    <eCH-0217:${el}>${amt(z(nr))}</eCH-0217:${el}>`)
     .join('\n');
 
-  const rateEls = (kind: 'supply' | 'acquisition', el: string) => TAX_RATE_ROWS
+  const rateEls = (kind: 'supply' | 'acquisition', el: string) => vat().rateRows
     .filter((row) => row.kind === kind && z(row.ziffer) !== 0)
     .sort((a, b) => b.rate - a.rate)
     .map((row) => `    <eCH-0217:${el}>
@@ -68,7 +67,7 @@ function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
   const supplyEls = rateEls('supply', 'suppliesPerTaxRate');
   const acquisitionEls = rateEls('acquisition', 'acquisitionTax');
 
-  const inputEls = INPUT_TAX
+  const inputEls = Object.entries(vat().form.inputTax).map(([nr, b]) => [nr, b.element] as const)
     .filter(([nr]) => z(nr) !== 0)
     .map(([nr, el]) => `    <eCH-0217:${el}>${amt(z(nr))}</eCH-0217:${el}>`)
     .join('\n');

@@ -1,7 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { QuarterKey } from '../types/index.js';
 import { derivePeriod } from './periods.js';
-import { INPUT_TAX, TAX_RATE_ROWS, TURNOVER_DEDUCTIONS } from './ziffern.js';
 import { vat } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
@@ -31,7 +30,7 @@ export function parseFiledReturn(xml: string): ReturnFigures {
 
   const declared: Record<string, number> = { '200': num(turnover.totalConsideration) };
   const known = new Set(['totalConsideration']);
-  for (const [nr, el] of TURNOVER_DEDUCTIONS) {
+  for (const [nr, el] of Object.entries(vat().form.deductions).flatMap(([nr, d]) => (d.element ? [[nr, d.element] as const] : []))) {
     known.add(el);
     if (el in turnover) declared[nr] = num(turnover[el]);
   }
@@ -43,12 +42,12 @@ export function parseFiledReturn(xml: string): ReturnFigures {
     const el = kind === 'supply' ? 'suppliesPerTaxRate' : 'acquisitionTax';
     for (const r of (effective[el] ?? []) as Node[]) {
       const rate = num(r.taxRate);
-      const row = TAX_RATE_ROWS.find((x) => x.kind === kind && x.rate === rate);
+      const row = vat().rateRows.find((x) => x.kind === kind && x.rate === rate);
       if (!row) throw new Error(`${period}: ${el} at rate ${rate}% has no Ziffer`);
       declared[row.ziffer] = num(r.turnover);
     }
   }
-  for (const [nr, el] of INPUT_TAX) {
+  for (const [nr, el] of Object.entries(vat().form.inputTax).map(([nr, b]) => [nr, b.element] as const)) {
     knownEffective.add(el);
     if (el in effective) declared[nr] = num(effective[el]);
   }

@@ -1,6 +1,6 @@
 /**
  * The casebook (examples/cases/) cannot drift from the engine: every case is booked into a copy
- * of each shipped demo workspace, and its declared Ziffern are what computeVatReport / figuresFromBooks
+ * of each shipped demo workspace, and its declared Ziffern are what vat().report / vat().figures
  * then add to its quarter. Selection (selectCases) and the classify prompt are tested on
  * synthetic transactions.
  */
@@ -11,8 +11,6 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { computeVatReport } from '../src/accounting/vat-report.js';
-import { figuresFromBooks } from '../src/accounting/return-figures.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadBooks, mutateJournal } from '../src/books/store.js';
 import { classifyTransactions, type ClassifyDeps } from '../src/booking/classify.js';
@@ -24,6 +22,7 @@ import type { BankTransaction, JournalEntry } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_ROOT, DEMO_ROOTS } from './support/workspace.js';
 import { inventoryMarkdown, minePatterns } from '../tools/cases/mine.js';
+import { vat } from '../src/engines/index.js';
 
 const cases = loadCases();
 const byId = (id: string) => cases.find((c) => c.id === id)!;
@@ -51,7 +50,7 @@ for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').
   const books = loadBooks(workspaceAt(dir));
   const base = books.journalEntries.slice();
   const adjustments = books.config.vatAdjustments ?? [];
-  const figures = (entries: JournalEntry[], c: BookingCase) => figuresFromBooks(entries, casePeriod(c), adjustments);
+  const figures = (entries: JournalEntry[], c: BookingCase) => vat().figures(entries, casePeriod(c), adjustments);
 
   for (const c of cases) {
     books.journalEntries = base.slice();
@@ -73,7 +72,7 @@ for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').
     assert.ok(Math.abs(after.payable - before.payable - c.payable) < 0.011, `${c.id}: payable moved ${after.payable - before.payable}, the case says ${c.payable}`);
 
     // The per-entry report (MWST tab, npm run vat-report) agrees on the source Ziffern.
-    const rep = (entries: JournalEntry[]) => Object.fromEntries(computeVatReport(entries, casePeriod(c), adjustments).ziffern.map((z) => [z.number, z.amount]));
+    const rep = (entries: JournalEntry[]) => Object.fromEntries(vat().report(entries, casePeriod(c), adjustments).ziffern.map((z) => [z.number, z.amount]));
     const [r0, r1] = [rep(base), rep(books.journalEntries)];
     for (const z of ['200', '220', '221', '400', '405', '415']) {
       assert.equal(Math.round(((r1[z] ?? 0) - (r0[z] ?? 0)) * 100) / 100, c.ziffern[z] ?? 0, `${c.id}: report Ziffer ${z}`);

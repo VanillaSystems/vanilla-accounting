@@ -19,7 +19,6 @@ import { fileURLToPath } from 'node:url';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../../src/types/index.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/parsers/camt053.js';
 import { bankKind } from '../../src/workspace/banks.js';
-import { figuresFromBooks } from '../../src/accounting/return-figures.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
 import { sealOf } from '../../src/books/seal.js';
 import { BOOKS_SCHEMA } from '../../src/workspace/schema.js';
@@ -31,6 +30,7 @@ import { loadInvoices, readPdf } from '../../src/invoices/store.js';
 import { matchPayments } from '../../src/invoices/payments.js';
 import { kaffee } from './kaffee.js';
 import { consulting } from './consulting.js';
+import { vat } from '../../src/engines/index.js';
 
 /** Every demo workspace `npm run demo:generate` writes. */
 const DEMOS: readonly Demo[] = [kaffee, consulting];
@@ -236,14 +236,14 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
 
   // The tax payment of Q1 needs Q1's figure, so the books are made once without it.
   const draft = book(demo, sc.payments);
-  const q1 = figuresFromBooks(draft.entries, demo.filed.period, []);
+  const q1 = vat().figures(draft.entries, demo.filed.period, []);
   if (q1.payable <= 0) throw new Error(`${demo.dir}: Q1 must have tax to pay, got ${q1.payable}`);
   // The Korrekturabrechnung: Q1 as today's books declare it, corrections included, less what was filed.
   const corrections: JournalEntry[] = sc.manual.filter((m) => m.corrects).map((m) => ({
     id: m.key, transactionRef: m.key, date: m.date, accountDebit: m.debit, accountCredit: m.credit, amount: m.amount,
     ...(m.vatCode ? { vatCode: m.vatCode } : {}), description: m.text, corrects: m.corrects,
   }));
-  const difference = r2(figuresFromBooks([...draft.entries, ...corrections], demo.filed.period, []).payable - q1.payable);
+  const difference = r2(vat().figures([...draft.entries, ...corrections], demo.filed.period, []).payable - q1.payable);
   const correctionPayment = sc.correctionPayment && difference !== 0 ? [sc.correctionPayment(difference)] : [];
   const { booked, entries, keys } = book(demo, [...sc.payments, sc.taxPayment(q1.payable), ...correctionPayment]);
 

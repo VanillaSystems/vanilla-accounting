@@ -11,6 +11,7 @@ import type { Ask, BooksPort } from '../src/intake/pipeline.js';
 import { vatStep } from '../src/intake/vat.js';
 import type { Receipt } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import './support/jurisdiction.js';
 
 const FACTS = ['vatId', 'hasSwissVat', 'vatSummary', 'lineItems', 'vatExtractedAt'] as const;
 const facts = (r: Receipt) => Object.fromEntries(FACTS.map((k) => [k, r[k]]));

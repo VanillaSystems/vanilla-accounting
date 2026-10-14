@@ -1,6 +1,6 @@
 /**
  * MWST: one VAT return as the mockup shows it, a list of Ziffern and the entries or the sum behind
- * each. Every figure comes from src/accounting (computeVatReport, entriesForReturn, vatLine); this
+ * each. Every figure comes from the engine (vat().report, vat().vatLine) and entriesForReturn; this
  * file only arranges them.
  */
 import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../types/index.js';

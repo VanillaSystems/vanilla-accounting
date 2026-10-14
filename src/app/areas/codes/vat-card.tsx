@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TAX_RATE_ROWS } from '../../../accounting/ziffern.js';
+import { vat } from '../../../engines/index.js';
 import { lookupVatCode, vatCodeRateName, type VatCodeEntry } from '../../../accounting/vat-codes.js';
 import { accountingName, isKey, t } from '../../i18n/index.js';
 import { periodName } from '../../lib/period-label.js';
@@ -28,7 +28,7 @@ export const codeText = (code: string) => {
 export function zifferName(z: string): string {
   const key = `vat.z${z}`;
   if (isKey(key)) return t(key as 'vat.z200');
-  const row = TAX_RATE_ROWS.find((r) => r.ziffer === z);
+  const row = vat().rateRows.find((r) => r.ziffer === z);
   return row ? `${accountingName(row.name)} ${row.rate} %` : t('vat.ziffer', { ziffer: z });
 }
 

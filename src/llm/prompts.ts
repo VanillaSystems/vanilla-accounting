@@ -1,5 +1,5 @@
 import type { BankTransaction, VatRateGroup, ReceiptLine } from "../types/index.js";
-import { deriveHasSwissVat } from "../accounting/ziffern.js";
+import { vat } from "../engines/index.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
 
 export interface MatchResult {
@@ -185,7 +185,7 @@ export interface ReceiptInput {
   description?: string;
   filename?: string;
   // VAT facts extracted at the receipt level (extract-vat step) — source of
-  // truth for the rate. See buildReceiptVatPrompt / deriveHasSwissVat.
+  // truth for the rate. See buildReceiptVatPrompt / hasDomesticVat.
   hasSwissVat?: boolean;
   vatId?: string;
   vatSummary?: VatRateGroup[];
@@ -404,7 +404,7 @@ export function parseReceiptVat(raw: string): ReceiptVatResult | null {
     vatId: typeof parsed.vatId === "string" && parsed.vatId.trim() ? parsed.vatId.trim() : undefined,
     currency: typeof parsed.currency === "string" ? parsed.currency : undefined,
     total: typeof parsed.total === "number" ? parsed.total : undefined,
-    hasSwissVat: deriveHasSwissVat(summary, parsed.hasSwissVat === true),
+    hasSwissVat: hasDomesticVat(summary, parsed.hasSwissVat === true),
     vatSummary: summary,
     lineItems,
   };
@@ -434,4 +434,15 @@ export function parseMatchResult(raw: string): MatchResult | null {
     return null;
   }
   return parsed;
+}
+
+/**
+ * Whether a receipt charged the jurisdiction's own VAT: only when it shows one of its positive
+ * rates (modules/ch/rates.yaml). A 0%-only summary or a foreign rate does not count, even under a
+ * domestic VAT number in the letterhead. When no rate could be parsed at all (poor OCR), the
+ * model's own call decides.
+ */
+function hasDomesticVat(summary: VatRateGroup[], llmSaidYes: boolean): boolean {
+  if (summary.some((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent))) return true;
+  return summary.length === 0 ? llmSaidYes : false;
 }

@@ -11,16 +11,16 @@
 import type { Index } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod } from '../accounting/periods.js';
-import { TAX_RATE_ROWS } from '../accounting/ziffern.js';
 import { openWorkspace } from '../workspace/workspace.js';
 import { vat } from '../engines/index.js';
 import type { VatLine } from '../engines/return.js';
 
 // Which per-entry value is the one that sums to the Ziffer's reported amount.
-const ZIFFER_FIELD: Record<string, 'gross' | 'base' | 'tax'> = {
-  '200': 'gross', '220': 'gross', '221': 'gross', '225': 'gross', '230': 'gross', '280': 'gross',
-  ...Object.fromEntries(TAX_RATE_ROWS.map((row) => [row.ziffer, row.kind === 'supply' ? 'base' : 'tax'] as const)),
-  '400': 'tax', '405': 'tax', '410': 'tax', '415': 'tax', '420': 'tax',
+const zifferField = (z: string): 'gross' | 'base' | 'tax' | undefined => {
+  const row = vat().rateRows.find((r) => r.ziffer === z);
+  if (row) return row.kind === 'supply' ? 'base' : 'tax';
+  if (z === vat().form.turnoverBox || z in vat().form.deductions) return 'gross';
+  return z in vat().form.inputTax ? 'tax' : undefined;
 };
 
 const ws = openWorkspace();
@@ -55,7 +55,7 @@ function printPeriod(label: string, index: Index, from: string, to: string, deta
     console.log(`${mark} Ziffer ${z.number.padEnd(4)} ${z.label.padEnd(42)} ${fmt(z.amount)}`);
 
     if (detail && lines[z.number]?.length) {
-      const field = ZIFFER_FIELD[z.number] ?? 'gross';
+      const field = zifferField(z.number) ?? 'gross';
       const rows = lines[z.number].slice().sort((a, b) => a.date.localeCompare(b.date));
       let sum = 0;
       for (const r of rows) {

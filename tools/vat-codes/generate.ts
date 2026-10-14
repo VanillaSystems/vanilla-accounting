@@ -131,7 +131,7 @@ export async function renderDocs(): Promise<string> {
     '- **-B, -E, -N, -T, -D** on a sale code name the kind of supply (opted, abroad, not taxable, notification procedure, various).',
     '- **Boxes (Ziffern)** are the numbers of the ESTV return (form 0550). "turnover" means the gross amount counts in the box,',
     '  "taxable" that it is taxable turnover whose tax the rate row computes, "tax" that only the VAT in the amount counts.',
-    '  The boxes below are what the app\'s engine books (`computeVatReport`), proven by tests/vat-codes.test.ts.',
+    '  The boxes below are what the app\'s engine books (`vat().report` over modules/ch), proven by tests/vat-codes.test.ts.',
     '- **Not declared**: the app puts the code into no box. Banana would; the column names Banana\'s boxes.',
     '',
     'The rules that choose a code are in `processes/booking.guide.yaml` (purchase_vat, sale_vat, side, eigenverbrauch);',
