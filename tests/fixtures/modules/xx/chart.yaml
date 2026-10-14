@@ -1,0 +1,8 @@
+classes: { "0": asset, "1": asset, "2": liability, "3": liability, "4": revenue, "5": expense, "6": expense, "7": expense, "9": closing }
+types:
+  asset: { normal: debit, side: assets }
+  liability: { normal: credit, side: liabilities }
+  revenue: { normal: credit, side: result }
+  expense: { normal: debit, side: result }
+  closing: { normal: debit, side: none }
+unclassified: { normal: debit, side: none }

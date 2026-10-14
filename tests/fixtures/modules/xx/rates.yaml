@@ -1,0 +1,3 @@
+rows:
+  "10": { rate: 20, kind: supply, code: S20, name: Standard }
+  "11": { rate: 5, kind: supply, code: S5, name: Reduced }

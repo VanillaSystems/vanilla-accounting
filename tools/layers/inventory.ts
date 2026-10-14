@@ -22,6 +22,12 @@ export const SWISS: [name: string, pattern: RegExp][] = [
   ['Rappen', /\bRappen\b/],
 ];
 
+/** Files outside src/providers/ that name a Swiss specific: what step 11's lint holds to an allow-list. */
+export function swissFiles(root: string): string[] {
+  return sourceFiles(root).filter((f) => !f.startsWith('src/providers/'))
+    .filter((f) => readFileSync(join(root, f), 'utf8').split('\n').some((l) => SWISS.some(([, re]) => re.test(l)))).sort();
+}
+
 const ORDER: Layer[] = ['core', 'engine', 'provider', 'split', 'infrastructure', 'workflow', 'view'];
 
 export function inventory(root: string): string {

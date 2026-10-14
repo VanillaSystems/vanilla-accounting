@@ -1,0 +1,8 @@
+negativePrefix: "-"
+amountSuffix: { families: [P], net: ".n", tax: ".t" }
+codes:
+  S20: { rate: 20, revenue: "10" }
+  S5: { rate: 5, revenue: "11" }
+  X0: { rate: 0, deduction: "20" }
+  P20: { rate: 20, inputTax: "30" }
+patterns: []

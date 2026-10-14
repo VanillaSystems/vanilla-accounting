@@ -21,7 +21,10 @@ return length and due days; the seals, the filed-return archive and year-close s
 quarters, `QuarterKey`, and follow with step 10), 7, 8 (`update(books, actor, fn)` in `src/books/store.ts`; ownership by
 `origin`: a person's entries change only by a person), 9 (`workflows/booking/`, `src/workflows/`,
 `npm run workflow`; runs in a local store outside the workspace; `npm run classify` stays the
-batch path until the queue batches model calls).
+batch path until the queue batches model calls), 10 in part (statements, providers, chart, year
+end, invoicing, setup; left: the ESTV rates and eCH-0217 as providers, the legal forms, the
+texts, and the quarter names of seals and filed returns), 11 (`tests/swap.test.ts` books the `xx`
+fixture; `tools/layers/swiss-allowed.txt` lists the 115 files that still name a Swiss specific).
 
 | # | Step | Ends when | Needs |
 |---|---|---|---|

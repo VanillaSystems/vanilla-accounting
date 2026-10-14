@@ -1,0 +1,5 @@
+accounts: { retainedEarnings: ["2970"], fxDifference: ["6880"], vatSettlement: ["3800"], vat: ["1400", "3800"] }
+templates: []
+profitAllocation: { accountDebit: "2970", accountCredit: "2900" }
+receivables: { accountDebit: "1200" }
+withholdingTaxRate: 0

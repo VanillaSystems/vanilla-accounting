@@ -1,0 +1,14 @@
+turnoverBox: "1"
+turnoverLabel: Total sales
+rateOrder: ["10", "11"]
+deductions:
+  "20": { label: Exports }
+inputTax:
+  "30": { label: Input tax, element: inputTax, sign: 1 }
+derived:
+  "2": { label: Taxable sales, formula: { minus: ["1", "20"] } }
+  "40": { label: Tax due, formula: { taxOfRows: true } }
+  "50": { label: To pay, formula: { positive: { minus: ["40", "30"] } } }
+  "51": { label: To refund, formula: { positive: { minus: ["30", "40"] } } }
+payable: "50"
+credit: "51"

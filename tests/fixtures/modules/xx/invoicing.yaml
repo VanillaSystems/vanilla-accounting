@@ -1,0 +1,2 @@
+rates: [20, 5, 0]
+exemptions: { abroad: "20", export: "20" }
