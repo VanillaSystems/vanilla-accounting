@@ -117,7 +117,11 @@ on its own afterwards (see 4).
 The data is split by fiscal year and stored one record per line (JSON Lines), sorted by id:
 `books/<year>/entries.jsonl`, `transactions.jsonl`, `mappings.jsonl`, plus `receipts/<year>/`,
 `bank-statements/<year>/`, `filings/<year>/`. Shared data stays at the top
-(`belege.workspace.yaml`, `accounts.json`, `knowledge/`, `access.yaml`, `VERSION`). How sealed
+(`belege.workspace.yaml`, `accounts.json`, `knowledge/`, `access.yaml`, `VERSION`).
+[ADR 0013](0013-workspace-layout-and-ownership.md) amends the paths: the books lie in the app's
+folder (`vanilla-accounting/`) of the company's repository; inside it the shared data is in
+`master-data/` and each year's in `transactional-data/<year>/` (`books/entries.jsonl`,
+`receipts/`, …). How sealed
 records keep their seals through this is in [ADR 0004](0004-versions-and-record-envelope.md);
 a company's own fields and external references live beside the records, outside the seals
 ([ADR 0007](0007-external-references-and-annotations.md)).

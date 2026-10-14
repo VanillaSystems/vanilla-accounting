@@ -47,7 +47,7 @@ is its door in the UI. Nothing goes from a channel straight into the books.
                        ┌────────────────────────────┬───────────────────────────────┤
                        ▼                            ▼                               ▼
               accepted: into the books      quarantine (outside git)       waiting: needs a person
-              receipts/<year>/, statements  data/quarantine/ with reason   or the model
+              <year>/receipts/, statements  data/quarantine/ with reason   or the model
 ```
 
 **1. Recognize what it is,** cheaply first, the model only for what remains:
@@ -84,7 +84,7 @@ with a pointer to the original.
 
 **5. Decide:**
 
-- **Accepted:** receipts into `receipts/<year>/`, statements into `bank-statements/<year>/`,
+- **Accepted:** receipts into `transactional-data/<year>/receipts/`, statements into `…/bank-statements/` (ADR 0013),
   committed with who brought them and by which channel; a camt file is imported into the books
   directly (it needs no model).
 - **Quarantine:** not a receipt, a duplicate, a private photo. Kept in `data/quarantine/`,
@@ -121,7 +121,7 @@ a failed push.
 - `beleg-import/` takes statements and camt files too; the Kontoauszüge import uses the same
   inbox.
 - The app gets the drop zone and the inbox list (the mockup already has the full-page drop).
-- Receipts move into year folders when the data is split by year ([ADR 0003](0003-deployment-and-collaboration.md)).
+- Receipts and statements move into year folders (`transactional-data/<year>/receipts/`, `…/bank-statements/`) with the year split of the books, in the year of the entry that books them ([ADR 0013](0013-workspace-layout-and-ownership.md)).
 - Files already in `receipts/` that are not receipts (catalogues, brochures, private photos) can
   be moved to quarantine; they remain in git history unless that history is rewritten, which
   [ADR 0003](0003-deployment-and-collaboration.md) avoids.
