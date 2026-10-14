@@ -13,7 +13,7 @@ import { assignUniqueRefs, transactionsOf } from '../src/providers/camt053/camt0
 import { parseStatementBalances } from '../src/providers/camt053/statement-balances.js';
 import { readBankStatements, type StatementFile } from '../src/workspace/bank-statements.js';
 import { parseIban } from '../src/workspace/banks.js';
-import { WorkspaceError, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { WorkspaceError, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
 import { testIban, withTestIbans } from './support/iban.js';
 import { tempWorkspace } from './support/workspace.js';
 
@@ -38,8 +38,9 @@ function workspaceWith(files: Record<string, string>, bankAccounts = BANK_ACCOUN
   const manifest = readFileSync(paths.manifest, 'utf8');
   writeFileSync(paths.manifest, manifest.slice(0, manifest.indexOf('bankAccounts:')) + bankAccounts);
   for (const [to, fixture] of Object.entries(files)) {
-    mkdirSync(dirname(join(paths.statements, to)), { recursive: true });
-    writeFileSync(join(paths.statements, to), withTestIbans(fixture.startsWith('<') ? fixture : readFileSync(join(FIXTURES, fixture), 'utf8')));
+    const statements = yearPaths(paths, '2026').statements;
+    mkdirSync(dirname(join(statements, to)), { recursive: true });
+    writeFileSync(join(statements, to), withTestIbans(fixture.startsWith('<') ? fixture : readFileSync(join(FIXTURES, fixture), 'utf8')));
   }
   return workspaceAt(paths.root);
 }

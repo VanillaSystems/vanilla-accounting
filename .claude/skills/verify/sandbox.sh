@@ -3,7 +3,7 @@
 #
 #   sandbox.sh up [run-id]     clone data, start API + UI on free ports, print env
 #   sandbox.sh doctor [run-id] read-only health + isolation check
-#   sandbox.sh diff [run-id]   what changed in the sandbox index vs. the snapshot taken at `up`
+#   sandbox.sh diff [run-id]   what changed in the sandbox's books vs. the snapshot taken at `up`
 #   sandbox.sh down [run-id]   stop what `up` started, delete the sandbox (evidence is kept)
 #   sandbox.sh list            sandboxes that currently exist
 #
@@ -26,6 +26,10 @@ claim_port() {
 }
 # Every request is bounded: a server that accepts but never answers makes a check FAIL, not hang.
 get() { curl -sf --connect-timeout 3 --max-time 15 "$@"; }
+# The books' files of a workspace (ADR 0013): ledger.json and every year's books/*.jsonl, as one hash.
+books_sha() { (cd "$1" && cat ledger.json transactional-data/*/books/*.jsonl 2>/dev/null) | shasum -a 256 | cut -d' ' -f1; }
+# The app's folder a directory names: itself when it holds the manifest, else its vanilla-accounting/.
+app_folder() { if [[ -f "$1/belege.workspace.yaml" ]]; then echo "$1"; elif [[ -f "$1/vanilla-accounting/belege.workspace.yaml" ]]; then echo "$1/vanilla-accounting"; fi; }
 alive() { [[ -n "${1:-}" ]] && kill -0 "$1" 2>/dev/null; }
 
 resolve_run() {
@@ -48,23 +52,18 @@ load() {
 cmd_up() {
   RUN="${1:-v$(date +%Y%m%d-%H%M%S)}"; SB="$BASE/$RUN"
   [[ -e "$SB" ]] && die "sandbox $SB already exists; run 'down $RUN' first"
-  # Default: the repo root when it is a workspace (a private checkout), else the shipped demo.
-  local WS_DEFAULT="$REPO"; [[ -f "$REPO/belege.workspace.yaml" ]] || WS_DEFAULT="$REPO/demo"
-  local WS_SRC; WS_SRC="$(cd "${VERIFY_WORKSPACE:-$WS_DEFAULT}" && pwd)"
-  [[ -f "$WS_SRC/belege.workspace.yaml" ]] || die "no belege.workspace.yaml in $WS_SRC (VERIFY_WORKSPACE names the workspace to clone)"
+  # Default: the shipped demo; VERIFY_WORKSPACE names a company repository or its vanilla-accounting/.
+  local WS_SRC; WS_SRC="$(app_folder "$(cd "${VERIFY_WORKSPACE:-$REPO/demo}" && pwd)")"
+  [[ -n "$WS_SRC" ]] || die "no belege.workspace.yaml in ${VERIFY_WORKSPACE:-$REPO/demo} or its vanilla-accounting/ (VERIFY_WORKSPACE names the books to clone)"
   mkdir -p "$SB"
 
-  # The sandbox dir IS the workspace clone, on the fixed layout of src/workspace/workspace.ts.
+  # The sandbox dir IS a clone of the app's folder, on the fixed layout of src/workspace/workspace.ts.
   # APFS clonefile (cp -c): copy-on-write, so a large receipts tree costs nothing until written.
-  # Filings are copied, not linked, so nothing can write the real ones. No code is copied: the API
-  # and Vite run the repo's working tree, and VANILLA_WORKSPACE points the API here.
-  for f in belege.workspace.yaml books.json accounts.json; do cp -c "$WS_SRC/$f" "$SB/$f"; done
-  for d in receipts bank-statements filings; do cp -cR "$WS_SRC/$d" "$SB/$d"; done
-  for d in history knowledge; do if [[ -d "$WS_SRC/$d" ]]; then cp -cR "$WS_SRC/$d" "$SB/$d"; fi; done
-  if [[ -f "$WS_SRC/invoices.json" ]]; then cp -c "$WS_SRC/invoices.json" "$SB/invoices.json"; fi
-  if [[ -d "$WS_SRC/invoices" ]]; then cp -cR "$WS_SRC/invoices" "$SB/invoices"; fi
-  if [[ -d "$WS_SRC/beleg-import" ]]; then cp -cR "$WS_SRC/beleg-import" "$SB/beleg-import"; else mkdir "$SB/beleg-import"; fi
-  cp -c "$SB/books.json" "$SB/index.snapshot.json"
+  # Everything is copied, not linked, so nothing can write the real files; data/ (the app's
+  # scratch) stays behind. No code is copied: the API and Vite run the repo's working tree, and
+  # VANILLA_WORKSPACE points the API here.
+  for e in "$WS_SRC"/* "$WS_SRC"/.[!.]*; do [[ -e "$e" && "$(basename "$e")" != data ]] && cp -cR "$e" "$SB/"; done
+  [[ -d "$SB/beleg-import" ]] || mkdir "$SB/beleg-import"
   # No model calls: src/llm/ask.ts spawns `claude`, and the API finds this refusing shim first.
   mkdir "$SB/bin"
   printf '#!/bin/sh\ncat >/dev/null\necho "verify sandbox: no model calls" >&2\nexit 1\n' >"$SB/bin/claude"
@@ -99,7 +98,7 @@ EOF
 
   # The recipes name quarters by the clone's period lock: the last filed quarter and the open one after it.
   local CT CLOSED_Q="" CLOSED_FROM="" OPEN_Q="" OPEN_FROM=""
-  CT="$(jq -r '.config.closedThrough // empty' "$SB/books.json")"
+  CT="$(jq -r '.config.closedThrough // empty' "$SB/ledger.json")"
   if [[ -n "$CT" ]]; then
     local y=${CT:0:4} q=$(( (10#${CT:5:2} - 1) / 3 + 1 ))
     CLOSED_Q="$y-Q$q"; CLOSED_FROM="$(printf '%s-%02d-01' "$y" $(( (q - 1) * 3 + 1 )))"
@@ -125,7 +124,7 @@ API_PID=$(cat "$SB/api.pid")
 UI_PID=$(cat "$SB/ui.pid")
 VITE_CONFIG=$VITE_CONFIG
 WS_SRC=$WS_SRC
-REAL_INDEX_SHA=$(shasum -a 256 "$WS_SRC/books.json" | cut -d' ' -f1)
+REAL_INDEX_SHA=$(books_sha "$WS_SRC")
 EOF
   source "$SB/env"
 
@@ -135,6 +134,8 @@ EOF
   done
   get "$API/api/status" >/dev/null || { tail -20 "$SB/api.log"; die "API did not come up (log above)"; }
   get "$UI/" >/dev/null || { tail -20 "$SB/ui.log"; die "UI did not come up (log above)"; }
+  # The books as the API reads them at `up`: what `diff` compares against.
+  get "$API/books.json" > "$SB/index.snapshot.json"
   echo "ready"
   cat "$SB/env"
 }
@@ -142,10 +143,12 @@ EOF
 cmd_doctor() {
   load "${1:-}"; local bad=0
   check() { if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; bad=1; fi; }
-  # The first PDF under the sandbox's $1/, fetched through the UI, is byte-identical to the clone's.
+  # The first PDF under a year's $1/ of the sandbox, fetched through the UI, is byte-identical to the clone's.
   served() {
-    local f; f="$(cd "$SB/$1" && find . -name '*.pdf' | sort | head -1)"; f="${f#./}"
-    [[ -n "$f" ]] && get "$UI/$1/$(jq -rn --arg f "$f" '$f|split("/")|map(@uri)|join("/")')" | cmp -s - "$SB/$1/$f"
+    local d f; d="$(ls -d "$SB"/transactional-data/*/"$1" 2>/dev/null | head -1)"
+    [[ -n "$d" ]] || return 1
+    f="$(cd "$d" && find . -name '*.pdf' | sort | head -1)"; f="${f#./}"
+    [[ -n "$f" ]] && get "$UI/$1/$(jq -rn --arg f "$f" '$f|split("/")|map(@uri)|join("/")')" | cmp -s - "$d/$f"
   }
   check "api pid $API_PID alive"                  "alive $API_PID"
   check "ui pid $UI_PID alive"                    "alive $UI_PID"
@@ -156,10 +159,10 @@ cmd_doctor() {
   check "UI serves index.html"                    "get $UI/ | grep -q '<div id=\"root\"'"
   check "UI compiles the app"                     "get $UI/src/app/main.tsx >/dev/null"
   check "UI proxies /api to this sandbox"         "get $UI/api/status >/dev/null"
-  check "UI serves the sandbox books"             "[[ \"\$(get $UI/books.json | shasum -a 256 | cut -d' ' -f1)\" == \"\$(shasum -a 256 < $SB/books.json | cut -d' ' -f1)\" ]]"
+  check "UI serves the sandbox books"             "[[ \"\$(get $UI/books.json | shasum -a 256 | cut -d' ' -f1)\" == \"\$(get $API/books.json | shasum -a 256 | cut -d' ' -f1)\" ]]"
   check "UI serves the sandbox receipts"          "served receipts"
   check "UI serves the sandbox bank statements"   "served bank-statements"
-  check "real workspace books untouched since up" "[[ \"\$(shasum -a 256 $WS_SRC/books.json | cut -d' ' -f1)\" == $REAL_INDEX_SHA ]]"
+  check "real workspace books untouched since up" "[[ \"\$(books_sha $WS_SRC)\" == $REAL_INDEX_SHA ]]"
   check "api opened the sandbox workspace"        "ps eww -p $API_PID | grep -q 'VANILLA_WORKSPACE=$SB '"
   check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude </dev/null 2>/dev/null"
   echo "closedThrough: $(get "$API/api/config" | jq -r '.closedThrough // "none"')"
@@ -169,6 +172,7 @@ cmd_doctor() {
 
 cmd_diff() {
   load "${1:-}"
+  get "$API/books.json" > "$SB/index.now.json"
   node -e '
     const fs = require("fs");
     const [a, b] = process.argv.slice(1).map((p) => JSON.parse(fs.readFileSync(p, "utf8")));
@@ -192,7 +196,7 @@ cmd_diff() {
       }
     }
     if (!changes) console.log("no changes");
-  ' "$SB/index.snapshot.json" "$SB/books.json"
+  ' "$SB/index.snapshot.json" "$SB/index.now.json"
 }
 
 cmd_down() {

@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Books } from '../src/books/store.js';
+import { loadBooks, type Books } from '../src/books/store.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
 import type { Ask, BooksPort } from '../src/intake/pipeline.js';
 import { vatStep } from '../src/intake/vat.js';
 import type { Receipt } from '../src/types/index.js';
@@ -23,7 +24,7 @@ const NEW: Receipt = {
 };
 
 function run(answer: () => Promise<string>, force = false) {
-  const books: Books = JSON.parse(readFileSync(join(DEMO_ROOT, 'books.json'), 'utf8'));
+  const books: Books = JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT))));
   books.receipts.push(structuredClone(NEW));
   const port: BooksPort = { read: () => structuredClone(books), update: (fn) => fn(books) };
   const asked: string[] = [];

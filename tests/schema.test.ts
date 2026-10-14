@@ -1,31 +1,33 @@
 /**
- * The schema of books.json and of the manifest (src/workspace/schema.ts): old files read,
+ * The schema of the books (ledger.json) and of the manifest (src/workspace/schema.ts): old files read,
  * newer ones are refused, and the ladder runs forward, pure and once.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBooks, saveBooks } from '../src/books/store.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, type Ladder } from '../src/workspace/schema.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
-import { tempWorkspace } from './support/workspace.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
-test('books from before the schema read as schema 1, and the next save stamps it first', () => {
+test('a ledger without schema reads as schema 1, and the next save stamps the current one first', () => {
   const ws = tempWorkspace('schema-');
-  copyFileSync(FIXTURE, ws.paths.books);
-  assert.equal(JSON.parse(readFileSync(ws.paths.books, 'utf8')).schema, undefined);
+  writeIndex(ws, JSON.parse(readFileSync(FIXTURE, 'utf8')));
+  const { config } = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ config }));
   const books = loadBooks(ws);
   assert.equal(books.schema, BOOKS_SCHEMA);
   saveBooks(ws, books);
-  assert.equal(Object.keys(JSON.parse(readFileSync(ws.paths.books, 'utf8')))[0], 'schema');
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(ws.paths.ledger, 'utf8'))), ['schema', 'config']);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
 });
 
 test('books of a newer schema are refused with what to do', () => {
   const ws = tempWorkspace('schema-');
-  writeFileSync(ws.paths.books, JSON.stringify({ schema: BOOKS_SCHEMA + 1, receipts: [], transactions: [], mappings: [], bankStatements: [] }));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ schema: BOOKS_SCHEMA + 1, config: {} }));
   assert.throws(() => loadBooks(ws), new RegExp(`schema ${BOOKS_SCHEMA + 1}; this version of the app reads up to ${BOOKS_SCHEMA}\\. Update the app: npm run update`));
 });
 

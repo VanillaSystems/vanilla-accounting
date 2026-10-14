@@ -11,7 +11,7 @@ import { applyPlan, planWorkspace, suggestAccount, type InitInput } from './scaf
 import { PRESET_NAMES, firstUnsupported, type Answers, type Preset, type QuestionKey } from './setup.js';
 import { parseUid } from './uid.js';
 import { initRepository } from './git.js';
-import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from './workspace.js';
+import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from './workspace.js';
 
 /**
  * Why a setup was refused. `unsupported`: an answer the engine does not support yet (the
@@ -75,7 +75,7 @@ export function checkAnswers(answers: Answers): InitInput['answers'] {
 }
 
 export interface SetupRequest {
-  /** The folder of the books; created when missing. */
+  /** The company's repository; created when missing. The books go into its vanilla-accounting/. */
   root: string;
   preset: Preset;
   name: string;
@@ -106,7 +106,7 @@ export interface Created {
 export async function createWorkspace(req: SetupRequest): Promise<Created> {
   if (!req.root.trim()) throw new SetupError('A folder for the books is needed.', { reason: 'required', field: 'root' });
   const root = resolve(req.root);
-  if (existsSync(join(root, MANIFEST_FILE))) {
+  if (appFolderIn(root)) {
     workspaceAt(root);
     return { root, existed: true, created: [], differing: [] };
   }

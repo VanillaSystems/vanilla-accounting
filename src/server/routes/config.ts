@@ -122,14 +122,14 @@ function mailPatch(raw: unknown): MailPatch | null {
 const LOGO_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg' };
 
 /**
- * The invoice logo: stored under invoices/ by its checksum (a new logo is a new file, so an
+ * The invoice logo: stored under logos/ by its checksum (a new logo is a new file, so an
  * issued invoice keeps showing the logo it was issued with) and set as the layout's logo.
  */
 router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), limit: '1500kb' }), (req, res) => {
   const ext = LOGO_TYPES[String(req.headers['content-type'] ?? '').split(';')[0].trim()];
   if (!ext || !Buffer.isBuffer(req.body) || req.body.length === 0) throw new RequestError(400, 'Logo als PNG, JPEG oder SVG erwartet.');
-  const file = `invoices/logo-${createHash('sha256').update(req.body).digest('hex').slice(0, 12)}.${ext}`;
-  mkdirSync(join(WS.paths.root, 'invoices'), { recursive: true });
+  const file = `logos/logo-${createHash('sha256').update(req.body).digest('hex').slice(0, 12)}.${ext}`;
+  mkdirSync(WS.paths.logos, { recursive: true });
   writeAtomic(join(WS.paths.root, file), req.body);
   checked(() => patchManifest(WS.paths.manifest, { invoicing: { layout: { logo: file } } }));
   reopenWorkspace();

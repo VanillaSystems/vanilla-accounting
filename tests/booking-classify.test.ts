@@ -10,12 +10,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyTransactions, entriesFor, type ClassifyDeps } from '../src/booking/classify.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
-import type { LedgerBankAccount } from '../src/workspace/workspace.js';
+import { workspaceAt, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { ClosedPeriodError, periodLock, type Books } from '../src/books/store.js';
 import type { ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { startApi } from './support/api-server.js';
+import { booksOnDisk } from './support/workspace.js';
+import { loadBooks } from '../src/books/store.js';
 import './support/jurisdiction.js';
 
 const REPO = process.cwd();
@@ -158,7 +160,7 @@ test('UI re-classify books through the classifier: daily rate, VAT facts, origin
   try {
     const { status, json } = await api.send('POST', '/api/journal-entries/classify/W1');
     assert.equal(status, 200, String(json.error));
-    const saved = JSON.parse(readFileSync(api.indexPath, 'utf8')) as Books;
+    const saved = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
     const entries = saved.journalEntries.filter((e) => e.transactionRef === 'W1');
     assert.deepEqual(
       entries.map(({ id, ...e }) => e),
@@ -169,10 +171,10 @@ test('UI re-classify books through the classifier: daily rate, VAT facts, origin
     );
     assert.match(readFileSync(promptLog, 'utf8'), /VAT facts: Swiss MWST CHE-123\.456\.789/);
 
-    const before = readFileSync(api.indexPath);
+    const before = JSON.stringify(booksOnDisk(api.ws));
     const closed = await api.send('POST', '/api/journal-entries/classify/C1');
     assert.equal(closed.status, 403);
-    assert.ok(readFileSync(api.indexPath).equals(before), 'closed transaction: index byte-identical');
+    assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'closed transaction: index byte-identical');
   } finally {
     api.stop();
   }

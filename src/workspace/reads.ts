@@ -5,21 +5,24 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFiledReturn } from '../accounting/filed-return.js';
-import type { Workspace } from './workspace.js';
+import { findFile, yearPaths, type Workspace } from './workspace.js';
+import type { Receipt } from '../types/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
-/** Where a receipt's PDF lies: beleg-import/ until it is matched, receipts/ after. */
-export function receiptDirOf(ws: Workspace, location?: string): string {
-  return location === 'staged' ? ws.paths.inbox : ws.paths.receipts;
+/** Where a receipt's PDF lies: beleg-import/ until it is matched, a year folder's receipts/ after; undefined when no file holds it. */
+export function receiptPathOf(ws: Workspace, receipt: Pick<Receipt, 'filename' | 'location'>): string | undefined {
+  if (receipt.location !== 'staged') return findFile(ws.paths, 'receipts', receipt.filename);
+  const path = join(ws.paths.inbox, receipt.filename);
+  return existsSync(path) ? path : undefined;
 }
 
 export function accountsOf(ws: Workspace): unknown[] {
   return existsSync(ws.paths.accounts) ? JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) : [];
 }
 
-/** The VAT returns as filed with the ESTV (filings/<year>/), in quarter order. */
+/** The VAT returns as filed with the ESTV (transactional-data/<year>/filings/), in quarter order. */
 export function filedReturnsOf(ws: Workspace, year: string): ReturnFigures[] {
-  const dir = join(ws.paths.filings, year);
+  const dir = yearPaths(ws.paths, year).filings;
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => /^mwst-ech0217-\d{4}-Q[1-4]\.xml$/.test(f))

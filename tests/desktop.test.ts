@@ -17,7 +17,8 @@ import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
 import { ask, modelReady, NoClaudeError } from '../src/llm/ask.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
-import { APP_ROOT, MANIFEST_FILE } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, workspaceAt } from '../src/workspace/workspace.js';
+import { loadBooks } from '../src/books/store.js';
 import de from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -74,8 +75,8 @@ test('without books: the start screen is served, the books API answers noWorkspa
 test('Demo: a copy in the user data folder opens; another workspace is created, opened and switched in place; the recent list follows', async () => {
   const demo = await call('POST', '/api/desktop/demo');
   assert.equal(demo.status, 200, demo.text);
-  assert.ok(existsSync(join(home, 'Demo', MANIFEST_FILE)), 'the demo was copied');
-  assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(readFileSync(join(DEMO_ROOT, 'books.json'), 'utf8')));
+  assert.ok(existsSync(join(home, 'Demo', APP_FOLDER, MANIFEST_FILE)), 'the demo was copied');
+  assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT)))));
   const demoName = (await call('GET', '/api/workspace')).json.company.name;
   const receipt = (await call('GET', '/books.json')).json.receipts.find((r: { location?: string }) => r.location === 'archived').filename;
   assert.equal((await call('GET', `/receipts/${encodeURIComponent(receipt)}`)).status, 200);
@@ -160,7 +161,7 @@ test('the SMTP password: npm start keeps it in .env; the app saves it through Fi
     assert.equal((await call('PUT', '/api/mail/password', { password: 'geheim' })).status, 200);
     assert.equal((await call('GET', '/api/mail')).json.password, 'set');
     assert.ok(!readFileSync(file, 'utf8').includes('geheim'));
-    assert.ok(!readFileSync(join(desktop.current()!.root, MANIFEST_FILE), 'utf8').includes('geheim'), 'the books never hold it');
+    assert.ok(!readFileSync(workspaceAt(desktop.current()!.root).paths.manifest, 'utf8').includes('geheim'), 'the books never hold it');
   } finally {
     useSecretStore(envSecrets);
   }

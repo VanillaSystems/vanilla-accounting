@@ -10,7 +10,9 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdir
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { LedgerRow } from '../src/llm/ask.js';
-import type { Books } from '../src/books/store.js';
+import { loadBooks, type Books } from '../src/books/store.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
+import { writeIndex } from './support/workspace.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
 const FIXTURE = 'tests/fixtures/classify-index.json';
@@ -32,10 +34,10 @@ after(() => {
 });
 
 beforeEach(() => {
-  copyFileSync(FIXTURE, api.indexPath);
-  const receipts = join(api.root, 'receipts');
+  writeIndex(api.ws, JSON.parse(readFileSync(FIXTURE, 'utf8')));
+  const receipts = join(api.root, 'transactional-data/2026/receipts');
   rmSync(receipts, { recursive: true, force: true });
-  mkdirSync(receipts);
+  mkdirSync(receipts, { recursive: true });
   writeFileSync(join(receipts, PDF), 'PDF rw');
   rmSync(join(api.root, 'data'), { recursive: true, force: true });
   rmSync(gate, { force: true });
@@ -43,7 +45,7 @@ beforeEach(() => {
   writeFileSync(promptLog, '');
 });
 
-const books = (): Books => JSON.parse(readFileSync(api.indexPath, 'utf8'));
+const books = (): Books => loadBooks(workspaceAt(api.ws.paths.root));
 const receipt = () => books().receipts.find((r) => r.id === 'rw')!;
 const ledger = (): LedgerRow[] => {
   const path = join(api.root, 'data', 'llm-ledger.jsonl');
@@ -80,7 +82,7 @@ test('every UI model call is ledgered under its step', async () => {
       ['booking.guide.yaml#classify', 'sonnet', true, 7, 3],
     ],
   );
-  assert.ok(readFileSync(promptLog, 'utf8').includes(`'${join(realpathSync(api.root), 'receipts', PDF)}'`), 'vision reads the PDF by its absolute path');
+  assert.ok(readFileSync(promptLog, 'utf8').includes(`'${join(realpathSync(api.root), 'transactional-data/2026/receipts', PDF)}'`), 'vision reads the PDF by its absolute path');
 });
 
 test('vision OCR keeps an edit made while the model reads the PDF', async () => {

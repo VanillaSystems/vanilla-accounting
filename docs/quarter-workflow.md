@@ -37,7 +37,8 @@ receipts you need. Without them you cannot know what is missing.
 1. In the e-banking of every bank account, download the statement for exactly the quarter, in
    the format **camt.053**. Every Swiss bank offers it. At Wise, download it once per currency.
    [Getting started](getting-started.md#4-import-your-first-bank-statement) says where to find it.
-2. Save each file in `bank-statements/<bank>/` of your workspace.
+2. Save each file in `transactional-data/<year>/bank-statements/<bank>/` of your workspace (an
+   upload in the app files it there).
 3. Run `npm run extract`. It reads the new statements into the books.
 
 **Check.** The Kontoauszüge tab shows the statements, the Transaktionen tab the payments.
@@ -94,7 +95,8 @@ npm run evidence -- 2026-Q3 --apply
 ```
 
 `match` asks Claude for each new receipt which payment it belongs to, gives the file a clear
-name, and moves it to `receipts/`. `evidence` links what fixed rules can prove: the same
+name, and moves it to `receipts/` of its year (`transactional-data/<year>/receipts/`: the year of
+the payment that books it). `evidence` links what fixed rules can prove: the same
 amount, a payment reference printed on the receipt, the parts of a batch payment. Without
 `--apply` it only shows what it would link. Run it again whenever new receipts or statements
 arrive. It changes nothing in a closed period.
@@ -215,7 +217,7 @@ For agents: [`vat-filing.flow.yaml`](../processes/vat-filing.flow.yaml), steps `
 Once the return is filed, the quarter never changes again. This is the first rule of the app
 (see [`AGENTS.md`](../AGENTS.md), golden rule 1).
 
-1. Copy the XML you filed into `filings/<year>/` of the workspace. Never generate a filed
+1. Copy the XML you filed into `transactional-data/<year>/filings/` of the workspace. Never generate a filed
    return again.
 2. Close and seal the quarter:
 
@@ -223,9 +225,9 @@ Once the return is filed, the quarter never changes again. This is the first rul
    npm run seal -- 2026-Q3 --close
    ```
 
-   This sets `config.closedThrough` in `books.json` to the last day of the quarter
+   This sets `config.closedThrough` in `ledger.json` to the last day of the quarter
    (`2026-09-30`). From then on, the app, the commands and Claude refuse to change any entry
-   dated on or before that day. It also writes `filings/2026/seal-Q3.json`, a fingerprint of
+   dated on or before that day. It also writes `transactional-data/2026/filings/seal-Q3.json`, a fingerprint of
    every entry, transaction and receipt link of the closed period. Each time the books load,
    the app checks the fingerprint. If anything sealed has changed, even by a hand edit, the
    books open read-only and `npm run doctor` says so.

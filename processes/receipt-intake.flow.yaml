@@ -10,7 +10,7 @@ id: receipt-intake
 name: Archive receipts
 noun: file
 discharge: >
-  every file in beleg-import/ is archived under receipts/ with its text, its
+  every file in beleg-import/ is archived under its year's receipts/ with its text, its
   VAT facts, a descriptive name and its kind — invoice, sales record,
   supporting document, statement, noise or duplicate
 
@@ -121,7 +121,7 @@ steps:
     phase: file
 
   - id: archive
-    name: Name it and move it into receipts/
+    name: Name it and move it into its year's receipts/
     produces: receipts
     icon: archive
     uses: npm:archive

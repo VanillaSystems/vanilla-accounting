@@ -6,8 +6,8 @@
  * Usage: npm run vat-report-html -- <outfile.html> [YYYY-Qn ...]
  * Without quarters it covers the filed quarters of the year config.closedThrough falls in.
  */
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { loadBooks } from '../books/store.js';
 import { derivePeriod } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -242,6 +242,7 @@ const html = `<style>
   </footer>
 </div>`;
 
-const out = outArg || join(ws.paths.root, `vat-filing-${years.join('-')}.html`);
+const out = outArg || join(ws.paths.data, `vat-filing-${years.join('-')}.html`);
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, html);
 console.log(`✓ wrote ${out} (${(html.length / 1024).toFixed(1)} KB)`);

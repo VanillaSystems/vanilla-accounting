@@ -24,7 +24,11 @@ quarters, `QuarterKey`, and follow with step 10), 7, 8 (`update(books, actor, fn
 batch path until the queue batches model calls), 10 in part (statements, providers, chart, year
 end, invoicing, setup; left: the ESTV rates and eCH-0217 as providers, the legal forms, the
 texts, and the quarter names of seals and filed returns), 11 (`tests/swap.test.ts` books the `xx`
-fixture; `tools/layers/swiss-allowed.txt` lists the 115 files that still name a Swiss specific).
+fixture; `tools/layers/swiss-allowed.txt` lists the 115 files that still name a Swiss specific),
+14 on the demos (`src/workspace/layout.ts`, run by `npm run update`; `tests/layout.test.ts` migrates
+each demo written back in the layout of 0.3 to exactly the files the app ships; the decisions
+the build added are ADR 0013's *As built*; the real workspace moves once its owner has seen the
+demo).
 
 | # | Step | Ends when | Needs |
 |---|---|---|---|

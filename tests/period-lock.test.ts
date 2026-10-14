@@ -11,7 +11,9 @@ import { join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { issue } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type InvoiceBook } from '../src/invoices/model.js';
-import type { Books } from '../src/books/store.js';
+import { loadBooks, type Books } from '../src/books/store.js';
+import { findFile, workspaceAt } from '../src/workspace/workspace.js';
+import { booksOnDisk } from './support/workspace.js';
 import { closedPart } from '../src/books/seal.js';
 import type { IntakeStatus } from '../src/intake/pipeline.js';
 import { startApi, type ApiServer } from './support/api-server.js';
@@ -27,9 +29,9 @@ function withInvoice(root: string): void {
     customerId: 'cu_p', date: '2026-06-01', currency: 'CHF' as const, language: 'de' as const, comments: [], lines: [{ text: 'Leistung', quantity: 1, price: 100, vatRate: 8.1 as const }] };
   const sender = { name: 'Muster', uid: 'CHE-123.456.789', address: { street: 'Weg', postcode: '8000', town: 'Zürich', country: 'CH' }, payTo: { account: '1021', iban: 'CH6580808000000000001' } };
   const issued = issue(draft, { customer: { id: 'cu_p', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-06-01T09:00:00Z' });
-  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: { file: 'invoices/2026-001.pdf', sha256: createHash('sha256').update(pdf).digest('hex') } }], sent: [] };
-  mkdirSync(join(root, 'invoices'));
-  writeFileSync(join(root, 'invoices/2026-001.pdf'), pdf);
+  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: createHash('sha256').update(pdf).digest('hex') } }], sent: [] };
+  mkdirSync(join(root, 'transactional-data/2026/invoices'), { recursive: true });
+  writeFileSync(join(root, 'transactional-data/2026/invoices/2026-001.pdf'), pdf);
   writeFileSync(join(root, 'invoices.json'), JSON.stringify(book));
 }
 
@@ -84,7 +86,7 @@ test('status: not in audit mode', async () => {
 
 for (const call of refused) {
   test(`refused: ${call.method} ${call.path} ${JSON.stringify(call.body ?? '')} -> ${call.status}, index unchanged`, async () => {
-    const before = readFileSync(api.indexPath);
+    const before = JSON.stringify(booksOnDisk(api.ws));
     const { status, error, json } = await send(call);
     assert.equal(status, call.status, error);
     if (status === 403) {
@@ -96,7 +98,7 @@ for (const call of refused) {
       assert.match(error ?? '', /Nur manuelle Transaktionen/);
       assert.equal(json.code, 'manualOnly');
     }
-    assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+    assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
   });
 }
 
@@ -152,14 +154,14 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
   { method: 'PATCH', path: '/api/workspace', body: { invoicing: { layout: { accent: '#0f766e' }, texts: { de: { intro: 'Hallo' } } } },
     check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('accent: "#0f766e"') },
   { method: 'PUT', path: '/api/accounts/1100', body: { name: 'Debitoren' },
-    check: () => readFileSync(join(api.root, 'accounts.json'), 'utf8').includes('"Debitoren"') },
+    check: () => readFileSync(api.ws.paths.accounts, 'utf8').includes('"Debitoren"') },
 ];
 
 for (const call of allowed) {
   test(`open period: ${call.method} ${call.path} ${JSON.stringify(call.body ?? '')} succeeds`, async () => {
     const { status, error } = await send(call);
     assert.equal(status, 200, error);
-    assert.ok(call.check(JSON.parse(readFileSync(api.indexPath, 'utf8'))), 'the change is in the index');
+    assert.ok(call.check(loadBooks(workspaceAt(api.ws.paths.root))), 'the change is in the index');
   });
 }
 
@@ -168,11 +170,11 @@ test('refused: DELETE of a manual payment that is booked -> 409 hasEntries, inde
   const ref = made.json.ref as string;
   const booked = await send({ method: 'POST', path: '/api/journal-entries', body: { transactionRef: ref, date: '2026-08-03', accountDebit: '6800', accountCredit: '2100', amount: 7, description: 'privat' } });
   assert.equal(booked.status, 200, booked.error);
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const { status, json } = await send({ method: 'DELETE', path: `/api/transactions/${ref}` });
   assert.equal(status, 409);
   assert.equal(json.code, 'hasEntries');
-  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
 });
 
 /** A camt.053 of the demo's Raiffeisen account with one payment on `date`. */
@@ -186,34 +188,34 @@ const upload = (name: string, body: string) => fetch(`http://127.0.0.1:${api.por
   .then(async (r) => ({ status: r.status, json: await r.json() as Record<string, unknown> }));
 
 test('refused: POST /api/statements with a statement wholly inside the filed quarter -> 403, index unchanged, no file kept', async () => {
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const { status, json } = await upload('mai.xml', camt('S-MAI', '2026-05-20'));
   assert.equal(status, 403, json.error as string);
   assert.equal(json.code, 'periodClosed');
   assert.equal((json.params as { reason: string }).reason, 'newStatement');
-  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
-  assert.equal(existsSync(join(api.root, 'bank-statements/Raiffeisen/mai.xml')), false);
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
+  assert.equal(!!findFile(api.ws.paths, 'statements', 'Raiffeisen/mai.xml'), false);
 });
 
 test('open period: POST /api/statements reads the statement in, keeps every payment it does not hold', async () => {
   const { status, json } = await upload('august.xml', camt('S-AUG', '2026-08-25'));
   assert.equal(status, 200, json.error as string);
   assert.deepEqual(json, { file: 'Raiffeisen/august.xml', account: '1021', month: '2026-08', added: 1 });
-  const now: Index = JSON.parse(readFileSync(api.indexPath, 'utf8'));
+  const now: Index = loadBooks(workspaceAt(api.ws.paths.root));
   assert.ok(now.transactions.some((t) => t.ref === 'REF-S-AUG' && t.date === '2026-08-25' && t.amount === 12));
   assert.ok(['C1', 'O1', 'CI', 'OI'].every((ref) => now.transactions.some((t) => t.ref === ref)), 'payments of no file stay');
   const again = await upload('august-2.xml', camt('S-AUG', '2026-08-25'));
   assert.equal(again.status, 409, 'the same statement under another name is read once');
   assert.equal((again.json.params as { reason: string }).reason, 'duplicate');
-  assert.equal(existsSync(join(api.root, 'bank-statements/Raiffeisen/august-2.xml')), false);
+  assert.equal(!!findFile(api.ws.paths, 'statements', 'Raiffeisen/august-2.xml'), false);
 });
 
 test('the closed period is still exactly as in the fixture', () => {
   const fixture: Index = JSON.parse(readFileSync(join(REPO, 'tests/fixtures/period-lock-index.json'), 'utf8'));
-  const now: Index = JSON.parse(readFileSync(api.indexPath, 'utf8'));
+  const now: Index = loadBooks(workspaceAt(api.ws.paths.root));
   const closed = (i: Index) => ({
-    transactions: i.transactions.filter((t) => t.date <= '2026-06-30'),
-    entries: i.journalEntries!.filter((j) => j.date <= '2026-06-30'),
+    transactions: i.transactions.filter((t) => t.date <= '2026-06-30').sort((a, b) => a.ref.localeCompare(b.ref)),
+    entries: i.journalEntries!.filter((j) => j.date <= '2026-06-30').sort((a, b) => a.id.localeCompare(b.id)),
     receipt: i.receipts.find((r) => r.id === 'rc'),
     mappings: i.mappings.filter((m) => m.transactionRef === 'C1'),
     config: i.config,
@@ -222,11 +224,11 @@ test('the closed period is still exactly as in the fixture', () => {
 });
 
 test('open period: POST /api/workspace/logo succeeds: a logo is no dated record, the books stay as they were', async () => {
-  const before = readFileSync(api.indexPath, 'utf8');
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const res = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([137, 80, 78, 71]) });
   assert.equal(res.status, 200);
-  assert.match(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), /logo: invoices\/logo-[0-9a-f]{12}\.png/);
-  assert.equal(readFileSync(api.indexPath, 'utf8'), before);
+  assert.match(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), /logo: logos\/logo-[0-9a-f]{12}\.png/);
+  assert.equal(JSON.stringify(booksOnDisk(api.ws)), before);
 });
 
 test('open period: POST /api/intake runs the inbox processing; the filed quarter keeps its entries, payments and links', async () => {
@@ -241,6 +243,6 @@ test('open period: POST /api/intake runs the inbox processing; the filed quarter
   }
   assert.ok(job, 'the job finished');
   assert.equal(job.steps[0].state, 'done', JSON.stringify(job.steps[0].notes));
-  const now = JSON.parse(readFileSync(api.indexPath, 'utf8')) as Books;
+  const now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
 });

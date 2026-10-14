@@ -18,6 +18,7 @@ import { pdfText } from '../parsers/pdf-text.js';
 import { detectVatProofIssue } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
+import { filesOfPart, type Workspace } from '../workspace/workspace.js';
 import { mergeIndex, readStatementPdfs, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
@@ -115,18 +116,22 @@ function isPdf(path: string): boolean {
   }
 }
 
+const isReceiptPdf = (name: string, path: string) =>
+  name.toLowerCase().endsWith('.pdf') && !name.endsWith('.icloud') && isPdf(path); // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
+
 function scanPdfs(dir: string, location: 'staged' | 'archived'): FoundFile[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => {
-      if (!f.toLowerCase().endsWith('.pdf')) return false;
-      if (f.endsWith('.icloud')) return false;
-      // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
-      return isPdf(join(dir, f));
-    })
+    .filter((f) => isReceiptPdf(f, join(dir, f)))
     .sort()
     .map((f) => ({ filename: f, filepath: join(dir, f), location }));
 }
+
+/** The receipts of every year folder, by name. */
+const archivedPdfs = (ws: Workspace): FoundFile[] => filesOfPart(ws.paths, 'receipts')
+  .filter(([name, path]) => !name.includes('/') && isReceiptPdf(name, path))
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  .map(([filename, filepath]) => ({ filename, filepath, location: 'archived' as const }));
 
 const idOf = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex').substring(0, 16);
 
@@ -148,12 +153,12 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   }
   const unmatched = unmatchedOf(bank);
   if (unmatched.length) return { notes: [{ code: 'unmatched', files: unmatched }], stop: true };
-  if (!existsSync(ws.paths.receipts)) return { notes: [{ code: 'error', detail: `receipts/ directory not found at ${ws.paths.receipts}` }], stop: true };
-
   await convertImagesToPdf(ws.paths.inbox, log);
 
   // Archived receipts first, then staged (for cross-folder duplicate detection)
-  const archivedFiles = scanPdfs(ws.paths.receipts, 'archived');
+  const archivedFiles = archivedPdfs(ws);
+  const twice = archivedFiles.filter((f, i) => archivedFiles.findIndex((g) => g.filename === f.filename) !== i);
+  if (twice.length) return { notes: [{ code: 'error', detail: `${twice.map((f) => f.filename).join(', ')}: in two year folders' receipts/, keep one` }], stop: true };
   const stagedFiles = scanPdfs(ws.paths.inbox, 'staged');
   log(`Found ${archivedFiles.length} PDFs in receipts/, ${stagedFiles.length} PDFs in beleg-import/\n`);
 
@@ -232,7 +237,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     // Paid invoices first (ADR 0010): a payment with an invoice's reference is booked from the invoice, before classify sees it.
     const paid = payments ? matchPayments(index, invoices, payments) : undefined;
     if (paid) {
-      fileReceipts(ws, paid.files);
+      fileReceipts(ws, index, paid.files);
       saveInvoices(ws, invoices);
     }
     return { ...merged, paid, counts: { receipts: index.receipts, transactions: index.transactions.length, statements: index.bankStatements.length, mappings: index.mappings.length } };

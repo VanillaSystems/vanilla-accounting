@@ -18,7 +18,7 @@ import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspac
 import { checkWorkflow, loadWorkflow } from '../src/workflows/load.js';
 import { replayRun, runWorkflow } from '../src/workflows/runner.js';
 import { listRuns, saveRun } from '../src/workflows/store.js';
-import { DEMO_ROOT } from './support/workspace.js';
+import { DEMO_ROOT, booksOnDisk } from './support/workspace.js';
 
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'runs-'));
 const workflow = loadWorkflow(APP_ROOT, 'booking');
@@ -85,14 +85,14 @@ test('a replay writes nothing and shows the entries the run booked; a second run
     assert.deepEqual(run.steps.map((s) => `${s.step}:${s.outcome}`), ['open:open', 'classify:decided', 'book:booked']);
     assert.equal(run.steps[1].llm.length, 1, 'the model answer is recorded');
 
-    const before = readFileSync(ws.paths.books, 'utf8');
+    const before = booksOnDisk(ws);
     const replay = await replayRun(workflow, { ...run, steps: run.steps }, { ws });
-    assert.equal(readFileSync(ws.paths.books, 'utf8'), before, 'a replay writes nothing');
+    assert.deepEqual(booksOnDisk(ws), before, 'a replay writes nothing');
     assert.deepEqual(replay.steps.map((s) => `${s.step}:${s.outcome}`), ['open:booked'], 'today the transaction is booked: the replay stops there');
 
     const again = await runWorkflow(workflow, refs[0], { ws, ask: async () => { throw new Error('no model call for a booked transaction'); } });
     assert.equal(again.status, 'done');
-    assert.equal(readFileSync(ws.paths.books, 'utf8'), before);
+    assert.deepEqual(booksOnDisk(ws), before);
     assert.ok(booked.length > 0);
   } finally {
     rmSync(ws.paths.root, { recursive: true, force: true });
@@ -105,10 +105,10 @@ test('a replay of a recorded run on unbooked books shows the would-be entries an
   try {
     const run = await runWorkflow(workflow, first.refs[0], { ws: first.ws, ask: first.ask });
     const live = loadBooks(first.ws).journalEntries.filter((e) => e.transactionRef === first.refs[0]);
-    const before = readFileSync(second.ws.paths.books, 'utf8');
+    const before = booksOnDisk(second.ws);
     const replay = await replayRun(workflow, run, { ws: second.ws });
     assert.equal(replay.status, 'done');
-    assert.equal(readFileSync(second.ws.paths.books, 'utf8'), before);
+    assert.deepEqual(booksOnDisk(second.ws), before);
     const effect = replay.steps.find((s) => s.step === 'book')!.effects[0];
     assert.equal(effect.applied, false);
     assert.deepEqual(comparable(effect.value as JournalEntry[]), comparable(live));
@@ -121,10 +121,10 @@ test('a replay of a recorded run on unbooked books shows the would-be entries an
 test('without a model the run waits for a person and books nothing', async () => {
   const { ws, refs } = prepared();
   try {
-    const before = readFileSync(ws.paths.books, 'utf8');
+    const before = booksOnDisk(ws);
     const run = await runWorkflow(workflow, refs[0], { ws });
     assert.equal(run.status, 'waiting');
-    assert.equal(readFileSync(ws.paths.books, 'utf8'), before);
+    assert.deepEqual(booksOnDisk(ws), before);
   } finally {
     rmSync(ws.paths.root, { recursive: true, force: true });
   }

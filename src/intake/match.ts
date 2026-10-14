@@ -5,11 +5,12 @@
  *   into receipts/ and linked when the model is at least 80 % sure
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
-import { existsSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/prompts.js';
 import type { BankTransaction, Receipt } from '../types/index.js';
-import { periodLock, type Books } from '../books/store.js';
+import { periodLock, receiptHome, type Books } from '../books/store.js';
+import { findFile } from '../workspace/workspace.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
 import { baseCurrency } from '../engines/index.js';
 
@@ -92,11 +93,12 @@ function normalizeFilename(raw: string): string {
   return name || 'receipt.pdf';
 }
 
-function resolveCollision(desiredName: string, targetDir: string): string {
-  if (!existsSync(join(targetDir, desiredName))) return desiredName;
+/** `desiredName`, or with -2, -3, … when a year folder already holds that name. */
+function resolveCollision(desiredName: string, taken: (name: string) => boolean): string {
+  if (!taken(desiredName)) return desiredName;
   const base = desiredName.replace(/\.pdf$/i, '');
   let i = 2;
-  while (existsSync(join(targetDir, `${base}-${i}.pdf`))) i++;
+  while (taken(`${base}-${i}.pdf`)) i++;
   return `${base}-${i}.pdf`;
 }
 
@@ -113,7 +115,6 @@ function candidates(receipt: Receipt, all: BankTransaction[]): BankTransaction[]
 }
 
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
-  const RECEIPTS_DIR = ws.paths.receipts;
   const IMPORT_DIR = ws.paths.inbox;
   const snapshot = books.read();
   const staged = snapshot.receipts.filter((r) => r.location === 'staged');
@@ -128,17 +129,19 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   progress(0, total);
 
   /**
-   * Moves the staged file into receipts/ and changes its receipt in the same synchronous change,
+   * Moves the staged file into its year's receipts/ and changes its receipt in the same synchronous change,
    * if the receipt is still the staged file it was. Returns the new file name, or why not.
    */
   const archive = (receipt: Receipt, desired: string, change: (r: Receipt, books: Books) => void): string | undefined => books.update((index) => {
     const r = index.receipts.find((x) => x.id === receipt.id);
     const srcPath = join(IMPORT_DIR, receipt.filename);
     if (!r || r.location !== 'staged' || r.filename !== receipt.filename || !existsSync(srcPath)) return undefined;
-    const target = resolveCollision(desired, RECEIPTS_DIR);
+    const target = resolveCollision(desired, (name) => !!findFile(ws.paths, 'receipts', name));
     change(r, index);
     Object.assign(r, { filename: target, location: 'archived' });
-    renameSync(srcPath, join(RECEIPTS_DIR, target));
+    const home = receiptHome(ws, index, r);
+    mkdirSync(home, { recursive: true });
+    renameSync(srcPath, join(home, target));
     return target;
   });
 

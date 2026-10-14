@@ -9,6 +9,9 @@ import { chmodSync, copyFileSync, existsSync, readFileSync, readdirSync, rmSync,
 import { dirname, join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { booksOnDisk, writeIndex } from './support/workspace.js';
+import { loadBooks } from '../src/books/store.js';
+import { workspaceAt, yearPaths } from '../src/workspace/workspace.js';
 
 const FIXTURE = 'tests/fixtures/period-lock-index.json';
 let api: ApiServer;
@@ -16,23 +19,23 @@ let receiptsDir = '';
 
 before(async () => {
   api = await startApi(FIXTURE);
-  receiptsDir = join(api.root, 'receipts');
+  receiptsDir = join(api.root, 'transactional-data/2026/receipts');
 });
 after(() => {
-  chmodSync(dirname(api.indexPath), 0o755);
+  chmodSync(yearPaths(api.ws.paths, '2026').books, 0o755);
   api?.stop();
 });
 
 beforeEach(() => {
-  chmodSync(dirname(api.indexPath), 0o755);
-  copyFileSync(FIXTURE, api.indexPath);
+  chmodSync(yearPaths(api.ws.paths, '2026').books, 0o755);
+  writeIndex(api.ws, JSON.parse(readFileSync(FIXTURE, 'utf8')));
   rmSync(receiptsDir, { recursive: true, force: true });
   mkdirSync(receiptsDir);
   writeFileSync(join(receiptsDir, 'open.pdf'), 'PDF ro');
   writeFileSync(join(receiptsDir, 'taken.pdf'), 'PDF other');
 });
 
-const readIndex = (): Index => JSON.parse(readFileSync(api.indexPath, 'utf8'));
+const readIndex = (): Index => loadBooks(workspaceAt(api.ws.paths.root));
 const files = () => readdirSync(receiptsDir).sort();
 
 /** Every record of the index that differs from the fixture, as `<collection>[<key>].<field>`. */
@@ -53,7 +56,9 @@ function changedFields(after: Index): string[] {
       }
     }
   }
-  const rest = (i: Index) => ({ ...i, schema: undefined, receipts: undefined, transactions: undefined });
+  // The books' files keep records sorted by id (ADR 0013), the fixture in its own order.
+  const byKey = <T>(xs: T[] | undefined) => xs?.map((x) => JSON.stringify(x)).sort();
+  const rest = (i: Index) => ({ ...i, schema: undefined, receipts: undefined, transactions: undefined, mappings: byKey(i.mappings), journalEntries: byKey(i.journalEntries) });
   assert.deepEqual(rest(after), rest(fixture), 'mappings, entries and config are untouched');
   return out.sort();
 }
@@ -102,39 +107,39 @@ const invalid: Array<[string, Record<string, unknown>]> = [
 
 for (const [what, body] of invalid) {
   test(`receipt: ${what} refuses the whole edit (400), nothing changes`, async () => {
-    const before = readFileSync(api.indexPath);
+    const before = JSON.stringify(booksOnDisk(api.ws));
     const { status } = await api.send('PATCH', '/api/receipts/ro', body);
     assert.equal(status, 400);
-    assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+    assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
     assert.deepEqual(files(), ['open.pdf', 'taken.pdf']);
   });
 }
 
 test('receipt: renaming onto an existing file is refused (409), nothing changes', async () => {
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const { status, json } = await api.send('PATCH', '/api/receipts/ro', { filename: 'taken.pdf', description: 'neu' });
   assert.equal(status, 409);
   assert.match(String(json.error), /taken\.pdf existiert bereits/);
-  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
   assert.equal(readFileSync(join(receiptsDir, 'taken.pdf'), 'utf8'), 'PDF other');
   assert.equal(readFileSync(join(receiptsDir, 'open.pdf'), 'utf8'), 'PDF ro');
 });
 
 test('receipt: a failed index write undoes the rename', async () => {
-  const before = readFileSync(api.indexPath);
-  chmodSync(dirname(api.indexPath), 0o555);
+  const before = JSON.stringify(booksOnDisk(api.ws));
+  chmodSync(yearPaths(api.ws.paths, '2026').books, 0o555);
   const { status } = await api.send('PATCH', '/api/receipts/ro', { filename: 'neu.pdf', description: 'neu' });
   assert.equal(status, 500);
-  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
   assert.deepEqual(files(), ['open.pdf', 'taken.pdf'], 'the file has its old name again');
 });
 
 test('receipt: closed period refuses the whole edit (403)', async () => {
   writeFileSync(join(receiptsDir, 'closed.pdf'), 'PDF rc');
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const { status } = await api.send('PATCH', '/api/receipts/rc', { filename: 'neu.pdf', remarks: 'neu' });
   assert.equal(status, 403);
-  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
   assert.ok(existsSync(join(receiptsDir, 'closed.pdf')) && !existsSync(join(receiptsDir, 'neu.pdf')));
 });
 
@@ -154,10 +159,10 @@ test('transaction: noReceiptNeeded false and an empty remark clear the fields', 
 });
 
 test('transaction: an empty description refuses the whole edit (400)', async () => {
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const { status } = await api.send('PATCH', '/api/transactions/O1', { remarks: 'Notiz', description: '  ' });
   assert.equal(status, 400);
-  assert.ok(readFileSync(api.indexPath).equals(before), 'index is byte-identical');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
 });
 
 test('transaction: unknown ref is 404', async () => {

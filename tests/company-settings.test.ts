@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -87,6 +87,7 @@ test('refused: a UID of the wrong shape, an IBAN with wrong check digits, a bank
 test('chart: a rename keeps the account\'s other fields; a new account goes in number order', () => {
   const root = mkdtempSync(join(tmpdir(), 'belege-chart-'));
   const paths = workspacePaths(root);
+  mkdirSync(paths.masterData);
   writeFileSync(paths.accounts, JSON.stringify([{ number: '1020', name: 'Bank', group: 'liquid' }, { number: '3200', name: 'Ertrag' }], null, 2));
   assert.deepEqual(setAccountName({ paths }, '1020', ' Bank Raiffeisen '), { number: '1020', name: 'Bank Raiffeisen', added: false });
   assert.deepEqual(setAccountName({ paths }, '1100', 'Debitoren'), { number: '1100', name: 'Debitoren', added: true });
@@ -152,7 +153,7 @@ test('API: a logo upload is stored by its checksum and becomes the layout\'s log
     assert.equal(up.status, 200);
     const info = await up.json() as CompanyInfo;
     const logo = info.invoicing!.layout.logo!;
-    assert.match(logo, /^invoices\/logo-[0-9a-f]{12}\.svg$/);
+    assert.match(logo, /^logos\/logo-[0-9a-f]{12}\.svg$/);
     assert.equal(readFileSync(join(api.root, logo), 'utf8'), svg);
     assert.match(readFileSync(join(api.root, MANIFEST_FILE), 'utf8'), new RegExp(`logo: ${logo.replace('.', '\\.')}`));
     const served = await fetch(`http://127.0.0.1:${api.port}/api/invoice-logo?path=${encodeURIComponent(logo)}`);

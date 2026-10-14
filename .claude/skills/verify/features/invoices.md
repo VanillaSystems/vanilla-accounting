@@ -1,6 +1,6 @@
 # Rechnungen (invoices)
 
-Rechnungen (`/invoices…`, rebuilt in redesign phase 9) is the invoicing UI over `src/invoices/` (ADR 0010, ADR 0012) and its API (`/api/invoices`, `/api/customers`, `/invoices/<number>.pdf`, `/invoices/sent/<id>.pdf`). The sheet on screen is laid out by the PDF's own renderer (`src/invoices/sheet.ts`): blocks measured in the page, `paginate`, `assembleSheets`. Firma › Rechnungslayout (`/company/invoice-layout`) edits the manifest's `invoicing` block through `PATCH /api/workspace` and `POST /api/workspace/logo`. Records live in `$SB/invoices.json` and `$SB/invoices/`, not in `books.json`.
+Rechnungen (`/invoices…`, rebuilt in redesign phase 9) is the invoicing UI over `src/invoices/` (ADR 0010, ADR 0012) and its API (`/api/invoices`, `/api/customers`, `/invoices/<number>.pdf`, `/invoices/sent/<id>.pdf`). The sheet on screen is laid out by the PDF's own renderer (`src/invoices/sheet.ts`): blocks measured in the page, `paginate`, `assembleSheets`. Firma › Rechnungslayout (`/company/invoice-layout`) edits the manifest's `invoicing` block through `PATCH /api/workspace` and `POST /api/workspace/logo`. Records live in `$SB/invoices.json` and `$SB/transactional-data/<year>/invoices/`, the logo in `$SB/logos/`, not in the books.
 
 ## Sub-features
 
@@ -27,7 +27,7 @@ Rechnungen (`/invoices…`, rebuilt in redesign phase 9) is the invoicing UI ove
 - **Credit, cancel, reminder.** `[data-act=credit]`, `Teilbetrag`, an amount, `[data-act=credit-ok]`: a credit-note draft opens; `[data-act=issue]` issues it in the same sequence. `[data-act=cancel]` on an open invoice, a reason, `[data-act=cancel-ok]`: the stamp shows, Versand lists the notice. `[data-act=remind]` on the overdue one, a fee, `[data-act=remsend]`: Versand lists the reminder PDF.
 - **Layout.** `/company/invoice-layout`, click a swatch, pick `Helvetica`: `$SB/belege.workspace.yaml` shows them under `invoicing.layout`; any draft shows the new colour and font.
 - **Refusal.** A draft without lines, `Ausstellen`: the toast says "Für eine MWST-konforme Rechnung fehlt: mindestens eine Position."
-- `$S diff` stays `no changes` for all of this: invoices are not in `books.json` (only a confirmed payment books an entry).
+- `$S diff` stays `no changes` for all of this: invoices are not in the books (only a confirmed payment books an entry).
 
 ## Gotchas
 

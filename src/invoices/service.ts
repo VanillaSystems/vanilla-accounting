@@ -7,6 +7,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
+import { receiptFile, type Books } from '../books/store.js';
 import { defaultTexts, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, DEFAULT_LAYOUT,
@@ -232,7 +233,7 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
     const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
     return commit(ws, draft.id, draft, (fresh, at) => {
       if (nextNumberTaken(fresh, issued.number)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
-      const done: Issued = { ...issued, pdf: storePdf(ws, `${issued.number}.pdf`, printed.pdf) };
+      const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), `${issued.number}.pdf`, printed.pdf) };
       fresh.invoices[at] = done;
       return done;
     });
@@ -293,7 +294,7 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
   const env = newEnvelope('sd', now);
   const printed = await printer.pdf(sheet, now);
   const title = sentTitle(inv, kind, level);
-  const pdf = storePdf(ws, `sent/${env.id}.pdf`, printed.pdf);
+  const pdf = storePdf(ws, now.slice(0, 4), `sent/${env.id}.pdf`, printed.pdf);
   let delivered: Awaited<ReturnType<Deliver>> | undefined;
   try {
     delivered = deliver && await deliver({ filename: `${title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: printed.pdf });
@@ -414,10 +415,12 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
   };
 }
 
-/** Files the invoice PDFs that became receipts under receipts/, once. */
-export function fileReceipts(ws: Workspace, files: PaymentOutcome['files']): void {
+/** Files the invoice PDFs that became receipts of `books` under their year's receipts/, once. */
+export function fileReceipts(ws: Workspace, books: Books, files: PaymentOutcome['files']): void {
   for (const f of files) {
-    const path = join(ws.paths.receipts, f.filename);
+    const receipt = books.receipts.find((r) => r.filename === f.filename);
+    if (!receipt) throw new Error(`${f.filename}: no receipt of the books names it`);
+    const path = receiptFile(ws, books, receipt);
     if (!existsSync(path)) writeAtomic(path, f.pdf);
   }
 }

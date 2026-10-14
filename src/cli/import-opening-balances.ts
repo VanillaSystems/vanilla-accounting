@@ -23,7 +23,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
-import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
+import { hasBooks, loadBooks, saveBooks, update, PERSON } from '../books/store.js';
 import { toRappen, fromRappen } from '../accounting/rappen.js';
 import { chart, baseCurrency } from '../engines/index.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -207,12 +207,12 @@ function main() {
   }
 
   if (!write) {
-    console.log('\nDry run — no changes written. Re-run with --write to save into books.json.');
+    console.log('\nDry run — no changes written. Re-run with --write to save into the books.');
     return;
   }
 
-  if (!existsSync(ws.paths.books)) {
-    console.error(`\nCannot write: ${ws.paths.books} not found.`);
+  if (!hasBooks(ws)) {
+    console.error(`\nCannot write: no books in ${ws.paths.root}.`);
     process.exit(1);
   }
   const index = loadBooks(ws);

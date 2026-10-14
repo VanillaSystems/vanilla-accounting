@@ -21,7 +21,7 @@ import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Cr
 import { suggestAccount } from '../workspace/scaffold.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import { parseUid } from '../workspace/uid.js';
-import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from '../workspace/workspace.js';
+import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 
 const flagOf = (key: QuestionKey) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
@@ -186,7 +186,7 @@ async function main(): Promise<string> {
   const root = resolve(await text('dir', 'Folder for the books', undefined, interactive ? join(APP_ROOT, '..', `${slug}-books`) : undefined));
 
   let message: string;
-  if (existsSync(join(root, MANIFEST_FILE))) {
+  if (appFolderIn(root)) {
     workspaceAt(root);
     message = `${root} is already a workspace: nothing to change.`;
   } else {

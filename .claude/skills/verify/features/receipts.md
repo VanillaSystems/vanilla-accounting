@@ -70,7 +70,7 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 - **Intake.** On any page dispatch `dragenter` + `drop` with a `DataTransfer` holding a PDF
   (`$B js`): the URL becomes `/receipts/<id>`, `.row.reading` shows, `curl $API/api/inbox` lists
   it. The demo's `extract` refuses its own closed transactions, so stand in for it by adding the
-  receipt (`location: staged`, same id and file name) to `$SB/books.json`: within 3 s the row
+  receipt (`location: staged`, same id and file name) to `$SB/transactional-data/<year>/books/receipts.jsonl`: within 3 s the row
   becomes the receipt, still selected.
 
 ## Gotchas

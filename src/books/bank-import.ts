@@ -11,7 +11,7 @@ import { pdfText } from '../parsers/pdf-text.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { partDirs, type Workspace } from '../workspace/workspace.js';
 import { periodLock } from './store.js';
 
 type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
@@ -55,13 +55,11 @@ export function statementPdf(filename: string): { fromDate: string; toDate: stri
   return null;
 }
 
-/** The monthly statement PDFs in each bank's folder, named the way Raiffeisen or Wise name them. */
+/** The monthly statement PDFs in each bank's folder of each year, named the way Raiffeisen or Wise name them. */
 export function readStatementPdfs(ws: Ws): BankStatement[] {
   const statements: BankStatement[] = [];
   for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements).map((a) => a.bank))) {
-    const dir = join(ws.paths.statements, bank);
-    if (!existsSync(dir)) continue;
-    for (const file of readdirSync(dir).filter((f) => f.endsWith('.pdf'))) {
+    for (const dir of partDirs(ws.paths, 'statements').map((d) => join(d, bank)).filter((d) => existsSync(d))) for (const file of readdirSync(dir).filter((f) => f.endsWith('.pdf'))) {
       const parsed = statementPdf(file);
       if (parsed) statements.push({ bank, filename: file, ...parsed });
     }
@@ -73,9 +71,7 @@ export function readStatementPdfs(ws: Ws): BankStatement[] {
 export async function readWiseReferences(ws: Ws, warn: (msg: string) => void = () => {}): Promise<Map<string, string>> {
   const refs = new Map<string, string>();
   for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements === 'wise').map((a) => a.bank))) {
-    const dir = join(ws.paths.statements, bank);
-    if (!existsSync(dir)) continue;
-    for (const f of readdirSync(dir).filter((x) => x.endsWith('.pdf'))) {
+    for (const dir of partDirs(ws.paths, 'statements').map((d) => join(d, bank)).filter((d) => existsSync(d))) for (const f of readdirSync(dir).filter((x) => x.endsWith('.pdf'))) {
       try {
         for (const [id, ref] of wiseReferences(await pdfText(join(dir, f), 'raw'))) refs.set(id, ref);
       } catch (e) { warn(`${f}: ${e}`); }

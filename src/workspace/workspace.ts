@@ -1,10 +1,11 @@
 /**
- * The one owner of "where is the data". A workspace is the directory holding one company's
- * books, receipts, statements and filings, found by its belege.workspace.yaml. The app's own
+ * The one owner of "where is the data". A workspace is the app's folder (vanilla-accounting/) in
+ * one company's repository, holding its books, receipts, statements and filings, found by its
+ * belege.workspace.yaml; its layout is LAYOUT (ADR 0013). The app's own
  * files (processes/, reference/, src/server/scan.html) are found from APP_ROOT, never the cwd.
  */
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { parseEnv } from 'node:util';
@@ -66,16 +67,50 @@ export interface LedgerBankAccount {
   iban?: Iban;
 }
 
-/** Fixed layout. No path is configurable, so there is one way to find each thing. */
+/**
+ * The app's folder in the company's repository (ADR 0013): the workspace of Vanilla Accounting.
+ * The repository's root holds its git and agent files, the apps' folders, master-data/ (shared by
+ * apps, reserved) and own/ (the company's files no app reads).
+ */
+export const APP_FOLDER = 'vanilla-accounting';
+
+/** Who writes a name of the workspace: the app (a person changes it only through the app), or the company (a person adds it, the app reads it). */
+export type Owner = 'app' | 'company';
+
+/**
+ * The one list of the names the app's folder may hold (ADR 0013), each with its owner: at its
+ * top level, in its master-data/ and in a year folder of transactional-data/. The workspace
+ * check names everything else; the migration, the leak guard and the audit export read it too.
+ */
+export const LAYOUT = {
+  top: {
+    'belege.workspace.yaml': 'company', 'mail.yaml': 'company', 'secret-terms.txt': 'company', 'AGENTS.md': 'company', 'CLAUDE.md': 'company',
+    knowledge: 'company', modules: 'company', workflows: 'company', 'beleg-import': 'company', history: 'company',
+    VERSION: 'app', 'ledger.json': 'app', 'invoices.json': 'app', logos: 'app', data: 'app', 'master-data': 'app', 'transactional-data': 'app',
+  },
+  masterData: { 'accounts.json': 'company' },
+  year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', receipts: 'company', 'bank-statements': 'company' },
+} as const satisfies Record<string, Record<string, Owner>>;
+
+/** The names a company repository's root holds besides the apps' folders: git and agent files, the shared master-data/, own/. */
+export const REPOSITORY_ROOT = new Set([
+  '.git', '.gitignore', '.gitattributes', '.github', '.env', '.DS_Store', '.claude', '.agents', '.codex', '.cursor', '.vscode',
+  'AGENTS.md', 'CLAUDE.md', 'README.md', 'master-data', 'own',
+]);
+
+/** A fiscal year's folder in transactional-data/: four digits. */
+export const YEAR_FOLDER = /^\d{4}$/;
+
+/** Fixed layout (ADR 0013). No path is configurable, so there is one way to find each thing. */
 export interface WorkspacePaths {
+  /** The app's folder, vanilla-accounting/ of the company's repository. */
   root: string;
+  /** The company's repository holding the app's folder; the app's folder itself when it lies alone. */
+  repository: string;
   manifest: string;
-  books: string;
-  receipts: string;
+  /** closedThrough and the rest of the books' config, and the books' schema (src/books/store.ts). */
+  ledger: string;
   inbox: string;
-  statements: string;
-  filings: string;
-  accounts: string;
   history: string;
   data: string;
   /** Mailboxes receipts are collected from and how their senders are sorted (src/collect/mail-config.ts). */
@@ -84,8 +119,30 @@ export interface WorkspacePaths {
   secretTerms: string;
   /** Customers, invoices, sent documents (src/invoices/store.ts). */
   invoices: string;
+  /** The logos of the invoice layout, logo-<checksum>.<ext>. */
+  logos: string;
+  masterData: string;
+  /** The chart of accounts. */
+  accounts: string;
+  /** One folder per fiscal year (yearPaths). */
+  transactional: string;
+}
+
+/** The folders of one fiscal year in transactional-data/<year>/. */
+export interface YearPaths {
+  year: string;
+  root: string;
+  /** entries.jsonl, transactions.jsonl, mappings.jsonl, receipts.jsonl, statements.jsonl, balances.jsonl (src/books/store.ts). */
+  books: string;
+  receipts: string;
+  /** bank-statements/<bank>/ */
+  statements: string;
+  /** VAT returns as filed, seals, year-close.json. */
+  filings: string;
   /** The PDFs of issued invoices (<number>.pdf), and of sent reminders and notices (sent/<id>.pdf). */
-  invoiceFiles: string;
+  invoices: string;
+  /** The figures npm run test:books compares the books against. */
+  expected: string;
 }
 
 export interface Workspace {
@@ -103,37 +160,98 @@ export interface Workspace {
 export class WorkspaceError extends Error {}
 
 export function workspacePaths(root: string): WorkspacePaths {
+  const masterData = join(root, 'master-data');
   return {
     root,
+    repository: basename(root) === APP_FOLDER ? dirname(root) : root,
     manifest: join(root, MANIFEST_FILE),
-    books: join(root, 'books.json'),
-    receipts: join(root, 'receipts'),
+    ledger: join(root, 'ledger.json'),
     inbox: join(root, 'beleg-import'),
-    statements: join(root, 'bank-statements'),
-    filings: join(root, 'filings'),
-    accounts: join(root, 'accounts.json'),
     history: join(root, 'history'),
     data: join(root, 'data'),
     mail: join(root, 'mail.yaml'),
     secretTerms: join(root, 'secret-terms.txt'),
     invoices: join(root, 'invoices.json'),
-    invoiceFiles: join(root, 'invoices'),
+    logos: join(root, 'logos'),
+    masterData,
+    accounts: join(masterData, 'accounts.json'),
+    transactional: join(root, 'transactional-data'),
   };
+}
+
+export function yearPaths(paths: Pick<WorkspacePaths, 'transactional'>, year: string): YearPaths {
+  if (!YEAR_FOLDER.test(year)) throw new Error(`not a fiscal year: ${year}`);
+  const root = join(paths.transactional, year);
+  return {
+    year, root,
+    books: join(root, 'books'),
+    receipts: join(root, 'receipts'),
+    statements: join(root, 'bank-statements'),
+    filings: join(root, 'filings'),
+    invoices: join(root, 'invoices'),
+    expected: join(root, 'expected'),
+  };
+}
+
+/** The fiscal years the workspace has a folder for, oldest first. */
+export function yearsOf(paths: Pick<WorkspacePaths, 'transactional'>): string[] {
+  if (!existsSync(paths.transactional)) return [];
+  return readdirSync(paths.transactional, { withFileTypes: true }).filter((d) => d.isDirectory() && YEAR_FOLDER.test(d.name)).map((d) => d.name).sort();
+}
+
+/** A part's folder in every year folder that has one, oldest year first. */
+export function partDirs(paths: Pick<WorkspacePaths, 'transactional'>, part: Exclude<keyof YearPaths, 'year' | 'root'>): string[] {
+  return yearsOf(paths).map((y) => yearPaths(paths, y)[part]).filter((d) => existsSync(d));
+}
+
+/** A file name that lies in two year folders: which one a record means is not clear. */
+export class DuplicateFileError extends Error {}
+
+type FilePart = 'receipts' | 'statements' | 'invoices';
+
+/**
+ * The path of the file `name` (relative to its part's folder, as `x.pdf` or `Wise/y.pdf`) in the
+ * year folders; undefined when none holds it. Throws DuplicateFileError when two do.
+ */
+export function findFile(paths: WorkspacePaths, part: FilePart, name: string): string | undefined {
+  const found = yearsOf(paths).map((y) => join(yearPaths(paths, y)[part], name)).filter((p) => existsSync(p));
+  if (found.length > 1) throw new DuplicateFileError(`${name} lies in ${found.map((p) => relative(paths.root, p)).join(' and ')}: keep one.`);
+  return found[0];
+}
+
+/** Every file of a part in every year folder, as [name relative to the part's folder, full path], recursively. */
+export function filesOfPart(paths: WorkspacePaths, part: FilePart): Array<[string, string]> {
+  const walk = (dir: string, prefix: string): Array<[string, string]> => existsSync(dir)
+    ? readdirSync(dir, { withFileTypes: true }).flatMap((e): Array<[string, string]> => {
+      if (e.name.startsWith('.')) return [];
+      const full = join(dir, e.name);
+      return e.isDirectory() ? walk(full, `${prefix}${e.name}/`) : [[`${prefix}${e.name}`, full]];
+    })
+    : [];
+  return yearsOf(paths).flatMap((y) => walk(yearPaths(paths, y)[part], ''));
+}
+
+/** The app's folder `dir` names: `dir` itself when it holds the manifest, else its vanilla-accounting/ when that does. */
+export function appFolderIn(dir: string): string | undefined {
+  if (existsSync(join(dir, MANIFEST_FILE))) return dir;
+  if (existsSync(join(dir, APP_FOLDER, MANIFEST_FILE))) return join(dir, APP_FOLDER);
+  return undefined;
 }
 
 /** The workspace whose manifest is in `root`; from now on the engines compute with its jurisdiction (modules/ch with its overlay). */
 export function workspaceAt(root: string): Workspace {
-  const paths = workspacePaths(resolve(root));
+  const paths = workspacePaths(appFolderIn(resolve(root)) ?? resolve(root));
   setJurisdiction(workspaceModules(APP_ROOT, paths.root).effective);
   return { ...readManifest(paths.manifest), paths };
 }
 
 /**
- * Resolution, first hit wins:
+ * Resolution, first hit wins; a directory counts when it holds the manifest or its
+ * vanilla-accounting/ does (appFolderIn):
  *   1. VANILLA_WORKSPACE (or the deprecated BELEGE_WORKSPACE; "demo" or "demo-<name>" means that demo under APP_ROOT, a leading ~ is
  *      the home directory), from
  *      the environment or else from the app's own .env (an empty value skips both)
- *   2. walking up from the cwd to the first directory holding a belege.workspace.yaml
+ *   2. walking up from the cwd to the first such directory
  * Memoized: every CLI and the API resolve it once per process.
  */
 export function openWorkspace(): Workspace {
@@ -151,24 +269,24 @@ export function appLanguages(): string[] {
   return readdirSync(join(APP_ROOT, 'src/app/i18n/locales')).filter((f) => f.endsWith('.ts')).map((f) => f.slice(0, -3)).sort();
 }
 
-/** The demo workspaces the app ships (tools/demo/generate.ts): demo/, demo-consulting/, … */
+/** The demo repositories the app ships (tools/demo/generate.ts): demo/, demo-consulting/, …, each with its vanilla-accounting/. */
 export const DEMO_NAME = /^demo(-[a-z0-9]+)*$/;
 
 function locate(): string {
   const env = workspaceVar(process.env) ?? workspaceFromAppEnv();
   if (env) {
-    const root = DEMO_NAME.test(env) ? join(APP_ROOT, env) : resolve(env.replace(/^~(?=$|\/)/, homedir()));
-    if (!existsSync(join(root, MANIFEST_FILE))) {
-      throw new WorkspaceError(`VANILLA_WORKSPACE=${env}: no ${MANIFEST_FILE} in ${root}.`);
-    }
+    const dir = DEMO_NAME.test(env) ? join(APP_ROOT, env) : resolve(env.replace(/^~(?=$|\/)/, homedir()));
+    const root = appFolderIn(dir);
+    if (!root) throw new WorkspaceError(`VANILLA_WORKSPACE=${env}: no ${MANIFEST_FILE} in ${dir} or its ${APP_FOLDER}/.`);
     return realpathSync(root);
   }
   for (let dir = process.cwd(); ; dir = dirname(dir)) {
-    if (existsSync(join(dir, MANIFEST_FILE))) return dir;
+    const root = appFolderIn(dir);
+    if (root) return root;
     if (dirname(dir) === dir) break;
   }
   throw new WorkspaceError(
-    `No workspace: set VANILLA_WORKSPACE to a directory holding ${MANIFEST_FILE}, or run from inside one.`,
+    `No workspace: set VANILLA_WORKSPACE to a company repository (or its ${APP_FOLDER}/ folder), or run from inside one.`,
   );
 }
 

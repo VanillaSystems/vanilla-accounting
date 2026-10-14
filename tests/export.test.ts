@@ -19,6 +19,7 @@ import { BadRequest, PRESETS, entriesIn, parseRequest, presetPeriod, receiptsIn,
 import { closeBrowser, findBrowser, printPdf } from '../src/invoices/pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
+import { booksOnDisk } from './support/workspace.js';
 
 const ws = workspaceAt(DEMO_ROOT);
 const books = loadBooks(ws);
@@ -137,7 +138,7 @@ test('a report PDF is printed by Chromium', { skip: browser ? false : 'no Chromi
 
 test('POST /api/export answers in audit mode with the ZIP, the books unchanged', async () => {
   const api = await startApi('tests/fixtures/period-lock-index.json', { READONLY: '1' });
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   try {
     const res = await fetch(`http://127.0.0.1:${api.port}/api/export`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -149,7 +150,7 @@ test('POST /api/export answers in audit mode with the ZIP, the books unchanged',
     assert.deepEqual(files, ['Daten/Buchungen.csv', 'Daten/Buchungen.json', 'LIESMICH.txt', 'SHA256SUMS.txt', 'manifest.json']);
     const bad = await api.send('POST', '/api/export', { period: 'all', items: {} });
     assert.equal(bad.status, 400);
-    assert.ok(readFileSync(api.indexPath).equals(before), 'books.json is byte-identical');
+    assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'books.json is byte-identical');
   } finally {
     api.stop();
   }

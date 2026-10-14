@@ -9,7 +9,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBooks } from '../books/store.js';
-import { openWorkspace } from '../workspace/workspace.js';
+import { filesOfPart, openWorkspace, partDirs } from '../workspace/workspace.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
 import { loadMailConfig } from '../collect/mail-config.js';
 
@@ -30,7 +30,7 @@ const inQ = (d?: string) => !!d && d >= qFrom && d <= qTo;
 const idx = loadBooks(ws);
 const ls = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
 const staged = ls(ws.paths.inbox);
-const archived = ls(ws.paths.receipts);
+const archived = filesOfPart(ws.paths, 'receipts').map(([name]) => name);
 const all = [...staged, ...archived];
 
 type Row = { label: string; state: string; note: string };
@@ -51,7 +51,7 @@ for (const a of ws.bankAccounts) {
 const statementFiles = readBankStatements(ws);
 for (const [bank, currencies] of currenciesByBank) {
   const label = `${bank} ${currencies.join('/')}`;
-  const files = ls(join(ws.paths.statements, bank));
+  const files = partDirs(ws.paths, 'statements').flatMap((d) => ls(join(d, bank)));
   const xml = [...new Set(statementFiles.filter((f) => f.status === 'read' && f.account.bank === bank).map((f) => f.file))];
   const pdfs = files.filter((f) => f.endsWith('.pdf') && months.some((m) => {
     const [y, mo] = m.split('-');

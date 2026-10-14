@@ -13,7 +13,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { parse } from 'yaml';
-import { loadBooks } from '../books/store.js';
+import { hasBooks, loadBooks } from '../books/store.js';
 import {
   identify, claims, merchantOf, signalsOfReceipt, uidsIn, TIERS, type Counterparty,
 } from '../knowledge/counterparties.js';
@@ -176,8 +176,8 @@ function headingsOf(full: string): string[] {
 
 function checkProcedure(where: string, procedure: string, err: (m: string) => void, root: string) {
   const [path, ...anchors] = procedure.split('§').map((p) => p.trim().replace(/,$/, '').trim());
-  // A workspace rule may point at its own docs or at the app's public runbooks.
-  const full = [join(root, path), join(APP_ROOT, path)].find((f) => existsSync(f));
+  // A workspace rule may point at its own docs (in the app's folder or the company's repository) or at the app's public runbooks.
+  const full = [join(root, path), join(ws.paths.repository, path), join(APP_ROOT, path)].find((f) => existsSync(f));
   if (!full) { err(`${where}: procedure file "${path}" does not exist`); return; }
   const heads = headingsOf(full);
   for (const a of anchors.filter(Boolean)) {
@@ -309,7 +309,7 @@ for (const f of counterpartyFiles) {
 // ─── Routing, proven on the current index ───────────────────────────────────
 
 const unknownMerchants = new Map<string, number>();
-if (existsSync(ws.paths.books) && counterparties.length) {
+if (hasBooks(ws) && counterparties.length) {
   const index = loadBooks(ws);
 
   // A UID routes the strongest tier, so it must belong to this counterparty alone.

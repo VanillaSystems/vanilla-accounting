@@ -187,7 +187,7 @@ router.post('/api/invoices/:id/payments', (req, res) => {
     assertOpen(books, books.transactions.filter((t) => t.ref === transactionRef).map((t) => t.date), 'mapping');
     const invoices = loadInvoices(WS);
     const result = confirmPayment(books, invoices, req.params.id, transactionRef, ctx);
-    fileReceipts(WS, result.files);
+    fileReceipts(WS, books, result.files);
     saveInvoices(WS, invoices);
     return { paid: result.paid };
   });

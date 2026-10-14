@@ -1,10 +1,11 @@
 /**
  * npm run demo:generate -- [--demo DIR] [--seed N] [--out DIR]
  *
- * Writes every demo workspace in DEMOS (synthetic companies, see tools/demo/kit.ts), or only
- * --demo's: books.json, receipts/ as text PDFs, bank-statements/ as camt053 XML plus monthly
- * PDFs, the as-filed Q1 return under filings/, accounts.json, knowledge/ and the manifest.
- * Each lands in <app>/<demo.dir> unless --out names another directory (only with --demo).
+ * Writes every demo repository in DEMOS (synthetic companies, see tools/demo/kit.ts), or only
+ * --demo's, its books in vanilla-accounting/ (ADR 0013): the books by year, receipts/ as text
+ * PDFs, bank-statements/ as camt053 XML plus monthly PDFs, the as-filed Q1 return under filings/,
+ * master-data/accounts.json, knowledge/ and the manifest. Each lands in <app>/<demo.dir> unless
+ * --out names another directory (only with --demo).
  * The same seed always gives the same bytes; the output directory is replaced as a whole.
  *
  * The filed return is produced by the real `vat-xml` CLI on the books as they stood when
@@ -22,6 +23,9 @@ import { bankKind } from '../../src/workspace/banks.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
 import { sealOf } from '../../src/books/seal.js';
 import { BOOKS_SCHEMA } from '../../src/workspace/schema.js';
+import { writeBooks } from '../../src/books/store.js';
+import { BOOK_FILES, splitByYear, toJsonl } from '../../src/books/years.js';
+import { APP_FOLDER, workspacePaths } from '../../src/workspace/workspace.js';
 import { camt053Xml, type CamtEntry } from './camt053.js';
 import { textPdf } from './pdf.js';
 import { chf, PAID_PRIVATELY, uidChecksumValid, YEAR, type Demo, type Doc, type Payment, type StatementBank } from './kit.js';
@@ -37,6 +41,8 @@ import { loadJurisdiction } from '../../src/core/modules/load.js';
 const DEMOS: readonly Demo[] = [kaffee, consulting];
 
 const APP_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+/** The demo year's folder in the demo repository: every record of a demo lies in it. */
+const YEAR_DIR = `${APP_FOLDER}/transactional-data/${YEAR}`;
 // The demos are written before any workspace opens: they book with the shipped jurisdiction.
 setJurisdiction(loadJurisdiction(APP_ROOT, 'ch').jurisdiction);
 
@@ -143,7 +149,7 @@ function statements(demo: Demo, bankId: string, booked: Booked[], tree: Tree): {
   const balanceAt = (date: string) => r2(mine.filter((b) => b.payment.date <= date)
     .reduce((s, b) => s + (b.direction === 'CRDT' ? b.amount : -b.amount), bank.opening));
   const before = (date: string) => balanceAt(new Date(Date.parse(`${date}T12:00:00Z`) - 864e5).toISOString().slice(0, 10));
-  const dir = `bank-statements/${bank.bank}`;
+  const dir = `${YEAR_DIR}/bank-statements/${bank.bank}`;
 
   for (const [from, to] of QUARTERS) {
     const created = `${new Date(Date.parse(`${to}T12:00:00Z`) + 864e5).toISOString().slice(0, 10)}T06:00:00`;
@@ -192,7 +198,7 @@ function filedReturn(demo: Demo, books: Index): string {
   try {
     symlinkSync(join(APP_ROOT, 'node_modules'), join(dir, 'node_modules'));
     writeFileSync(join(dir, 'belege.workspace.yaml'), manifest(demo));
-    writeFileSync(join(dir, 'books.json'), JSON.stringify(books));
+    writeBooks(workspacePaths(dir), books);
     const out = join(dir, 'filed.xml');
     execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), demo.filed.period, out], {
       cwd: dir, env: { ...process.env, VANILLA_WORKSPACE: dir }, stdio: 'pipe',
@@ -268,8 +274,8 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
   const mappings: Mapping[] = [];
   const addDoc = (doc: Doc, ref: string, indexedOn: string) => {
     const pdf = textPdf(doc.lines);
-    if (tree.has(`receipts/${doc.file}`)) throw new Error(`${demo.dir}: two receipts are named ${doc.file}`);
-    tree.set(`receipts/${doc.file}`, pdf);
+    if (tree.has(`${YEAR_DIR}/receipts/${doc.file}`)) throw new Error(`${demo.dir}: two receipts are named ${doc.file}`);
+    tree.set(`${YEAR_DIR}/receipts/${doc.file}`, pdf);
     const receipt = receiptOf(doc, pdf, indexedOn);
     receipts.push(receipt);
     mappings.push({ transactionRef: ref, receiptId: receipt.id });
@@ -281,9 +287,9 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
 
   // The bank transactions are what our own parser reads from the statements just written.
   const viaBank = booked.filter((b) => b.payment.bank !== PAID_PRIVATELY);
-  const parsed: BankTransaction[] = assignUniqueRefs([...tree].filter(([path]) => path.endsWith('.xml') && path.startsWith('bank-statements/'))
+  const parsed: BankTransaction[] = assignUniqueRefs([...tree].filter(([path]) => path.endsWith('.xml') && path.startsWith(`${YEAR_DIR}/bank-statements/`))
     .flatMap(([path, xml]) => {
-      const bank = path.split('/')[1];
+      const bank = path.slice(`${YEAR_DIR}/bank-statements/`.length).split('/')[0];
       return readCamt(String(xml)).statements.flatMap((s) => transactionsOf(s, { bank, statements: bankKind(bank).statements! }));
     }));
   if (parsed.length !== viaBank.length) throw new Error(`parser read ${parsed.length} transactions, ${viaBank.length} were written`);
@@ -338,13 +344,16 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
 
   // As filed: the books on filing day knew nothing of the later correction, and Q1 was still open.
   const asFiled: Index = { ...books, journalEntries: entries.filter((e) => !e.corrects), config: { ...books.config, closedThrough: undefined } };
-  tree.set(`filings/${YEAR}/mwst-ech0217-${demo.filed.period}.xml`, filedReturn(demo, asFiled));
+  tree.set(`${YEAR_DIR}/filings/mwst-ech0217-${demo.filed.period}.xml`, filedReturn(demo, asFiled));
 
-  tree.set('books.json', json(books));
-  tree.set(`filings/${YEAR}/seal-${demo.filed.period.slice(5)}.json`, json(sealOf(books, demo.filed.period, demo.filed.generationTime.slice(0, 10))));
-  tree.set('accounts.json', json(demo.accounts.map(([number, name]) => ({ number, name }))));
-  tree.set('belege.workspace.yaml', manifest(demo));
-  for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`knowledge/${file}`, yaml);
+  const years = splitByYear({ ...books, journalEntries: books.journalEntries! }, books.config, () => true);
+  if ([...years.keys()].some((y) => y !== YEAR)) throw new Error(`${demo.dir}: every record lies in ${YEAR}, found ${[...years.keys()].join(', ')}`);
+  for (const [part, records] of years.get(YEAR)!) tree.set(`${YEAR_DIR}/books/${BOOK_FILES[part]}`, toJsonl(records));
+  tree.set(`${APP_FOLDER}/ledger.json`, json({ schema: BOOKS_SCHEMA, config: books.config }));
+  tree.set(`${YEAR_DIR}/filings/seal-${demo.filed.period.slice(5)}.json`, json(sealOf(books, demo.filed.period, demo.filed.generationTime.slice(0, 10))));
+  tree.set(`${APP_FOLDER}/master-data/accounts.json`, json(demo.accounts.map(([number, name]) => ({ number, name }))));
+  tree.set(`${APP_FOLDER}/belege.workspace.yaml`, manifest(demo));
+  for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`${APP_FOLDER}/knowledge/${file}`, yaml);
   tree.set('.gitignore', 'data/\n.env\nbeleg-import/\n');
   return tree;
 }
@@ -368,9 +377,10 @@ async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPay
     }
     books.journalEntries!.sort((a, b) => a.date.localeCompare(b.date) || a.transactionRef.localeCompare(b.transactionRef) || a.id.localeCompare(b.id));
     books.receipts.sort((a, b) => a.filename.localeCompare(b.filename));
-    for (const f of paid.files) tree.set(`receipts/${f.filename}`, f.pdf);
-    for (const [path, bytes] of invoiceFiles(ws)) tree.set(path, bytes);
-    tree.set('invoices.json', json(book));
+    for (const f of paid.files) tree.set(`${YEAR_DIR}/receipts/${f.filename}`, f.pdf);
+    for (const [path, bytes] of invoiceFiles(ws)) tree.set(`${APP_FOLDER}/${path}`, bytes);
+    if (demo.invoicing!.logo) tree.set(`${APP_FOLDER}/${demo.invoicing!.logo.file}`, demo.invoicing!.logo.svg);
+    tree.set(`${APP_FOLDER}/invoices.json`, json(book));
   } finally {
     rmSync(ws.paths.root, { recursive: true, force: true });
   }

@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "config": {
+    "closedThrough": "2026-03-31",
+    "openingBalances": {
+      "2026": {
+        "1021": 18500,
+        "1023": 3753.36,
+        "1510": 12000,
+        "1520": 2500,
+        "2800": 20000,
+        "2970": 16753.36
+      }
+    },
+    "openingBalancesNative": {
+      "2026": {
+        "1023": {
+          "amount": 4000,
+          "currency": "EUR"
+        }
+      }
+    },
+    "vatAdjustments": [],
+    "correctionCases": [
+      {
+        "id": "2026-Q1-digitec-vorsteuer",
+        "period": "2026-Q1",
+        "title": "Vorsteuer Digitec Galaxus nachgeholt",
+        "wrong": "Der Beleg der Digitec-Galaxus-Rechnung 118203344 (CHF 129.00, 8.1% MWST) fehlte beim Einreichen, die Buchung lief ohne Vorsteuer (I0).",
+        "fix": "Korrekturbuchung I81-2 über CHF 9.67 vom 15.04.2026 mit corrects 2026-Q1; die Buchung vom Februar bleibt wie eingereicht.",
+        "originalEntryIds": [
+          "3dfefc8da253a062"
+        ],
+        "correctionEntryIds": [
+          "ba3d2cc3bcb68abb"
+        ],
+        "source": "receipts/20260209-digitec-galaxus-milchkaennchen.pdf"
+      }
+    ]
+  }
+}

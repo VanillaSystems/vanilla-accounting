@@ -6,7 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { partDirs, type Workspace } from '../workspace/workspace.js';
 import type { Seal } from './seal.js';
 import { sealsOf, type Books } from './store.js';
 import { bankBalances } from './year-close.js';
@@ -17,7 +17,7 @@ export type SealView =
   | { status: 'broken'; quarter: QuarterKey; problem: string };
 
 export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing' | 'outgoingMail'> {
-  /** The quarters whose return lies in filings/<year>/ as filed with the ESTV. */
+  /** The quarters whose return lies in transactional-data/<year>/filings/ as filed with the ESTV. */
   filed: QuarterKey[];
   seals: SealView[];
   /** The latest balance a statement shows, per ledger account, in the account's currency. */
@@ -25,9 +25,7 @@ export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' 
 }
 
 function filedQuarters(ws: Workspace): QuarterKey[] {
-  const dir = ws.paths.filings;
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((y) => /^\d{4}$/.test(y)).flatMap((y) => readdirSync(join(dir, y))
+  return partDirs(ws.paths, 'filings').flatMap((dir) => readdirSync(dir)
     .map((f) => /^mwst-ech0217-(\d{4}-Q[1-4])\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
     .filter((q): q is QuarterKey => !!q)).sort();
 }

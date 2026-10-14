@@ -4,7 +4,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isAppPath } from '../src/server/app-paths.js';
@@ -25,7 +25,8 @@ before(async () => {
   dist = mkdtempSync(join(tmpdir(), 'belege-dist-'));
   writeFileSync(join(dist, 'index.html'), '<!doctype html><title>app</title>');
   api = await startApi('tests/fixtures/period-lock-index.json', { APP_DIST: dist });
-  writeFileSync(join(api.root, 'receipts', 'scan.pdf'), '%PDF-1.4');
+  mkdirSync(join(api.root, 'transactional-data/2026/receipts'), { recursive: true });
+  writeFileSync(join(api.root, 'transactional-data/2026/receipts', 'scan.pdf'), '%PDF-1.4');
 });
 after(() => { api?.stop(); rmSync(dist, { recursive: true, force: true }); });
 

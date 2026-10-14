@@ -15,7 +15,7 @@ VAT return for review.
 - **On the workspace** (the company's data repository), guided by its `AGENTS.md`, the process
   flows and guides, and the company's knowledge (suppliers, rules).
 - **Through the app's commands** (`npm run …` today, the `vanilla` CLI later), never by editing
-  `books.json` directly. The commands enforce the rules (closed periods, VAT logic) and record
+  the books' files directly. The commands enforce the rules (closed periods, VAT logic) and record
   the change.
 - Inside the app, for single steps (extract a receipt, classify a payment), the app calls the
   model itself through the `claude` CLI on the subscription (`src/llm/ask.ts`); the Codex CLI is
@@ -35,7 +35,7 @@ the tool ("Anna via Claude Code").
 
 ## Risks and pains
 
-- An agent with write access to `books.json` can do anything; the commands, not the agent's
+- An agent with write access to the books' files can do anything; the commands, not the agent's
   good behaviour, keep the books consistent.
 - Two agents (or an agent and a person) writing at once hit the same multi-writer problem as
   the bookkeeper.

@@ -15,7 +15,8 @@ import { derivePeriod, type Period } from '../accounting/periods.js';
 import type { ExportedFile } from '../audit/manifest.js';
 import { appVersion } from '../audit/manifest.js';
 import { invoiceFontCss } from '../invoices/fonts.js';
-import { filedReturnsOf, receiptDirOf } from '../workspace/reads.js';
+import { filedReturnsOf, receiptPathOf } from '../workspace/reads.js';
+import { findFile, yearPaths } from '../workspace/workspace.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { bananaTsv } from '../providers/banana/banana.js';
 import { ITEMS, quartersIn, receiptsIn, statementsIn, type ExportRequest, type Format, type ItemId } from './model.js';
@@ -123,14 +124,14 @@ tr { break-inside: avoid; }
 <table><thead><tr>${cols.map((h, i) => `<th class="${isMoney(i) ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></body></html>`;
 }
 
-/** The files of filed quarters in the period (returns, seals) from filings/<year>/. */
+/** The files of filed quarters in the period (returns, seals) from transactional-data/<year>/filings/. */
 function filingsIn(ws: Workspace, books: Index, range: Period): Array<{ path: string; src: string }> {
   const closed = books.config?.closedThrough;
   const out: Array<{ path: string; src: string }> = [];
   for (const q of quartersIn(range)) {
     const [year, n] = [q.slice(0, 4), q.slice(-1)];
     if (!closed || derivePeriod(q)!.to > closed) continue;
-    const dir = join(ws.paths.filings, year);
+    const dir = yearPaths(ws.paths, year).filings;
     if (!existsSync(dir)) continue;
     for (const f of readdirSync(dir).sort()) if (new RegExp(`(^|[^0-9])Q${n}([^0-9]|$)`).test(f)) out.push({ path: `${year}/${f}`, src: join(dir, f) });
   }
@@ -161,16 +162,16 @@ export async function buildBundle(ws: Workspace, books: Index, names: Record<str
     if (!formats?.length) continue;
     if (def.id === 'receipts') {
       for (const v of receiptsIn(books, range)) {
-        const src = join(receiptDirOf(ws, v.r.location), v.r.filename);
-        if (existsSync(src)) files.push({ path: `${t('export.dirReceipts')}/${v.r.filename}`, data: readFileSync(src) });
+        const src = receiptPathOf(ws, v.r);
+        if (src) files.push({ path: `${t('export.dirReceipts')}/${v.r.filename}`, data: readFileSync(src) });
         else missing.push(v.r.filename);
       }
       continue;
     }
     if (def.id === 'statements') {
       for (const s of statementsIn(books, range)) {
-        const src = join(ws.paths.statements, s.bank, s.filename);
-        if (existsSync(src)) files.push({ path: `${t('export.dirStatements')}/${s.bank}/${s.filename}`, data: readFileSync(src) });
+        const src = findFile(ws.paths, 'statements', `${s.bank}/${s.filename}`);
+        if (src) files.push({ path: `${t('export.dirStatements')}/${s.bank}/${s.filename}`, data: readFileSync(src) });
         else missing.push(`${s.bank}/${s.filename}`);
       }
       continue;

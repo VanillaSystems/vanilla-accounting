@@ -1,6 +1,6 @@
 /**
  * Seals of the filed quarters: golden rule 1 (AGENTS.md) made checkable after the fact. When a
- * quarter is closed, filings/<year>/seal-<Qn>.json records a SHA-256 of every journal entry,
+ * quarter is closed, transactional-data/<year>/filings/seal-<Qn>.json records a SHA-256 of every journal entry,
  * bank transaction and receipt mapping dated on or before the quarter's last day. loadBooks
  * checks every seal; books whose sealed part changed still open, so the change can be looked at,
  * but saveBooks refuses to write them until they are restored from git.
@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from 'node:path';
 import { derivePeriod } from '../accounting/periods.js';
 import type { Index, QuarterKey } from '../types/index.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 
 type Records = Pick<Index, 'transactions' | 'mappings' | 'journalEntries'>;
 
@@ -97,7 +97,7 @@ const quarterEnd = (q: QuarterKey) => derivePeriod(q)!.to;
 
 export function sealFile(ws: Workspace, q: QuarterKey): string {
   const [, year, n] = QUARTER.exec(q)!;
-  return join(ws.paths.filings, year, `seal-Q${n}.json`);
+  return join(yearPaths(ws.paths, year).filings, `seal-Q${n}.json`);
 }
 
 /** Pure: the seal of `quarter` for these books. */
@@ -108,14 +108,14 @@ export function sealOf(books: Records, quarter: QuarterKey, sealedAt: string): S
 
 /** Every seal file of the workspace, by quarter. */
 function sealFiles(ws: Workspace): { quarter: QuarterKey; file: string }[] {
-  const { filings } = ws.paths;
-  if (!existsSync(filings)) return [];
-  return readdirSync(filings, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^\d{4}$/.test(d.name))
-    .flatMap((d) => readdirSync(join(filings, d.name))
-      .map((f) => /^seal-Q([1-4])\.json$/.exec(f))
-      .filter((m): m is RegExpExecArray => !!m)
-      .map((m) => ({ quarter: `${d.name}-Q${m[1]}` as QuarterKey, file: join(filings, d.name, m[0]) })))
+  return yearsOf(ws.paths)
+    .flatMap((year) => {
+      const { filings } = yearPaths(ws.paths, year);
+      return existsSync(filings) ? readdirSync(filings)
+        .map((f) => /^seal-Q([1-4])\.json$/.exec(f))
+        .filter((m): m is RegExpExecArray => !!m)
+        .map((m) => ({ quarter: `${year}-Q${m[1]}` as QuarterKey, file: join(filings, m[0]) })) : [];
+    })
     .sort((a, b) => a.quarter.localeCompare(b.quarter));
 }
 

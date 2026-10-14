@@ -17,8 +17,8 @@ before(async () => {
   writeFileSync(join(bin, 'claude'), '#!/bin/sh\ncat >/dev/null\necho "model down" >&2\nexit 1\n');
   chmodSync(join(bin, 'claude'), 0o755);
   api = await startApi('tests/fixtures/classify-index.json', { PATH: `${bin}:${process.env.PATH}` });
-  mkdirSync(join(api.root, 'receipts'), { recursive: true });
-  writeFileSync(join(api.root, 'receipts', '2026-08-12_shop-eu_rechnung.pdf'), 'PDF rw');
+  mkdirSync(join(api.root, 'transactional-data/2026/receipts'), { recursive: true });
+  writeFileSync(join(api.root, 'transactional-data/2026/receipts', '2026-08-12_shop-eu_rechnung.pdf'), 'PDF rw');
 });
 after(() => {
   api?.stop();

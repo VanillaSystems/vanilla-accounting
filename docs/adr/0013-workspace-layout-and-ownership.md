@@ -3,7 +3,8 @@
 Status: proposed (2026-10-14), amended the same day: the company's repository holds one folder per
 app (`vanilla-accounting/`, later others); inside it the fiscal year is the top folder, and
 receipts, statements and filings move into it in the same step. Amends the order of work and the
-paths of [ADR 0003](0003-deployment-and-collaboration.md) §3; nothing of this built yet.
+paths of [ADR 0003](0003-deployment-and-collaboration.md) §3. Built in 0.4.0 step 14 (2026-10-14);
+what the build decided beyond this text is under [As built](#as-built-step-14).
 
 ## Problem
 
@@ -113,13 +114,15 @@ second app needs it, and the rules for booking it stay in `knowledge/`.
 ```
 vanilla-accounting/
   belege.workspace.yaml  mail.yaml  secret-terms.txt  VERSION  AGENTS.md   settings  ┐ customizing
-  knowledge/        rules per supplier, customer, authority, and per step   ┘
-  beleg-import/   data/   history/   invoices.json
+  knowledge/  modules/  workflows/   rules, overlays, workflows of the company   ┘
+  beleg-import/   data/   history/   invoices.json   logos/
+  ledger.json       the books' schema and config (closedThrough, corrections, opening balances)
   master-data/
     accounts.json     the chart of accounts
   transactional-data/
     2026/
-      books/            entries.jsonl, transactions.jsonl, mappings.jsonl (ADR 0003 §3)
+      books/            entries.jsonl, transactions.jsonl, mappings.jsonl (ADR 0003 §3),
+                        receipts.jsonl, statements.jsonl, balances.jsonl
       receipts/
       bank-statements/<bank>/
       filings/          VAT returns, seals, year-close.json
@@ -186,8 +189,8 @@ Accounting's folder may hold, in its own top level, in `master-data/` and in a y
 
 | Owner | Meaning | `vanilla-accounting/` | `master-data/` | `transactional-data/<year>/` |
 |---|---|---|---|---|
-| `app` | written by the app; a person changes it only through the app | `invoices.json`, `data/`, `VERSION` | | `books/`, `filings/`, `invoices/`, `expected/` |
-| `company` | added or edited by a person, read by the app | `belege.workspace.yaml`, `beleg-import/`, `history/`, `mail.yaml`, `secret-terms.txt`, `knowledge/`, `AGENTS.md`, `CLAUDE.md` | `accounts.json` | `receipts/`, `bank-statements/` |
+| `app` | written by the app; a person changes it only through the app | `ledger.json`, `invoices.json`, `logos/`, `data/`, `VERSION` | | `books/`, `filings/`, `invoices/`, `expected/` |
+| `company` | added or edited by a person, read by the app | `belege.workspace.yaml`, `beleg-import/`, `history/`, `mail.yaml`, `secret-terms.txt`, `knowledge/`, `modules/`, `workflows/`, `AGENTS.md`, `CLAUDE.md` | `accounts.json` | `receipts/`, `bank-statements/` |
 
 A year folder's name is a four-digit year; `transactional-data/` holds nothing else. The migration, the leak guard, the workspace check and
 the audit export read this list instead of keeping their own.
@@ -212,6 +215,44 @@ a figure, and the diff is reviewed. "Golden master" is testing jargon, and the s
 names "golden rule 1" (a filed quarter never changes), which means something else. `expected/`
 says what the folder is, and it lies in the year it checks (`transactional-data/<year>/expected/`). The scripts follow:
 `test:books:freeze` → `test:books:init`.
+
+### As built (step 14)
+
+The build of step 14 decided what the text above leaves open:
+
+- **The config is not split by year.** `closedThrough`, the VAT adjustments and correction cases
+  and the opening balances lie in `ledger.json` at the app's top level, with the books' schema
+  (`BOOKS_SCHEMA` 2). `books.json` is gone, so the old and the new format are never confused.
+  `openingBalances` is per year by nature and is a candidate for `<year>/books/` later.
+- **Every record of the old `books.json` has a file in its year's `books/`:** `entries.jsonl` and
+  `transactions.jsonl` by their date, `mappings.jsonl` by the year of the mapping's transaction,
+  `receipts.jsonl` beside the receipt's file, `statements.jsonl` beside the statement's file,
+  `balances.jsonl` by the balance's date. One record per line, sorted by its id.
+- **A statement lies in the year of its last day** (`toDate`, a camt export from December to
+  January in the new year) when that year is open, else in the earliest open year, as a receipt.
+- **A year before the first year of the books counts as closed.** The first year is the
+  earliest of `config.openingBalances`; its books before were kept in another program. A receipt
+  dated earlier and not booked lies in the first year.
+- **A closed year's receipt records are frozen too.** `saveBooks` writes no file of a closed
+  year and refuses books that would change one, so a closed year's receipt keeps its
+  description, VAT summary and extracted text as they were at the close.
+- **Files move in a converging step, not inside the write.** After the books' files are written,
+  and again on every load, each receipt and statement file of an open year that lies in another
+  year than its record moves there; a closed year's file never moves. A run cut short finishes
+  on the next one. A name that lies in two year folders is refused (the lookup throws, the
+  workspace check fails), never resolved to the first one.
+- **The invoice logo is customizing,** not a year's record: `logos/` at the app's top level.
+- **Generated copies** of a return or a report (`npm run vat-xml`, `vat-report-html`) go to
+  `data/` (not in git); the as-filed returns stay in `filings/`.
+- **Books in the layout of 0.3 do not open:** `loadBooks` refuses them (`OldLayoutError`) and
+  `npm run update` migrates them (`src/workspace/layout.ts`): `git mv` of every tracked file,
+  the books split by year, the paths in `invoices.json` and the manifest's logo rewritten,
+  `books.json` kept in `data/backups/` and removed last. The manifest moves last too, so a run cut
+  short still opens as the old layout and the next run finishes it.
+- **Open:** `docs/company/` (the workspace's notes for agents and its receipt-collection runbook,
+  named by knowledge rules) stays at the repository's root, and the check names it as unknown.
+  Whether it becomes `vanilla-accounting/AGENTS.md` and a runbook in `knowledge/`, or a name the
+  repository's root allows, is not decided yet.
 
 ### The layout comes before the first year close
 

@@ -99,20 +99,24 @@ Last it asks where the books go at year-end, such as Banana or your Treuhand. In
 bank is `<bank>:<currency>[:<ledger account>[:<IBAN>]]`, for example `--bank "UBS:CHF::<IBAN>"`
 (an empty ledger account takes the suggested one).
 
-The workspace gets:
+The folder becomes your company's repository. Its `AGENTS.md` holds notes for Claude about your
+company; the books lie in its `vanilla-accounting/` ([ADR 0013](adr/0013-workspace-layout-and-ownership.md)):
 
-| File or folder | Holds |
+| File or folder in `vanilla-accounting/` | Holds |
 |---|---|
 | `belege.workspace.yaml` | Who the company is, your answers, and which ledger account each bank books on |
-| `accounts.json` | Your chart of accounts, taken from the Swiss KMU chart for your profile |
-| `books.json` | The books: transactions, receipts, journal entries. Empty at first |
-| `bank-statements/<bank>/` | Your camt.053 statements |
-| `beleg-import/` | Where new receipts arrive |
-| `receipts/` | Receipts after they are read and matched |
-| `filings/` | Your VAT returns as filed |
 | `knowledge/` | What the app learns about your suppliers (`suppliers/`), customers (`customers/`), authorities (`authorities/`) and your own rules (`rules/`); each folder starts with a commented `_example.yaml` |
 | `mail.yaml` | Mailboxes to collect receipts from (optional, commented template) |
-| `AGENTS.md` | Notes for Claude about your company |
+| `beleg-import/` | Where new receipts arrive |
+| `ledger.json` | The books' settings: up to which day they are closed, opening balances, corrections |
+| `master-data/accounts.json` | Your chart of accounts, taken from the Swiss KMU chart for your profile |
+| `transactional-data/<year>/books/` | The books of the year: transactions, receipts, journal entries, one record per line. Empty at first |
+| `transactional-data/<year>/bank-statements/<bank>/` | Your camt.053 statements |
+| `transactional-data/<year>/receipts/` | Receipts after they are read and matched |
+| `transactional-data/<year>/filings/` | Your VAT returns as filed, and their seals |
+
+Files that are not the app's (notes, scripts, exports of an earlier program) go into `own/` at the
+repository's root; `npm run doctor` names every other one.
 
 Every question also has a flag, so `npm run init` runs without questions too:
 
@@ -134,7 +138,7 @@ npm run doctor
 ```
 
 It checks the tools (Node.js, the `claude` command and its login) and the workspace
-(the manifest, `books.json`, the folders, that every bank account is in the chart, and which
+(the manifest, the books, the folders, that every bank account is in the chart, and which
 bank account each statement file lands on). Each line starts with ✓ or ✗. A ✗ line says how
 to fix it. A ! line is a note that does not stop you.
 
@@ -153,8 +157,8 @@ Which banks: the import is tested with Raiffeisen and Wise statements, and with 
 the shapes UBS, PostFinance and the cantonal banks export (the tests read synthetic ones).
 Any other bank's camt.053 reads the same way.
 
-Save each file in `bank-statements/<bank>/` of your workspace, for example
-`bank-statements/UBS/`. The file name does not matter, and a subfolder is fine. Each statement
+Save each file in `transactional-data/<year>/bank-statements/<bank>/` of your workspace, for example
+`transactional-data/2026/bank-statements/UBS/` (or upload it in the app, which files it there). The file name does not matter, and a subfolder is fine. Each statement
 lands on a bank account of `belege.workspace.yaml`:
 
 1. The account with the statement's IBAN and currency, when you entered the IBAN. Then the
@@ -197,7 +201,7 @@ inbox itself after every drop, add, statement upload or phone scan, and when a f
    shows as "wird gelesen" until it is read.
 2. Read each receipt's VAT facts, with Claude.
 3. Link each receipt to its payment and name it, with Claude. Receipts move from
-   `beleg-import/` to `receipts/`.
+   `beleg-import/` to `transactional-data/<year>/receipts/`.
 4. Book each new payment (accounts, VAT code, exchange rate), with Claude.
    **Neu klassifizieren** on an entry in Buchungen books that one payment again.
 
@@ -257,14 +261,14 @@ npm run vat-xml -- 2026-Q3
 ```
 
 This writes an eCH-0217 XML. Import it in the ESTV portal ("MWST abrechnen"), check, and
-submit. Then copy the XML into `filings/<year>/` and close the quarter (the fourth quarter closes with
+submit. Then copy the XML into `transactional-data/<year>/filings/` and close the quarter (the fourth quarter closes with
 the year instead, see [year-end.md](year-end.md)):
 
 ```sh
 npm run seal -- 2026-Q3 --close
 ```
 
-This sets `config.closedThrough` in `books.json` to the last day of the quarter and seals it.
+This sets `config.closedThrough` in `ledger.json` to the last day of the quarter and seals it.
 From then on, that quarter never changes: the app shows it with a lock and refuses every edit
 in it. Corrections are booked in the next open quarter (in Buchungen, a filed entry offers
 **Korrektur in … erfassen**), and MWST shows them on the Korrekturabrechnung (form 0535, `/vat/0535`); see the

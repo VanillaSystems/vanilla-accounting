@@ -1,5 +1,5 @@
 /**
- * Every statement under bank-statements/, with the ledger account it lands on. Extract (the
+ * Every statement under bank-statements/ of each year folder, with the ledger account it lands on. Extract (the
  * transactions), reconcile-balances (the closing balances), the import board and doctor all
  * read the folder through here, so they agree on which file counts.
  *
@@ -8,11 +8,10 @@
  * folder holding statements of two IBANs in one currency is a problem: both would book on one
  * ledger account.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { accountForStatement, type StatementMatch } from '../accounting/bank-accounts.js';
 import { readCamt, type CamtMessage, type CamtStatement } from '../providers/camt053/camt053.js';
-import type { Workspace } from './workspace.js';
+import { filesOfPart, type Workspace } from './workspace.js';
 
 type Matched = Extract<StatementMatch, { account: unknown }>;
 
@@ -28,26 +27,20 @@ const SKIPPED: Record<Exclude<CamtMessage, 'camt.053'>, string> = {
   other: 'not a camt.053 bank statement.',
 };
 
-/** *.xml files under `dir`, relative to it, in directory order (dot files skipped). */
-function xmlFiles(dir: string, root = dir): string[] {
-  let names: string[];
-  try { names = readdirSync(dir).sort(); } catch { return []; }
-  return names.filter((n) => !n.startsWith('.')).flatMap((n) => {
-    const path = join(dir, n);
-    if (statSync(path).isDirectory()) return xmlFiles(path, root);
-    return n.toLowerCase().endsWith('.xml') ? [relative(root, path)] : [];
-  });
-}
+/** *.xml files of the statements, as [name relative to bank-statements/, full path], by name (dot files skipped). */
+const xmlFiles = (ws: Pick<Workspace, 'paths'>) => filesOfPart(ws.paths, 'statements')
+  .filter(([name]) => name.toLowerCase().endsWith('.xml'))
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 
 export function readBankStatements(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): StatementFile[] {
   const out: StatementFile[] = [];
   const seen = new Map<string, string>();
   const ibanOf = new Map<string, { iban: string; file: string }>();
-  for (const file of xmlFiles(ws.paths.statements)) {
-    const folder = file.includes(sep) ? file.split(sep)[0] : '';
+  for (const [file, path] of xmlFiles(ws)) {
+    const folder = file.includes('/') ? file.split('/')[0] : '';
     let camt: ReturnType<typeof readCamt>;
     try {
-      camt = readCamt(readFileSync(join(ws.paths.statements, file), 'utf8'));
+      camt = readCamt(readFileSync(path, 'utf8'));
     } catch (e) {
       out.push({ status: 'skipped', file, message: 'unreadable', reason: `does not read as XML (${(e as Error).message.split('\n')[0]}).` });
       continue;

@@ -3,16 +3,19 @@
  * copy of a fixture index, so a test reads and writes only that copy.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tempWorkspace } from './workspace.js';
+import { tempWorkspace, writeIndex } from './workspace.js';
+import { workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
+import { loadBooks } from '../../src/books/store.js';
 
 const REPO = process.cwd();
 
 export interface ApiServer {
   root: string;
   port: number;
-  indexPath: string;
+  /** The temp workspace the server runs on. */
+  ws: Workspace;
   send(method: string, path: string, body?: unknown): Promise<{ status: number; json: Record<string, unknown> }>;
   stop(): void;
 }
@@ -24,14 +27,15 @@ export interface ApiServer {
  * says otherwise ('' for every interface).
  */
 export async function startApi(fixture: string, env: Record<string, string> = {}): Promise<ApiServer> {
-  const { paths } = tempWorkspace('belege-api-');
+  const ws = tempWorkspace('belege-api-');
+  const { paths } = ws;
   const root = paths.root;
-  const indexPath = paths.books;
-  mkdirSync(paths.receipts);
   mkdirSync(paths.history);
   writeFileSync(join(paths.history, 'prior-year.Konten.txt'), '1021\tBank\n6570\tInformatikaufwand\n');
   writeFileSync(join(paths.history, 'prior-year.Buchungen-sample.tsv'), 'Datum\tBeschreibung\tKtSoll\tKtHaben\tBetrag\n');
-  copyFileSync(join(REPO, fixture), indexPath);
+  // A fixture is an index (books.json's content before ADR 0013), or a workspace whose books are copied.
+  const source = join(REPO, fixture);
+  writeIndex(ws, source.endsWith('.json') ? JSON.parse(readFileSync(source, 'utf8')) : JSON.parse(JSON.stringify(loadBooks(workspaceAt(source)))));
   const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(REPO, 'src/server/main.ts')], {
     cwd: root,
     env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, VANILLA_API_HOST: '127.0.0.1', PORT: '0', READONLY: '', ...env },
@@ -53,7 +57,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   return {
     port,
     root,
-    indexPath,
+    ws,
     async send(method, path, body) {
       const res = await fetch(base + path, {
         method,

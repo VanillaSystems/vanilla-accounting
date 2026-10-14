@@ -8,7 +8,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
-import { emptyBooks, loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import { emptyBooks, hasBooks, loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
 import type { Workspace } from '../workspace/workspace.js';
 
 export const INTAKE_STEPS = ['read', 'vat', 'match', 'classify'] as const;
@@ -84,8 +84,8 @@ export type StepRun = (ctx: StepContext) => Promise<StepResult>;
 
 /** The books of `ws` through src/books/store.ts, written as `actor`. */
 export function storePort(ws: Workspace, actor: Actor): BooksPort {
-  // Before the first run there is no books.json: the books start empty.
-  const load = () => (existsSync(ws.paths.books) ? loadBooks(ws) : emptyBooks());
+  // Before the first run there are no books: they start empty.
+  const load = () => (hasBooks(ws) ? loadBooks(ws) : emptyBooks());
   return {
     read: load,
     update(fn) {

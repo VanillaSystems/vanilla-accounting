@@ -19,8 +19,8 @@ import {
 import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, YearCloseRefused } from '../src/books/year-close.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import type { LedgerBankAccount, Workspace } from '../src/workspace/workspace.js';
-import { APP_ROOT } from '../src/workspace/workspace.js';
-import { tempWorkspace } from './support/workspace.js';
+import { APP_ROOT, yearPaths } from '../src/workspace/workspace.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
 
 const CHART = ['1020', '1021', '1170', '1171', '2201', '2800', '2970', '3400', '6570', '6960'];
 const ACCOUNTS = yearEndAccounts(CHART);
@@ -235,7 +235,8 @@ test('profit allocation: a dividend of 10000 owes 3500 Verrechnungssteuer, 6500 
 
 function workspace(): Workspace {
   const ws = tempWorkspace('year-close-', join(APP_ROOT, 'demo-consulting'));
-  writeFileSync(ws.paths.books, JSON.stringify(books()));
+  writeIndex(ws, books());
+  mkdirSync(ws.paths.masterData, { recursive: true });
   writeFileSync(ws.paths.accounts, JSON.stringify(CHART.map((number) => ({ number, name: number }))));
   return ws;
 }
@@ -270,8 +271,9 @@ const Q4_FILED = `<VATDeclaration><generalInformation><reportingPeriodFrom>2026-
 function readyToClose(): Workspace {
   const ws = workspace();
   writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451'].map((number) => ({ number, name: number }))));
-  for (const dir of [ws.paths.receipts, join(ws.paths.statements, 'Raiffeisen'), join(ws.paths.statements, 'Wise'), join(ws.paths.filings, '2026')]) mkdirSync(dir, { recursive: true });
-  writeFileSync(join(ws.paths.filings, '2026', 'mwst-ech0217-2026-Q4.xml'), Q4_FILED);
+  const y = yearPaths(ws.paths, '2026');
+  for (const dir of [y.receipts, join(y.statements, 'Raiffeisen'), join(y.statements, 'Wise'), y.filings]) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(y.filings, 'mwst-ech0217-2026-Q4.xml'), Q4_FILED);
   const b = loadBooks(ws);
   b.statementBalances = [
     { account: '1020', bank: 'Raiffeisen', currency: 'CHF', date: '2026-12-31', amount: 10900, source: 'pdf', sourceFile: 'r.pdf' },
@@ -290,7 +292,7 @@ test('the whole round: close 2026 (Q4 sealed, closedThrough 31.12.), open 2027 a
   const result = await closeYear(ws, '2026', RATES, '2027-03-01');
   assert.equal(result.closedThrough, '2026-12-31');
   assert.equal(result.committed, false, 'a temp folder is no git repository');
-  assert.ok(existsSync(join(ws.paths.filings, '2026', 'seal-Q4.json')));
+  assert.ok(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q4.json')));
   assert.deepEqual(sealsOf(loadBooks(ws)).checks.map((c) => `${c.quarter} ${c.status}`), ['2026-Q1 intact', '2026-Q2 intact', '2026-Q3 intact', '2026-Q4 intact']);
   assert.equal((await closeYear(ws, '2026', RATES, '2027-03-02')).closedThrough, '2026-12-31', 'closing again only checks');
   assert.throws(() => bookRevaluation(ws, '2026', RATES), /closed/, 'nothing can be dated 31.12. any more');

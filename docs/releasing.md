@@ -30,7 +30,7 @@ Rules on top of the table:
 
 ## Changing the data format
 
-`books.json` and `belege.workspace.yaml` carry `schema`. `src/workspace/schema.ts` lists both
+The books (`ledger.json`) and `belege.workspace.yaml` carry `schema`. `src/workspace/schema.ts` lists both
 versions and their migration ladders. To change a format:
 
 1. Raise the version by one and add the step from the old version to the new one to its ladder.

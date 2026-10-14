@@ -13,7 +13,8 @@ import { parse } from 'yaml';
 import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
 import { QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
-import { APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt, workspacePaths, yearPaths } from '../src/workspace/workspace.js';
+import { loadBooks, saveBooks } from '../src/books/store.js';
 import { testIban, withTestIbans } from './support/iban.js';
 
 // A UID with a wrong check digit, written in parts so the leak guard does not take it for a real one.
@@ -84,6 +85,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   assert.match(first.out, /Committed the workspace to a new git repository/);
 
   const ws = workspaceAt(dir);
+  assert.equal(ws.paths.root, join(dir, APP_FOLDER), 'the books lie in the repository\'s vanilla-accounting/');
   assert.equal(ws.company.uid, 'CHE-153.004.184');
   assert.equal(ws.company.legalForm, 'GmbH');
   assert.equal(ws.company.language, 'fr');
@@ -94,8 +96,9 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   ]);
   const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string; type: string }[];
   assert.deepEqual(accounts.filter((a) => ['1020', '1021', '1022', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Bankguthaben USD', 'Kontokorrent Gesellschafter']);
-  assert.deepEqual(JSON.parse(readFileSync(ws.paths.books, 'utf8')).config, {}, 'no closedThrough');
-  for (const d of [ws.paths.receipts, ws.paths.inbox, ws.paths.filings, join(ws.paths.statements, 'UBS'), join(ws.paths.statements, 'Wise'), ...['suppliers', 'customers', 'authorities', 'rules'].map((k) => join(dir, 'knowledge', k))]) {
+  assert.deepEqual(loadBooks(ws).config, {}, 'no closedThrough');
+  const year = yearPaths(ws.paths, new Date().toISOString().slice(0, 4));
+  for (const d of [year.receipts, ws.paths.inbox, year.filings, join(year.statements, 'UBS'), join(year.statements, 'Wise'), ...['suppliers', 'customers', 'authorities', 'rules'].map((k) => join(ws.paths.root, 'knowledge', k))]) {
     assert.ok(existsSync(d), d);
   }
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /AGENTS\.md \(golden rule 1/);
@@ -173,7 +176,8 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   const dir = join(base, 'books');
   const bin = stubTools();
   assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
-  const manifestPath = join(dir, MANIFEST_FILE);
+  const manifestPath = join(dir, APP_FOLDER, MANIFEST_FILE);
+  const ubs = join(yearPaths(workspacePaths(join(dir, APP_FOLDER)), new Date().toISOString().slice(0, 4)).statements, 'UBS');
   const manifest = readFileSync(manifestPath, 'utf8');
 
   writeFileSync(manifestPath, manifest.replace('account: "1021"', 'account: "1029"'));
@@ -182,14 +186,14 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   assert.match(doctor.out, /✗ Wise EUR books on 1029, which is not in accounts\.json\n {4}fix: Add \{ "number": "1029"/);
 
   writeFileSync(manifestPath, manifest);
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'export.xml'), '<Document/>');
+  writeFileSync(join(ubs, 'export.xml'), '<Document/>');
   const fixture = (name: string) => withTestIbans(readFileSync(join(import.meta.dirname, 'fixtures/camt053', name), 'utf8'));
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'Kontoauszug Juli.xml'), fixture('ubs_camt053_001_04.xml'));
+  writeFileSync(join(ubs, 'Kontoauszug Juli.xml'), fixture('ubs_camt053_001_04.xml'));
   const named = cli('doctor.ts', ['--workspace', dir], bin);
   assert.equal(named.code, 0, named.out);
   assert.ok(named.out.includes(`! UBS CHF books on 1020: 1 statement(s) read from bank-statements/UBS/, for IBAN ${testIban('00230000000000001')}: add iban: ${testIban('00230000000000001')}`), named.out);
   assert.match(named.out, /! bank-statements\/UBS\/export\.xml is not read: not a camt\.053 bank statement/);
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'pf.xml'), fixture('postfinance_camt053_001_08.xml'));
+  writeFileSync(join(ubs, 'pf.xml'), fixture('postfinance_camt053_001_08.xml'));
   const foreign = cli('doctor.ts', ['--workspace', dir], bin);
   assert.equal(foreign.code, 1);
   assert.match(foreign.out, /✗ bank-statements\/UBS\/pf\.xml belongs to no bank account\n {4}fix: bank-statements\/UBS\/ holds statements of two CHF accounts/);
@@ -214,15 +218,15 @@ test('a new workspace books its first transaction: no prior-year export, the cha
   const base = tmp();
   const dir = join(base, 'books');
   assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
-  const booksPath = join(dir, 'books.json');
-  const books = JSON.parse(readFileSync(booksPath, 'utf8'));
+  const ws = workspaceAt(dir);
+  const books = loadBooks(ws);
   books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo' });
-  writeFileSync(booksPath, JSON.stringify(books));
+  saveBooks(ws, books);
 
   const prompts = join(base, 'prompts.txt');
   const r = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { VANILLA_WORKSPACE: dir, CLAUDE_STUB_PROMPTS: prompts });
   assert.equal(r.code, 0, r.out);
-  const entries = JSON.parse(readFileSync(booksPath, 'utf8')).journalEntries as { transactionRef: string; accountDebit: string; accountCredit: string; amount: number }[];
+  const entries = loadBooks(workspaceAt(dir)).journalEntries;
   assert.deepEqual(entries.map((e) => [e.transactionRef, e.accountDebit, e.accountCredit, e.amount]), [['TX-1', '6570', '1020', 50]]);
   const prompt = readFileSync(prompts, 'utf8');
   assert.match(prompt, /## Chart of Accounts[\s\S]*\n1020\tUBS CHF\n/);

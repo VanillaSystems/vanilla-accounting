@@ -1,7 +1,7 @@
 # Audit export
 
 An audit export is a read-only copy of your books that runs without Node.js and without the
-API. It is a folder of static files: the app, `books.json`, every receipt and bank statement PDF
+API. It is a folder of static files: the app, the books as one `books.json`, every receipt and bank statement PDF
 the books name, the VAT returns as filed, and a `manifest.json` with the SHA-256 of every file.
 Give it to your Treuhänder, to an ESTV or AHV auditor, or keep it as the state of the books on
 the day you made it.
@@ -36,7 +36,7 @@ that holds other files. It replaces an earlier export in the same folder.
 | In the export | What it is |
 | --- | --- |
 | `index.html`, `assets/` | The app, built in audit mode. All paths are relative. |
-| `books.json` | Your `books.json`, byte for byte. |
+| `books.json` | Your books as the app reads them: every year's records and the config, in one file. |
 | `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year, the ESTV exchange rates the foreign entries are checked against. |
 | `receipts/<id>.pdf` | Every receipt in the books, named by its id. |
 | `bank-statements/<bank>/` | Every bank statement PDF in the books. |
@@ -115,4 +115,4 @@ npm run build:audit -- site --workspace demo
 The manifest makes an export checkable at any later date. `npm run verify-audit -- <dir>`
 recomputes the SHA-256 of every file. The seals in the manifest name the hash of each filed
 quarter's records (see `npm run seal`). They match the seal files in the workspace's
-`filings/<year>/` as long as the filed quarters did not change.
+`transactional-data/<year>/filings/` as long as the filed quarters did not change.

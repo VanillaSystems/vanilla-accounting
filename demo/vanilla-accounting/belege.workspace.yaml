@@ -16,7 +16,7 @@ invoicing:
     EUR: { account: "1023" }
   revenueAccount: "3300"
   paymentTermsDays: 30
-  layout: { logo: invoices/logo.svg, accent: "#5a3a22" }
+  layout: { logo: logos/logo.svg, accent: "#5a3a22" }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\nFreundliche Grüsse, Anna Muster" }
     fr: { closing: "Payable dans les {days} jours.\nMeilleures salutations, Anna Muster" }

@@ -34,6 +34,20 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ action** The books move into a folder of their own and split by fiscal year
+  ([ADR 0013](docs/adr/0013-workspace-layout-and-ownership.md)). Your books' folder becomes the
+  company's repository; the books lie in its `vanilla-accounting/`: the settings and `knowledge/`
+  at the top, `ledger.json`, `master-data/accounts.json`, and per year
+  `transactional-data/<year>/` with the books (one record per line), receipts, bank statements,
+  filed returns and seals, issued invoices and the expected figures (`golden/` is now
+  `expected/`, and `npm run test:books:freeze` is `test:books:init`). Run `npm run update`: it
+  moves every file with git, splits `books.json` by year, keeps a copy of it in
+  `vanilla-accounting/data/backups/`, and changes no record and no seal; then commit
+  (`git add -A`). `VANILLA_WORKSPACE` may keep naming the repository. Until then the app refuses
+  to open the books. Afterwards `npm run doctor` lists every file that is not the app's: move
+  your own notes, scripts and exports into `own/` or delete them. A closed year's files are never
+  written again; a receipt or statement lies in the year of the entry that books it.
+- `npm run vat-xml` and `npm run vat-report-html` write into the workspace's `data/` by default.
 - A module, a workflow run or the inbox processing can no longer change or delete an entry a
   person booked by hand; only a person can.
 

@@ -3,8 +3,8 @@
  * (src/providers/ech0217/xml.ts) for the ESTV "MWST abrechnen" import. The period is required: a
  * default would regenerate returns that are already filed.
  */
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod, isFilingKey } from '../accounting/periods.js';
@@ -39,13 +39,14 @@ if (!isQuarterKey(key)) {
 // Golden rule 1 (AGENTS.md): a filed return is set in stone and is never regenerated.
 const lock = periodLock(index);
 if (lock.isClosed(derivePeriod(key)!.to)) {
-  console.error(`${key} is filed (closed through ${lock.closedThrough}); its return is filings/${key.slice(0, 4)}/mwst-ech0217-${key}.xml and is never regenerated.`);
+  console.error(`${key} is filed (closed through ${lock.closedThrough}); its return is transactional-data/${key.slice(0, 4)}/filings/mwst-ech0217-${key}.xml and is never regenerated.`);
   console.error(`A correction is an entry dated in the open period with corrects: "${key}"; it is declared in ${key}'s Korrekturabrechnung (form 0535, MWST tab).`);
   process.exit(1);
 }
 {
   const { xml, payable } = buildXml(key);
-  const out = process.argv[3] || join(ws.paths.root, `mwst-ech0217-${key}.xml`);
+  const out = process.argv[3] || join(ws.paths.data, `mwst-ech0217-${key}.xml`);
+  mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, xml);
   const res = payable >= 0 ? `zu bezahlen CHF ${payable.toFixed(2)}` : `Guthaben CHF ${(-payable).toFixed(2)}`;
   console.log(`✓ ${out}  —  ${key}: ${res}`);

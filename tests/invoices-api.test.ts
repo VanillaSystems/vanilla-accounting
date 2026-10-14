@@ -16,8 +16,8 @@ const skip = findBrowser() ? false : 'no Chromium-based browser installed (Chrom
 let api: ApiServer;
 before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');
-  mkdirSync(join(api.root, 'invoices'));
-  copyFileSync(join(DEMO_ROOT, 'invoices/logo.svg'), join(api.root, 'invoices/logo.svg'));
+  mkdirSync(join(api.root, 'logos'));
+  copyFileSync(join(DEMO_ROOT, 'logos/logo.svg'), join(api.root, 'logos/logo.svg'));
 });
 after(() => api?.stop());
 

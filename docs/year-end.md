@@ -22,7 +22,7 @@ The same steps for agents: [`year-close.flow.yaml`](../processes/year-close.flow
 
 File the return of the fourth quarter as every quarter
 ([quarter workflow](quarter-workflow.md), steps 1 to 9), and copy the filed XML to
-`filings/2026/`.
+`transactional-data/2026/filings/`.
 
 Do **not** run `npm run seal -- 2026-Q4 --close`. Year-end entries such as the exchange
 difference and depreciation are dated 31.12. Once the fourth quarter is closed, nothing can be
@@ -42,7 +42,7 @@ npm run year:close -- 2026 --dry-run
 This prints the checklist and writes nothing. Abschluss (`/close`) in the app shows the
 same list. Every item is computed from the books:
 
-- **The fourth quarter is filed.** Its XML is in `filings/2026/`.
+- **The fourth quarter is filed.** Its XML is in `transactional-data/2026/filings/`.
 - **Q1 to Q3 are closed and sealed.** Each closed with `npm run seal -- <quarter> --close`.
 - **Every bank account matches its statement on 31.12.** The December statement must be
   imported: its closing balance must equal the balance of the books, in the account's own
@@ -106,9 +106,12 @@ and says what. When nothing is open, it:
 
 1. books the exchange difference,
 2. sets `config.closedThrough` to 31.12.2026,
-3. seals the fourth quarter (`filings/2026/seal-Q4.json`),
-4. records the close in `filings/2026/year-close.json`,
-5. commits `books.json` and `filings/2026/` when the workspace is a git repository.
+3. seals the fourth quarter (`transactional-data/2026/filings/seal-Q4.json`),
+4. records the close in `transactional-data/2026/filings/year-close.json`,
+5. commits `ledger.json` and `transactional-data/` when the workspace is a git repository.
+
+From then on the app never writes a file of 2026 again: its books, receipts and statements are
+read-only, and a receipt of 2026 that arrives later is booked and filed in 2027.
 
 From then on nothing dated 2026 changes. A mistake found later is corrected in 2027, as
 every correction is ([quarter workflow](quarter-workflow.md), step 11).

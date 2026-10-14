@@ -3,11 +3,10 @@
  * request errors, and where the receipt PDFs live.
  */
 import type { Response } from 'express';
-import type { Index } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, periodLock, saveBooks, update, PERSON, type Books } from '../books/store.js';
+import type { Index, Receipt } from '../types/index.js';
+import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, update, PERSON, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
-import { receiptDirOf } from '../workspace/reads.js';
 
 /** Live: a route that changes the manifest reopens it, the desktop app opens other books, and every route reads the new one. */
 export let WS = openWorkspace();
@@ -16,7 +15,7 @@ export function reopenWorkspace(root: string = WS.paths.root): void {
   WS = openWorkspaceAt(root);
 }
 
-export const receiptDir = (location?: string): string => receiptDirOf(WS, location);
+export const receiptPath = (books: Books, receipt: Receipt): string => receiptFile(WS, books, receipt);
 
 export const readBooks = (): Books => loadBooks(WS);
 

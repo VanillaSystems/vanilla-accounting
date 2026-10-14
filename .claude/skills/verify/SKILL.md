@@ -1,11 +1,11 @@
 ---
 name: verify
-description: Launch and drive the Vanilla Accounting bookkeeping app (React UI on Vite + Express API on a workspace's books.json) in a disposable sandbox that clones the workspace, then prove UI, API, and CLI behavior with screenshots, dialogs, and an index diff. Use whenever a change to src/app, src/server, or src/cli needs to be shown working in the real app, or to check what a click actually writes to the books.
+description: Launch and drive the Vanilla Accounting bookkeeping app (React UI on Vite + Express API on a workspace's books) in a disposable sandbox that clones the workspace, then prove UI, API, and CLI behavior with screenshots, dialogs, and an index diff. Use whenever a change to src/app, src/server, or src/cli needs to be shown working in the real app, or to check what a click actually writes to the books.
 ---
 
 # Verify Vanilla Accounting
 
-Belege is a single-page React app (Vite) backed by an Express API (`src/server/main.ts` starts it; `api.ts` assembles the routes in `src/server/routes/`). The API opens a workspace (`src/workspace/workspace.ts`: `VANILLA_WORKSPACE`, else the first directory from the cwd upward that holds a `belege.workspace.yaml`), reads and writes ONE file there, `books.json`, plus the `receipts/` and `beleg-import/` folders, and serves `/books.json`, `/receipts/*` and `/bank-statements/*` to the UI. That workspace can be a company's real books, with quarters already filed with the ESTV. **Never verify against the user's running instance or the real workspace.** Always use the sandbox below.
+Belege is a single-page React app (Vite) backed by an Express API (`src/server/main.ts` starts it; `api.ts` assembles the routes in `src/server/routes/`). The API opens a workspace, the app's folder `vanilla-accounting/` of a company's repository (`src/workspace/workspace.ts`: `VANILLA_WORKSPACE`, else the first directory from the cwd upward that holds a `belege.workspace.yaml` or a `vanilla-accounting/` with one; layout in ADR 0013). It reads and writes the books there (`ledger.json` and `transactional-data/<year>/books/*.jsonl`, through `src/books/store.ts`), the year folders' `receipts/` and `beleg-import/`, and serves `/books.json` (the books as one JSON), `/receipts/*` and `/bank-statements/*` (found in whichever year folder holds them) to the UI. That workspace can be a company's real books, with quarters already filed with the ESTV. **Never verify against the user's running instance or the real workspace.** Always use the sandbox below.
 
 All commands run from the repo root. `S=.claude/skills/verify/sandbox.sh` and `B=$(command -v browse)` are the shorthands used here and in `features/`.
 
@@ -18,7 +18,7 @@ $S up my-run            # run-id optional; default v<timestamp>
 
 `up` does the following, in about 2 s:
 
-- It clones (APFS copy-on-write) the workspace layout into `$TMPDIR/belege-verify/<run>/`, which then is a workspace of its own: `belege.workspace.yaml`, `books.json`, `accounts.json`, `receipts/`, `bank-statements/`, `beleg-import/`, `history/`, `knowledge/`, and `filings/` (the filed VAT returns the MWST tab's Korrekturabrechnung reads). The source is `$VERIFY_WORKSPACE`, default the repo root when it holds a `belege.workspace.yaml`, else `demo/` (set it to your workspace to verify against your own books).
+- It clones (APFS copy-on-write) the app's folder into `$TMPDIR/belege-verify/<run>/`, which then is a workspace of its own: `belege.workspace.yaml`, `ledger.json`, `master-data/accounts.json`, `knowledge/`, `history/`, `invoices.json`, `beleg-import/` and `transactional-data/<year>/` (`books/`, `receipts/`, `bank-statements/`, `invoices/`, and `filings/`, the filed VAT returns the MWST tab's Korrekturabrechnung reads); `data/` stays behind. The source is `$VERIFY_WORKSPACE` (a company's repository or its `vanilla-accounting/`), default `demo/` (set it to your repository to verify against your own books).
 - No code is copied or linked. The API runs the repo's working tree with `VANILLA_WORKSPACE` set to the sandbox (and `cwd` there, so no repo `.env` is loaded), so every read and write lands in the clone. Vite runs from the repo and proxies `/api`, `/scan`, `/books.json`, `/receipts/*` and `/bank-statements/*` to the sandbox API, so the UI loads the cloned books and PDFs.
 - It picks free ports starting at 3556 for the API and 5273 for the UI. It never uses 3456 or 5173, which belong to the user's `npm start`.
 
@@ -36,7 +36,7 @@ Two sandboxes can run side by side because each one has its own ports, data, and
 $S doctor my-run
 ```
 
-The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, and that the API finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and proxies `/api` to this sandbox, that the UI serves the sandbox books (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books.json is unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
+The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, and that the API finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and proxies `/api` to this sandbox, that the UI serves the same books as the sandbox API (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books (`ledger.json` and every `books/*.jsonl`) are unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
 
 ## Drive
 
@@ -76,7 +76,7 @@ Never run `npm run <script>` without `VANILLA_WORKSPACE="$SB"` during verificati
 
 Evidence goes to `.verify/evidence/<run>/<feature>/` in the repo. The folder is gitignored and survives `down`. `down` also copies `api.log` and `ui.log` there.
 
-- `$S diff my-run` prints every collection, record, and field that changed in the sandbox `books.json` since `up` (`+`, `-`, `~ old -> new`). Save it as `index-diff.txt`. It is the side-effect proof for any mutation. It also catches *unexpected* writes, so a correct UI change alongside a stray write is a failed proof.
+- `$S diff my-run` prints every collection, record, and field that changed in the sandbox's books since `up` (both read through `GET /books.json`) (`+`, `-`, `~ old -> new`). Save it as `index-diff.txt`. It is the side-effect proof for any mutation. It also catches *unexpected* writes, so a correct UI change alongside a stray write is a failed proof.
 - Capture the action and the resulting state: a `before` and `after` screenshot, plus the `js`/`text` readback of the changed cell. A screenshot of the final screen alone is not proof.
 - To prove a refusal (for example a closed period), capture the `$B dialog` text, take a screenshot, and run `diff` to show that nothing changed for that record.
 - Drive the real user path, such as a double-click edit, a link through the panel, or a period switch. A `curl` PATCH proves the API, not the feature.

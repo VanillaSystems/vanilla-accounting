@@ -11,6 +11,7 @@ import { basename, join, relative } from 'node:path';
 import { accountForStatement } from '../../accounting/bank-accounts.js';
 import { mergeIndex, readStatementPdfs, readTransactions, readWiseReferences, statementPdf, withinBooks } from '../../books/bank-import.js';
 import { periodLock } from '../../books/store.js';
+import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../../providers/camt053/camt053.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
 import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
@@ -20,7 +21,7 @@ import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal } from '../../types/api-error.js';
 import type { StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
-import type { LedgerBankAccount } from '../../workspace/workspace.js';
+import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, readBooks, withBooks } from '../books.js';
 import { baseCurrency } from '../../engines/index.js';
 
@@ -101,8 +102,10 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
   const placed = xml ? placeCamt(body, name, hint) : placePdf(name, hint, month);
   assertOpen(readBooks(), [placed.last], 'newStatement');
 
-  const dir = join(WS.paths.statements, placed.account.bank);
-  const path = join(dir, placed.filename);
+  const year = openYear(placed.last.slice(0, 4), readBooks().config.closedThrough);
+  const dir = join(yearPaths(WS.paths, year).statements, placed.account.bank);
+  const mine = `${placed.account.bank}/${placed.filename}`;
+  const path = findFile(WS.paths, 'statements', mine) ?? join(dir, placed.filename);
   if (existsSync(path)) {
     const same = readFileSync(path).equals(body);
     throw new RequestError(409, same ? `${placed.filename} ist schon eingelesen.` : `Datei ${placed.filename} existiert bereits.`,
@@ -114,7 +117,6 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
     const bank = readTransactions(WS);
     const unmatched = bank.files.find((f) => f.status === 'unmatched');
     if (unmatched?.status === 'unmatched') refuse(400, unmatched.problem, 'account', unmatched.problem);
-    const mine = relative(WS.paths.statements, path);
     for (const f of bank.files) {
       if (f.status !== 'duplicate' || (f.file !== mine && f.of !== mine)) continue;
       const other = f.file === mine ? f.of : f.file;
@@ -122,7 +124,7 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
     }
 
     const wiseRefs = await readWiseReferences(WS);
-    const balances = xml ? undefined : (await extractStatementBalances(WS.paths.statements, WS.bankAccounts)).balances;
+    const balances = xml ? undefined : (await extractStatementBalances(partDirs(WS.paths, 'statements'), WS.bankAccounts)).balances;
     const invoices = loadInvoices(WS);
     const payments = paymentContext(WS);
     withBooks(res, (books): StatementImport => {
@@ -140,7 +142,7 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
       if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
-      if (paid) { fileReceipts(WS, paid.files); saveInvoices(WS, invoices); }
+      if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
       return {
         file: `${placed.account.bank}/${placed.filename}`,
         account: placed.account.account,

@@ -10,15 +10,14 @@ import { join } from 'node:path';
 import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
 import { extractStatementBalances } from '../providers/statement-pdf/statement-pdf-balances.js';
 import { reconcileMonthly } from '../accounting/reconcile-bank.js';
-import { openWorkspace } from '../workspace/workspace.js';
+import { openWorkspace, partDirs } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
-const STATEMENTS_DIR = ws.paths.statements;
 
 async function main() {
   const index = loadBooks(ws);
 
-  const { balances, warnings } = await extractStatementBalances(STATEMENTS_DIR, ws.bankAccounts);
+  const { balances, warnings } = await extractStatementBalances(partDirs(ws.paths, 'statements'), ws.bankAccounts);
   update(index, PERSON, (books) => { books.statementBalances = balances; });
   saveBooks(ws, index);
 

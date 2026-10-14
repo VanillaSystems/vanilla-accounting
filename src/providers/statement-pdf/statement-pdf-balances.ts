@@ -75,12 +75,11 @@ export interface ExtractResult {
   warnings: string[];
 }
 
-export async function extractStatementBalances(statementsDir: string, bankAccounts: readonly LedgerBankAccount[]): Promise<ExtractResult> {
+/** The closing balances of the statement PDFs in `statementsDirs` (bank-statements/ of each year). */
+export async function extractStatementBalances(statementsDirs: readonly string[], bankAccounts: readonly LedgerBankAccount[]): Promise<ExtractResult> {
   const balances: StatementClosingBalance[] = [];
   const warnings: string[] = [];
-  if (!existsSync(statementsDir)) return { balances, warnings };
-
-  for (const sub of readdirSync(statementsDir)) {
+  for (const statementsDir of statementsDirs.filter((d) => existsSync(d))) for (const sub of readdirSync(statementsDir)) {
     const bank = bankFromDir(sub);
     if (!bank) continue;
     const dir = join(statementsDir, sub);

@@ -145,7 +145,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -171,7 +171,7 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "invoices/2026-001.pdf",
+        "file": "transactional-data/2026/invoices/2026-001.pdf",
         "sha256": "f97841477c1b8e95c2583a89ae8e0f4ea3fdd561e352ad3b1de1eea5d7459540"
       }
     },
@@ -245,7 +245,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -271,7 +271,7 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "invoices/2026-002.pdf",
+        "file": "transactional-data/2026/invoices/2026-002.pdf",
         "sha256": "29069a28ed29cf3006cb7103594b5ae9852117be3d850e35af504b9d18f36489"
       }
     },
@@ -337,7 +337,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -374,7 +374,7 @@
         }
       ],
       "pdf": {
-        "file": "invoices/2026-003.pdf",
+        "file": "transactional-data/2026/invoices/2026-003.pdf",
         "sha256": "69a2498928346605bfaef4492fe18247e7b3dc53233f96ad736bc1a9c4e26de6"
       }
     },
@@ -442,7 +442,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -461,7 +461,7 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "invoices/2026-004.pdf",
+        "file": "transactional-data/2026/invoices/2026-004.pdf",
         "sha256": "3c3c1032c8edcecf8b77eee72019d922878befecf448e19f858e706ded686429"
       }
     },
@@ -534,7 +534,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -553,7 +553,7 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "invoices/2026-005.pdf",
+        "file": "transactional-data/2026/invoices/2026-005.pdf",
         "sha256": "f722136e2e6b22569572cd509e5c647002c47b5a27b7f9170488e09e4eb7ae6e"
       }
     },
@@ -627,7 +627,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -646,7 +646,7 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "invoices/2026-006.pdf",
+        "file": "transactional-data/2026/invoices/2026-006.pdf",
         "sha256": "5bb885e43df6126e0286413ec6f05eee4f18b5f79c662aa5223438cb8fa5ad96"
       }
     },
@@ -712,7 +712,7 @@
         "font": "Inter",
         "accent": "#5a3a22",
         "window": "right",
-        "logo": "invoices/logo.svg",
+        "logo": "logos/logo.svg",
         "logoPosition": "left",
         "logoSize": "m",
         "show": {
@@ -731,7 +731,7 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "invoices/2026-007.pdf",
+        "file": "transactional-data/2026/invoices/2026-007.pdf",
         "sha256": "1055180f452ef0bd8eb1fccb4cd7a23e551a5ea6fdac4e820365bebe6dedbcdc"
       },
       "cancelled": {
@@ -804,7 +804,7 @@
       "invoiceId": "in_VWzEXhFm3hTa",
       "kind": "invoice",
       "title": "Rechnung 2026-001",
-      "file": "invoices/2026-001.pdf",
+      "file": "transactional-data/2026/invoices/2026-001.pdf",
       "sha256": "f97841477c1b8e95c2583a89ae8e0f4ea3fdd561e352ad3b1de1eea5d7459540",
       "sentAt": "2026-07-06T09:12:00.000Z",
       "to": "buchhaltung@bistro.example"
@@ -817,7 +817,7 @@
       "invoiceId": "in_S9Jcs6yeSIZJ",
       "kind": "invoice",
       "title": "Rechnung 2026-002",
-      "file": "invoices/2026-002.pdf",
+      "file": "transactional-data/2026/invoices/2026-002.pdf",
       "sha256": "29069a28ed29cf3006cb7103594b5ae9852117be3d850e35af504b9d18f36489",
       "sentAt": "2026-07-20T14:30:00.000Z",
       "to": "kueche@musterhotel.example"
@@ -830,7 +830,7 @@
       "invoiceId": "in_glJAMD-ee_Jz",
       "kind": "invoice",
       "title": "Rechnung 2026-003",
-      "file": "invoices/2026-003.pdf",
+      "file": "transactional-data/2026/invoices/2026-003.pdf",
       "sha256": "69a2498928346605bfaef4492fe18247e7b3dc53233f96ad736bc1a9c4e26de6",
       "sentAt": "2026-08-17T08:05:00.000Z",
       "to": "buchhaltung@bistro.example"
@@ -843,7 +843,7 @@
       "invoiceId": "in_bGsKxKfMFmsz",
       "kind": "credit-note",
       "title": "Gutschrift 2026-004",
-      "file": "invoices/2026-004.pdf",
+      "file": "transactional-data/2026/invoices/2026-004.pdf",
       "sha256": "3c3c1032c8edcecf8b77eee72019d922878befecf448e19f858e706ded686429",
       "sentAt": "2026-09-02T10:40:00.000Z",
       "to": "kueche@musterhotel.example"
@@ -856,7 +856,7 @@
       "invoiceId": "in_CK97dEv4JYjS",
       "kind": "invoice",
       "title": "Rechnung 2026-005",
-      "file": "invoices/2026-005.pdf",
+      "file": "transactional-data/2026/invoices/2026-005.pdf",
       "sha256": "f722136e2e6b22569572cd509e5c647002c47b5a27b7f9170488e09e4eb7ae6e",
       "sentAt": "2026-09-21T13:00:00.000Z",
       "to": "einkauf@kaffeehaus-beispiel.example"
@@ -869,7 +869,7 @@
       "invoiceId": "in_glJAMD-ee_Jz",
       "kind": "reminder",
       "title": "1. Mahnung · Rechnung 2026-003",
-      "file": "invoices/sent/sd_XL9s3VHctVsb.pdf",
+      "file": "transactional-data/2026/invoices/sent/sd_XL9s3VHctVsb.pdf",
       "sha256": "3f39f9a6ce5dd968c5b32104c3e112a869ec3d2964594063d79a47d5ee2b93dc",
       "sentAt": "2026-09-28T09:00:00.000Z",
       "to": "buchhaltung@bistro.example"
@@ -882,7 +882,7 @@
       "invoiceId": "in_rM737093UX1y",
       "kind": "invoice",
       "title": "Facture 2026-006",
-      "file": "invoices/2026-006.pdf",
+      "file": "transactional-data/2026/invoices/2026-006.pdf",
       "sha256": "5bb885e43df6126e0286413ec6f05eee4f18b5f79c662aa5223438cb8fa5ad96",
       "sentAt": "2026-09-29T15:20:00.000Z",
       "to": "compta@cafe-exemple.example"
@@ -895,7 +895,7 @@
       "invoiceId": "in_31CeXXkIQDem",
       "kind": "invoice",
       "title": "Rechnung 2026-007",
-      "file": "invoices/2026-007.pdf",
+      "file": "transactional-data/2026/invoices/2026-007.pdf",
       "sha256": "1055180f452ef0bd8eb1fccb4cd7a23e551a5ea6fdac4e820365bebe6dedbcdc",
       "sentAt": "2026-10-01T07:45:00.000Z",
       "to": "kueche@musterhotel.example"
@@ -908,7 +908,7 @@
       "invoiceId": "in_31CeXXkIQDem",
       "kind": "cancellation",
       "title": "STORNIERT: Rechnung 2026-007",
-      "file": "invoices/sent/sd_oK6z1b13K2C6.pdf",
+      "file": "transactional-data/2026/invoices/sent/sd_oK6z1b13K2C6.pdf",
       "sha256": "f3e45f57e28046006aa0c2c678de60931aa61a879326f292d76c8ff064a170fc",
       "sentAt": "2026-10-02T08:10:00.000Z",
       "to": "kueche@musterhotel.example"

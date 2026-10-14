@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { config as loadEnv } from 'dotenv';
-import { loadBooks, periodLock } from '../books/store.js';
+import { hasBooks, loadBooks, periodLock } from '../books/store.js';
 import { loadMailConfig, loginOf, mailConfigured } from '../collect/mail-config.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -53,7 +53,7 @@ function toolChecks(): Result[] {
 
 /** The open transactions no supplier, customer or authority file claims: booked by the generic rules alone. */
 function knowledgeCheck(ws: Workspace): Result[] {
-  if (!existsSync(ws.paths.books)) return [];
+  if (!hasBooks(ws)) return [];
   try {
     const books = loadBooks(ws);
     const lock = periodLock(books);

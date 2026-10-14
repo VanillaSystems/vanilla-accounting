@@ -14,6 +14,7 @@ import { EXPORT_SOURCES } from '../src/audit/sources.js';
 import type { ApiStatus } from '../src/types/api-error.js';
 import type { Index } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
+import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { serveStatic, type StaticServer } from './support/static-server.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'audit-export-'));
@@ -60,7 +61,7 @@ test('every read the UI makes is a file of the export, under any base path', asy
 test('the status is a read-only snapshot naming its date, schema and app version', async () => {
   const status = await json<ApiStatus>(EXPORT_SOURCES.status());
   const { version } = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as { version: string };
-  assert.deepEqual(status, { ok: true, readonly: true, snapshot: { createdAt: '2026-10-09T12:00:00.000Z', booksSchema: 1, appVersion: version } });
+  assert.deepEqual(status, { ok: true, readonly: true, snapshot: { createdAt: '2026-10-09T12:00:00.000Z', booksSchema: BOOKS_SCHEMA, appVersion: version } });
 });
 
 test('the filed returns of the demo are in the export', async () => {

@@ -9,8 +9,8 @@ import { stringify } from 'yaml';
 import { bankKind, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import type { Preset, SupportedAnswers } from './setup.js';
-import { WORKSPACE_SCHEMA } from './schema.js';
-import { APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
+import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
 
 /** The shipped jurisdiction a new workspace starts from (no workspace, so no overlay yet). */
@@ -104,10 +104,6 @@ data/
 beleg-import/
 .DS_Store
 .llm-concurrency.json
-
-# Generated VAT artifacts at the root (as-filed copies are committed under filings/<year>/).
-/mwst-ech0217-*.xml
-/mwst-report-*.html
 `;
 
 const MAIL_YAML = `# Mailboxes receipts are collected from (npm run collect). Uncomment and fill in to use it.
@@ -186,12 +182,15 @@ const KNOWLEDGE_TEMPLATES: [string, string][] = [
 ];
 
 function agentsMd(input: InitInput, appRel: string): string {
-  return `# ${input.name}: books (private workspace)
+  return `# ${input.name}: the company's repository (private)
 
-This folder holds the books, not the code. It is a Vanilla Accounting workspace: \`belege.workspace.yaml\`
-(who the company is, how it works, which ledger account each bank books on), \`accounts.json\`
-(chart of accounts), \`books.json\`, \`receipts/\`, \`bank-statements/\`, \`filings/\`, plus the
-company's own knowledge: \`knowledge/\` (suppliers, customers, authorities, rules), \`mail.yaml\`.
+This repository holds the company's data, not the code. Each app has its own folder; the books of
+Vanilla Accounting are in \`vanilla-accounting/\`: \`belege.workspace.yaml\` (who the company is, how
+it works, which ledger account each bank books on), \`knowledge/\` (suppliers, customers,
+authorities, rules), \`mail.yaml\`, \`master-data/accounts.json\` (chart of accounts), \`ledger.json\`,
+and per fiscal year \`transactional-data/<year>/\` (\`books/\`, \`receipts/\`, \`bank-statements/\`,
+\`filings/\`). Files no app reads (notes, scripts, reference documents) go to \`own/\`;
+\`npm run doctor\` names every other file.
 
 The app is at \`${appRel}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
 command run there works on these books:
@@ -212,24 +211,30 @@ Company notes:
 `;
 }
 
-export function planWorkspace(input: InitInput, chart: Chart, root: string, appRoot: string): Plan {
+/**
+ * The company's repository at `root` (ADR 0013): its agent files at the root, the books in
+ * vanilla-accounting/ with the folders of the fiscal year `year`.
+ */
+export function planWorkspace(input: InitInput, chart: Chart, root: string, appRoot: string, year = new Date().toISOString().slice(0, 4)): Plan {
   const bankAccounts = bankAccountsOf(input);
   const accounts = accountsOf(input, chart);
-  const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => `bank-statements/${b.bank}`))];
-  const kept = ['receipts', 'filings', ...statementDirs];
+  const app = (p: string) => `${APP_FOLDER}/${p}`;
+  const yearDir = (p: string) => app(`transactional-data/${year}/${p}`);
+  const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => yearDir(`bank-statements/${b.bank}`)))];
+  const kept = [yearDir('receipts'), yearDir('filings'), ...statementDirs];
   const appRel = relative(root, appRoot) || '.';
   return {
-    dirs: [...kept, 'beleg-import', 'data'],
+    dirs: [...kept, app('beleg-import'), app('data')],
     files: [
       ...kept.map((d): [string, string] => [`${d}/.gitkeep`, '']),
-      ...KNOWLEDGE_TEMPLATES,
-      ['accounts.json', JSON.stringify(accounts, null, 2) + '\n'],
-      ['books.json', JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], config: {} }, null, 2) + '\n'],
-      ['mail.yaml', MAIL_YAML],
+      ...KNOWLEDGE_TEMPLATES.map(([path, text]): [string, string] => [app(path), text]),
+      [app('master-data/accounts.json'), JSON.stringify(accounts, null, 2) + '\n'],
+      [app('ledger.json'), JSON.stringify({ schema: BOOKS_SCHEMA, config: {} }, null, 2) + '\n'],
+      [app('mail.yaml'), MAIL_YAML],
       ['AGENTS.md', agentsMd(input, appRel)],
       ['CLAUDE.md', '@AGENTS.md\n'],
       ['.gitignore', GITIGNORE],
-      [MANIFEST_FILE, manifestYaml(input, bankAccounts)],
+      [app(MANIFEST_FILE), manifestYaml(input, bankAccounts)],
     ],
   };
 }

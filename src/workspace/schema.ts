@@ -2,7 +2,7 @@
  * The versions of a workspace's data files, and the steps that bring an older file up to
  * date. The one place the versions are listed; docs/releasing.md says when to bump one.
  *
- *   books.json             `schema` (absent: 1)  BOOKS_MIGRATIONS
+ *   the books              `schema` of ledger.json (books.json before 2; absent: 1)  BOOKS_MIGRATIONS
  *   belege.workspace.yaml  `schema` (absent: 1)  MANIFEST_MIGRATIONS
  *   invoices.json          `schema`              INVOICES_MIGRATIONS (src/invoices/store.ts)
  *
@@ -14,14 +14,18 @@
  */
 import type { Document } from 'yaml';
 
-export const BOOKS_SCHEMA = 1;
+/** 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts). */
+export const BOOKS_SCHEMA = 2;
 export const WORKSPACE_SCHEMA = 1;
 export const INVOICES_SCHEMA = 1;
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
 
-export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {};
+export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
+  // The records stay as they are; only where they lie changed.
+  1: (doc) => doc,
+};
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {};
 export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {};

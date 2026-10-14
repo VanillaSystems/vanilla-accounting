@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path';
 import express from 'express';
 import { isAppPath } from '../server/app-paths.js';
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
-import { APP_ROOT, MANIFEST_FILE, WorkspaceError, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 import type { DesktopInfo, KnownBooks } from '../types/desktop.js';
 import { opened, readState, writeState } from './state.js';
@@ -53,7 +53,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
 
   async function openBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);
-    if (!existsSync(join(root, MANIFEST_FILE))) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}.`);
+    if (!appFolderIn(root)) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
     workspaceAt(root);
     if (books) (await import('../server/books.js')).reopenWorkspace(root);
     else {
@@ -67,7 +67,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   }
 
   async function openDemo(): Promise<KnownBooks> {
-    if (!existsSync(join(opts.demoRoot, MANIFEST_FILE))) copyTree(opts.demoSource ?? join(APP_ROOT, 'demo'), opts.demoRoot);
+    if (!appFolderIn(opts.demoRoot)) copyTree(opts.demoSource ?? join(APP_ROOT, 'demo'), opts.demoRoot);
     return openBooks(opts.demoRoot);
   }
 

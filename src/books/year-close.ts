@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { JournalEntry, QuarterKey } from '../types/index.js';
 import { commitPaths, repositoryAt } from '../workspace/git.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import { accountsOf, filedReturnsOf } from '../workspace/reads.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
 import { parseStatementBalances } from '../providers/camt053/statement-balances.js';
@@ -31,7 +31,7 @@ import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books 
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './refs.js';
 
-export const stateFile = (ws: Workspace, year: string): string => join(ws.paths.filings, year, 'year-close.json');
+export const stateFile = (ws: Workspace, year: string): string => join(yearPaths(ws.paths, year).filings, 'year-close.json');
 
 export function readState(ws: Workspace, year: string): YearCloseState {
   const file = stateFile(ws, year);
@@ -187,7 +187,7 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   const seal = writeSeal(ws, books, q4, today);
   const state = readState(ws, year);
   if (!state.closedAt) writeState(ws, { ...state, closedAt: today });
-  const committed = await commit(ws, `Jahresabschluss ${year}: closed through ${end}, ${q4} sealed`, [ws.paths.books, join(ws.paths.filings, year)]);
+  const committed = await commit(ws, `Jahresabschluss ${year}: closed through ${end}, ${q4} sealed`, [ws.paths.ledger, ws.paths.transactional]);
   return { closedThrough: end, seal: seal.file, committed };
 }
 
@@ -235,7 +235,7 @@ export async function openYear(ws: Workspace, year: string, rates: EstvRates = r
   if (!state.openedAt) writeState(ws, { ...state, openedAt: today });
   const firstDay = `${opening.year}-01-01`;
   const ratesReady = foreignAccounts(ws.bankAccounts).every((f) => (rates.on(f.currency, `${opening.year}-12-31`)?.validOn ?? '') >= firstDay);
-  await commit(ws, `Eröffnung ${opening.year}: opening balances from the closed ${year}`, [ws.paths.books, join(ws.paths.filings, year)]);
+  await commit(ws, `Eröffnung ${opening.year}: opening balances from the closed ${year}`, [ws.paths.ledger, ws.paths.transactional]);
   return { opening, changes, ratesReady, ...(reversal ? { reversal } : {}) };
 }
 

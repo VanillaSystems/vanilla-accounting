@@ -4,7 +4,8 @@ import { basename, dirname, join } from 'node:path';
 import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
-import { receiptDir, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { findFile } from '../../workspace/workspace.js';
+import { WS, receiptPath, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
@@ -63,10 +64,11 @@ function patched(receipt: Receipt, { date, amount, kind, ...rest }: ReceiptPatch
 }
 
 router.get('/api/receipts/:id', (req, res) => {
-  const receipt = readBooks().receipts.find((r) => r.id === req.params.id);
+  const books = readBooks();
+  const receipt = books.receipts.find((r) => r.id === req.params.id);
   if (!receipt) throw new RequestError(404, 'Receipt not found');
 
-  const pdfPath = join(receiptDir(receipt.location), receipt.filename);
+  const pdfPath = receiptPath(books, receipt);
   if (!existsSync(pdfPath)) throw new RequestError(404, 'File not found on disk');
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -82,8 +84,8 @@ router.delete('/api/receipts/:id', (req, res) => {
     if (idx === -1) throw new RequestError(404, 'Receipt not found');
     assertOpen(books, receiptDates(books, id), 'deleteReceipt');
 
-    const [receipt] = books.receipts.splice(idx, 1);
-    pdfPath = join(receiptDir(receipt.location), receipt.filename);
+    pdfPath = receiptPath(books, books.receipts[idx]);
+    books.receipts.splice(idx, 1);
     books.mappings = books.mappings.filter((m) => m.receiptId !== id);
     return { ok: true };
   });
@@ -101,7 +103,7 @@ router.post('/api/vision/extract', async (req, res) => {
   if (!receipt) throw new RequestError(404, 'Receipt not found');
   assertOpen(books, receiptDates(books, receiptId), 'editReceipt');
 
-  const pdfPath = join(receiptDir(receipt.location), receipt.filename);
+  const pdfPath = receiptPath(books, receipt);
   if (!existsSync(pdfPath)) throw new RequestError(404, 'PDF file not found on disk');
 
   const text = await ask(buildVisionPrompt(pdfPath), {
@@ -131,7 +133,7 @@ router.patch('/api/receipts/:id', (req, res) => {
       assertOpen(books, receiptDates(books, id), 'editReceipt');
 
       const receipt = books.receipts[idx];
-      if (patch.filename !== undefined) undoRename = renameReceiptFile(receipt, patch.filename);
+      if (patch.filename !== undefined) undoRename = renameReceiptFile(receiptPath(books, receipt), patch.filename);
       books.receipts[idx] = patched(receipt, patch);
       return { ok: true, receipt: books.receipts[idx] };
     });
@@ -141,14 +143,13 @@ router.patch('/api/receipts/:id', (req, res) => {
   }
 });
 
-/** Renames the receipt's PDF on disk (a missing file is left alone) and returns the undo. */
-function renameReceiptFile(receipt: Receipt, filename: string): () => void {
-  if (filename === receipt.filename) return () => {};
-  const dir = receiptDir(receipt.location);
-  const from = join(dir, receipt.filename);
-  const to = join(dir, filename);
+/** Renames the receipt's PDF on disk (a missing file is left alone) and returns the undo. A name another year folder holds is a clash too. */
+function renameReceiptFile(from: string, filename: string): () => void {
+  if (filename === basename(from)) return () => {};
+  const to = join(dirname(from), filename);
+  const elsewhere = dirname(from) !== WS.paths.inbox && findFile(WS.paths, 'receipts', filename);
   // Case-only renames hit the same file on a case-insensitive disk; that is not a clash.
-  if (existsSync(to) && filename.toLowerCase() !== receipt.filename.toLowerCase()) {
+  if ((existsSync(to) || elsewhere) && filename.toLowerCase() !== basename(from).toLowerCase()) {
     throw new RequestError(409, `Datei ${filename} existiert bereits.`, { code: 'fileExists', params: { filename } });
   }
   if (!existsSync(from)) return () => {};

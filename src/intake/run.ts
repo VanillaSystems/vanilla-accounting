@@ -36,5 +36,5 @@ export async function runStepCli(id: IntakeStepId, step: StepRun, after?: (books
   for (const line of noteLines(done.notes)) console.error(line);
   if (done.state === 'stopped') process.exit(1);
   after?.(books);
-  console.log(`\nWrote ${ws.paths.books}`);
+  console.log(`\nWrote the books in ${ws.paths.transactional}`);
 }

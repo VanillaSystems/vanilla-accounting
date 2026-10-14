@@ -35,7 +35,7 @@ rows in tests/period-lock.test.ts).
 - `bk-missing`: a missing month's detail shows `Dieser Auszug fehlt …` and `.desk .well`; a click picks a file that is read
   in for that account and month (a PDF with another name is renamed the bank's way). Its payments still show in Zahlungen.
 - `bk-import`: the add button (`.addbtn`, N) or a drop on the page while Kontoauszüge is open: camt.053 (XML) and statement
-  PDFs go to `POST /api/statements?name=<file>[&account=&month=]`, which stores them in `bank-statements/<bank>/`, reads
+  PDFs go to `POST /api/statements?name=<file>[&account=&month=]`, which stores them in `transactional-data/<year>/bank-statements/<bank>/` (the year of the statement's last day), reads
   the folder like `npm run extract` (payments kept, invoice payments matched) and the PDF closing balances. Toast
   `Auszug eingelesen · N neue Zahlungen`; the page opens the statement. Refusals as toasts: a statement wholly inside the
   filed quarter (`Periode geschlossen bis $CT. Ein Auszug, der ganz in einer geschlossenen Periode liegt, …`), the same
@@ -61,7 +61,7 @@ Wise EUR (1023), January to September 2026.
 - **Payment line.** Click `.pay[data-pay="<ref>"]`; read `.paybar` and `.pgno`, screenshot the `.hl`.
 - **Links.** Click `[data-testid=go-receipt]`, then on the receipt `[data-testid=go-payment]`: back on the same payment.
   `[data-testid=go-entry]` opens `/journal/<id>`.
-- **Missing month.** In the sandbox, move a PDF away and drop its `bankStatements` row from `$SB/books.json`; the row
+- **Missing month.** In the sandbox, move a PDF away and drop its `bankStatements` row from `$SB/transactional-data/<year>/books/statements.jsonl`; the row
   shows `fehlt`, the dock badge counts it. To import through the well: `$B js "HTMLInputElement.prototype.click =
   function(){ this.id='__pick'; document.body.append(this) }"`, click `.desk .well`, then `$B upload '#__pick'
   <file under $TMPDIR>` (browse uploads only from the repo or the temp dir).

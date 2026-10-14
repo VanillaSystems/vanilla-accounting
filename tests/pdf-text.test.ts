@@ -80,7 +80,7 @@ test('a generated PDF reads back line for line, with a form feed after every pag
 });
 
 test('a letter-spaced word reads as one word', async () => {
-  const text = await pdfText(join(DEMO_ROOT, 'invoices', '2026-001.pdf'));
+  const text = await pdfText(join(DEMO_ROOT, 'transactional-data/2026/invoices', '2026-001.pdf'));
   assert.match(text, /^RÖSTEREI · ZÜRICH$/m);
   assert.match(text, /^Total netto\nMWST 8\.1 % auf 360\.00\nMWST 2\.6 % auf 560\.00\nTotal CHF\n\n920\.00\n29\.16\n14\.56\n963\.72$/m, 'the totals and their amounts are a column each, as pdftotext read them');
 });

@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "config": {
+    "closedThrough": "2026-03-31",
+    "openingBalances": {
+      "2026": {
+        "1020": 42000,
+        "1021": 2345.85,
+        "1520": 1800,
+        "2800": 20000,
+        "2970": 26145.85
+      }
+    },
+    "openingBalancesNative": {
+      "2026": {
+        "1021": {
+          "amount": 2500,
+          "currency": "EUR"
+        }
+      }
+    },
+    "vatAdjustments": [],
+    "correctionCases": [
+      {
+        "id": "2026-Q1-treuhand-inland",
+        "period": "2026-Q1",
+        "title": "Inlandleistung Beispiel Treuhand als Auslandleistung deklariert",
+        "wrong": "Die Zahlung der Beispiel Treuhand AG (Zürich) für die Rechnung 2026-031 lief mit V0-E (Ziffer 221) statt V81: CHF 6’486.00 ohne Steuer deklariert.",
+        "fix": "Storno -V0-E und Neubuchung V81 über je CHF 6’486.00 vom 14.04.2026 mit corrects 2026-Q1, Steuer CHF 486.00 nachdeklariert; die Buchung vom März bleibt wie eingereicht.",
+        "originalEntryIds": [
+          "d05230c47dd4c418"
+        ],
+        "correctionEntryIds": [
+          "e73c59bcdd480405",
+          "19c8cc952c19fb57"
+        ],
+        "source": "receipts/20260302-muster-consulting-rechnung-2026-031.pdf"
+      }
+    ]
+  }
+}

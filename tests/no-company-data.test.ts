@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { Index } from '../src/types/index.js';
-import { APP_ROOT, identityIn, type Workspace } from '../src/workspace/workspace.js';
+import { APP_ROOT, identityIn, partDirs, type Workspace } from '../src/workspace/workspace.js';
+import { loadBooks } from '../src/books/store.js';
 import { companyWorkspace, DEMO_ROOTS } from './support/workspace.js';
 
 const SCANNED = [join(APP_ROOT, 'tests'), ...DEMO_ROOTS];
@@ -23,12 +24,14 @@ function filesUnder(dir: string): string[] {
 
 /** The company's identifiers other than its name and UID, by kind. */
 function secretsOf(ws: Workspace): Map<string, string> {
-  const books = JSON.parse(readFileSync(ws.paths.books, 'utf8')) as Index;
+  // Books not yet moved into vanilla-accounting/ (npm run update) still name their identifiers.
+  const old = join(ws.paths.root, 'books.json');
+  const books = existsSync(old) ? JSON.parse(readFileSync(old, 'utf8')) as Index : loadBooks(ws);
   const secrets = new Map<string, string>();
   for (const r of books.receipts) secrets.set(r.id, 'receipt id');
   // The app numbers manual transactions M<year>-<nnn> in every workspace, so those identify no one.
   for (const t of books.transactions) if (!/^M\d{4}-\d{3}$/.test(t.ref)) secrets.set(t.ref, 'transaction ref');
-  const statements = existsSync(ws.paths.statements) ? filesUnder(ws.paths.statements) : [];
+  const statements = [join(ws.paths.root, 'bank-statements'), ...partDirs(ws.paths, 'statements')].filter((d) => existsSync(d)).flatMap(filesUnder);
   const ibanSources = [
     ...books.bankStatements.map((s) => s.filename),
     ...statements.map((f) => f.endsWith('.xml') ? readFileSync(f, 'utf8').match(/<IBAN>[^<]+<\/IBAN>/g)?.join(' ') ?? '' : f),

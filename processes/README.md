@@ -9,7 +9,7 @@ safe for anyone.
 |---|---|
 | `quarter-close.flow.yaml` | The whole quarter, at the altitude you think about it. The middle steps name the files below. |
 | `receipt-collection.flow.yaml` | Email, vendor portals and paper, through to a receipt staged in `beleg-import/` |
-| `receipt-intake.flow.yaml` | Staged file → text, VAT facts, its kind, archived under `receipts/` |
+| `receipt-intake.flow.yaml` | Staged file → text, VAT facts, its kind, archived under its year's `receipts/` |
 | `bank-import.flow.yaml` | camt053 and statement PDFs in, every month end reconciled to the cent |
 | `evidence.flow.yaml` | Receipts ↔ transactions, re-runnable: rules, then AI, then the Offen tab, until every transaction is settled |
 | `booking.flow.yaml` | Settled transactions → journal entries, splits, VAT codes, FX at payment date; stale entries rebooked |

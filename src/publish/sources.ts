@@ -6,7 +6,7 @@ import { parse as parseEnv } from 'dotenv';
 import { loadBooks } from '../books/store.js';
 import { loadMailConfig } from '../collect/mail-config.js';
 import { loadKnowledge } from '../knowledge/layers.js';
-import { APP_ROOT, MANIFEST_FILE, openWorkspace, type Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, appFolderIn, filesOfPart, openWorkspace, type Workspace } from '../workspace/workspace.js';
 import { isAllowed, parseAllowlist, scan, secretsOf, type Allowlist, type Finding, type PublicFile, type Secret } from './leak-guard.js';
 
 export const ALLOWLIST_FILE = 'public-files.txt';
@@ -42,15 +42,12 @@ export function readPublicFile(dir: string, path: string): PublicFile {
 /** Every secret of the company, from its workspace. Nothing here is ever written into the app. */
 export function workspaceSecrets(ws: Workspace): Secret[] {
   const knowledge = loadKnowledge(APP_ROOT, ws.paths.root);
-  const statementsDir = ws.paths.statements;
-  const statements = existsSync(statementsDir)
-    ? filesOf(statementsDir).map((p) => ({ name: p, text: p.endsWith('.xml') ? readFileSync(join(statementsDir, p), 'utf8') : null }))
-    : [];
+  const statements = filesOfPart(ws.paths, 'statements').map(([name, path]) => ({ name, text: name.endsWith('.xml') ? readFileSync(path, 'utf8') : null }));
   const terms = existsSync(ws.paths.secretTerms)
     ? readFileSync(ws.paths.secretTerms, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
     : [];
   const mail = existsSync(ws.paths.mail) ? loadMailConfig(ws).mailboxes : [];
-  const envFile = join(ws.paths.root, '.env');
+  const envFile = join(ws.paths.repository, '.env');
   const env = existsSync(envFile) ? parseEnv(readFileSync(envFile, 'utf8')) : {};
   const logins = mail.map((m) => env[`${m.env}_IMAP_USER`]).filter((u): u is string => !!u?.includes('@'));
   return secretsOf({
@@ -74,7 +71,7 @@ export function secretsOrWhyNot(): { secrets: Secret[] } | { why: string } {
 
 export function checkTree(dir: string, secrets: readonly Secret[]): Finding[] {
   const allowlist = loadAllowlist();
-  const privateRepo = existsSync(join(dir, MANIFEST_FILE));
+  const privateRepo = !!appFolderIn(dir);
   const paths = filesOf(dir).filter((p) => !privateRepo || isAllowed(p, allowlist));
   return scan(paths.map((p) => readPublicFile(dir, p)), secrets, allowlist, { requireAllowlisted: !privateRepo });
 }

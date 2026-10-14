@@ -1,4 +1,4 @@
-/** npm run test:freeze | test:books:freeze: the workspace's current books become its golden master's input. */
+/** npm run test:freeze | test:books:init: the workspace's current books become its golden master's input. */
 import { openWorkspace } from '../../src/workspace/workspace.js';
 import { freezeBooks } from './golden.js';
 

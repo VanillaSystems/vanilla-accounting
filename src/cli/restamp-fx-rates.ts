@@ -125,7 +125,7 @@ function main() {
     for (const c of changes) c.entry.exchangeRate = c.to;
   });
   saveBooks(ws, index);
-  console.log(`\n✓ Saved ${ws.paths.books} — ${changed} entries restamped.`);
+  console.log(`\n✓ Saved the books — ${changed} entries restamped.`);
 }
 
 main();

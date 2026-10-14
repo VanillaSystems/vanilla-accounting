@@ -9,11 +9,11 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../src/types/index.js';
-import { APP_ROOT } from '../src/workspace/workspace.js';
+import { APP_ROOT, yearPaths } from '../src/workspace/workspace.js';
 import { parseFiledReturn } from '../src/accounting/filed-return.js';
 import { reconcileCases, caseEffect } from '../src/accounting/correction-cases.js';
 import { goldenSet } from './support/golden.js';
-import { tempWorkspace } from './support/workspace.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
 import { vat } from '../src/engines/index.js';
 
 const { ws, books, expect: golden } = goldenSet();
@@ -26,7 +26,7 @@ const FILED = QUARTERS.filter((q) => q <= quarterOf(books.config.closedThrough))
 const OPEN = QUARTERS.at(-1)!;
 const YEAR = OPEN.slice(0, 4);
 const REPORT_KEYS = [...QUARTERS, `${YEAR}-H1`, YEAR];
-const filedXml = (q: QuarterKey) => readFileSync(join(ws.paths.filings, q.slice(0, 4), `mwst-ech0217-${q}.xml`), 'utf8');
+const filedXml = (q: QuarterKey) => readFileSync(join(yearPaths(ws.paths, q.slice(0, 4)).filings, `mwst-ech0217-${q}.xml`), 'utf8');
 
 test('the frozen books span one year with a filed and an open quarter', () => {
   assert.ok(QUARTERS.every((q) => q.startsWith(YEAR)), `one year: ${QUARTERS.join(', ')}`);
@@ -71,7 +71,7 @@ test('eCH-0217 XML for the open quarter (the file uploaded to the ESTV)', () => 
   const dir = paths.root;
   try {
     symlinkSync(join(APP_ROOT, 'node_modules'), join(dir, 'node_modules'));
-    writeFileSync(paths.books, JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], ...books }));
+    writeIndex({ paths }, books);
     execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), OPEN, join(dir, 'open.xml')], {
       cwd: dir, env: { ...process.env, VANILLA_WORKSPACE: dir }, stdio: 'pipe',
     });

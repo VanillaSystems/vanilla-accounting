@@ -1,6 +1,6 @@
 # Abschluss and Firma
 
-Abschluss (`/close[/<step>]`, rebuilt in redesign phase 7) is the year-end in seven steps over the year-close engine (`src/accounting/year-close.ts`, `src/books/year-close.ts`, routes `/api/year-close/:year/*`). Firma (`/company/<section>`) shows and edits what the workspace says about the company: `belege.workspace.yaml` through `PATCH /api/workspace` (field by field, comments and unknown fields kept), `accounts.json` through `PUT /api/accounts/<number>`, and the seals and filings read by `GET /api/workspace`.
+Abschluss (`/close[/<step>]`, rebuilt in redesign phase 7) is the year-end in seven steps over the year-close engine (`src/accounting/year-close.ts`, `src/books/year-close.ts`, routes `/api/year-close/:year/*`). Firma (`/company/<section>`) shows and edits what the workspace says about the company: `belege.workspace.yaml` through `PATCH /api/workspace` (field by field, comments and unknown fields kept), `master-data/accounts.json` through `PUT /api/accounts/<number>`, and the seals and filings read by `GET /api/workspace`.
 
 ## Sub-features
 
@@ -20,7 +20,7 @@ Abschluss (`/close[/<step>]`, rebuilt in redesign phase 7) is the year-end in se
 ## Driving it with browse + sandbox.sh
 
 - **Checks.** `$B goto "$UI/close"`: the URL stays `/close`, the detail is `Prüfen, was offen ist`. On the demo: Q4 and the bank checks are `later`, `invoices` lists the demo's 3 open invoices with their CHF total.
-- **Receivables.** `/close/entries`, in `[data-template=receivables]` click `Erfassen`: inputs read `2026-12-31`, `1100`, `3300` and the open total of the `invoices` check. Submit, then `$S diff` shows `+ journalEntries <id>` and `$SB/filings/2026/year-close.json` has `receivables: done`. Click the toast's `Rückgängig` within 6 s: `$S diff` says `no changes`.
+- **Receivables.** `/close/entries`, in `[data-template=receivables]` click `Erfassen`: inputs read `2026-12-31`, `1100`, `3300` and the open total of the `invoices` check. Submit, then `$S diff` shows `+ journalEntries <id>` and `$SB/transactional-data/2026/filings/year-close.json` has `receivables: done`. Click the toast's `Rückgängig` within 6 s: `$S diff` says `no changes`.
 - **Profile.** `/company/profile`, `Bearbeiten`, type into `input[name=business]`, save: `diff` of the manifest shows one added line `business: …`; clearing it and saving again leaves the file byte-identical.
 - **Accounts.** `/company/accounts`, number `1100`, a name, `Konto hinzufügen`: accounts.json gains the account in number order; a known number switches the button to `Umbenennen`.
 - **Refusal.** `/company/banks`, `Bezeichnung und IBAN bearbeiten`, an IBAN with a wrong check digit, save: the toast names it, the manifest is unchanged.

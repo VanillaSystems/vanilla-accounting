@@ -17,12 +17,13 @@ import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Index } from '../types/index.js';
 import { loadBooks, periodLock, saveBooks, type Books, update, moduleActor } from '../books/store.js';
 import { ask } from '../llm/ask.js';
-import { openWorkspace } from '../workspace/workspace.js';
+import { openWorkspace, yearPaths } from '../workspace/workspace.js';
+import { openYear } from '../books/years.js';
 
 const execFileAsync = promisify(execFile);
 const ws = openWorkspace();
@@ -264,7 +265,8 @@ function bookApproved(index: Books, apply: boolean) {
       description: `tutti.ch ${p.seller}: ${p.item}${late ? ` — Korrektur: Kauf vom ${p.date} (Periode abgeschlossen)` : ''}`, remarks: `privat ausgelegt (${p.payment === 'twint' ? 'TWINT' : p.payment === 'cash' ? 'bar' : OWNER}), Beleg = tutti-Chat`,
     });
     if (!apply) continue;
-    const out = join(ws.paths.receipts, file);
+    const out = join(yearPaths(ws.paths, openYear(bookDate.slice(0, 4), index.config?.closedThrough)).receipts, file);
+    mkdirSync(dirname(out), { recursive: true });
     chatPdf(c, p, out);
     const content = readFileSync(out);
     const id = createHash('sha256').update(content).digest('hex').substring(0, 16);
