@@ -1,0 +1,10 @@
+# Switzerland: the MWST codes, rates and return as data (docs/0.4.0/modules.md).
+
+id: ch
+kind: jurisdiction
+version: 2026.4.0
+schema: 1
+provides:
+  - accounting.tax.vat-codes@1
+  - accounting.tax.rates@1
+  - accounting.tax.vat-return@1

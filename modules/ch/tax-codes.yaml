@@ -1,0 +1,103 @@
+# The MWST codes (Banana's names, reference/MWST-codes.txt) and the boxes each feeds.
+# "-" before a code reverses it (a refund). On M, I and B codes the suffix -1 means the amount is
+# net, -2 that it is the tax itself; without a suffix it is gross.
+
+negativePrefix: "-"
+amountSuffix:
+  families:
+    - M
+    - I
+    - B
+  net: "-1"
+  tax: "-2"
+codes:
+  V81:
+    rate: 8.1
+    revenue: "303"
+  V26:
+    rate: 2.6
+    revenue: "313"
+  V38:
+    rate: 3.8
+    revenue: "343"
+  V77:
+    rate: 7.7
+    revenue: "302"
+  V25-N:
+    rate: 2.5
+    revenue: "312"
+  V37:
+    rate: 3.7
+    revenue: "342"
+  B81:
+    rate: 8.1
+    inputTax: "405"
+    acquisition: "383"
+  B77:
+    rate: 7.7
+    inputTax: "405"
+    acquisition: "382"
+  V0:
+    rate: 0
+    deduction: "220"
+  V0-E:
+    rate: 0
+    deduction: "221"
+  V0-T:
+    rate: 0
+    deduction: "225"
+  V0-N:
+    rate: 0
+    deduction: "230"
+  V0-D:
+    rate: 0
+    deduction: "280"
+  M0:
+    rate: 0
+  M81:
+    rate: 8.1
+    inputTax: "400"
+  M26:
+    rate: 2.6
+    inputTax: "400"
+  M38:
+    rate: 3.8
+    inputTax: "400"
+  M77:
+    rate: 7.7
+    inputTax: "400"
+  M25:
+    rate: 2.5
+    inputTax: "400"
+  M37:
+    rate: 3.7
+    inputTax: "400"
+  I0:
+    rate: 0
+  I81:
+    rate: 8.1
+    inputTax: "405"
+  I26:
+    rate: 2.6
+    inputTax: "405"
+  I38:
+    rate: 3.8
+    inputTax: "405"
+  I77:
+    rate: 7.7
+    inputTax: "405"
+  I25:
+    rate: 2.5
+    inputTax: "405"
+  I37:
+    rate: 3.7
+    inputTax: "405"
+patterns:
+  - match: ^K(\d*)-([ABC])$
+    rateGroup: 1
+    rateDivisor: 10
+    correctionGroup: 2
+    correction:
+      A: "410"
+      B: "415"
+      C: "420"

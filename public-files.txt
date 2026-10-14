@@ -30,6 +30,8 @@ demo-consulting/**
 tools/demo/**
 tools/cases/**
 tools/vat-codes/**
+tools/modules/**
+modules/**
 examples/**
 demo-consulting/**
 tools/hooks/**

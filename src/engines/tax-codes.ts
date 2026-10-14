@@ -1,0 +1,77 @@
+/**
+ * Reads a tax code against a jurisdiction's tax-codes data: its rate, its sign, what its amount
+ * is, and the boxes it feeds. Pure, browser-safe, the same for every jurisdiction.
+ */
+import type { BoxId, TaxCodesData } from '../core/modules/schema.js';
+
+export interface TaxCodeInfo {
+  code: string;
+  rate: number;
+  isNegative: boolean;
+  revenueZiffer?: BoxId;
+  deductionZiffer?: BoxId;
+  inputTaxZiffer?: BoxId;
+  correctionZiffer?: BoxId;
+  acquisitionZiffer?: BoxId;
+  /** What the entry's amount is: gross (tax included), net (excluded), or the tax itself. */
+  amountIs: 'gross' | 'net' | 'tax';
+}
+
+export interface TaxCodeEngine {
+  /** The code's meaning, or null when the jurisdiction does not know it. */
+  parse(code: string): TaxCodeInfo | null;
+  /** Every code with a fixed meaning, in catalogue order. Pattern codes are not listed. */
+  named: readonly string[];
+  /** The boxes an entry with this code feeds, the turnover box first. */
+  sourceBoxes(info: TaxCodeInfo): BoxId[];
+}
+
+export function taxCodeEngine(data: TaxCodesData, turnoverBox: BoxId): TaxCodeEngine {
+  const suffixRe = new RegExp(`^(${data.amountSuffix.families.join('|')})\\d+(${esc(data.amountSuffix.net)}|${esc(data.amountSuffix.tax)})$`);
+  const patterns = data.patterns.map((p) => ({ ...p, re: new RegExp(p.match) }));
+
+  function meaningOf(clean: string): Omit<TaxCodeInfo, 'code' | 'isNegative' | 'amountIs'> | null {
+    const m = data.codes[clean];
+    if (m) {
+      return {
+        rate: m.rate,
+        ...(m.revenue ? { revenueZiffer: m.revenue } : {}),
+        ...(m.deduction ? { deductionZiffer: m.deduction } : {}),
+        ...(m.inputTax ? { inputTaxZiffer: m.inputTax } : {}),
+        ...(m.correction ? { correctionZiffer: m.correction } : {}),
+        ...(m.acquisition ? { acquisitionZiffer: m.acquisition } : {}),
+      };
+    }
+    for (const p of patterns) {
+      const hit = p.re.exec(clean);
+      if (hit) return { rate: (parseFloat(hit[p.rateGroup]) || 0) / p.rateDivisor, correctionZiffer: p.correction[hit[p.correctionGroup]] };
+    }
+    return null;
+  }
+
+  return {
+    named: Object.keys(data.codes),
+    parse(code) {
+      if (!code) return null;
+      const isNegative = code.startsWith(data.negativePrefix);
+      const unsigned = isNegative ? code.slice(data.negativePrefix.length) : code;
+      const suffix = suffixRe.exec(unsigned)?.[2];
+      const amountIs: TaxCodeInfo['amountIs'] = suffix === data.amountSuffix.tax ? 'tax' : suffix === data.amountSuffix.net ? 'net' : 'gross';
+      const clean = suffix ? unsigned.slice(0, -suffix.length) : unsigned;
+      const m = meaningOf(clean);
+      return m ? { code, isNegative, ...m, amountIs } : null;
+    },
+    sourceBoxes(info) {
+      return [
+        info.revenueZiffer || info.deductionZiffer ? turnoverBox : undefined,
+        info.revenueZiffer,
+        info.deductionZiffer,
+        info.rate > 0 ? info.inputTaxZiffer : undefined,
+        info.correctionZiffer,
+        info.acquisitionZiffer,
+      ].filter((z): z is string => !!z);
+    },
+  };
+}
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

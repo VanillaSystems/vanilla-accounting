@@ -1,0 +1,100 @@
+# The MWST return (ESTV form 0550, effective method, eCH-0217 v2.0.0), keyed by Ziffer.
+# Deductions and input tax are listed in eCH-0217 schema order; derived Ziffern are formulas over
+# other Ziffern (sum, minus, positive, signed, taxOfRows), so the loader can check every reference.
+
+turnoverBox: "200"
+turnoverLabel: Gesamtumsatz
+rateOrder:
+  - "303"
+  - "313"
+  - "343"
+  - "302"
+  - "312"
+  - "342"
+  - "383"
+  - "382"
+deductions:
+  "220":
+    label: Steuerbefreite Leistungen (Exporte)
+    element: suppliesToForeignCountries
+  "221":
+    label: Leistungen im Ausland
+    element: suppliesAbroad
+  "225":
+    label: Übertragungen im Meldeverfahren
+    element: transferNotificationProcedure
+  "230":
+    label: Nicht steuerbare Leistungen
+    element: suppliesExemptFromTax
+  "235":
+    label: Entgeltsminderungen
+    element: reductionOfConsideration
+  "280":
+    label: Diverse Abzüge
+inputTax:
+  "400":
+    label: Vorsteuer Material/Dienstleistungen
+    element: inputTaxMaterialAndServices
+    sign: 1
+  "405":
+    label: Vorsteuer Investitionen/Betriebsaufwand
+    element: inputTaxInvestments
+    sign: 1
+  "410":
+    label: Einlageentsteuerung
+    element: subsequentInputTaxDeduction
+    sign: 1
+  "415":
+    label: Vorsteuerkorrekturen
+    element: inputTaxCorrections
+    sign: -1
+  "420":
+    label: Vorsteuerkürzungen
+    element: inputTaxReductions
+    sign: -1
+derived:
+  "289":
+    label: Total Abzüge
+    formula:
+      sum:
+        - "220"
+        - "221"
+        - "225"
+        - "230"
+        - "235"
+        - "280"
+  "299":
+    label: Steuerbarer Umsatz
+    formula:
+      minus:
+        - "200"
+        - "289"
+  "399":
+    label: Total geschuldete Steuer
+    formula:
+      taxOfRows: true
+  "479":
+    label: Total Vorsteuer
+    formula:
+      signed:
+        "400": 1
+        "405": 1
+        "410": 1
+        "415": -1
+        "420": -1
+  "500":
+    label: Zu bezahlender Betrag
+    formula:
+      positive:
+        minus:
+          - "399"
+          - "479"
+  "510":
+    label: Guthaben
+    formula:
+      positive:
+        minus:
+          - "479"
+          - "399"
+payable: "500"
+credit: "510"
