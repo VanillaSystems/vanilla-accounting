@@ -24,6 +24,8 @@ module.exports = {
     'dist/**/*',
     'reference/**/*',
     'processes/**/*',
+    'modules/**/*',
+    'workflows/**/*',
     'demo/**/*',
     'examples/cases/**/*',
     'src/server/scan.html',
