@@ -5,12 +5,13 @@
  * records left uncommitted by a crash are committed. Customizing (rules, workflows, settings) is
  * not committed here: it is saved in Änderungen.
  *
- * What a commit holds is every records file that changed: ledger.json and transactional-data/.
+ * What a commit holds is every records file that changed: ledger.json, invoices.json and transactional-data/.
  * Direct edits commit at once and runs commit at rest, so the working tree holds no one else's
  * records changes in the normal case; a commit per record line is a later refinement.
  */
 import { repositoryAt, commitExactly } from '../workspace/git.js';
 import type { Workspace } from '../workspace/workspace.js';
+import { recordsPaths } from './changes.js';
 
 export interface RecordsCommitter {
   /** Commits what a run wrote and its log line; false when there is nothing to commit or no repository. */
@@ -22,7 +23,7 @@ export interface RecordsCommitter {
 }
 
 export function openRecordsCommitter(ws: Pick<Workspace, 'paths'>): RecordsCommitter {
-  const paths = [ws.paths.ledger, ws.paths.transactional];
+  const paths = recordsPaths(ws);
   const commit = async (message: string): Promise<boolean> => {
     const repo = await repositoryAt(ws.paths.repository);
     return repo ? commitExactly(repo, message, paths) : false;

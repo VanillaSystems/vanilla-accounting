@@ -42,8 +42,8 @@ export type Route =
   | { area: 'automation'; view: 'map'; map: 'phases' | 'events' }
   | { area: 'automation'; view: 'queue' }
   | { area: 'automation'; view: 'tasks'; run?: string }
-  /** Änderungen: what is not saved yet, or one save of Verlauf. */
-  | { area: 'changes'; commit?: string };
+  /** Änderungen: the AI's draft, edits made outside the app, or one save of Verlauf; `file` one file of it. */
+  | { area: 'changes'; commit?: string; file?: string };
 
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
@@ -116,7 +116,7 @@ function segmentsOf(r: Route): Array<string | undefined> {
     case 'company': return ['company', r.section];
     case 'invoices': return ['invoices', r.view === 'list' ? undefined : r.view, r.id];
     case 'automation': return automationSegments(r);
-    case 'changes': return ['changes', r.commit];
+    case 'changes': return ['changes', r.commit, r.commit ? r.file : undefined];
   }
 }
 
@@ -132,7 +132,7 @@ function routeOf([a, b, c, d]: string[]): Route {
     case 'company': return { area: 'company', section: b ?? 'profile' };
     case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
     case 'automation': return automationRoute(b, c, d);
-    case 'changes': return defined({ area: 'changes', commit: b });
+    case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
     default: return { area: 'receipts' };
   }
 }

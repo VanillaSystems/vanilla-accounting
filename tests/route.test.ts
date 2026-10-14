@@ -64,6 +64,8 @@ const CANONICAL = [
   '/automation/tasks/booking-1a2b3c4d',
   '/changes',
   '/changes/3f2a9c0',
+  '/changes/draft/knowledge%2Frules%2Fbooking.guide.yaml',
+  '/changes/3f2a9c0/vanilla-accounting%2Fledger.json',
 ];
 
 test('every path of urls.md parses and formats back to itself', () => {
@@ -92,6 +94,7 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/automation/map/events'), { area: 'automation', view: 'map', map: 'events' });
   assert.deepEqual(route('/automation/tasks/booking-1a2b'), { area: 'automation', view: 'tasks', run: 'booking-1a2b' });
   assert.deepEqual(route('/changes/3f2a9c0'), { area: 'changes', commit: '3f2a9c0' });
+  assert.deepEqual(route('/changes/outside/mail.yaml'), { area: 'changes', commit: 'outside', file: 'mail.yaml' });
 });
 
 test('automation: the default tab leaves no segment, an unknown tab is the graph', () => {

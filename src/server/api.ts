@@ -16,6 +16,7 @@ import { router as statements } from './routes/statements.js';
 import { router as exportBundle } from './routes/export.js';
 import { router as intake } from './routes/intake.js';
 import { router as automation, queueCommit } from './routes/automation.js';
+import { router as changes } from './routes/changes.js';
 import { openRecordsCommitter } from '../saving/records.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
@@ -68,7 +69,7 @@ app.get('/api/status', (_req, res) => {
 const RECORDS: Array<[RegExp, string]> = [
   [/^\/api\/receipts/, 'Beleg bearbeitet'], [/^\/api\/vision/, 'Beleg gelesen'], [/^\/api\/transactions/, 'Bewegung bearbeitet'],
   [/^\/api\/mapping/, 'Zuordnung bearbeitet'], [/^\/api\/journal-entries/, 'Buchung bearbeitet'], [/^\/api\/statements/, 'Kontoauszug eingelesen'],
-  [/^\/api\/year-close/, 'Jahresabschluss'], [/^\/api\/invoices\/[^/]+\/payments/, 'Zahlung einer Rechnung gebucht']
+  [/^\/api\/year-close/, 'Jahresabschluss'], [/^\/api\/invoices/, 'Rechnung bearbeitet'], [/^\/api\/customers/, 'Kunde bearbeitet'],
 ];
 app.use((req, res, next) => {
   const hit = req.method !== 'GET' ? RECORDS.find(([re]) => re.test(req.path)) : undefined;
@@ -76,7 +77,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail, automation);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail, automation, changes);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

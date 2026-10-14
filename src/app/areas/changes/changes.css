@@ -1,0 +1,23 @@
+/* Änderungen: files waiting to be saved, Verlauf by day, a diff. */
+.row.chrow { grid-template-columns: minmax(0, 1fr) auto; }
+.chrow .a { display: inline-flex; align-items: center; gap: 8px; }
+.chnothing { margin: 8px 0 14px; }
+.chcount { font: 500 11.5px "Geist Mono"; white-space: nowrap; }
+.chcount .plus { color: var(--pos); }
+.chcount .minus { color: var(--neg); }
+.chkind { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: var(--hover); color: var(--ink-2); white-space: nowrap; margin-right: 8px; }
+.chkind.k-books { background: var(--accent-soft); color: var(--accent); }
+.chkind.k-customizing { background: color-mix(in srgb, var(--ai) 16%, transparent); color: var(--ai); }
+.chpage .head h2.who { font-size: 18px; line-height: 1.35; }
+.chpage .head h2.chpath { word-break: break-all; }
+.chbody { white-space: pre-wrap; font: 400 13px/1.5 "Instrument Sans"; color: var(--ink-2); margin: 8px 0 0; }
+.chh3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px; }
+.chfiles { display: flex; flex-direction: column; }
+.chfile { display: flex; justify-content: space-between; gap: 12px; padding: 7px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.chfile:hover { background: var(--hover); }
+.chdiff { margin: 0; padding: 10px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--desk); font: 400 12px/1.55 "Geist Mono"; overflow: auto; }
+.chdiff .ln { display: block; padding: 0 12px 0 0; white-space: pre; }
+.chdiff .no { display: inline-block; width: 42px; padding-right: 8px; text-align: right; color: var(--faint); user-select: none; }
+.chdiff .kadd { background: color-mix(in srgb, var(--pos) 14%, transparent); }
+.chdiff .kdel { background: color-mix(in srgb, var(--neg) 12%, transparent); }
+.chdiff .gap { display: block; padding-left: 96px; color: var(--faint); }
