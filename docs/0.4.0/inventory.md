@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 37 | 22 |
+| core | 38 | 22 |
 | engine | 4 | 1 |
 | provider | 11 | 9 |
 | split | 47 | 26 |
 | infrastructure | 17 | 4 |
-| workflow | 7 | 0 |
-| view | 172 | 60 |
+| workflow | 10 | 0 |
+| view | 177 | 60 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -39,6 +39,7 @@ Layers are assigned by path prefix, most specific first:
 - `src/knowledge/` → split
 - `src/collect/` → split
 - `src/workflows/` → workflow
+- `src/assistant/` → workflow
 - `src/llm/` → infrastructure
 - `src/audit/` → infrastructure
 - `src/secrets/` → infrastructure

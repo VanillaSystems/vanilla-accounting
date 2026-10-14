@@ -14,6 +14,7 @@ import '@fontsource/geist-mono/500.css';
 import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/detail.css';
+import './styles/assistant.css';
 import { Shell } from './shell/Shell.js';
 import { useLanguage } from './shell/prefs.js';
 import { desktop, noTitleBar } from './desktop/bridge.js';

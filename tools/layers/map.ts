@@ -31,6 +31,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/knowledge/', 'split'],
   ['src/collect/', 'split'],
   ['src/workflows/', 'workflow'],
+  ['src/assistant/', 'workflow'],
   ['src/llm/', 'infrastructure'],
   ['src/audit/', 'infrastructure'],
   ['src/secrets/', 'infrastructure'],

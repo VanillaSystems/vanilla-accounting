@@ -5,6 +5,7 @@
  */
 import { Fragment, type ReactNode } from 'react';
 import './automation.css';
+import { AskAi } from '../../assistant/AskAi.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { language, t, tData } from '../../i18n/index.js';
@@ -117,6 +118,7 @@ function WorkflowPage({ w, view, route, nav }: { w: WorkflowDecl; view: Automati
     <div className="detail-in wfpage" key={w.id}>
       <div className="head">
         <h2 className="who">{hasAi(w, view.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}{label(w)}<small>{phaseLabel(w.phase)} · {tx(w.cadence)} · {forLabel(w.for)}</small></h2>
+        <AskAi context={{ kind: 'workflow', id: w.id, label: label(w) }} />
       </div>
       <p className="lead">{tx(w.desc)}</p>
       {!w.runnable.ok ? <p className="warnline">{t('automation.missing', { steps: w.runnable.missing.map((m) => `${tx(stepOf(w, m.step)?.label ?? { en: m.step })} (${m.action})`).join(', ') })}</p> : null}
@@ -220,6 +222,7 @@ function RunPage({ id, view, nav }: { id: string; view: AutomationView; nav: Nav
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
         {data.status === 'done' || data.status === 'stuck' ? <button type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</button> : null}
+        <AskAi context={{ kind: 'run', id, label: t('automation.run', { id }) }} mode={data.status === 'stuck' ? 'ask' : 'change'} />
         {data.status !== 'done' && data.status !== 'discarded' ? <button type="button" className="btn ghost" onClick={act({ kind: 'discard', run: id })}>{t('automation.discard')}</button> : null}
       </div>
       {w ? <div className="wfscroll"><Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /></div> : null}

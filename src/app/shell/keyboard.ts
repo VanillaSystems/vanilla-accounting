@@ -29,6 +29,8 @@ export interface ShellKeys {
   toggleLegend(): void;
   /** ⇧E: the export dialog, preset for the page. */
   exportOpen(): void;
+  /** ⌘J: the AI sidebar, also while typing. */
+  assistant(): void;
 }
 
 const plain = (e: KeyboardEvent) => !e.metaKey && !e.ctrlKey && !e.altKey;
@@ -45,6 +47,7 @@ export function useShellKeys(keys: ShellKeys) {
       const target = e.target as HTMLElement | null;
       const typing = !!target?.closest?.('input, textarea, select, [contenteditable]');
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); k.palette(); return; }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') { e.preventDefault(); k.assistant(); return; }
       if (k.overlayOpen()) {
         if (e.key === 'Escape') { e.preventDefault(); k.closeOverlay(); }
         return;

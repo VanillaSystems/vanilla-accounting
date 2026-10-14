@@ -35,6 +35,9 @@ import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
 import { Corner } from './Corner.js';
+import { Sidebar } from './Sidebar.js';
+import { pageContext } from '../assistant/context.js';
+import { syncSidebarWidth, toggleAssistant } from '../assistant/store.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
 
@@ -149,7 +152,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     toggleTheme,
     toggleLegend: () => setLegend(!legend),
     exportOpen: () => openExport(),
+    assistant: toggleAssistant,
   });
+  useLayoutEffect(syncSidebarWidth, []);
 
   // urls.md rule 6: the tab names the object.
   useEffect(() => {
@@ -244,7 +249,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         onExport={() => openExport()}
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
+        onAssistant={toggleAssistant}
       />
+      <Sidebar page={pageContext(loc.route, books)} onGo={(route) => nav.go({ route, query: {} })} />
       <Corner onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
