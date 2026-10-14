@@ -14,7 +14,6 @@ import { router as files } from './files.js';
 import { router as invoices } from './routes/invoices.js';
 import { router as statements } from './routes/statements.js';
 import { router as exportBundle } from './routes/export.js';
-import { router as intake } from './routes/intake.js';
 import { router as automation, queueCommit } from './routes/automation.js';
 import { router as changes } from './routes/changes.js';
 import { router as assistant } from './routes/assistant.js';
@@ -78,7 +77,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail, automation, changes, assistant);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) {

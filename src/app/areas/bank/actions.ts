@@ -3,7 +3,7 @@
  * statements added from a file (the add button, N, a drop, or a missing month's well) through
  * POST /api/statements, which reads them into the books as `npm run extract` would.
  */
-import { startIntake } from '../../shell/Intake.js';
+import { startIntake } from '../../automation/intake.js';
 import type { BankTransaction } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';

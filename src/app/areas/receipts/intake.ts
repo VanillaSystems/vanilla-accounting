@@ -8,7 +8,7 @@ import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
 import { pollInbox } from './state.js';
-import { startIntake } from '../../shell/Intake.js';
+import { startIntake } from '../../automation/intake.js';
 import { RECEIPT_TYPES, receiptType } from '../../../types/upload.js';
 
 /** The id extract gives the file: the first 16 hex characters of its SHA-256. */

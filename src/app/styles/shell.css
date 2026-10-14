@@ -155,10 +155,6 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .palette .o .r { margin-left: auto; color: var(--muted); font: 12px "Geist Mono"; }
 .palette .o svg { color: var(--muted); }
 /* the inbox processing while it runs (shell/Intake.tsx), bottom left, out of the dock's way */
-.intake { position: fixed; left: 16px; bottom: 16px; z-index: 6; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-radius: 10px; font-size: 12.5px; color: var(--ink-2); background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: fade .2s ease; }
-.intake:hover { color: var(--ink); }
-.intake .mono { font: 11.5px "Geist Mono"; color: var(--muted); }
-.intake .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; transform: scale(.8); } }
 .counts button.runinbox { display: inline-flex; align-items: center; gap: 5px; }
 .counts button.runinbox:disabled { cursor: default; color: var(--faint); }

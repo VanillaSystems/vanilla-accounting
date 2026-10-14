@@ -1,5 +1,4 @@
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
-import type { IntakeStatus } from '../../intake/pipeline.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
@@ -181,10 +180,7 @@ export const api = {
     return (await res.json()) as StatementImport;
   },
 
-  /** How far the inbox processing is (src/intake/); the static export has none. */
-  intake: () => (STATIC_EXPORT ? Promise.resolve<IntakeStatus>({ running: false, inbox: [] }) : request<IntakeStatus>('GET', '/api/intake')),
   /** Starts the inbox processing; while a job runs, one more run after it. */
-  startIntake: () => request<IntakeStatus>('POST', '/api/intake'),
 
   /** The PDFs waiting in the inbox to be read; none in the static export. */
   inbox: () => (STATIC_EXPORT ? Promise.resolve([]) : request<InboxFile[]>('GET', '/api/inbox')),

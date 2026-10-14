@@ -1,5 +1,5 @@
-label: {"de": "Text lesen", "en": "Read the text", "fr": "Lire le texte", "it": "Leggere il testo"}
-uses: parsers.pdf-text
-reads: ["file"]
-emits: ["text"]
-outcomes: {"ok": "kind"}
+label: {"de": "Belege und Kontoauszüge lesen", "en": "Read receipts and statements", "fr": "Lire pièces et relevés", "it": "Leggere giustificativi ed estratti"}
+uses: intake.read
+effects: ["books.write"]
+emits: ["notes"]
+outcomes: {"ok": "facts"}

@@ -15,7 +15,7 @@ import { loadBooks, type Books } from '../src/books/store.js';
 import { findFile, workspaceAt } from '../src/workspace/workspace.js';
 import { booksOnDisk } from './support/workspace.js';
 import { closedPart } from '../src/books/seal.js';
-import type { IntakeStatus } from '../src/intake/pipeline.js';
+import type { RunDetail } from '../src/workflows/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
 const REPO = process.cwd();
@@ -231,18 +231,18 @@ test('open period: POST /api/workspace/logo succeeds: a logo is no dated record,
   assert.equal(JSON.stringify(booksOnDisk(api.ws)), before);
 });
 
-test('open period: POST /api/intake runs the inbox processing; the filed quarter keeps its entries, payments and links', async () => {
+test('open period: a run of the inbox processing keeps the filed quarter\'s entries, payments and links', async () => {
   const fixture = JSON.parse(readFileSync(join(REPO, 'tests/fixtures/period-lock-index.json'), 'utf8')) as Books;
-  const { status } = await send({ method: 'POST', path: '/api/intake' });
+  const { status, json } = await send({ method: 'POST', path: '/api/automation', body: { kind: 'start', workflow: 'receipt-intake', item: { kind: 'company', id: 'inbox' } } });
   assert.equal(status, 200);
-  let job: IntakeStatus['job'];
+  const id = (json as { run: string }).run;
+  let run: RunDetail | undefined;
   for (let i = 0; i < 500; i++) {
-    const s = (await api.send('GET', '/api/intake')).json as unknown as IntakeStatus;
-    if (!s.running && s.job?.finishedAt) { job = s.job; break; }
+    run = (await api.send('GET', `/api/automation/runs/${id}`)).json as unknown as RunDetail;
+    if (run.status !== 'queued' && run.status !== 'running') break;
     await new Promise((r) => setTimeout(r, 20));
   }
-  assert.ok(job, 'the job finished');
-  assert.equal(job.steps[0].state, 'done', JSON.stringify(job.steps[0].notes));
+  assert.equal(run?.status, 'done', run?.error);
   const now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
 });

@@ -18,7 +18,7 @@ import { pollInbox, setUi, toggleGroup, ui, useUi } from './state.js';
 import { at, ledgerFor, listed } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
-import { startIntake, useIntake } from '../../shell/Intake.js';
+import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
@@ -213,7 +213,7 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
 
 /** "Eingang verarbeiten": reads the inbox and statements, the VAT facts, names, links and books (src/intake/). */
 function RunInbox() {
-  const { running } = useIntake();
+  const running = useIntakeRunning();
   return (
     <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} title={t('intake.runTip')} onClick={() => void startIntake()}>
       {I.spark}{running ? t('intake.running') : t('intake.run')}

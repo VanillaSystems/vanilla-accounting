@@ -1,10 +1,11 @@
-label: {"de": "Beleg aufnehmen", "en": "Take in a receipt", "fr": "Enregistrer une pièce", "it": "Acquisire un documento"}
-desc: {"de": "Liest eine neue Datei, erkennt ihre Art und die MWST-Fakten und legt sie unter receipts/ ab.", "en": "Reads a new file, recognises its kind and VAT facts, and files it under receipts/.", "fr": "Lit un nouveau fichier, reconnaît sa nature et les faits TVA, et le range sous receipts/.", "it": "Legge un nuovo file, ne riconosce il tipo e i dati IVA e lo archivia in receipts/."}
+label: {"de": "Eingang verarbeiten", "en": "Process the inbox", "fr": "Traiter la boîte d’entrée", "it": "Elaborare la casella"}
+desc: {"de": "Liest, was im Eingang liegt: Belege, Fotos und Kontoauszüge. Nimmt die MWST-Angaben der Belege, ordnet sie den Bewegungen zu, benennt und archiviert sie und bucht neue Bewegungen. Jeder Schritt nimmt nur auf, was noch offen ist.", "en": "Reads what lies in the inbox: receipts, photos and bank statements. Takes the receipts' VAT facts, matches them to payments, names and archives them and books new payments. Every step takes up only what is still open.", "fr": "Lit ce qui se trouve dans la boîte d’entrée : pièces, photos et relevés. Relève la TVA des pièces, les rapproche des mouvements, les nomme et les archive, et comptabilise les nouveaux mouvements. Chaque étape ne reprend que ce qui reste ouvert.", "it": "Legge ciò che è nella casella: giustificativi, foto ed estratti conto. Rileva l’IVA dei giustificativi, li abbina ai movimenti, li nomina e archivia e registra i nuovi movimenti. Ogni passo riprende solo ciò che è ancora aperto."}
 phase: collect
-cadence: {"de": "laufend", "en": "ongoing", "fr": "en continu", "it": "continuo"}
-for: file
+cadence: {"de": "bei jedem Eingang", "en": "on every arrival", "fr": "à chaque arrivée", "it": "a ogni arrivo"}
+for: company
 triggers:
-  - outside: {"accepts": ["receipt"]}
-emits: ["receipt.archived"]
+  - outside: {"accepts": ["receipt", "statement"]}
+  - manual: {"for": "company", "label": {"de": "Eingang verarbeiten", "en": "Process the inbox", "fr": "Traiter la boîte d’entrée", "it": "Elabora la casella"}}
+emits: ["receipt.archived", "transaction.imported"]
 start: read
-steps: ["read", "kind", "ask", "facts", "archive"]
+steps: ["read", "facts", "match", "book"]

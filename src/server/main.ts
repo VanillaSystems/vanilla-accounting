@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { app, READONLY } from './api.js';
 import { closeBrowser } from '../invoices/pdf.js';
-import { engine } from './routes/automation.js';
+import { engine, outsideArrivals } from './routes/automation.js';
 
 // PORT=0 lets the system choose. Without VANILLA_API_HOST the server listens on every interface,
 // so the phone app reaches it on the LAN.
@@ -28,6 +28,9 @@ function listening() {
   }
   console.log();
 }
+
+// Files arriving in the inbox start their runs (the outside trigger), looked for every few seconds.
+if (!READONLY) setInterval(() => void outsideArrivals().catch((e) => console.error(`inbox: ${(e as Error).message}`)), 5_000).unref();
 
 // The minute clock of the workflows' schedule triggers, aligned to the full minute.
 setTimeout(() => {

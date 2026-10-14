@@ -7,9 +7,10 @@
  * twice. Events a finished run emits start the workflows that listen; schedules start theirs.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import { emptyBooks, hasBooks, loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import type { BooksPort } from '../intake/pipeline.js';
 import type { AskOptions } from '../llm/ask.js';
-import type { BankTransaction, JournalEntry } from '../types/index.js';
+import type { BankTransaction, JournalEntry, Mapping } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { ACTIONS, type Effects } from './actions.js';
 import { cronMatches } from './cron.js';
@@ -230,9 +231,10 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   /** The handles a step may write through. ledger.book books through the write door; a dry run or a replay checks the same booking on a copy and saves nothing. */
   function effectHandles(run: Run, w: WorkflowDecl, step: string, declared: string[], record: StepRecord): Effects {
     const effects: Effects = {};
-    if (!declared.includes('ledger.book')) return effects;
     const actor: Actor = { kind: 'run', id: run.id, workflow: w.id };
     const key = `${w.id}:${run.item.id}:${step}`;
+    if (declared.includes('books.write')) effects['books.write'] = booksPort(run, actor, key, record);
+    if (!declared.includes('ledger.book')) return effects;
     effects['ledger.book'] = (entries: JournalEntry[]) => {
       const stamped = entries.map((e) => ({ ...e, run: run.id }));
       const before = [...runs.values()].some((r) => r.mode === 'live' && r.steps.some((s) => s.effects.some((x) => x.key === key && x.applied)));
@@ -256,6 +258,37 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       record.effects.push(rec);
     };
     return effects;
+  }
+
+  /**
+   * The books for a step that changes them as a whole (the inbox processing): every change goes
+   * through the write door as the run's actor and is saved at once; what it adds carries the run's
+   * id. In a dry run or a replay it works on one copy that is never saved. The effect record names
+   * what it wrote, by id.
+   */
+  function booksPort(run: Run, actor: Actor, key: string, record: StepRecord): BooksPort {
+    const live = run.mode === 'live';
+    const load = () => (run.startedBy.kind === 'check' ? booksFor(run) : hasBooks(ws) ? loadBooks(ws) : emptyBooks());
+    let copy: Books | undefined;
+    const wrote = { entries: [] as string[], mappings: [] as string[], receipts: [] as string[] };
+    record.effects.push({ effect: 'books.write', key, applied: live, wrote });
+    const link = (m: Mapping) => `${m.transactionRef}:${m.receiptId}`;
+    return {
+      read: () => (live ? load() : (copy ??= load())),
+      update(fn) {
+        const books = live ? load() : (copy ??= structuredClone(load()));
+        const had = { entries: new Set(books.journalEntries.map((e) => e.id)), mappings: new Set(books.mappings.map(link)), receipts: new Set(books.receipts.map((r) => r.id)) };
+        const out = update(books, actor, (b) => {
+          const r = fn(b);
+          for (const e of b.journalEntries) if (!had.entries.has(e.id)) { e.run = run.id; wrote.entries.push(e.id); }
+          for (const m of b.mappings) if (!had.mappings.has(link(m))) { m.run = run.id; wrote.mappings.push(link(m)); }
+          for (const x of b.receipts) if (!had.receipts.has(x.id)) wrote.receipts.push(x.id);
+          return r;
+        });
+        if (live) saveBooks(ws, books);
+        return out;
+      },
+    };
   }
 
   /** A call step: one child run per element of `forEach` (or one for the run's item); the parent parks until all children rest. */
@@ -353,6 +386,11 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     if (!w) return { ok: false, refusal: 'not-found', detail: id };
     if (!w.runnable.ok) return { ok: false, refusal: 'not-runnable', detail: w.runnable.missing.map((m) => m.action).join(', ') };
     if (mode === 'live' && !isApproved(w)) return { ok: false, refusal: 'not-approved', detail: w.version };
+    // The company is one item: while a live run of it is under way, a second start is that run.
+    const open = item.kind === 'company' && mode === 'live'
+      ? [...runs.values()].find((r) => r.workflow === w.id && r.mode === 'live' && ['queued', 'running', 'retrying'].includes(r.state.status))
+      : undefined;
+    if (open) return { ok: true, run: open.id };
     const run = await create(w, item, by, mode);
     return { ok: true, run: run.id };
   }

@@ -115,13 +115,15 @@ const drop = (page, files) => page.evaluate((files) => {
   for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name, { type: f.type, lastModified: Date.now() }));
   for (const type of ['dragenter', 'dragover', 'drop']) window.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
 }, files.map((f) => ({ ...f, b64: f.bytes.toString('base64') })));
+/** The inbox processing's runs started since `since` have come to rest (the workflow receipt-intake). */
 async function intakeDone(page, since) {
+  const ofIntake = (v) => (v?.runs ?? []).filter((r) => r.workflow === 'receipt-intake' && r.startedAt > since);
   for (let i = 0; i < 240; i++) {
-    const s = (await api(page, '/api/intake')).json;
-    if (s && !s.running && s.job?.finishedAt && s.job.startedAt > since && !s.inbox.length) return s;
+    const runs = ofIntake((await api(page, '/api/automation')).json);
+    if (runs.length && runs.every((r) => r.status !== 'queued' && r.status !== 'running')) return { job: { steps: runs[0].path.map((id) => ({ id, done: 1, total: 1 })) } };
     await sleep(500);
   }
-  return (await api(page, '/api/intake')).json;
+  return { job: { steps: ofIntake((await api(page, '/api/automation')).json)[0]?.path.map((id) => ({ id, done: 0, total: 1 })) ?? [] } };
 }
 
 const wire = await getCurrentFuseWire(exe);
@@ -271,7 +273,7 @@ await sleep(1000);
 await shot(page, '04g-dropped-read');
 const books = (await api(page, '/books.json')).json;
 const added = books.receipts.slice(receiptsBefore);
-check('the job reads the dropped PDF, PNG and HEIC: three receipts, named by the model, archived', added.length === 3 && added.every((r) => r.location === 'archived' && /stub-shop/.test(r.filename)),
+check('the run reads the dropped PDF, PNG and HEIC: three receipts, named by the model, archived', added.length === 3 && added.every((r) => r.location === 'archived' && /stub-shop/.test(r.filename)),
   `${added.map((r) => `${r.filename} (${r.extractionMethod})`).join(', ')}; steps ${job?.job?.steps?.map((st) => `${st.id} ${st.done}/${st.total}`).join(', ')}`);
 check('the photos became PDFs in the books', added.filter((r) => r.extractionMethod !== 'pdftotext').length === 2, added.map((r) => r.extractionMethod).join(', '));
 

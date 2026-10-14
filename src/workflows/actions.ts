@@ -9,6 +9,11 @@ import { periodLock, type Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
+import { noteLines, type BooksPort, type StepRun } from '../intake/pipeline.js';
+import { readStep } from '../intake/read.js';
+import { vatStep } from '../intake/vat.js';
+import { matchStep } from '../intake/match.js';
+import { classifyStep } from '../intake/classify.js';
 
 export interface ActionContext {
   ws: Workspace;
@@ -18,6 +23,8 @@ export interface ActionContext {
 
 export interface Effects {
   'ledger.book'?: (entries: JournalEntry[]) => void;
+  /** The books through the write door as the run's actor; in a dry run or a replay, a copy that is never saved. */
+  'books.write'?: BooksPort;
 }
 
 export interface ActionResult {
@@ -37,6 +44,19 @@ export interface Action {
 
 /** An action declared for a workflow whose code does not exist yet (docs/0.4.0/ui/design.md, "runnable"). */
 const declared = (outcomes: string[], o: { effects?: string[]; ai?: boolean } = {}): Action => ({ outcomes, effects: o.effects ?? [], ...(o.ai ? { ai: true } : {}) });
+
+/**
+ * A step of the inbox processing as an action: it runs on the books through the run's handle, its
+ * notes (what waits for the model, what failed) are its output, and a step that stops gets the
+ * run stuck with its reason, nothing written.
+ */
+function batch(step: StepRun): NonNullable<Action['run']> {
+  return async (_input, effects, { ws, ask }) => {
+    const r = await step({ ws, books: effects['books.write']!, ask, progress: () => {}, log: () => {} });
+    if (r.stop) throw new Error(noteLines(r.notes).join('; '));
+    return { outcome: 'ok', output: { notes: r.notes } };
+  };
+}
 
 const tx = (input: Record<string, unknown>) => input.transaction as BankTransaction;
 const books = (input: Record<string, unknown>) => input.books as Books;
@@ -77,10 +97,11 @@ export const ACTIONS: Record<string, Action> = {
 
   'source.due': declared(['due', 'none']),
   'source.pull': declared(['ok', 'login-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited', 'person-needed'], { effects: ['inbox.add', 'records.import', 'collected.append'] }),
-  'parsers.pdf-text': declared(['ok']),
-  'intake.classify': declared(['receipt', 'statement', 'unclear'], { ai: true }),
-  'intake.extract-vat': declared(['ok'], { ai: true }),
-  'receipts.archive': declared(['ok'], { effects: ['files.write'] }),
+  // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
+  'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep) },
+  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep()) },
+  'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(matchStep) },
+  'intake.book': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(classifyStep()) },
   'parsers.statement': declared(['ok']),
   'books.merge-statement': declared(['ok'], { effects: ['books.transactions'] }),
   'books.statement-balance': declared(['matches', 'differs']),

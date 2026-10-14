@@ -18,7 +18,7 @@ import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { intake } from '../areas/receipts/intake.js';
-import { IntakeLine, finishedText, watchIntake } from './Intake.js';
+import { watchIntakeRuns } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
@@ -134,7 +134,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   // The inbox processing runs on the server; the books are loaded again when a job ends.
   const reload = useRef(refresh);
   reload.current = refresh;
-  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => { reload.current(); toast(finishedText(job)); })), [canEdit, toast]);
+  useEffect(() => (STATIC_EXPORT ? undefined : watchIntakeRuns((run) => { reload.current(); toast(run.status === 'done' ? t('intake.finished') : t('intake.note.error', { detail: run.error ?? run.status })); })), [toast]);
 
   useShellKeys({
     overlayOpen: () => overlay !== null,
@@ -255,7 +255,6 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <Corner onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
-      <IntakeLine onOpen={() => goArea('receipts')} />
       {legend && (
         <div className="legend">
           {t('shell.edges')}<br />

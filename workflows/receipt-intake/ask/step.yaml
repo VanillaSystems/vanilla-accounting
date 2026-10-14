@@ -1,6 +1,0 @@
-label: {"de": "Person fragen", "en": "Ask a person", "fr": "Demander à une personne", "it": "Chiedere a una persona"}
-by: person
-task: {"title": {"de": "Was ist diese Datei?", "en": "What is this file?", "fr": "Qu’est-ce que ce fichier ?", "it": "Che cos’è questo file?"}, "do": "decide"}
-reads: ["file"]
-emits: ["kind"]
-outcomes: {"receipt": "facts", "other": "done"}

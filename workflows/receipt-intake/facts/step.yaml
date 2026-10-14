@@ -1,5 +1,5 @@
-label: {"de": "MWST-Fakten lesen", "en": "Read the VAT facts", "fr": "Lire les faits TVA", "it": "Leggere i dati IVA"}
+label: {"de": "MWST-Angaben der Belege nehmen", "en": "Take the receipts' VAT facts", "fr": "Relever la TVA des pièces", "it": "Rilevare l’IVA dei giustificativi"}
 uses: intake.extract-vat
-reads: ["text"]
-emits: ["vatFacts"]
-outcomes: {"ok": "archive"}
+effects: ["books.write"]
+emits: ["notes"]
+outcomes: {"ok": "match"}

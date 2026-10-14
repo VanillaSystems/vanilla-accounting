@@ -20,6 +20,7 @@ import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
+import { inboxFiles } from './scan.js';
 import type { JournalEntry } from '../../types/index.js';
 
 export const router = Router();
@@ -113,3 +114,23 @@ router.patch('/api/automation/workflows/:id', (req, res) => {
   setSchedule(WS, w, cron);
   res.json({ ok: true });
 });
+
+/** Inbox files a run was started for: a file no step can read starts no second run on its own. */
+const attempted = new Set<string>();
+
+/**
+ * The outside trigger (docs/0.4.0/workflows.md): files that arrived in the inbox (a drop, the
+ * Finder, the phone app) start a run of each workflow that takes them; one run for the inbox,
+ * and another once it rests if more files came meanwhile.
+ */
+export async function outsideArrivals(): Promise<void> {
+  const files = inboxFiles({ photos: true }).filter((f) => !attempted.has(f.id));
+  if (!files.length) return;
+  const e = engine();
+  for (const w of e.declarations().workflows) {
+    if (!w.triggers.some((t) => t.kind === 'outside' && !t.off && t.accepts.includes('receipt'))) continue;
+    const r = await e.start(w.id, { kind: 'company', id: 'inbox' }, { kind: 'outside', file: files[0].filename });
+    if (!r.ok && r.refusal !== 'not-runnable') console.error(`${w.id}: ${r.refusal} ${r.detail ?? ''}`);
+  }
+  for (const f of files) attempted.add(f.id);
+}

@@ -26,12 +26,14 @@ async function poll(): Promise<void> {
     state = { ...state, error: errorText(e) };
     emit();
   }
-  if (listeners.size) timer = setTimeout(poll, 10_000);
+  // Every 2 s while something runs, every 10 s when it is quiet.
+  const busy = state.view?.runs.some((r) => r.status === 'running' || r.status === 'queued');
+  if (listeners.size) timer = setTimeout(poll, busy ? 2_000 : 10_000);
 }
 
 const onFocus = () => { clearTimeout(timer); void poll(); };
 
-function subscribe(l: () => void): () => void {
+export function subscribe(l: () => void): () => void {
   listeners.add(l);
   if (listeners.size === 1) { void poll(); window.addEventListener('focus', onFocus); }
   return () => {

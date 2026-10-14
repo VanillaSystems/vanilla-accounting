@@ -1,5 +1,0 @@
-label: {"de": "Was ist das?", "en": "What is it?", "fr": "Qu’est-ce que c’est ?", "it": "Che cos’è?"}
-uses: intake.classify
-reads: ["text"]
-emits: ["kind"]
-outcomes: {"receipt": "facts", "statement": "done", "unclear": "ask"}
