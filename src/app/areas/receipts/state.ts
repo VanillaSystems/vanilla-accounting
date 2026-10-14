@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react';
 import type { InboxFile } from '../../../types/index.js';
 import { api } from '../../lib/api.js';
-import { store, stored } from '../../shell/prefs.js';
+import { store, stored } from '../../shell/storage.js';
 import type { GroupKey } from './model.js';
 
 export type Section = 'zahlung' | 'angaben' | 'datei';

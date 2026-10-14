@@ -164,9 +164,6 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const listRef = useRef<HTMLElement>(null);
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
 
-  const topRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLElement>(null);
-  useEdges(topRef, dockRef, overlay !== null || dropping);
   useDrop(canEdit, setDropping, (files) => (area.drop ? area.drop.run(files, propsRef.current) : intake(files, nav)));
 
   const search = useCallback((q: string): PaletteGroup[] => {
@@ -235,7 +232,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       </FxProvider>
 
       <TopBar
-        ref={topRef}
+        hold={overlay !== null && overlay.kind !== 'palette'}
         company={workspace?.company.name}
         period={area.periodless ? undefined : periodName(period)}
         zoom={zoom}
@@ -247,8 +244,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
-      <Dock ref={dockRef} current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
-      <div className="hint" aria-hidden="true" />
+      <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
       <IntakeLine onOpen={() => goArea('receipts')} />
       {legend && (
@@ -306,40 +302,6 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       )}
     </ShellUiContext.Provider>
   );
-}
-
-// Without a title bar the top 28 px drag the window and send the page no mouse moves.
-const TOP_EDGE = noTitleBar ? 34 : 10;
-
-/** The top bar shows near the top edge, the dock near the bottom edge; both stay while hovered or held. */
-function useEdges(top: React.RefObject<HTMLElement>, dock: React.RefObject<HTMLElement>, hold: boolean) {
-  const holdRef = useRef(hold);
-  holdRef.current = hold;
-  useEffect(() => {
-    let hideTop: ReturnType<typeof setTimeout>, hideDock: ReturnType<typeof setTimeout>;
-    const show = (el: HTMLElement | null, on: boolean, timer: 'top' | 'dock') => {
-      if (!el) return;
-      clearTimeout(timer === 'top' ? hideTop : hideDock);
-      if (on) el.classList.add('show');
-      else if (timer === 'top') hideTop = setTimeout(() => el.classList.remove('show'), 450);
-      else hideDock = setTimeout(() => el.classList.remove('show'), 450);
-    };
-    const onMove = (e: MouseEvent) => {
-      if (document.querySelector('.drop.show')) return;
-      const d = dock.current, b = top.current;
-      show(d, innerHeight - e.clientY < 80 || !!d?.matches(':hover'), 'dock');
-      show(b, e.clientY < TOP_EDGE || !!b?.matches(':hover') || !!document.querySelector('.menu'), 'top');
-      if (d?.classList.contains('show')) for (const it of d.querySelectorAll<HTMLElement>('.it')) {
-        const r = it.getBoundingClientRect();
-        const dx = Math.abs(e.clientX - (r.left + r.width / 2));
-        it.querySelector<HTMLElement>('.ic')!.style.transform = `scale(${1 + Math.max(0, 1 - dx / 110) * 0.22})`;
-      }
-    };
-    const unmagnify = () => dock.current?.querySelectorAll<HTMLElement>('.ic').forEach((ic) => { ic.style.transform = ''; });
-    document.addEventListener('mousemove', onMove);
-    dock.current?.addEventListener('mouseleave', unmagnify);
-    return () => { document.removeEventListener('mousemove', onMove); clearTimeout(hideTop); clearTimeout(hideDock); };
-  }, []);
 }
 
 /** Files dragged over the page show the drop zone; dropped, they go to the inbox. */

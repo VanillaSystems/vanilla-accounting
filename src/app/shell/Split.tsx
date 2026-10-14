@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { t } from '../i18n/index.js';
-import { store, stored } from './prefs.js';
+import { store, stored } from './storage.js';
 import type { AreaId } from './route.js';
 
 const MIN = 340;

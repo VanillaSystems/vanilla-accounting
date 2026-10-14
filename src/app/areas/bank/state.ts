@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Index } from '../../../types/index.js';
 import { localToday } from '../../../accounting/periods.js';
-import { store, stored } from '../../shell/prefs.js';
+import { store, stored } from '../../shell/storage.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { bankOf, type Account, type Bank } from './model.js';
 

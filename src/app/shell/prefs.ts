@@ -6,14 +6,8 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { desktop } from '../desktop/bridge.js';
+import { store, stored } from './storage.js';
 
-export function stored(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-
-export function store(key: string, value: string | null): void {
-  try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* storage unavailable */ }
-}
 
 export type Theme = 'system' | 'light' | 'dark';
 const darkOS = () => matchMedia('(prefers-color-scheme: dark)');

@@ -4,7 +4,7 @@
  * sections and list groups are open (per viewer, kept in this browser).
  */
 import { useSyncExternalStore } from 'react';
-import { store, stored } from '../../shell/prefs.js';
+import { store, stored } from '../../shell/storage.js';
 import type { RowState } from './model.js';
 
 export type Section = 'draft' | 'look' | 'customer' | 'sent' | 'comments' | 'log';

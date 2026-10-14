@@ -1,7 +1,8 @@
-import { forwardRef } from 'react';
 import { t } from '../i18n/index.js';
 import { ZOOM_STEPS } from './prefs.js';
 import { ICONS } from '../areas/icons.js';
+import { dispatchBar } from './bars.js';
+import { Fold } from './Fold.js';
 
 interface Props {
   company?: string;
@@ -17,14 +18,16 @@ interface Props {
   onLanguage(anchor: HTMLElement): void;
 }
 
-/** The context bar at the top edge: company, search, period, zoom, export, theme and language. */
-export const TopBar = forwardRef<HTMLDivElement, Props>(function TopBar(p, ref) {
+/** The context bar at the top: company, search, period, zoom, export, theme and language; folded, a pill with company and period. */
+export function TopBar(p: Props & { hold?: boolean }) {
+  const used = (f: () => void) => () => { dispatchBar('top', { kind: 'used' }); f(); };
   return (
-    <div className="topbar" ref={ref} role="toolbar" aria-label={t('shell.toolbar')}>
+    <Fold id="top" className="topbar" label={t('shell.toolbar')} hold={p.hold}
+      pill={<>{p.company ? <b>{p.company}</b> : null}{p.period ? <span className="mono">{p.period}</span> : null}<span aria-hidden="true">▾</span></>}>
       {p.company && <span className="chip" tabIndex={0}><b style={{ fontWeight: 600 }}>{p.company}</b></span>}
       <span className="sep" />
-      <button type="button" className="chip" onClick={p.onSearch}>⌕ {t('shell.search')} <span className="k">⌘K</span></button>
-      {p.period && <button type="button" className="chip mono" title={t('period.choose')} onClick={(e) => p.onPeriod(e.currentTarget)}>{p.period} ▾</button>}
+      <button type="button" className="chip" onClick={used(p.onSearch)}>⌕ {t('shell.search')} <span className="k">⌘K</span></button>
+      {p.period && <button type="button" className="chip mono" title={t('period.choose')} onClick={(e) => { dispatchBar('top', { kind: 'used' }); p.onPeriod(e.currentTarget); }}>{p.period} ▾</button>}
       <span className="sep" />
       <span className="zoom" role="group" aria-label={t('shell.zoom')}>
         <button type="button" className="chip" title={t('shell.zoomOut')} aria-label={t('shell.zoomOut')} disabled={p.zoom <= ZOOM_STEPS[0]} onClick={() => p.onZoom(-1)}>−</button>
@@ -32,9 +35,9 @@ export const TopBar = forwardRef<HTMLDivElement, Props>(function TopBar(p, ref) 
         <button type="button" className="chip" title={t('shell.zoomIn')} aria-label={t('shell.zoomIn')} disabled={p.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} onClick={() => p.onZoom(1)}>+</button>
       </span>
       <span className="sep" />
-      <button type="button" className="chip" title={t('export.chipTip')} aria-label={t('export.dialog')} onClick={p.onExport}>{ICONS.download}</button>
+      <button type="button" className="chip" title={t('export.chipTip')} aria-label={t('export.dialog')} onClick={used(p.onExport)}>{ICONS.download}</button>
       <button type="button" className="chip" title={t('shell.theme')} aria-label={t('shell.theme')} onClick={p.onTheme}>◐</button>
       <button type="button" className="chip" aria-label={t('app.language')} aria-haspopup="menu" onClick={(e) => p.onLanguage(e.currentTarget)}>{p.language.toUpperCase()}</button>
-    </div>
+    </Fold>
   );
-});
+}
