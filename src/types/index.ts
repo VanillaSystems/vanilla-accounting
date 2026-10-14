@@ -70,6 +70,8 @@ export interface Mapping {
   /** Who made the link: a deterministic rule (and which), the AI matcher, or a person. Absent: before this was recorded. */
   by?: 'rule' | 'llm' | 'human';
   rule?: string;
+  /** The workflow run that made the link. */
+  run?: string;
 }
 
 export interface BankStatement {
@@ -118,6 +120,8 @@ export interface JournalEntry {
    * 'invoice' is the revenue of a paid invoice, booked from its lines (src/invoices/payments.ts).
    */
   origin?: 'classify' | 'manual' | 'year-close' | 'invoice';
+  /** The workflow run that booked it (src/workflows/engine.ts): its history explains why it is booked like this. */
+  run?: string;
 }
 
 /** A VAT quarter, e.g. "2026-Q2". */

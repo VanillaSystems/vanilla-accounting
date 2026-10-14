@@ -264,9 +264,25 @@ main.full { display: flex; flex-direction: column; }
 
 /* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable. */
 .no-titlebar body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 28px; -webkit-app-region: drag; z-index: 15; }
-.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop) { -webkit-app-region: no-drag; }
+.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop, .corner) { -webkit-app-region: no-drag; }
 
 /* Fixed elements centre on the page, not the window: the AI sidebar (when open) is not page. */
 :root { --aiw: 0px; --page-mid: calc((100% - var(--aiw)) / 2); }
 .bartip .btn { background: transparent; color: var(--bg); border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); }
 .bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
+
+/* the status corner (docs/0.4.0/views.md "Status, top right") */
+.corner { position: fixed; top: 14px; right: calc(16px + var(--aiw)); z-index: 22; }
+.cornerbtn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(18px); color: var(--ink); font: 500 12.5px "Instrument Sans"; cursor: pointer; box-shadow: var(--shadow); }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .9s linear infinite; flex: none; }
+.spin.small { width: 10px; height: 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; border-color: var(--accent); } }
+.amber { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+.cornerpanel { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; padding: 8px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; }
+.cprow { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cprow:hover { background: var(--hover); }
+.cprow b { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cplinks { display: flex; gap: 12px; padding: 6px 8px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
+/* While the top bar stands open (new or pinned), the pages start below it instead of under it. */
+body:has(.topbar.open) :is(.detail, main.full) { padding-top: 76px; }

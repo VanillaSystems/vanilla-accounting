@@ -21,7 +21,7 @@ import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
-import type { AutomationView, RunDetail } from '../../workflows/model.js';
+import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
 
@@ -148,6 +148,7 @@ export const api = {
   yearClose: (year: string) => request<YearCloseView>('GET', `/api/year-close/${year}`),
   automation: (since?: string) => request<AutomationView | { unchanged: true }>('GET', `/api/automation${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   automationRun: (id: string) => request<RunDetail>('GET', `/api/automation/runs/${encodeURIComponent(id)}`),
+  automationCommand: (cmd: AutomationCommand) => request<CommandResult>('POST', '/api/automation', cmd),
   bookRevaluation: (year: string) => request<{ entries: JournalEntry[] }>('POST', `/api/year-close/${year}/revaluation`),
   markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<unknown>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),
   bookYearEndEntry: (year: string, input: YearEndEntryInput) => request<{ entry: JournalEntry }>('POST', `/api/year-close/${year}/entries`, input),

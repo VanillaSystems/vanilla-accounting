@@ -3,16 +3,17 @@
  * npm run workflow -- <id> --replay <run-id>        replay a recorded run on today's workflow, writing nothing
  * npm run workflow -- <id> --runs                   list the stored runs
  *
- * The pilot of migration step 9 (docs/0.4.0/workflows.md); workflows/booking/ is the only one.
+ * With the app's server up the command goes to its engine, so runs never have two writers; without
+ * it, an engine runs here, holding the workspace's lock for each step that writes.
  */
 import 'dotenv/config';
 import { loadBooks, periodLock } from '../books/store.js';
 import { askIfReady } from '../intake/run.js';
-import { IntakeBusyError, lockIntake } from '../intake/pipeline.js';
+import { lockIntake } from '../intake/pipeline.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
-import { loadWorkflow } from '../workflows/load.js';
-import { replayRun, runWorkflow, type Run } from '../workflows/runner.js';
-import { listRuns, loadRun, runsDir, saveRun } from '../workflows/store.js';
+import { openEngine } from '../workflows/engine.js';
+import { summaryOf, type AutomationCommand, type CommandResult, type Run } from '../workflows/model.js';
+import { listRuns, runsDir } from '../workflows/store.js';
 
 const [id, arg, value] = process.argv.slice(2);
 if (!id || !arg) {
@@ -20,39 +21,44 @@ if (!id || !arg) {
   process.exit(1);
 }
 const ws = openWorkspace();
-const workflow = loadWorkflow(APP_ROOT, id, ws.paths.root);
-const line = (r: Run) => `${r.id}  ${r.mode.padEnd(6)}  ${r.status.padEnd(7)}  ${r.item.ref}  ${r.steps.map((s) => `${s.step}:${s.outcome ?? s.error ?? '?'}`).join(' → ')}`;
+const line = (r: Run) => { const s = summaryOf(r); return `${s.id}  ${s.mode.padEnd(6)}  ${s.status.padEnd(8)}  ${s.item.id}  ${r.steps.map((x) => `${x.step}:${x.outcome ?? x.error ?? '?'}`).join(' → ')}`; };
+const API = `http://127.0.0.1:${process.env.PORT ?? 3456}`;
+
+/** The server's engine, when the app runs; else undefined. */
+async function server(): Promise<((cmd: AutomationCommand) => Promise<CommandResult>) | undefined> {
+  try {
+    const up = await fetch(`${API}/api/status`, { signal: AbortSignal.timeout(800) });
+    if (!up.ok) return undefined;
+    return async (cmd) => (await fetch(`${API}/api/automation`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cmd) })).json() as Promise<CommandResult>;
+  } catch {
+    return undefined;
+  }
+}
 
 if (arg === '--runs') {
   for (const r of listRuns(ws).filter((r) => r.workflow === id)) console.log(line(r));
   console.log(`\n${runsDir(ws)}`);
-} else if (arg === '--replay') {
-  const replay = await replayRun(workflow, loadRun(ws, value), { ws });
-  saveRun(ws, replay);
-  console.log(line(replay));
-  for (const s of replay.steps) for (const e of s.effects) console.log(`  ${s.step}: would ${e.effect} ${JSON.stringify(e.value)}`);
 } else {
-  let release: () => void;
-  try {
-    release = lockIntake(ws);
-  } catch (e) {
-    if (!(e instanceof IntakeBusyError)) throw e;
-    console.error(`⛔ ${e.message}`);
-    process.exit(1);
-  }
-  try {
-    const books = loadBooks(ws);
-    const lock = periodLock(books);
-    const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
-    const refs = arg === '--open' ? books.transactions.filter((t) => !booked.has(t.ref) && !lock.isClosed(t.date)).map((t) => t.ref) : [arg];
-    const ask = await askIfReady();
-    for (const ref of refs) {
-      const run = await runWorkflow(workflow, ref, { ws, ask });
-      saveRun(ws, run);
-      console.log(line(run));
+  const books = loadBooks(ws);
+  const lock = periodLock(books);
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const commands: AutomationCommand[] = arg === '--replay' ? [{ kind: 'replay', run: value }]
+    : (arg === '--open' ? books.transactions.filter((t) => !booked.has(t.ref) && !lock.isClosed(t.date)).map((t) => t.ref) : [arg])
+      .map((ref): AutomationCommand => ({ kind: 'start', workflow: id, item: { kind: 'transaction', id: ref } }));
+  if (!commands.length) console.log('Nothing open to book.');
+  const remote = await server();
+  if (remote) {
+    for (const c of commands) console.log(JSON.stringify(await remote(c)));
+    console.log(`Sent to the app's engine (${API}); see Automatisierung.`);
+  } else {
+    const engine = openEngine(ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws) });
+    const started: string[] = [];
+    for (const c of commands) {
+      const result = await engine.command(c);
+      if (!result.ok) console.error(`⛔ ${result.refusal}${result.detail ? `: ${result.detail}` : ''}`);
+      else if (result.run) started.push(result.run);
     }
-    if (!refs.length) console.log('Nothing open to book.');
-  } finally {
-    release!();
+    await engine.idle();
+    for (const r of started) console.log(line(engine.run(r)!));
   }
 }

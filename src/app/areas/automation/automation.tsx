@@ -5,11 +5,11 @@
  */
 import { Fragment, type ReactNode } from 'react';
 import './automation.css';
-import { AUTOMATION_TABS, type RouteOf } from '../../shell/route.js';
+import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
-import { language, t } from '../../i18n/index.js';
-import { automationNow, useAutomation, useRun } from '../../automation/store.js';
-import { hasAi, PHASES, processMap, stepOf, textIn, type AutomationView, type RunSummary, type StepDecl, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
+import { language, t, tData } from '../../i18n/index.js';
+import { automationCommand, automationNow, useAutomation, useRun } from '../../automation/store.js';
+import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type RunSummary, type StepDecl, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
@@ -48,7 +48,7 @@ function selectedRow(route: R, view: AutomationView | undefined): R | undefined 
 function List({ route, nav }: Props) {
   const { view, error } = useAutomation();
   const sel = selectedRow(route, view);
-  const waiting = view?.runs.filter((r) => r.status === 'waiting') ?? [];
+  const waiting = view?.tasks ?? [];
   const row = (r: R, content: ReactNode) => {
     const on = !!sel && sameRow(r, sel);
     return (
@@ -105,8 +105,8 @@ function Detail({ route, nav }: Props) {
     }
     case 'run': return <RunPage id={route.run} view={view} nav={nav} />;
     case 'map': return <MapPage view={view} map={route.map} nav={nav} />;
-    case 'queue': return <div className="detail-in wfpage"><div className="head"><h2 className="who">{t('automation.queue')}</h2></div><p className="lead">{t('automation.queueEmpty')}</p></div>;
-    case 'tasks': return <TasksPage view={view} nav={nav} />;
+    case 'queue': return <QueuePage view={view} nav={nav} />;
+    case 'tasks': return <TasksPage view={view} nav={nav} run={route.run} />;
   }
 }
 
@@ -208,22 +208,36 @@ function RunPage({ id, view, nav }: { id: string; view: AutomationView; nav: Nav
   if (error) return <div className="detail-empty"><div>{error}</div></div>;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
+  const act = (cmd: AutomationCommand) => () => { void automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); }); };
   return (
     <div className="detail-in wfpage" key={id}>
       <div className="head">
         <h2 className="who">{t('automation.run', { id })}<small>{w ? label(w) : data.workflow} · {forLabel(data.item.kind)} <span className="mono">{data.item.id}</span></small></h2>
       </div>
-      <p className="lead"><span className={`wfpill st-${data.status}`}>{status(data.status)}</span> {when(data.startedAt)}{data.of ? ` · ${t('automation.replayOf', { id: data.of })}` : ''}</p>
+      <p className="lead"><span className={`wfpill st-${data.status}`}>{status(data.status)}</span> {when(data.startedAt)}{data.mode !== 'live' ? ` · ${data.mode}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}</p>
       {data.error ? <p className="warnline">{data.error}</p> : null}
+      <div className="wfactions">
+        {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
+        {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
+        {data.status === 'done' || data.status === 'stuck' ? <button type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</button> : null}
+        {data.status !== 'done' && data.status !== 'discarded' ? <button type="button" className="btn ghost" onClick={act({ kind: 'discard', run: id })}>{t('automation.discard')}</button> : null}
+      </div>
       {w ? <div className="wfscroll"><Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /></div> : null}
       <ol className="wftimeline">
         {data.steps.map((s, i) => (
           <li key={`${s.step}-${i}`}>
             <b>{w ? tx(stepOf(w, s.step)?.label ?? { en: s.step }) : s.step}</b>
             {s.outcome ? <span className="mono"> → {s.outcome}</span> : null}
+            {Object.entries(s.input).filter(([, v]) => v).map(([k, v]) => <div key={k} className="m mono">{k}: {v}</div>)}
             {s.error ? <div className="warnline">{s.error}</div> : null}
-            {s.llm ? <div className="m">{t('automation.llm', { n: s.llm })}</div> : null}
-            {s.effects.map((e, j) => <div key={j} className="m">{e.applied ? t('automation.effect.applied', { effect: e.effect }) : t('automation.effect.muted', { effect: e.effect })}</div>)}
+            {s.llm.length ? <div className="m">{t('automation.llm', { n: s.llm.length })}</div> : null}
+            {s.effects.map((e, j) => (
+              <div key={j} className={e.refused ? 'warnline' : 'm'}>
+                {e.refused ? t('automation.refused', { reason: e.refused })
+                  : e.applied ? t('automation.effect.applied', { effect: e.effect })
+                  : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.effect.muted', { effect: e.effect })}
+              </div>
+            ))}
           </li>
         ))}
       </ol>
@@ -276,12 +290,60 @@ function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'ev
   );
 }
 
-function TasksPage({ view, nav }: { view: AutomationView; nav: Nav }) {
-  const waiting = view.runs.filter((r) => r.status === 'waiting');
+function TasksPage({ view, nav, run }: { view: AutomationView; nav: Nav; run?: string }) {
+  const answer = (task: Task, outcome: string) => () => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); }); };
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
-      {waiting.length ? <RunList runs={waiting} nav={nav} /> : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      {view.tasks.length ? (
+        <div className="wftasks">
+          {view.tasks.map((task) => {
+            const w = view.workflows.find((x) => x.id === task.workflow);
+            return (
+              <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
+                <b>{fillTask(tx(task.title), task.item)}</b>
+                <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
+                {task.why ? <p>{fillTask(tx(task.why), task.item)}</p> : null}
+                <span className="wfactions">
+                  {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
+                  {task.outcomes.map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}
+                  <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: task.run }, query: {} })}>{t('automation.run', { id: task.run })}</button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : <p className="lead">{t('automation.tasksEmpty')}</p>}
+    </div>
+  );
+}
+
+/** Where an item of a run is shown in the other areas. */
+function itemRoute(item: Task['item']): Route | undefined {
+  switch (item.kind) {
+    case 'transaction': return { area: 'bank', payment: item.id };
+    case 'entry': return { area: 'journal', id: item.id };
+    case 'receipt': return { area: 'receipts', id: item.id };
+    default: return undefined;
+  }
+}
+
+function QueuePage({ view, nav }: { view: AutomationView; nav: Nav }) {
+  const groups: Array<[string, RunSummary[]]> = [
+    [t('automation.queueRunning'), view.runs.filter((r) => r.status === 'running')],
+    [t('automation.queueQueued'), view.runs.filter((r) => r.status === 'queued').reverse()],
+    [t('automation.queueStuck'), view.runs.filter((r) => r.status === 'stuck')],
+    [t('automation.recentlyDone'), view.runs.filter((r) => r.status === 'done').slice(0, 8)],
+  ];
+  return (
+    <div className="detail-in wfpage">
+      <div className="head"><h2 className="who">{t('automation.queue')}</h2></div>
+      <div className="wfactions">
+        <button type="button" className="btn ghost" onClick={() => void automationCommand({ kind: 'pause', on: !view.paused })}>{t(view.paused ? 'automation.unpause' : 'automation.pause')}</button>
+      </div>
+      {groups.every(([, rs]) => !rs.length) ? <p className="lead">{t('automation.queueEmpty')}</p> : groups.filter(([, rs]) => rs.length).map(([title, rs]) => (
+        <Fragment key={title}><h3 className="wfh3">{title}</h3><RunList runs={rs} nav={nav} /></Fragment>
+      ))}
     </div>
   );
 }
@@ -294,7 +356,7 @@ const legend = (): LegendItem[] => [
 export const automation: Area<RouteOf<'automation'>> = {
   id: 'automation',
   label: () => t('area.automation'),
-  dock: { key: 'w', icon: ICONS.automation, tip: () => t('area.automation.tip') },
+  dock: { key: 'w', icon: ICONS.automation, tip: () => t('area.automation.tip'), badge: () => { const v = automationNow(); return v ? openCount(v) : 0; } },
   List,
   Detail,
   legend,

@@ -16,7 +16,8 @@ import { moduleActor } from '../src/books/store.js';
 import type { JournalEntry } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { checkWorkflow, loadWorkflow } from '../src/workflows/load.js';
-import { replayRun, runWorkflow } from '../src/workflows/runner.js';
+import { openEngine, type Ask as EngineAsk } from '../src/workflows/engine.js';
+import type { Run } from '../src/workflows/model.js';
 import { listRuns, saveRun } from '../src/workflows/store.js';
 import { DEMO_ROOT, booksOnDisk } from './support/workspace.js';
 
@@ -43,7 +44,25 @@ function prepared(): { ws: Workspace; ask: Ask; refs: string[] } {
   return { ws, ask, refs: [...answers.keys()] };
 }
 
-const comparable = (entries: JournalEntry[]) => entries.map(({ id: _, ...e }) => JSON.stringify(e)).sort();
+const comparable = (entries: JournalEntry[]) => entries.map(({ id: _, run: __, ...e }) => JSON.stringify(e)).sort();
+
+/** One run of `workflow` on `ref` through the engine, driven to rest. */
+async function runOnce(ws: Workspace, ref: string, ask?: EngineAsk, mode: Run['mode'] = 'live'): Promise<Run> {
+  const engine = openEngine(ws, { appRoot: APP_ROOT, ask: async () => ask });
+  const started = await engine.start('booking', { kind: 'transaction', id: ref }, { kind: 'manual' }, mode);
+  assert.ok(started.ok, JSON.stringify(started));
+  await engine.idle();
+  return engine.run(started.ok ? started.run! : '')!;
+}
+
+async function replayOf(ws: Workspace, of: Run): Promise<Run> {
+  saveRun(ws, of);
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const started = await engine.command({ kind: 'replay', run: of.id });
+  assert.ok(started.ok, JSON.stringify(started));
+  await engine.idle();
+  return engine.run(started.ok ? started.run! : '')!;
+}
 
 test('workflows/booking/ passes its lint', () => {
   assert.deepEqual(checkWorkflow(workflow, [workflow]), []);
@@ -65,9 +84,8 @@ test('booking by run equals booking by classify on the demo', async () => {
     assert.ok(byClassify.refs.length > 10, `the demo has open transactions to book (${byClassify.refs.length})`);
     await runIntake({ ws: byClassify.ws, books: storePort(byClassify.ws, moduleActor('intake')), ask: byClassify.ask, steps: [['classify', classifyStep()]] });
     for (const ref of byRuns.refs) {
-      const run = await runWorkflow(workflow, ref, { ws: byRuns.ws, ask: byRuns.ask });
-      assert.equal(run.status, 'done', `${ref}: ${JSON.stringify(run.steps)}`);
-      saveRun(byRuns.ws, run);
+      const run = await runOnce(byRuns.ws, ref, byRuns.ask);
+      assert.equal(run.state.status, 'done', `${ref}: ${JSON.stringify(run.steps)}`);
     }
     assert.deepEqual(comparable(loadBooks(byRuns.ws).journalEntries), comparable(loadBooks(byClassify.ws).journalEntries));
     assert.equal(listRuns(byRuns.ws).length, byRuns.refs.length);
@@ -80,18 +98,19 @@ test('booking by run equals booking by classify on the demo', async () => {
 test('a replay writes nothing and shows the entries the run booked; a second run books nothing', async () => {
   const { ws, ask, refs } = prepared();
   try {
-    const run = await runWorkflow(workflow, refs[0], { ws, ask });
+    const run = await runOnce(ws, refs[0], ask);
     const booked = loadBooks(ws).journalEntries.filter((e) => e.transactionRef === refs[0]);
+    assert.ok(booked.every((e) => e.run === run.id), 'every entry the run booked carries its id');
     assert.deepEqual(run.steps.map((s) => `${s.step}:${s.outcome}`), ['open:open', 'classify:decided', 'book:booked']);
     assert.equal(run.steps[1].llm.length, 1, 'the model answer is recorded');
 
     const before = booksOnDisk(ws);
-    const replay = await replayRun(workflow, { ...run, steps: run.steps }, { ws });
+    const replay = await replayOf(ws, run);
     assert.deepEqual(booksOnDisk(ws), before, 'a replay writes nothing');
     assert.deepEqual(replay.steps.map((s) => `${s.step}:${s.outcome}`), ['open:booked'], 'today the transaction is booked: the replay stops there');
 
-    const again = await runWorkflow(workflow, refs[0], { ws, ask: async () => { throw new Error('no model call for a booked transaction'); } });
-    assert.equal(again.status, 'done');
+    const again = await runOnce(ws, refs[0], async () => { throw new Error('no model call for a booked transaction'); });
+    assert.equal(again.state.status, 'done');
     assert.deepEqual(booksOnDisk(ws), before);
     assert.ok(booked.length > 0);
   } finally {
@@ -103,15 +122,16 @@ test('a replay of a recorded run on unbooked books shows the would-be entries an
   const first = prepared();
   const second = prepared();
   try {
-    const run = await runWorkflow(workflow, first.refs[0], { ws: first.ws, ask: first.ask });
+    const run = await runOnce(first.ws, first.refs[0], first.ask);
     const live = loadBooks(first.ws).journalEntries.filter((e) => e.transactionRef === first.refs[0]);
     const before = booksOnDisk(second.ws);
-    const replay = await replayRun(workflow, run, { ws: second.ws });
-    assert.equal(replay.status, 'done');
+    const replay = await replayOf(second.ws, run);
+    assert.equal(replay.state.status, 'done');
     assert.deepEqual(booksOnDisk(second.ws), before);
     const effect = replay.steps.find((s) => s.step === 'book')!.effects[0];
     assert.equal(effect.applied, false);
-    assert.deepEqual(comparable(effect.value as JournalEntry[]), comparable(live));
+    assert.deepEqual(comparable(effect.would as JournalEntry[]), comparable(live));
+    assert.equal(effect.refused, undefined, 'the write door would accept the booking');
   } finally {
     rmSync(first.ws.paths.root, { recursive: true, force: true });
     rmSync(second.ws.paths.root, { recursive: true, force: true });
@@ -122,8 +142,8 @@ test('without a model the run waits for a person and books nothing', async () =>
   const { ws, refs } = prepared();
   try {
     const before = booksOnDisk(ws);
-    const run = await runWorkflow(workflow, refs[0], { ws });
-    assert.equal(run.status, 'waiting');
+    const run = await runOnce(ws, refs[0]);
+    assert.deepEqual(run.state.status === 'waiting' && run.state.at, 'manual', 'it waits at the person step');
     assert.deepEqual(booksOnDisk(ws), before);
   } finally {
     rmSync(ws.paths.root, { recursive: true, force: true });

@@ -71,3 +71,10 @@
 .wfcard.dim { opacity: .7; }
 .wfcard .next { font-size: 11.5px; }
 .wfcard .next.off { text-decoration: line-through; }
+
+.wfactions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
+.wfh3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 4px; }
+.wftasks { display: flex; flex-direction: column; gap: 10px; }
+.wftask { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.wftask.sel { border-color: var(--accent); }
+.wftask p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }

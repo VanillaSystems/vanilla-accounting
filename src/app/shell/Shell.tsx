@@ -34,6 +34,7 @@ import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
+import { Corner } from './Corner.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
 
@@ -244,6 +245,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
+      <Corner onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
       <IntakeLine onOpen={() => goArea('receipts')} />

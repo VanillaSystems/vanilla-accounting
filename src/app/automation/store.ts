@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import { api, errorText, STATIC_EXPORT } from '../lib/api.js';
 import { t } from '../i18n/index.js';
-import type { AutomationView, RunDetail } from '../../workflows/model.js';
+import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 
 interface State { view?: AutomationView; error?: string }
 
@@ -62,3 +62,11 @@ export function useRun(id: string, rev: string | undefined): { data?: RunDetail;
 
 /** The view as last fetched, for code outside React (an area's key handler). */
 export const automationNow = (): AutomationView | undefined => state.view;
+
+/** POST /api/automation, then a poll at once, so the screens show the command's effect without waiting for the next tick. */
+export async function automationCommand(cmd: AutomationCommand): Promise<CommandResult> {
+  const result = await api.automationCommand(cmd);
+  clearTimeout(timer);
+  await poll();
+  return result;
+}

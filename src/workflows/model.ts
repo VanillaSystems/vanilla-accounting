@@ -207,17 +207,109 @@ export function buttonsFor(ws: readonly WorkflowDecl[], kind: ItemKind): Array<{
 }
 
 // ---------------------------------------------------------------------------------------------
-// What GET /api/automation answers (read-only until the engine runs in the server)
+// Runs: the only stored state of the automation (one JSON per run, saved after every step)
 // ---------------------------------------------------------------------------------------------
 
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'parked' | 'stuck' | 'done' | 'discarded';
+
+/** Why a queued run does not run yet. */
+export type QueueReason = 'slot' | 'ai-slot' | 'lane' | 'paused' | 'busy';
+
+/** A run's state: one variant per thing the screens tell apart. `at` is the step the run is on. */
+export type RunState =
+  | { status: 'queued'; at: string; since: string; reason?: QueueReason }
+  | { status: 'running'; at: string; since: string }
+  | { status: 'waiting'; at: string; since: string }
+  | { status: 'parked'; at: string; since: string; until: { event: string } | { time: string } }
+  | { status: 'stuck'; at: string; since: string; reason: string }
+  | { status: 'done'; finishedAt: string }
+  | { status: 'discarded'; at: string; reason: string };
+
+/** The legal moves of a run: every change of state goes through transition(), so an illegal move throws instead of writing a broken run. */
+export const MOVES: Record<RunStatus, readonly RunStatus[]> = {
+  queued: ['running', 'queued', 'discarded'],
+  running: ['running', 'queued', 'waiting', 'parked', 'stuck', 'done', 'discarded'],
+  waiting: ['queued', 'done', 'discarded'],
+  parked: ['queued', 'done', 'discarded'],
+  stuck: ['queued', 'discarded'],
+  done: ['discarded'],
+  discarded: [],
+};
+
+export class RunStateError extends Error {}
+
+export function transition(run: Run, next: RunState): Run {
+  if (!MOVES[run.state.status].includes(next.status)) throw new RunStateError(`${run.id}: ${run.state.status} → ${next.status} is not a legal move`);
+  return { ...run, state: next };
+}
+
+export interface LlmCall { promptSha: string; answer: string }
+
+export interface EffectRecord {
+  effect: string;
+  /** `${workflow}:${item}:${step}`: an effect a run already applied is skipped on any rerun. */
+  key: string;
+  applied: boolean;
+  /** What it wrote, by record id: the books' link back to the run, and Änderungen's join key. */
+  wrote: Partial<Record<'entries' | 'mappings' | 'receipts', string[]>>;
+  /** In a dry run or a replay: what it would have written, checked by the write door but not saved. */
+  would?: unknown;
+  /** The write door refused it (a closed period, an unbalanced entry): shown in a replay instead of written. */
+  refused?: string;
+}
+
+export interface StepRecord {
+  step: string;
+  startedAt: string;
+  finishedAt?: string;
+  /** What it read, in short ("transaction: BT-…, 412.35"). */
+  input: Record<string, string>;
+  outcome?: string;
+  output?: Record<string, unknown>;
+  llm: LlmCall[];
+  effects: EffectRecord[];
+  error?: string;
+  /** A person's answer to the step's task. */
+  answer?: { outcome: string; at: string };
+}
+
+export type StartedBy =
+  | { kind: 'manual' }
+  | { kind: 'event'; name: string; run: string }
+  | { kind: 'schedule'; cron: string }
+  | { kind: 'outside'; file: string }
+  | { kind: 'parent'; run: string; step: string }
+  | { kind: 'replay'; of: string };
+
+export interface Run {
+  schema: 2;
+  id: string;
+  workflow: string;
+  /** The declaration version it runs on. */
+  version: string;
+  item: ItemRef;
+  /** live writes through the write door; dry and replay check the same writes and save none. */
+  mode: 'live' | 'dry' | 'replay';
+  startedBy: StartedBy;
+  startedAt: string;
+  state: RunState;
+  /** Append-only: one record per executed step. Finished records never change. */
+  steps: StepRecord[];
+}
+
+/** What a step can read: the outputs of the steps before it, in order. Derived, never stored twice. */
+export const outputsOf = (run: Run): Record<string, unknown> => Object.assign({}, ...run.steps.map((s) => s.output ?? {}));
+
+// ---------------------------------------------------------------------------------------------
+// What GET /api/automation answers, all derived from runs and declarations
+// ---------------------------------------------------------------------------------------------
 
 /** A run in a list: where it went and where it is, without its step records. */
 export interface RunSummary {
   id: string;
   workflow: string;
   item: ItemRef;
-  mode: 'live' | 'replay' | 'dry';
+  mode: Run['mode'];
   startedAt: string;
   finishedAt?: string;
   status: RunStatus;
@@ -227,19 +319,51 @@ export interface RunSummary {
   at?: string;
   /** Why it stopped, when it is stuck. */
   error?: string;
+  reason?: QueueReason;
 }
 
-export interface RunStepView {
+export function summaryOf(run: Run): RunSummary {
+  const s = run.state;
+  return {
+    id: run.id, workflow: run.workflow, item: run.item, mode: run.mode, startedAt: run.startedAt,
+    ...(s.status === 'done' ? { finishedAt: s.finishedAt } : {}),
+    status: s.status, path: run.steps.map((r) => r.step),
+    ...('at' in s && s.status !== 'discarded' ? { at: s.at } : {}),
+    ...(s.status === 'stuck' ? { error: s.reason } : s.status === 'discarded' ? { error: s.reason } : {}),
+    ...(s.status === 'queued' && s.reason ? { reason: s.reason } : {}),
+  };
+}
+
+export interface RunDetail extends RunSummary { steps: StepRecord[] }
+
+/** A task: a waiting run seen from the person it waits for. Never stored on its own. */
+export interface Task {
+  run: string;
+  workflow: string;
   step: string;
-  outcome?: string;
-  error?: string;
-  output?: Record<string, unknown>;
-  /** How many model answers the step recorded. */
-  llm: number;
-  effects: Array<{ effect: string; applied: boolean }>;
+  item: ItemRef;
+  title: Text;
+  why?: Text;
+  do?: TaskDecl['do'];
+  due?: string;
+  since: string;
+  /** The person step's outcomes: the task's buttons. */
+  outcomes: string[];
 }
 
-export interface RunDetail extends RunSummary { steps: RunStepView[]; of?: string }
+export function taskOf(w: WorkflowDecl, run: Run): Task | undefined {
+  if (run.state.status !== 'waiting') return undefined;
+  const step = stepOf(w, run.state.at);
+  if (step?.body.kind !== 'person') return undefined;
+  const task = step.body.task;
+  return {
+    run: run.id, workflow: w.id, step: step.id, item: run.item, title: task.title, ...(task.why ? { why: task.why } : {}),
+    ...(task.do ? { do: task.do } : {}), ...(task.due ? { due: task.due } : {}), since: run.state.since, outcomes: Object.keys(step.outcomes),
+  };
+}
+
+/** "{transaction}" in a task text becomes the run's item. */
+export const fillTask = (text: string, item: ItemRef): string => text.replace(/\{[a-z]+\}/g, item.id);
 
 export interface AutomationView {
   /** Changes whenever a declaration or a run changed: the poll sends it back as `since`. */
@@ -249,4 +373,31 @@ export interface AutomationView {
   warnings: Array<{ workflow: string; message: string }>;
   /** Newest first. */
   runs: RunSummary[];
+  tasks: Task[];
+  paused: boolean;
+  limits: { ai: number; other: number };
 }
+
+/** The status corner (views.md "Status, top right"): exactly three states. */
+export type Corner = { kind: 'running'; count: number } | { kind: 'needs-you'; count: number } | { kind: 'quiet' };
+
+export function corner(v: AutomationView): Corner {
+  const running = v.runs.filter((r) => r.status === 'running' || r.status === 'queued').length;
+  if (running) return { kind: 'running', count: running };
+  return v.tasks.length ? { kind: 'needs-you', count: v.tasks.length } : { kind: 'quiet' };
+}
+
+/** The dock badge of Automatisierung: what waits for a person, and what is stuck. */
+export const openCount = (v: AutomationView): number => v.tasks.length + v.runs.filter((r) => r.status === 'stuck').length;
+
+export type AutomationCommand =
+  | { kind: 'start'; workflow: string; item: ItemRef; mode?: 'live' | 'dry' }
+  | { kind: 'answer'; run: string; outcome: string }
+  | { kind: 'resume'; run: string }
+  | { kind: 'replay'; run: string }
+  | { kind: 'discard'; run: string; reason?: string }
+  | { kind: 'pause'; on: boolean };
+
+export type CommandResult =
+  | { ok: true; run?: string }
+  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal'; detail?: string };

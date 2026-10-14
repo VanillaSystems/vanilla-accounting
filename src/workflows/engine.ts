@@ -1,0 +1,414 @@
+/**
+ * The workflow engine (docs/0.4.0/ui/design.md, "The engine is one state machine"): the one place
+ * a run moves. advance() executes one step and saves the run; pump() picks queued runs within the
+ * slots (two AI steps, four others at a time) and lanes, and drives each to rest: done, waiting
+ * for a person, parked for an event, or stuck. Every state change goes through transition(), every
+ * write to the books through update() with the run as actor, so a crash or a rerun never books
+ * twice. Events a finished run emits start the workflows that listen; schedules start theirs.
+ */
+import { createHash, randomBytes } from 'node:crypto';
+import { loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import type { AskOptions } from '../llm/ask.js';
+import type { BankTransaction, JournalEntry } from '../types/index.js';
+import type { Workspace } from '../workspace/workspace.js';
+import { ACTIONS, type Effects } from './actions.js';
+import { cronMatches } from './cron.js';
+import { loadWorkflows, type Loaded } from './load.js';
+import {
+  outputsOf, stepOf, transition,
+  type AutomationCommand, type CommandResult, type EffectRecord, type ItemRef, type QueueReason, type Run, type RunState, type StartedBy, type StepRecord, type WorkflowDecl,
+} from './model.js';
+import { listRuns, saveRun } from './store.js';
+
+export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
+
+export interface EngineDeps {
+  appRoot: string;
+  /** The model, when one is ready; asked for each AI step, so a model set up later is used at once. */
+  ask?: () => Promise<Ask | undefined>;
+  now?: () => string;
+  limits?: { ai: number; other: number };
+  /** A company version of a workflow runs live only when approved; the app's are approved by definition. */
+  isApproved?: (w: WorkflowDecl) => boolean;
+  /** Called once a run came to rest (done, waiting, parked, stuck, discarded): the records path commits here. */
+  onRest?: (run: Run) => void;
+  /** Takes the workspace's one-writer lock for a step that writes; throws when another process holds it. */
+  lock?: () => () => void;
+}
+
+export interface Engine {
+  declarations(): Loaded;
+  runs(): Run[];
+  run(id: string): Run | undefined;
+  readonly paused: boolean;
+  readonly limits: { ai: number; other: number };
+  /** Bumped on every change of a run, so a poll can answer "unchanged". */
+  readonly counter: number;
+  command(cmd: AutomationCommand): Promise<CommandResult>;
+  start(workflow: string, item: ItemRef, by: StartedBy, mode?: Run['mode']): Promise<CommandResult>;
+  /** Starts the scheduled workflows whose cron matches this minute. */
+  tick(at?: Date): Promise<void>;
+  /** Resolves when no run is running or queued (for tests and the CLI). */
+  idle(): Promise<void>;
+}
+
+const MAX_HOPS = 50;
+const sha = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16);
+const short = (v: unknown): string => {
+  if (v === undefined) return '';
+  if (typeof v !== 'object' || v === null) return String(v).slice(0, 80);
+  if (Array.isArray(v)) return `${v.length} ×`;
+  const o = v as Record<string, unknown>;
+  return ['ref', 'id', 'date', 'amount', 'description'].filter((k) => o[k] !== undefined).map((k) => String(o[k])).join(', ').slice(0, 80) || `{${Object.keys(o).slice(0, 4).join(', ')}}`;
+};
+
+export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
+  const now = deps.now ?? (() => new Date().toISOString());
+  const limits = deps.limits ?? { ai: 2, other: 4 };
+  const isApproved = deps.isApproved ?? ((w: WorkflowDecl) => w.origin === 'app');
+  const runs = new Map(listRuns(ws).map((r) => [r.id, r]));
+  let declared = loadWorkflows(deps.appRoot, ws.paths.root);
+  let paused = false;
+  let counter = 0;
+  const active = new Set<string>();
+  /** A run that found the one-writer lock taken tries again after this time. */
+  const retryAt = new Map<string, number>();
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let waiters: Array<() => void> = [];
+
+  const workflow = (id: string) => declared.workflows.find((w) => w.id === id);
+  const save = (run: Run) => { runs.set(run.id, run); saveRun(ws, run); counter++; };
+  const move = (run: Run, next: RunState): Run => { const r = transition(run, next); save(r); return r; };
+
+  // A run the process left running when it stopped goes back into the queue at its step.
+  for (const r of runs.values()) if (r.state.status === 'running') move(r, { status: 'queued', at: r.state.at, since: now() });
+
+  const settle = (run: Run) => {
+    if (['done', 'waiting', 'parked', 'stuck', 'discarded'].includes(run.state.status)) deps.onRest?.(run);
+  };
+
+  /** The slot a queued run needs: an AI slot when its next step is an AI step. */
+  const slotOf = (run: Run): 'ai' | 'other' => {
+    const w = workflow(run.workflow);
+    const at = 'at' in run.state ? run.state.at : undefined;
+    return w && at && stepOf(w, at)?.kind === 'agent' ? 'ai' : 'other';
+  };
+  const laneOf = (run: Run, books: Books): string | undefined => {
+    const w = workflow(run.workflow);
+    if (w?.lane !== 'account' || run.item.kind !== 'transaction') return undefined;
+    return `${w.id}:${books.transactions.find((t) => t.ref === run.item.id)?.bank ?? '?'}`;
+  };
+
+  function pump(): void {
+    if (paused) { notifyIdle(); return; }
+    const books = loadBooks(ws);
+    const busy = { ai: 0, other: 0 };
+    const lanes = new Set<string>();
+    for (const id of active) {
+      const r = runs.get(id)!;
+      busy[slotOf(r)]++;
+      const lane = laneOf(r, books);
+      if (lane) lanes.add(lane);
+    }
+    const queued = [...runs.values()].filter((r) => r.state.status === 'queued' && !active.has(r.id) && (retryAt.get(r.id) ?? 0) <= Date.now()).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    const later = [...retryAt.values()].filter((t) => t > Date.now());
+    clearTimeout(retryTimer);
+    if (later.length) retryTimer = setTimeout(pump, Math.min(...later) - Date.now());
+    for (const r of queued) {
+      const slot = slotOf(r);
+      const lane = laneOf(r, books);
+      const reason: QueueReason | undefined = busy[slot] >= limits[slot] ? (slot === 'ai' ? 'ai-slot' : 'slot') : lane && lanes.has(lane) ? 'lane' : undefined;
+      if (reason) {
+        if (r.state.status === 'queued' && r.state.reason !== reason) move(r, { ...r.state, reason });
+        continue;
+      }
+      busy[slot]++;
+      if (lane) lanes.add(lane);
+      active.add(r.id);
+      void drive(r.id).finally(() => { active.delete(r.id); pump(); });
+    }
+    notifyIdle();
+  }
+
+  function notifyIdle() {
+    if (active.size || [...runs.values()].some((r) => r.state.status === 'queued' && !paused && r.state.reason !== 'busy')) return;
+    const w = waiters;
+    waiters = [];
+    for (const f of w) f();
+  }
+
+  /** Runs `id` step by step until it comes to rest. */
+  async function drive(id: string): Promise<void> {
+    let run = runs.get(id)!;
+    if (run.state.status !== 'queued') return;
+    retryAt.delete(id);
+    run = move(run, { status: 'running', at: run.state.at, since: now() });
+    for (let hops = 0; run.state.status === 'running'; hops++) {
+      if (hops >= MAX_HOPS) { run = move(run, { status: 'stuck', at: run.state.at, since: now(), reason: `more than ${MAX_HOPS} steps in one go` }); break; }
+      run = await advance(run);
+    }
+    settle(run);
+    if (run.state.status === 'done' && run.mode === 'live') await emitFrom(run);
+    if (run.state.status === 'done' || run.state.status === 'stuck' || run.state.status === 'discarded') await childRested(run);
+  }
+
+  /** One step of a running run, saved before it returns. */
+  async function advance(run: Run): Promise<Run> {
+    const state = run.state as Extract<RunState, { status: 'running' }>;
+    const w = workflow(run.workflow);
+    if (!w) return move(run, { status: 'stuck', at: state.at, since: now(), reason: `the workflow ${run.workflow} no longer loads` });
+    const step = stepOf(w, state.at);
+    if (!step) return move(run, { status: 'stuck', at: state.at, since: now(), reason: `${w.id} has no step ${state.at}` });
+    const body = step.body;
+    const books = loadBooks(ws);
+    const available: Record<string, unknown> = { ...outputsOf(run), books, item: run.item, [run.item.kind]: itemValue(run.item, books) };
+    const input = Object.fromEntries(step.reads.map((k) => [k, short(available[k])]));
+    const record: StepRecord = { step: step.id, startedAt: now(), input, llm: [], effects: [] };
+
+    if (body.kind === 'person') return move({ ...run, steps: [...run.steps, record] }, { status: 'waiting', at: step.id, since: now() });
+    if (body.kind === 'wait') {
+      const until = body.timeout ? { time: plusDuration(now(), body.timeout.after) } : { event: body.for };
+      return move({ ...run, steps: [...run.steps, record] }, { status: 'parked', at: step.id, since: now(), until });
+    }
+    if (body.kind === 'call') return call(run, w, step, record, available);
+    if (body.kind === 'code') return move({ ...run, steps: [...run.steps, { ...record, error: 'a step of its own code does not run yet' }] }, { status: 'stuck', at: step.id, since: now(), reason: 'run.ts steps do not run yet' });
+
+    const action = ACTIONS[body.uses];
+    if (!action?.run) return move({ ...run, steps: [...run.steps, { ...record, error: `${body.uses} is not built yet` }] }, { status: 'stuck', at: step.id, since: now(), reason: `${body.uses} is not built yet` });
+    if (run.item.kind === 'transaction' && step.reads.includes('transaction') && available.transaction === undefined) {
+      return move({ ...run, steps: [...run.steps, { ...record, error: `no transaction ${run.item.id}` }] }, { status: 'stuck', at: step.id, since: now(), reason: `the transaction ${run.item.id} is gone` });
+    }
+    const inputs = Object.fromEntries(step.reads.map((k) => [k, available[k]]));
+    const recorded = run.mode === 'replay' ? recordedAnswers(run) : undefined;
+    const model = recorded ?? (deps.ask ? await deps.ask() : undefined);
+    const ask = model && (async (prompt: string, opts: AskOptions) => {
+      const answer = await model(prompt, opts);
+      record.llm.push({ promptSha: sha(prompt), answer });
+      return answer;
+    });
+    const effects = effectHandles(run, w, step.id, step.effects, record);
+    let release: (() => void) | undefined;
+    if (step.effects.length && run.mode === 'live' && deps.lock) {
+      try {
+        release = deps.lock();
+      } catch {
+        retryAt.set(run.id, Date.now() + 5000);
+        return move(run, { status: 'queued', at: step.id, since: now(), reason: 'busy' });
+      }
+    }
+    try {
+      const result = await action.run(inputs, effects, { ws, ask });
+      record.outcome = result.outcome;
+      const output = result.output ?? {};
+      const extra = Object.keys(output).filter((k) => !step.emits.includes(k));
+      if (extra.length) throw new Error(`returned ${extra.join(', ')}, which ${step.id}/step.yaml does not emit`);
+      if (Object.keys(output).length) record.output = output;
+    } catch (e) {
+      const message = String(e instanceof Error ? e.message : e);
+      return move({ ...run, steps: [...run.steps, { ...record, error: message, finishedAt: now() }] }, { status: 'stuck', at: step.id, since: now(), reason: message });
+    } finally {
+      release?.();
+    }
+    const done = { ...run, steps: [...run.steps, { ...record, finishedAt: now() }] };
+    const target = step.outcomes[record.outcome!];
+    if (!target) return move(done, { status: 'stuck', at: step.id, since: now(), reason: `outcome ${record.outcome} of ${step.id} leads nowhere` });
+    return move(done, target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
+  }
+
+  /** The handles a step may write through. ledger.book books through the write door; a dry run or a replay checks the same booking on a copy and saves nothing. */
+  function effectHandles(run: Run, w: WorkflowDecl, step: string, declared: string[], record: StepRecord): Effects {
+    const effects: Effects = {};
+    if (!declared.includes('ledger.book')) return effects;
+    const actor: Actor = { kind: 'run', id: run.id, workflow: w.id };
+    const key = `${w.id}:${run.item.id}:${step}`;
+    effects['ledger.book'] = (entries: JournalEntry[]) => {
+      const stamped = entries.map((e) => ({ ...e, run: run.id }));
+      const before = [...runs.values()].some((r) => r.mode === 'live' && r.steps.some((s) => s.effects.some((x) => x.key === key && x.applied)));
+      if (run.mode !== 'live') {
+        const copy = structuredClone(loadBooks(ws));
+        let refused: string | undefined;
+        try { update(copy, actor, (b) => { b.journalEntries.push(...stamped); }); } catch (e) { refused = (e as Error).message; }
+        record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {}, would: stamped, ...(refused ? { refused } : {}) });
+        return;
+      }
+      if (before) { record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {} }); return; }
+      const books = loadBooks(ws);
+      const ref = run.item.kind === 'transaction' ? run.item.id : undefined;
+      const applied = update(books, actor, (b) => {
+        if (ref && b.journalEntries.some((e) => e.transactionRef === ref)) return false;
+        b.journalEntries.push(...stamped);
+        return true;
+      });
+      if (applied) saveBooks(ws, books);
+      const rec: EffectRecord = { effect: 'ledger.book', key, applied, wrote: applied ? { entries: stamped.map((e) => e.id) } : {} };
+      record.effects.push(rec);
+    };
+    return effects;
+  }
+
+  /** A call step: one child run per element of `forEach` (or one for the run's item); the parent parks until all children rest. */
+  async function call(run: Run, w: WorkflowDecl, step: WorkflowDecl['steps'][number], record: StepRecord, available: Record<string, unknown>): Promise<Run> {
+    const body = step.body as { kind: 'call'; workflow: string };
+    const called = workflow(body.workflow);
+    if (!called?.runnable.ok) return move({ ...run, steps: [...run.steps, { ...record, error: `${body.workflow} cannot run yet` }] }, { status: 'stuck', at: step.id, since: now(), reason: `${body.workflow} cannot run yet` });
+    const items = step.forEach ? (available[step.forEach] as ItemRef[] | undefined) ?? [] : [run.item];
+    const parked = move({ ...run, steps: [...run.steps, record] }, { status: 'parked', at: step.id, since: now(), until: { event: `children:${run.id}` } });
+    if (!items.length) return childRested(parked).then(() => runs.get(run.id)!);
+    for (const item of items) await create(called, item, { kind: 'parent', run: run.id, step: step.id }, run.mode);
+    return parked;
+  }
+
+  /** When the last child of a parked parent comes to rest, the parent goes on with outcome done. */
+  async function childRested(child: Run): Promise<void> {
+    const parentId = child.startedBy.kind === 'parent' ? child.startedBy.run : child.state.status === 'parked' && 'until' in child.state && 'event' in child.state.until && child.state.until.event === `children:${child.id}` ? child.id : undefined;
+    if (!parentId) return;
+    const parent = runs.get(parentId);
+    if (!parent || parent.state.status !== 'parked') return;
+    const children = [...runs.values()].filter((r) => r.startedBy.kind === 'parent' && r.startedBy.run === parentId);
+    if (children.some((c) => !['done', 'stuck', 'discarded'].includes(c.state.status))) return;
+    const w = workflow(parent.workflow)!;
+    const step = stepOf(w, parent.state.at)!;
+    const target = step.outcomes.done;
+    const steps = parent.steps.map((s, i) => (i === parent.steps.length - 1 ? { ...s, outcome: 'done', finishedAt: now() } : s));
+    if (!target) { settle(move({ ...parent, steps }, { status: 'stuck', at: step.id, since: now(), reason: `outcome done of ${step.id} leads nowhere` })); return; }
+    if (target.to === 'end') { settle(move({ ...parent, steps }, { status: 'done', finishedAt: now() })); return; }
+    move({ ...parent, steps }, { status: 'queued', at: target.step, since: now() });
+    pump();
+  }
+
+  /** Every workflow listening to an event the finished run emits starts a run for the same item. */
+  async function emitFrom(run: Run): Promise<void> {
+    const w = workflow(run.workflow);
+    for (const name of w?.emits ?? []) {
+      for (const l of declared.workflows) {
+        if (!l.runnable.ok || !isApproved(l)) continue;
+        if (l.triggers.some((t) => t.kind === 'event' && t.name === name && !t.off)) await create(l, run.item, { kind: 'event', name, run: run.id }, 'live');
+      }
+      for (const p of [...runs.values()].filter((r) => r.state.status === 'parked' && 'until' in r.state && 'event' in r.state.until && r.state.until.event === name && r.item.id === run.item.id)) {
+        const pw = workflow(p.workflow);
+        const step = pw && stepOf(pw, (p.state as { at: string }).at);
+        const target = step?.outcomes.arrived;
+        if (target) move(p, target.to === 'end' ? { status: 'queued', at: step.id, since: now() } : { status: 'queued', at: target.step, since: now() });
+      }
+    }
+    pump();
+  }
+
+  async function create(w: WorkflowDecl, item: ItemRef, by: StartedBy, mode: Run['mode']): Promise<Run> {
+    const run: Run = {
+      schema: 2, id: `${w.id}-${randomBytes(4).toString('hex')}`, workflow: w.id, version: w.version, item, mode, startedBy: by,
+      startedAt: now(), state: { status: 'queued', at: w.start, since: now() }, steps: [],
+    };
+    save(run);
+    pump();
+    return run;
+  }
+
+  /** The model answers a replay gives: the recorded ones, in order. */
+  function recordedAnswers(run: Run): Ask | undefined {
+    if (run.startedBy.kind !== 'replay') return undefined;
+    const of = runs.get(run.startedBy.of);
+    const answers = (of?.steps ?? []).flatMap((s) => s.llm.map((c) => c.answer));
+    const used = run.steps.reduce((n, s) => n + s.llm.length, 0);
+    let i = used;
+    return async () => {
+      if (i >= answers.length) throw new Error(`run ${run.startedBy.kind === 'replay' ? run.startedBy.of : ''} recorded no further model answer`);
+      return answers[i++];
+    };
+  }
+
+  function itemValue(item: ItemRef, books: Books): unknown {
+    if (item.kind === 'transaction') return books.transactions.find((t: BankTransaction) => t.ref === item.id);
+    if (item.kind === 'entry') return books.journalEntries.find((e) => e.id === item.id);
+    if (item.kind === 'receipt') return books.receipts.find((r) => r.id === item.id);
+    return item.id;
+  }
+
+  async function start(id: string, item: ItemRef, by: StartedBy, mode: Run['mode'] = 'live'): Promise<CommandResult> {
+    declared = loadWorkflows(deps.appRoot, ws.paths.root);
+    const w = workflow(id);
+    if (!w) return { ok: false, refusal: 'not-found', detail: id };
+    if (!w.runnable.ok) return { ok: false, refusal: 'not-runnable', detail: w.runnable.missing.map((m) => m.action).join(', ') };
+    if (mode === 'live' && !isApproved(w)) return { ok: false, refusal: 'not-approved', detail: w.version };
+    const run = await create(w, item, by, mode);
+    return { ok: true, run: run.id };
+  }
+
+  async function command(cmd: AutomationCommand): Promise<CommandResult> {
+    switch (cmd.kind) {
+      case 'start': return start(cmd.workflow, cmd.item, { kind: 'manual' }, cmd.mode ?? 'live');
+      case 'pause': paused = cmd.on; counter++; pump(); return { ok: true };
+      case 'discard': {
+        const r = runs.get(cmd.run);
+        if (!r) return { ok: false, refusal: 'not-found' };
+        try { settle(move(r, { status: 'discarded', at: now(), reason: cmd.reason ?? 'discarded by a person' })); } catch { return { ok: false, refusal: 'illegal' }; }
+        return { ok: true, run: r.id };
+      }
+      case 'resume': {
+        const r = runs.get(cmd.run);
+        if (!r) return { ok: false, refusal: 'not-found' };
+        if (r.state.status !== 'stuck' && r.state.status !== 'parked') return { ok: false, refusal: 'illegal', detail: r.state.status };
+        declared = loadWorkflows(deps.appRoot, ws.paths.root);
+        move(r, { status: 'queued', at: r.state.at, since: now() });
+        pump();
+        return { ok: true, run: r.id };
+      }
+      case 'answer': {
+        const r = runs.get(cmd.run);
+        if (!r) return { ok: false, refusal: 'not-found' };
+        if (r.state.status !== 'waiting') return { ok: false, refusal: 'not-waiting' };
+        const w = workflow(r.workflow)!;
+        const step = stepOf(w, r.state.at)!;
+        const target = step.outcomes[cmd.outcome];
+        if (!target) return { ok: false, refusal: 'unknown-outcome', detail: Object.keys(step.outcomes).join(', ') };
+        const at = now();
+        const steps = r.steps.map((s, i) => (i === r.steps.length - 1 ? { ...s, outcome: cmd.outcome, answer: { outcome: cmd.outcome, at }, finishedAt: at } : s));
+        if (target.to === 'end') {
+          const finished = move({ ...r, steps }, { status: 'done', finishedAt: at });
+          settle(finished);
+          if (finished.mode === 'live') await emitFrom(finished);
+          await childRested(finished);
+        } else {
+          move({ ...r, steps }, { status: 'queued', at: target.step, since: at });
+          pump();
+        }
+        return { ok: true, run: r.id };
+      }
+      case 'replay': {
+        const r = runs.get(cmd.run);
+        if (!r) return { ok: false, refusal: 'not-found' };
+        return start(r.workflow, r.item, { kind: 'replay', of: r.id }, 'replay');
+      }
+    }
+  }
+
+  async function tick(at = new Date()): Promise<void> {
+    declared = loadWorkflows(deps.appRoot, ws.paths.root);
+    for (const w of declared.workflows) {
+      if (!w.runnable.ok || !isApproved(w)) continue;
+      for (const t of w.triggers) if (t.kind === 'schedule' && !t.off && cronMatches(t.cron, at)) await create(w, { kind: 'company', id: 'company' }, { kind: 'schedule', cron: t.cron }, 'live');
+    }
+  }
+
+  pump();
+  return {
+    declarations: () => declared,
+    runs: () => [...runs.values()],
+    run: (id) => runs.get(id),
+    get paused() { return paused; },
+    limits,
+    get counter() { return counter; },
+    command,
+    start,
+    tick,
+    idle: () => new Promise<void>((resolve) => { waiters.push(resolve); notifyIdle(); }),
+  };
+}
+
+/** An ISO duration (P30D, PT5M) added to an ISO time. */
+export function plusDuration(iso: string, duration: string): string {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/.exec(duration);
+  if (!m) return iso;
+  const ms = ((Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0)) * 60_000;
+  return new Date(Date.parse(iso) + ms).toISOString();
+}

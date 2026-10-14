@@ -4,9 +4,11 @@ import type { AreaId } from './route.js';
 import { t } from '../i18n/index.js';
 import { dispatchBar } from './bars.js';
 import { Fold } from './Fold.js';
+import { useAutomation } from '../automation/store.js';
 
 /** The areas at the bottom: an icon, its label, a badge, and a tooltip with its G + letter; folded, a pill with the current area. */
 export function Dock({ current, books, keys, href, onGo }: { current: AreaId; books: Index; keys: boolean; href(area: AreaId): string; onGo(area: AreaId): void }) {
+  useAutomation();
   const marked = AREAS[current].dockAs ?? current;
   const open = AREAS[marked];
   const count = open.dock?.badge?.(books) || 0;

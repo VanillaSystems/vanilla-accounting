@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { app, READONLY } from './api.js';
 import { closeBrowser } from '../invoices/pdf.js';
+import { engine } from './routes/automation.js';
 
 // PORT=0 lets the system choose. Without VANILLA_API_HOST the server listens on every interface,
 // so the phone app reaches it on the LAN.
@@ -27,6 +28,12 @@ function listening() {
   }
   console.log();
 }
+
+// The minute clock of the workflows' schedule triggers, aligned to the full minute.
+setTimeout(() => {
+  void engine().tick();
+  setInterval(() => void engine().tick(), 60_000).unref();
+}, 60_000 - (Date.now() % 60_000)).unref();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => { void closeBrowser().finally(() => process.exit(0)); });

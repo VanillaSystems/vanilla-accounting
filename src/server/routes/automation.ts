@@ -1,44 +1,45 @@
 /**
- * Automatisierung over HTTP (docs/0.4.0/ui/design.md): the declarations and the stored runs, read
- * only until the engine runs in the server. GET /api/automation?since=<rev> answers
- * { unchanged: true } when nothing moved, so the browser's poll is cheap.
+ * Automatisierung over HTTP (docs/0.4.0/ui/design.md): one engine per workspace in this process,
+ * the only writer of runs while the server is up (the CLI sends its commands here).
+ *
+ *   GET  /api/automation?since=<rev>   the view, or { unchanged: true } when nothing moved
+ *   GET  /api/automation/runs/:id      one run with its step records
+ *   POST /api/automation               an AutomationCommand → CommandResult
  */
 import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { RequestError, WS } from '../books.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
+import { askIfReady } from '../../intake/run.js';
+import { lockIntake } from '../../intake/pipeline.js';
+import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import type { AutomationView, RunDetail, RunSummary } from '../../workflows/model.js';
-import type { Run } from '../../workflows/runner.js';
-import { listRuns } from '../../workflows/store.js';
+import { summaryOf, taskOf, type AutomationCommand, type AutomationView, type RunDetail, type Task } from '../../workflows/model.js';
 
 export const router = Router();
 
-function summaryOf(r: Run): RunSummary {
-  const last = r.steps.at(-1);
-  return {
-    id: r.id, workflow: r.workflow, item: { kind: r.item.kind, id: r.item.ref }, mode: r.mode,
-    startedAt: r.startedAt, ...(r.finishedAt ? { finishedAt: r.finishedAt } : {}), status: r.status,
-    path: r.steps.map((s) => s.step), ...(last ? { at: last.step } : {}),
-    ...(r.status === 'stuck' && last?.error ? { error: last.error } : {}),
-  };
-}
+const engines = new Map<string, Engine>();
 
-function detailOf(r: Run): RunDetail {
-  return {
-    ...summaryOf(r), ...(r.of ? { of: r.of } : {}),
-    steps: r.steps.map((s) => ({
-      step: s.step, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.error ? { error: s.error } : {}), ...(s.output ? { output: s.output } : {}),
-      llm: s.llm.length, effects: s.effects.map((e) => ({ effect: e.effect, applied: e.applied })),
-    })),
-  };
+/** The engine of the open workspace; a workspace opened later gets its own. */
+export function engine(): Engine {
+  const ws = WS;
+  let e = engines.get(ws.paths.root);
+  if (!e) {
+    e = openEngine(ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws) });
+    engines.set(ws.paths.root, e);
+  }
+  return e;
 }
 
 export function automationView(): AutomationView {
+  const e = engine();
   const loaded = loadWorkflows(APP_ROOT, WS.paths.root);
-  const runs = listRuns(WS).reverse().map(summaryOf);
-  const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, runs.map((r) => [r.id, r.status, r.path.length])])).digest('hex').slice(0, 16);
-  return { rev, ...loaded, runs };
+  const runs = e.runs();
+  const byId = new Map(loaded.workflows.map((w) => [w.id, w]));
+  const tasks = runs.map((r) => (byId.has(r.workflow) ? taskOf(byId.get(r.workflow)!, r) : undefined)).filter((t): t is Task => !!t);
+  const summaries = runs.map(summaryOf).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
+  const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused])).digest('hex').slice(0, 16);
+  return { rev, ...loaded, runs: summaries, tasks, paused: e.paused, limits: e.limits };
 }
 
 router.get('/api/automation', (req, res) => {
@@ -47,7 +48,17 @@ router.get('/api/automation', (req, res) => {
 });
 
 router.get('/api/automation/runs/:id', (req, res) => {
-  const run = listRuns(WS).find((r) => r.id === req.params.id);
+  const run = engine().run(req.params.id);
   if (!run) throw new RequestError(404, `Lauf ${req.params.id} gibt es nicht.`);
-  res.json(detailOf(run));
+  const detail: RunDetail = { ...summaryOf(run), steps: run.steps };
+  res.json(detail);
+});
+
+const KINDS = new Set(['start', 'answer', 'resume', 'replay', 'discard', 'pause']);
+
+router.post('/api/automation', async (req, res) => {
+  const cmd = req.body as AutomationCommand;
+  if (!cmd || typeof cmd !== 'object' || !KINDS.has(cmd.kind)) throw new RequestError(400, 'Unbekannter Befehl.');
+  if (cmd.kind === 'start' && (typeof cmd.workflow !== 'string' || typeof cmd.item?.id !== 'string' || typeof cmd.item?.kind !== 'string')) throw new RequestError(400, 'start braucht workflow und item.');
+  res.json(await engine().command(cmd));
 });
