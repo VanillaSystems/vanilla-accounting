@@ -170,6 +170,17 @@ export interface InvoicingData {
   exemptions: Record<'abroad' | 'export', BoxId>;
 }
 
+/** setup.yaml: the accounts a new workspace gets from the setup's answers. */
+export interface SetupData {
+  bankAccounts: {
+    byCurrency: Record<string, string>;
+    nextFree: { bank: number; card: number };
+    byClass: Record<string, { type: AccountType; line: string }> & { otherwise: { type: AccountType; line: string } };
+  };
+  owner: Record<string, { account: string; label: string }> & { otherwise: { account: string; label: string } };
+  answers: { payouts: string[]; imports: string[] };
+}
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
@@ -181,4 +192,5 @@ export interface Jurisdiction {
   statements: StatementsData;
   yearEnd: YearEndData;
   invoicing: InvoicingData;
+  setup: SetupData;
 }

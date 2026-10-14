@@ -30,12 +30,15 @@ import { loadInvoices, readPdf } from '../../src/invoices/store.js';
 import { matchPayments } from '../../src/invoices/payments.js';
 import { kaffee } from './kaffee.js';
 import { consulting } from './consulting.js';
-import { vat } from '../../src/engines/index.js';
+import { setJurisdiction, vat } from '../../src/engines/index.js';
+import { loadJurisdiction } from '../../src/core/modules/load.js';
 
 /** Every demo workspace `npm run demo:generate` writes. */
 const DEMOS: readonly Demo[] = [kaffee, consulting];
 
 const APP_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+// The demos are written before any workspace opens: they book with the shipped jurisdiction.
+setJurisdiction(loadJurisdiction(APP_ROOT, 'ch').jurisdiction);
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const hashId = (s: string | Buffer) => createHash('sha256').update(s).digest('hex').slice(0, 16);

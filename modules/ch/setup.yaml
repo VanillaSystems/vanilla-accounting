@@ -1,0 +1,21 @@
+# The accounts a new workspace gets from the setup's answers (src/workspace/scaffold.ts), on the
+# chart of accounts.yaml.
+
+bankAccounts:
+  # The chart's bank account per currency; a further one takes the next free number of its range.
+  byCurrency: { CHF: "1020", EUR: "1021", USD: "1022" }
+  nextFree: { bank: 1023, card: 2101 }
+  # Where an added account goes, by the class of its number.
+  byClass:
+    "1": { type: asset, line: fluessige-mittel }
+    otherwise: { type: liability, line: kurzfristig-verzinslich }
+
+# The owner's private payments: the private account of an Einzelfirma, else a current account.
+owner:
+  Einzelfirma: { account: "2850", label: Privat }
+  otherwise: { account: "2451", label: Kontokorrent }
+
+# Accounts an answer adds to the chart.
+answers:
+  payouts: ["1093", "6580"]
+  imports: ["4020", "4030", "4040"]

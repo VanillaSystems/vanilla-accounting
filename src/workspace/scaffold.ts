@@ -10,18 +10,19 @@ import { bankKind, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import type { Preset, SupportedAnswers } from './setup.js';
 import { WORKSPACE_SCHEMA } from './schema.js';
-import { MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
+import { APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
+import { loadJurisdiction } from '../core/modules/load.js';
 
-/** The chart's bank accounts per currency (modules/ch/accounts.yaml); a further account takes the next free number. */
-const BANK_BY_CURRENCY: Record<string, string> = { CHF: '1020', EUR: '1021', USD: '1022' };
-const NEXT_FREE = { bank: 1023, card: 2101 } as const;
+/** The shipped jurisdiction a new workspace starts from (no workspace, so no overlay yet). */
+const ch = () => loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 
 /** The ledger account a new bank account books on: the chart's for its currency while free, else the next free one. */
 export function suggestAccount(bank: string, currency: string, taken: ReadonlySet<string>): string {
   const range = bankKind(bank).range;
-  const preferred = range === 'bank' ? BANK_BY_CURRENCY[currency] : undefined;
+  const { byCurrency, nextFree } = ch().setup.bankAccounts;
+  const preferred = range === 'bank' ? byCurrency[currency] : undefined;
   if (preferred && !taken.has(preferred)) return preferred;
-  for (let n = NEXT_FREE[range]; ; n++) if (!taken.has(String(n))) return String(n);
+  for (let n = nextFree[range]; ; n++) if (!taken.has(String(n))) return String(n);
 }
 
 export interface InitInput {
@@ -45,9 +46,9 @@ export interface Plan {
 
 /** The owner's private payments: a current account (GmbH, AG) or the private account (Einzelfirma). */
 function ownerAccount(input: InitInput): LedgerBankAccount {
-  return input.answers.legalForm === 'Einzelfirma'
-    ? { bank: 'manual', currency: 'CHF', account: '2850', label: `Privat ${input.owner}` }
-    : { bank: 'manual', currency: 'CHF', account: '2451', label: `Kontokorrent ${input.owner}` };
+  const { setup, manifest } = ch();
+  const owner = setup.owner[input.answers.legalForm] ?? setup.owner.otherwise;
+  return { bank: 'manual', currency: manifest.baseCurrency, account: owner.account, label: `${owner.label} ${input.owner}` };
 }
 
 export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
@@ -61,16 +62,17 @@ export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
 /** The chart of the profile and legal form, plus what the answers need, with the bank accounts named after their bank. */
 export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   const { sells, legalForm, payouts, imports } = input.answers;
-  const extra = new Set([...(payouts === 'yes' ? ['1093', '6580'] : []), ...(imports === 'yes' ? ['4020', '4030', '4040'] : [])]);
+  const { answers, bankAccounts } = ch().setup;
+  const extra = new Set([...(payouts === 'yes' ? answers.payouts : []), ...(imports === 'yes' ? answers.imports : [])]);
   const base = chartFor(chart, sells, legalForm);
   const byNumber = new Map(base.map((a) => [a.number, a]));
   for (const a of chartFor(chart, 'both', legalForm)) if (extra.has(a.number)) byNumber.set(a.number, a);
   for (const b of bankAccountsOf(input)) {
-    const line = b.account.startsWith('1') ? 'fluessige-mittel' : 'kurzfristig-verzinslich';
+    const added = bankAccounts.byClass[b.account[0]] ?? bankAccounts.byClass.otherwise;
     const known = byNumber.get(b.account);
     byNumber.set(b.account, known && b.bank === 'manual'
       ? known
-      : { number: b.account, name: b.label, type: b.account.startsWith('1') ? 'asset' : 'liability', line: known?.line ?? line });
+      : { number: b.account, name: b.label, type: added.type, line: known?.line ?? added.line });
   }
   return [...byNumber.values()].sort((a, b) => a.number.localeCompare(b.number));
 }

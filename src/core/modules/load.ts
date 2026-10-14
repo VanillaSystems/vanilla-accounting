@@ -7,10 +7,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import type { ChartData, InvoicingData, Jurisdiction, PeriodsData, StatementsData, YearEndData, ModuleManifest, RatesData, ReturnData, TaxCodesData } from './schema.js';
+import type { ChartData, InvoicingData, Jurisdiction, SetupData, PeriodsData, StatementsData, YearEndData, ModuleManifest, RatesData, ReturnData, TaxCodesData } from './schema.js';
 import { checkJurisdiction, type ModuleProblem } from './check.js';
 
-const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', chart: 'chart.yaml', periods: 'periods.yaml', statements: 'statements.yaml', yearEnd: 'year-end.yaml', invoicing: 'invoicing.yaml' } as const;
+const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', chart: 'chart.yaml', periods: 'periods.yaml', statements: 'statements.yaml', yearEnd: 'year-end.yaml', invoicing: 'invoicing.yaml', setup: 'setup.yaml' } as const;
 
 /** Merges an overlay onto a shipped value: maps key by key, `null` (YAML `~`) removes a key, anything else replaces. */
 export function mergeOverlay<T>(shipped: T, overlay: unknown): T {
@@ -67,6 +67,7 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
     statements: part<StatementsData>(FILES.statements, 'statements'),
     yearEnd: part<YearEndData>(FILES.yearEnd, 'yearEnd'),
     invoicing: part<InvoicingData>(FILES.invoicing, 'invoicing'),
+    setup: part<SetupData>(FILES.setup, 'setup'),
   };
   if (overlayManifest) overlaid.push('manifest');
   return {

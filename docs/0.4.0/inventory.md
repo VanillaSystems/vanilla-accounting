@@ -71,7 +71,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/manifest.ts` | CHF 2, QR-bill 7 |
 | `src/workspace/migrate.ts` | ESTV 1 |
 | `src/workspace/reads.ts` | ESTV 1 |
-| `src/workspace/scaffold.ts` | CHF 3, MWST 2, ESTV 1, form 0535 1 |
+| `src/workspace/scaffold.ts` | MWST 2, ESTV 1, form 0535 1 |
 | `src/workspace/setup.ts` | CHF 1, MWST 3, ESTV 2, eCH-0217 2 |
 | `src/workspace/uid.ts` | MWST 2 |
 | `src/workspace/workspace.ts` | ESTV 1 |
