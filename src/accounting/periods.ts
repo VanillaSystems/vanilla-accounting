@@ -48,12 +48,23 @@ export function isIsoDate(s: string): boolean {
   return iso(y, m, d) === s;
 }
 
+/** How long one VAT return covers: the jurisdiction's periods.yaml says which. */
+export const FILING_LENGTHS = ['month', 'quarter', 'half', 'year'] as const;
+export type FilingLength = typeof FILING_LENGTHS[number];
+
 /**
- * VAT reporting periods only: YYYY-Qn, YYYY-Hn and YYYY. The CLI and the VAT engine use this; the
- * app uses parsePeriod.
+ * VAT reporting periods only: YYYY-MM, YYYY-Qn, YYYY-Hn and YYYY. The CLI and the VAT engine use
+ * this; the app uses parsePeriod.
  */
-export function derivePeriod(key: string): { from: string; to: string } | null {
-  let m = key.match(/^(\d{4})-Q([1-4])$/);
+export function derivePeriod(key: string): { from: string; to: string; kind: FilingLength } | null {
+  const p = fixedRange(key);
+  return p && { ...p, kind: key.includes('-Q') ? 'quarter' : key.includes('-H') ? 'half' : key.length === 4 ? 'year' : 'month' };
+}
+
+function fixedRange(key: string): { from: string; to: string } | null {
+  let m = key.match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+  if (m) return { from: `${key}-01`, to: lastOfMonth(+m[1], +m[2]) };
+  m = key.match(/^(\d{4})-Q([1-4])$/);
   if (m) {
     const y = +m[1], q = +m[2];
     return { from: iso(y, (q - 1) * 3 + 1, 1), to: lastOfMonth(y, q * 3) };
@@ -99,10 +110,8 @@ export function parsePeriod(token: string, today: IsoDate): Period | null {
     const [from, to] = RESOLVE[token](today);
     return { token, kind: token, from, to };
   }
-  const vat = derivePeriod(token);
-  if (vat) return { token, kind: token.includes('-Q') ? 'quarter' : token.includes('-H') ? 'half' : 'year', ...vat };
-  const month = token.match(/^(\d{4})-(0[1-9]|1[0-2])$/);
-  if (month) return { token, kind: 'month', from: `${token}-01`, to: lastOfMonth(+month[1], +month[2]) };
+  const fixed = derivePeriod(token);
+  if (fixed) return { token, ...fixed };
   const range = token.match(/^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/);
   if (range && isIsoDate(range[1]) && isIsoDate(range[2]) && range[1] <= range[2]) {
     return { token, kind: 'range', from: range[1], to: range[2] };
@@ -126,12 +135,28 @@ export function rangeToken(from: IsoDate, to: IsoDate): string {
   return `${from}..${to}`;
 }
 
-/** The ESTV reporting period (year, half or quarter) a period covers exactly, else null. */
-export function vatPeriodOf(p: Period): string | null {
+/**
+ * The VAT period a period covers exactly, else null: a filing period of `length`, or a longer one
+ * (a half or the year) that sums them.
+ */
+export function vatPeriodOf(p: Period, length: FilingLength): string | null {
   if (p.kind === 'all') return null;
   const token = rangeToken(p.from, p.to);
-  return /^\d{4}(-[QH]\d)?$/.test(token) ? token : null;
+  const kind = derivePeriod(token)?.kind;
+  return kind && FILING_LENGTHS.indexOf(kind) >= FILING_LENGTHS.indexOf(length) ? token : null;
 }
+
+/** The filing period of `length` that holds `date`: 2026-07, 2026-Q3, 2026-H2 or 2026. */
+export function filingKeyOf(date: IsoDate, length: FilingLength): string {
+  const [y, m] = parts(date);
+  if (length === 'month') return `${y}-${pad(m)}`;
+  if (length === 'quarter') return `${y}-Q${quarterOf(m)}`;
+  if (length === 'half') return `${y}-H${m <= 6 ? 1 : 2}`;
+  return String(y);
+}
+
+/** Whether `key` names one filing period of `length` (a return that is filed), not a sum of them. */
+export const isFilingKey = (key: string, length: FilingLength): boolean => derivePeriod(key)?.kind === length;
 
 /** A date typed the Swiss way, "9.10.2026" or "09.10.2026"; null when it is no real day. */
 export function parseSwissDate(text: string): IsoDate | null {
@@ -160,10 +185,10 @@ export function localToday(now = new Date()): IsoDate {
 }
 
 /**
- * The quarter the work is in: the first one after the filed ones (`closedThrough`), or today's
- * quarter when nothing is filed. A page shows it unless its link names another period.
+ * The filing period the work is in: the first one after the filed ones (`closedThrough`), or
+ * today's when nothing is filed. A page shows it unless its link names another period.
  */
-export function openQuarter(closedThrough: IsoDate | undefined, today: IsoDate): Period {
+export function openFilingPeriod(closedThrough: IsoDate | undefined, today: IsoDate, length: FilingLength): Period {
   const day = closedThrough ? addDays(closedThrough, 1) : today;
-  return parsePeriod(`${day.slice(0, 4)}-Q${quarterOf(Number(day.slice(5, 7)))}`, today)!;
+  return parsePeriod(filingKeyOf(day, length), today)!;
 }

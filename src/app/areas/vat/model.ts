@@ -5,8 +5,8 @@
  */
 import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../types/index.js';
 import { entriesForReturn } from '../../../accounting/index.js';
-import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period } from '../../../accounting/periods.js';
-import { vat } from '../../../engines/index.js';
+import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
+import { vat, filing } from '../../../engines/index.js';
 import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
 
 /** The four parts of the return, as the form groups its Ziffern. */
@@ -51,7 +51,7 @@ export interface VatReturn {
 
 /** The return a period shows: its own when it is an ESTV period, else the open quarter's. */
 export function vatKeyOf(period: Period, open: Period): string {
-  return vatPeriodOf(period) ?? open.token;
+  return vatPeriodOf(period, filing().length) ?? open.token;
 }
 
 export function vatReturn(books: Index, key: string, today: IsoDate = localToday()): VatReturn {
@@ -59,13 +59,13 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
   const all = books.config?.vatAdjustments ?? [];
   const range = derivePeriod(key)!;
   const closed = books.config?.closedThrough;
-  const quarter = /^\d{4}-Q[1-4]$/.test(key);
-  const due = addDays(range.to, 60);
+  const quarter = isFilingKey(key, filing().length);
+  const due = addDays(range.to, filing().dueDays);
   const state: ReturnState = !quarter ? { kind: 'overview' }
     : closed && range.to <= closed ? { kind: 'filed' }
     : { kind: 'open', due, overdue: due < today };
   const lines: Record<string, EntryLine[]> = {};
-  for (const entry of entriesForReturn(entries, key)) {
+  for (const entry of entriesForReturn(entries, key, filing().length)) {
     const line = vat().vatLine(entry);
     if (!line) continue;
     for (const z of vat().codes.sourceBoxes(vat().codes.parse(line.code)!)) (lines[z] ??= []).push({ ...line, entry });
@@ -119,4 +119,4 @@ export function byCode(lines: EntryLine[]): Array<[code: string, lines: EntryLin
 }
 
 /** The quarter a correction entry corrects, as a period for its label. */
-export const correctedPeriod = (q: QuarterKey) => parsePeriod(q, localToday())!;
+export const correctedPeriod = (q: string) => parsePeriod(q, localToday())!;

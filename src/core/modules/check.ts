@@ -4,6 +4,7 @@
  * problem names its file and path, so the person (or the AI) editing the overlay can fix it.
  */
 import type { BoxId, Formula, Jurisdiction } from './schema.js';
+import { FILING_LENGTHS } from '../../accounting/periods.js';
 
 export interface ModuleProblem {
   file: string;
@@ -62,5 +63,7 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   for (const [prefix, type] of Object.entries(j.chart.classes)) {
     if (!j.chart.types[type]) add('chart.yaml', `classes.${prefix}`, `type "${type}" is not one of types`);
   }
+  if (!FILING_LENGTHS.includes(j.periods.vat.length)) add('periods.yaml', 'vat.length', `"${j.periods.vat.length}" is not one of ${FILING_LENGTHS.join(', ')}`);
+  if (!(j.periods.vat.dueDays >= 0)) add('periods.yaml', 'vat.dueDays', 'must be a number of days');
   return problems;
 }

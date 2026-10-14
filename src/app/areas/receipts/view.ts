@@ -1,17 +1,17 @@
 /** What the list, the detail and the keys of Belege share: the ledger of the loaded books, and the list as last shown. */
 import type { BankTransaction, Index } from '../../../types/index.js';
-import { localToday, openQuarter, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
+import { localToday, openFilingPeriod, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { Location, Route } from '../../shell/route.js';
 import { ledgerOf, type Candidate, type Ledger } from './model.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, filing } from '../../../engines/index.js';
 
 let memo: { books: Index; ledger: Ledger } | undefined;
 
 /** The ledger of these books, computed once per load. */
 export function ledgerFor(books: Index): Ledger {
-  if (memo?.books !== books) memo = { books, ledger: ledgerOf(books, openQuarter(books.config?.closedThrough, localToday()).from) };
+  if (memo?.books !== books) memo = { books, ledger: ledgerOf(books, openFilingPeriod(books.config?.closedThrough, localToday(), filing().length).from) };
   return memo.ledger;
 }
 

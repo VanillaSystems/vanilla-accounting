@@ -21,9 +21,9 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
-import { derivePeriod } from '../accounting/periods.js';
+import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
-import { vat } from '../engines/index.js';
+import { vat, filing } from '../engines/index.js';
 
 const ws = openWorkspace();
 const index = loadBooks(ws);
@@ -109,7 +109,7 @@ ${inputEls}
 
 // The period is required: a default would regenerate returns that are already filed.
 const key = process.argv[2] ?? '';
-const isQuarterKey = (k: string): k is QuarterKey => /^\d{4}-Q[1-4]$/.test(k);
+const isQuarterKey = (k: string): k is QuarterKey => isFilingKey(k, filing().length);
 if (!isQuarterKey(key)) {
   console.error(`Usage: npm run vat-xml -- <YYYY-Qn> [out.xml]   (e.g. 2026-Q3; got "${key}")`);
   process.exit(1);

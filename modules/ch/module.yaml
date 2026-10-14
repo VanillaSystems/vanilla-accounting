@@ -10,3 +10,4 @@ provides:
   - accounting.tax.rates@1
   - accounting.tax.vat-return@1
   - accounting.ledger.chart@1
+  - accounting.tax.periods@1

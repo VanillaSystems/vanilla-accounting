@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
-import { isIsoDate, parsePeriod } from '../../accounting/periods.js';
+import { isIsoDate, parsePeriod, isFilingKey } from '../../accounting/periods.js';
 import { nextManualRef } from '../../books/refs.js';
 import { assertOpen, patchBody, refDates, stringField, withBooks, RequestError } from '../books.js';
+import { filing } from '../../engines/index.js';
 
 export const router = Router();
 
@@ -64,7 +65,7 @@ router.post('/api/journal-entries', (req, res) => {
   if (!exchangeCurrency !== (exchangeRate === undefined)) throw new RequestError(400, 'exchangeCurrency und exchangeRate gehören zusammen.');
   if (exchangeRate !== undefined && !(exchangeRate > 0)) throw new RequestError(400, 'exchangeRate muss grösser als 0 sein.');
   const corrects = optional('corrects');
-  if (corrects && !/^\d{4}-Q[1-4]$/.test(corrects)) throw new RequestError(400, 'corrects: YYYY-Qn.');
+  if (corrects && !isFilingKey(corrects, filing().length)) throw new RequestError(400, 'corrects: YYYY-Qn.');
   const transactionRef = optional('transactionRef');
   const id = optional('id');
   // An undo puts back an entry without an origin (books from before origins) without one.
@@ -91,7 +92,7 @@ router.post('/api/journal-entries', (req, res) => {
       ...(vatCode && { vatCode }),
       description,
       ...(exchangeCurrency && { exchangeCurrency, exchangeRate }),
-      ...(corrects && { corrects: corrects as QuarterKey }),
+      ...(corrects && { corrects }),
       ...(origin && { origin: origin as Origin }),
     };
     books.journalEntries.push(entry);

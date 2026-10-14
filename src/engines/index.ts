@@ -24,5 +24,8 @@ export const vat = (): ReturnEngine => loaded().vat;
 /** The open workspace's chart: what an account is. */
 export const chart = (): ChartEngine => loaded().chart;
 
+/** The length of one VAT return and when its tax is due. */
+export const filing = (): Jurisdiction['periods']['vat'] => loaded().source.periods.vat;
+
 /** The currency the books are kept in: every amount without an exchange currency is in it. */
 export const baseCurrency = (): string => loaded().source.manifest.baseCurrency;

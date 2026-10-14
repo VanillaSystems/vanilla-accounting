@@ -1,6 +1,6 @@
 /** What the list, the detail and the keys of Buchungen share: the journal of the loaded books, and the commands on an entry. */
-import type { Index, QuarterKey, Receipt } from '../../../types/index.js';
-import { localToday, openQuarter, periodContaining, type Period } from '../../../accounting/periods.js';
+import type { Index, Receipt } from '../../../types/index.js';
+import { localToday, openFilingPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
@@ -9,6 +9,7 @@ import { at } from '../receipts/view.js';
 import { journalOf, type Journal } from './model.js';
 import { listed, setUi, ui } from './state.js';
 import { deleteEntry } from './actions.js';
+import { filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -21,7 +22,7 @@ export function journalFor(books: Index): Journal {
 }
 
 /** The quarter new entries go in: the first one after the filed ones. */
-export const openPeriod = (books: Index): Period => openQuarter(books.config?.closedThrough, localToday());
+export const openPeriod = (books: Index): Period => openFilingPeriod(books.config?.closedThrough, localToday(), filing().length);
 
 /** The day a new entry starts on: today, unless today is filed (then the open quarter's first day). */
 export function newEntryDate(books: Index): string {
@@ -63,7 +64,7 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
         amount: e.amount,
         vatCode: e.vatCode && (e.vatCode.startsWith('-') ? e.vatCode.slice(1) : `-${e.vatCode}`),
         description: t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }),
-        corrects: periodContaining(e.date) as QuarterKey,
+        corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
       } } });
       return true;
   }

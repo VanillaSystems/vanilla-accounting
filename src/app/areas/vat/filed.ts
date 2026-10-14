@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import type { ReturnFigures } from '../../../engines/return.js';
+import { filing } from '../../../engines/index.js';
+import { isFilingKey } from '../../../accounting/periods.js';
 
 const years = new Map<string, Promise<ReturnFigures[]>>();
 
@@ -14,7 +16,7 @@ const load = (year: string) => {
 export function useFiledReturn(key: string): ReturnFigures | undefined {
   const [filed, setFiled] = useState<{ key: string; figures?: ReturnFigures }>();
   useEffect(() => {
-    if (!/^\d{4}-Q[1-4]$/.test(key)) return;
+    if (!isFilingKey(key, filing().length)) return;
     let live = true;
     load(key.slice(0, 4)).then((list) => { if (live) setFiled({ key, figures: list.find((f) => f.period === key) }); });
     return () => { live = false; };

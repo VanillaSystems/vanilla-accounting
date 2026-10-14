@@ -5,9 +5,10 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { Index } from '../../../types/index.js';
-import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
+import { localToday, openFilingPeriod, type Period } from '../../../accounting/periods.js';
 import { api, errorText, STATIC_EXPORT, type YearCloseView } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
+import { filing } from '../../../engines/index.js';
 
 interface State { year: string; books: Index | null; data?: YearCloseView; error?: string }
 
@@ -41,5 +42,5 @@ export function closeYear(period: Period | undefined, books: Index, today = loca
   if (period && period.kind !== 'all') return period.from.slice(0, 4);
   const closed = books.config?.closedThrough;
   if (closed?.endsWith('-12-31') && today < `${+closed.slice(0, 4) + 1}-07-01`) return closed.slice(0, 4);
-  return openQuarter(closed, today).from.slice(0, 4);
+  return openFilingPeriod(closed, today, filing().length).from.slice(0, 4);
 }

@@ -103,9 +103,10 @@ export interface JournalEntry {
   /**
    * The filed quarter this entry corrects. The entry is dated in an open period
    * for the books, but its VAT is declared in that quarter's Korrekturabrechnung
-   * (ESTV form 0535), never in the return of its own date.
+   * (ESTV form 0535), never in the return of its own date. A filing-period key
+   * (src/accounting/periods.ts isFilingKey): a quarter for the effective method.
    */
-  corrects?: QuarterKey;
+  corrects?: string;
   /**
    * Who wrote the entry, so `classify --force` can tell its own entries from hand bookings,
    * corrections and rebook-shopify output. The classifier (src/booking/classify.ts, for

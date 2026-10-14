@@ -1,12 +1,12 @@
 /** What the MWST list and detail share: the return a page shows, a Ziffer's name, and the 0535 difference. */
 import { useMemo } from 'react';
 import type { Index } from '../../../types/index.js';
-import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
+import { localToday, openFilingPeriod, type Period } from '../../../accounting/periods.js';
 import { fmt } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { rateOf, vatKeyOf, vatReturn, type VatReturn } from './model.js';
 import { useFiledReturn } from './filed.js';
-import { vat } from '../../../engines/index.js';
+import { vat, filing } from '../../../engines/index.js';
 import type { ReturnFigures } from '../../../engines/return.js';
 
 /** A Ziffer's short name in the list and the detail heading. */
@@ -18,7 +18,7 @@ export function zifferLabel(v: VatReturn, n: string): string {
 
 /** The open quarter, and the return a page shows for its period. */
 export function useReturn({ books, period }: { books: Index; period: Period }) {
-  const key = vatKeyOf(period, openQuarter(books.config?.closedThrough, localToday()));
+  const key = vatKeyOf(period, openFilingPeriod(books.config?.closedThrough, localToday(), filing().length));
   const v = useMemo(() => vatReturn(books, key), [books, key]);
   const filed = useFiledReturn(key);
   return { v, filed };

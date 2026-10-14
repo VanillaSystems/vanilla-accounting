@@ -5,7 +5,7 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Index } from '../../../types/index.js';
-import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
+import { localToday, openFilingPeriod, type Period } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
@@ -24,6 +24,7 @@ import { importStatements, statementAdd } from './actions.js';
 import { Detail, statementName } from './Detail.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './bank.css';
+import { filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -192,7 +193,7 @@ const legend = (): LegendItem[] => [
 
 function palette({ books, nav, period }: AreaProps): PaletteItem[] {
   const b = bankFor(books);
-  const open = openQuarter(books.config?.closedThrough, localToday());
+  const open = openFilingPeriod(books.config?.closedThrough, localToday(), filing().length);
   const statements = b.statements('0000-01-01', localToday()).filter((s) => s.file || s.from >= open.from).map((s) => ({
     label: `${t('bank.statementOf', { name: statementName(s) })} · ${s.account.label}`,
     side: s.file ? t('bank.statement') : t('bank.missing'),
@@ -214,7 +215,7 @@ export const bank: Area<RouteOf<'bank'>> = {
     key: 'k',
     icon: ICONS.bank,
     tip: () => t('area.bank.tip'),
-    badge: (books) => badgeCount(bankFor(books), openQuarter(books.config?.closedThrough, localToday()).from, localToday()),
+    badge: (books) => badgeCount(bankFor(books), openFilingPeriod(books.config?.closedThrough, localToday(), filing().length).from, localToday()),
   },
   List,
   Detail,

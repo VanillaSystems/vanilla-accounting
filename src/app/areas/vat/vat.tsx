@@ -5,7 +5,7 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import './vat.css';
-import { localToday, openQuarter } from '../../../accounting/periods.js';
+import { localToday, openFilingPeriod } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
@@ -23,6 +23,7 @@ import { entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
 import type { ReturnFigures } from '../../../engines/return.js';
+import { filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -150,7 +151,7 @@ export const vat: Area<RouteOf<'vat'>> = {
     return true;
   },
   palette: ({ books, nav, period }) => {
-    const v = vatReturn(books, vatKeyOf(period, openQuarter(books.config?.closedThrough, localToday())));
+    const v = vatReturn(books, vatKeyOf(period, openFilingPeriod(books.config?.closedThrough, localToday(), filing().length)));
     return shownZiffern(v, undefined, false).map((n) => ({
       label: `${n} ${zifferLabel(v, n)}`,
       side: `${periodName(v.period)}  ${fmt(formAmount(v, n))}`,

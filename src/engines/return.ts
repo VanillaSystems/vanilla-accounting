@@ -100,7 +100,7 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
 
   function adjustmentsFor(adjustments: VatAdjustment[], entries: JournalEntry[], periodKey: string): VatAdjustment[] {
     const { from, to } = reportRange(periodKey);
-    const declared = new Set(entriesForReturn(entries, periodKey).map((e) => e.id));
+    const declared = new Set(entriesForReturn(entries, periodKey, j.periods.vat.length).map((e) => e.id));
     return adjustments.filter((a) => {
       const p = derivePeriod(a.period);
       if (!p) throw new Error(`vatAdjustments ${a.id}: unknown period "${a.period}"`);
@@ -113,7 +113,7 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
   }
 
   function entryLines(entries: JournalEntry[], periodKey: string, out: Record<BoxId, VatLine[]> = {}) {
-    for (const entry of entriesForReturn(entries, periodKey)) {
+    for (const entry of entriesForReturn(entries, periodKey, j.periods.vat.length)) {
       const line = vatLine(entry);
       if (!line) continue;
       for (const z of codes.sourceBoxes(codes.parse(line.code)!)) (out[z] ??= []).push(line);

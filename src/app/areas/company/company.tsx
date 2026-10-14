@@ -15,7 +15,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useShellUi } from '../../shell/ui.js';
 import { moveKey } from '../../shell/keyboard.js';
 import type { Theme } from '../../shell/prefs.js';
-import { addDays, localToday, openQuarter, parsePeriod } from '../../../accounting/periods.js';
+import { addDays, localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
 import type { Address } from '../../../invoices/model.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { ManifestPatch } from '../../../workspace/manifest-write.js';
@@ -24,7 +24,7 @@ import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
 import { MailSection } from './MailSection.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
@@ -38,7 +38,7 @@ const THEMES: Theme[] = ['light', 'dark', 'system'];
 const themeLabel = (th: Theme) => t(th === 'light' ? 'app.themeLight' : th === 'dark' ? 'app.themeDark' : 'app.themeSystem');
 
 /** The year the books are in: the open quarter's. */
-const bookYear = (books: Props['books']) => openQuarter(books.config?.closedThrough, localToday()).from.slice(0, 4);
+const bookYear = (books: Props['books']) => openFilingPeriod(books.config?.closedThrough, localToday(), filing().length).from.slice(0, 4);
 
 function sectionLabel(s: CompanySection, books: Props['books']): string {
   return s === 'opening' ? t('company.openingYear', { year: bookYear(books) }) : t(`company.${s}`);
@@ -399,7 +399,7 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
         </Fragment>
       ))}
       <p className="m src-note">{t('company.sealNote')}</p>
-      <p className="m">{t('company.howToClose', { quarter: openQuarter(closed, today).token })}{' '}
+      <p className="m">{t('company.howToClose', { quarter: openFilingPeriod(closed, today, filing().length).token })}{' '}
         <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'close' }, query: {} })}>{t('company.toClose')}</button>
       </p>
     </>

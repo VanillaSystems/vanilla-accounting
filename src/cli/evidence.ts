@@ -21,10 +21,11 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Receipt, BankTransaction } from '../types/index.js';
 import { loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
-import { derivePeriod } from '../accounting/periods.js';
+import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { documentTypeOf } from '../knowledge/counterparties.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
+import { filing } from '../engines/index.js';
 
 const ws = openWorkspace();
 const BEFORE_DAYS = 45; // invoice dated up to 45 days before the payment
@@ -86,7 +87,7 @@ function fits(r: Receipt, t: BankTransaction): string | null {
 
 function main() {
   const key = process.argv[2] ?? '';
-  const period = /^\d{4}-Q[1-4]$/.test(key) ? derivePeriod(key) : null;
+  const period = isFilingKey(key, filing().length) ? derivePeriod(key) : null;
   if (!period) { console.error('Usage: npm run evidence -- <YYYY-Qn> [--apply]'); process.exit(1); }
   const apply = process.argv.includes('--apply');
   const index = loadBooks(ws);

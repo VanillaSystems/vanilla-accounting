@@ -112,6 +112,13 @@ export interface ReturnData {
   credit: BoxId;
 }
 
+import type { FilingLength } from '../../accounting/periods.js';
+
+/** periods.yaml: the length of one VAT return and the days after its end until the tax is due. */
+export interface PeriodsData {
+  vat: { length: FilingLength; dueDays: number };
+}
+
 export type AccountType = 'asset' | 'liability' | 'revenue' | 'expense' | 'closing';
 
 /** Which side of the statements an account's balance counts on; `none` keeps it off both. */
@@ -137,4 +144,5 @@ export interface Jurisdiction {
   taxCodes: TaxCodesData;
   vatReturn: ReturnData;
   chart: ChartData;
+  periods: PeriodsData;
 }
