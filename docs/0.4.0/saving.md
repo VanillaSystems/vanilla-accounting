@@ -1,7 +1,17 @@
 # Saving, syncing, undo
 
-**Status: proposed.** Clickable mockup: screen 7 of [mockups/workflows.html](mockups/workflows.html).
-Builds on ADR 0003 (books in git, sync, undo as a bookkeeping operation) and ADR 0004.
+**Status: built in 0.4.0 (ui/design.md units 6 and 7), amended 14.10.2026.** Clickable mockup:
+screen 7 of [mockups/workflows.html](mockups/workflows.html). Builds on ADR 0003 (books in git,
+sync, undo as a bookkeeping operation) and ADR 0004.
+
+**The amendment (D3, D11 in [decisions.md](decisions.md)).** The books do not wait for a person:
+the app commits them itself, one commit per run when it comes to rest and one per direct edit,
+with a short run log beside them. Workflows will also run in the cloud with nobody present, and
+their results must still land in git for later review. What waits in Änderungen is only
+customizing: rules, workflows, knowledge and settings, changed in the AI's draft
+(`data/draft/`) or outside the app. Where this page still speaks of the books waiting to be
+saved (the import of 500 receipts, «Den Import verwerfen»), read it as history: such a run is one
+entry in Verlauf, and a person who wants to look before booking makes that a step of the workflow.
 
 The workspace is a git repository. A regular user never sees a git word and never does git
 work: the AI prepares the saves, the person talks to it and saves. A new area **Änderungen**,

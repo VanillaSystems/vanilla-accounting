@@ -245,5 +245,5 @@ export async function openYear(ws: Workspace, year: string, rates: EstvRates = r
  */
 async function commit(ws: Workspace, message: string, paths: string[]): Promise<boolean> {
   const repo = await repositoryAt(ws.paths.repository);
-  return repo ? commitExactly(repo, message, paths) : false;
+  return repo ? commitExactly(repo, `${message}\n\nVanilla-Kind: books\nVanilla-Lock: year-close`, paths) : false;
 }

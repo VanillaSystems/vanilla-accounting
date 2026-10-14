@@ -24,6 +24,8 @@ export interface SaveSummary {
   /** From the commit's trailer: the app's records path, a saved change, or a commit made outside the app. */
   kind: 'books' | 'customizing' | 'outside';
   run?: string;
+  /** A year close, a filing or a seal: never undone. */
+  locked?: boolean;
 }
 
 export interface ChangesView {
@@ -35,9 +37,63 @@ export interface ChangesView {
   /** Records files the app has not committed yet (normally none: runs and edits commit at once). */
   booksUnsaved: number;
   history: SaveSummary[];
+  proposal?: ProposalView;
+  sync: SyncState;
 }
 
-export interface SaveDetail extends SaveSummary { body: string; files: FileChange[] }
+/** One changed file a prepared save covers, with the hash of its content when the AI saw it. */
+export interface CoveredFile { source: ChangeSource; path: string; basis: string }
+
+/** A save the AI prepared: its message, why it holds what it holds, and its files. */
+export interface PreparedSave {
+  id: string;
+  message: string;
+  why: string;
+  files: CoveredFile[];
+  /** The person said "not yet": stays unsaved. */
+  held?: boolean;
+}
+
+export interface TalkTurn { me: string; ai: string }
+
+/** Stored in data/saving/proposal.json. Stale is never stored: it is derived from the files. */
+export interface Proposal { at: string; saves: PreparedSave[]; talk: TalkTurn[] }
+
+export interface ProposalView extends Proposal {
+  /** Ids of the saves whose files changed since the AI prepared them. */
+  stale: string[];
+  /** Changed files no save covers (changed since the proposal). */
+  uncovered: string[];
+  /** Ready when nothing is stale or uncovered: only then may it be saved. */
+  ready: boolean;
+}
+
+export interface SyncState {
+  /** The repository has an upstream to sync with. */
+  remote: boolean;
+  /** Saves not yet synced. */
+  ahead: number;
+}
+
+export type SavingCommand =
+  | { kind: 'prepare' }
+  | { kind: 'talk'; text: string }
+  | { kind: 'refresh' }
+  | { kind: 'save'; sync?: boolean }
+  | { kind: 'sync' }
+  | { kind: 'discard' }
+  | { kind: 'undo'; oid: string };
+
+export type SavingRefusal = 'no-repository' | 'nothing' | 'no-proposal' | 'stale' | 'not-customizing' | 'no-remote' | 'two-versions' | 'cannot-undo' | 'closed' | 'model';
+
+export type SavingResult = { ok: true; reply?: string; saved?: number; reversed?: number } | { ok: false; refusal: SavingRefusal; message: string };
+
+export interface SaveDetail extends SaveSummary {
+  body: string;
+  files: FileChange[];
+  /** What Rückgängig would do: a customizing save goes back to the draft; a run's bookings are reversed. */
+  undo?: 'draft' | 'reverse';
+}
 
 export interface FileDiff { path: string; before: string; after: string }
 

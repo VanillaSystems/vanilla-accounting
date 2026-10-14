@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from 'react';
 import { api, errorText, STATIC_EXPORT } from '../lib/api.js';
 import { t } from '../i18n/index.js';
-import type { ChangesView, FileDiff, SaveDetail } from '../../saving/model.js';
+import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 interface State { view?: ChangesView; error?: string }
 
@@ -57,3 +57,12 @@ export const useDiff = (source: string, path: string, rev: string | undefined) =
 
 /** The view as last fetched, for an area's key handler. */
 export const changesNow = (): ChangesView | undefined => state.view;
+
+/** A saving command; the view is fetched again at once, and Verlauf's saves with it. */
+export async function changesCommand(cmd: SavingCommand): Promise<SavingResult> {
+  const result = await api.changesCommand(cmd);
+  for (const k of [...cache.keys()]) if (k.startsWith('diff:')) cache.delete(k);
+  clearTimeout(timer);
+  await pollChanges();
+  return result;
+}

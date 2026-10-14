@@ -22,7 +22,7 @@ import type { ReturnFigures } from '../../engines/return.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
-import type { ChangesView, FileDiff, SaveDetail } from '../../saving/model.js';
+import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
 
@@ -152,6 +152,7 @@ export const api = {
   automationCommand: (cmd: AutomationCommand) => request<CommandResult>('POST', '/api/automation', cmd),
   changes: (since?: string) => request<ChangesView | { unchanged: true }>('GET', `/api/changes${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
+  changesCommand: (cmd: SavingCommand) => request<SavingResult>('POST', '/api/changes', cmd),
   changesDiff: (source: string, path: string) => request<FileDiff>('GET', `/api/changes/diff?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`),
   bookRevaluation: (year: string) => request<{ entries: JournalEntry[] }>('POST', `/api/year-close/${year}/revaluation`),
   markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<unknown>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),

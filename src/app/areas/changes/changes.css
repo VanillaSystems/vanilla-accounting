@@ -21,3 +21,25 @@
 .chdiff .kadd { background: color-mix(in srgb, var(--pos) 14%, transparent); }
 .chdiff .kdel { background: color-mix(in srgb, var(--neg) 12%, transparent); }
 .chdiff .gap { display: block; padding-left: 96px; color: var(--faint); }
+.chsync { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; }
+.chsync .wfpill { margin-left: 0; }
+.chundo { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; }
+.chsave { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; }
+.chsave .wfpill { margin-left: 0; }
+.chbanner { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; margin: 6px 0 12px; border-radius: 10px; background: var(--warn-soft); color: var(--ink); font-size: 13px; }
+.chbanner b { color: var(--warn); font-weight: 600; }
+.chpreps { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px; }
+.chprep { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.chprep.held { opacity: .6; }
+.chprep.stale { border-color: var(--warn); }
+.chprep .pt { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.chprep .pf { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
+.chtalk { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; }
+.chtalk .msg { max-width: 85%; padding: 8px 11px; border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.chtalk .msg.me { align-self: flex-end; background: var(--accent-soft); }
+.chtalk .msg.ai { align-self: flex-start; display: flex; gap: 8px; background: var(--hover); }
+.chcomposer { display: flex; gap: 8px; align-items: flex-end; }
+.chcomposer textarea { flex: 1; resize: vertical; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--desk); color: var(--ink); font: inherit; font-size: 13px; }
+.chpage .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.chpage .linkbtn:hover { text-decoration: underline; }
+.chpage .linkbtn:disabled { opacity: .45; cursor: default; text-decoration: none; }

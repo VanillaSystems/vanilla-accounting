@@ -89,6 +89,7 @@ function summary(c: Awaited<ReturnType<typeof git.log>>[number]): SaveSummary {
   return {
     oid: c.oid, short: c.oid.slice(0, 7), at: new Date(c.commit.author.timestamp * 1000).toISOString(), author: c.commit.author.name,
     subject: c.commit.message.split('\n')[0], kind: kind === 'books' ? 'books' : kind === 'customizing' ? 'customizing' : 'outside', ...(run ? { run } : {}),
+    ...(trailer(c.commit.message, 'Vanilla-Lock') ? { locked: true } : {}),
   };
 }
 
@@ -106,7 +107,7 @@ export async function changesView(ws: Ws): Promise<ChangesView> {
   const repository = !!(await repositoryAt(ws.paths.repository));
   const [draft, outside, unsaved, log] = [draftChanges(ws), await outsideChanges(ws), await booksUnsaved(ws), await history(ws)];
   const rev = createHash('sha256').update(JSON.stringify([draft, outside, unsaved, log[0]?.oid])).digest('hex').slice(0, 16);
-  return { rev, repository, draft, outside, booksUnsaved: unsaved, history: log };
+  return { rev, repository, draft, outside, booksUnsaved: unsaved, history: log, sync: { remote: false, ahead: 0 } };
 }
 
 /** One save: its message and the files it changed against its parent. */
@@ -130,7 +131,9 @@ export async function saveDetail(ws: Ws, oid: string): Promise<SaveDetail | unde
       return false;
     },
   });
-  return { ...summary(c), body: c.commit.message, files: changed };
+  const s = summary(c);
+  const undo = s.kind === 'customizing' ? 'draft' as const : s.kind === 'books' && s.run && !s.locked ? 'reverse' as const : undefined;
+  return { ...s, body: c.commit.message, files: changed, ...(undo ? { undo } : {}) };
 }
 
 /** Before and after of one file: in the draft, outside the app, or in a save. */

@@ -167,6 +167,11 @@ Verification: the red-flag screen was re-run on the merged sketch, and the claim
 
 - 2026-10-14, owner (conversation of the same day): adopt the architecture's G6 direction. The books are committed by the app, one commit per run at rest and per direct edit; a run log with failures goes into git under three rules (only runs that did something or needed someone, append-only, no detail); the detail stays outside git with retention; customizing is prepared on a draft branch. Also accepted with it: replay books as a dry run (G3), per-step overlays (G5), deadlines, knowledge cited by AI steps as needs-switch-on (G9), the step cap as a warning. Amends D3 and D11; decisions.md and saving.md follow before unit 4.
 - Unit 0 built as designed (`ceb19be`).
+- Units 1 to 3 built as designed (`5cacd91`, `93c1b53`, `f6ce9b2`).
+- Unit 4 (`6113b0d`, `bfc7bd1`). Records are committed per file (every changed records file), not per record line: direct edits commit at once and runs at rest, so the working tree holds nobody else's records changes in the normal case. Record-level commits stay a later refinement; the contract (a run's records and its log line in one commit) holds.
+- Unit 5 (`09a29e9`). The classify-this-payment route stays: it re-books payments that are already booked, which the booking workflow skips. A workflow button is hidden, not disabled, while its workflow is not runnable. Accepted by the implementer; the design still holds (one way to book an unbooked payment).
+- Unit 6 (`e34f5c9`). The draft is a folder, `data/draft/`, holding copies of the changed files, not a git worktree: isomorphic-git has no worktree. It keeps the property that matters (the AI's edits never touch the books' working tree); a save copies the files over and commits them. The books-unsaved check reads only the books' own files (ledger, invoices, each year's books and run log), since hashing every receipt made the view slow (about 450 ms cold on the owner's repository now).
+- Unit 7. Talk regroups, holds, merges and renames saves; it does not rewrite files (the mockup's «Den Treibstoffzuschlag noch nicht»), which is the sidebar's job in the draft (unit 8). Rückgängig of a customizing save puts the files as they were into the draft, to be saved like any change; of a run, it books a reversal (`storno-<id>`, Soll and Haben swapped, the VAT code's sign turned) dated like each entry, so the write door refuses it in a closed period and the correction workflow takes over. Year-close commits now carry `Vanilla-Kind: books` and `Vanilla-Lock: year-close`, so Verlauf shows them locked and offers no undo. No save action was needed for filing: there is no filing route yet, and year close commits itself. Sync is `git pull --ff-only` then `git push` through the user's git program; a pull that cannot fast-forward is refused as two versions.
 
 ## Open questions and risks
 
@@ -180,4 +185,4 @@ Verification: the red-flag screen was re-run on the merged sketch, and the claim
 
 ## Next implementation step
 
-Unit 1: the two `Route` variants with their tests, both areas registered with empty List and Detail, the dock group and the i18n keys (unit 0 is done).
+Unit 8: the AI sidebar (feat/chat ported as a docked sidebar, its working directory the draft) and Ablauf ändern (approvals, `classifyDraft`, replay of saved cases).
