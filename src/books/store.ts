@@ -1,7 +1,7 @@
 /**
  * The one owner of the workspace's books.json: load, save, its schema (src/workspace/schema.ts),
  * and golden rule 1 (AGENTS.md), nothing dated on or before config.closedThrough ever changes:
- * mutateJournal while the app runs, the seals of the filed quarters (src/books/seal.ts) on load.
+ * `update` while the app runs, the seals of the filed quarters (src/books/seal.ts) on load.
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { AccountingConfig, Index, JournalEntry } from '../types/index.js';
@@ -94,18 +94,45 @@ export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
   };
 }
 
-/** The checks of the mutateJournal calls in flight, run again by every saveBooks inside them. */
+/**
+ * Who changes the books: a person (the UI, a command they run), a module that writes on its own
+ * (intake, year close, a collector), or a workflow run. The actor decides what may be replaced.
+ */
+export type Actor =
+  | { kind: 'person' }
+  | { kind: 'module'; id: string }
+  | { kind: 'run'; id: string; workflow: string };
+
+export const PERSON: Actor = { kind: 'person' };
+export const moduleActor = (id: string): Actor => ({ kind: 'module', id });
+
+/**
+ * Who owns an entry, by its origin. A person's own entries change only by a person; an entry
+ * without an origin (booked before origins existed) is anyone's, as it was.
+ */
+const OWNER: Record<NonNullable<JournalEntry['origin']>, 'person' | 'module'> = {
+  manual: 'person',
+  classify: 'module',
+  invoice: 'module',
+  'year-close': 'module',
+};
+
+export class OwnershipError extends Error {}
+
+/** The checks of the `update` calls in flight, run again by every saveBooks inside them. */
 const guards = new WeakMap<Books, () => void>();
 
 /**
- * Golden rule 1 as a structural check. Runs `fn`, then throws ClosedPeriodError if any
- * closed-period journal entry, closed transaction, or mapping to a closed transaction was
- * changed, added or removed. A saveBooks inside `fn` runs the same check before it writes.
+ * The one write door. Runs `fn` as `actor`, then throws ClosedPeriodError if any closed-period
+ * journal entry, closed transaction, or mapping to a closed transaction was changed, added or
+ * removed (golden rule 1), and OwnershipError if an actor other than a person changed or removed
+ * a person's entry. A saveBooks inside `fn` runs the same checks before it writes.
  */
-export function mutateJournal<T>(books: Books, fn: (books: Books) => Promise<T>): Promise<T>;
-export function mutateJournal<T>(books: Books, fn: (books: Books) => T): T;
-export function mutateJournal<T>(books: Books, fn: (books: Books) => T | Promise<T>): T | Promise<T> {
+export function update<T>(books: Books, actor: Actor, fn: (books: Books) => Promise<T>): Promise<T>;
+export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T): T;
+export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | Promise<T>): T | Promise<T> {
   const before = { closedThrough: periodLock(books).closedThrough, ...closedPart(books, periodLock(books).closedThrough) };
+  const persons = actor.kind === 'person' ? undefined : personsEntries(books);
   const check = () => {
     const lock = periodLock(books);
     if (lock.closedThrough !== before.closedThrough) {
@@ -115,6 +142,10 @@ export function mutateJournal<T>(books: Books, fn: (books: Books) => T | Promise
     const changed = (['entries', 'transactions', 'mappings'] as const).flatMap((k) => diff(k, before[k], after[k]));
     if (changed.length) {
       throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}: ${changed.join('; ')}`, lock.closedThrough);
+    }
+    if (persons) {
+      const touched = diff('entry', persons, personsEntries(books)).filter((d) => !d.endsWith(' added'));
+      if (touched.length) throw new OwnershipError(`${describe(actor)} ändert keine Buchung einer Person: ${touched.join('; ')}`);
     }
   };
   const outer = guards.get(books);
@@ -136,6 +167,12 @@ export function mutateJournal<T>(books: Books, fn: (books: Books) => T | Promise
     done();
   }
   return result;
+}
+
+const describe = (a: Actor) => (a.kind === 'person' ? 'Eine Person' : a.kind === 'module' ? `Modul ${a.id}` : `Lauf ${a.id} (${a.workflow})`);
+
+function personsEntries(books: Books): Map<string, string[]> {
+  return new Map(books.journalEntries.filter((e) => e.origin && OWNER[e.origin] === 'person').map((e) => [e.id, [JSON.stringify(e)]]));
 }
 
 function diff(kind: string, before: Map<string, string[]>, after: Map<string, string[]>): string[] {

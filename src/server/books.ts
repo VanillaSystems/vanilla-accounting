@@ -4,7 +4,7 @@
  */
 import type { Response } from 'express';
 import type { Index } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, periodLock, saveBooks, update, PERSON, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { receiptDirOf } from '../workspace/reads.js';
@@ -24,13 +24,13 @@ export const readBooks = (): Books => loadBooks(WS);
 type Sync<T> = T extends PromiseLike<unknown> ? never : T;
 
 /**
- * One change to the books: load, run `fn` inside mutateJournal, save, and return what `fn`
+ * One change to the books by the person using the app: load, run `fn` through the write door, save, and return what `fn`
  * returns. Nothing is saved when `fn` throws. `fn` is synchronous: a route that asks a model
  * awaits it first and applies the answer here, to books loaded after the answer came.
  */
 export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
   const books = readBooks();
-  const result = mutateJournal(books, fn);
+  const result = update(books, PERSON, fn);
   saveBooks(WS, books);
   return result;
 }
@@ -45,7 +45,7 @@ export function withBooks<T>(res: Response, fn: (books: Books) => Sync<T>): void
 
 // Golden rule 1 (AGENTS.md): nothing dated on or before config.closedThrough may change.
 // Every route that writes the books refuses a closed date with one of these first, so the
-// UI can say why; mutateJournal in withBooks catches whatever a route forgets.
+// UI can say why; the write door in withBooks catches whatever a route forgets.
 export const CLOSED: Record<ClosedReason, string> = {
   editTransaction: 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   deleteTransaction: 'Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',

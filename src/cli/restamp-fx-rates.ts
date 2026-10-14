@@ -18,7 +18,7 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
 import type { JournalEntry } from '../types/index.js';
-import { loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
+import { loadBooks, periodLock, saveBooks, update, PERSON } from '../books/store.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { paymentDateOf } from '../accounting/fx-conversion.js';
 import { REFERENCE_DIR, openWorkspace } from '../workspace/workspace.js';
@@ -121,7 +121,7 @@ function main() {
     console.log(`\n(dry run — nothing written; re-run without --dry-run to apply)`);
     return;
   }
-  mutateJournal(index, () => {
+  update(index, PERSON, () => {
     for (const c of changes) c.entry.exchangeRate = c.to;
   });
   saveBooks(ws, index);

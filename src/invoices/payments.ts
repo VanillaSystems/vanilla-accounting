@@ -65,7 +65,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Matches the open period's incoming payments to issued invoices by reference, records the
- * allocations in `book` and books the revenue into `books` (call inside mutateJournal).
+ * allocations in `book` and books the revenue into `books` (call inside the write door, update in src/books/store.ts).
  */
 export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentContext): PaymentOutcome {
   const out: PaymentOutcome = { paid: [], questions: [], files: [] };

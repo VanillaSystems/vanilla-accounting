@@ -20,7 +20,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Receipt, BankTransaction } from '../types/index.js';
-import { loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
+import { loadBooks, periodLock, saveBooks, update, PERSON } from '../books/store.js';
 import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { documentTypeOf } from '../knowledge/counterparties.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -202,7 +202,7 @@ function main() {
   if (duplicates.length) { console.log('\n  likely duplicates:'); for (const d of duplicates) console.log(`  = ${d.receipt.filename}  same as  ${d.existing.filename}  (${d.tx.ref})`); }
 
   if (!apply) { console.log('\nDRY RUN — nothing written. Pass --apply to link the "+" lines.'); return; }
-  mutateJournal(index, (books) => {
+  update(index, PERSON, (books) => {
     for (const l of links) books.mappings.push({ transactionRef: l.tx.ref, receiptId: l.receipt.id, by: 'rule', rule: l.rule });
     for (const k of kinded) Object.assign(k.receipt, { kind: k.kind, kindBy: 'rule', kindRule: k.rule });
   });

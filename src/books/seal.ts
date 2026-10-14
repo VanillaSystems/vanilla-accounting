@@ -5,7 +5,7 @@
  * checks every seal; books whose sealed part changed still open, so the change can be looked at,
  * but saveBooks refuses to write them until they are restored from git.
  *
- * mutateJournal (src/books/store.ts) stops a change while the app runs; a seal also catches one
+ * The write door, update (src/books/store.ts), stops a change while the app runs; a seal also catches one
  * made by a hand edit, an ad-hoc script or a bad merge, and still holds after a git commit.
  */
 import { createHash } from 'node:crypto';

@@ -9,7 +9,7 @@ import { copyFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path';
 import type { Workspace } from '../src/workspace/workspace.js';
 import { tempWorkspace } from './support/workspace.js';
-import { ClosedPeriodError, loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../src/books/store.js';
+import { ClosedPeriodError, loadBooks, moduleActor, OwnershipError, PERSON, periodLock, saveBooks, update, type Actor, type Books } from '../src/books/store.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
@@ -82,30 +82,55 @@ const closedChanges: Array<[string, (b: Books) => void]> = [
   ['move closedThrough on (closing a quarter is not a journal mutation)', (b) => { b.config.closedThrough = '2026-07-15'; }],
 ];
 
+const ACTORS: Actor[] = [PERSON, moduleActor('intake'), { kind: 'run', id: 'r1', workflow: 'booking' }];
+
 for (const [name, change] of closedChanges) {
-  test(`mutateJournal throws: ${name}`, () => {
-    assert.throws(() => mutateJournal(fixtureBooks(), change), ClosedPeriodError);
+  for (const actor of ACTORS) {
+    test(`update as ${actor.kind} throws: ${name}`, () => {
+      assert.throws(() => update(fixtureBooks(), actor, change), ClosedPeriodError);
+    });
+  }
+}
+
+const persons = (b: Books) => { b.journalEntries.push({ id: 'pm', transactionRef: 'O1', date: '2026-07-02', accountDebit: '6500', accountCredit: '1021', amount: 5, origin: 'manual' }); return b; };
+const ownChanges: Array<[string, (b: Books) => void]> = [
+  ['edit a person\'s entry', (b) => { b.journalEntries.find((e) => e.id === 'pm')!.amount = 6; }],
+  ['delete a person\'s entry', (b) => { b.journalEntries = b.journalEntries.filter((e) => e.id !== 'pm'); }],
+];
+
+for (const [name, change] of ownChanges) {
+  test(`only a person may ${name}`, () => {
+    assert.doesNotThrow(() => update(persons(fixtureBooks()), PERSON, change));
+    assert.throws(() => update(persons(fixtureBooks()), moduleActor('intake'), change), OwnershipError);
+    assert.throws(() => update(persons(fixtureBooks()), { kind: 'run', id: 'r1', workflow: 'booking' }, change), /Lauf r1 \(booking\)/);
   });
 }
 
-test('mutateJournal throws after an async mutation', async () => {
-  await assert.rejects(mutateJournal(fixtureBooks(), async (b) => { b.journalEntries.find((e) => e.id === 'jc')!.amount = 11; }), ClosedPeriodError);
+test('a module may add entries beside a person\'s and change its own and unowned ones', () => {
+  assert.doesNotThrow(() => update(persons(fixtureBooks()), moduleActor('intake'), (b) => {
+    b.journalEntries.find((e) => e.id === 'jo')!.amount = 22;
+    b.journalEntries.push({ id: 'cl', transactionRef: 'O1', date: '2026-07-03', accountDebit: '6500', accountCredit: '1021', amount: 1, origin: 'classify' });
+  }));
 });
 
-test('mutateJournal guards a saveBooks inside it: nothing reaches the disk', () => {
+test('update throws after an async mutation', async () => {
+  await assert.rejects(update(fixtureBooks(), PERSON, async (b) => { b.journalEntries.find((e) => e.id === 'jc')!.amount = 11; }), ClosedPeriodError);
+});
+
+test('update guards a saveBooks inside it: nothing reaches the disk', () => {
   const dir = root();
   const books = loadBooks(dir);
   const before = readFileSync(dir.paths.books, 'utf8');
-  assert.throws(() => mutateJournal(books, (b) => {
+  assert.throws(() => update(books, PERSON, (b) => {
     b.mappings.push({ transactionRef: 'C1', receiptId: 'ro' });
     saveBooks(dir, b);
   }), ClosedPeriodError);
   assert.equal(readFileSync(dir.paths.books, 'utf8'), before);
 });
 
-test('mutateJournal passes open-period changes and a reorder, and returns fn’s result', () => {
+test('update passes open-period changes and a reorder, and returns fn’s result', () => {
   const books = fixtureBooks();
-  const result = mutateJournal(books, (b) => {
+  const result = update(books, PERSON, (b) => {
     b.journalEntries.find((e) => e.id === 'jo')!.amount = 21;
     b.journalEntries.push({ id: 'n', transactionRef: 'O1', date: '2026-07-01', accountDebit: '6500', accountCredit: '1021', amount: 1, corrects: '2026-Q2' });
     b.mappings.push({ transactionRef: 'O1', receiptId: 'rc' });

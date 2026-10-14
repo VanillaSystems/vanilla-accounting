@@ -7,7 +7,7 @@
  */
 
 import { join } from 'node:path';
-import { loadBooks, mutateJournal, saveBooks } from '../books/store.js';
+import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
 import { extractStatementBalances } from '../parsers/statement-pdf-balances.js';
 import { reconcileMonthly } from '../accounting/reconcile-bank.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -19,7 +19,7 @@ async function main() {
   const index = loadBooks(ws);
 
   const { balances, warnings } = await extractStatementBalances(STATEMENTS_DIR, ws.bankAccounts);
-  mutateJournal(index, (books) => { books.statementBalances = balances; });
+  update(index, PERSON, (books) => { books.statementBalances = balances; });
   saveBooks(ws, index);
 
   console.log(`Extracted ${balances.length} month-end closing balances from statement PDFs.`);

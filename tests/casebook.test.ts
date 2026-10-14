@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import { loadBooks, mutateJournal } from '../src/books/store.js';
+import { loadBooks, PERSON, update } from '../src/books/store.js';
 import { classifyTransactions, type ClassifyDeps } from '../src/booking/classify.js';
 import {
   CASE_TOKEN_LIMIT, OWN_HISTORY_THRESHOLD, caseEntries, casePeriod, caseTokens, loadCaseChart, loadCases, selectCases, validateCase,
@@ -55,7 +55,7 @@ for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').
   for (const c of cases) {
     books.journalEntries = base.slice();
     // The period lock of the demo (Q1 filed) holds: a case only ever adds to an open quarter.
-    mutateJournal(books, (b) => { b.journalEntries.push(...caseEntries(c)); });
+    update(books, PERSON, (b) => { b.journalEntries.push(...caseEntries(c)); });
     const before = figures(base, c);
     const after = figures(books.journalEntries, c);
     const delta: Record<string, number> = {};

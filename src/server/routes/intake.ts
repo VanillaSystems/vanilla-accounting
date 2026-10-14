@@ -8,6 +8,7 @@ import { IntakeBusyError, runIntake, storePort, type IntakeJob, type IntakeStatu
 import { PIPELINE, askIfReady } from '../../intake/run.js';
 import { WS } from '../books.js';
 import { inboxFiles } from './scan.js';
+import { moduleActor } from '../../books/store.js';
 
 export const router = Router();
 
@@ -23,7 +24,7 @@ function start(): void {
       again = false;
       try {
         await runIntake({
-          ws: WS, books: storePort(WS), ask: await askIfReady(), steps: PIPELINE,
+          ws: WS, books: storePort(WS, moduleActor('intake')), ask: await askIfReady(), steps: PIPELINE,
           log: (line) => { if (line.trim()) console.log(`  intake: ${line}`); },
           onChange: (job) => { last = structuredClone(job); },
         });

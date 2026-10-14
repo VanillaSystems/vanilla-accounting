@@ -18,7 +18,8 @@ imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`),
 `module.yaml`, not in `books.json`: no schema change, and a workspace overlay may name its own;
 the year-end, setup, provider and parser sites follow in step 10), 6 (`modules/ch/periods.yaml`:
 return length and due days; the seals, the filed-return archive and year-close still name
-quarters, `QuarterKey`, and follow with step 10), 7.
+quarters, `QuarterKey`, and follow with step 10), 7, 8 (`update(books, actor, fn)` in `src/books/store.ts`; ownership by
+`origin`: a person's entries change only by a person).
 
 | # | Step | Ends when | Needs |
 |---|---|---|---|

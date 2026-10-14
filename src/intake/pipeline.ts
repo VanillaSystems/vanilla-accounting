@@ -8,7 +8,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
-import { emptyBooks, loadBooks, mutateJournal, saveBooks, type Books } from '../books/store.js';
+import { emptyBooks, loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
 import type { Workspace } from '../workspace/workspace.js';
 
 export const INTAKE_STEPS = ['read', 'vat', 'match', 'classify'] as const;
@@ -55,7 +55,7 @@ export interface IntakeStatus {
 
 /**
  * The books as a step sees them. `update` loads, changes and saves in one synchronous call inside
- * mutateJournal, so a filed quarter never changes and an edit made while a model was thinking is
+ * the write door (src/books/store.ts update), so a filed quarter never changes and an edit made while a model was thinking is
  * not saved over: a step asks the model on what it `read`, then applies the answer in `update`.
  */
 export interface BooksPort {
@@ -82,15 +82,15 @@ export interface StepResult {
 
 export type StepRun = (ctx: StepContext) => Promise<StepResult>;
 
-/** The books of `ws` through src/books/store.ts, for a CLI. */
-export function storePort(ws: Workspace): BooksPort {
+/** The books of `ws` through src/books/store.ts, written as `actor`. */
+export function storePort(ws: Workspace, actor: Actor): BooksPort {
   // Before the first run there is no books.json: the books start empty.
   const load = () => (existsSync(ws.paths.books) ? loadBooks(ws) : emptyBooks());
   return {
     read: load,
     update(fn) {
       const books = load();
-      const out = mutateJournal(books, fn);
+      const out = update(books, actor, fn);
       saveBooks(ws, books);
       return out;
     },

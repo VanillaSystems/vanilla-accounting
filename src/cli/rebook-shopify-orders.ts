@@ -33,7 +33,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { JournalEntry, BankTransaction } from '../types/index.js';
-import { loadBooks, mutateJournal, periodLock, saveBooks } from '../books/store.js';
+import { loadBooks, periodLock, saveBooks, update, PERSON } from '../books/store.js';
 import type { ShopifyOrder } from './extract-shopify-orders.js';
 import { derivePeriod } from '../accounting/periods.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -178,7 +178,7 @@ if (!apply) { console.log('\nDRY RUN — nothing written. Pass --apply to write.
 
 const removeIds = new Set(toRemove.map((e) => e.id));
 const addIds = new Set(toAdd.map((e) => e.id));
-mutateJournal(index, (books) => {
+update(index, PERSON, (books) => {
   books.journalEntries = books.journalEntries.filter((e) => !removeIds.has(e.id) && !addIds.has(e.id)).concat(toAdd);
 });
 saveBooks(ws, index);

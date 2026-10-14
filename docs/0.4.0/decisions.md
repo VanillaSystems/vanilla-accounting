@@ -1,7 +1,8 @@
 # Decisions
 
 **Status: open.** Each decision gets an ADR in `docs/adr/` when it is made; this table then
-links to it. IDs in parentheses refer to the research repo's review findings.
+links to it. Decided on branch `0.4.0` by the leaning, for implementation, open to review: D3 (b),
+D4 (a), D5 (a), D9 (a). IDs in parentheses refer to the research repo's review findings.
 
 | ID | Decision | Options | Leaning | Blocks |
 |---|---|---|---|---|

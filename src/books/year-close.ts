@@ -27,7 +27,7 @@ import { roundCHF } from '../accounting/rappen.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn } from '../invoices/rules.js';
 import { workspaceChecks } from '../workspace/checks.js';
-import { loadBooks, mutateJournal, saveBooks, sealsOf, type Books } from './store.js';
+import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './refs.js';
 
@@ -110,7 +110,7 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
   const missing = rows.filter((r) => r.status === 'no-rate').map((r) => r.currency);
   if (missing.length) throw new YearCloseRefused(`The ESTV rate of 31.12.${year} is not published yet for ${[...new Set(missing)].join(', ')}: npm run fetch-rates -- --year ${year} once it is.`);
   const entries = revaluationEntries(year, rows, yearEndAccounts(chartOf(ws)).fxDifference);
-  mutateJournal(books, (b) => applyRevaluation(b, year, entries));
+  update(books, moduleActor('year-close'), (b) => applyRevaluation(b, year, entries));
   saveBooks(ws, books);
   return entries;
 }
@@ -143,7 +143,7 @@ export interface EntryInput {
  */
 export function bookEntry(ws: Workspace, input: EntryInput, template?: string): JournalEntry {
   const books = loadBooks(ws);
-  const entry = mutateJournal(books, (b) => {
+  const entry = update(books, PERSON, (b) => {
     const year = input.date.slice(0, 4);
     if (template === RECEIVABLES.id && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {
       throw new YearCloseRefused(`The receivables of ${year} are booked already.`);
@@ -224,7 +224,7 @@ export async function openYear(ws: Workspace, year: string, rates: EstvRates = r
   if (opening.residual !== 0) throw new YearCloseRefused(`The opening of ${opening.year} does not balance: Aktiven − Passiven = ${opening.residual.toFixed(2)}.`);
   const changes = openingChanges(books.config.openingBalances?.[opening.year], opening.balances);
   const reversal = receivablesReversal(books.journalEntries, year);
-  mutateJournal(books, (b) => {
+  update(books, moduleActor('year-close'), (b) => {
     const { config } = b;
     if (reversal) b.journalEntries = [...b.journalEntries.filter((x) => x.id !== reversal.id), reversal];
     config.openingBalances = { ...config.openingBalances, [opening.year]: opening.balances };

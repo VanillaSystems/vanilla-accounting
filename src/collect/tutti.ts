@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Index } from '../types/index.js';
-import { loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
+import { loadBooks, periodLock, saveBooks, type Books, update, moduleActor } from '../books/store.js';
 import { ask } from '../llm/ask.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
@@ -241,7 +241,7 @@ function nextManualRef(index: Index, year: string): string {
 
 function importApproved(apply: boolean) {
   const index = loadBooks(ws);
-  mutateJournal(index, (books) => bookApproved(books, apply));
+  update(index, moduleActor('tutti'), (books) => bookApproved(books, apply));
 }
 
 function bookApproved(index: Books, apply: boolean) {

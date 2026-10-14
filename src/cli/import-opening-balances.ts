@@ -23,7 +23,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
-import { loadBooks, mutateJournal, saveBooks } from '../books/store.js';
+import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
 import { toRappen, fromRappen } from '../accounting/rappen.js';
 import { chart, baseCurrency } from '../engines/index.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -216,7 +216,7 @@ function main() {
     process.exit(1);
   }
   const index = loadBooks(ws);
-  mutateJournal(index, ({ config }) => {
+  update(index, PERSON, ({ config }) => {
     if (!config.openingBalances) config.openingBalances = {};
     config.openingBalances[year] = opening;
     // A native value the export does not carry was set from another source (1093 Stripe EUR is a
