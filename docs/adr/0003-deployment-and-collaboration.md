@@ -388,6 +388,7 @@ One target is built and supported first; the others follow.
 4. **Cloud instance** for a review: one host target, login gate, review branch, durable clone,
    verified sync before deletion; take-over into `main` in the app.
 5. **Data by year and record** (3), seals untouched ([ADR 0004](0004-versions-and-record-envelope.md));
+   brought forward into 0.4.0, before the first year close ([ADR 0013](0013-workspace-layout-and-ownership.md));
    merge driver, structural invariants, close-readiness checks, allocations, group conflicts.
 6. **Contributors on branches**, host permissions read by the app, regular take-over.
 7. **Full service:** permanent instance, model calls with the company's key, the remote MCP

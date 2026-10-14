@@ -17,6 +17,7 @@ D4 (a), D5 (a), D9 (a). IDs in parentheses refer to the research repo's review f
 | D9 | **LLM steps and replay** (G4). An LLM step is not deterministic. | (a) replay uses the recorded LLM answer; (b) replay asks again and shows the difference | (a) by default, (b) on request | step 9 |
 | D10 | **Folder for app modules and workflows.** | (a) `modules/` and `workflows/` at the repo root; (b) under `src/` | (a): they are data, public, and read by the lint like `processes/` | step 3 |
 | D11 | **Who saves the books** (amends ADR 0003 §4). | (a) every change is a commit at once, as ADR 0003 says; (b) workflows and the AI write, a person saves what the AI prepared; filing, seals and year close save themselves | (b): the page shows the work done and the person approves it; (a) stays available as the setting «automatisch speichern» | saving.md, step 13 |
+| D12 | **Workspace layout** ([ADR 0013](../adr/0013-workspace-layout-and-ownership.md)). What is the app's at the workspace root, and when the books split by year. | (a) one owner list in `WorkspacePaths`, everything else in `own/`, year split in 0.4.0; (b) everything of the app under one folder; (c) as today, split later with the cloud instance (ADR 0003) | (a) | step 14 |
 
 ## Settled already, for reference
 
