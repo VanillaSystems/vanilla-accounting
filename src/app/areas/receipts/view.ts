@@ -5,6 +5,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { Location, Route } from '../../shell/route.js';
 import { ledgerOf, type Candidate, type Ledger } from './model.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 let memo: { books: Index; ledger: Ledger } | undefined;
 
@@ -22,9 +23,9 @@ export const signed = (tx: BankTransaction) => (tx.direction === 'DBIT' ? -1 : 1
 
 /** The account a payment moved on: the bank's label, its currency when not CHF; a private outlay is "Privat". */
 export const bankOf = (tx: BankTransaction) =>
-  tx.bank === 'manual' ? t('receipts.private') : tx.currency !== 'CHF' ? `${tx.bank} ${tx.currency}` : tx.bank;
+  tx.bank === 'manual' ? t('receipts.private') : tx.currency !== baseCurrency() ? `${tx.bank} ${tx.currency}` : tx.bank;
 
-export const amountOf = (tx: BankTransaction) => `${tx.currency !== 'CHF' ? `${tx.currency} ` : ''}${fmt(signed(tx))}`;
+export const amountOf = (tx: BankTransaction) => `${tx.currency !== baseCurrency() ? `${tx.currency} ` : ''}${fmt(signed(tx))}`;
 
 /** A payment in one line, for toasts: "29.09.2026 Raiffeisen −15.00". */
 export const txLine = (tx: BankTransaction) => `${formatDate(tx.date)} ${bankOf(tx)} ${amountOf(tx)}`;

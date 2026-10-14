@@ -18,6 +18,7 @@ import { parseReference } from './reference.js';
 import { allocate, liveInvoices, openAmount, openFees, revenueSplit, totals, withPayment } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
+import { baseCurrency } from '../engines/index.js';
 
 export interface PaymentContext {
   bankAccounts: readonly LedgerBankAccount[];
@@ -121,8 +122,8 @@ function replace(book: InvoiceBook, inv: Issued): void {
 /** The revenue of one allocation as journal entries, the invoice PDF as their receipt. */
 export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: PaymentAllocation, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): JournalEntry[] {
   const bank = bankAccountFor(tx, ctx.bankAccounts);
-  const rate = tx.currency === 'CHF' ? undefined : ctx.fx.daily(tx.currency, tx.date);
-  if (tx.currency !== 'CHF' && rate === undefined) throw new Error(`Kein ESTV-Kurs ${tx.currency} für ${tx.date}: npm run fetch-rates`);
+  const rate = tx.currency === baseCurrency() ? undefined : ctx.fx.daily(tx.currency, tx.date);
+  if (tx.currency !== baseCurrency() && rate === undefined) throw new Error(`Kein ESTV-Kurs ${tx.currency} für ${tx.date}: npm run fetch-rates`);
   const text = `${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`;
   const legs = [
     ...revenueSplit(inv, a.amount, ctx.revenueAccount),

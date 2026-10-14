@@ -7,6 +7,7 @@ import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../typ
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
 import type { Period } from '../../../accounting/periods.js';
 import type { ReceiptFilter } from '../../shell/route.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 /** The kinds of document that are not a receipt of their own. */
 const NON_RECEIPT_KINDS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
@@ -155,7 +156,7 @@ export function groups(rows: ReceiptView[], l: Ledger, filter: ReceiptFilter | u
 export type ToChf = (amount: number, currency: string, date: string) => number;
 
 export const chfOf = (rates: EstvRates | null): ToChf => (amount, currency, date) =>
-  currency === 'CHF' ? amount : amount * (rates?.on(currency, date)?.rate ?? 1);
+  currency === baseCurrency() ? amount : amount * (rates?.on(currency, date)?.rate ?? 1);
 
 export interface Candidate {
   tx: BankTransaction;
@@ -181,7 +182,7 @@ const DAY = 864e5;
 export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''): { best: Candidate[]; more: Candidate[] } {
   const { r } = v;
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const cur = r.currency || 'CHF';
+  const cur = r.currency || baseCurrency();
   const all: Candidate[] = [];
   for (const tx of l.txByRef.values()) {
     if (tx.amount === 0 || tx.type === 'wise-fee' || v.links.includes(tx.ref)) continue;

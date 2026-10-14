@@ -14,7 +14,9 @@ marked *decided*.
 ## Steps
 
 Done on branch `0.4.0`: 0, 1 ([inventory.md](inventory.md)), 2 (`tests/layers.test.ts`, 40 wrong-way
-imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`), 4 (`modules/ch/chart.yaml`), 7.
+imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`), 4 (`modules/ch/chart.yaml`), 5 (`baseCurrency` in
+`module.yaml`, not in `books.json`: no schema change, and a workspace overlay may name its own;
+the year-end, setup, provider and parser sites follow in step 10), 7.
 
 | # | Step | Ends when | Needs |
 |---|---|---|---|

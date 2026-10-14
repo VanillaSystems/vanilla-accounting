@@ -24,6 +24,7 @@ import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
 import { MailSection } from './MailSection.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
@@ -278,7 +279,7 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
 }
 
 function AddBank({ nav, onDone }: { nav: Nav; onDone(): void }) {
-  const [f, setF] = useState({ bank: '', currency: 'CHF', account: '', label: '', iban: '' });
+  const [f, setF] = useState({ bank: '', currency: baseCurrency(), account: '', label: '', iban: '' });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const valid = !!f.bank.trim() && /^[A-Za-z]{3}$/.test(f.currency.trim()) && /^\d{4}$/.test(f.account.trim()) && !!f.label.trim();
   async function save(e: FormEvent) {

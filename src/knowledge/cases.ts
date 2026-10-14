@@ -15,7 +15,7 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import type { BankTransaction, JournalEntry, QuarterKey, Receipt } from '../types/index.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { loadChart } from '../workspace/chart.js';
-import { vat } from '../engines/index.js';
+import { vat, baseCurrency } from '../engines/index.js';
 
 export const CASES_DIR = join(APP_ROOT, 'examples', 'cases');
 /** The KMU accounts the casebook books on (Kontenrahmen KMU), number → name. */
@@ -249,13 +249,13 @@ export function validateCase(c: BookingCase, ctx: { chart: ReadonlyMap<string, s
 
   const tx = c.transaction;
   if (tx) {
-    const native = (l: CaseLine) => (l.currency ? l.currency === tx.currency : tx.currency === 'CHF');
+    const native = (l: CaseLine) => (l.currency ? l.currency === tx.currency : tx.currency === baseCurrency());
     const moved = c.lines.reduce((s, l) => s
       + (l.debit === tx.account && native(l) ? (tx.direction === 'CRDT' ? l.amount : -l.amount) : 0)
       + (l.credit === tx.account && native(l) ? (tx.direction === 'DBIT' ? l.amount : -l.amount) : 0), 0);
     if (Math.round(moved * 100) !== Math.round(tx.amount * 100)) err(`the lines move ${moved} on ${tx.account}, the transaction ${tx.amount} ${tx.currency} — they must agree`);
     if (tx.parts && Math.round(tx.parts.reduce((s, p) => s + p.amount, 0) * 100) !== Math.round(tx.amount * 100)) err('the parts must sum to the transaction amount');
-    if (tx.currency !== 'CHF' && c.lines.some((l) => (l.debit === tx.account || l.credit === tx.account) && l.currency !== tx.currency)) err(`a ${tx.currency} transaction's bank rows carry currency ${tx.currency} and the ESTV rate`);
+    if (tx.currency !== baseCurrency() && c.lines.some((l) => (l.debit === tx.account || l.credit === tx.account) && l.currency !== tx.currency)) err(`a ${tx.currency} transaction's bank rows carry currency ${tx.currency} and the ESTV rate`);
   }
 
   const effect = zifferEffect(c);
@@ -310,7 +310,7 @@ export const FOREIGN_HINT = /\b[\w-]+\.(?:com|io|ai|net|org|de|fr|it|at|ie|nl|co
 /** The counterparty kinds a transaction's structure alone points at. Keywords decide the rest. */
 function inferredKinds(tx: SelectionTransaction, receipts: readonly SelectionReceipt[]): Set<CounterpartyKind> {
   const kinds = new Set<CounterpartyKind>();
-  const foreignCurrency = tx.currency !== 'CHF';
+  const foreignCurrency = tx.currency !== baseCurrency();
   const text = receipts.map((r) => r.extractedText ?? '').join('\n');
   const swissUid = receipts.some((r) => r.vatId?.startsWith('CHE'));
   const foreign = foreignCurrency || FOREIGN_HINT.test(text);
@@ -341,7 +341,7 @@ export function selectCases(tx: SelectionTransaction, receipts: readonly Selecti
     const vatFits = receipts.length === 0 ? c.receipt === null : !!c.receipt && c.receipt.swissVat === swissVat;
     // A case whose receipt says the opposite about Swiss MWST would teach the wrong code.
     const contradicts = receipts.length > 0 && !!c.receipt && c.receipt.swissVat !== swissVat;
-    const structural = (vatFits ? 2 : 0) + (ctx?.direction === tx.direction ? 2 : 0) + ((ctx?.currency ?? 'CHF') !== 'CHF' === (tx.currency !== 'CHF') ? 1 : 0);
+    const structural = (vatFits ? 2 : 0) + (ctx?.direction === tx.direction ? 2 : 0) + ((ctx?.currency ?? baseCurrency()) !== baseCurrency() === (tx.currency !== baseCurrency()) ? 1 : 0);
     return { c, score: score + structural, relevant: !contradicts && (hits > 0 || kinds.has(c.signals.kind)) };
   });
   return scored.filter((s) => s.relevant)

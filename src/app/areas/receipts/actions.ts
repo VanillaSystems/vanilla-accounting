@@ -8,6 +8,7 @@ import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import type { ReceiptView } from './model.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 async function run(nav: Nav, call: () => Promise<unknown>, message: string, undo?: () => Promise<unknown>): Promise<boolean> {
   try {
@@ -41,7 +42,7 @@ export async function privateOutlay(nav: Nav, v: ReceiptView): Promise<boolean> 
   }
   let ref = '';
   return run(nav, async () => {
-    ref = await api.createManualTransaction({ date: v.date!, description: r.description || r.filename, amount: Math.abs(r.amount!), currency: r.currency || 'CHF' });
+    ref = await api.createManualTransaction({ date: v.date!, description: r.description || r.filename, amount: Math.abs(r.amount!), currency: r.currency || baseCurrency() });
     await api.addMapping(pair(r.id, ref));
   }, t('receipts.privateDone'), () => api.deleteTransaction(ref));
 }
@@ -70,7 +71,7 @@ export function saveFields(nav: Nav, v: ReceiptView, patch: ReceiptPatch, change
   if ('date' in patch) back.date = r.date ?? null;
   if ('amount' in patch) {
     if (r.amount == null) back.amount = null;
-    else { back.amount = r.amount; back.currency = r.currency || 'CHF'; }
+    else { back.amount = r.amount; back.currency = r.currency || baseCurrency(); }
   }
   if ('description' in patch) back.description = r.description ?? '';
   if ('remarks' in patch) back.remarks = r.remarks ?? '';

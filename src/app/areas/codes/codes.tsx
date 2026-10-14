@@ -18,6 +18,7 @@ import { Kbd } from '../receipts/commands.js';
 import { codeGroups, splitCodes, vatStats, type CodeRow } from './model.js';
 import { codesUi, setCodesUi, toggleFamily, useCodesUi } from './state.js';
 import { amountText, codeText, kindName, rateName, rateOf, showOnly, VatCards, zifferName } from './vat-card.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'codes'>>;
 
@@ -140,7 +141,7 @@ function Detail(props: Props) {
             {e.examples.slice(0, 3).map((x) => (
               <div key={`${x.caseId}-${x.description}`} className="ex">
                 <div className="ext">{x.title}</div>
-                <div className="exl mono"><span>{x.debit || '–'} / {x.credit || '–'}</span><span>{x.vatCode}</span><span>{x.currency ?? 'CHF'} {fmt(x.amount)}</span></div>
+                <div className="exl mono"><span>{x.debit || '–'} / {x.credit || '–'}</span><span>{x.vatCode}</span><span>{x.currency ?? baseCurrency()} {fmt(x.amount)}</span></div>
                 <div className="exd">{x.description}</div>
               </div>
             ))}
@@ -155,7 +156,7 @@ function Detail(props: Props) {
                 {entries.slice(0, SHOWN_ENTRIES).map((x) => (
                   <button key={x.id} type="button" className="tx go" onClick={() => nav.go({ route: { area: 'journal', id: x.id }, query: { period: props.query.period } })}>
                     <span className="d">{formatDate(x.date)} · {x.accountDebit || '–'} / {x.accountCredit || '–'}</span>
-                    <span className="am">{x.exchangeCurrency && x.exchangeCurrency !== 'CHF' ? `${x.exchangeCurrency} ` : ''}{fmt(x.amount)}</span>
+                    <span className="am">{x.exchangeCurrency && x.exchangeCurrency !== baseCurrency() ? `${x.exchangeCurrency} ` : ''}{fmt(x.amount)}</span>
                     <span className="tt">{x.description}</span>
                   </button>
                 ))}

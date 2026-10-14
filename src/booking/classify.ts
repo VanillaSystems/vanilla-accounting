@@ -13,6 +13,7 @@ import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
+import { baseCurrency } from '../engines/index.js';
 
 export const BATCH_SIZE = 10;
 export const CONCURRENCY = 3;
@@ -37,7 +38,7 @@ export interface EntryContext {
  */
 export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, bankAccount, lock }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
-  const fxStamp = tx.currency === 'CHF'
+  const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const orderDate = receiptDate && !lock.isClosed(receiptDate) ? receiptDate : tx.date;

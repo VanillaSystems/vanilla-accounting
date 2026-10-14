@@ -9,6 +9,7 @@ import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, openAmount, totals } from '../../../invoices/rules.js';
 import type { InvoiceList } from '../../lib/api.js';
 import type { InvoiceStatus } from '../../shell/route.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 /** What a row and its group say: an issued invoice is open or overdue until paid; a credit note and a cancelled invoice are their own groups. */
 export type RowState = 'overdue' | 'open' | 'draft' | 'paid' | 'credit' | 'cancelled';
@@ -64,13 +65,13 @@ export function groupsOf(rows: readonly InvoiceRow[], status: InvoiceStatus | un
 
 /** What customers still owe in CHF, and how much of it is overdue (EUR invoices are shown in their rows). */
 export function openSums(rows: readonly InvoiceRow[], invoices: readonly Invoice[]): { open: number; overdue: number } {
-  const sum = (states: RowState[]) => Math.round(rows.filter((r) => states.includes(r.state) && r.inv.currency === 'CHF').reduce((s, r) => s + openAmount(r.inv, invoices), 0) * 100) / 100;
+  const sum = (states: RowState[]) => Math.round(rows.filter((r) => states.includes(r.state) && r.inv.currency === baseCurrency()).reduce((s, r) => s + openAmount(r.inv, invoices), 0) * 100) / 100;
   return { open: sum(['open', 'overdue']), overdue: sum(['overdue']) };
 }
 
 /** A customer's open invoices in CHF, for the customer list. */
 export function customerOpen(d: InvoiceList, id: string): number {
-  return Math.round(d.invoices.filter((i) => i.status === 'issued' && i.customerId === id && i.currency === 'CHF').reduce((s, i) => s + openAmount(i, d.invoices), 0) * 100) / 100;
+  return Math.round(d.invoices.filter((i) => i.status === 'issued' && i.customerId === id && i.currency === baseCurrency()).reduce((s, i) => s + openAmount(i, d.invoices), 0) * 100) / 100;
 }
 
 /** The sent documents, newest first, searched by title, customer and recipient. */

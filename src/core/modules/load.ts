@@ -58,7 +58,7 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
   };
 
   const jurisdiction: Jurisdiction = {
-    manifest: readYaml(join(shippedDir, 'module.yaml')) as ModuleManifest,
+    manifest: { ...readYaml(join(shippedDir, 'module.yaml')) as ModuleManifest, ...(overlayManifest?.baseCurrency ? { baseCurrency: overlayManifest.baseCurrency } : {}) },
     rates: part<RatesData>(FILES.rates, 'rates'),
     taxCodes: part<TaxCodesData>(FILES.taxCodes, 'taxCodes'),
     vatReturn: part<ReturnData>(FILES.vatReturn, 'vatReturn'),

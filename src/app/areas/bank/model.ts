@@ -10,6 +10,7 @@ import { addDays, type IsoDate } from '../../../accounting/periods.js';
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
 import { fromRappen, toRappen } from '../../../accounting/rappen.js';
 import { splitTitle } from '../receipts/model.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'statements'>;
 
@@ -109,7 +110,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
 
   const files = new Map<string, Statement[]>(banked.map((a) => [a.account, []]));
   for (const f of books.bankStatements) {
-    const a = accountOf(f.bank, f.currency ?? 'CHF');
+    const a = accountOf(f.bank, f.currency ?? baseCurrency());
     if (a) files.get(a.account)!.push({ key: statementKey(a.account, f.fromDate), account: a, from: f.fromDate, to: f.toDate, file: f });
   }
 

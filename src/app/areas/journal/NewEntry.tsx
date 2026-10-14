@@ -17,6 +17,7 @@ import { createEntry } from './actions.js';
 import { AccountField } from './AccountField.js';
 import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -70,7 +71,7 @@ export function NewEntry(props: Props) {
         <form ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onSubmit={(e) => { e.preventDefault(); book(); }}>
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} autoFocus /></label>
-            <label>{t('journal.amountIn', { currency: 'CHF' })}<input className="mono" name="amount" defaultValue={d.amount ? fmt(d.amount) : ''} style={{ textAlign: 'right' }} /></label>
+            <label>{t('journal.amountIn', { currency: baseCurrency() })}<input className="mono" name="amount" defaultValue={d.amount ? fmt(d.amount) : ''} style={{ textAlign: 'right' }} /></label>
           </div>
           <div className="two">
             <AccountField name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />

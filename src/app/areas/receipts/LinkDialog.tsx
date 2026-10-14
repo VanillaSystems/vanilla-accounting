@@ -13,6 +13,7 @@ import { candidates, chfOf, type Candidate, type Ledger, type ReceiptView } from
 import { bankOf, dayText, signed, txLine } from './view.js';
 import { linkPayment, privateOutlay } from './actions.js';
 import { Kbd } from './commands.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClose(): void };
 
@@ -56,7 +57,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
       <div key={c.tx.ref} className={`o tx2${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-ref={c.tx.ref} onMouseMove={() => i !== at && setIdx(i)} onClick={() => choose(c)}>
         <span className="d mono">{formatDate(c.tx.date)}</span>
         <span className="t"><span>{c.tx.description}</span><small>{bankOf(c.tx)}{w && ` · ${w}`}</small></span>
-        <span className="a mono">{c.tx.currency !== 'CHF' && <i>{c.tx.currency}</i>}{fmt(signed(c.tx))}</span>
+        <span className="a mono">{c.tx.currency !== baseCurrency() && <i>{c.tx.currency}</i>}{fmt(signed(c.tx))}</span>
       </div>
     );
   };
@@ -68,7 +69,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
       <div className="palette linkdlg" role="dialog" aria-label={t('receipts.linkPayment')}>
         <div className="ctx">
           <div><span className="lbl">{t('receipts.linkPayment')}</span><b>{v.vendor}</b> <span className="m">{v.desc}</span></div>
-          <div className="mono">{v.date ? formatDate(v.date) : t('receipts.noDate')} · <b>{r.currency || 'CHF'} {r.amount != null ? fmt(r.amount) : '—'}</b></div>
+          <div className="mono">{v.date ? formatDate(v.date) : t('receipts.noDate')} · <b>{r.currency || baseCurrency()} {r.amount != null ? fmt(r.amount) : '—'}</b></div>
         </div>
         <input autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(0); }} onKeyDown={onKeyDown} />
         <div className="res" role="listbox">

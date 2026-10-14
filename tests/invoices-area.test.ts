@@ -12,6 +12,7 @@ import type { InvoiceBook } from '../src/invoices/model.js';
 import { byRouteId, counts, customerChange, groupsOf, openSums, routeId, rowsOf } from '../src/app/areas/invoices/model.js';
 import { addressRule, countryOf, languageFor, numberFirst, vatRule } from '../src/app/areas/invoices/address.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import './support/jurisdiction.js';
 
 const TODAY = '2026-10-11';
 const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;

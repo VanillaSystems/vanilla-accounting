@@ -22,6 +22,7 @@ import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, pickStatements, setNote, setNoReceipt } from './actions.js';
 import { at } from '../receipts/view.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -129,7 +130,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
               </div>
             </Sec>
           )}
-          {s.account.currency !== 'CHF' && <Rates b={b} pays={pays} />}
+          {s.account.currency !== baseCurrency() && <Rates b={b} pays={pays} />}
           {s.file && (
             <Sec k="datei" label={t('bank.sec.datei')} val="">
               <dl className="kv">

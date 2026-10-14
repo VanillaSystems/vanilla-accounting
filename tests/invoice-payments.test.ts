@@ -14,6 +14,7 @@ import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issue
 import { scorReference } from '../src/invoices/reference.js';
 import type { Books } from '../src/books/store.js';
 import type { BankTransaction } from '../src/types/index.js';
+import './support/jurisdiction.js';
 
 const customer: Customer = {
   id: 'cu_1', createdAt: '2026-07-01T08:00:00Z', origin: 'manual', deleted: false,

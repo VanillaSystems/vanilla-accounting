@@ -23,6 +23,7 @@ import { Detail } from './Detail.js';
 import { Dialogs } from './dialogs.js';
 import { countryName } from './address.js';
 import { localToday } from '../../../accounting/periods.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -147,7 +148,7 @@ function Row({ r, sel, onSelect }: { r: InvoiceRow; sel: boolean; onSelect(): vo
     <div className={`row inv st-${r.state}${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={routeId(inv)} onClick={onSelect}>
       <span className="d mono">{inv.status === 'issued' ? inv.number : <span className="draftno">{t('invoices.draft')}</span>}</span>
       <span className="t">{r.state === 'overdue' && I.dot}{r.customer} {inv.subject && <small>{inv.subject}</small>}</span>
-      <span className="a mono">{inv.currency !== 'CHF' && <span className="c">{inv.currency}</span>}{fmt(r.gross)}</span>
+      <span className="a mono">{inv.currency !== baseCurrency() && <span className="c">{inv.currency}</span>}{fmt(r.gross)}</span>
     </div>
   );
 }

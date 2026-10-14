@@ -83,6 +83,16 @@ test('a workspace whose chart puts class 4 on the credit side changes that norma
   }
 });
 
+test('the base currency is the jurisdiction\'s unless the workspace overlay names its own', () => {
+  assert.equal(loadJurisdiction(APP_ROOT, 'ch').jurisdiction.manifest.baseCurrency, 'CHF');
+  const ws = workspaceWith({ 'module.yaml': 'overlays: ch\nbaseCurrency: EUR\n' });
+  try {
+    assert.equal(loadJurisdiction(APP_ROOT, 'ch', ws).jurisdiction.manifest.baseCurrency, 'EUR');
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
+  }
+});
+
 test('a jurisdiction the app does not ship is refused with the reason', () => {
   assert.throws(() => loadJurisdiction(APP_ROOT, 'xx'), /no module "xx"/);
 });

@@ -13,6 +13,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { REFERENCE_DIR } from '../workspace/workspace.js';
 import { estvRates, type EstvRateTable } from './fx-conversion.js';
+import { baseCurrency } from '../engines/index.js';
 
 /** One file per year, reference/estv-daily-rates-<year>.json (npm run fetch-rates -- --year <year>). */
 const DAILY_RATES_FILE = /^estv-daily-rates-(\d{4})\.json$/;
@@ -57,7 +58,7 @@ export function loadFxResolver(dir: string = REFERENCE_DIR): FxResolver {
 
   return {
     daily(currency, date) {
-      return currency === 'CHF' ? 1 : estv.on(currency, date)?.rate;
+      return currency === baseCurrency() ? 1 : estv.on(currency, date)?.rate;
     },
     flat(currency) {
       return flatRates[currency];

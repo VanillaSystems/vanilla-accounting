@@ -5,6 +5,7 @@
  */
 import type { JournalEntry } from '../types/index.js';
 import { chfAmount } from './ledger.js';
+import { baseCurrency } from '../engines/index.js';
 
 /** reference/estv-daily-rates-<year>.json as `npm run fetch-rates` writes it. */
 export interface EstvRateTable {
@@ -83,7 +84,7 @@ export interface Conversion {
 /** Undefined for a CHF entry. */
 export function conversionOf(entry: JournalEntry, paymentDate: string, rates: EstvRates): Conversion | undefined {
   const currency = entry.exchangeCurrency;
-  if (!currency || currency === 'CHF') return undefined;
+  if (!currency || currency === baseCurrency()) return undefined;
   const estv = rates.on(currency, paymentDate);
   const check: RateCheck = !estv ? { kind: 'unknown' } : sameRate(entry.exchangeRate, estv.rate) ? { kind: 'estv', estv } : { kind: 'differs', estv };
   return { currency, amount: entry.amount, rate: entry.exchangeRate, chf: chfAmount(entry), paymentDate, check };

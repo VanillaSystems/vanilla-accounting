@@ -17,7 +17,7 @@ import { chfAmount, computeBalances } from './ledger.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { derivePeriod } from './periods.js';
-import { chart, vat } from '../engines/index.js';
+import { chart, vat, baseCurrency } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -199,7 +199,7 @@ export function foreignAccounts(bankAccounts: readonly LedgerBankAccount[]): For
   const byAccount = new Map<string, LedgerBankAccount[]>();
   for (const b of bankAccounts) byAccount.set(b.account, [...(byAccount.get(b.account) ?? []), b]);
   return [...byAccount.values()]
-    .filter((bs) => bs[0].currency !== 'CHF' && bs.every((b) => b.currency === bs[0].currency))
+    .filter((bs) => bs[0].currency !== baseCurrency() && bs.every((b) => b.currency === bs[0].currency))
     .map(([b]) => ({ account: b.account, currency: b.currency, label: b.label }))
     .sort((a, b) => a.account.localeCompare(b.account));
 }

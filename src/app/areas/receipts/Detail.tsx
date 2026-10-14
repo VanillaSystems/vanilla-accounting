@@ -21,6 +21,7 @@ import { deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type 
 import { LinkDialog } from './LinkDialog.js';
 import { Paper } from './Paper.js';
 import { I } from './icons.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -66,9 +67,9 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const s = useUi();
   const { rates } = useFx();
   const edit = canEdit && !v.locked;
-  const cur = r.currency || 'CHF';
+  const cur = r.currency || baseCurrency();
   const firstTx = v.links.map((ref) => l.txByRef.get(ref)).find(Boolean);
-  const rate = cur !== 'CHF' && firstTx && rates?.on(cur, firstTx.date);
+  const rate = cur !== baseCurrency() && firstTx && rates?.on(cur, firstTx.date);
   const vat = r.hasSwissVat ? (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && g.vat) : [];
   const src = sources.receipt(r.id);
   const open = parsePeriod(l.openFrom.slice(0, 4) + '-Q' + Math.ceil(Number(l.openFrom.slice(5, 7)) / 3), localToday());
@@ -248,7 +249,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
   const s = useUi();
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
-  const currencies = useMemo(() => [...new Set([...CURRENCIES, r.currency || 'CHF'])], [r.currency]);
+  const currencies = useMemo(() => [...new Set([...CURRENCIES, r.currency || baseCurrency()])], [r.currency]);
 
   useEffect(() => {
     if (!s.open.angaben || !s.focus) return;
@@ -269,12 +270,12 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
     const filename = f.filename.trim() || r.filename;
     if (filename !== r.filename) { patch.filename = filename; changed.push('filename'); }
     if ((date ?? undefined) !== r.date) { patch.date = date; changed.push('date'); }
-    const cur = f.currency || r.currency || 'CHF';
-    if ((amount ?? undefined) !== r.amount || (amount != null && cur !== (r.currency || 'CHF'))) {
+    const cur = f.currency || r.currency || baseCurrency();
+    if ((amount ?? undefined) !== r.amount || (amount != null && cur !== (r.currency || baseCurrency()))) {
       if (amount == null) patch.amount = null;
       else { patch.amount = amount; patch.currency = cur; }
       if ((amount ?? undefined) !== r.amount) changed.push('amount');
-      if (amount != null && cur !== (r.currency || 'CHF')) changed.push('currency');
+      if (amount != null && cur !== (r.currency || baseCurrency())) changed.push('currency');
     }
     if (f.description !== (r.description ?? '')) { patch.description = f.description; changed.push('description'); }
     if (f.remarks !== (r.remarks ?? '')) { patch.remarks = f.remarks; changed.push('remarks'); }
@@ -296,7 +297,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
         <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} style={{ fontSize: 12 }} /></label>
         <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={t('receipts.datePlaceholder')} readOnly={!edit} /></label>
         <div className="two">
-          <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || 'CHF'} disabled={!edit}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
           <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
         <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!edit} /></label>

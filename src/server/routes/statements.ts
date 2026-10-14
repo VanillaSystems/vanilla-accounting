@@ -22,6 +22,7 @@ import type { StatementClosingBalance, StatementImport } from '../../types/index
 import { parseIban } from '../../workspace/banks.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, readBooks, withBooks } from '../books.js';
+import { baseCurrency } from '../../engines/index.js';
 
 export const router = Router();
 
@@ -75,7 +76,7 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
   const iban = /\b([A-Z]{2}\d{2}[A-Z0-9]{11,30})\b/.exec(filename.replace(/\s+(?=\d)/g, ''))?.[1];
   const byIban = iban ? imported().find((a) => a.iban && a.iban === parseIban(iban)) : undefined;
   const wise = named.currency ? imported().find((a) => a.statements === 'wise' && a.currency === named.currency) : undefined;
-  const chf = imported().filter((a) => a.statements !== 'wise' && a.currency === 'CHF');
+  const chf = imported().filter((a) => a.statements !== 'wise' && a.currency === baseCurrency());
   const account = byIban ?? wise ?? hint ?? (chf.length === 1 ? chf[0] : undefined);
   if (!account) return refuse(400, 'Zu welchem Konto gehört der Auszug? Aus dem fehlenden Monat hinzufügen.', 'account');
   return { account, filename, last: named.toDate };

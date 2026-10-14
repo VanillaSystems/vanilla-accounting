@@ -11,6 +11,7 @@ import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/pro
 import type { BankTransaction, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
+import { baseCurrency } from '../engines/index.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -26,14 +27,14 @@ function filterByAmount(txs: BankTransaction[], receiptAmount?: number, receiptC
   if (!receiptAmount || receiptAmount <= 0) return txs;
 
   // Convert receipt amount to CHF for comparison (simplified rates)
-  const chfAmount = toCHF(receiptAmount, receiptCurrency || 'CHF');
+  const chfAmount = toCHF(receiptAmount, receiptCurrency || baseCurrency());
 
   // Allow ±30% range to account for fees, partial payments, currency fluctuations
   const minAmount = chfAmount * 0.7;
   const maxAmount = chfAmount * 1.3;
 
   return txs.filter((tx) => {
-    const txAmount = toCHF(tx.amount, tx.currency || 'CHF');
+    const txAmount = toCHF(tx.amount, tx.currency || baseCurrency());
     return txAmount >= minAmount && txAmount <= maxAmount;
   });
 }
@@ -70,7 +71,7 @@ function rankByProximity(txs: BankTransaction[], targetAmount: number, targetCur
   return txs
     .map((tx) => ({
       tx,
-      diff: Math.abs(toCHF(tx.amount, tx.currency || 'CHF') - chfTarget)
+      diff: Math.abs(toCHF(tx.amount, tx.currency || baseCurrency()) - chfTarget)
     }))
     .sort((a, b) => a.diff - b.diff)
     .map((item) => item.tx);
@@ -107,7 +108,7 @@ function candidates(receipt: Receipt, all: BankTransaction[]): BankTransaction[]
   // keyword instead of amount so the correct transaction isn't excluded as a candidate.
   if (isGroupedVendorReceipt(receipt.extractedText)) txs = filterByVendorKeyword(txs, receipt.extractedText!);
   else if (receipt.amount && receipt.amount > 0) txs = filterByAmount(txs, receipt.amount, receipt.currency);
-  if (receipt.amount && receipt.amount > 0) txs = rankByProximity(txs, receipt.amount, receipt.currency || 'CHF');
+  if (receipt.amount && receipt.amount > 0) txs = rankByProximity(txs, receipt.amount, receipt.currency || baseCurrency());
   return txs.slice(0, 20);
 }
 

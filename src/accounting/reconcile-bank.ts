@@ -16,6 +16,7 @@ import type { Index, JournalEntry, StatementClosingBalance } from '../types/inde
 import { toRappen, fromRappen } from './rappen.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { BalanceSnapshot } from '../parsers/statement-balances.js';
+import { baseCurrency } from '../engines/index.js';
 
 export interface ReconcileRow {
   account: string;
@@ -36,7 +37,7 @@ export function nativeOpening(index: Pick<Index, 'config'>, account: string, cur
   const native = index.config?.openingBalancesNative?.[year]?.[account];
   if (native && native.currency === currency) return native.amount;
   // CHF accounts store their opening in the plain (CHF) opening-balance table.
-  if (currency === 'CHF') return index.config?.openingBalances?.[year]?.[account] ?? 0;
+  if (currency === baseCurrency()) return index.config?.openingBalances?.[year]?.[account] ?? 0;
   return 0;
 }
 

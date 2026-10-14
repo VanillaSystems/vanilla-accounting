@@ -23,3 +23,6 @@ export const vat = (): ReturnEngine => loaded().vat;
 
 /** The open workspace's chart: what an account is. */
 export const chart = (): ChartEngine => loaded().chart;
+
+/** The currency the books are kept in: every amount without an exchange currency is in it. */
+export const baseCurrency = (): string => loaded().source.manifest.baseCurrency;

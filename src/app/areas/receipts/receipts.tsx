@@ -22,6 +22,7 @@ import { startIntake, useIntake } from '../../shell/Intake.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -189,7 +190,7 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
     >
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? formatDate(v.date) : <span className="d none">{t('receipts.noDate')}</span>}</span>
       <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}</span>
-      <span className="a mono">{r.amount != null && <>{(r.currency ?? 'CHF') !== 'CHF' && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
+      <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
           edit && <button type="button" title={t('receipts.isReceipt')} aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>

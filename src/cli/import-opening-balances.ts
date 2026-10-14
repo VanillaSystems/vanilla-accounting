@@ -25,7 +25,7 @@ import { join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
 import { loadBooks, mutateJournal, saveBooks } from '../books/store.js';
 import { toRappen, fromRappen } from '../accounting/rappen.js';
-import { chart } from '../engines/index.js';
+import { chart, baseCurrency } from '../engines/index.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
@@ -128,7 +128,7 @@ function main() {
     const nat = naturalBalance(a.account, a.balanceCHF);
     if (toRappen(nat) === 0) continue;
     opening[a.account] = fromRappen(toRappen(nat));
-    if (a.currency && a.currency !== 'CHF') {
+    if (a.currency && a.currency !== baseCurrency()) {
       const natCur = naturalBalance(a.account, a.balanceCurrency);
       openingNative[a.account] = { amount: fromRappen(toRappen(natCur)), currency: a.currency };
       currencyNotes.push(

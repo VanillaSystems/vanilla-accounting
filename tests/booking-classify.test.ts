@@ -16,6 +16,7 @@ import { ClosedPeriodError, periodLock, type Books } from '../src/books/store.js
 import type { ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { startApi } from './support/api-server.js';
+import './support/jurisdiction.js';
 
 const REPO = process.cwd();
 const fx = loadFxResolver();

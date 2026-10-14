@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
+import './support/jurisdiction.js';
 
 test('real ESTV rate file: each payment date gets its own daily sell rate', () => {
   const fx = loadFxResolver();

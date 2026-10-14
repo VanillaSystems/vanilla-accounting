@@ -29,7 +29,7 @@ import { reclassify, saveEntry, type Field } from './actions.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
-import { vat } from '../../../engines/index.js';
+import { vat, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -51,7 +51,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const acName = getAccountMap();
   const found = e.vatCode ? lookupVatCode(e.vatCode) : null;
   const tax = vat().vatLine(e)?.tax;
-  const cur = e.exchangeCurrency || 'CHF';
+  const cur = e.exchangeCurrency || baseCurrency();
   const edit = canEdit && !v.locked && e.origin !== 'year-close';
   const siblings = (j.byRef.get(e.transactionRef) ?? []).filter((x) => x !== v);
   const receipt = v.receipts[0];
@@ -207,7 +207,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
         </div>
         <div className="two">
           <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={e.vatCode ?? ''} readOnly={!edit} list="vat-codes" /></label>
-          <label>{t('journal.amountIn', { currency: e.exchangeCurrency || 'CHF' })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
+          <label>{t('journal.amountIn', { currency: e.exchangeCurrency || baseCurrency() })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
         <label>{t('journal.field.description')}<input name="description" defaultValue={e.description ?? ''} readOnly={!edit} /></label>
         <VatCodeList />

@@ -26,6 +26,7 @@ import { Detail } from './Detail.js';
 import { NewEntry } from './NewEntry.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './journal.css';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -144,7 +145,7 @@ function Row({ v, prev, sel, acName, onSelect }: { v: EntryView; prev?: EntryVie
       {e.vatCode
         ? <span className={`mono vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })}>{e.vatCode}</span>
         : <span className="mono vc none" title={t('journal.noVat')}>·</span>}
-      <span className="mono cu">{e.exchangeCurrency && e.exchangeCurrency !== 'CHF' ? e.exchangeCurrency : ''}</span>
+      <span className="mono cu">{e.exchangeCurrency && e.exchangeCurrency !== baseCurrency() ? e.exchangeCurrency : ''}</span>
       <span className="a mono">{fmt(e.amount)}</span>
     </div>
   );
@@ -177,7 +178,7 @@ export const journal: Area<RouteOf<'journal'>> = {
   title: (r, books) => { const v = r.id ? journalFor(books).byId.get(r.id) : undefined; return v && v.title; },
   palette: ({ books, nav, period }) => [...journalFor(books).views].sort((a, b) => b.e.date.localeCompare(a.e.date)).map((v) => ({
     label: v.sub ? `${v.title} · ${v.sub}` : v.title,
-    side: `${formatDate(v.e.date)}  ${v.e.exchangeCurrency && v.e.exchangeCurrency !== 'CHF' ? `${v.e.exchangeCurrency} ` : ''}${fmt(v.e.amount)}`,
+    side: `${formatDate(v.e.date)}  ${v.e.exchangeCurrency && v.e.exchangeCurrency !== baseCurrency() ? `${v.e.exchangeCurrency} ` : ''}${fmt(v.e.amount)}`,
     run: () => nav.go(at({ area: 'journal', id: v.e.id }, v.e.date, period)),
   })),
   keys(e, p) {

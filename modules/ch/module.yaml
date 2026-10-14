@@ -4,6 +4,7 @@ id: ch
 kind: jurisdiction
 version: 2026.4.0
 schema: 1
+baseCurrency: CHF
 provides:
   - accounting.tax.vat-codes@1
   - accounting.tax.rates@1

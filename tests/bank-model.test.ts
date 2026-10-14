@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import type { BankTransaction, Index } from '../src/types/index.js';
 import { badgeCount, bankOf, payText, type Account } from '../src/app/areas/bank/model.js';
 import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
+import './support/jurisdiction.js';
 
 const ACCOUNTS: Account[] = [
   { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053' },

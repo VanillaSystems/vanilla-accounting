@@ -17,6 +17,8 @@ export interface ModuleManifest {
   /** The format of its data files; climbs like books.json (src/workspace/schema.ts). */
   schema: number;
   provides?: string[];
+  /** A jurisdiction's currency of account; a workspace overlay may set its own (a Swiss company keeping books in EUR). */
+  baseCurrency: string;
   /** A workspace overlay names the shipped module it changes and the version it was written against. */
   overlays?: string;
   basedOn?: string;
