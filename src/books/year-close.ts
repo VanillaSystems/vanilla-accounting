@@ -11,7 +11,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { JournalEntry, QuarterKey } from '../types/index.js';
-import { commitPaths, repositoryAt } from '../workspace/git.js';
+import { commitExactly, repositoryAt } from '../workspace/git.js';
 import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import { accountsOf, filedReturnsOf } from '../workspace/reads.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
@@ -240,10 +240,10 @@ export async function openYear(ws: Workspace, year: string, rates: EstvRates = r
 }
 
 /**
- * Commits `paths` when the workspace is a git repository of its own (a demo inside the app's
- * repository is not); nothing else is staged or committed.
+ * Commits `paths` when the company's repository is a git repository of its own (a demo inside the
+ * app's repository is not); nothing else is committed.
  */
 async function commit(ws: Workspace, message: string, paths: string[]): Promise<boolean> {
-  const repo = await repositoryAt(ws.paths.root);
-  return repo ? commitPaths(repo, message, paths) : false;
+  const repo = await repositoryAt(ws.paths.repository);
+  return repo ? commitExactly(repo, message, paths) : false;
 }

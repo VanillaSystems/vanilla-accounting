@@ -8,6 +8,8 @@ import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { initRepository } from '../src/workspace/git.js';
 import type { Index, JournalEntry } from '../src/types/index.js';
 import { estvRates, type EstvRates } from '../src/accounting/fx-conversion.js';
 import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
@@ -233,8 +235,8 @@ test('profit allocation: a dividend of 10000 owes 3500 Verrechnungssteuer, 6500 
 
 // ─── On a workspace ───────────────────────────────────────────────────────────
 
-function workspace(): Workspace {
-  const ws = tempWorkspace('year-close-', join(APP_ROOT, 'demo-consulting'));
+function workspace(inRepository = false): Workspace {
+  const ws = tempWorkspace('year-close-', join(APP_ROOT, 'demo-consulting'), { inRepository });
   writeIndex(ws, books());
   mkdirSync(ws.paths.masterData, { recursive: true });
   writeFileSync(ws.paths.accounts, JSON.stringify(CHART.map((number) => ({ number, name: number }))));
@@ -268,8 +270,8 @@ const Q4_FILED = `<VATDeclaration><generalInformation><reportingPeriodFrom>2026-
 <turnoverComputation><totalConsideration>0</totalConsideration></turnoverComputation><effectiveReportingMethod><grossOrNet>2</grossOrNet></effectiveReportingMethod><payableTax>0</payableTax></VATDeclaration>`;
 
 /** The state a real year reaches in February: Q1 to Q3 filed, closed and sealed, Q4 filed, December's bank balances in. */
-function readyToClose(): Workspace {
-  const ws = workspace();
+function readyToClose(inRepository = false): Workspace {
+  const ws = workspace(inRepository);
   writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451'].map((number) => ({ number, name: number }))));
   const y = yearPaths(ws.paths, '2026');
   for (const dir of [y.receipts, join(y.statements, 'Raiffeisen'), join(y.statements, 'Wise'), y.filings]) mkdirSync(dir, { recursive: true });
@@ -323,4 +325,18 @@ test('receivables: booked on 31.12. under the year\'s id, once; opening the next
   assert.deepEqual(opened.reversal, reversal);
   await openYear(ws, '2026', RATES, '2027-03-02');
   assert.deepEqual(loadBooks(ws).journalEntries.filter((x) => x.id.includes('receivables')), [booked, reversal]);
+});
+
+test('in a company repository (ADR 0013) the close and the opening are committed in the repository, with only the books', async () => {
+  const ws = readyToClose(true);
+  await initRepository(ws.paths.repository, 'Workspace set up');
+  writeFileSync(join(ws.paths.repository, 'notes.md'), 'not part of the close');
+  bookRevaluation(ws, '2026', RATES);
+  for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
+  assert.equal((await closeYear(ws, '2026', RATES, '2027-03-01')).committed, true);
+  await openYear(ws, '2026', RATES, '2027-03-01');
+  const git = (...args: string[]) => execFileSync('git', ['-C', ws.paths.repository, ...args], { encoding: 'utf8' }).trim();
+  assert.deepEqual(git('log', '--format=%s').split('\n'), ['Eröffnung 2027: opening balances from the closed 2026', 'Jahresabschluss 2026: closed through 2026-12-31, 2026-Q4 sealed', 'Workspace set up']);
+  assert.ok(git('show', '--name-only', '--format=', 'HEAD~1').split('\n').every((f) => f.startsWith('vanilla-accounting/')), 'only the books are in the close');
+  assert.equal(git('status', '--porcelain'), '?? notes.md');
 });

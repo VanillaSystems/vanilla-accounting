@@ -1,5 +1,5 @@
 /** Workspaces for tests: the demos, a temp copy of a manifest, and the company's own when this checkout has one. */
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse as parseEnv } from 'dotenv';
@@ -17,9 +17,11 @@ export const DEMO_ROOTS: readonly string[] = readdirSync(APP_ROOT, { withFileTyp
   .filter((d) => d.isDirectory() && DEMO_NAME.test(d.name) && existsSync(join(APP_ROOT, d.name, APP_FOLDER, MANIFEST_FILE)))
   .map((d) => join(APP_ROOT, d.name, APP_FOLDER));
 
-/** A temp workspace holding a copy of the manifest in `manifestOf` (the demo's by default). */
-export function tempWorkspace(prefix = 'belege-ws-', manifestOf: string = DEMO_ROOT): Workspace {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
+/** A temp workspace holding a copy of the manifest in `manifestOf` (the demo's by default); `inRepository`: as the app's folder of a company repository (ADR 0013). */
+export function tempWorkspace(prefix = 'belege-ws-', manifestOf: string = DEMO_ROOT, { inRepository = false } = {}): Workspace {
+  const repo = mkdtempSync(join(tmpdir(), prefix));
+  const dir = inRepository ? join(repo, APP_FOLDER) : repo;
+  mkdirSync(dir, { recursive: true });
   copyFileSync(join(appFolderIn(manifestOf) ?? manifestOf, MANIFEST_FILE), join(dir, MANIFEST_FILE));
   return workspaceAt(dir);
 }
