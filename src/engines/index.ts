@@ -24,6 +24,9 @@ export const vat = (): ReturnEngine => loaded().vat;
 /** The open workspace's chart: what an account is. */
 export const chart = (): ChartEngine => loaded().chart;
 
+/** The open workspace's statement layout. */
+export const statements = (): Jurisdiction['statements'] => loaded().source.statements;
+
 /** The length of one VAT return and when its tax is due. */
 export const filing = (): Jurisdiction['periods']['vat'] => loaded().source.periods.vat;
 

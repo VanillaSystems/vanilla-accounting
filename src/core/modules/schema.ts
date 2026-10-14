@@ -137,6 +137,21 @@ export interface ChartData {
   unclassified: AccountTypeRule;
 }
 
+/** Accounts by range (`from` inclusive, `to` exclusive) or one by one. */
+export type AccountGroup = { title: string } & ({ from: string; to: string } | { accounts: string[] });
+
+export const INCOME_SECTIONS = ['revenue', 'costOfGoods', 'operatingExpenses', 'otherIncome', 'otherExpenses', 'extraordinaryItems'] as const;
+
+/** statements.yaml: the groups of the balance sheet and the sections of the income statement. */
+export interface StatementsData {
+  balance: {
+    assets: AccountGroup[];
+    /** The group with `openResult` also shows the year's result while the year is open, under that name. */
+    liabilities: (AccountGroup & { openResult?: string })[];
+  };
+  income: Record<(typeof INCOME_SECTIONS)[number], AccountGroup>;
+}
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
@@ -145,4 +160,5 @@ export interface Jurisdiction {
   vatReturn: ReturnData;
   chart: ChartData;
   periods: PeriodsData;
+  statements: StatementsData;
 }

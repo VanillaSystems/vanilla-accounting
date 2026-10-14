@@ -24,6 +24,14 @@ Two markers flag an entry you must read before you update:
   codes, the base currency, a half-yearly return for the net tax rate method. Nothing changes for
   a workspace without one.
 
+### Fixed
+
+- **⚠ figures** Income booked on 7000 (Ertrag Nebenbetrieb), 8100 (betriebsfremder Ertrag) or
+  8510 (ausserordentlicher Ertrag) showed as a negative amount in the income statement and the
+  trial balance, so the income statement's result was too low by twice that amount. The balance
+  sheet and the VAT return were right. After the update, `npm run test:books` shows the changed
+  sign of these accounts in the open periods; accept it with `npm run test:books:update`.
+
 ### Changed
 
 - A module, a workflow run or the inbox processing can no longer change or delete an entry a

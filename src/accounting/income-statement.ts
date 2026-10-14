@@ -1,6 +1,7 @@
 import type { JournalEntry } from '../types/index.js';
 import { computeBalances } from './ledger.js';
-import { chart } from '../engines/index.js';
+import { chart, statements } from '../engines/index.js';
+import { inGroup } from '../engines/chart.js';
 import { roundCHF } from './rappen.js';
 
 export interface IncomeStatementSection {
@@ -43,16 +44,18 @@ export function computeIncomeStatement(
     };
   }
 
-  const revenue = section('Erlöse', a => a >= '3000' && a < '4000');
-  const costOfGoods = section('Aufwand für Material und Waren', a => a >= '4000' && a < '5000');
+  const layout = statements().income;
+  const of = (key: keyof typeof layout) => section(layout[key].title, inGroup(layout[key]));
+  const revenue = of('revenue');
+  const costOfGoods = of('costOfGoods');
   const grossProfit = roundCHF(revenue.total - costOfGoods.total);
 
-  const operatingExpenses = section('Betriebsaufwand', a => a >= '5000' && a < '7000');
+  const operatingExpenses = of('operatingExpenses');
   const operatingResult = roundCHF(grossProfit - operatingExpenses.total);
 
-  const otherIncome = section('Nebenbetrieblicher Ertrag', a => a === '7000' || a === '8100' || a === '8510');
-  const otherExpenses = section('Nebenbetrieblicher Aufwand', a => a === '7010' || a === '8000' || a === '8500' || a === '8900');
-  const extraordinaryItems = section('Ausserordentliches', () => false);
+  const otherIncome = of('otherIncome');
+  const otherExpenses = of('otherExpenses');
+  const extraordinaryItems = of('extraordinaryItems');
 
   const netResult = roundCHF(operatingResult + otherIncome.total - otherExpenses.total);
 

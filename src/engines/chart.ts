@@ -1,5 +1,9 @@
 /** What an account is, from the jurisdiction's chart.yaml: its type, normal side and statement side. */
-import type { AccountType, AccountTypeRule, ChartData } from '../core/modules/schema.js';
+import type { AccountGroup, AccountType, AccountTypeRule, ChartData } from '../core/modules/schema.js';
+
+/** Whether an account belongs to a statement group of statements.yaml. */
+export const inGroup = (g: AccountGroup) => (account: string): boolean =>
+  'accounts' in g ? g.accounts.includes(account) : account >= g.from && account < g.to;
 
 export interface ChartEngine {
   typeOf(account: string): AccountType | undefined;
