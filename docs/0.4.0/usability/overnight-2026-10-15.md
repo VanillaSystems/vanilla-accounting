@@ -43,3 +43,4 @@ file records every decision a person might have made differently, newest last.
    change rebooks: a corrected VAT rebooks every automatic entry (older ones included); a hand
    link only those that recorded their receipts, because an older entry without that record may
    have been shaped by a person and, without a model, would be left unbooked.
+10. Duplicates and receipt detection merged (content duplicates, receipt-or-not at the drop, in the run and in mail collection, skip-sender offer).
