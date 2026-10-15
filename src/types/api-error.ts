@@ -18,6 +18,7 @@ export type ClosedReason = (typeof CLOSED_REASONS)[number];
 export type ApiRefusal =
   | { code: 'readonly' }
   | { code: 'localOnly' }
+  | { code: 'phoneToken' }
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason } }
   | { code: 'manualOnly' }
   | { code: 'hasEntries' }

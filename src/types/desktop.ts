@@ -41,3 +41,16 @@ export interface DesktopInfo {
   /** Where new books go unless the person picks another folder. */
   booksHome: string;
 }
+
+/** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */
+export interface PhoneInfo {
+  on: boolean;
+  /** This Mac's addresses a phone can reach, best first; empty when it is on no network. */
+  addresses: string[];
+  port?: number;
+  /** While on and on a network: the URL the QR code carries (scan page and token) and the code as SVG. */
+  url?: string;
+  qr?: string;
+  /** Switching on failed: why (the port could not be opened). */
+  error?: string;
+}

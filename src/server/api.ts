@@ -26,6 +26,7 @@ import { NoBrowserError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
 import { NoClaudeError } from '../llm/ask.js';
+import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
 
 export const app = express();
 
@@ -35,16 +36,14 @@ const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409,
 };
 
-/**
- * The server listens on the network only so the phone app can upload scans (src/server/routes/scan.ts).
- * Everything else — the books, receipts, every write — answers only to this computer.
- */
-export const NETWORK_PATHS: ReadonlySet<string> = new Set(['/scan', '/scan/manifest.json', '/api/upload', '/api/status']);
-const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+// From the network only the phone's paths answer (src/server/phone.ts), the API ones with the
+// pairing token once one is configured. Everything else (the books, receipts, every write) answers
+// only to this computer.
 app.use((req, res, next) => {
-  if (LOOPBACK.test(req.socket.remoteAddress ?? '') || NETWORK_PATHS.has(req.path)) return next();
+  if (fromThisComputer(req) || NETWORK_PATHS.has(req.path)) return next();
   res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
 });
+app.use(phoneGate);
 app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the

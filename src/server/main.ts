@@ -3,7 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { app, READONLY } from './api.js';
 import { closeBrowser } from '../invoices/pdf.js';
-import { engine, outsideArrivals } from './routes/automation.js';
+import { startBackground } from './background.js';
+import { pairingUrl, phoneToken } from './phone.js';
 import { WS } from './books.js';
 import { useKeychain } from '../secrets/keychain-store.js';
 
@@ -11,7 +12,7 @@ import { useKeychain } from '../secrets/keychain-store.js';
 useKeychain(() => WS.paths.root);
 
 // PORT=0 lets the system choose. Without VANILLA_API_HOST the server listens on every interface,
-// so the phone app reaches it on the LAN.
+// so the phone app reaches it on the LAN; with VANILLA_PHONE_TOKEN set it needs that token.
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3456;
 const HOST = process.env.VANILLA_API_HOST;
 
@@ -22,26 +23,21 @@ function listening() {
   console.log(`\nAPI server running on port ${port}`);
   if (READONLY) console.log('🔒 READ-ONLY mode — all writes are blocked');
 
-  // Print all IPv4 addresses so user can find the right one for the iOS app
+  // Every IPv4 address, so the phone can be pointed at the right one.
+  const token = phoneToken();
   const nets = networkInterfaces();
   for (const [iface, addrs] of Object.entries(nets)) {
     for (const addr of addrs ?? []) {
       if (addr.family !== 'IPv4' || addr.internal) continue;
       const label = addr.address.startsWith('172.20.10.') ? 'USB  ' : 'LAN  ';
-      console.log(`  ${label}  http://${addr.address}:${port}  (${iface})`);
+      console.log(`  ${label}  ${token ? pairingUrl(addr.address, port, token) : `http://${addr.address}:${port}`}  (${iface})`);
     }
   }
+  if (!token) console.log('  Phone uploads need no token: set VANILLA_PHONE_TOKEN in .env to require one.');
   console.log();
 }
 
-// Files arriving in the inbox start their runs (the outside trigger), looked for every few seconds.
-if (!READONLY) setInterval(() => void outsideArrivals().catch((e) => console.error(`inbox: ${(e as Error).message}`)), 5_000).unref();
-
-// The minute clock of the workflows' schedule triggers, aligned to the full minute.
-setTimeout(() => {
-  void engine().tick();
-  setInterval(() => void engine().tick(), 60_000).unref();
-}, 60_000 - (Date.now() % 60_000)).unref();
+startBackground();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => { void closeBrowser().finally(() => process.exit(0)); });

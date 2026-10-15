@@ -1,17 +1,16 @@
 /**
- * The desktop app's main process (ADR 0006, form 3): the local server on 127.0.0.1, one window on
+ * The desktop app's main process (ADR 0006, form 3): the local server on 127.0.0.1 (and, switched
+ * on in Firma › Handy, the phone's listener on the local network), one window on
  * the built UI, the native menu, the passwords in the keychain store, and the few things a page
  * cannot do itself (a folder dialog, links to the browser). Built by tools/desktop/build.mjs into
  * out/desktop/main.mjs, which keeps the bundle two folders below the app root, as
  * src/workspace/workspace.ts finds APP_ROOT.
  */
-import { createServer, type Server } from 'node:http';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell } from 'electron';
-import type { Express } from 'express';
 import { usePrintPages } from '../invoices/pdf.js';
 import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
@@ -21,7 +20,7 @@ import { findClaude } from './claude.js';
 import { sameOrigin, saveFile } from './save-file.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
-import { desktopServer } from './server.js';
+import { desktopServer, listen, portOf } from './server.js';
 import { readState, writeState, type Bounds } from './state.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -53,7 +52,7 @@ async function start(): Promise<void> {
     onOpen: () => refreshMenu(),
   });
   useSecretStore(sealedStore({ file: join(app.getPath('userData'), 'secrets.json'), cipher: safeStorage, books: () => server.current()?.root }));
-  const port = await listen(server.app, readState(stateFile).port);
+  const port = portOf(await listen(server.app, '127.0.0.1', readState(stateFile).port));
   writeState(stateFile, { ...readState(stateFile), port });
   server.allowHost(`127.0.0.1:${port}`);
   const base = `http://127.0.0.1:${port}`;
@@ -124,8 +123,10 @@ async function start(): Promise<void> {
   const last = readState(stateFile).recent[0];
   if (last) await server.open(last).catch(() => undefined);
   refreshMenu();
-  // The page starts the inbox job as it loads; the job checks for claude once, so it must be known by then.
+  // The inbox's runs check for claude once, so it must be known before the first one starts.
   await claudeFound;
+  server.startBackground();
+  void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   show();
   app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
@@ -163,16 +164,6 @@ function smokeHandles(): void {
     return !!item;
   });
   ipcMain.on('smoke:quit', () => app.quit());
-}
-
-function listen(app: Express, preferred: number | undefined): Promise<number> {
-  const attempt = (port: number) => new Promise<Server>((resolve, reject) => {
-    const s = createServer(app);
-    s.once('error', reject);
-    s.listen(port, '127.0.0.1', () => resolve(s));
-  });
-  return (preferred ? attempt(preferred).catch(() => attempt(0)) : attempt(0))
-    .then((s) => (s.address() as { port: number }).port);
 }
 
 function createWindow(stateFile: string): BrowserWindow {

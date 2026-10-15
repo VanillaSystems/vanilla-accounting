@@ -16,7 +16,7 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
+import type { DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
 
@@ -61,6 +61,7 @@ export function errorText(e: unknown): string {
   switch (b.code) {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
+    case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
     case 'hasEntries': return t('error.hasEntries');
     case 'yearClose': return t('error.yearClose');
@@ -239,6 +240,9 @@ export const api = {
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
+    phone: () => request<PhoneInfo>('GET', '/api/desktop/phone'),
+    setPhone: (on: boolean) => request<PhoneInfo>('POST', '/api/desktop/phone', { on }),
+    renewPhone: () => request<PhoneInfo>('POST', '/api/desktop/phone', { renew: true }),
   },
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),

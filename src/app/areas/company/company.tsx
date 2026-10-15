@@ -27,6 +27,8 @@ import { InvoiceLayoutSection } from './InvoiceLayout.js';
 import { clearBankDraft, draftForm, peekBankDraft, type BankDraft } from './bank-draft.js';
 import { MailSection } from './MailSection.js';
 import { SourcesSection } from './SourcesSection.js';
+import { PhoneSection } from './PhoneSection.js';
+import { desktop } from '../../desktop/bridge.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
@@ -34,7 +36,7 @@ type Props = AreaProps<RouteOf<'company'>>;
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
   ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources']],
   ['company.groupBooks', ['accounts', 'periods', 'opening']],
-  ['company.groupApp', ['display']],
+  ['company.groupApp', ['display', 'phone']],
 ];
 
 const THEMES: Theme[] = ['light', 'dark', 'system'];
@@ -84,7 +86,7 @@ function List({ route, books, nav }: Props) {
         {GROUPS.map(([group, sections]) => (
           <Fragment key={group}>
             <div className="group"><span>{t(group)}</span></div>
-            {sections.map((s) => {
+            {sections.filter((s) => s !== 'phone' || desktop).map((s) => {
               const sel = s === route.section;
               return (
                 <div
@@ -142,6 +144,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'invoice-layout': return <InvoiceLayoutSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'mail': return <MailSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'sources': return <SourcesSection />;
+    case 'phone': return <PhoneSection nav={p.nav} />;
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;

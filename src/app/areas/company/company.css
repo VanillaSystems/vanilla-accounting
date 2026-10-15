@@ -17,3 +17,8 @@
 
 /* The app's build under the sections, for a person reporting what they run. */
 .appver { margin: 18px 12px 0; font-size: 11px; color: var(--faint); user-select: text; }
+
+/* Firma › Handy: the pairing code beside what to do with it. The code is paper in both themes. */
+.phonepair { display: flex; gap: 20px; align-items: flex-start; margin: 16px 0; }
+.phoneqr { width: 200px; flex: none; background: var(--paper-bg); padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.phoneqr svg { display: block; width: 100%; height: auto; }
