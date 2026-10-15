@@ -29,8 +29,11 @@ Verkleinern and Originalgrösse step it, and ⌘+ ⌘− ⌘0 still reach the pa
 
 `tools/desktop/build.mjs` bundles `src/desktop` into `out/desktop/` (two folders below the app
 root, as `APP_ROOT` expects) and fails when the bundle imports a package that is not a
-dependency in `package.json`, since only those are packed. `tools/desktop/icon.mjs` renders
-`desktop/icon.svg` to the PNG electron-builder makes the icon from.
+dependency in `package.json`, since only those are packed. The icon is the brand's: the wave in tram
+blue (`assets/app-icons/macos/AppIcon.svg` and `AppIcon-1024.png` of the branding repository,
+copied to `desktop/icon.svg` and `desktop/icon.png`; its `web/` set is `public/favicon*` and
+`apple-touch-icon.png`). Copy them again when the brand changes; `tools/desktop/icon.mjs` renders
+`desktop/icon.svg` to `desktop/icon.png` when only the SVG is at hand.
 
 The smoke test starts the packaged app with only `/usr/bin:/bin` on its PATH and a fresh user data
 folder (so it never opens books of the machine), and drives it: start screen, Demo, every area,
