@@ -16,6 +16,7 @@ import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
 import { RunsHome } from './Runs.js';
+import { QueuePage } from './Queue.js';
 import type { Index } from '../../../types/index.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -547,26 +548,6 @@ function itemRoute(item: Task['item']): Route | undefined {
     case 'receipt': return { area: 'receipts', id: item.id };
     default: return undefined;
   }
-}
-
-function QueuePage({ view, nav }: { view: AutomationView; nav: Nav }) {
-  const groups: Array<[string, RunSummary[]]> = [
-    [t('automation.queueRunning'), view.runs.filter((r) => r.status === 'running')],
-    [t('automation.queueQueued'), view.runs.filter((r) => r.status === 'queued').reverse()],
-    [t('automation.queueStuck'), view.runs.filter((r) => r.status === 'stuck')],
-    [t('automation.recentlyDone'), view.runs.filter((r) => r.status === 'done').slice(0, 8)],
-  ];
-  return (
-    <div className="detail-in wfpage">
-      <div className="head"><h2 className="who">{t('automation.queue')}</h2></div>
-      <div className="wfactions">
-        <button type="button" className="btn ghost" onClick={() => void automationCommand({ kind: 'pause', on: !view.paused })}>{t(view.paused ? 'automation.unpause' : 'automation.pause')}</button>
-      </div>
-      {groups.every(([, rs]) => !rs.length) ? <p className="lead">{t('automation.queueEmpty')}</p> : groups.filter(([, rs]) => rs.length).map(([title, rs]) => (
-        <Fragment key={title}><h3 className="wfh3">{title}</h3><RunList runs={rs} nav={nav} /></Fragment>
-      ))}
-    </div>
-  );
 }
 
 const legend = (): LegendItem[] => [

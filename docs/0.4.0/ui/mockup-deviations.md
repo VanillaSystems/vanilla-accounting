@@ -64,7 +64,7 @@ No deviation beyond S1: the lists, details, figures and links match.
 | W1 | Screen 1: the area opens on a workflow list | The latest runs as a table (owner, 15.10.) | decided |
 | W2 | Screen 2 Prozesskarte: four numbered phases, each with what it does and how often, its open count; each workflow card with STARTET BEI (its triggers), MELDET (its events), its state («läuft», «2 steckt») and the event arrows between phases | Four columns of plain cards: name and cadence, the arrows as a crossed-out line | open |
 | W3 | List column: each workflow with its trigger chips (Zeitplan, Von aussen, Ereignis, Knopf) and its open count | Each workflow with its cadence, «noch nicht ausführbar» | open |
-| W4 | Screen 9 Warteschlange: Läuft (each run with its step and a bar), In der Schlange (numbered, why it waits, ×), Geparkt (waiting for a person or an event), Fertig, «Pausieren» at the top right | Running, queued, stuck and recently done as plain lists of run ids | open |
+| W4 | Screen 9 Warteschlange: Läuft (each run with its step and a bar), In der Schlange (numbered, why it waits, ×), Geparkt (waiting for a person or an event), Fertig, «Pausieren» at the top right | as the mockup (Queue.tsx) | fixed |
 | W5 | Screen 8 Dateien ablegen: «Hinzufügen» | Taken at once, «Rückgängig» (owner, 15.10.) | decided |
 | W6 | Screens 3 (a stuck run), 4 (triggers in the areas), 5 (a task), 6 (changing a workflow) | not compared yet: need a stuck run and a waiting task | to compare |
 

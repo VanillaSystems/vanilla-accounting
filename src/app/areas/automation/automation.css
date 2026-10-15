@@ -169,3 +169,32 @@
 .runshome .ok-t, .rtable .ok-t { color: var(--pos); }
 .runshome .warn-t, .rtable .warn-t { color: var(--warn); }
 .runshome .rmore { margin-top: 14px; border: 0; background: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 13px; }
+
+/* Warteschlange (Queue.tsx, the mockup's screen 9) */
+.qpage .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.qpage .head small { display: block; font: 400 12px "Geist Mono"; color: var(--muted); margin-top: 2px; }
+.qsec { margin: 18px 0 0; }
+.qh { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.qh b { font-weight: 600; font-size: 14px; }
+.qrow { display: flex; align-items: center; gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+.qrow:hover { background: var(--hover); }
+.qrow .qi { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.qrow .qi .mono { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qrow .qwhy { flex: 0 1 40%; font-size: 12px; }
+.qrow .qt { white-space: nowrap; font-size: 11.5px; }
+.qrow .qp { display: flex; flex-direction: column; gap: 3px; width: 220px; flex: none; font-size: 11.5px; }
+.qrow .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.qrow .bar i { display: block; height: 100%; background: var(--accent); }
+.qrow .pos { width: 18px; text-align: right; color: var(--muted); font-size: 12px; }
+.qrow .x { border: 0; background: none; color: var(--faint); font-size: 16px; cursor: pointer; padding: 0 4px; }
+.qrow .x:hover { color: var(--ink); }
+.qrow .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--accent); border-right-color: transparent; animation: qspin 1s linear infinite; flex: none; }
+@keyframes qspin { to { transform: rotate(360deg); } }
+.qrow .ri { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; flex: none; background: var(--pos-soft); color: var(--pos); }
+.qrow .ri.st-waiting, .qrow .ri.st-stuck { background: var(--warn-soft); color: var(--warn); }
+.qrow .ri.st-discarded { background: var(--hover); color: var(--muted); }
+.wfchip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--bg); color: var(--ink-2); font: inherit; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
+.wfchip:hover { color: var(--ink); border-color: var(--ink-2); }
+.wfchip .bot { width: 12px; height: 12px; color: var(--ai); }
+.qsec p.m, .qh .m, .qrow .m { font-size: 12px; color: var(--muted); }
+.qsec p.m { margin: 8px 2px; }
