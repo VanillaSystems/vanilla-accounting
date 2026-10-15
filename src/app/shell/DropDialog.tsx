@@ -4,7 +4,7 @@
  * own small action; nothing is written before «Hinzufügen», which fills the inbox, reads the
  * statements and starts the inbox's run. Further drops, onto the window or the dialog, add rows.
  */
-import { useState, useSyncExternalStore } from 'react';
+import { Fragment, useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
 import { language, t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
@@ -94,6 +94,37 @@ const restingRun = (view: ReturnType<typeof useAutomation>['view'], done: NonNul
 /** Where one taken file is, read from the books and the run: still in its step, read, matched, or waiting for a person. */
 type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' };
 
+/** A taken receipt's quick details: what was read off it, the payment it was linked to and the entries booked on that payment, each a link. */
+function ReceiptDetails({ id, books, go }: { id: string; books: Index; go(route: Route): void }) {
+  const receipt = books.receipts.find((x) => x.id === id);
+  if (!receipt) return null;
+  const refs = new Set(books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef));
+  const payments = books.transactions.filter((x) => refs.has(x.ref));
+  const entries = (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef));
+  const read = [receipt.description, receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ');
+  const vat = receipt.vatSummary?.length ? receipt.vatSummary.map((g) => `${g.ratePercent} % ${fmt(g.vat)}`).join(' · ')
+    : receipt.hasSwissVat === false ? t('drop.d.noSwissVat') : '–';
+  return (
+    <dl className="ddet">
+      <dt>{t('drop.d.read')}</dt><dd>{read || '–'}</dd>
+      <dt>{t('drop.d.vat')}</dt><dd>{vat}{receipt.vatId ? ` · ${receipt.vatId}` : ''}</dd>
+      <dt>{t('drop.d.payment')}</dt>
+      <dd>{payments.length ? payments.map((x) => (
+        <button key={x.ref} type="button" className="linkbtn" onClick={() => go({ area: 'bank', payment: x.ref })}>
+          {formatDate(x.date)} · {x.bank} · {x.currency} {fmt(x.direction === 'DBIT' ? -x.amount : x.amount)}
+        </button>
+      )) : t('drop.d.none')}</dd>
+      <dt>{t('drop.d.entry')}</dt>
+      <dd>{entries.length ? entries.map((e) => (
+        <button key={e.id} type="button" className="linkbtn" onClick={() => go({ area: 'journal', id: e.id })}>
+          {e.accountDebit} / {e.accountCredit}{e.vatCode ? ` · ${e.vatCode}` : ''} · {fmt(e.amount)}
+        </button>
+      )) : t('drop.d.none')}</dd>
+      <dt>{t('drop.d.file')}</dt><dd className="mono">{receipt.filename}</dd>
+    </dl>
+  );
+}
+
 /**
  * After «Hinzufügen» (mockup screen 8): the run's progress over all files, each file with where it
  * is, and «Im Hintergrund weiter», since the run goes on the same when the dialog closes.
@@ -117,6 +148,9 @@ function Progress({ done, rows, books, onGo }: { done: NonNullable<DropSession['
   const finished = states.filter((x) => x.kind !== 'working').length;
   const pct = taken.length ? Math.round((resting ? 1 : (finished + (stepAt >= 0 ? (stepAt + 1) / (steps.length + 1) : 0) * (taken.length - finished)) / taken.length) * 100) : 100;
   const waits = run?.status === 'waiting' || states.some((x) => x.kind === 'waits');
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(key)) next.add(key); return next; });
+  const go = (route: Route) => { closeDrop(); onGo(route); };
   return (
     <div className="dprog">
       <div className="dbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
@@ -130,19 +164,30 @@ function Progress({ done, rows, books, onGo }: { done: NonNullable<DropSession['
           const receipt = books.receipts.find((y) => y.id === r.id);
           const facts = receipt && (receipt.date || receipt.amount !== undefined)
             ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
+          const shown = !!receipt && open.has(r.key);
           return (
-            <div key={r.key} className="droprow">
-              <div className="dn"><b className="mono">{r.name}</b><small>{receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
-              <div className="dgo"><span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span></div>
-              <span />
-            </div>
+            <Fragment key={r.key}>
+              <div className={`droprow${shown ? ' open' : ''}`}>
+                <div className="dn"><b className="mono">{r.name}</b><small>{receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
+                <div className="dgo">
+                  <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
+                  {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id })}>{t('drop.openReceipt')}</button> : null}
+                </div>
+                {receipt ? (
+                  <button type="button" className="dtog" aria-expanded={shown} aria-label={t('drop.d.toggle', { name: r.name })} onClick={() => toggle(r.key)}>
+                    <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                  </button>
+                ) : <span />}
+              </div>
+              {shown ? <ReceiptDetails id={receipt.id} books={books} go={go} /> : null}
+            </Fragment>
           );
         })}
       </div>
       {done.refused.map((x) => <p key={x.name} className="warnline">{x.name}: {x.message}</p>)}
       {resting && waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
       <div className="dfoot">
-        <span className="m">{done.run ? <button type="button" className="linkbtn" onClick={() => { closeDrop(); onGo({ area: 'automation', view: 'run', run: done.run! }); }}>{t('drop.openRun')}</button> : null}</span>
+        <span className="m">{done.run ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'run', run: done.run! })}>{t('drop.openRun')}</button> : null}</span>
         <button type="button" className="btn primary" onClick={closeDrop}>{resting ? t('common.close') : t('drop.background')}</button>
       </div>
     </div>
