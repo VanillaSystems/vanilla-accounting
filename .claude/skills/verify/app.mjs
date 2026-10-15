@@ -6,11 +6,16 @@
 //     fill('Firmenname', 'Malerei Huber')      the field of the label that starts with the text
 //     nth(8, process.env.PERSONA_IBAN_SPACED)   the i-th visible input/textarea, selects not counted (fields without labels)
 //     pick('PDFs hierher ziehen', ['IMG_4471.jpg'])   the app's file picker with ~/Downloads files
-//     drop(['IMG_4471.jpg', 'swisscom_juli.pdf'])     a Finder drag onto the window (DevTools drag events)
+//     drop(['IMG_4471.jpg', 'swisscom_juli.pdf'])     a Finder drag onto the window (DevTools drag events);
+//                                              only files that were in the VM's ~/Downloads when it started
+//     dropLocal(['/path/on/this/Mac/file.pdf'])  any file of this Mac, dropped as a File built in the page
 //     wait(3000), ev('document.title'), p      (p: the puppeteer page)
 //     await books()                            the books as /books.json gives them (receipts, transactions, mappings, journalEntries)
 //   TEXT_FROM=… TEXT_LEN=… slice the printed text (default the first 3000 characters).
 import puppeteer from 'puppeteer-core';
+process.stdout.on('error', (e) => { if (e.code === 'EPIPE') process.exit(0); });
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 const [, , name, ...steps] = process.argv;
 const { CDP, EVIDENCE } = process.env;
@@ -53,9 +58,17 @@ const drop = async (files, x = 700, y = 500) => {
   await c.send('Input.dispatchDragEvent', { type: 'drop', x, y, data });
   await c.detach();
 };
+const dropLocal = async (paths) => {
+  const files = paths.map((f) => ({ name: basename(f), b64: readFileSync(f).toString('base64') }));
+  await p.evaluate((files) => {
+    const dt = new DataTransfer();
+    for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name));
+    for (const type of ['dragenter', 'dragover', 'drop']) document.body.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+  }, files);
+};
 const ev = (s) => p.evaluate(s);
 const books = () => p.evaluate(async () => (await fetch('/books.json')).json());
-void [wait, fill, nth, pick, drop, ev, books];
+void [wait, fill, nth, pick, drop, dropLocal, ev, books];
 
 for (const s of steps) { await eval(`(async () => { ${s} })()`); await wait(400); }
 await wait(800);
