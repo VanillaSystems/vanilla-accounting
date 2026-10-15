@@ -208,7 +208,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                 })}
               </div>
             ))}
-            {c.preset === 'audit' && <p className="xnote">{t('export.auditNote', { command: 'npm run build:audit' })}</p>}
+            {c.preset === 'audit' && <p className="xnote">{t('export.auditNote')}</p>}
             {STATIC_EXPORT && <p className="xnote">{t('export.staticOff')}</p>}
           </div>
         </div>

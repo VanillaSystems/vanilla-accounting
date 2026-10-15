@@ -415,7 +415,7 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
         </Fragment>
       ))}
       <p className="m src-note">{t('company.sealNote')}</p>
-      <p className="m">{t('company.howToClose', { quarter: openFilingPeriod(closed, today, filing().length).token })}{' '}
+      <p className="m">{t('company.howToClose')}{' '}
         <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'close' }, query: {} })}>{t('company.toClose')}</button>
       </p>
     </>
@@ -445,7 +445,7 @@ function Opening({ books, nav }: Props) {
       {assets === liabilities
         ? <p className="okline">{I.check}{t('company.openingBalanced')}</p>
         : <p className="warnline">{I.dot}{t('company.openingDiffers', { amount: fmt(assets - liabilities) })}</p>}
-      <p className="m src-note">{t('company.openingSource', { year })}</p>
+      <p className="m src-note">{t('company.openingSource')}</p>
     </>
   );
 }

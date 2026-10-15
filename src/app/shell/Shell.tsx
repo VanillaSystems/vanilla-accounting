@@ -55,7 +55,7 @@ export function Shell(props: ShellProps) {
   if (loading || error) {
     return (
       <main className="full">
-        <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint', { command: 'npm run extract' })}</p><p>{error}</p></div>}</div>
+        <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint')}</p><p>{error}</p></div>}</div>
       </main>
     );
   }

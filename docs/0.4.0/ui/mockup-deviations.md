@@ -22,7 +22,8 @@ compared yet).
 | S1 | The open top bar floats over free space; the list heading and its add button («+ Beleg», «+ Auszug», «+ Buchung», «+ Rechnung») stay visible | as the mockup | fixed |
 | S2 | Dock at the bottom edge (both mockups) | Activity bar down the left edge (try of 15.10., f2e8660), with the bolt button for Automatisierung above it | decided (owner to confirm) |
 | S3 | Period picker, ⌘K palette, export dialog, AI sidebar, status corner | not compared yet | to compare |
-| S4 | No page names a developer command | FX hints («npm run restamp-fx», «npm run fetch-rates»), Firma › Perioden and Eröffnung («npm run seal», «npm run import-opening»), the first-run questions («npm run init») and the sources («npm run secret») still do | open |
+| S4 | No page names a developer command | none does any more; where the app has no button for it yet (exchange rates, opening balances, sealing, the audit export, a source's password), the text says what is missing | fixed (the missing buttons: A2, S5) |
+| S5 | — | No button to load ESTV rates, import opening balances or enter a source's password in the app | open (missing features) |
 
 ## Belege
 

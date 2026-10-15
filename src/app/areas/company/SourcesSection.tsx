@@ -60,7 +60,7 @@ export function SourcesSection() {
                   <dt>{t('sources.code')}</dt>
                   <dd className="mono">{`${verdict.decl.code.kind === 'app' ? `app:${verdict.decl.code.id}` : verdict.decl.code.entry} · ${verdict.decl.version}`}</dd>
                   {secrets.map((s) => (
-                    <Fragment key={s.channel}><dt>{t('sources.secret', { channel: s.channel })}</dt><dd>{s.present ? t('sources.secretSet') : <span className="warnline">{t('sources.secretMissing', { name: `source:${id}:${s.channel}` })}</span>}</dd></Fragment>
+                    <Fragment key={s.channel}><dt>{t('sources.secret', { channel: s.channel })}</dt><dd>{s.present ? t('sources.secretSet') : <span className="warnline">{t('sources.secretMissing')}</span>}</dd></Fragment>
                   ))}
                 </dl>
               </>
