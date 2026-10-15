@@ -3,7 +3,12 @@
 # SSH (shell), the VM's own screen sharing (whole screen: macOS dialogs, Finder, System Settings)
 # and the app's DevTools port through an SSH tunnel (inside the app). Never on the person's desktop.
 #
-#   vm.sh up [run]          clone, boot, key, Gatekeeper on, dmg + persona files into ~/Downloads
+#   vm.sh up [run] [--from SNAP]   clone vanilla-clean (or a snapshot), boot, key, Gatekeeper on,
+#                           dmg + persona files into ~/Downloads; 6 GB, so three VMs run side by side
+#   vm.sh install           the app of release/mac-arm64 (npm run desktop:dir, 15 s) into /Applications,
+#                           over the one there, past Gatekeeper: for iterating, not for install tests
+#   vm.sh snap NAME         keep this VM's state as snapshot belege-snap-NAME (books set up, files in …)
+#   vm.sh snaps             the snapshots
 #   vm.sh doctor [run]      read-only: every line ok, else down + up
 #   vm.sh shot NAME         whole screen → $EVIDENCE/NAME.png (+ NAME.s.png, 1400 px wide, to read)
 #   vm.sh click X Y         click at X,Y of the 1400-px image; `vm.sh dclick X Y` double-clicks
@@ -37,23 +42,40 @@ px() { echo "$1 * $(scale) / 1400" | bc; }
 case "$cmd" in
 up)
   RUN=${1:-vm$(date +%H%M%S)}; VM="belege-vm-$RUN"; D="$ROOT/$RUN"
+  BASE=vanilla-clean; [ "${2:-}" = "--from" ] && BASE="belege-snap-$3"
   DMG=$(ls -t "$REPO"/release/*arm64.dmg 2>/dev/null | head -1)
   [ -n "$DMG" ] || { echo "no release/*arm64.dmg: npm run desktop:build first" >&2; exit 1; }
   [ -f "$KEY" ] || { echo "no SSH key $KEY" >&2; exit 1; }
   [ -x "$VENV/bin/vncdo" ] || { python3 -m venv "$VENV" && "$VENV/bin/pip" install -q vncdotool; }
   mkdir -p "$D"; EVIDENCE="$REPO/.verify/evidence/$RUN"; mkdir -p "$EVIDENCE"
-  tart clone vanilla-clean "$VM"
+  tart clone "$BASE" "$VM"; tart set "$VM" --memory 6144
   (tart run "$VM" > "$D/tart.log" 2>&1 & echo $! > "$D/tart.pid")
   IP=; for _ in $(seq 1 60); do IP=$(tart ip "$VM" 2>/dev/null || true); [ -n "$IP" ] && nc -z -w2 "$IP" 22 2>/dev/null && break; IP=; sleep 3; done
   [ -n "$IP" ] || { echo "VM $VM got no IP / SSH" >&2; exit 1; }
-  expect -c "set timeout 30; spawn ssh-copy-id -i $KEY.pub -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null admin@$IP; expect -re {assword:} { send \"admin\r\" }; expect eof" >/dev/null
+  [ "$BASE" = vanilla-clean ] && expect -c "set timeout 30; spawn ssh-copy-id -i $KEY.pub -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null admin@$IP; expect -re {assword:} { send \"admin\r\" }; expect eof" >/dev/null
   printf 'RUN=%s\nVM=%s\nIP=%s\nEVIDENCE=%s\nDMG="%s"\n' "$RUN" "$VM" "$IP" "$EVIDENCE" "$DMG" > "$D/env"
   # vanilla-clean has Gatekeeper off; a person's Mac has it on.
   ssh_ 'echo admin | sudo -S spctl --global-enable 2>/dev/null; mkdir -p ~/Downloads; osascript -e "quit app \"Terminal\"" >/dev/null 2>&1 || true'
   node "$HERE/persona-files.mjs" "$D/Downloads" >/dev/null && cat "$D/persona.env" >> "$D/env"
-  "$0" put "$DMG" "$D"/Downloads/* >/dev/null
+  [ "$BASE" = vanilla-clean ] && "$0" put "$DMG" "$D"/Downloads/* >/dev/null
   echo ready; cat "$D/env"; echo "source $D/env"
   ;;
+install)
+  load; APP="$REPO/release/mac-arm64/Vanilla Accounting.app"
+  [ -d "$APP" ] || { echo "no $APP: npm run desktop:dir first" >&2; exit 1; }
+  ditto -c -k --keepParent "$APP" "$ROOT/$RUN/app.zip"
+  scp -q -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$ROOT/$RUN/app.zip" "admin@$IP:/tmp/app.zip"
+  ssh_ 'pkill -9 -f "/Applications/Vanilla Accounting.app" 2>/dev/null; rm -rf "/Applications/Vanilla Accounting.app" && ditto -x -k /tmp/app.zip /Applications && xattr -dr com.apple.quarantine "/Applications/Vanilla Accounting.app"; defaults read "/Applications/Vanilla Accounting.app/Contents/Info" CFBundleVersion'
+  ;;
+snap)
+  load; N=$1; ssh_ 'pkill -f "/Applications/Vanilla Accounting.app"; sync' || true
+  [ -f "$ROOT/$RUN/tunnel.pid" ] && kill "$(cat "$ROOT/$RUN/tunnel.pid")" 2>/dev/null || true
+  tart stop "$VM"; tart delete "belege-snap-$N" >/dev/null 2>&1 || true; tart clone "$VM" "belege-snap-$N"
+  (tart run "$VM" > "$ROOT/$RUN/tart.log" 2>&1 &)
+  for _ in $(seq 1 60); do IP2=$(tart ip "$VM" 2>/dev/null || true); [ -n "$IP2" ] && nc -z -w2 "$IP2" 22 2>/dev/null && break; sleep 3; done
+  sed -i '' "s/^IP=.*/IP=$IP2/" "$ROOT/$RUN/env"; echo "snapshot belege-snap-$N; $VM runs again at $IP2 (vm.sh app to start the app)"
+  ;;
+snaps) tart list | awk '/belege-snap-/{print $2}' ;;
 put)
   load; scp -q -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$@" "admin@$IP:Downloads/"
   for f in "$@"; do ssh_ "xattr -w com.apple.quarantine '0083;6720f000;Safari;' ~/Downloads/'$(basename "$f")'"; done
