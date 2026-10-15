@@ -26,6 +26,8 @@ export interface CamtStatement {
   id: string;
   iban?: string;
   currency: string;
+  /** Acct/Svcr/FinInstnId/Nm: the bank that keeps the account, as it names itself. */
+  bankName?: string;
   node: Node;
 }
 
@@ -53,6 +55,7 @@ export function readCamt(xml: string): { message: CamtMessage; statements: CamtS
       id: node.Id !== undefined ? String(node.Id) : `${createHash('sha256').update(xml).digest('hex').slice(0, 16)}#${i + 1}`,
       ...(node.Acct?.Id?.IBAN ? { iban: String(node.Acct.Id.IBAN) } : {}),
       currency: String(node.Acct?.Ccy ?? node.Ntry?.[0]?.Amt?.['@_Ccy'] ?? node.Bal?.[0]?.Amt?.['@_Ccy'] ?? 'CHF'),
+      ...(node.Acct?.Svcr?.FinInstnId?.Nm ? { bankName: String(node.Acct.Svcr.FinInstnId.Nm).trim() } : {}),
       node,
     })),
   };

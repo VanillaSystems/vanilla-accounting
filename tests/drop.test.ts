@@ -255,3 +255,31 @@ test('deleted, dropped again, deleted again: «Rückgängig» brings back the la
     api.stop();
   }
 });
+
+test('a camt.053 of an account the books lack names its bank and asks; «Nein, privat» sets it aside with nothing read', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, books } = SESSION(api);
+    const camt = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>P-1</MsgId><CreDtTm>2026-08-25T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>P-1</Id><Acct><Id><IBAN>CH4431999123000889012</IBAN></Id><Ccy>CHF</Ccy><Svcr><FinInstnId><BICFI>RAIFCH22</BICFI><Nm>Raiffeisenbank Wil und Umgebung</Nm></FinInstnId></Svcr></Acct>
+<Ntry><Amt Ccy="CHF">40.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-25</Dt></BookgDt><AcctSvcrRef>REF-PRIVATE</AcctSvcrRef><AddtlNtryInf>Coiffeur</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=privat.xml`, Buffer.from(camt));
+    const row = s.rows[0];
+    assert.equal(row.state, 'refused');
+    assert.deepEqual(row.unknownAccount, { iban: 'CH4431999123000889012', currency: 'CHF', bankName: 'Raiffeisenbank Wil und Umgebung' });
+
+    s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'private' });
+    const aside = s.rows[0];
+    assert.deepEqual([aside.state, aside.reason, aside.unknownAccount, aside.message], ['refused', 'private', undefined, undefined]);
+    assert.equal(existsSync(join(api.root, 'data/drop', s.id, 'files', row.key)), false, 'the session keeps no copy');
+    assert.equal((await books()).transactions.some((t) => t.ref === 'REF-PRIVATE'), false, 'nothing of it in the books');
+    await assert.rejects(post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'private' }), /400/, 'once');
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    api.stop();
+  }
+});

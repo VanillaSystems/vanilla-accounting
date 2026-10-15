@@ -5,6 +5,7 @@
  * by bank-balance reconciliation to match a statement's closing balance to a ledger account (no
  * statement names `manual`, so those rows never reconcile).
  */
+import type { UnknownAccount } from '../types/api-error.js';
 import type { BankTransaction } from '../types/index.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import { setup } from '../engines/index.js';
@@ -38,8 +39,8 @@ export interface StatementAccount {
 
 export type StatementMatch =
   | { account: LedgerBankAccount & { statements: StatementKind }; by: 'iban' | 'folder' }
-  /** `unknown`: the statement's IBAN and currency when the manifest lacks that account (the UI offers to add it). */
-  | { problem: string; unknown?: { iban: string; currency: string } };
+  /** `unknown`: the statement's account when the manifest lacks it (the UI offers to add it). */
+  | { problem: string; unknown?: UnknownAccount };
 
 /**
  * The ledger account a statement lands on: the account with its IBAN and currency, else the

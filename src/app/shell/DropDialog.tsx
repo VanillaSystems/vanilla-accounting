@@ -83,8 +83,9 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         <span className={`dchip c-${r.state}`}>{chip}</span>
         {r.unknownAccount ? (
           <>
-            <small>{t('error.statement.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency })}</small>
-            <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('company.addBank')}</button>
+            <small>{t(r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '' })}</small>
+            <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>
+            <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
           </>
         ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
         {(r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{t('drop.takeAnyway')}</button> : null}

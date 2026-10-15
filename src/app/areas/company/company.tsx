@@ -24,7 +24,7 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
-import { clearBankDraft, peekBankDraft, type BankDraft } from './bank-draft.js';
+import { clearBankDraft, draftForm, peekBankDraft, type BankDraft } from './bank-draft.js';
 import { MailSection } from './MailSection.js';
 import { SourcesSection } from './SourcesSection.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
@@ -291,14 +291,18 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
           </div>
         )}
       </form>
-      {adding && <AddBank nav={nav} draft={draft} onDone={() => setAdding(false)} />}
+      {adding && <AddBank nav={nav} draft={draft} banks={ws.bankAccounts} onDone={() => setAdding(false)} />}
       <p className="m src-note">{t('company.banksSource')}</p>
     </>
   );
 }
 
-function AddBank({ nav, draft, onDone }: { nav: Nav; draft?: BankDraft; onDone(): void }) {
-  const [f, setF] = useState({ bank: '', currency: draft?.currency ?? baseCurrency(), account: '', label: '', iban: draft?.iban ?? '' });
+function AddBank({ nav, draft, banks, onDone }: { nav: Nav; draft?: BankDraft; banks: CompanyInfo['bankAccounts']; onDone(): void }) {
+  const [f, setF] = useState(() => ({
+    bank: '', account: '', label: '',
+    ...(draft && draftForm(draft, banks, Object.keys(getAccountMap()))),
+    currency: draft?.currency ?? baseCurrency(), iban: draft?.iban ?? '',
+  }));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const valid = !!f.bank.trim() && /^[A-Za-z]{3}$/.test(f.currency.trim()) && /^\d{4}$/.test(f.account.trim()) && !!f.label.trim();
   async function save(e: FormEvent) {
@@ -315,7 +319,7 @@ function AddBank({ nav, draft, onDone }: { nav: Nav; draft?: BankDraft; onDone()
       <div className="acts">
         <button type="submit" className="btn primary" disabled={!valid}>{t('company.addBank')}</button>
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
-        <span className="m">{t('company.addBankHint')}</span>
+        <span className="m">{t('company.addBankHint')}{draft ? ` ${t('company.addBankThenDrop')}` : ''}</span>
       </div>
     </form>
   );

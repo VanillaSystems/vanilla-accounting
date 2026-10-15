@@ -31,7 +31,7 @@ export type ApiRefusal =
   | { code: 'notInTrash' }
   | { code: 'deletedAgain' }
   | { code: 'alreadyBack' }
-  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string; unknown?: { iban: string; currency: string } } }
+  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string; unknown?: UnknownAccount } }
   | { code: 'noBrowser' }
   | { code: 'noClaude' }
   | { code: 'noWorkspace' }
@@ -43,6 +43,9 @@ export type ApiRefusal =
  * camt.053, no bank account takes it (detail: the manifest's problem), a PDF whose name gives no
  * month, or a camt.053 already read (detail: that file).
  */
+/** A statement's account the manifest lacks: its IBAN and currency, and the bank's name when the statement gives it. */
+export interface UnknownAccount { iban: string; currency: string; bankName?: string }
+
 export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate';
 
 /** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */

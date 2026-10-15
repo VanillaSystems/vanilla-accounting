@@ -6,6 +6,8 @@
  * never part of it.
  */
 
+import type { UnknownAccount } from './api-error.js';
+
 /** What a file is. Unset while nobody knows (the row asks). */
 export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'zip';
 
@@ -38,8 +40,8 @@ export interface DropRow {
   reason?: DropReason;
   /** A refusal the books gave in their own words (a statement of a filed quarter, of no account). */
   message?: string;
-  /** A statement of an account the books do not know: its IBAN and currency, so the UI can offer «Bankkonto hinzufügen». */
-  unknownAccount?: { iban: string; currency: string };
+  /** A statement of an account the books do not know: the UI asks whether it is the firm's and offers «Bankkonto hinzufügen». */
+  unknownAccount?: UnknownAccount;
   /** Taken: the run that takes it up. */
   run?: string;
   /** A receipt: the name it got in the inbox. */
@@ -54,7 +56,9 @@ export interface StatementFacts { iban?: string; from?: string; to?: string; ent
 
 export type DropReason =
   | 'duplicate' | 'not-receipt' | 'held' | 'pdf-password'
-  | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported';
+  | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported'
+  /** A statement of an account the owner said is private: set aside, not read into the books. */
+  | 'private';
 
 export interface DropSession {
   id: string;
@@ -68,4 +72,6 @@ export type DropAction =
   /** The password of a protected ZIP: used to unpack it, never stored. */
   | { kind: 'unlock'; password: string }
   /** Take a taken file back out: the inbox file, or what it made in the books. */
-  | { kind: 'undo' };
+  | { kind: 'undo' }
+  /** A statement of an unknown account is the owner's private one: set aside. */
+  | { kind: 'private' };

@@ -105,6 +105,9 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       if (a.as === 'receipt') unquarantine(row);
       Object.assign(row, a.as === 'quarantine' ? { state: 'quarantine', reason: 'held' } : { kind: 'receipt', state: 'take', reason: undefined });
       break;
+    case 'private':
+      setAsidePrivate(s, row);
+      break;
     case 'undo':
       if (row.state !== 'taken') throw new RequestError(400, 'Nur eine übernommene Datei lässt sich zurücknehmen.');
       if (undo(row).length) await bookAgain(row.name);
@@ -124,6 +127,15 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
   save(s);
   res.json(s);
 });
+
+/** «Nein, privat» on a statement of an account the books lack: it stays out of the books, its copy in the session goes. */
+function setAsidePrivate(s: DropSession, row: DropRow): void {
+  if (!row.unknownAccount) throw new RequestError(400, 'Nur ein Auszug eines unbekannten Kontos wird als privat beiseitegelegt.');
+  delete row.unknownAccount;
+  delete row.message;
+  row.reason = 'private';
+  rmSync(fileOf(s.id, row.key), { force: true });
+}
 
 /** A free name in `folder` for `name`: the same stem with -2, -3 … when taken. */
 function freeName(folder: string, name: string): string {
