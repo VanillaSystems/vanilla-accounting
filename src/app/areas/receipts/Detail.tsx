@@ -95,6 +95,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <button type="button" className="miss" disabled={!edit} title={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
           {vat.length
             ? vat.map((g) => <span key={g.ratePercent} title={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
+            : r.hasSwissVat === undefined ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
             : <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>}
           {vat.length > 0 && (r.vatId
             ? <span title={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')}</span>

@@ -691,6 +691,8 @@ export default {
     'receipts.noUidTip': 'Nessun numero IVA riconosciuto. Deve figurare sul giustificativo per dedurre l’imposta precedente.',
     'receipts.noVat': 'nessuna IVA CH',
     'receipts.noVatTip': 'Il giustificativo non indica IVA svizzera: nessuna deduzione dell’imposta precedente.',
+    'receipts.vatUnread': 'IVA non ancora letta',
+    'receipts.vatUnreadTip': 'L’app non ha ancora letto l’IVA di questo giustificativo. Con Claude Code la legge alla prossima esecuzione.',
     'receipts.noneNotice': 'Non è un giustificativo. Il file non conta come aperto ed è normalmente nascosto.',
     'receipts.notReceipt': 'Non è un giustificativo',
     'receipts.notReceiptDone': 'Nascosto · {file} non è un giustificativo',

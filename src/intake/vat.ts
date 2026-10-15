@@ -15,7 +15,7 @@ import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '.
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { Receipt } from '../types/index.js';
-import { hasVatIndicator } from '../parsers/receipt-text.js';
+import { hasVatIndicator, textFacts } from '../parsers/receipt-text.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
 
 // Adaptive concurrency (AIMD — like TCP congestion control):
@@ -88,7 +88,18 @@ export function vatStep({ force = false } = {}): StepRun {
       books.update((index) => { for (const r of index.receipts) if (noText.some((x) => x.id === r.id)) r.needsVisionReview = true; });
       notes.push({ code: 'poorScan', files: noText.map((r) => r.filename) });
     }
-    if (needsLlm.length && !ask) notes.push({ code: 'noModel', waiting: needsLlm.length });
+    if (needsLlm.length && !ask) {
+      // A VAT number with MWST and amounts that add up at a Swiss rate need no model.
+      const proven = needsLlm.flatMap((r): Array<[Receipt, Facts]> => {
+        const f = textFacts(r.extractedText);
+        return f.vatId && f.vatSummary ? [[r, { vatId: f.vatId, hasSwissVat: true, vatSummary: f.vatSummary, lineItems: undefined, vatExtractedAt: new Date().toISOString() }]] : [];
+      });
+      apply(proven, false);
+      for (const [r, f] of proven) log(`  ✓ ${r.filename}: from its text, ${f.vatSummary!.map((g) => `${g.ratePercent}%`).join(', ')} ${f.vatId}`);
+      progress(done += proven.length, total);
+      const waiting = needsLlm.length - proven.length;
+      if (waiting) notes.push({ code: 'noModel', waiting });
+    }
     if (needsLlm.length && ask) {
       let firstError: string | undefined;
       const { stats } = await runAdaptivePool(

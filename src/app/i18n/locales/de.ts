@@ -688,6 +688,8 @@ export const messages = {
   'receipts.noUidTip': 'Keine MWST-Nummer erkannt. Für den Vorsteuerabzug muss sie auf dem Beleg stehen.',
   'receipts.noVat': 'keine CH-MWST',
   'receipts.noVatTip': 'Der Beleg weist keine Schweizer MWST aus: kein Vorsteuerabzug.',
+  'receipts.vatUnread': 'MWST noch nicht gelesen',
+  'receipts.vatUnreadTip': 'Die App hat die MWST dieses Belegs noch nicht gelesen. Mit Claude Code liest sie sie beim nächsten Lauf.',
   'receipts.noneNotice': 'Kein Beleg. Die Datei zählt nicht als offen und ist normalerweise ausgeblendet.',
   'receipts.notReceipt': 'Kein Beleg',
   'receipts.notReceiptDone': 'Ausgeblendet · {file} ist kein Beleg',

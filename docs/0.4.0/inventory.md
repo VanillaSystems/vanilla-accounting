@@ -120,7 +120,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/collect/tutti.ts` | CHF 8, MWST 1 |
 | `src/intake/match.ts` | CHF 2 |
 | `src/intake/read.ts` | camt.053 4 |
-| `src/intake/vat.ts` | MWST 2 |
+| `src/intake/vat.ts` | MWST 3 |
 | `src/invoices/fonts.ts` | QR-bill 1 |
 | `src/invoices/model.ts` | CHF 1, MWST 2, Ziffer 1, QR-bill 7 |
 | `src/invoices/payments.ts` | ESTV 1, camt.053 1, QR-bill 1 |
@@ -131,7 +131,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |
-| `src/parsers/receipt-text.ts` | MWST 3 |
+| `src/parsers/receipt-text.ts` | CHF 1, MWST 6 |
 
 ## infrastructure
 
@@ -179,7 +179,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 25, MWST 111, ESTV 17, Ziffer 45, eCH-0217 2, form 0535 4, UID 1, camt.053 12, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 25, MWST 113, ESTV 17, Ziffer 45, eCH-0217 2, form 0535 4, UID 1, camt.053 12, QR-bill 1 |
 | `src/app/i18n/locales/en.ts` | CHF 25, MWST 2, ESTV 16, eCH-0217 2, form 0535 4, UID 1, camt.053 12, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 25, MWST 1, eCH-0217 2, form 0535 4, UID 1, camt.053 12, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 25, MWST 1, eCH-0217 2, form 0535 4, UID 1, camt.053 12, QR-bill 1 |

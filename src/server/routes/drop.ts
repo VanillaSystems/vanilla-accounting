@@ -210,7 +210,7 @@ function undo(row: DropRow): void {
     const books = readBooks();
     const receipt = books.receipts.find((r) => r.id === row.id);
     if (receipt) {
-      assertOpen(books, [...receiptDates(books, row.id), receipt.date], 'deleteReceipt');
+      assertOpen(books, receiptDates(books, row.id), 'deleteReceipt');
       const refs = new Set(books.mappings.filter((m) => m.receiptId === row.id).map((m) => m.transactionRef));
       const pdf = receiptPath(books, receipt);
       updateBooks((b) => {

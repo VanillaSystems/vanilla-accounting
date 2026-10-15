@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
 import { pdfText } from '../parsers/pdf-text.js';
-import { detectVatProofIssue } from '../parsers/receipt-text.js';
+import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
@@ -208,6 +208,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       const existing = byId.get(id);
       const fresh = existing?.extractedText ? undefined : extracted.get(id);
       if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText) }] : [];
+      // Without a model nothing else reads the date and the total; what the text states plainly is taken.
+      const plain = ask ? {} : textFacts(fresh.text);
       return [{
         id,
         filename,
@@ -217,10 +219,10 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         fileSize: fresh.fileSize,
         indexedAt: existing?.indexedAt ?? new Date().toISOString(),
         location,
-        date: existing?.date,
+        date: existing?.date ?? plain.date,
         description: existing?.description,
-        amount: existing?.amount,
-        currency: existing?.currency,
+        amount: existing?.amount ?? plain.amount,
+        currency: existing?.currency ?? plain.currency,
         needsVisionReview: fresh.text.length === 0 || undefined,
         remarks: existing?.remarks ?? detectVatProofIssue(fresh.text),
       } as Receipt];

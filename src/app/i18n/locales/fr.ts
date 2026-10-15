@@ -691,6 +691,8 @@ export default {
     'receipts.noUidTip': 'Aucun numéro TVA reconnu. Il doit figurer sur le justificatif pour déduire l’impôt préalable.',
     'receipts.noVat': 'pas de TVA CH',
     'receipts.noVatTip': 'Le justificatif ne mentionne pas de TVA suisse : pas de déduction de l’impôt préalable.',
+    'receipts.vatUnread': 'TVA pas encore lue',
+    'receipts.vatUnreadTip': 'L’app n’a pas encore lu la TVA de ce justificatif. Avec Claude Code, elle la lit au prochain passage.',
     'receipts.noneNotice': 'Pas un justificatif. Le fichier ne compte pas comme ouvert et est normalement masqué.',
     'receipts.notReceipt': 'Pas un justificatif',
     'receipts.notReceiptDone': 'Masqué · {file} n’est pas un justificatif',

@@ -93,3 +93,18 @@ test('a scan too poor to read is set aside once, with a note, and not taken up a
   assert.deepEqual(second.notes, [], 'nothing to say the second time');
   assert.equal(asked.length, askedBefore);
 });
+
+test('without a model: a receipt whose text proves Swiss VAT gets it from the text, one whose figures do not add up waits', async () => {
+  const books: Books = JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT))));
+  const proven: Receipt = { ...structuredClone(NEW), id: 'vat-text-proven', extractedText: 'Kaffee AG\nCHE-123.456.789 MWST\nTotal exkl. MWST\nMWST 8.1%\nTotal CHF\n100.00\n8.10\n108.10' };
+  const unclear: Receipt = { ...structuredClone(NEW), id: 'vat-text-unclear', extractedText: 'Kaffee AG\nCHE-123.456.789 MWST\nTotal CHF 10.80\nMWST 8.1% CHF 0.90' };
+  books.receipts.push(proven, unclear);
+  const port: BooksPort = { read: () => structuredClone(books), update: (fn) => fn(books) };
+  const { notes } = await vatStep()({ ws: undefined as never, books: port, ask: undefined, progress: () => {}, log: () => {} });
+  const after = (id: string) => books.receipts.find((r) => r.id === id)!;
+  assert.equal(after(proven.id).hasSwissVat, true);
+  assert.deepEqual(after(proven.id).vatSummary, [{ ratePercent: 8.1, net: 100, vat: 8.1, gross: 108.1 }]);
+  assert.equal(after(proven.id).vatId, 'CHE-123.456.789');
+  assert.equal(after(unclear.id).hasSwissVat, undefined, 'figures that do not add up stay for the model');
+  assert.ok(notes.some((n) => n.code === 'noModel'));
+});

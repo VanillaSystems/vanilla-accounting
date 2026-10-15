@@ -691,6 +691,8 @@ export default {
     'receipts.noUidTip': 'No VAT number found. It must be on the receipt to deduct input tax.',
     'receipts.noVat': 'no Swiss VAT',
     'receipts.noVatTip': 'The receipt shows no Swiss VAT: no input tax deduction.',
+    'receipts.vatUnread': 'VAT not read yet',
+    'receipts.vatUnreadTip': 'The app has not read this receipt’s VAT yet. With Claude Code it reads it in the next run.',
     'receipts.noneNotice': 'Not a receipt. The file does not count as open and is normally hidden.',
     'receipts.notReceipt': 'Not a receipt',
     'receipts.notReceiptDone': 'Hidden · {file} is not a receipt',
