@@ -67,7 +67,7 @@ Tests (golden master):
 - Only when a figure change is intended: `npm run test:update` (demo) and/or `npm run test:books:update` (company), review the diff, and say why in the commit, and add a CHANGELOG.md entry marked **⚠ figures** (docs/releasing.md).
 
 Versions and data format:
-- SemVer, 0.x until the public release; the rules, the changelog and how to cut a release: docs/releasing.md. Every user-visible change gets a CHANGELOG.md entry under the next version.
+- SemVer, 0.x until the public release; the rules, the changelog and how to cut a release: docs/releasing.md. How a build names itself (`0.4.0-rc.56+g36b66d6`), when `package.json` is raised and which tags (`vX.Y.Z`, `vX.Y.Z-rc.N`) to set: docs/versioning.md. Every user-visible change gets a CHANGELOG.md entry under the next version.
 - The books (`schema` in ledger.json) and belege.workspace.yaml carry `schema`; src/workspace/schema.ts lists both versions and their forward-only migration ladders. Changing either format means a new version and a ladder step, never a shape change without one. `npm run update` writes migrated files back.
 
 VAT filing (MWST-Abrechnung):

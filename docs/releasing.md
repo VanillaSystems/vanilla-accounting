@@ -62,7 +62,9 @@ versions and their migration ladders. To change a format:
 
 3. Move the entries under a new heading in `CHANGELOG.md`: `## [X.Y.Z] - YYYY-MM-DD`, with
    **⚠ figures** and **⚠ action** where they apply.
-4. Bump the version. This edits `package.json` and `package-lock.json` and does not commit:
+4. Check the version. `package.json` already holds X.Y.Z while the work on it runs
+   ([versioning.md](versioning.md)); only if it does not, set it. This edits `package.json` and
+   `package-lock.json` and does not commit:
 
    ```sh
    npm version X.Y.Z --no-git-tag-version

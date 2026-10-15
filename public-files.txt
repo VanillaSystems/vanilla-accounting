@@ -50,6 +50,7 @@ docs/getting-started.md
 docs/audit-export.md
 docs/vat-codes.md
 docs/releasing.md
+docs/versioning.md
 docs/mail-setup.md
 docs/quarter-workflow.md
 docs/year-end.md

@@ -63,7 +63,9 @@ module.exports = {
   // tools/desktop/smoke.mjs drives the fused build through the renderer (docs/desktop.md).
   electronFuses: {
     runAsNode: false,
-    enableCookieEncryption: true,
+    // Off: the app keeps no cookies, and on the Mac the encryption key sits in the keychain, so every
+    // start of a build macOS has not seen asked for the login password before the window appeared.
+    enableCookieEncryption: false,
     enableNodeOptionsEnvironmentVariable: false,
     enableNodeCliInspectArguments: false,
     enableEmbeddedAsarIntegrityValidation: true,

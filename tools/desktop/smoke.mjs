@@ -136,8 +136,8 @@ async function intakeDone(page, since) {
 const wire = await getCurrentFuseWire(exe);
 const fused = wire[FuseV1Options.RunAsNode] === 48 && wire[FuseV1Options.EnableNodeOptionsEnvironmentVariable] === 48
   && wire[FuseV1Options.EnableNodeCliInspectArguments] === 48 && wire[FuseV1Options.OnlyLoadAppFromAsar] === 49
-  && wire[FuseV1Options.EnableEmbeddedAsarIntegrityValidation] === 49 && wire[FuseV1Options.EnableCookieEncryption] === 49;
-check('the build is fused: no RunAsNode, NODE_OPTIONS or --inspect; app.asar only, its integrity checked; cookies encrypted', fused, JSON.stringify(wire));
+  && wire[FuseV1Options.EnableEmbeddedAsarIntegrityValidation] === 49 && wire[FuseV1Options.EnableCookieEncryption] === 48;
+check('the build is fused: no RunAsNode, NODE_OPTIONS or --inspect; app.asar only, its integrity checked; no cookie encryption (no keychain prompt at start)', fused, JSON.stringify(wire));
 
 // 1. First start: the start screen, nothing opened.
 const first = await launch(9333, stubShell);

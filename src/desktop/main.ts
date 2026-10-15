@@ -9,7 +9,7 @@ import { createServer, type Server } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { BrowserWindow, Menu, app, dialog, ipcMain, safeStorage, screen, session, shell } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell } from 'electron';
 import type { Express } from 'express';
 import { usePrintPages } from '../invoices/pdf.js';
 import { sealedStore } from '../secrets/sealed-store.js';
@@ -58,9 +58,14 @@ async function start(): Promise<void> {
   guard(base);
 
   const show = (path = '/') => {
-    if (!win || win.isDestroyed()) win = createWindow(stateFile);
-    void win.loadURL(base + path);
-    win.show();
+    const fresh = !win || win.isDestroyed();
+    if (fresh) {
+      const opened = (win = createWindow(stateFile));
+      // A new window appears once the page has painted, not as an empty frame.
+      opened.once('ready-to-show', () => opened.show());
+    }
+    void win!.loadURL(base + path);
+    if (!fresh) win!.show();
   };
   const opening = (open: () => Promise<unknown>) => async () => {
     try {
@@ -137,6 +142,8 @@ function createWindow(stateFile: string): BrowserWindow {
   const win = new BrowserWindow({
     ...(saved ?? { width: 1440, height: 900 }),
     minWidth: 900, minHeight: 600, show: false, title: 'Vanilla Accounting',
+    // The colour of tokens.css's page for the system's theme, so no white flashes before it paints.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     // On the Mac the page runs up to the top edge under the traffic lights; no title bar.
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const } : {}),
     webPreferences: {
