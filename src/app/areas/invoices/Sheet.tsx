@@ -37,6 +37,9 @@ function layOut(d: SheetData, box: HTMLDivElement): string {
 
 let measureBox: HTMLDivElement | undefined;
 
+/** A number field: typing replaces what is there, as in a form. */
+const numeric = (el: HTMLElement) => /^l:\d+:(quantity|price)$/.test(el.dataset.ed ?? '');
+
 export interface SheetProps {
   data: SheetData;
   editing?: boolean;
@@ -79,10 +82,27 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
     const next = key ? box.querySelector<HTMLElement>(`[data-ed="${CSS.escape(key)}"]`) : null;
     if (next) {
       next.focus();
-      if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus) sel?.collapseToEnd(); }
+      if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus && !numeric(next)) sel?.collapseToEnd(); }
     }
     return () => ro.disconnect();
   }, [html]);
+
+  // The sheet's HTML is not React's: React never sees a <select> in it change (its onChange follows
+  // React's own elements), so the sheet listens to the DOM's change event, which bubbles.
+  const edit = useRef(onEdit);
+  edit.current = onEdit;
+  useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const changed = (e: Event) => {
+      const el = e.target;
+      if (!(el instanceof HTMLSelectElement) || !el.dataset.ed) return;
+      if (edit.current?.(el.dataset.ed, el.value, true) === false) el.value = el.dataset.was ?? '';
+      else el.dataset.was = el.value;
+    };
+    box.addEventListener('change', changed);
+    return () => box.removeEventListener('change', changed);
+  }, []);
 
   const field = (e: { target: EventTarget }) => (e.target as HTMLElement).closest?.<HTMLElement>('[data-ed]') ?? null;
   const text = (el: HTMLElement) => (el instanceof HTMLSelectElement ? el.value : el.innerText.replace(/\n+$/, ''));
@@ -99,8 +119,12 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         refocus.current = (e.relatedTarget as HTMLElement | null)?.closest?.<HTMLElement>('[data-ed]')?.dataset.ed;
         if (onEdit?.(el.dataset.ed!, text(el), true) === false) el.innerText = el.dataset.was ?? '';
       }}
-      onFocus={(e) => { const el = field(e); if (el) el.dataset.was = text(el); }}
-      onChange={(e) => { const el = field(e); if (el instanceof HTMLSelectElement && onEdit?.(el.dataset.ed!, el.value, true) === false) el.value = el.dataset.was ?? ''; }}
+      onFocus={(e) => {
+        const el = field(e);
+        if (!el) return;
+        el.dataset.was = text(el);
+        if (el.isContentEditable && numeric(el)) requestAnimationFrame(() => { if (document.activeElement === el) getSelection()?.selectAllChildren(el); });
+      }}
       onKeyDown={(e) => {
         const el = field(e);
         if (!el?.isContentEditable) return;

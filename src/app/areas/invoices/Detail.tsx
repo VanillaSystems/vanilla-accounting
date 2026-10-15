@@ -4,7 +4,7 @@
  * their invoices; a sent document as the PDF that went out.
  */
 import { useEffect, useState, type ReactNode } from 'react';
-import { localToday, parseSwissDate } from '../../../accounting/periods.js';
+import { localToday } from '../../../accounting/periods.js';
 import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
 import { missingForIssue, openAmount, paidAmount, refundDue, reminderDraft, totals } from '../../../invoices/rules.js';
@@ -20,7 +20,8 @@ import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
-import { byRouteId, customerChange, customerOf, routeId, rowState, type RowState } from './model.js';
+import { byRouteId, customerOf, routeId, rowState, type RowState } from './model.js';
+import { parseNumber, sheetEdit } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
@@ -57,12 +58,6 @@ function Sec({ k, label, val, children }: { k: Section; label: string; val: Reac
     </div>
   );
 }
-
-/** A number typed the Swiss way or another: 1’200.50, 1 200,50, −3. */
-const parseNumber = (s: string): number | null => {
-  const n = Number(s.replace(/[’'\s]/g, '').replace('−', '-').replace(',', '.'));
-  return s.trim() && Number.isFinite(n) ? n : null;
-};
 
 interface DetailProps extends Props { d: InvoiceList; ws: CompanyInfo; inv: Invoice }
 
@@ -133,49 +128,16 @@ function InvoiceDetail(props: DetailProps) {
   );
 }
 
-/** What an edit on the draft's sheet changes; false: refused, the field goes back. */
+/** An edit on the draft's sheet, saved; false: refused, the field goes back. */
 function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value: string): DraftChange | false | undefined {
-  const c = d.customers.find((x) => x.id === inv.customerId);
-  if (key === 'intro' || key === 'closing') {
-    const def = defaultTexts(contextOf(ws), inv.kind, inv.language, c?.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30)[key];
-    const now = inv[key] ?? def;
-    if (value === now) return undefined;
-    return { [key]: value === def ? null : value };
-  }
-  if (key === 'date' || key === 'dueDate') {
-    const iso = parseSwissDate(value);
-    if (!iso) { nav.toast(t('invoices.errDate')); return false; }
-    return iso === inv[key] ? undefined : { [key]: iso };
-  }
-  if (key === 'exemption') return { exemption: value === 'abroad' || value === 'export' ? value : null };
-  if (key === 'customer') {
-    if (value === '+') { setUi({ dialog: { kind: 'customer', then: { draft: inv.id } } }); return false; }
-    const next = d.customers.find((x) => x.id === value);
-    return next ? customerChange(inv, next) : false;
-  }
-  const m = /^l:(\d+):(\w+)$/.exec(key);
-  if (!m) return undefined;
-  const k = Number(m[1]);
-  const field = m[2];
-  const lines = inv.lines.map((l) => ({ ...l }));
-  const line = lines[k];
-  if (!line) return undefined;
-  if (field === 'text') {
-    if (value === line.text) return undefined;
-    const subject = !inv.subject || (k === 0 && inv.subject === line.text) ? { subject: k === 0 ? value : inv.subject ?? value } : {};
-    line.text = value;
-    return { lines, ...subject };
-  }
-  if (field === 'quantity' || field === 'price') {
-    const n = parseNumber(value);
-    if (n === null) { nav.toast(t('invoices.errNumber')); return false; }
-    if (n === line[field]) return undefined;
-    line[field] = n;
-    return { lines };
-  }
-  if (field === 'unit') { if (value) line.unit = value as typeof line.unit; else delete line.unit; return { lines }; }
-  if (field === 'vatRate') { line.vatRate = Number(value) as typeof line.vatRate; return { lines }; }
-  return undefined;
+  const terms = d.customers.find((x) => x.id === inv.customerId)?.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30;
+  const r = sheetEdit(inv, key, value, { customers: d.customers, defaultTexts: defaultTexts(contextOf(ws), inv.kind, inv.language, terms) });
+  if (!r) return undefined;
+  if ('change' in r) return r.change;
+  if ('newCustomer' in r) { setUi({ dialog: { kind: 'customer', then: { draft: inv.id } } }); return false; }
+  if (r.refused === 'date') nav.toast(t('invoices.errDate'));
+  if (r.refused === 'number') nav.toast(t('invoices.errNumber'));
+  return false;
 }
 
 function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { state: RowState; reminder: boolean }) {

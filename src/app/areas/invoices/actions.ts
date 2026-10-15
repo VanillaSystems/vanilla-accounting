@@ -2,7 +2,7 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import type { Customer, CustomerFields, Draft, Invoice, Issued } from '../../../invoices/model.js';
+import type { Customer, CustomerFields, Draft, Invoice, InvoiceLine, Issued } from '../../../invoices/model.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import { api, errorText, type CreditInput, type DraftChange } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
@@ -20,8 +20,8 @@ export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view:
 export const invoiceAt = (inv: Invoice, current?: Period): Location =>
   ({ route: invoicePath(inv), query: inv.status === 'draft' && current ? { period: current } : { period: parsePeriod(periodContaining(inv.date, current), localToday()) ?? undefined } });
 
-/** The line a new draft starts with, its text ready to be typed over. */
-export const firstLine = (zero: boolean) => ({ text: t('invoices.newLine'), quantity: 1, unit: 'h' as const, price: 0, vatRate: zero ? 0 : invoicing().rates[0] });
+/** The line a new draft starts with, its text ready to be typed over; no unit until one is picked (a discount has none). */
+export const firstLine = (zero: boolean): InvoiceLine => ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoicing().rates[0] });
 
 async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
   try {
