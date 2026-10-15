@@ -17,14 +17,25 @@ export function useIntakeRunning(): boolean {
   return !!useAutomation().view?.runs.some((r) => r.workflow === INTAKE && OPEN.has(r.status));
 }
 
-/** Calls `onRest` once for every inbox run that comes to rest while the page is open. */
+/**
+ * Calls `onRest` once for every inbox run that comes to rest while the page is open, also one
+ * that started and finished between two polls (seen first at rest). The runs already at rest in
+ * the first view stay quiet.
+ */
 export function watchIntakeRuns(onRest: (run: RunSummary) => void): () => void {
   const open = new Set<string>();
+  let seen: Set<string> | undefined;
   const check = () => {
-    for (const r of automationNow()?.runs ?? []) {
+    const view = automationNow();
+    if (!view) return;
+    const first = !seen;
+    seen ??= new Set();
+    for (const r of view.runs) {
       if (r.workflow !== INTAKE) continue;
+      const fresh = !seen.has(r.id);
+      seen.add(r.id);
       if (OPEN.has(r.status)) open.add(r.id);
-      else if (open.delete(r.id)) onRest(r);
+      else if (open.delete(r.id) || (fresh && !first)) onRest(r);
     }
   };
   check();
