@@ -1535,6 +1535,7 @@ export default {
     'invoiceLayout.setupLead': 'Before the first invoice is laid out: where your customers pay, which account the revenue goes to and how long they have. You can change it later.',
     'invoiceLayout.payTo': 'Customers pay to',
     'invoiceLayout.iban': 'IBAN of this account (it is on every bank statement)',
+    'invoiceLayout.ibanExample': 'CH00 0000 0000 0000 0000 0',
     'invoiceLayout.revenue': 'Revenue on account',
     'invoiceLayout.days': 'Payment term in days',
     'invoiceLayout.setup': 'Set up invoices',

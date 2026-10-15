@@ -1532,6 +1532,7 @@ export const messages = {
   'invoiceLayout.setupLead': 'Bevor die erste Rechnung gestaltet wird: wohin deine Kunden zahlen, auf welches Konto der Umsatz kommt und wie lange sie Zeit haben. Das kannst du später ändern.',
   'invoiceLayout.payTo': 'Kunden zahlen auf',
   'invoiceLayout.iban': 'IBAN dieses Kontos (steht auf jedem Kontoauszug)',
+  'invoiceLayout.ibanExample': 'CH00 0000 0000 0000 0000 0',
   'invoiceLayout.revenue': 'Umsatz auf Konto',
   'invoiceLayout.days': 'Zahlungsfrist in Tagen',
   'invoiceLayout.setup': 'Rechnungen einrichten',

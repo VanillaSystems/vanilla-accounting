@@ -184,7 +184,7 @@ function InvoicingSetup({ ws, nav, canEdit, onDone }: { ws: CompanyInfo; nav: Na
           {banks.map((a) => <option key={a.account} value={a.account}>{a.label} · {a.currency}{a.iban ? ` · ${a.iban}` : ''}</option>)}
         </select>
       </label>
-      {!banks.find((a) => a.account === account)?.iban ? <label>{t('invoiceLayout.iban')}<input className="mono wide" value={iban} placeholder="CH00 0000 0000 0000 0000 0" onChange={(e) => setIban(e.target.value)} disabled={!canEdit} /></label> : null}
+      {!banks.find((a) => a.account === account)?.iban ? <label>{t('invoiceLayout.iban')}<input className="mono wide" value={iban} placeholder={t('invoiceLayout.ibanExample')} onChange={(e) => setIban(e.target.value)} disabled={!canEdit} /></label> : null}
       <label>{t('invoiceLayout.revenue')}
         <select value={revenueAccount} onChange={(e) => setRevenue(e.target.value)} disabled={!canEdit}>
           {revenue.map((n) => <option key={n} value={n}>{n} {names[n]}</option>)}

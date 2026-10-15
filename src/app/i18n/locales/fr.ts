@@ -1535,6 +1535,7 @@ export default {
     'invoiceLayout.setupLead': 'Avant de mettre en page la première facture : où tes clients paient, sur quel compte va le chiffre d’affaires et combien de temps ils ont. Tu peux le changer plus tard.',
     'invoiceLayout.payTo': 'Les clients paient sur',
     'invoiceLayout.iban': 'IBAN de ce compte (il figure sur chaque relevé)',
+    'invoiceLayout.ibanExample': 'CH00 0000 0000 0000 0000 0',
     'invoiceLayout.revenue': 'Chiffre d’affaires sur le compte',
     'invoiceLayout.days': 'Délai de paiement en jours',
     'invoiceLayout.setup': 'Configurer les factures',

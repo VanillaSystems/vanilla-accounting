@@ -1535,6 +1535,7 @@ export default {
     'invoiceLayout.setupLead': 'Prima di impaginare la prima fattura: dove pagano i tuoi clienti, su quale conto va il ricavo e quanto tempo hanno. Puoi cambiarlo più tardi.',
     'invoiceLayout.payTo': 'I clienti pagano su',
     'invoiceLayout.iban': 'IBAN di questo conto (è su ogni estratto conto)',
+    'invoiceLayout.ibanExample': 'CH00 0000 0000 0000 0000 0',
     'invoiceLayout.revenue': 'Ricavo sul conto',
     'invoiceLayout.days': 'Termine di pagamento in giorni',
     'invoiceLayout.setup': 'Configurare le fatture',
