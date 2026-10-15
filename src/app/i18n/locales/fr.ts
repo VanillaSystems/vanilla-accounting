@@ -2221,6 +2221,8 @@ export default {
     'drop.entries': { one: '{n} mouvement', other: '{n} mouvements' },
     'drop.reason.duplicate': 'déjà dans les livres ou la boîte d’entrée',
     'drop.reason.not-receipt': 'pas une pièce',
+    'sources.skipOffer': '{n} pièces jointes de {sender} n’étaient pas des pièces. Ignorer cet expéditeur ?',
+    'sources.skipSender': 'Ignorer l’expéditeur',
     'drop.state.possible': 'déjà là ?',
     'drop.reason.possible-duplicate': 'doublon possible',
     'drop.reason.same': 'identique à une pièce de la comptabilité : non reprise',

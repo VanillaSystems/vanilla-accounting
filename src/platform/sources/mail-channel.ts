@@ -50,16 +50,19 @@ export async function imapBackend(r: MailReach, password: string, port = 993): P
 }
 
 export interface MailCursor { validity: string; uid: number }
+/** An attachment's bytes the host holds until it delivers them, with the address of the mail's sender. */
+export interface Held { name: string; content: Buffer; from?: string }
 export const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
 /**
  * What the code may call: `messages(cursor)` (a page of mail it may see, and the cursor after
  * it) and `attachments(uid)` (each as a file reference to bytes the host holds). `held` collects
- * the bytes by reference for the delivery.
+ * the bytes by reference for the delivery, with their sender.
  */
-export function mailChannel(backend: MailBackend, r: MailReach, addresses: string[], since: Date, held: Map<string, { name: string; content: Buffer }>) {
+export function mailChannel(backend: MailBackend, r: MailReach, addresses: string[], since: Date, held: Map<string, Held>) {
   const folder = r.folders[0] ?? 'INBOX';
-  const seen = new Set<number>();
+  /** The sender of each message handed to the code. */
+  const seen = new Map<number, string>();
   const mine = (to: string[]) => !addresses.length || to.some((a) => addresses.includes(a.toLowerCase()));
   return {
     async messages(cursor?: MailCursor, limit = 50) {
@@ -68,7 +71,7 @@ export function mailChannel(backend: MailBackend, r: MailReach, addresses: strin
       const list = restart ? await backend.list(folder, undefined, since, limit) : page;
       const last = list.messages.at(-1)?.uid ?? (restart ? 0 : cursor?.uid ?? 0);
       const shown = list.messages.filter((m) => senderAllowed(r, m.from) && mine(m.to));
-      for (const m of shown) seen.add(m.uid);
+      for (const m of shown) seen.set(m.uid, m.from.toLowerCase());
       return { messages: shown, cursor: { validity: list.validity, uid: last } satisfies MailCursor, done: list.messages.length < limit };
     },
     async attachments(uid: number) {
@@ -76,7 +79,7 @@ export function mailChannel(backend: MailBackend, r: MailReach, addresses: strin
       const parts = await backend.attachments(folder, uid);
       return parts.map((p) => {
         const ref = `held:${sha256(p.content)}`;
-        held.set(ref, { name: p.filename, content: p.content });
+        held.set(ref, { name: p.filename, content: p.content, from: seen.get(uid) });
         return { file: ref, filename: p.filename, contentType: p.contentType };
       });
     },

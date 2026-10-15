@@ -2218,6 +2218,8 @@ export const messages = {
   'drop.entries': { one: '{n} Bewegung', other: '{n} Bewegungen' },
   'drop.reason.duplicate': 'schon in den Büchern oder im Eingang',
   'drop.reason.not-receipt': 'kein Beleg',
+  'sources.skipOffer': '{n} Anhänge von {sender} waren kein Beleg. Diesen Absender überspringen?',
+  'sources.skipSender': 'Absender überspringen',
   'drop.state.possible': 'schon da?',
   'drop.reason.possible-duplicate': 'möglicher Doppelbeleg',
   'drop.reason.same': 'dasselbe wie ein Beleg der Bücher: nicht übernommen',

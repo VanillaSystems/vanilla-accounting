@@ -6,6 +6,7 @@
  * that fetches is `changed`, code that reaches past its reach `over-reach`; a dry run writes
  * nothing. Against a stand-in mailbox, never a real one.
  */
+import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
@@ -17,6 +18,8 @@ import { readLedger } from '../src/platform/sources/ledger.js';
 import type { MailBackend, MailSummary } from '../src/platform/sources/mail-channel.js';
 import { APP_ROOT, type Workspace } from '../src/workspace/workspace.js';
 import { tempWorkspace } from './support/workspace.js';
+import { textPdf } from './support/text-pdf.js';
+import { addSkip, skipOffers } from '../src/platform/sources/skip.js';
 
 process.env.VANILLA_APPROVALS_DIR = mkdtempSync(join(tmpdir(), 'pull-approvals-'));
 const secretsFile = join(mkdtempSync(join(tmpdir(), 'pull-secrets-')), 'secrets.json');
@@ -33,19 +36,20 @@ const MAILS: Mail[] = [
 ];
 
 /** A stand-in mailbox; `failAt` makes the attachment fetch of that UID fail once, as a dropped connection would. */
-function fake(opts: { failAt?: number } = {}): { backend: () => Promise<MailBackend>; fetched: number[] } {
+function fake(opts: { failAt?: number; mails?: Mail[] } = {}): { backend: () => Promise<MailBackend>; fetched: number[] } {
+  const mails = opts.mails ?? MAILS;
   const fetched: number[] = [];
   let failed = false;
   return {
     fetched,
     backend: async () => ({
       async list(_folder, after, _since, limit) {
-        return { validity: '7', messages: MAILS.filter((m) => !after || m.uid > after).slice(0, limit).map(({ files: _f, ...m }) => m) };
+        return { validity: '7', messages: mails.filter((m) => !after || m.uid > after).slice(0, limit).map(({ files: _f, ...m }) => m) };
       },
       async attachments(_folder, uid) {
         if (opts.failAt === uid && !failed) { failed = true; throw new Error('connection dropped'); }
         fetched.push(uid);
-        return MAILS.find((m) => m.uid === uid)!.files;
+        return mails.find((m) => m.uid === uid)!.files;
       },
       async close() {},
     }),
@@ -79,14 +83,14 @@ const inbox = (ws: Workspace) => (existsSync(ws.paths.inbox) ? readdirSync(ws.pa
 test('a pull delivers the PDFs of the senders the reach lets through; a copy is a duplicate; the second pull delivers nothing', async () => {
   const ws = office();
   const first = await pull(req(ws, fake().backend));
-  assert.deepEqual(first, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, complete: true }] });
+  assert.deepEqual(first, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, quarantined: 0, complete: true }] });
   assert.deepEqual(inbox(ws), ['invoice-1.pdf', 'invoice-2.pdf'], 'not the logo, not the other sender\'s offer, not the copy');
   const ledger = readLedger(ws, 'office');
   assert.deepEqual(ledger.map((l) => ('cursor' in l ? `cursor ${JSON.stringify(l.cursor)}` : `${l.key} ${l.got.kind === 'document' && l.got.duplicateOf ? 'duplicate' : 'new'}`)), [
     '<1@vendor>#invoice-1.pdf new', '<3@vendor>#copy.pdf duplicate', '<4@vendor>#invoice-2.pdf new', 'cursor {"validity":"7","uid":4}',
   ]);
   const second = fake();
-  assert.deepEqual(await pull(req(ws, second.backend, { feeds: ['attachments'] })), { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 0, duplicates: 0, complete: true }] });
+  assert.deepEqual(await pull(req(ws, second.backend, { feeds: ['attachments'] })), { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 0, duplicates: 0, quarantined: 0, complete: true }] });
   assert.deepEqual(second.fetched, [], 'from its cursor, nothing new to fetch');
   assert.deepEqual(await pull(req(ws, fake().backend)), { outcome: 'ok', feeds: [] }, 'a daily feed pulled today is not due');
 });
@@ -110,7 +114,7 @@ test('a missing password stops that source only; a dry run writes nothing', asyn
   assert.equal((await pull(req(ws, fake().backend))).outcome, 'ok', 'the other source pulls');
   const dry = office();
   const r = await pull(req(dry, fake().backend, { mode: 'dry' }));
-  assert.deepEqual(r, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, complete: true }] });
+  assert.deepEqual(r, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, quarantined: 0, complete: true }] });
   assert.deepEqual([inbox(dry), readLedger(dry, 'office')], [[], []]);
 });
 
@@ -132,5 +136,22 @@ test('code that fetches is changed; code that reaches past its reach is over-rea
   assert.equal(changed.outcome, 'changed');
   const reaching = own("yield await io.web.open('https://elsewhere.example/');");
   approveSource(reaching, (sources(reaching, APP_ROOT)[0] as unknown as { decl: never }).decl);
-  assert.deepEqual(await pull(req(reaching, fake().backend)), { outcome: 'over-reach', feed: 'attachments', channel: 'web', attempted: 'web.open', feeds: [{ feed: 'attachments', documents: 0, duplicates: 0, complete: false }] });
+  assert.deepEqual(await pull(req(reaching, fake().backend)), { outcome: 'over-reach', feed: 'attachments', channel: 'web', attempted: 'web.open', feeds: [{ feed: 'attachments', documents: 0, duplicates: 0, quarantined: 0, complete: false }] });
+});
+
+test('an attachment whose words say it is no receipt goes to quarantine, not the inbox; a sender that sends only such is offered to be skipped, and skipping keeps the mailbox switched on', async () => {
+  const news = async (n: number) => textPdf(['Vendor News', `Ausgabe ${n}: neue Farben im Herbst`, 'Sie erhalten diesen Newsletter als Kundin. Abmelden: vendor.example/abmelden']);
+  const mail = (uid: number, filename: string, content: Buffer, from = 'news@vendor.example'): Mail => ({ uid, from, to: ['office@example.com'], subject: filename, date: `2026-10-0${uid}T08:00:00Z`, messageId: `<${uid}@news>`, files: [{ filename, contentType: 'application/pdf', content }] });
+  const mails = [mail(1, 'news-1.pdf', await news(1)), mail(2, 'news-2.pdf', await news(2)), mail(3, 'news-3.pdf', await news(3)), mail(4, 'invoice-9.pdf', await textPdf(['Vendor AG', 'Rechnung R-9', 'Total CHF 54.00', 'MWST 8.1 % 4.05']), 'billing@vendor.example')];
+  const ws = office(YAML.replace('from: ["*@vendor.example"]', 'from: ["*@vendor.example"], skip: []'));
+  const r = await pull(req(ws, fake({ mails }).backend));
+  assert.deepEqual(r, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 1, duplicates: 0, quarantined: 3, complete: true }] });
+  assert.deepEqual(inbox(ws), ['invoice-9.pdf']);
+  assert.deepEqual(readdirSync(join(ws.paths.data, 'quarantine')).filter((f) => f.endsWith('.pdf')).sort(), ['news-1.pdf', 'news-2.pdf', 'news-3.pdf']);
+  const decl = (sources(ws, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === 'office') as unknown as { decl: { reach: { mail: never } } }).decl;
+  assert.deepEqual(skipOffers(readLedger(ws, 'office'), [], decl.reach.mail), [{ sender: 'news@vendor.example', n: 3 }], 'the newsletter address, not the vendor that sends the invoices too');
+  addSkip(ws, 'office', 'news@vendor.example');
+  const next = sources(ws, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === 'office');
+  assert.equal(next?.kind, 'pending', 'a new version');
+  assert.deepEqual(next?.kind === 'pending' && next.reachDiff, { added: [{ channel: 'mail', what: 'not from news@vendor.example' }], removed: [] }, 'that only narrows the reach: the click switches it on');
 });

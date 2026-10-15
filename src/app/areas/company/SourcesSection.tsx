@@ -1,7 +1,7 @@
 /**
- * Firma › Quellen (ADR 0014), read-only in this unit: every source with its verdict (ready, waiting
+ * Firma › Quellen (ADR 0014): every source with its verdict (ready, waiting
  * to be switched on with what its reach adds, or invalid with file and line), its feeds, its reach
- * and whether each channel's secret is set.
+ * whether each channel's secret is set, and the senders a mailbox could skip (one click).
  */
 import { Fragment, useEffect, useState } from 'react';
 import { language, t } from '../../i18n/index.js';
@@ -32,7 +32,7 @@ export function SourcesSection() {
   if (!rows.length) return <p className="m">{t('sources.none')}</p>;
   return (
     <div className="srcs">
-      {rows.map(({ verdict, secrets }) => {
+      {rows.map(({ verdict, secrets, skipOffers }) => {
         const id = verdict.kind === 'invalid' ? verdict.id : verdict.decl.id;
         const label = verdict.kind === 'invalid' ? id : verdict.decl.label[language()] ?? verdict.decl.label.en;
         return (
@@ -52,6 +52,12 @@ export function SourcesSection() {
                     <span className="m">{t('sources.approveWhy')}</span>
                   </div>
                 ) : null}
+                {(skipOffers ?? []).map((o) => (
+                  <div key={o.sender} className="srcon">
+                    <span>{t('sources.skipOffer', { n: o.n, sender: o.sender })}</span>
+                    <button type="button" className="btn" onClick={() => api.skipSender(verdict.decl.id, o.sender, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.skipSender')}</button>
+                  </div>
+                ))}
                 <dl className="kv">
                   <dt>{t('sources.feeds')}</dt>
                   <dd>{verdict.decl.feeds.map((f) => `${f.id} · ${f.output.kind === 'records' ? f.output.record : t(`sources.output.${f.output.kind}` as 'sources.output.document')} · ${t(`sources.every.${f.every}` as 'sources.every.daily')}`).join('; ')}</dd>

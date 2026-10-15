@@ -57,8 +57,11 @@ export type SourceVerdict =
 
 export interface ReachDiff { added: Array<{ channel: Channel; what: string }>; removed: Array<{ channel: Channel; what: string }> }
 
-/** A source as the Quellen page shows it: its verdict, and whether each channel's secret is there (never its value). */
-export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: 'mail' | 'api'; present: boolean }> }
+/** A sender (its address) whose `n` attachments were no receipt: offered to be skipped (src/platform/sources/skip.ts). */
+export interface SkipOffer { sender: string; n: number }
+
+/** A source as the Quellen page shows it: its verdict, whether each channel's secret is there (never its value), the senders it could skip. */
+export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: 'mail' | 'api'; present: boolean }>; skipOffers?: SkipOffer[] }
 
 /** The keychain name of a channel's secret: derived, never listed. */
 export const secretKey = (source: string, channel: 'mail' | 'api') => `source:${source}:${channel}` as const;

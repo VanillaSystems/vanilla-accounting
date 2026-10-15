@@ -7,9 +7,10 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Workspace } from '../../workspace/workspace.js';
+import type { OtherWhy } from '../../core/modules/schema.js';
 
 export type LedgerLine =
-  | { at: string; run: string; feed: string; key: string; got: { kind: 'document'; sha256: string; file?: string; duplicateOf?: string } }
+  | { at: string; run: string; feed: string; key: string; got: { kind: 'document'; sha256: string; file?: string; duplicateOf?: string; from?: string; quarantined?: { file: string; why: OtherWhy } } }
   | { at: string; run: string; feed: string; key: string; got: { kind: 'record'; record: string; id: string; change: 'new' | 'updated' | 'same' | 'refused-closed' } }
   | { at: string; run: string; feed: string; cursor: unknown };
 

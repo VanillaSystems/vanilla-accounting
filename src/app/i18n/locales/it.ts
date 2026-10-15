@@ -2221,6 +2221,8 @@ export default {
     'drop.entries': { one: '{n} movimento', other: '{n} movimenti' },
     'drop.reason.duplicate': 'già nei libri o nella casella',
     'drop.reason.not-receipt': 'non è un giustificativo',
+    'sources.skipOffer': '{n} allegati di {sender} non erano giustificativi. Saltare questo mittente?',
+    'sources.skipSender': 'Salta il mittente',
     'drop.state.possible': 'già presente?',
     'drop.reason.possible-duplicate': 'possibile doppione',
     'drop.reason.same': 'uguale a un giustificativo della contabilità: non ripreso',

@@ -2221,6 +2221,8 @@ export default {
     'drop.entries': { one: '{n} booking', other: '{n} bookings' },
     'drop.reason.duplicate': 'already in the books or the inbox',
     'drop.reason.not-receipt': 'not a receipt',
+    'sources.skipOffer': '{n} attachments from {sender} were no receipt. Skip this sender?',
+    'sources.skipSender': 'Skip sender',
     'drop.state.possible': 'already here?',
     'drop.reason.possible-duplicate': 'possible duplicate',
     'drop.reason.same': 'the same as a receipt in the books: not taken',
