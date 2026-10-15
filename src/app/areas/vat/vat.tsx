@@ -5,7 +5,7 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import './vat.css';
-import { localToday, openFilingPeriod } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { WorkflowButtons } from '../../automation/marks.js';
@@ -154,7 +154,7 @@ export const vat: Area<RouteOf<'vat'>> = {
     return true;
   },
   palette: ({ books, nav, period }) => {
-    const v = vatReturn(books, vatKeyOf(period, openFilingPeriod(books.config?.closedThrough, localToday(), filing().length)));
+    const v = vatReturn(books, vatKeyOf(period, booksOpenPeriod(books, localToday(), filing().length)));
     return shownZiffern(v, undefined, false).map((n) => ({
       label: `${n} ${zifferLabel(v, n)}`,
       side: `${periodName(v.period)}  ${fmt(formAmount(v, n))}`,

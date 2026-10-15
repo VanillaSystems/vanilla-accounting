@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './export.css';
 import type { Index } from '../../../types/index.js';
-import { localToday, openFilingPeriod, type Period } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, type Period } from '../../../accounting/periods.js';
 import { GROUPS, ITEMS, PRESETS, countOf, quartersIn, receiptsIn, type Format, type ItemDef, type ItemId } from '../../../export/model.js';
 import { t } from '../../i18n/index.js';
 import { errorText, STATIC_EXPORT } from '../../lib/api.js';
@@ -45,7 +45,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
   useEffect(() => dialogRef.current?.focus(), []);
   const names = getAccountMap();
   const today = localToday();
-  const open = openFilingPeriod(books.config?.closedThrough, today, filing().length);
+  const open = booksOpenPeriod(books, today, filing().length);
   const period = periodOf(c.period);
 
   const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account)])) as Record<ItemId, number>, [books, period, names, account]);

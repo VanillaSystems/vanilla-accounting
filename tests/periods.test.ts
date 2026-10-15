@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { entriesForReturn } from '../src/accounting/declarations.js';
-import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
+import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, booksOpenPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
 import './support/jurisdiction.js';
 import { chart } from '../src/engines/index.js';
 
@@ -179,4 +179,11 @@ test('a half-year filer declares a correction in the half it corrects, not where
   assert.deepEqual(entriesForReturn(entries, '2026-H1', 'half').map((x) => x.id), ['a', 'b']);
   assert.deepEqual(entriesForReturn(entries, '2026-H2', 'half').map((x) => x.id), ['c']);
   assert.deepEqual(entriesForReturn(entries, '2026', 'half').map((x) => x.id), ['a', 'b', 'c']);
+});
+
+test('books that never filed work on the period of their first payment; filed books on the one after the filing', () => {
+  const tx = (date: string) => ({ date });
+  assert.equal(booksOpenPeriod({ transactions: [tx('2026-08-14'), tx('2026-07-02')] }, '2026-10-15', 'quarter').token, '2026-Q3');
+  assert.equal(booksOpenPeriod({ transactions: [] }, '2026-10-15', 'quarter').token, '2026-Q4');
+  assert.equal(booksOpenPeriod({ config: { closedThrough: '2026-06-30' }, transactions: [tx('2026-01-05')] }, '2026-10-15', 'quarter').token, '2026-Q3');
 });

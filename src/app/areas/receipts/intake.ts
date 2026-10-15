@@ -1,6 +1,6 @@
 /**
  * Files added by the add button or N: they open the drop dialog (src/app/shell/DropDialog.tsx),
- * like a drop on any page, and go into the inbox with «Hinzufügen».
+ * like a drop on any page, and are taken at once.
  */
 import { t } from '../../i18n/index.js';
 import type { Area } from '../index.js';

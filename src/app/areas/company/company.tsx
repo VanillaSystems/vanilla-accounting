@@ -16,7 +16,7 @@ import { dispatchBar, useBar, type BarId } from '../../shell/bars.js';
 import { useShellUi } from '../../shell/ui.js';
 import { moveKey } from '../../shell/keyboard.js';
 import type { Theme } from '../../shell/prefs.js';
-import { addDays, localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
+import { addDays, localToday, booksOpenPeriod, parsePeriod } from '../../../accounting/periods.js';
 import type { Address } from '../../../invoices/model.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { ManifestPatch } from '../../../workspace/manifest-write.js';
@@ -40,7 +40,7 @@ const THEMES: Theme[] = ['light', 'dark', 'system'];
 const themeLabel = (th: Theme) => t(th === 'light' ? 'app.themeLight' : th === 'dark' ? 'app.themeDark' : 'app.themeSystem');
 
 /** The year the books are in: the open quarter's. */
-const bookYear = (books: Props['books']) => openFilingPeriod(books.config?.closedThrough, localToday(), filing().length).from.slice(0, 4);
+const bookYear = (books: Props['books']) => booksOpenPeriod(books, localToday(), filing().length).from.slice(0, 4);
 
 function sectionLabel(s: CompanySection, books: Props['books']): string {
   return s === 'opening' ? t('company.openingYear', { year: bookYear(books) }) : t(`company.${s}`);

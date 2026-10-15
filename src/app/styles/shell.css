@@ -308,3 +308,5 @@ body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
 .activity .it.go .cnt { position: absolute; top: -5px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #d98a00; color: #fff; font: 600 11px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
 @keyframes go-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .activity .it.go.running .ring circle { animation: none; stroke-dasharray: none; } }
+.firststeps { margin: 10px 0 18px; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.firststeps b { color: var(--ink); font-weight: 600; }

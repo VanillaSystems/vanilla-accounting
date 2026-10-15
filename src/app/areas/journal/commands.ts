@@ -1,6 +1,6 @@
 /** What the list, the detail and the keys of Buchungen share: the journal of the loaded books, and the commands on an entry. */
 import type { Index, Receipt } from '../../../types/index.js';
-import { localToday, openFilingPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
@@ -22,7 +22,7 @@ export function journalFor(books: Index): Journal {
 }
 
 /** The quarter new entries go in: the first one after the filed ones. */
-export const openPeriod = (books: Index): Period => openFilingPeriod(books.config?.closedThrough, localToday(), filing().length);
+export const openPeriod = (books: Index): Period => booksOpenPeriod(books, localToday(), filing().length);
 
 /** The day a new entry starts on: today, unless today is filed (then the open quarter's first day). */
 export function newEntryDate(books: Index): string {

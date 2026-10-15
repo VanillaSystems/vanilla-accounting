@@ -4,7 +4,7 @@
  * Areas own only their list, detail and keys (docs/redesign/architecture.md §3).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { localToday, openFilingPeriod, parsePeriod } from '../../accounting/periods.js';
+import { localToday, booksOpenPeriod, parsePeriod } from '../../accounting/periods.js';
 import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
 import type { Index } from '../../types/index.js';
@@ -76,7 +76,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [dropping, setDropping] = useState(false);
 
   const area = areaOf(loc.route);
-  const open = openFilingPeriod(books.config?.closedThrough, localToday(), filing().length);
+  const open = booksOpenPeriod(books, localToday(), filing().length);
   const period = loc.query.period ?? open;
 
   const current = useRef(loc);
@@ -116,7 +116,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const runAdd = () => { if (area.add && canEdit) area.add.run(propsRef.current); };
 
   // The palette's search keeps the first render's closure: the open quarter is read from the props of now.
-  const openNow = () => openFilingPeriod(propsRef.current.books.config?.closedThrough, localToday(), filing().length);
+  const openNow = () => booksOpenPeriod(propsRef.current.books, localToday(), filing().length);
   const openExport = (config?: DialogConfig) => {
     const { route, period } = propsRef.current;
     setOverlay({ kind: 'export', config: config ?? presetFor(route, period, openNow()) });

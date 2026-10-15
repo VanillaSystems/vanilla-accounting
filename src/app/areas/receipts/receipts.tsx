@@ -111,8 +111,21 @@ function List(props: Props) {
 
       {counts.alle === 0 && hidden.length === 0 && pending.length === 0 ? (
         <div className="empty">
-          <h2>{t('receipts.emptyTitle', { period: periodName(period) })}</h2>
-          <p>{t('receipts.emptyText')}</p>
+          {books.transactions.length === 0 && books.receipts.length === 0 ? (
+            <>
+              <h2>{t('receipts.startTitle')}</h2>
+              <ol className="firststeps">
+                <li><b>{t('receipts.start1')}</b>{t('receipts.start1Text')}</li>
+                <li><b>{t('receipts.start2')}</b>{t('receipts.start2Text')}</li>
+                <li><b>{t('receipts.start3')}</b>{t('receipts.start3Text')}</li>
+              </ol>
+            </>
+          ) : (
+            <>
+              <h2>{t('receipts.emptyTitle', { period: periodName(period) })}</h2>
+              <p>{t('receipts.emptyText')}</p>
+            </>
+          )}
           {canEdit && (
             <button type="button" className="well" style={{ width: '100%' }} onClick={() => intakeAdd.run(props as AreaProps)}>
               <span><b>{t('receipts.well')}</b>{t('receipts.wellHint')}</span>

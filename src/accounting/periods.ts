@@ -188,7 +188,16 @@ export function localToday(now = new Date()): IsoDate {
  * The filing period the work is in: the first one after the filed ones (`closedThrough`), or
  * today's when nothing is filed. A page shows it unless its link names another period.
  */
-export function openFilingPeriod(closedThrough: IsoDate | undefined, today: IsoDate, length: FilingLength): Period {
-  const day = closedThrough ? addDays(closedThrough, 1) : today;
+export function openFilingPeriod(closedThrough: IsoDate | undefined, today: IsoDate, length: FilingLength, firstDay?: IsoDate): Period {
+  const day = closedThrough ? addDays(closedThrough, 1) : firstDay && firstDay < today ? firstDay : today;
   return parsePeriod(filingKeyOf(day, length), today)!;
+}
+
+/**
+ * The books' first period not filed yet. Books that never filed start with the period of their
+ * first payment: a firm that begins its books in October with the summer's statement works on Q3.
+ */
+export function booksOpenPeriod(books: { config?: { closedThrough?: IsoDate }; transactions: Array<{ date: IsoDate }> }, today: IsoDate, length: FilingLength): Period {
+  const first = books.config?.closedThrough ? undefined : books.transactions.reduce<IsoDate | undefined>((m, x) => (!m || x.date < m ? x.date : m), undefined);
+  return openFilingPeriod(books.config?.closedThrough, today, length, first);
 }
