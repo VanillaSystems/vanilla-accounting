@@ -26,3 +26,15 @@ file records every decision a person might have made differently, newest last.
 4. VAT corrected by hand: the payment is booked again by the next run (needs Claude). Follow-up:
    without a model, the correction must adjust the booking's VAT code itself (mission: possible
    without the AI).
+5. Restore after delete: merged (race fixed, per-deletion trash, unknown-IBAN question with the bank name).
+6. «Neu klassifizieren» respects corrections: merged. A booking set by hand or by a wish is kept
+   unless the person confirms; the classifier never books an empty account or entries that do not
+   add up to the payment; every automatic booking says why. Only origin manual counts as «hers»:
+   invoice bookings and older entries without origin are still re-booked without asking.
+7. Noted for Ken: the Bilanz counts a single-leg VAT-amount entry (the Shopify Vorsteuer pattern
+   M81-2 / I81-2) as a missing counter-account and shows a difference. This belongs with the
+   «Bilanz/ER net, VAT legs to 2201» decision (3).
+8. Duplicates and receipt detection: measured on the real books (read-only, numbers not in git):
+   30 of 32 labelled duplicates found (0 before), no real receipt quarantined. Merging after the
+   agent rebases onto the latest branch. «ist dasselbe» at the drop does not take the file at all
+   (rather than taking it as kind duplicate): it adds nothing the books lack.
