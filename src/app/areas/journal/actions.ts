@@ -53,11 +53,12 @@ export const createEntry = (nav: Nav, input: JournalEntryInput) =>
   run(nav, () => api.createJournalEntry(input), (entry) => t('journal.created', { ref: entry.transactionRef }), (entry) => api.deleteJournalEntry(entry.id));
 
 /**
- * The payment booked again by the classifier (it asks the model). Undo removes its entries and
- * puts the ones before back.
+ * The payment booked again by the classifier (it asks the model). `overwrite`: the person said a
+ * booking of hers may go (the API refuses otherwise). Undo removes its entries and puts the ones
+ * before back.
  */
-export function reclassify(nav: Nav, ref: string, before: JournalEntry[]) {
-  return run(nav, () => api.classifyTransaction(ref), (entries) => t('journal.reclassified', { n: entries.length }), async (entries) => {
+export function reclassify(nav: Nav, ref: string, before: JournalEntry[], overwrite = false) {
+  return run(nav, () => api.classifyTransaction(ref, overwrite), (entries) => t('journal.reclassified', { n: entries.length }), async (entries) => {
     for (const e of entries) await api.deleteJournalEntry(e.id);
     for (const e of before) await api.createJournalEntry(inputOf(e));
   });

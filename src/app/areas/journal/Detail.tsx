@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
 import { codeForRate, lookupVatCode, parseRate, vatCodes } from '../../../accounting/vat-codes.js';
-import type { BankTransaction } from '../../../types/index.js';
+import type { BankTransaction, JournalEntry } from '../../../types/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { sources } from '../../lib/api.js';
@@ -22,7 +22,7 @@ import { Paper } from '../receipts/Paper.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain, codeText } from '../codes/vat-card.js';
-import type { EntryView, Journal } from './model.js';
+import { whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
@@ -59,6 +59,11 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const siblings = (j.byRef.get(e.transactionRef) ?? []).filter((x) => x !== v);
   const receipt = v.receipts[0];
   const open = openPeriod(props.books);
+  const payment = tx ? (j.byRef.get(tx.ref) ?? []).map((x) => x.e) : [];
+  const hers = payment.filter((x) => x.origin === 'manual');
+  const [asking, setAsking] = useState(false);
+  const rebook = (overwrite: boolean) => { setAsking(false); if (tx) void reclassify(nav, tx.ref, payment, overwrite).then((es) => es?.[0] && selectNew(nav, es[0].id)); };
+  const seen = whySeen(e, props.books.receipts);
 
   return (
     <div className="detail-in" data-for={e.id}>
@@ -134,19 +139,62 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
               <dt>{t('journal.booked')}</dt><dd>{t(`journal.originText.${e.origin ?? 'other'}`)}</dd>
+              {seen || e.reason ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
+                {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
+                {e.reason && <div className="m">{t('journal.why.ai', { text: e.reason })}</div>}
+              </dd></> : null}
               {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} nav={nav} /></dd></> : null}
             </dl>
             <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (
               <div className="dangers">
-                {tx && <button type="button" title={t('journal.reclassifyTip')} onClick={() => reclassify(nav, tx.ref, (j.byRef.get(tx.ref) ?? []).map((x) => x.e)).then((es) => es?.[0] && selectNew(nav, es[0].id))}>{t('journal.reclassify')}</button>}
+                {tx && <button type="button" title={t('journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
                 <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
               </div>
             )}
           </Sec>
         </aside>
       </div>
+      {asking && <KeepHers hers={hers} onKeep={() => setAsking(false)} onRebook={() => rebook(true)} />}
     </div>
+  );
+}
+
+/** One thing the classifier saw: a receipt with the VAT facts that set the code, or no receipt at all. */
+function WhyLine({ w, nav }: { w: WhySeen; nav: Props['nav'] }) {
+  if (w.kind === 'noReceipt') return <div>{t('journal.why.noReceipt')}</div>;
+  const facts = w.vat === 'none' ? t('journal.why.vatNone')
+    : w.vat === 'unread' ? t('journal.why.vatUnread')
+      : t(w.vat.vatId ? 'journal.why.vatId' : 'journal.why.vat', { rate: String(w.vat.rate), tax: fmt(w.vat.tax), id: w.vat.vatId ?? '' });
+  return (
+    <div>
+      {t('journal.why.receipt')} <button type="button" className="golink" onClick={() => nav.go(at({ area: 'receipts', id: w.id }, w.date))}>{w.name}</button>{': '}{facts}
+    </div>
+  );
+}
+
+const satzOf = (x: JournalEntry) => `${x.accountDebit || '–'} / ${x.accountCredit || '–'} · ${x.vatCode || t('journal.noVat')} · ${fmt(x.amount)}`;
+
+/**
+ * Asked before «Neu klassifizieren» replaces a person's booking (by hand, or by a wish in the AI
+ * sidebar): what she set, and that Claude would book the payment anew. Keeping hers is the default.
+ * Its keys stay in it: the ↵ that keeps hers would otherwise also open the receipt.
+ */
+function KeepHers({ hers, onKeep, onRebook }: { hers: JournalEntry[]; onKeep(): void; onRebook(): void }) {
+  return (
+    <>
+      <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 40%, transparent)' }} onClick={onKeep} />
+      <div className="palette confirm" role="alertdialog" aria-label={t('journal.keepTitle')} data-testid="keep-hers" onKeyDown={(ev) => { ev.stopPropagation(); if (ev.key === 'Escape') onKeep(); }}>
+        <h2>{t('journal.keepTitle')}</h2>
+        <p>{t('journal.keepText', { n: hers.length })}</p>
+        {hers.map((x) => <div key={x.id} className="file">{satzOf(x)}{x.description ? ` · ${x.description}` : ''}</div>)}
+        <p>{t('journal.keepWarn')}</p>
+        <div className="acts" style={{ marginTop: 16 }}>
+          <button type="button" className="btn ghost" onClick={onRebook}>{t('journal.keepRebook')}</button>
+          <button type="button" className="btn primary" autoFocus onClick={onKeep}>{t('journal.keepMine')} <span className="k">↵</span></button>
+        </div>
+      </div>
+    </>
   );
 }
 

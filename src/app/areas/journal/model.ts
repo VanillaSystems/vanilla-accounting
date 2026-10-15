@@ -99,3 +99,27 @@ export function byMonth(rows: readonly EntryView[]): Array<[string, EntryView[]]
   for (const v of rows) { const k = v.e.date.slice(0, 7); (out.get(k) ?? out.set(k, []).get(k)!).push(v); }
   return [...out];
 }
+
+/**
+ * Why the classifier booked an entry, from what it saw: each receipt linked when it booked, with the
+ * VAT facts that set the code, or none (no receipt, no input tax). Undefined for another writer's
+ * entry, or one booked before entries recorded their receipts. The model's words are `e.reason`.
+ */
+export type WhySeen =
+  | { kind: 'receipt'; id: string; name: string; date?: string; vat: { rate: number; tax: number; vatId?: string } | 'none' | 'unread' }
+  | { kind: 'noReceipt' };
+
+export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[] | undefined {
+  if (e.origin !== 'classify' || !e.receipts) return undefined;
+  if (!e.receipts.length) return [{ kind: 'noReceipt' }];
+  return e.receipts.flatMap((id): WhySeen[] => {
+    const r = receipts.find((x) => x.id === id);
+    if (!r) return [];
+    const group = r.vatSummary?.find((g) => g.ratePercent > 0);
+    const vat = r.hasSwissVat === false ? 'none' as const
+      : group ? { rate: group.ratePercent, tax: group.vat, ...(r.vatId && { vatId: r.vatId }) }
+        : 'unread' as const;
+    return [{ kind: 'receipt', id, name: r.description || r.filename, ...(r.date && { date: r.date }), vat }];
+  });
+}
+
