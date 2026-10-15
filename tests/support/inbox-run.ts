@@ -48,8 +48,8 @@ const SCAFFOLD = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:te
 const LINKS_TO_G = { suggestedFilename: '20260801-geruestbau.pdf', date: '2026-08-01', description: 'Gerüstbau, Gerüstmiete', amount: 1120, currency: 'CHF', confidence: 0.95, matchedTransactionRefs: ['REF-G'] };
 
 /** The demo with the model stub, the statement read and booked, then the receipt dropped, linked and the payment booked again with it. */
-export async function bookedWithReceipt() {
-  const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_ANSWER: JSON.stringify(LINKS_TO_G) });
+export async function bookedWithReceipt(env: Record<string, string> = {}) {
+  const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_ANSWER: JSON.stringify(LINKS_TO_G), ...env });
   cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
   const session = SESSION(api);
   const full = async () => (await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as { receipts: Receipt[]; mappings: Array<{ receiptId: string; transactionRef: string }>; journalEntries: JournalEntry[] };

@@ -39,8 +39,8 @@ before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');
   withInvoice(api.root);
   // A receipt deleted while its payment C1 was open, put back after the quarter was filed.
-  mkdirSync(join(api.root, 'data/trash/rx'), { recursive: true });
-  writeFileSync(join(api.root, 'data/trash/rx/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));
+  mkdirSync(join(api.root, 'data/trash/rx/d1'), { recursive: true });
+  writeFileSync(join(api.root, 'data/trash/rx/d1/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));
 });
 after(() => api?.stop());
 

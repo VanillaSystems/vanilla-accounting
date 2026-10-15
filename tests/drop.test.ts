@@ -6,7 +6,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configure, TextReader, Uint8ArrayReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import { recognize } from '../src/intake/recognize.js';
@@ -180,7 +181,7 @@ test('deleting a receipt books its payment again without it; the trash gives it 
     await session.rest();
     assert.deepEqual(await onG(), [[]], 'no input tax on a receipt that is gone');
     const trash = join(api.root, 'data/trash', rc.id);
-    assert.deepEqual(readdirSync(trash).sort(), ['20260801-geruestbau.pdf', 'trashed.json'], 'the file waits in the trash');
+    assert.deepEqual(readdirSync(join(trash, del.json.deletion as string)).sort(), ['20260801-geruestbau.pdf', 'trashed.json'], 'the file waits in the trash');
 
     const back = await api.send('POST', `/api/receipts/${rc.id}/restore`);
     assert.equal(back.status, 200, back.json.error as string);
@@ -191,6 +192,64 @@ test('deleting a receipt books its payment again without it; the trash gives it 
     await session.rest();
     assert.deepEqual(await onG(), [[rc.id]], 'booked with it again');
     assert.equal((await api.send('POST', `/api/receipts/${rc.id}/restore`)).status, 404, 'once');
+  } finally {
+    await session.rest().catch(() => {});
+    api.stop();
+  }
+});
+
+test('«Rückgängig» of a delete while the run that books the payment without the receipt still works: the payment ends booked with it', async () => {
+  const gate = join(tmpdir(), `restore-gate-${process.pid}-${Date.now()}`);
+  writeFileSync(gate, '');
+  const { api, session, rc, onG } = await bookedWithReceipt({ CLAUDE_STUB_GATE: gate });
+  try {
+    rmSync(gate);
+    rmSync(`${gate}.started`, { force: true });
+    assert.equal((await api.send('DELETE', `/api/receipts/${rc.id}`)).status, 200);
+    for (let i = 0; i < 200 && !existsSync(`${gate}.started`); i++) await new Promise((r) => setTimeout(r, 25));
+    assert.ok(existsSync(`${gate}.started`), 'the run asks the model to book the payment without the receipt');
+    const back = await api.send('POST', `/api/receipts/${rc.id}/restore`);
+    assert.equal(back.status, 200, back.json.error as string);
+    writeFileSync(gate, '');
+    await session.rest();
+    assert.deepEqual(await onG(), [[rc.id]], 'booked with the receipt, not left as the run of the delete booked it');
+  } finally {
+    writeFileSync(gate, '');
+    await session.rest().catch(() => {});
+    api.stop();
+    rmSync(gate, { force: true });
+    rmSync(`${gate}.started`, { force: true });
+  }
+});
+
+test('deleted, dropped again, deleted again: «Rückgängig» brings back the last deletion; «Rückgängig» of the first one is refused plainly', async () => {
+  const { api, session, rc, pdf, full, onG } = await bookedWithReceipt();
+  try {
+    const first = await api.send('DELETE', `/api/receipts/${rc.id}`);
+    assert.equal(first.status, 200);
+    await session.rest();
+    let s = await session.post('/api/drop');
+    s = await session.post(`/api/drop/${s.id}/files?name=Geruest_August.pdf`, pdf);
+    assert.equal(s.rows.at(-1)!.state, 'taken', 'a deleted receipt dropped again is new');
+    await session.rest();
+    assert.deepEqual(await onG(), [[rc.id]], 'booked with it again');
+    const second = await api.send('DELETE', `/api/receipts/${rc.id}`);
+    assert.equal(second.status, 200);
+    await session.rest();
+    assert.notEqual(first.json.deletion, second.json.deletion, 'each deletion is its own');
+
+    const old = await api.send('POST', `/api/receipts/${rc.id}/restore`, { deletion: first.json.deletion });
+    assert.equal(old.status, 409);
+    assert.match(old.json.error as string, /später noch einmal gelöscht/);
+    const back = await api.send('POST', `/api/receipts/${rc.id}/restore`, { deletion: second.json.deletion });
+    assert.equal(back.status, 200, back.json.error as string);
+    const b = await full();
+    assert.ok(b.receipts.some((r) => r.id === rc.id) && b.mappings.some((m) => m.receiptId === rc.id), 'receipt and link back');
+    await session.rest();
+    assert.deepEqual(await onG(), [[rc.id]], 'booked with it');
+    const again = await api.send('POST', `/api/receipts/${rc.id}/restore`, { deletion: second.json.deletion });
+    assert.equal(again.status, 404, 'once');
+    assert.equal(existsSync(join(api.root, 'data/trash', rc.id)), false, 'the trash holds nothing of it any more');
   } finally {
     await session.rest().catch(() => {});
     api.stop();

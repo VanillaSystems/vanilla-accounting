@@ -36,6 +36,9 @@ export default {
     'error.paymentDate': 'La registrazione di un pagamento porta la data del pagamento ({date}): l’IVA è conteggiata secondo le controprestazioni ricevute, appartiene al trimestre del pagamento.',
     'error.paymentBalance': 'Le registrazioni del pagamento del {date} di {paid} darebbero insieme {booked}: tutte le parti insieme devono dare il pagamento.',
     'error.fileExists': 'Il file {filename} esiste già.',
+    'error.notInTrash': 'Questo giustificativo non è più nel cestino.',
+    'error.deletedAgain': 'Questo giustificativo è stato eliminato di nuovo in seguito. «Annulla» sull’ultima eliminazione lo ripristina.',
+    'error.alreadyBack': 'Questo giustificativo è già tornato nella contabilità.',
 
     'app.auditBar': 'Modalità revisione · sola lettura — le modifiche sono disattivate',
     'app.snapshot': 'Istantanea del {date} · schema dei libri {schema} · app v{version}',

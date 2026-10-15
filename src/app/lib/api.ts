@@ -69,6 +69,9 @@ export function errorText(e: unknown): string {
       return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
     case 'fileExists': return t('error.fileExists', b.params);
+    case 'notInTrash': return t('error.notInTrash');
+    case 'deletedAgain': return t('error.deletedAgain');
+    case 'alreadyBack': return t('error.alreadyBack');
     case 'statement': {
       const { reason, detail = '', unknown } = b.params;
       if (reason === 'duplicate') return t('error.statement.duplicate', { detail });
@@ -133,8 +136,8 @@ async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
 export const api = {
   patchReceipt: (id: string, patch: ReceiptPatch) =>
     request<{ receipt: Receipt }>('PATCH', `/api/receipts/${id}`, patch).then((r) => r.receipt),
-  deleteReceipt: (id: string) => request<Ok>('DELETE', `/api/receipts/${id}`),
-  restoreReceipt: (id: string) => request<Ok>('POST', `/api/receipts/${id}/restore`),
+  deleteReceipt: (id: string) => request<{ ok: true; deletion: string }>('DELETE', `/api/receipts/${id}`).then((r) => r.deletion),
+  restoreReceipt: (id: string, deletion: string) => request<Ok>('POST', `/api/receipts/${id}/restore`, { deletion }),
   visionExtract: (receiptId: string) => request<Ok>('POST', '/api/vision/extract', { receiptId }),
 
   patchTransaction: (ref: string, patch: TransactionPatch) =>

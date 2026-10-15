@@ -92,8 +92,11 @@ export function saveVat(nav: Nav, v: ReceiptView, vat: VatFacts) {
   return run(nav, () => api.patchReceipt(r.id, { vat }), message, () => api.patchReceipt(r.id, back));
 }
 
-export const deleteReceipt = (nav: Nav, v: ReceiptView) =>
-  run(nav, () => api.deleteReceipt(v.r.id), t('receipts.deleted', { file: v.r.filename }), () => api.restoreReceipt(v.r.id));
+/** Undo restores this deletion; a later deletion of the same file makes it refuse, plainly. */
+export function deleteReceipt(nav: Nav, v: ReceiptView) {
+  let deletion = '';
+  return run(nav, async () => { deletion = await api.deleteReceipt(v.r.id); }, t('receipts.deleted', { file: v.r.filename }), () => api.restoreReceipt(v.r.id, deletion));
+}
 
 /** The text read again by the model, from the PDF's image (sends the page to Claude). */
 export const readAgain = (nav: Nav, v: ReceiptView) =>

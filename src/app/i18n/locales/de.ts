@@ -33,6 +33,9 @@ export const messages = {
   'error.paymentDate': 'Die Buchung einer Zahlung trägt das Datum der Zahlung ({date}): die MWST wird nach vereinnahmtem Entgelt abgerechnet, sie gehört ins Quartal der Zahlung.',
   'error.paymentBalance': 'Die Buchungen der Zahlung vom {date} über {paid} ergäben zusammen {booked}: alle Teile müssen zusammen die Zahlung ergeben.',
   'error.fileExists': 'Datei {filename} existiert bereits.',
+  'error.notInTrash': 'Dieser Beleg liegt nicht mehr im Papierkorb.',
+  'error.deletedAgain': 'Dieser Beleg wurde später noch einmal gelöscht. «Rückgängig» der letzten Löschung holt ihn zurück.',
+  'error.alreadyBack': 'Dieser Beleg ist schon wieder in den Büchern.',
 
   'app.auditBar': 'Prüfmodus · nur Lesen — Änderungen sind deaktiviert',
   'app.snapshot': 'Stand vom {date} · Buchhaltungsdaten Schema {schema} · App v{version}',

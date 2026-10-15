@@ -36,6 +36,9 @@ export default {
     'error.paymentDate': 'An entry of a payment carries the payment’s date ({date}): VAT is reported on payments received, so it belongs to the payment’s quarter.',
     'error.paymentBalance': 'The entries of the payment of {date} for {paid} would add up to {booked}: all parts together must make the payment.',
     'error.fileExists': 'File {filename} already exists.',
+    'error.notInTrash': 'This receipt is no longer in the trash.',
+    'error.deletedAgain': 'This receipt was deleted again later. «Undo» on the latest deletion brings it back.',
+    'error.alreadyBack': 'This receipt is already back in the books.',
 
     'app.auditBar': 'Audit mode · read only — changes are disabled',
     'app.snapshot': 'Snapshot of {date} · books schema {schema} · app v{version}',

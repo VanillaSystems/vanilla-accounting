@@ -27,6 +27,10 @@ export type ApiRefusal =
   /** The bookings of a payment would no longer add up to it: `paid` and `booked` in its currency. */
   | { code: 'paymentBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'fileExists'; params: { filename: string } }
+  /** A restore of a deleted receipt (POST /api/receipts/:id/restore): gone from the trash, deleted again later, or back already. */
+  | { code: 'notInTrash' }
+  | { code: 'deletedAgain' }
+  | { code: 'alreadyBack' }
   | { code: 'statement'; params: { reason: StatementRefusal; detail?: string; unknown?: { iban: string; currency: string } } }
   | { code: 'noBrowser' }
   | { code: 'noClaude' }

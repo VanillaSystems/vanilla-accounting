@@ -36,6 +36,9 @@ export default {
     'error.paymentDate': 'L’écriture d’un paiement porte la date du paiement ({date}) : la TVA est décomptée selon les contre-prestations reçues, elle appartient au trimestre du paiement.',
     'error.paymentBalance': 'Les écritures du paiement du {date} de {paid} feraient ensemble {booked} : toutes les parties doivent donner ensemble le paiement.',
     'error.fileExists': 'Le fichier {filename} existe déjà.',
+    'error.notInTrash': 'Ce justificatif n’est plus dans la corbeille.',
+    'error.deletedAgain': 'Ce justificatif a été supprimé une nouvelle fois ensuite. «Annuler» sur la dernière suppression le rétablit.',
+    'error.alreadyBack': 'Ce justificatif est déjà de retour dans la comptabilité.',
 
     'app.auditBar': 'Mode révision · lecture seule — les modifications sont désactivées',
     'app.snapshot': 'Instantané du {date} · schéma des livres {schema} · app v{version}',
