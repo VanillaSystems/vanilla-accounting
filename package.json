@@ -67,6 +67,7 @@
     "mine-cases": "tsx tools/cases/mine.ts",
     "secret": "tsx src/cli/secret.ts",
     "browser": "tsx src/cli/browser.ts",
+    "desktop:e2e": "sh tools/desktop/vm-e2e.sh",
     "pull": "tsx src/cli/pull.ts"
   },
   "dependencies": {

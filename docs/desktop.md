@@ -35,6 +35,12 @@ copied to `desktop/icon.svg` and `desktop/icon.png`; its `web/` set is `public/f
 `apple-touch-icon.png`). Copy them again when the brand changes; `tools/desktop/icon.mjs` renders
 `desktop/icon.svg` to `desktop/icon.png` when only the SVG is at hand.
 
+**Run it in a VM, never on your own desktop:** `npm run desktop:e2e` installs the built app into
+the Tart VM `vanilla-e2e` over the copy there (as an update would) and runs the smoke test inside
+it, with no window on the host; `-- --fresh` uses a throwaway clone of `vanilla-clean` for a first
+installation, `-- --watch` shows the VM in a window. `tools/desktop/vm-e2e.sh` says what it needs
+(an SSH key installed once). The evidence comes back to `/tmp/vanilla-e2e/out/`.
+
 The smoke test starts the packaged app with only `/usr/bin:/bin` on its PATH and a fresh user data
 folder (so it never opens books of the machine), and drives it: start screen, Demo, every area,
 issuing an invoice (one page, the QR-bill decodes), the SMTP password saved in Firma and the
