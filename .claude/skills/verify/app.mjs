@@ -4,10 +4,11 @@
 //   node app.mjs NAME ['STEP' …]      each STEP is JavaScript run in Node with these in scope:
 //     clickText('Buchhaltung anlegen')         the smallest visible button/link/label holding the text
 //     fill('Firmenname', 'Malerei Huber')      the field of the label that starts with the text
-//     nth(8, process.env.PERSONA_IBAN_SPACED)   the i-th visible input/textarea (fields without labels)
+//     nth(8, process.env.PERSONA_IBAN_SPACED)   the i-th visible input/textarea, selects not counted (fields without labels)
 //     pick('PDFs hierher ziehen', ['IMG_4471.jpg'])   the app's file picker with ~/Downloads files
 //     drop(['IMG_4471.jpg', 'swisscom_juli.pdf'])     a Finder drag onto the window (DevTools drag events)
 //     wait(3000), ev('document.title'), p      (p: the puppeteer page)
+//     await books()                            the books as /books.json gives them (receipts, transactions, mappings, journalEntries)
 //   TEXT_FROM=… TEXT_LEN=… slice the printed text (default the first 3000 characters).
 import puppeteer from 'puppeteer-core';
 
@@ -53,7 +54,8 @@ const drop = async (files, x = 700, y = 500) => {
   await c.detach();
 };
 const ev = (s) => p.evaluate(s);
-void [wait, fill, nth, pick, drop, ev];
+const books = () => p.evaluate(async () => (await fetch('/books.json')).json());
+void [wait, fill, nth, pick, drop, ev, books];
 
 for (const s of steps) { await eval(`(async () => { ${s} })()`); await wait(400); }
 await wait(800);

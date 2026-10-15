@@ -29,7 +29,9 @@ statement, supplier invoices with 8.1 % MWST, till-receipt photos, wrong files).
 4. Check the books behind the screen when money is involved: `ev` with
    `fetch('/books.json')` gives receipts, transactions, mappings and journalEntries. A booking with
    the wrong VAT code or account is a finding of severity high, whatever the screen says.
-5. Write findings to `.verify/findings/<scenario>.md` as you go (the coordinator reads them while
+5. Quitting mid-run: `$V sh 'osascript -e "quit app \"Vanilla Accounting\""'` within about 5 s
+   of a drop, else the run has finished already; `$V app` starts it again.
+6. Write findings to `.verify/findings/<scenario>.md` as you go (the coordinator reads them while
    you work), then `$V down <scenario>`. Evidence stays in `.verify/evidence/<scenario>/`.
 
 ## A finding
