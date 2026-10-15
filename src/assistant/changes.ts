@@ -3,7 +3,7 @@
  * of BookChange (src/types/assistant.ts). The block is cut from the text the person reads; every
  * change is checked here, at the edge, before src/server/edits.ts applies it.
  */
-import type { BookChange, EntrySet, ReceiptSet } from '../types/assistant.js';
+import type { BookChange, EntrySet, NewEntry, ReceiptSet } from '../types/assistant.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 
@@ -60,12 +60,34 @@ function entrySet(v: unknown): EntrySet {
   return out;
 }
 
+/** A booking the AI adds: always the person's (origin manual); the exchange rate of a foreign payment comes from its other bookings (src/server/edits.ts). */
+function newEntry(v: unknown): NewEntry {
+  const e = obj(v, 'entry');
+  const date = str(e.date, 'date');
+  if (!DATE.test(date)) throw new ChangesError('date muss JJJJ-MM-TT sein');
+  const amount = num(e.amount, 'amount');
+  if (amount === 0) throw new ChangesError('amount ist 0');
+  const text = (k: string) => (typeof e[k] === 'string' && e[k].trim() ? e[k].trim() : undefined);
+  const accountDebit = text('accountDebit') ?? '';
+  const accountCredit = text('accountCredit') ?? '';
+  if (!accountDebit && !accountCredit) throw new ChangesError('accountDebit oder accountCredit fehlt');
+  const transactionRef = text('transactionRef');
+  const vatCode = text('vatCode');
+  const corrects = text('corrects');
+  return {
+    ...(transactionRef && { transactionRef }), date, accountDebit, accountCredit, amount,
+    ...(vatCode && { vatCode }), description: str(e.description, 'description'), ...(corrects && { corrects }), origin: 'manual',
+  };
+}
+
 function change(v: unknown): BookChange {
   const c = obj(v, 'change');
   switch (c.kind) {
     case 'receipt': return { kind: 'receipt', id: str(c.id, 'id'), set: receiptSet(c.set) };
     case 'link': case 'unlink': return { kind: c.kind, receipt: str(c.receipt, 'receipt'), payment: str(c.payment, 'payment') };
     case 'entry': return { kind: 'entry', id: str(c.id, 'id'), set: entrySet(c.set) };
+    case 'newEntry': return { kind: 'newEntry', entry: newEntry(c.entry) };
+    case 'deleteEntry': return { kind: 'deleteEntry', id: str(c.id, 'id') };
     default: throw new ChangesError(`unbekannte Änderung ${String(c.kind)}`);
   }
 }

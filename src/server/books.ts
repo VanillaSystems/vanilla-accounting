@@ -79,6 +79,12 @@ export function receiptDates(books: Pick<Index, 'transactions' | 'journalEntries
   return books.mappings.filter((m) => m.receiptId === receiptId).flatMap((m) => refDates(books, m.transactionRef));
 }
 
+/** The code of a refusal (src/types/api-error.ts) the UI says in the person's language; none for one without. */
+export function refusalOf(err: unknown): ApiRefusal | undefined {
+  if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}) } };
+  return err instanceof RequestError ? err.refusal : undefined;
+}
+
 /** A request the API refuses with this status; the error handler in api.ts sends it. */
 export class RequestError extends Error {
   constructor(readonly status: number, message: string, readonly refusal?: ApiRefusal) { super(message); }

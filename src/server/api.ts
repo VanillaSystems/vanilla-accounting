@@ -1,6 +1,6 @@
 import express from 'express';
 import { ClosedPeriodError } from '../books/store.js';
-import { RequestError, WS } from './books.js';
+import { RequestError, WS, refusalOf } from './books.js';
 import type { ApiErrorBody, ApiStatus, InvoiceErrorBody } from '../types/api-error.js';
 import { router as classify } from './routes/classify.js';
 import { router as scan } from './routes/scan.js';
@@ -68,10 +68,8 @@ app.get('/api/status', (_req, res) => {
 app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, sourcesRoute);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (err instanceof ClosedPeriodError) {
-    const params = { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}) };
-    res.status(403).json({ error: err.message, code: 'periodClosed', params } satisfies ApiErrorBody);
-  } else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
+  if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
+  else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else if (err instanceof InvoiceRuleError) {
     res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
   } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });

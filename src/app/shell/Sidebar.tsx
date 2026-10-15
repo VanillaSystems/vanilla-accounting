@@ -12,7 +12,8 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import { automationNow } from '../automation/store.js';
 import { language } from '../i18n/index.js';
 import { textIn } from '../../workflows/model.js';
-import type { BookChange, ContextRef, MadeChange } from '../../types/assistant.js';
+import type { ContextRef, EntrySet, MadeChange } from '../../types/assistant.js';
+import { ApiError, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
 import type { Route } from './route.js';
@@ -22,8 +23,20 @@ import {
 
 interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void }
 
-/** One change in the person's words: which receipt, payment or booking, and what it is now. */
-function describe(c: BookChange, books: Index): string {
+/** A booking's fields as they read on a card: accounts, VAT code, amount, date, text. */
+function entryWhat(set: EntrySet, withText = true): string {
+  return [
+    set.accountDebit && t('assistant.c.debit', { account: set.accountDebit }),
+    set.accountCredit && t('assistant.c.credit', { account: set.accountCredit }),
+    set.vatCode !== undefined && t('assistant.c.code', { code: set.vatCode || '–' }),
+    set.amount !== undefined && fmt(set.amount),
+    set.date && formatDate(set.date),
+    withText && set.description && `«${set.description}»`,
+  ].filter(Boolean).join(' · ');
+}
+
+/** One change in the person's words: which receipt, payment or booking, and what it is now. A deleted booking is read from its undo. */
+function describe({ change: c, undo }: MadeChange, books: Index): string {
   const receipt = (id: string) => { const r = books.receipts.find((x) => x.id === id); return r?.description || r?.filename || id; };
   const payment = (ref: string) => { const x = books.transactions.find((y) => y.ref === ref); return x ? `${formatDate(x.date)} · ${x.currency} ${fmt(x.amount)}` : ref; };
   switch (c.kind) {
@@ -39,17 +52,11 @@ function describe(c: BookChange, books: Index): string {
     }
     case 'link': return t('assistant.c.link', { name: receipt(c.receipt), payment: payment(c.payment) });
     case 'unlink': return t('assistant.c.unlink', { name: receipt(c.receipt), payment: payment(c.payment) });
-    case 'entry': {
-      const e = books.journalEntries?.find((x) => x.id === c.id);
-      const what = [
-        c.set.accountDebit && t('assistant.c.debit', { account: c.set.accountDebit }),
-        c.set.accountCredit && t('assistant.c.credit', { account: c.set.accountCredit }),
-        c.set.vatCode !== undefined && t('assistant.c.code', { code: c.set.vatCode || '–' }),
-        c.set.amount !== undefined && fmt(c.set.amount),
-        c.set.date && formatDate(c.set.date),
-        c.set.description && `«${c.set.description}»`,
-      ].filter(Boolean).join(' · ');
-      return t('assistant.c.entry', { name: e?.description || c.id, what });
+    case 'entry': return t('assistant.c.entry', { name: books.journalEntries?.find((x) => x.id === c.id)?.description || c.id, what: entryWhat(c.set) });
+    case 'newEntry': return t('assistant.c.newEntry', { name: c.entry.description ?? '', what: entryWhat(c.entry, false) });
+    case 'deleteEntry': {
+      const gone = undo.kind === 'newEntry' ? undo.entry : undefined;
+      return t('assistant.c.deleteEntry', { name: gone?.description || c.id, what: gone ? `${fmt(gone.amount)} · ${formatDate(gone.date)}` : '' });
     }
   }
 }
@@ -59,7 +66,7 @@ function Changes({ changes, books }: { changes: MadeChange[]; books: Index }) {
     <ul className="aichanges">
       {changes.map((c) => (
         <li key={c.id} className={c.undone ? 'undone' : ''}>
-          <span>{describe(c.change, books)}</span>
+          <span>{describe(c, books)}</span>
           {c.undone ? <small>{t('assistant.undone')}</small> : <button type="button" className="linkbtn" onClick={() => void undoChange(c)}>{t('assistant.undo')}</button>}
         </li>
       ))}
@@ -138,10 +145,15 @@ export function Sidebar({ page, books, onGo }: Props) {
               <div className="msg ai">
                 <BotIcon />
                 <div>
-                  {turn.tools.map((u, j) => <div key={j} className={`aitool${u.denied ? ' denied' : ''}`}>{u.name}{u.detail ? ` · ${u.detail}` : ''}{u.denied ? ` · ${t('assistant.denied')}` : ''}</div>)}
+                  {turn.tools.length ? (
+                    <details className="aitools">
+                      <summary>{t('assistant.details')}</summary>
+                      {turn.tools.map((u, j) => <div key={j} className={`aitool${u.denied ? ' denied' : ''}`}>{u.name}{u.detail ? ` · ${u.detail}` : ''}{u.denied ? ` · ${t('assistant.denied')}` : ''}</div>)}
+                    </details>
+                  ) : null}
                   {withoutChanges(turn.text) ? <div className="aitext">{withoutChanges(turn.text)}</div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
                   {turn.changes?.length ? <Changes changes={turn.changes} books={books} /> : null}
-                  {turn.refused ? <div className="warnline">{t('assistant.refused', { why: turn.refused })}</div> : null}
+                  {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
                   {turn.error ? <div className="warnline">{turn.error}</div> : null}
                 </div>
               </div>

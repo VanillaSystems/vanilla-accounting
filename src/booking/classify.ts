@@ -9,6 +9,7 @@ import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry,
 import { NoClaudeError, type AskOptions } from '../llm/ask.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
@@ -18,9 +19,6 @@ import { baseCurrency } from '../engines/index.js';
 export const BATCH_SIZE = 10;
 export const CONCURRENCY = 3;
 const CALL_TIMEOUT_MS = 360_000;
-
-/** Shopify/Stripe clearing account: revenue and fees on it are dated by the order, and its payout is booked automatically. */
-const SHOPIFY_ACCOUNT = '1093';
 
 export interface EntryContext {
   fx: FxResolver;

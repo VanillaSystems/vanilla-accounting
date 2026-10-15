@@ -38,3 +38,6 @@ export const filing = (): Jurisdiction['periods']['vat'] => loaded().source.peri
 
 /** The currency the books are kept in: every amount without an exchange currency is in it. */
 export const baseCurrency = (): string => loaded().source.manifest.baseCurrency;
+
+/** What a new workspace gets from the setup's answers, the owner's private account among them. */
+export const setup = (): Jurisdiction['setup'] => loaded().source.setup;

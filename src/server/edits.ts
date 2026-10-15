@@ -3,9 +3,15 @@
  * (src/assistant/): each refuses a filed quarter as the write door would, and returns the change
  * that undoes it.
  */
+import { randomBytes } from 'node:crypto';
 import type { Books } from '../books/store.js';
+import { nextManualRef } from '../books/refs.js';
+import { isFilingKey, parsePeriod } from '../accounting/periods.js';
+import { paymentDates, paymentSides } from '../accounting/payment-entries.js';
+import { baseCurrency, filing } from '../engines/index.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
-import type { BookChange, EntrySet, ReceiptSet } from '../types/assistant.js';
+import type { BookChange, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
+import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 
 const VAT_FACTS = ['hasSwissVat', 'vatSummary', 'vatId'] as const;
@@ -59,15 +65,51 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   assertOpen(books, [e.date, set.date], 'editEntry');
   if (e.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
   if (set.amount !== undefined && (!Number.isFinite(set.amount) || set.amount === 0)) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
-  const before: EntrySet = { origin: e.origin };
+  const before: EntrySet = { origin: e.origin ?? null };
   if (set.date !== undefined) { before.date = e.date; e.date = set.date; }
   if (set.accountDebit !== undefined) { before.accountDebit = e.accountDebit; e.accountDebit = set.accountDebit; }
   if (set.accountCredit !== undefined) { before.accountCredit = e.accountCredit; e.accountCredit = set.accountCredit; }
   if (set.vatCode !== undefined) { before.vatCode = e.vatCode ?? ''; e.vatCode = set.vatCode || undefined; }
   if (set.description !== undefined) { before.description = e.description ?? ''; e.description = set.description || undefined; }
   if (set.amount !== undefined) { before.amount = e.amount; e.amount = set.amount; }
-  e.origin = set.origin ?? 'manual';
+  const origin = set.origin === undefined ? 'manual' : set.origin;
+  if (origin) e.origin = origin;
+  else delete e.origin;
   return { kind: 'entry', id, set: before };
+}
+
+/** A ref of its own (M2026-004) needs no transaction: a manual entry stands alone. */
+const MANUAL_REF = /^M\d{4}-\d{3,}$/;
+
+/**
+ * A new booking, dated in the open period. Without `transactionRef` it gets the next free
+ * M<year>-NNN; with one it joins that payment's bookings, which must be open too. `corrects` names
+ * the filed quarter whose Korrekturabrechnung declares it.
+ */
+export function addEntry(books: Books, input: NewEntry): JournalEntry {
+  const { id, transactionRef, ...rest } = input;
+  const { corrects, date } = rest;
+  if (corrects && !isFilingKey(corrects, filing().length)) throw new RequestError(400, 'corrects: YYYY-Qn.');
+  assertOpen(books, [date], 'newEntry');
+  const closed = books.config.closedThrough;
+  if (corrects && !(closed && parsePeriod(corrects, date)!.to <= closed)) throw new RequestError(400, `corrects: ${corrects} ist nicht eingereicht.`);
+  if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
+  if (transactionRef) {
+    const dates = refDates(books, transactionRef);
+    if (!dates.length && !MANUAL_REF.test(transactionRef)) throw new RequestError(404, 'Transaction not found');
+    assertOpen(books, dates, 'newEntry');
+  }
+  const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
+  books.journalEntries.push(entry);
+  return entry;
+}
+
+/** Deletes a booking of the open period; returns it as it was. */
+export function deleteEntry(books: Books, id: string): JournalEntry {
+  const entry = entryOf(books, id);
+  assertOpen(books, [entry.date], 'deleteEntry');
+  books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
+  return entry;
 }
 
 /** One change; its undo, or nothing when it changed nothing (a link that was there already). */
@@ -77,5 +119,62 @@ export function applyChange(books: Books, c: BookChange): BookChange | undefined
     case 'link': return link(books, c.receipt, c.payment);
     case 'unlink': return unlink(books, c.receipt, c.payment);
     case 'entry': return setEntry(books, c.id, c.set);
+    case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry).id };
+    case 'deleteEntry': return { kind: 'newEntry', entry: deleteEntry(books, c.id) };
   }
+}
+
+/** The payment whose bookings a change touches, read before it is applied. */
+function paymentOf(books: Books, c: BookChange): string | undefined {
+  const ref = c.kind === 'newEntry' ? c.entry.transactionRef
+    : c.kind === 'entry' || c.kind === 'deleteEntry' ? books.journalEntries.find((e) => e.id === c.id)?.transactionRef
+      : undefined;
+  return ref && books.transactions.some((t) => t.ref === ref) ? ref : undefined;
+}
+
+const day = (iso: string) => iso.split('-').reverse().join('.');
+
+/**
+ * An answer of the AI sidebar (src/server/routes/assistant.ts): its changes as a person's, all or
+ * none, and two refusals more. A booking of a payment it dates keeps the payment's date (cash basis,
+ * src/accounting/payment-entries.ts), and a payment whose bank-side sum it changes still adds up
+ * to what the bank paid. A person's hand edits keep their freedom: a split by hand is two edits
+ * with a gap between them, and a correction may hang on a payment with a date of its own.
+ */
+export function applyAnswer(books: Books, changes: BookChange[], accounts: readonly LedgerBankAccount[]): Array<Omit<MadeChange, 'id'>> {
+  const payments = new Map<string, string>();
+  const dated: string[] = [];
+  const made = changes.flatMap((asked): Array<Omit<MadeChange, 'id'>> => {
+    const payment = paymentOf(books, asked);
+    if (payment && !payments.has(payment)) payments.set(payment, JSON.stringify(paymentSides(books, payment, accounts).map((s) => s.booked)));
+    const change = asked.kind === 'newEntry' ? { ...asked, entry: withRate(books, asked.entry) } : asked;
+    const undo = applyChange(books, change);
+    if (undo?.kind === 'deleteEntry') dated.push(undo.id);
+    if (change.kind === 'entry' && change.set.date) dated.push(change.id);
+    return undo ? [{ change, undo, ...(payment ? { payment } : {}) }] : [];
+  });
+  for (const e of books.journalEntries.filter((x) => dated.includes(x.id) && !x.corrects)) {
+    const dates = paymentDates(books, e);
+    if (dates.length && !dates.includes(e.date)) {
+      throw new RequestError(400, `Die Buchung einer Zahlung trägt das Datum der Zahlung (${day(dates[0])}): die Steuer wird nach vereinnahmtem Entgelt abgerechnet, sie gehört ins Quartal der Zahlung.`, { code: 'paymentDate', params: { date: dates[0] } });
+    }
+  }
+  for (const [ref, before] of payments) {
+    const sides = paymentSides(books, ref, accounts);
+    const off = sides.find((s) => s.booked !== s.paid);
+    if (off && JSON.stringify(sides.map((s) => s.booked)) !== before) {
+      const sign = off.paid < 0 ? -1 : 1;
+      const params = { date: off.date, currency: off.currency, paid: Math.abs(off.paid), booked: sign * off.booked };
+      throw new RequestError(400, `Die Buchungen der Zahlung vom ${day(off.date)} über ${off.currency} ${params.paid.toFixed(2)} ergäben zusammen ${off.currency} ${params.booked.toFixed(2)}: alle Teile müssen zusammen die Zahlung ergeben.`, { code: 'paymentBalance', params });
+    }
+  }
+  return made;
+}
+
+/** A new booking of a foreign payment takes the exchange rate its other bookings carry. */
+function withRate(books: Books, entry: NewEntry): NewEntry {
+  const tx = books.transactions.find((t) => t.ref === entry.transactionRef);
+  if (!tx || tx.currency === baseCurrency() || entry.exchangeCurrency) return entry;
+  const sibling = books.journalEntries.find((e) => e.transactionRef === tx.ref && e.exchangeCurrency);
+  return sibling ? { ...entry, exchangeCurrency: sibling.exchangeCurrency, exchangeRate: sibling.exchangeRate } : entry;
 }

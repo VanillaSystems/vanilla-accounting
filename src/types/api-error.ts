@@ -22,6 +22,10 @@ export type ApiRefusal =
   | { code: 'manualOnly' }
   | { code: 'hasEntries' }
   | { code: 'yearClose' }
+  /** Cash basis: a booking of a payment keeps the payment's date (src/server/edits.ts applyAnswer). */
+  | { code: 'paymentDate'; params: { date: string } }
+  /** The bookings of a payment would no longer add up to it: `paid` and `booked` in its currency. */
+  | { code: 'paymentBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'fileExists'; params: { filename: string } }
   | { code: 'statement'; params: { reason: StatementRefusal; detail?: string; unknown?: { iban: string; currency: string } } }
   | { code: 'noBrowser' }

@@ -7,10 +7,10 @@
  */
 import { randomUUID } from 'node:crypto';
 import { Router, type Response } from 'express';
-import { RequestError, WS, updateBooks } from '../books.js';
-import { listConversations, readConversation, sendMessage, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
-import type { AssistantEvent, AssistantSend, ContextRef, MadeChange } from '../../types/assistant.js';
-import { applyChange } from '../edits.js';
+import { RequestError, WS, refusalOf, updateBooks } from '../books.js';
+import { listConversations, readConversation, RefusedChanges, sendMessage, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
+import type { AssistantEvent, AssistantSend, ContextRef } from '../../types/assistant.js';
+import { applyAnswer, applyChange } from '../edits.js';
 
 export const router = Router();
 
@@ -58,13 +58,17 @@ router.post('/api/assistant', async (req, res) => {
 });
 
 /** All of an answer's changes in one write of the books: a refused one leaves the books as they were. */
-const apply: ApplyChanges = (changes) => updateBooks((books) => changes.flatMap((change): MadeChange[] => {
-  const undo = applyChange(books, change);
-  return undo ? [{ id: randomUUID().slice(0, 8), change, undo }] : [];
-}));
+const apply: ApplyChanges = (changes) => {
+  try {
+    return updateBooks((books) => applyAnswer(books, changes, WS.bankAccounts).map((m) => ({ id: randomUUID().slice(0, 8), ...m })));
+  } catch (e) {
+    throw new RefusedChanges((e as Error).message, refusalOf(e));
+  }
+};
 
+/** Undoes one change, with the others of its answer on the same payment (newest first), in one write. */
 router.post('/api/assistant/:id/changes/:change/undo', (req, res) => {
-  const made = undoChange(WS, req.params.id, req.params.change, (c) => updateBooks((books) => { applyChange(books, c); }));
+  const made = undoChange(WS, req.params.id, req.params.change, (undos) => updateBooks((books) => { for (const c of undos) applyChange(books, c); }));
   if (!made) throw new RequestError(404, 'Diese Änderung gibt es nicht.');
   res.json(made);
 });

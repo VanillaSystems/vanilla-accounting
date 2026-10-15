@@ -9,7 +9,7 @@ import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
-import { formatDate } from './utils.js';
+import { fmt, formatDate } from './utils.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
 import type { PaymentProposal } from '../../invoices/payments.js';
@@ -63,6 +63,11 @@ export function errorText(e: unknown): string {
     case 'manualOnly': return t('error.manualOnly');
     case 'hasEntries': return t('error.hasEntries');
     case 'yearClose': return t('error.yearClose');
+    case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
+    case 'paymentBalance': {
+      const { date, currency, paid, booked } = b.params;
+      return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
+    }
     case 'fileExists': return t('error.fileExists', b.params);
     case 'statement': {
       const { reason, detail = '', unknown } = b.params;
@@ -157,7 +162,7 @@ export const api = {
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
-  assistantUndo: (id: string, change: string) => request<MadeChange>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
+  assistantUndo: (id: string, change: string) => request<MadeChange[]>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
   sources: () => request<SourceRow[]>('GET', '/api/sources'),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),

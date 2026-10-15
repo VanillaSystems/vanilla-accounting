@@ -96,7 +96,6 @@ src/parsers/receipt-text.ts
 src/publish/leak-guard.ts
 src/reconcile/vat-consistency.ts
 src/server/routes/config.ts
-src/server/routes/journal.ts
 src/server/routes/receipts.ts
 src/server/routes/statements.ts
 src/server/routes/transactions.ts

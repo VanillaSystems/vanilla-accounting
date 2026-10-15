@@ -17,6 +17,8 @@ import { join } from 'node:path';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { claudeCommand, NoClaudeError, record, type Model } from '../llm/ask.js';
 import { customizingNames } from '../saving/changes.js';
+import { ownerAccount } from '../accounting/bank-accounts.js';
+import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
@@ -29,33 +31,42 @@ export function draftPatterns(): string[] {
   return customizingNames().map((n) => (/\.[a-z]+$/i.test(n) ? `data/draft/${n}` : `data/draft/${n}/**`));
 }
 
-export function assistantSystem(language: string): string {
+/** `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount). */
+export function assistantSystem(language: string, owner: string): string {
   return [
     'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them. They are not an accountant and not technical. Do what they ask.',
     'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, transactions = payments, mappings = links, journalEntries = bookings), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml.',
     `The app's own rules: ${join(APP_FILES, 'AGENTS.md')}. Its workflows: ${join(APP_FILES, 'workflows')}/<id>/workflow.yaml and <step>/step.yaml. The tax codes and the chart of the books' country: ${join(APP_FILES, 'modules')}/<country>/tax-codes.yaml and chart.yaml. The company's notes: ../docs/company/AGENTS.md when it exists.`,
-    'To change the books, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, each with an undo for the person:',
+    'To change the books, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, all or none, each with an undo for the person:',
     '```vanilla-changes',
     '[{"kind":"receipt","id":"<receipt id>","set":{"date":"2026-06-28","amount":1243.55,"currency":"<ISO code>","description":"Farbmix AG, Farben","vat":{"hasSwissVat":true,"vatId":"<the VAT number on the receipt>","vatSummary":[{"ratePercent":8.1,"net":1150.35,"vat":93.2,"gross":1243.55}]}}},',
     ' {"kind":"link","receipt":"<receipt id>","payment":"<transaction ref>"}, {"kind":"unlink","receipt":"<receipt id>","payment":"<transaction ref>"},',
-    ' {"kind":"entry","id":"<journal entry id>","set":{"accountDebit":"4000","accountCredit":"1020","vatCode":"<VAT code>","amount":1243.55,"date":"2026-07-03","description":"…"}}]',
+    ' {"kind":"entry","id":"<journal entry id>","set":{"accountDebit":"4000","accountCredit":"1020","vatCode":"<VAT code>","amount":1243.55,"date":"2026-07-03","description":"…"}},',
+    ' {"kind":"newEntry","entry":{"transactionRef":"<transaction ref>","date":"<the payment\'s date>","accountDebit":"…","accountCredit":"<the payment\'s bank account>","amount":44.5,"description":"…"}},',
+    ' {"kind":"deleteEntry","id":"<journal entry id>"}]',
     '```',
-    'Only the fields that change go into "set". "vat" with "hasSwissVat":false means the receipt shows no Swiss VAT. Take ids from what the person refers to or from the books. Check the receipt itself (Read its PDF) before you set facts from it.',
-    'A receipt\'s facts say what the paper shows, nothing else: never change them to steer a booking. How much input tax is claimed is the booking\'s VAT code; a private expense is booked without one.',
+    'Only the fields that change go into "set"; "vatCode":"" removes the code. "vat" with "hasSwissVat":false means the receipt shows no Swiss VAT. Take ids from what the person refers to or from the books. Check the receipt itself (Read its PDF) before you set facts from it.',
+    'A receipt\'s facts say what the paper shows, nothing else: never change them to steer a booking. How much input tax is claimed is the booking\'s VAT code.',
+    `The owner's private account in these books is ${owner}. A private expense, or the private share of one, is booked to it and has no VAT code at all (leave "vatCode" out or empty; not a zero-rate code): no input tax is claimed on it. Never use another account for private.`,
+    `The VAT is reported on payments received (cash basis): a booking of a payment carries the payment's date, also when the invoice is older, and its VAT belongs to the quarter of the payment. Never move such a booking to another date, and never offer to; the app refuses it. Only bookings on the payout clearing account ${SHOPIFY_ACCOUNT} take the order's date.`,
+    'The bookings of a payment add up to what the bank paid. To split one (e.g. half private), change the first and add the other part with "newEntry" on the same payment and date, in the same block; the app refuses a block that leaves a payment\'s bookings not adding up.',
     'A filed quarter (dated on or before config.closedThrough) never changes: say so, and that a correction is booked in the open quarter.',
+    'When a wish is vague (e.g. "make everything right"), change nothing yet: ask back in one short question and say what you would do and on what (this receipt, this payment, the quarter). Say what you looked at.',
+    'Never take back or redo a change you made earlier in this conversation without saying so plainly: name it and why.',
+    'Never send the person to a button, menu or screen you have not seen in this app. Do the work in the block, or say plainly that you cannot do it.',
     'How the app works (rules, workflows, knowledge, settings) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). Tell the person it takes effect when they press «Speichern» under Änderungen.',
     'Before the block, say in one or two plain sentences what you changed. Never mention files, JSON, ids, git or commits to the person.',
     `Answer in ${LANGUAGES[language] ?? 'German'}, short and plain, addressing the person informally as the app does (du, tu).`,
   ].join('\n');
 }
 
-export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string): string[] {
+export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string): string[] {
   const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   return [
     '-p',
     '--model', 'sonnet',
     '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--append-system-prompt', assistantSystem(send.language),
+    '--append-system-prompt', assistantSystem(send.language, owner),
     '--setting-sources', '',
     '--strict-mcp-config',
     '--permission-mode', 'default',
@@ -152,7 +163,7 @@ function modelOf(usage: Record<string, unknown> | undefined): Model {
 }
 
 export interface AssistantCall {
-  ws: Pick<Workspace, 'paths'>;
+  ws: Pick<Workspace, 'paths' | 'bankAccounts' | 'company'>;
   send: AssistantSend;
   session: string | undefined;
   prompt: string;
@@ -166,7 +177,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
   const root = call.ws.paths.root;
   return new Promise((resolve) => {
     const { bin, env } = claudeCommand();
-    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
+    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws)), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
     let real = root;
     try { real = realpathSync(root); } catch { /* the path as given */ }
     const parse = streamParser([...new Set([root, real])]);

@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
+import type { ApiRefusal } from '../types/api-error.js';
 import type { AssistantEvent, AssistantSend, BookChange, Conversation, ConversationSummary, MadeChange, Turn } from '../types/assistant.js';
 import { changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
@@ -38,8 +39,13 @@ export function listConversations(ws: Pick<Workspace, 'paths'>): ConversationSum
   }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
-/** Applies all the changes in one write of the books, or none and throws why. */
+/** Applies all the changes in one write of the books, or none and throws why (a RefusedChanges, or a ChangesError). */
 export type ApplyChanges = (changes: BookChange[]) => MadeChange[];
+
+/** Why the books refused an answer's changes: the API's words, and its code for the UI's. */
+export class RefusedChanges extends Error {
+  constructor(message: string, readonly refusal?: ApiRefusal) { super(message); }
+}
 
 /**
  * One message: stored, sent with its context read now, its answer streamed to `onEvent` and stored
@@ -80,7 +86,8 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       }
     } catch (e) {
       ai.refused = (e as Error).message;
-      onEvent({ type: 'refused', message: ai.refused });
+      if (e instanceof RefusedChanges && e.refusal) ai.refusal = e.refusal;
+      onEvent({ type: 'refused', message: ai.refused, ...(ai.refusal ? { refusal: ai.refusal } : {}) });
     }
   }
   if (done) onEvent(done);
@@ -88,14 +95,20 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   store(ws, c);
 }
 
-/** Takes back one change an answer made, once; the books refuse it as they refuse any edit of a filed quarter. */
-export function undoChange(ws: Pick<Workspace, 'paths'>, id: string, change: string, revert: (c: BookChange) => void): MadeChange | undefined {
+/**
+ * Takes back one change an answer made, once, and with it the others of that answer on the same
+ * payment, newest first, so its bookings add up again. The books refuse it as they refuse any edit
+ * of a filed quarter. Returns the changes now undone.
+ */
+export function undoChange(ws: Pick<Workspace, 'paths'>, id: string, change: string, revert: (undos: BookChange[]) => void): MadeChange[] | undefined {
   const c = readConversation(ws, id);
-  const made = c?.turns.flatMap((t) => (t.role === 'ai' ? t.changes ?? [] : [])).find((x) => x.id === change);
-  if (!c || !made) return undefined;
-  if (made.undone) return made;
-  revert(made.undo);
-  made.undone = true;
+  const turn = c?.turns.find((t): t is Extract<Turn, { role: 'ai' }> => t.role === 'ai' && !!t.changes?.some((x) => x.id === change));
+  const made = turn?.changes?.find((x) => x.id === change);
+  if (!c || !turn || !made) return undefined;
+  if (made.undone) return [made];
+  const together = turn.changes!.filter((x) => x === made || (!x.undone && made.payment && x.payment === made.payment));
+  revert(together.map((x) => x.undo).reverse());
+  for (const x of together) x.undone = true;
   store(ws, c);
-  return made;
+  return together;
 }

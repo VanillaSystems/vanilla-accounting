@@ -93,7 +93,9 @@ bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search onl
 - **Context is a reference, not a screenshot.** The AI receives *what* the person is looking at
   (a run, a booking, a workflow, a period) and reads the real record itself through the
   command registry's read commands (ADR 0005); it reads nothing else unless it looks it up, and
-  every lookup shows in the conversation. Three ways to give it:
+  every lookup is listed under a small **Details** toggle above its answer, closed by default (a
+  person who keeps books does not know what a Glob is; usability test 2026-10-15, Malerei Huber).
+  Three ways to give it:
   1. **The view, automatically:** a dashed chip "Ansicht: Lauf 1047" follows navigation until
      the first message, then stays with the conversation. × sends without it ("ohne Kontext").
   2. **@ in the text:** a list of runs, bookings, receipts, workflows, files and periods,
@@ -104,11 +106,29 @@ bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search onl
 
 **What it changes.** A change to the books (a receipt's date, amount, currency, description or
 VAT; a link between a receipt and a payment; a booking's accounts, VAT code, amount, date or
-text) is made at once and shows in the answer as a card with **Rückgängig**. The AI never writes
-the books' files: it names the changes at the end of its answer, and the app checks them and
-makes them all in one write, or none and says why (a filed quarter refuses as any edit does;
-src/assistant/changes.ts, src/server/edits.ts). A change to how the app works (rules, workflows,
-knowledge, settings) lands under Änderungen, unsaved ([saving.md](saving.md)).
+text; a new booking on a payment; a booking deleted) is made at once and shows in the answer as a
+card with **Rückgängig**. The AI never writes the books' files: it names the changes at the end
+of its answer, and the app checks them and makes them all in one write, or none and says why in
+the person's language (src/assistant/changes.ts, `applyAnswer` in src/server/edits.ts). It
+refuses an answer that
+
+- touches a filed quarter, as any edit does;
+- dates a payment's booking off the payment's date: the VAT is reported on payments received, so
+  a booking of a payment carries its date and its quarter, also when the invoice is older (only
+  bookings on the payout clearing account take the order's date, as classify books them;
+  src/accounting/payment-entries.ts);
+- changes what a payment's bookings move on its bank account and leaves them not adding up to
+  what the bank paid. A private share is a split: the business part changed and the private part
+  added on the owner's account (the Kontokorrent of a GmbH or AG, the Privatkonto of an
+  Einzelfirma), without a VAT code, in one answer.
+
+A person's own edits in Buchungen keep their freedom: a split by hand is two edits with a gap
+between them, and a correction may hang on a payment with a date of its own. **Rückgängig** on
+one booking of a payment takes back the answer's other changes on that payment with it, so its
+bookings add up again. A vague wish («mach alles richtig») gets a short question back with what
+the AI would do; it never takes back an earlier change of its own without saying so, and never
+points to a button it has not seen. A change to how the app works (rules, workflows, knowledge,
+settings) lands under Änderungen, unsaved ([saving.md](saving.md)).
 
 The app window does not scroll as a page: the list, the detail and the sidebar each scroll on
 their own, so the composer and the dock stay in place.

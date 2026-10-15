@@ -6,7 +6,8 @@
  * statement names `manual`, so those rows never reconcile).
  */
 import type { BankTransaction } from '../types/index.js';
-import type { LedgerBankAccount } from '../workspace/workspace.js';
+import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
+import { setup } from '../engines/index.js';
 import { parseIban, type StatementKind } from '../workspace/banks.js';
 
 export function findBankAccount(accounts: readonly LedgerBankAccount[], bank: string, currency: string): LedgerBankAccount | undefined {
@@ -16,6 +17,15 @@ export function findBankAccount(accounts: readonly LedgerBankAccount[], bank: st
 /** The ledger account a transaction's bank side is booked on: the manifest's first account when the pair is unknown. */
 export function bankAccountFor(tx: Pick<BankTransaction, 'bank' | 'currency'>, accounts: readonly LedgerBankAccount[]): string {
   return findBankAccount(accounts, tx.bank, tx.currency)?.account ?? accounts[0].account;
+}
+
+/** The owner's private account, number and name: the manifest's `manual` account, else the jurisdiction's for the legal form (a current account, the private account of an Einzelfirma). */
+export function ownerAccount(ws: Pick<Workspace, 'bankAccounts' | 'company'>): string {
+  const manual = ws.bankAccounts.find((a) => a.bank === 'manual');
+  if (manual) return `${manual.account} ${manual.label}`;
+  const { owner } = setup();
+  const o = (ws.company.legalForm && owner[ws.company.legalForm]) || owner.otherwise;
+  return `${o.account} ${o.label}`;
 }
 
 /** What a statement says about its account, and the folder under bank-statements/ it was found in. */

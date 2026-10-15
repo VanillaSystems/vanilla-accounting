@@ -41,6 +41,14 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The AI sidebar keeps a payment's bookings right. It no longer moves a payment's booking to
+  another date (VAT on payments received: the booking carries the payment's date and quarter),
+  and it no longer cuts a booking to the business half and stops: it can add the private half
+  on the owner's account, without a VAT code, or delete a booking, and an answer that leaves a
+  payment's bookings not adding up to the payment changes nothing and says why. «Rückgängig» on
+  one half takes back the other. What it looked up is under «Details», closed. A vague wish gets
+  a question back, and it no longer points to buttons that do not exist.
+
 - **⚠ figures** Income booked on 7000 (Ertrag Nebenbetrieb), 8100 (betriebsfremder Ertrag) or
   8510 (ausserordentlicher Ertrag) showed as a negative amount in the income statement and the
   trial balance, so the income statement's result was too low by twice that amount. The balance
