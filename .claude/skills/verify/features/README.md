@@ -41,6 +41,12 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 - [Rechnungen](./invoices.md) covers the invoice list by state, customers, the sent log, a draft edited on its A4 sheet, issue with the Art. 26 gaps, send, credit note, cancellation, reminders, comments, and Firma › Rechnungslayout. **Driven end to end on 2026-10-11 (redesign phase 9).**
 - [Static audit export](./audit-export.md) covers `npm run build:audit` served by a plain static server: every tab, search, PDFs, the snapshot line, no `/api/*` request. **Driven on 2026-10-09.**
 
+- [Desktop: installation and first start](./desktop-install.md) covers the dmg, the Gatekeeper path and the start screen on a fresh VM (`vm.sh`). **Driven on 2026-10-15.**
+- [Desktop: set up new books](./desktop-setup.md) covers the setup form, its UID/IBAN checks, unsupported answers and the written manifest. **Driven on 2026-10-15.**
+- [Desktop: drop files](./desktop-drop.md) covers Dateien hinzufügen in the packed app: take, statement, refuse, duplicate, undo. **Partly driven on 2026-10-15 (CSV refused; upload hang seen once).**
+
+The desktop files use `V`, `A`, `CDP` and `EVIDENCE` from the SKILL.md section "The packed Mac app on a fresh Mac", and their contract names the harness `vm.sh + app.mjs`.
+
 ## Not mapped yet
 
 - Scan PWA (`/scan`), which needs a camera. Its upload endpoint is `POST /api/upload` (`Content-Type: application/pdf`) and writes to `$SB/beleg-import/`. The iOS app (`ios/`) uses the same endpoint.

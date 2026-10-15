@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Launch and drive the Vanilla Accounting bookkeeping app (React UI on Vite + Express API on a workspace's books) in a disposable sandbox that clones the workspace, then prove UI, API, and CLI behavior with screenshots, dialogs, and an index diff. Use whenever a change to src/app, src/server, or src/cli needs to be shown working in the real app, or to check what a click actually writes to the books.
+description: Launch and drive the Vanilla Accounting bookkeeping app (React UI on Vite + Express API on a workspace's books) in a disposable sandbox that clones the workspace, then prove UI, API, and CLI behavior with screenshots, dialogs, and an index diff. Also drives the packed Mac app (the dmg) on a fresh throwaway Mac VM, for installation, first run, setup, and persona or usability tests. Use whenever a change to src/app, src/server, or src/cli needs to be shown working in the real app, to check what a click actually writes to the books, or to see the app as a new owner gets it.
 ---
 
 # Verify Vanilla Accounting
@@ -95,6 +95,54 @@ $S list                     # should not list my-run
 ## Helpers
 
 - `sandbox.sh up|doctor|diff|down [run-id]` and `sandbox.sh list`. The run-id falls back to `$VERIFY_RUN`, then to the only existing sandbox.
+
+## The packed Mac app on a fresh Mac (second surface)
+
+The sandbox above runs the working tree in a browser. What an owner installs is the dmg: Gatekeeper, the first start, setup, the Electron shell, the bundled server. That surface runs only in a throwaway Tart VM cloned from `vanilla-clean` (macOS 26, user `admin`, password `admin`), never on the person's desktop: the app steals focus. `V=.claude/skills/verify/vm.sh`, `A=.claude/skills/verify/app.mjs`.
+
+**Launch.** Build the dmg first (`npm run desktop:build`, about 3 min; it lands in `release/*-arm64.dmg`). Then:
+
+```bash
+$V up my-vm             # clone, boot, SSH key, Gatekeeper ON, dmg + persona files into ~/Downloads (≈1 min)
+source $TMPDIR/belege-vm/my-vm/env   # RUN VM IP EVIDENCE DMG; export VERIFY_VM=my-vm so later calls find it
+```
+
+Ready when it prints `ready`. `~/Downloads` then holds the dmg and made-up files of a painting firm (`persona-files.mjs`: a Q3 2026 camt.053 for IBAN `CH11 8080 8001 2345 6789 1`, the CSV a bank offers first, supplier PDFs with 8.1 % MWST, till-receipt photos, a holiday photo, a fake .docx, a duplicate PDF), all with the download quarantine flag, so macOS treats them like files from Safari.
+
+**Doctor.** `$V doctor` (read-only): VM running, SSH, Gatekeeper on, screen capture over VNC, and after `$V app` the app's DevTools port. Every line `ok`, else `down` + `up`.
+
+**Drive, outside the app** (macOS dialogs, Finder, System Settings) through the VM's screen sharing:
+
+```bash
+$V shot 02-gatekeeper           # whole screen → $EVIDENCE/02-gatekeeper.png and .s.png (1400 px wide)
+$V click 700 573                # coordinates read off the .s.png; dclick double-clicks
+$V type admin ; $V key enter    # a password field takes keys only after a click into it
+$V sh 'open ~/Downloads/*.dmg'  # shell as admin; `open` = a double-click
+$V put file.pdf                 # more files into ~/Downloads, quarantined
+```
+
+**Drive, inside the app** through its DevTools port. `$V app` (re)starts the installed `/Applications/Vanilla Accounting.app` with `--remote-debugging-port`, tunnels it to a free local port and writes `CDP` into the env; its stdout (the bundled server's log) goes to `/tmp/va.log` in the VM.
+
+```bash
+source $TMPDIR/belege-vm/my-vm/env; export CDP EVIDENCE
+node $A 04-setup "await clickText('Neue Buchhaltung anlegen')" "await fill('Firmenname','Malerei Huber GmbH')" "await nth(8,'CH11 8080 8001 2345 6789 1')"
+node $A 05-drop "await pick('PDFs hierher ziehen', ['swisscom_juli.pdf'])" "await wait(5000)"
+```
+
+Each call runs its steps, saves `$EVIDENCE/<name>.png` (the page) and prints the URL and the visible text. The steps and their helpers are in the head of `app.mjs`.
+
+**Evidence** goes to `.verify/evidence/<run>/` like the sandbox's: `NN-step.png` and `.s.png` (whole screen), the page shots, and `app.log` (copied by `down`). The side effect of a step is read in the VM, for example `$V sh 'cat ~/Documents/"Buchhaltung Malerei Huber GmbH"/vanilla-accounting/belege.workspace.yaml'`.
+
+**Cleanup.** `$V down my-vm` stops the tunnel it started, copies the app log, stops and deletes the VM; the evidence stays. `$V list` should not show it.
+
+**Gotchas.**
+- Synthetic drags over VNC never reach the app (Finder → window did nothing in two tries). Files go in through the app's own picker (`pick`, the drop zone's "oder klicken"), which opens the same drop dialog.
+- `screencapture` and Finder AppleEvents over SSH fail (no screen-recording or automation rights). Use `$V shot` and `open`.
+- `vanilla-clean` has Gatekeeper off; `up` turns it on. A fresh clone has no SSH key; `up` installs it with the password.
+- To get past Gatekeeper quickly after proving the dialog once: `ditto` the app from the mounted dmg to `/Applications` and `xattr -dr com.apple.quarantine` it. Moving it to Applications by hand makes macOS ask again.
+- Before relaunching with a debug port, kill every app process (`$V app` does `pkill -9` on the bundle path); a leftover helper keeps 9222 and DevTools does not start.
+- The VM has no `claude`. Reading a photo or a scan needs it; a persona test reports those paths as what an owner without Claude sees. To exercise them, `$V put tests/support/stub-bin/claude` and move it onto the app's PATH (see `tools/desktop/vm-e2e.sh`).
+- Two VMs fit (8 GB each); stop one before a third.
 
 ## Feature map
 
