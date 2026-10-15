@@ -87,11 +87,20 @@ struct ContentView: View {
     private var serverBadge: some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(server.serverURL != nil ? Color.green : Color.secondary.opacity(0.4))
+                .fill(server.state == .connected ? Color.green : server.state == .notPaired ? Color.orange : Color.secondary.opacity(0.4))
                 .frame(width: 8, height: 8)
-            Text(server.serverURL != nil ? "Server found" : (server.isSearching ? "Searching…" : "No server"))
+            Text(badgeText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var badgeText: String {
+        switch server.state {
+        case .connected: return "Mac found"
+        case .searching: return "Searching…"
+        case .notPaired: return "Not paired"
+        case .unknown, .unreachable: return "No Mac"
         }
     }
 
@@ -177,7 +186,7 @@ struct ContentView: View {
 
         for upload in pending {
             do {
-                try await UploadService.upload(upload, to: serverURL)
+                try await UploadService.upload(upload, to: serverURL, token: server.token)
                 upload.synced = true
                 syncProgress.done += 1
                 try? modelContext.save()

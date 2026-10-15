@@ -17,7 +17,7 @@ targets:
     info:
       path: Belege/Info.plist
       properties:
-        NSCameraUsageDescription: "Used to photograph receipts"
+        NSCameraUsageDescription: "Used to photograph receipts and to scan the pairing code the Mac shows"
         NSLocalNetworkUsageDescription: "Used to find and connect to the Belege server on your local network"
         NSBonjourServices:
           - "_http._tcp"
