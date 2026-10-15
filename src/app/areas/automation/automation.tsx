@@ -490,23 +490,38 @@ function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'ev
         ))}
       </div>
       {map === 'phases' ? (
-        <div className="wfmap">
-          {m.phases.map((p) => (
-            <div key={p.phase} className="col">
-              <h3>{phaseLabel(p.phase)}</h3>
-              {p.workflows.map((id) => {
-                const w = byId(id);
-                return (
-                  <button key={id} type="button" className={`wfcard${w.runnable.ok ? '' : ' dim'}`} onClick={() => open(id)}>
-                    <b>{hasAi(w, view.workflows) ? <BotIcon /> : null}{label(w)}</b>
-                    <span className="m">{tx(w.cadence)}</span>
-                    {m.arrows.filter((a) => a.from === id).map((a) => <span key={a.to + a.via} className={`m next${a.off ? ' off' : ''}`}>→ {label(byId(a.to))}</span>)}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        <>
+          <p className="lead">{t('automation.mapLead')}</p>
+          <div className="wfmap">
+            {m.phases.map((p, pi) => {
+              const runs = view.runs.filter((r) => r.mode === 'live' && p.workflows.includes(r.workflow));
+              const stuck = runs.filter((r) => r.status === 'stuck').length, running = runs.filter((r) => r.status === 'running' || r.status === 'queued').length;
+              const now = stuck ? t('automation.phaseStuck', { n: stuck }) : running ? t('automation.status.running') : '';
+              return (
+                <section key={p.phase} className="col">
+                  <header className="ph"><span className="pn">{pi + 1}</span><div><b>{phaseLabel(p.phase)}</b><span className="cad">{t(`automation.phaseCad.${p.phase}` as 'automation.phaseCad.collect')}</span></div></header>
+                  <p className="when">{t(`automation.phaseWhen.${p.phase}` as 'automation.phaseWhen.collect')}</p>
+                  {now ? <span className="now">{now}</span> : null}
+                  {p.workflows.map((id) => {
+                    const w = byId(id);
+                    const st = runs.filter((r) => r.workflow === id && r.status === 'stuck').length;
+                    const starts = w.triggers.filter((tr) => !tr.off).map((tr) => (tr.kind === 'event' ? tr.name : tr.kind === 'manual' ? t('automation.byButton', { label: tx(tr.label) }) : tr.kind === 'schedule' ? tr.cron : t('automation.byFile')));
+                    return (
+                      <button key={id} type="button" className={`wfcard${w.runnable.ok ? '' : ' dim'}${st ? ' stuck' : ''}`} onClick={() => open(id)}>
+                        <b>{label(w)}{hasAi(w, view.workflows) ? <BotIcon /> : null}</b>
+                        <span className="cc">{tx(w.cadence)}</span>
+                        {starts.length ? <span className="cl"><span>{t('automation.startsOn')}</span> {starts.join(', ')}</span> : null}
+                        {w.emits.length ? <span className="cl"><span>{t('automation.reports')}</span> {w.emits.join(', ')}</span> : null}
+                        {st ? <span className="wfpill warn">{t('automation.phaseStuck', { n: st })}</span> : !w.runnable.ok ? <span className="wfpill muted">{t('automation.notRunnable')}</span> : null}
+                      </button>
+                    );
+                  })}
+                  {p.phase === 'year' ? <span className="loop">{t('automation.yearLoop')}</span> : null}
+                </section>
+              );
+            })}
+          </div>
+        </>
       ) : (
         <ul className="wfarrows">
           {m.arrows.map((a) => (
