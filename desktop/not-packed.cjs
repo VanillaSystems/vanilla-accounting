@@ -12,6 +12,8 @@ const NOT_PACKED = {
   'puppeteer-core': 'src/invoices/pdf.ts',
   // pdf.js draws pages on it; the engine only reads text (src/parsers/pdf-text.ts).
   '@napi-rs/canvas': 'pdfjs-dist (optional)',
+  // The company's own Chrome per session (npm run browser); the Mac app gets it with the web channel.
+  'playwright-core': 'src/platform/browser/chrome.ts',
   // Mail sources run under npm start and the CLI; the Mac app runs no source yet (ADR 0014, unit 2b).
   imapflow: 'src/platform/sources/mail-channel.ts',
   mailparser: 'src/platform/sources/mail-channel.ts',
