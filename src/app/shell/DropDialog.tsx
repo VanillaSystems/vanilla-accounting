@@ -45,10 +45,10 @@ export function closeDrop(): void {
   set({ open: false, session: undefined, adding: 0, error: undefined });
 }
 
-type Tab = 'all' | 'bank' | 'statements' | 'receipts' | 'unclear' | 'out';
+type Tab = 'all' | 'statements' | 'receipts' | 'unclear' | 'out';
 const tabOf = (r: DropRow): Tab => (r.state === 'duplicate' || r.state === 'quarantine' || r.state === 'refused' || r.state === 'undone' ? 'out'
   : r.state === 'locked' || r.state === 'unclear' || !r.kind ? 'unclear'
-  : r.kind === 'camt' ? 'bank' : r.kind === 'statement-pdf' ? 'statements' : 'receipts');
+  : r.kind === 'camt' || r.kind === 'statement-pdf' ? 'statements' : 'receipts');
 const needsYou = (r: DropRow) => r.state === 'locked' || r.state === 'unclear';
 
 const act = (session: DropSession, r: DropRow, action: Parameters<typeof api.dropRow>[2]) =>
@@ -147,14 +147,16 @@ function Taken({ r, session, books, go }: { r: DropRow; session: DropSession; bo
   const facts = receipt && (receipt.date || receipt.amount !== undefined)
     ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
+  const missing = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
   const shown = !!receipt && open;
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
   return (
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`}>
-        <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? r.statement.file : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
+        <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
+          {missing ? <small className="dwhy">{t('drop.p.missing', { what: missing })}</small> : null}
           <span className="dacts">
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id })}>{t('drop.openReceipt')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} title={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
@@ -177,7 +179,7 @@ export function DropDialog({ onGo, books }: { onGo(route: Route): void; books: I
   const [tab, setTab] = useState<Tab>('all');
   if (!s.open) return null;
   const rows = s.session?.rows ?? [];
-  const tabs: Tab[] = ['all', 'bank', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];
+  const tabs: Tab[] = ['all', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];
   const shown = tab === 'all' ? rows : rows.filter((r) => tabOf(r) === tab);
   const taken = rows.filter((r) => r.state === 'taken');
   const states = taken.map((r) => fileState(r, books, view));

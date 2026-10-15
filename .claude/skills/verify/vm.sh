@@ -47,7 +47,7 @@ up)
   printf 'RUN=%s\nVM=%s\nIP=%s\nEVIDENCE=%s\nDMG="%s"\n' "$RUN" "$VM" "$IP" "$EVIDENCE" "$DMG" > "$D/env"
   # vanilla-clean has Gatekeeper off; a person's Mac has it on.
   ssh_ 'echo admin | sudo -S spctl --global-enable 2>/dev/null; mkdir -p ~/Downloads; osascript -e "quit app \"Terminal\"" >/dev/null 2>&1 || true'
-  node "$HERE/persona-files.mjs" "$D/Downloads" >/dev/null
+  node "$HERE/persona-files.mjs" "$D/Downloads" >/dev/null && cat "$D/persona.env" >> "$D/env"
   "$0" put "$DMG" "$D"/Downloads/* >/dev/null
   echo ready; cat "$D/env"; echo "source $D/env"
   ;;

@@ -23,8 +23,8 @@ Start screen › `Neue Buchhaltung anlegen`; fill top to bottom; `Buchhaltung an
 
 ```bash
 node $A 10-setup "await clickText('Neue Buchhaltung anlegen')" "await fill('Firmenname','Malerei Huber GmbH')" \
-  "await fill('UID','CHE-345.678.915')" "await fill('Inhaber','Thomas Huber')" \
-  "await nth(5,'Raiffeisen')" "await nth(8,'CH11 8080 8001 2345 6789 1')"
+  "await fill('UID', process.env.PERSONA_UID)" "await fill('Inhaber','Thomas Huber')" \
+  "await nth(5,'Raiffeisen')" "await nth(8, process.env.PERSONA_IBAN_SPACED)"
 node $A 11-created "await clickText('Buchhaltung anlegen','button')" "await wait(5000)"   # URL ends /receipts
 $V sh 'cat ~/Documents/"Buchhaltung Malerei Huber GmbH"/vanilla-accounting/belege.workspace.yaml'
 ```

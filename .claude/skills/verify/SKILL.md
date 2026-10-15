@@ -104,10 +104,10 @@ The sandbox above runs the working tree in a browser. What an owner installs is 
 
 ```bash
 $V up my-vm             # clone, boot, SSH key, Gatekeeper ON, dmg + persona files into ~/Downloads (≈1 min)
-source $TMPDIR/belege-vm/my-vm/env   # RUN VM IP EVIDENCE DMG; export VERIFY_VM=my-vm so later calls find it
+source $TMPDIR/belege-vm/my-vm/env   # RUN VM IP EVIDENCE DMG and the persona's PERSONA_IBAN, PERSONA_IBAN_SPACED, PERSONA_UID, PERSONA_CAMT; export VERIFY_VM=my-vm so later calls find it
 ```
 
-Ready when it prints `ready`. `~/Downloads` then holds the dmg and made-up files of a painting firm (`persona-files.mjs`: a Q3 2026 camt.053 for IBAN `CH11 8080 8001 2345 6789 1`, the CSV a bank offers first, supplier PDFs with 8.1 % MWST, till-receipt photos, a holiday photo, a fake .docx, a duplicate PDF), all with the download quarantine flag, so macOS treats them like files from Safari.
+Ready when it prints `ready`. `~/Downloads` then holds the dmg and made-up files of a painting firm (`persona-files.mjs`: a Q3 2026 camt.053 (`$PERSONA_CAMT`) for the IBAN `$PERSONA_IBAN`, the CSV a bank offers first, supplier PDFs with 8.1 % MWST, till-receipt photos, a holiday photo, a fake .docx, a duplicate PDF), all with the download quarantine flag, so macOS treats them like files from Safari.
 
 **Doctor.** `$V doctor` (read-only): VM running, SSH, Gatekeeper on, screen capture over VNC, and after `$V app` the app's DevTools port. Every line `ok`, else `down` + `up`.
 
@@ -124,8 +124,8 @@ $V put file.pdf                 # more files into ~/Downloads, quarantined
 **Drive, inside the app** through its DevTools port. `$V app` (re)starts the installed `/Applications/Vanilla Accounting.app` with `--remote-debugging-port`, tunnels it to a free local port and writes `CDP` into the env; its stdout (the bundled server's log) goes to `/tmp/va.log` in the VM.
 
 ```bash
-source $TMPDIR/belege-vm/my-vm/env; export CDP EVIDENCE
-node $A 04-setup "await clickText('Neue Buchhaltung anlegen')" "await fill('Firmenname','Malerei Huber GmbH')" "await nth(8,'CH11 8080 8001 2345 6789 1')"
+source $TMPDIR/belege-vm/my-vm/env; export CDP EVIDENCE PERSONA_IBAN_SPACED PERSONA_UID PERSONA_CAMT
+node $A 04-setup "await clickText('Neue Buchhaltung anlegen')" "await fill('Firmenname','Malerei Huber GmbH')" "await nth(8, process.env.PERSONA_IBAN_SPACED)"
 node $A 05-drop "await pick('PDFs hierher ziehen', ['swisscom_juli.pdf'])" "await wait(5000)"
 ```
 
@@ -136,7 +136,7 @@ Each call runs its steps, saves `$EVIDENCE/<name>.png` (the page) and prints the
 **Cleanup.** `$V down my-vm` stops the tunnel it started, copies the app log, stops and deletes the VM; the evidence stays. `$V list` should not show it.
 
 **Gotchas.**
-- Synthetic drags over VNC never reach the app (Finder → window did nothing in two tries). Files go in through the app's own picker (`pick`, the drop zone's "oder klicken"), which opens the same drop dialog.
+- Synthetic drags over VNC never reach the app (Finder → window did nothing in two tries). Files go in with `drop([...])` (DevTools drag events with the files' paths, what a Finder drag delivers) or the app's own picker (`pick`).
 - `screencapture` and Finder AppleEvents over SSH fail (no screen-recording or automation rights). Use `$V shot` and `open`.
 - `vanilla-clean` has Gatekeeper off; `up` turns it on. A fresh clone has no SSH key; `up` installs it with the password.
 - To get past Gatekeeper quickly after proving the dialog once: `ditto` the app from the mounted dmg to `/Applications` and `xattr -dr com.apple.quarantine` it. Moving it to Applications by hand makes macOS ask again.

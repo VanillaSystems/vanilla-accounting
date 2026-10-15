@@ -76,3 +76,7 @@ No deviation beyond S1: the lists, details, figures and links match.
 | C2 | Right: «Seit dem letzten Speichern», BÜCHER · AUS LÄUFEN (each run with its number of entries) and WIE DIE APP ARBEITET · DATEIEN (each file with who changed it and +/−) | as the mockup; the books wait for the person's save (owner, 15.10.: runs no longer save themselves) | fixed |
 | C3 | «Speichern vorbereiten» right under the two groups | as the mockup | fixed |
 | C4 | — | In the Q2 replay (a git worktree), isomorphic-git reads a HEAD the git CLI does not: 37 files untouched since the baseline show as «neu» | open (replay setup) |
+
+## Deliberate, from the usability test of 2026-10-15
+
+- Dateien hinzufügen: one tab «Kontoauszüge» for camt.053 and PDF statements (the mockup has «Bankdaten» and «Kontoauszüge»). The owner put a statement in and saw «Kontoauszüge 0». (docs/0.4.0/usability/2026-10-15-malerei-huber.md #21)

@@ -136,8 +136,13 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
       uid: 'error' in uid ? t('desktop.setup.uid', { detail: f.uid }) : '',
       owner: !f.owner.trim() ? t('desktop.setup.required.owner') : '',
       banks: f.banks.map((b) => (!b.bank.trim() ? t('desktop.setup.bankName') : b.iban.trim() && !parseIban(b.iban) ? t('desktop.setup.iban', { bank: b.bank, detail: b.iban }) : '')),
+      bankField: f.banks.map((b) => (!b.bank.trim() ? 'bank' : 'iban')),
     };
   }, [f]);
+  const problems = [
+    errors.name && t('desktop.name'), errors.uid && t('desktop.uid'), errors.owner && t('desktop.owner'),
+    ...f.banks.map((b, i) => errors.banks[i] && `${t('desktop.iban')} ${b.bank || i + 1}`),
+  ].filter(Boolean);
   const invalid = !!(errors.name || errors.uid || errors.owner || errors.banks.some(Boolean) || f.banks.length === 0);
 
   const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? x.answers : { ...PRESETS[preset].answers } }));
@@ -153,7 +158,15 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
   };
   const submit = () => {
     setChecked(true);
-    if (invalid || !complete || stop || presetStop) return;
+    if (invalid || !complete) {
+      requestAnimationFrame(() => {
+        const first = document.querySelector<HTMLElement>('.st-form .err');
+        first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        first?.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true });
+      });
+      return;
+    }
+    if (stop || presetStop) return;
     onCreate({
       root, preset: f.preset, name: f.name, uid: f.uid, owner: f.owner, business: f.business, language: f.language,
       answers: f.answers as Answers, banks: f.banks, exportTo: f.exportTo,
@@ -233,11 +246,11 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
           <p className="st-note">{t('desktop.banksHint')}</p>
           <datalist id="st-banks">{BANK_NAMES.map((b) => <option key={b} value={b} />)}</datalist>
           {f.banks.map((b, i) => (
-            <div key={i} className={`st-bank${checked && errors.banks[i] ? ' err' : ''}`}>
-              <label className="cf"><span>{t('desktop.bank')}</span><input list="st-banks" value={b.bank} onChange={(e) => setBank(i, { bank: e.target.value })} /></label>
+            <div key={i} className="st-bank">
+              <label className={`cf${checked && errors.banks[i] && errors.bankField[i] === 'bank' ? ' err' : ''}`}><span>{t('desktop.bank')}</span><input list="st-banks" value={b.bank} onChange={(e) => setBank(i, { bank: e.target.value })} /></label>
               <label className="cf"><span>{t('desktop.currency')}</span><input className="mono" maxLength={3} value={b.currency} onChange={(e) => setBank(i, { currency: e.target.value.toUpperCase() })} /></label>
               <label className="cf"><span>{t('desktop.ledgerAccount')}</span><input className="mono" value={b.account} placeholder={t('desktop.automatic')} onChange={(e) => setBank(i, { account: e.target.value })} /></label>
-              <label className="cf"><span>{t('desktop.iban')}</span><input className="mono" value={b.iban} placeholder={t('desktop.optional')} onChange={(e) => setBank(i, { iban: e.target.value })} /></label>
+              <label className={`cf${checked && errors.banks[i] && errors.bankField[i] === 'iban' ? ' err' : ''}`}><span>{t('desktop.iban')}</span><input className="mono" value={b.iban} placeholder={t('desktop.optional')} onChange={(e) => setBank(i, { iban: e.target.value })} /></label>
               <button type="button" className="btn ghost" aria-label={t('desktop.removeBank')} title={t('desktop.removeBank')} disabled={f.banks.length === 1} onClick={() => set('banks', f.banks.filter((_, j) => j !== i))}>×</button>
               {checked && errors.banks[i] && <em className="st-bankerr">{errors.banks[i]}</em>}
             </div>
@@ -252,6 +265,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
         </section>
 
         {error && <p className="warnline" role="alert">{error}</p>}
+        {checked && invalid && <p className="warnline" role="alert">{t('desktop.fixAbove', { fields: problems.join(', ') })}</p>}
         {checked && !complete && <p className="warnline">{t('desktop.answerAll')}</p>}
         <div className="st-foot">
           <button type="button" className="btn ghost" onClick={onCancel}>{t('common.cancel')}</button>

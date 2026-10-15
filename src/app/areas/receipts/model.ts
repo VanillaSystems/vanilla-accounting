@@ -82,8 +82,8 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
 
-/** Still waiting for its payment in the open quarter or later: what the dock's badge counts. */
-export const needsYou = (v: ReceiptView, l: Ledger) => !v.none && isOpen(v) && !v.locked && !!v.date && v.date >= l.openFrom;
+/** Still waiting for its payment in the open quarter or later, or for its date: what the dock's badge counts. */
+export const needsYou = (v: ReceiptView, l: Ledger) => !v.none && isOpen(v) && !v.locked && (!v.date || v.date >= l.openFrom);
 
 export const badgeCount = (l: Ledger) => l.views.filter((v) => needsYou(v, l)).length;
 
@@ -134,11 +134,11 @@ const byDateDesc = (a: ReceiptView, b: ReceiptView) => (b.date ?? '').localeComp
 
 /**
  * The list's groups in order, which is also the ↑↓ order: what needs you (a suggestion first),
- * then each month, newest first. Undated receipts come last as `later`, unless the filter asks
- * for them.
+ * then each month, newest first. An open receipt without a date needs you (last in its group); a
+ * linked one without a date comes last as `later`, unless the filter asks for it.
  */
 export function groups(rows: ReceiptView[], l: Ledger, filter: ReceiptFilter | undefined, suggested: (v: ReceiptView) => boolean): { groups: Group[]; later: ReceiptView[] } {
-  const later = filter === 'ohneDatum' ? [] : rows.filter((v) => !v.date);
+  const later = filter === 'ohneDatum' ? [] : rows.filter((v) => !v.date && !needsYou(v, l));
   const dated = rows.filter((v) => !later.includes(v));
   const need = dated.filter((v) => needsYou(v, l)).sort((a, b) => Number(suggested(b)) - Number(suggested(a)) || byDateDesc(a, b));
   const rest = dated.filter((v) => !need.includes(v)).sort(byDateDesc);

@@ -26,7 +26,7 @@
 .st-form .cf.s2 { grid-column: span 2; } .st-form .cf.s4 { grid-column: span 4; }
 .st-form .cf input { box-sizing: border-box; width: 100%; font: 13px "Instrument Sans"; color: var(--ink); padding: 6px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
 .st-form .cf input.mono { font-family: "Geist Mono"; font-size: 12.5px; }
-.st-form .cf.err input, .st-bank.err input { border-color: var(--warn); }
+.st-form .cf.err input { border-color: var(--warn); }
 .st-form .cf em, .st-bankerr { font-style: normal; color: var(--warn); margin-left: 4px; }
 .st-form .seg2 { justify-self: start; }
 .st-row { display: flex; gap: 8px; align-items: center; }

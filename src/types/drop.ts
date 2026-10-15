@@ -52,7 +52,7 @@ export interface StatementFacts { iban?: string; from?: string; to?: string; ent
 
 export type DropReason =
   | 'duplicate' | 'not-receipt' | 'held' | 'pdf-password'
-  | 'as-zip' | 'as-pdf' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported';
+  | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported';
 
 export interface DropSession {
   id: string;

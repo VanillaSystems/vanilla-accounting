@@ -40,6 +40,7 @@ async function start(): Promise<void> {
   const claudeFound = findClaude().then((bin) => { if (bin) process.env.CLAUDE_BIN = bin; });
   let language = languageOf(app.getLocale());
   let win: BrowserWindow | undefined;
+  await offerApplicationsFolder(textsIn(language));
 
   const server = desktopServer({
     stateFile,
@@ -111,6 +112,24 @@ async function start(): Promise<void> {
   app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
+}
+
+/**
+ * Started from the download's window (the dmg) or the Downloads folder, the app is gone once the
+ * dmg is ejected. Moved by the app itself, macOS does not ask about it a second time.
+ */
+async function offerApplicationsFolder(t: ReturnType<typeof textsIn>): Promise<void> {
+  if (!app.isPackaged || SMOKE || app.isInApplicationsFolder()) return;
+  const { response } = await dialog.showMessageBox({
+    type: 'question', message: t('desktop.moveTitle'), detail: t('desktop.moveDetail'),
+    buttons: [t('desktop.moveYes'), t('desktop.moveNo')], defaultId: 0, cancelId: 1,
+  });
+  if (response !== 0) return;
+  try {
+    app.moveToApplicationsFolder({ conflictHandler: () => true });
+  } catch (e) {
+    await dialog.showMessageBox({ type: 'warning', message: t('desktop.moveFailed'), detail: (e as Error).message });
+  }
 }
 
 function smokeHandles(): void {

@@ -4,8 +4,9 @@
 //   node app.mjs NAME ['STEP' …]      each STEP is JavaScript run in Node with these in scope:
 //     clickText('Buchhaltung anlegen')         the smallest visible button/link/label holding the text
 //     fill('Firmenname', 'Malerei Huber')      the field of the label that starts with the text
-//     nth(8, 'CH11 8080 …')                    the i-th visible input/textarea (fields without labels)
+//     nth(8, process.env.PERSONA_IBAN_SPACED)   the i-th visible input/textarea (fields without labels)
 //     pick('PDFs hierher ziehen', ['IMG_4471.jpg'])   the app's file picker with ~/Downloads files
+//     drop(['IMG_4471.jpg', 'swisscom_juli.pdf'])     a Finder drag onto the window (DevTools drag events)
 //     wait(3000), ev('document.title'), p      (p: the puppeteer page)
 //   TEXT_FROM=… TEXT_LEN=… slice the printed text (default the first 3000 characters).
 import puppeteer from 'puppeteer-core';
@@ -43,8 +44,16 @@ const pick = async (t, files) => {
   const [fc] = await Promise.all([p.waitForFileChooser({ timeout: 8000 }), clickText(t)]);
   await fc.accept(files.map((f) => `/Users/admin/Downloads/${f}`));
 };
+const drop = async (files, x = 700, y = 500) => {
+  const c = await p.createCDPSession();
+  const data = { items: [], files: files.map((f) => `/Users/admin/Downloads/${f}`), dragOperationsMask: 1 };
+  for (const type of ['dragEnter', 'dragOver']) await c.send('Input.dispatchDragEvent', { type, x, y, data });
+  await wait(600);
+  await c.send('Input.dispatchDragEvent', { type: 'drop', x, y, data });
+  await c.detach();
+};
 const ev = (s) => p.evaluate(s);
-void [wait, fill, nth, pick, ev];
+void [wait, fill, nth, pick, drop, ev];
 
 for (const s of steps) { await eval(`(async () => { ${s} })()`); await wait(400); }
 await wait(800);

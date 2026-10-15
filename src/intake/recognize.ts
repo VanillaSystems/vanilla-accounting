@@ -38,6 +38,7 @@ export function recognize(bytes: Buffer, name: string): Recognized {
   if (starts(bytes, 0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c) || starts(bytes, 0x52, 0x61, 0x72, 0x21) || /\.(7z|rar)$/.test(lower)) {
     return { state: 'refused', reason: 'as-zip' };
   }
+  if (/\.(docx?|xlsx?|pptx?|pages|numbers|key|odt|ods)$/.test(lower)) return { state: 'refused', reason: 'office' };
   if (starts(bytes, 0x50, 0x4b, 0x03, 0x04)) return { kind: 'zip', how: 'structure', state: 'take' };
   if (starts(bytes, 0x25, 0x50, 0x44, 0x46)) {
     if (/\/Encrypt\b/.test(bytes.subarray(Math.max(0, bytes.length - 65_536)).toString('latin1'))) {
@@ -57,5 +58,8 @@ export function recognize(bytes: Buffer, name: string): Recognized {
   const statement = STATEMENT_FILES.map((r) => r(bytes)).find(Boolean);
   if (statement) return { kind: 'camt', how: 'structure', state: 'take', facts: statement.facts };
   if (/^\s*(<\?xml|<Document)/.test(head(bytes))) return { state: 'refused', reason: 'not-statement' };
+  if (/\.csv$/.test(lower) || /^[^\n]*(buchung|valuta|booking|date)[^\n]*[;,\t][^\n]*(saldo|betrag|belastung|gutschrift|amount|balance)/i.test(head(bytes, 1024))) {
+    return { state: 'refused', reason: 'bank-csv' };
+  }
   return { state: 'refused', reason: 'as-pdf' };
 }

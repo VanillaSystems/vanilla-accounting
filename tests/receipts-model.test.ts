@@ -59,15 +59,15 @@ test('a period shows its receipts, counts them per filter, and hides what is no 
   assert.deepEqual(visible(l, q3, 'offen', 'druckerpapier').rows.map((x) => x.r.id), ['paper']);
 });
 
-test('what needs you comes first, then each month; undated receipts wait at the end', () => {
+test('what needs you comes first, an open receipt without a date with it, then each month', () => {
   const { rows } = visible(l, q3, undefined, undefined);
   const g = groups(rows, l, undefined, (x) => x.r.id === 'eur');
   assert.deepEqual(g.groups.map((x) => [x.key, x.rows.map((r) => r.r.id)]), [
-    ['need', ['eur', 'paper']],
+    ['need', ['eur', 'paper', 'undated']],
     ['month:2026-09', ['linked']],
   ]);
-  assert.deepEqual(g.later.map((x) => x.r.id), ['undated']);
-  assert.equal(badgeCount(l), 2);
+  assert.deepEqual(g.later.map((x) => x.r.id), []);
+  assert.equal(badgeCount(l), 3);
 });
 
 test('the payment of the same amount and the nearest date ranks first; fees, closed and linked payments never show', () => {
