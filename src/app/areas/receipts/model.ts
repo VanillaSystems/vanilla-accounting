@@ -82,8 +82,13 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
 
-/** Still waiting for its payment in the open quarter or later, or for its date: what the dock's badge counts. */
-export const needsYou = (v: ReceiptView, l: Ledger) => !v.none && isOpen(v) && !v.locked && (!v.date || v.date >= l.openFrom);
+/**
+ * Still waiting for its payment or its date, and not in a filed quarter: what the dock's badge
+ * counts. Books that never filed have no quarter to leave behind: a June invoice paid in July
+ * needs you as well.
+ */
+export const needsYou = (v: ReceiptView, l: Ledger) =>
+  !v.none && isOpen(v) && !v.locked && (!v.date || v.date >= l.openFrom || !l.closedThrough || v.date > l.closedThrough);
 
 export const badgeCount = (l: Ledger) => l.views.filter((v) => needsYou(v, l)).length;
 
@@ -109,7 +114,9 @@ export interface Visible {
 }
 
 export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undefined, q: string | undefined): Visible {
-  const pool = l.views.filter((v) => !!v.day && v.day >= period.from && v.day <= period.to);
+  // The working period also shows what from before it still needs you.
+  const working = period.from <= l.openFrom && l.openFrom <= period.to;
+  const pool = l.views.filter((v) => !!v.day && ((v.day >= period.from && v.day <= period.to) || (working && v.day < period.from && needsYou(v, l))));
   const receipts = pool.filter((v) => !v.none);
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const match = (v: ReceiptView) => { const h = haystack(v); return words.every((w) => h.includes(w)); };

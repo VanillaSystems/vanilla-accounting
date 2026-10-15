@@ -2207,6 +2207,7 @@ export default {
     'drop.p.date': 'data',
     'drop.p.amount': 'importo',
     'drop.p.missing': 'manca: {what}',
+    'drop.p.payment': 'confermare il pagamento: Giustificativi › Da fare',
     'drop.p.statement': 'importato',
     'drop.taking': 'in ripresa',
     'drop.state.undone': 'ritirato',

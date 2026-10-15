@@ -147,7 +147,8 @@ function Taken({ r, session, books, go }: { r: DropRow; session: DropSession; bo
   const facts = receipt && (receipt.date || receipt.amount !== undefined)
     ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
-  const missing = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
+  const lacks = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
+  const missing = x.kind !== 'waits' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : t('drop.p.payment');
   const shown = !!receipt && open;
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
   return (
@@ -156,7 +157,7 @@ function Taken({ r, session, books, go }: { r: DropRow; session: DropSession; bo
         <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
-          {missing ? <small className="dwhy">{t('drop.p.missing', { what: missing })}</small> : null}
+          {missing ? <small className="dwhy">{missing}</small> : null}
           <span className="dacts">
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id })}>{t('drop.openReceipt')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} title={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>

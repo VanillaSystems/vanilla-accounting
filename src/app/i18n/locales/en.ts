@@ -2207,6 +2207,7 @@ export default {
     'drop.p.date': 'date',
     'drop.p.amount': 'amount',
     'drop.p.missing': 'missing: {what}',
+    'drop.p.payment': 'confirm its payment: Receipts › Needs you',
     'drop.p.statement': 'imported',
     'drop.taking': 'being taken',
     'drop.state.undone': 'taken back',

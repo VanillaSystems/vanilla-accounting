@@ -2204,6 +2204,7 @@ export const messages = {
   'drop.p.date': 'Datum',
   'drop.p.amount': 'Betrag',
   'drop.p.missing': 'fehlt: {what}',
+  'drop.p.payment': 'Zahlung bestätigen: unter Belege › Braucht dich',
   'drop.p.statement': 'eingelesen',
   'drop.taking': 'wird übernommen',
   'drop.state.undone': 'zurückgenommen',

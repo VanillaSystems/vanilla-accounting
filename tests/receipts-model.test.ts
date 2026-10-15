@@ -90,3 +90,16 @@ test('a search finds payments by text; one exact fit becomes the suggestion', ()
   assert.equal(suggestion(view('paper'), l, flat)?.tx.ref, 'T-paper');
   assert.equal(suggestion(view('linked'), l, flat), undefined);
 });
+
+test('books that never filed: an open receipt dated before the working period needs you there, in its list and its badge', () => {
+  const fresh: Index = {
+    receipts: [receipt('june', { date: '2026-06-28', amount: 1243.55 }), receipt('july', { date: '2026-07-10', amount: 88.98 })],
+    transactions: [tx('T-june', '2026-07-03', 1243.55)], mappings: [], bankStatements: [],
+  };
+  const lf = ledgerOf(fresh, '2026-07-01');
+  const v = visible(lf, q3, undefined, undefined);
+  assert.deepEqual(v.rows.map((x) => x.r.id).sort(), ['july', 'june']);
+  assert.deepEqual(groups(v.rows, lf, undefined, () => false).groups.map((g) => [g.key, g.rows.map((r) => r.r.id)]), [['need', ['july', 'june']]]);
+  assert.equal(badgeCount(lf), 2);
+  assert.deepEqual(visible(lf, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'its own quarter still shows it');
+});
