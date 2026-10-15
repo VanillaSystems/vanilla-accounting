@@ -93,31 +93,36 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .chip.lock { color: var(--muted); cursor: default; }
 .chip.lock:hover { background: none; }
 .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
-.dock { position: fixed; left: var(--page-mid); bottom: 14px; transform: translate(-50%, 0); display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px;
-  border-radius: 22px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: transform .3s cubic-bezier(.2,.8,.2,1); z-index: 20; }
-.dock { gap: 2px; padding: 7px 8px 6px; }
-.dock .it { position: relative; min-width: 66px; padding-inline: 6px !important; padding: 7px 0 5px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); text-decoration: none; transition: background .15s, color .15s; }
-.dock .it .ic { position: relative; width: 24px; height: 24px; display: grid; place-items: center; transform-origin: 50% 100%; transition: transform .12s; }
-.dock .it .lb { font: 500 11px "Instrument Sans"; letter-spacing: .01em; white-space: nowrap; }
-.dock .it:hover { background: var(--hover); color: var(--ink); }
-.dock .it.on { background: var(--accent-soft); color: var(--ink); }
-.dock .it.on .lb { font-weight: 600; }
-.dock .it:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
-.dock .it .badge { position: absolute; top: -5px; left: 15px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
-.dock .it .badge:empty { display: none; }
-.dock .it .tip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font: 500 12px "Instrument Sans"; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; }
-.dock .it:hover .tip { opacity: 1; transition-delay: .5s; }
-.dock .it:focus-visible .tip, .dock.keys .it .tip { opacity: 1; transition-delay: 0s; }
-.dock .tip .kk { display: inline-flex; gap: 3px; }
-.dock .tip .kk span { font: 500 10.5px "Geist Mono"; min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
-.dock.keys .it .tip { padding-left: 6px; }
-.dock.keys .it .tip .tx { display: none; }
-.dock .div { width: 1px; align-self: stretch; margin: 8px 5px; background: var(--line); }
-.dock svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+/* the areas: an activity bar down the left edge, as in VS Code (shell/Dock.tsx) */
+.activity { position: fixed; left: 0; top: 0; bottom: 0; width: var(--abw); z-index: 21; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 0;
+  background: var(--desk, var(--bg)); border-right: 1px solid var(--line); }
+.no-titlebar .activity { padding-top: 40px; -webkit-app-region: drag; }
+.no-titlebar .activity .it { -webkit-app-region: no-drag; }
+.activity .it { position: relative; width: 100%; height: 46px; display: grid; place-items: center; color: var(--faint); text-decoration: none; cursor: pointer; transition: color .12s; }
+.activity .it::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; }
+.activity .it:hover { color: var(--ink); }
+.activity .it.on { color: var(--ink); }
+.activity .it.on::before { background: var(--accent); }
+.activity .it:focus-visible { outline: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.activity .it .ic { position: relative; width: 24px; height: 24px; display: grid; place-items: center; }
+.activity svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.activity .it .badge { position: absolute; bottom: -4px; right: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
+.activity .it .badge:empty { display: none; }
+.activity .it .tip { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 12px; padding: 6px 7px 6px 11px; border-radius: 7px;
+  background: var(--ink); color: var(--bg); font: 400 12px/1.35 "Instrument Sans"; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 1; }
+.activity .it .tip .tx { display: flex; flex-direction: column; }
+.activity .it .tip .tx b { font-weight: 600; font-size: 12.5px; }
+.activity .it:hover .tip { opacity: 1; transition-delay: .3s; }
+.activity .it:focus-visible .tip, .activity.keys .it .tip { opacity: 1; transition-delay: 0s; }
+.activity .tip .kk { display: inline-flex; gap: 3px; }
+.activity .tip .kk span { font: 500 10.5px "Geist Mono"; min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
+.activity.keys .it .tip { padding-left: 7px; }
+.activity.keys .it .tip .tx { display: none; }
+.activity .div { width: 24px; height: 1px; margin: 8px 0; background: var(--line); }
+main { margin-left: var(--abw); }
+
 /* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
-.dockitems { display: flex; align-items: flex-end; gap: 2px; }
-.topbar.folded, .dock.folded { padding: 4px; border-radius: 999px; }
+.topbar.folded { padding: 4px; border-radius: 999px; }
 .barpill { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 12px "Instrument Sans"; cursor: pointer; white-space: nowrap; }
 .barpill:hover, .barpill:focus-visible { color: var(--ink); background: var(--hover); outline: none; }
 .barpill b { font-weight: 600; color: var(--ink); }
@@ -128,13 +133,11 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .pin.on { color: var(--accent); }
 .pin .ptip { position: absolute; right: 0; width: 280px; display: none; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--ink); color: var(--bg); font: 400 12px/1.4 "Instrument Sans"; text-align: left; z-index: 30; }
 .topbar .pin .ptip { top: calc(100% + 10px); }
-.dock .pin .ptip { bottom: calc(100% + 12px); }
 .pin:hover .ptip, .pin:focus-within .ptip { display: flex; }
 .pin .ptip span { opacity: .7; }
 .pin .ptip span.cur { opacity: 1; font-weight: 600; }
 .bartip { position: absolute; left: 50%; transform: translateX(-50%); width: 320px; padding: 12px 14px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 12.5px; box-shadow: var(--shadow); z-index: 30; }
 .topbar .bartip { top: calc(100% + 12px); }
-.dock .bartip { bottom: calc(100% + 12px); }
 .bartip p { margin: 0 0 10px; }
 .bartip span { display: flex; justify-content: flex-end; gap: 6px; }
 
@@ -161,7 +164,6 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .runinbox svg { width: 13px; height: 13px; }
 .toast { position: fixed; left: var(--page-mid); bottom: 26px; transform: translate(-50%, 20px); opacity: 0; z-index: 45; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1), bottom .3s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
-.dock.open ~ .toast { bottom: 104px; }
 .toast button { color: inherit; font-weight: 600; padding: 4px 8px; border-radius: 7px; }
 .toast button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }
 .toast .k { font: 500 11px "Geist Mono"; opacity: .6; margin-left: 4px; }
@@ -263,7 +265,7 @@ main.full { display: flex; flex-direction: column; }
 .no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop, .corner) { -webkit-app-region: no-drag; }
 
 /* Fixed elements centre on the page, not the window: the AI sidebar (when open) is not page. */
-:root { --aiw: 0px; --page-mid: calc((100% - var(--aiw)) / 2); }
+:root { --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }
 .bartip .btn { background: transparent; color: var(--bg); border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); }
 .bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
 

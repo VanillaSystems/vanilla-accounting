@@ -154,7 +154,7 @@ check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o
 
 // 2. Demo ansehen.
 await Promise.all([page.waitForNavigation(), page.click('[data-act=demo]')]);
-await settle(page, 'nav.dockitems');
+await settle(page, 'nav.activity');
 await shot(page, '02-demo');
 const demoName = (await api(page, '/api/workspace')).json?.company?.name;
 check('Demo ansehen opens a copy in the user data folder', existsSync(join(userData, 'Demo', 'vanilla-accounting', 'belege.workspace.yaml')), demoName);
@@ -330,7 +330,7 @@ await fill('owner', 'Erika Rauch');
 await fill('root', root);
 await shot(page, '05-new-books-form');
 await Promise.all([page.waitForNavigation({ timeout: 30000 }), page.click('[data-act=create]')]);
-await settle(page, 'nav.dockitems');
+await settle(page, 'nav.activity');
 const created = (await api(page, '/api/workspace')).json?.company?.name;
 check('new books are set up and opened', created === 'Rauchtest GmbH' && existsSync(join(root, 'vanilla-accounting', 'belege.workspace.yaml')), created);
 const commits = await git.log({ fs, dir: root }).catch((e) => String(e));
@@ -347,7 +347,7 @@ await clickMenu(page, 'zoomReset');
 await sleep(400);
 check('View › Vergrössern steps the page\'s own zoom, Originalgrösse resets it', zoomed === '1.1' && !(await page.evaluate(() => document.documentElement.style.zoom)), `zoom ${zoomed}`);
 await Promise.all([page.waitForNavigation({ timeout: 20000 }), clickMenu(page, 'demo')]);
-await settle(page, 'nav.dockitems');
+await settle(page, 'nav.activity');
 const back = (await api(page, '/api/workspace')).json?.company?.name;
 check('File menu switches back to the demo (menu clicked)', back === demoName, back);
 await shot(page, '07-back-to-demo');
@@ -359,7 +359,7 @@ await exited;
 // 6. Without claude (a shell that does not find it): a model feature names what to install, the rest works.
 const second = await launch(9334, '/bin/sh');
 page = second.page;
-await settle(page, 'nav.dockitems');
+await settle(page, 'nav.activity');
 check('the next start opens the last books', (await api(page, '/api/workspace')).json?.company?.name === demoName);
 check('the next start keeps the page\'s origin and with it the language', second.base === base && (await page.evaluate(() => document.documentElement.lang)) === 'de', `${second.base} ${await page.evaluate(() => document.documentElement.lang)}`);
 const receipts = (await api(page, '/books.json')).json.receipts;

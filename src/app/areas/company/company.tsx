@@ -482,7 +482,7 @@ function Display() {
         <dd>{LOCALES.find((l) => l.code === ui.language)?.name} <span className="m">{t('display.languageHint')}</span></dd>
         <dt>{t('shell.zoom')}</dt>
         <dd><span className="mono">{Math.round(ui.zoom * 100)} %</span> <span className="m">{t('display.zoomHint')}</span></dd>
-        {(['top', 'dock'] as const).map((id) => <BarSetting key={id} id={id} />)}
+        {(['top'] as const).map((id) => <BarSetting key={id} id={id} />)}
       </dl>
       <p className="m src-note">{t('display.local')}</p>
     </>

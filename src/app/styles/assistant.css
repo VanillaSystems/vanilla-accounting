@@ -1,5 +1,5 @@
 /* The AI sidebar (docs/0.4.0/views.md, "The AI, as a sidebar"): beside the page, which narrows by --aiw. */
-main { width: calc(100% - var(--aiw)); }
+main { width: calc(100% - var(--abw) - var(--aiw)); }
 .legend { right: calc(16px + var(--aiw)); }
 .aside { position: fixed; top: 0; right: 0; bottom: 0; width: var(--aiw); z-index: 30; display: flex; flex-direction: column; background: var(--desk); border-left: 1px solid var(--line); }
 .aihead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 10px; }
