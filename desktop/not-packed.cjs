@@ -12,9 +12,9 @@ const NOT_PACKED = {
   'puppeteer-core': 'src/invoices/pdf.ts',
   // pdf.js draws pages on it; the engine only reads text (src/parsers/pdf-text.ts).
   '@napi-rs/canvas': 'pdfjs-dist (optional)',
-  // Receipt collection from mailboxes is a CLI (npm run collect, npm run doctor -- --mail).
-  imapflow: 'src/collect/imap.ts',
-  mailparser: 'src/collect/imap.ts',
+  // Mail sources run under npm start and the CLI; the Mac app runs no source yet (ADR 0014, unit 2b).
+  imapflow: 'src/platform/sources/mail-channel.ts',
+  mailparser: 'src/platform/sources/mail-channel.ts',
 };
 
 /** The lockfile paths (node_modules/…) of the packages reachable from the app's dependencies without passing `skip`. */

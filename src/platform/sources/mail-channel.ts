@@ -5,8 +5,6 @@
  * message (a body structure misses inline PDFs), held by their checksum until delivered.
  */
 import { createHash } from 'node:crypto';
-import { ImapFlow } from 'imapflow';
-import { simpleParser } from 'mailparser';
 import type { MailReach } from './model.js';
 import { senderAllowed } from './reach.js';
 
@@ -19,8 +17,9 @@ export interface MailBackend {
   close(): Promise<void>;
 }
 
-/** The real backend: one IMAP connection per pull. */
+/** The real backend: one IMAP connection per pull. The libraries load here, as the Mac app does not pack them (desktop/not-packed.cjs). */
 export async function imapBackend(r: MailReach, password: string, port = 993): Promise<MailBackend> {
+  const [{ ImapFlow }, { simpleParser }] = await Promise.all([import('imapflow'), import('mailparser')]);
   const client = new ImapFlow({ host: r.host, port, secure: true, auth: { user: r.account, pass: password }, logger: false, connectionTimeout: 20_000, greetingTimeout: 20_000 });
   try { await client.connect(); } catch (e) { client.close(); throw e; }
   return {

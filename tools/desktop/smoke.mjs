@@ -115,6 +115,13 @@ const drop = (page, files) => page.evaluate((files) => {
   for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name, { type: f.type, lastModified: Date.now() }));
   for (const type of ['dragenter', 'dragover', 'drop']) window.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
 }, files.map((f) => ({ ...f, b64: f.bytes.toString('base64') })));
+/** The drop dialog's «Hinzufügen», then its «Schliessen» once the files are in. */
+async function addDropped(page) {
+  await page.waitForFunction(() => [...document.querySelectorAll('.btn.primary')].some((b) => /^Hinzufügen/.test(b.textContent) && !b.disabled), { timeout: 20000 });
+  await clickText(page, '.btn.primary', 'Hinzufügen');
+  await page.waitForFunction(() => [...document.querySelectorAll('.btn.primary')].some((b) => b.textContent.trim() === 'Schliessen'), { timeout: 30000 });
+  await clickText(page, '.btn.primary', 'Schliessen');
+}
 /** The inbox processing's runs started since `since` have come to rest (the workflow receipt-intake). */
 async function intakeDone(page, since) {
   const ofIntake = (v) => (v?.runs ?? []).filter((r) => r.workflow === 'receipt-intake' && r.startedAt > since);
@@ -147,10 +154,10 @@ check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o
 
 // 2. Demo ansehen.
 await Promise.all([page.waitForNavigation(), page.click('[data-act=demo]')]);
-await settle(page, 'nav.dock');
+await settle(page, 'nav.dockitems');
 await shot(page, '02-demo');
 const demoName = (await api(page, '/api/workspace')).json?.company?.name;
-check('Demo ansehen opens a copy in the user data folder', existsSync(join(userData, 'Demo', 'belege.workspace.yaml')), demoName);
+check('Demo ansehen opens a copy in the user data folder', existsSync(join(userData, 'Demo', 'vanilla-accounting', 'belege.workspace.yaml')), demoName);
 
 // 3. Every area.
 const AREAS = [['receipts', '/receipts'], ['invoices', '/invoices'], ['bank', '/bank'], ['journal', '/journal'], ['vat', '/vat'],
@@ -228,7 +235,7 @@ await shot(page, '04c-mail-saved');
 const mailStatus = (await api(page, '/api/mail')).json;
 const sealed = existsSync(join(userData, 'secrets.json')) ? readFileSync(join(userData, 'secrets.json'), 'utf8') : '';
 check('the password is saved through Firma into the keychain store, sealed, not in the books', mailStatus?.password === 'set' && mailStatus.inApp && sealed.length > 0 && !sealed.includes(SMTP_PASSWORD)
-  && !readFileSync(join(userData, 'Demo', 'belege.workspace.yaml'), 'utf8').includes(SMTP_PASSWORD), JSON.stringify(mailStatus));
+  && !readFileSync(join(userData, 'Demo', 'vanilla-accounting', 'belege.workspace.yaml'), 'utf8').includes(SMTP_PASSWORD), JSON.stringify(mailStatus));
 // The key safeStorage seals with lives in the login keychain under the app's name (only its presence is read).
 if (keychainBefore) check('the login keychain item of the installed app is left as it was (sealed with the mock keychain)', keychainEntry() === keychainBefore, 'vanilla-accounting Safe Storage');
 else check('the sealing key is in the macOS keychain', keychainEntry() !== undefined, 'vanilla-accounting Safe Storage');
@@ -246,7 +253,7 @@ await page.click('[data-act=mail]');
 for (let i = 0; i < 60 && !mails.length; i++) await sleep(250);
 await sleep(800);
 await shot(page, '04e-sent');
-const stored = readFileSync(join(userData, 'Demo', 'invoices', `${number}.pdf`));
+const stored = readFileSync(join(userData, 'Demo', 'vanilla-accounting', 'transactional-data', '2026', 'invoices', `${number}.pdf`));
 const attachment = mails[0]?.mail.attachments.find((a) => a.contentType === 'application/pdf');
 check('the invoice goes out by e-mail through the local SMTP server with the saved password', mails[0]?.rcpt.includes('buchhaltung@kunde.example'), mails[0]?.mail.subject);
 check('the attachment is the stored PDF byte for byte', attachment && sha(attachment.content) === sha(stored), attachment && `${sha(attachment.content).slice(0, 16)} = ${sha(stored).slice(0, 16)}`);
@@ -256,23 +263,25 @@ check('the sent log records the e-mail', sentLog?.some((d) => d.channel === 'ema
 // 4d. A PDF, a PNG and an iPhone photo dropped on Belege: the inbox job reads them with the claude stub.
 await page.goto(`${base}/receipts?period=2026-Q3`);
 await settle(page, '.list');
-const receiptsBefore = (await api(page, '/books.json')).json.receipts.length;
-const demoPdf = readdirSync(join(userData, 'Demo', 'receipts')).find((f) => f.endsWith('.pdf'));
+const receiptsBefore = new Set((await api(page, '/books.json')).json.receipts.map((r) => r.id));
+const demoPdf = readdirSync(join(userData, 'Demo', 'vanilla-accounting', 'transactional-data', '2026', 'receipts')).find((f) => f.endsWith('.pdf'));
 const heicDir = mkdtempSync(join(tmpdir(), 'vanilla-smoke-heic-'));
 execFileSync('/usr/bin/sips', ['-s', 'format', 'heic', 'desktop/icon.png', '--out', join(heicDir, 'IMG_0001.HEIC')], { stdio: 'ignore' });
 const since = new Date().toISOString();
 await drop(page, [
-  { name: 'beleg.pdf', type: 'application/pdf', bytes: Buffer.concat([readFileSync(join(userData, 'Demo', 'receipts', demoPdf)), Buffer.from(`\n% smoke ${Date.now()}\n`)]) },
+  { name: 'beleg.pdf', type: 'application/pdf', bytes: Buffer.concat([readFileSync(join(userData, 'Demo', 'vanilla-accounting', 'transactional-data', '2026', 'receipts', demoPdf)), Buffer.from(`\n% smoke ${Date.now()}\n`)]) },
   { name: 'foto.png', type: 'image/png', bytes: readFileSync('desktop/icon.png') },
   { name: 'IMG_0001.HEIC', type: '', bytes: readFileSync(join(heicDir, 'IMG_0001.HEIC')) },
 ]);
+await shot(page, '04f-drop-dialog');
+await addDropped(page);
 await sleep(1500);
 await shot(page, '04f-dropped-running');
 const job = await intakeDone(page, since);
 await sleep(1000);
 await shot(page, '04g-dropped-read');
 const books = (await api(page, '/books.json')).json;
-const added = books.receipts.slice(receiptsBefore);
+const added = books.receipts.filter((r) => !receiptsBefore.has(r.id));
 check('the run reads the dropped PDF, PNG and HEIC: three receipts, named by the model, archived', added.length === 3 && added.every((r) => r.location === 'archived' && /stub-shop/.test(r.filename)),
   `${added.map((r) => `${r.filename} (${r.extractionMethod})`).join(', ')}; steps ${job?.job?.steps?.map((st) => `${st.id} ${st.done}/${st.total}`).join(', ')}`);
 check('the photos became PDFs in the books', added.filter((r) => r.extractionMethod !== 'pdftotext').length === 2, added.map((r) => r.extractionMethod).join(', '));
@@ -321,9 +330,9 @@ await fill('owner', 'Erika Rauch');
 await fill('root', root);
 await shot(page, '05-new-books-form');
 await Promise.all([page.waitForNavigation({ timeout: 30000 }), page.click('[data-act=create]')]);
-await settle(page, 'nav.dock');
+await settle(page, 'nav.dockitems');
 const created = (await api(page, '/api/workspace')).json?.company?.name;
-check('new books are set up and opened', created === 'Rauchtest GmbH' && existsSync(join(root, 'belege.workspace.yaml')), created);
+check('new books are set up and opened', created === 'Rauchtest GmbH' && existsSync(join(root, 'vanilla-accounting', 'belege.workspace.yaml')), created);
 const commits = await git.log({ fs, dir: root }).catch((e) => String(e));
 check('new books are committed to a new git repository', Array.isArray(commits) && commits.length === 1, Array.isArray(commits) ? commits[0].commit.message.trim() : commits);
 await shot(page, '06-new-books-open');
@@ -338,7 +347,7 @@ await clickMenu(page, 'zoomReset');
 await sleep(400);
 check('View › Vergrössern steps the page\'s own zoom, Originalgrösse resets it', zoomed === '1.1' && !(await page.evaluate(() => document.documentElement.style.zoom)), `zoom ${zoomed}`);
 await Promise.all([page.waitForNavigation({ timeout: 20000 }), clickMenu(page, 'demo')]);
-await settle(page, 'nav.dock');
+await settle(page, 'nav.dockitems');
 const back = (await api(page, '/api/workspace')).json?.company?.name;
 check('File menu switches back to the demo (menu clicked)', back === demoName, back);
 await shot(page, '07-back-to-demo');
@@ -350,7 +359,7 @@ await exited;
 // 6. Without claude (a shell that does not find it): a model feature names what to install, the rest works.
 const second = await launch(9334, '/bin/sh');
 page = second.page;
-await settle(page, 'nav.dock');
+await settle(page, 'nav.dockitems');
 check('the next start opens the last books', (await api(page, '/api/workspace')).json?.company?.name === demoName);
 check('the next start keeps the page\'s origin and with it the language', second.base === base && (await page.evaluate(() => document.documentElement.lang)) === 'de', `${second.base} ${await page.evaluate(() => document.documentElement.lang)}`);
 const receipts = (await api(page, '/books.json')).json.receipts;
