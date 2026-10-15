@@ -1,6 +1,7 @@
 /**
  * Zahlung verknüpfen: the open-period payments ranked for this receipt (best first), a search
- * over all of them, and "paid privately or in cash" last. ↑↓ choose, ↵ links, Esc closes.
+ * over all of them, and "paid privately or in cash" last. ↑↓ choose, ↵ links, Esc closes. The
+ * chosen payment says when its amount is off the receipt's, before it is linked.
  */
 import { useMemo, useState } from 'react';
 import type { RouteOf } from '../../shell/route.js';
@@ -10,7 +11,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { candidates, chfOf, type Candidate, type Ledger, type ReceiptView } from './model.js';
-import { bankOf, dayText, signed, txLine } from './view.js';
+import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { linkPayment, privateOutlay } from './actions.js';
 import { Kbd } from './commands.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -20,6 +21,7 @@ type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClo
 function why(c: Candidate): string {
   return [
     c.sameAmount ? t('receipts.whySameAmount') : c.otherCurrency ? t('receipts.whyAccount', { currency: c.tx.currency }) : '',
+    c.fit?.kind === 'skonto' ? fitText(c.fit) : '',
     c.days !== undefined ? dayText(c.days) : '',
     c.taken ? t('receipts.whyTaken', { n: c.taken }) : '',
   ].filter(Boolean).join(' · ');
@@ -39,7 +41,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
     if (!item) return;
     onClose();
     if (item === 'private') privateOutlay(nav, v);
-    else linkPayment(nav, v, item.tx.ref, txLine(item.tx));
+    else linkPayment(nav, v, item.tx.ref, txLine(item.tx), item.fit);
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -56,7 +58,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
     return (
       <div key={c.tx.ref} className={`o tx2${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-ref={c.tx.ref} onMouseMove={() => i !== at && setIdx(i)} onClick={() => choose(c)}>
         <span className="d mono">{formatDate(c.tx.date)}</span>
-        <span className="t"><span>{c.tx.description}</span><small>{bankOf(c.tx)}{w && ` · ${w}`}</small></span>
+        <span className="t"><span>{c.tx.description}</span><small>{bankOf(c.tx)}{w && ` · ${w}`}{i === at && c.fit?.kind === 'off' && <> · <b className="off">{fitText(c.fit)}</b></>}</small></span>
         <span className="a mono">{c.tx.currency !== baseCurrency() && <i>{c.tx.currency}</i>}{fmt(signed(c.tx))}</span>
       </div>
     );

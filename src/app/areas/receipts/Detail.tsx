@@ -15,7 +15,7 @@ import { useAutomation } from '../../automation/store.js';
 import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
-import type { Ledger, ReceiptView } from './model.js';
+import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView } from './model.js';
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
@@ -74,6 +74,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const firstTx = v.links.map((ref) => l.txByRef.get(ref)).find(Boolean);
   const rate = cur !== baseCurrency() && firstTx && rates?.on(cur, firstTx.date);
   const vat = r.hasSwissVat ? (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && g.vat) : [];
+  const misfit = vatMisfit(r);
   const src = sources.receipt(r.id);
   const open = parsePeriod(l.openFrom.slice(0, 4) + '-Q' + Math.ceil(Number(l.openFrom.slice(5, 7)) / 3), localToday());
 
@@ -99,6 +100,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : r.hasSwissVat === undefined ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
             : <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>}
           {r.vatBy === 'human' && <ByHand />}
+          {misfit !== undefined && <span className="misfit" data-testid="vat-misfit" title={t('receipts.vatMisfitTip', { gross: `${cur} ${fmt(misfit)}`, amount: `${cur} ${fmt(r.amount!)}` })}>{t('receipts.vatMisfit')}</span>}
           {vat.length > 0 && (r.vatId
             ? <span title={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')} <span className="mono">{r.vatId}</span></span>
             : <span className="nov" title={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
@@ -141,7 +143,9 @@ const ownPrivate = (l: Ledger, tx: BankTransaction) => tx.bank === 'manual' && (
 
 function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   const { v, l, nav, canEdit } = props;
+  const { rates } = useFx();
   const sug = listed.suggestions.get(v.r.id);
+  const fit = linkFit(v, l, chfOf(rates));
   if (v.links.length) {
     const ref = v.links[0];
     const tx = l.txByRef.get(ref);
@@ -167,6 +171,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
         {canEdit && !v.locked && (ownPrivate(l, tx)
           ? <button type="button" className="quiet" title={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
           : <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx))}>{t('receipts.unlink')}</button>)}
+        {fit?.kind === 'off' && <span className="fitnote warn" data-testid="fit-off">{t('receipts.fitOffNotice', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })}</span>}
+        {fit?.kind === 'skonto' && <span className="fitnote note" data-testid="fit-skonto">{t('receipts.fitSkontoNotice', { percent: fit.percent })}</span>}
       </>
     );
   }

@@ -7,7 +7,8 @@ import type { BankTransaction, ReceiptKind, ReceiptPatch, VatFacts } from '../..
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
-import type { ReceiptView } from './model.js';
+import { together, type AmountFit, type ReceiptView, type Saves } from './model.js';
+import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
 
 async function run(nav: Nav, call: () => Promise<unknown>, message: string, undo?: () => Promise<unknown>): Promise<boolean> {
@@ -24,8 +25,11 @@ async function run(nav: Nav, call: () => Promise<unknown>, message: string, undo
 
 const pair = (receiptId: string, transactionRef: string) => ({ receiptId, transactionRef });
 
-export const linkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
-  run(nav, () => api.addMapping(pair(v.r.id, ref)), t('receipts.linkedTo', { what }), () => api.removeMapping(pair(v.r.id, ref)));
+/** A link whose payment is off the receipt's amount says so in its toast. */
+export const linkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string, fit?: AmountFit) =>
+  run(nav, () => api.addMapping(pair(v.r.id, ref)),
+    fit?.kind === 'off' ? t('receipts.linkedOff', { what, amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` }) : t('receipts.linkedTo', { what }),
+    () => api.removeMapping(pair(v.r.id, ref)));
 
 export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
   run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping(pair(v.r.id, ref)));
@@ -63,6 +67,9 @@ export function setKind(nav: Nav, v: ReceiptView, kind: ReceiptKind) {
 
 export type Field = 'filename' | 'date' | 'amount' | 'currency' | 'description' | 'remarks';
 
+/** The fields saved on one receipt in a row (each field left saves on its own): one toast names them all, its undo takes them all back. */
+let saving: Saves<Field> | undefined;
+
 /** Saves the fields that changed; undo writes back what they were. */
 export function saveFields(nav: Nav, v: ReceiptView, patch: ReceiptPatch, changed: Field[]) {
   const { r } = v;
@@ -75,8 +82,10 @@ export function saveFields(nav: Nav, v: ReceiptView, patch: ReceiptPatch, change
   }
   if ('description' in patch) back.description = r.description ?? '';
   if ('remarks' in patch) back.remarks = r.remarks ?? '';
-  const names = changed.map((f) => t(`receipts.field.${f}`)).join(', ');
-  return run(nav, () => api.patchReceipt(r.id, patch), t('receipts.saved', { fields: names }), () => api.patchReceipt(r.id, back));
+  saving = together(saving, { id: r.id, fields: changed, back, at: Date.now() });
+  const all = saving;
+  const names = all.fields.map((f) => t(`receipts.field.${f}`)).join(', ');
+  return run(nav, () => api.patchReceipt(r.id, patch), t('receipts.saved', { fields: names }), () => { saving = undefined; return api.patchReceipt(r.id, all.back); });
 }
 
 /**

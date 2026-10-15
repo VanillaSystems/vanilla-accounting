@@ -4,6 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { badgeCount, candidates, groups, ledgerOf, suggestion, visible, type ToChf } from '../src/app/areas/receipts/model.js';

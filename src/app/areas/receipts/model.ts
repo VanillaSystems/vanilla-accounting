@@ -3,7 +3,7 @@
  * receipts a period holds, the groups ("Braucht dich" first), what is locked, and the payments a
  * receipt could belong to, ranked. Pure, so the list, the keys and the tests read the same order.
  */
-import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
+import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptPatch } from '../../../types/index.js';
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
 import type { Period } from '../../../accounting/periods.js';
 import type { ReceiptFilter } from '../../shell/route.js';
@@ -180,6 +180,8 @@ export interface Candidate {
   days?: number;
   /** Other receipts already linked to it (a grouped payment can hold several). */
   taken: number;
+  /** How its amount fits the receipt's, when it would hold only this receipt. */
+  fit?: AmountFit;
 }
 
 const DAY = 864e5;
@@ -209,7 +211,8 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
     const dAmt = want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
     const taken = (l.receiptsByRef.get(tx.ref) ?? []).length;
     const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken ? 30 : 0);
-    all.push({ tx, score, sameAmount, otherCurrency, days, taken });
+    const fit = taken ? undefined : amountFit(r, tx, toChf);
+    all.push({ tx, score, sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}) });
   }
   all.sort((a, b) => a.score - b.score || b.tx.date.localeCompare(a.tx.date));
   if (words.length) return { best: [], more: all.slice(0, 40) };
@@ -225,4 +228,64 @@ export function suggestion(v: ReceiptView, l: Ledger, toChf: ToChf): Candidate |
   if (!needsYou(v, l) || v.r.amount == null) return undefined;
   const fits = candidates(v, l, toChf).best.filter((c) => c.sameAmount && !c.taken && Math.abs(c.days ?? 99) <= 31);
   return fits.length === 1 ? fits[0] : undefined;
+}
+
+/**
+ * How a payment's amount fits a receipt's: the same (in another currency within 5 %, the bank's
+ * rate is not the ESTV's), less by up to 5 % as a cash discount (Skonto) leaves it, or off by
+ * `diff` (payment minus receipt, in the payment's currency, or CHF across currencies).
+ */
+export type AmountFit = { kind: 'same' } | { kind: 'skonto'; percent: number } | { kind: 'off'; diff: number; currency: string };
+
+const CENTS = 0.05;
+const SKONTO = 0.05;
+
+export function amountFit(r: Pick<Receipt, 'amount' | 'currency'>, tx: BankTransaction, toChf: ToChf): AmountFit | undefined {
+  if (r.amount == null || r.amount === 0) return undefined;
+  const cur = r.currency || baseCurrency();
+  if (cur !== tx.currency) {
+    const want = Math.abs(toChf(r.amount, cur, tx.date));
+    const paid = Math.abs(toChf(tx.amount, tx.currency, tx.date));
+    return Math.abs(paid - want) <= SKONTO * want ? { kind: 'same' } : { kind: 'off', diff: Math.round((paid - want) * 100) / 100, currency: baseCurrency() };
+  }
+  const want = Math.abs(r.amount);
+  const diff = Math.round((Math.abs(tx.amount) - want) * 100) / 100;
+  if (Math.abs(diff) <= CENTS) return { kind: 'same' };
+  if (diff < 0 && -diff <= SKONTO * want) return { kind: 'skonto', percent: Math.round((-diff / want) * 1000) / 10 };
+  return { kind: 'off', diff, currency: cur };
+}
+
+/** The fit of a receipt and the one payment it is linked to, when that payment holds only this receipt (a grouped payment adds up several). */
+export function linkFit(v: ReceiptView, l: Ledger, toChf: ToChf): AmountFit | undefined {
+  if (v.links.length !== 1) return undefined;
+  const tx = l.txByRef.get(v.links[0]);
+  if (!tx || (l.receiptsByRef.get(tx.ref) ?? []).length !== 1) return undefined;
+  return amountFit(v.r, tx, toChf);
+}
+
+/**
+ * The amount the receipt's Swiss VAT belongs to, when that is more than the receipt's amount (the
+ * amount changed by hand, or misread): the VAT would claim tax on money not paid. Each rate's
+ * total, else net + tax, else what its tax at its rate makes. Less is no sign: a receipt may hold
+ * items without VAT that its VAT block leaves out.
+ */
+export function vatMisfit(r: Receipt): number | undefined {
+  const groups = r.vatSummary ?? [];
+  if (!r.hasSwissVat || r.amount == null || !groups.some((g) => g.ratePercent > 0 && g.vat)) return undefined;
+  const totals = groups.map((g) => g.gross ?? (g.net != null ? g.net + g.vat : g.ratePercent > 0 ? g.vat * (100 + g.ratePercent) / g.ratePercent : undefined));
+  if (totals.some((x) => x === undefined)) return undefined;
+  const gross = totals.reduce((sum: number, x) => sum + x!, 0);
+  const exact = groups.every((g) => g.gross != null || g.net != null);
+  return gross - Math.abs(r.amount) > (exact ? CENTS : Math.max(0.1, 0.005 * gross)) ? Math.round(gross * 100) / 100 : undefined;
+}
+
+/** The saves of one receipt's fields in a row: one toast names them all, its undo writes `back`. */
+export interface Saves<F extends string> { id: string; fields: F[]; back: ReceiptPatch; at: number }
+
+const TOGETHER_MS = 10_000;
+
+/** A save joins the one before it on the same receipt within a few seconds; what a field was before the first save wins. */
+export function together<F extends string>(before: Saves<F> | undefined, next: Saves<F>): Saves<F> {
+  if (!before || before.id !== next.id || next.at - before.at > TOGETHER_MS) return next;
+  return { id: next.id, fields: [...new Set([...before.fields, ...next.fields])], back: { ...next.back, ...before.back }, at: next.at };
 }

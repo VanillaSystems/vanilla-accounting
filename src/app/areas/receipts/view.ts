@@ -4,7 +4,7 @@ import { localToday, booksOpenPeriod, parsePeriod, periodContaining, type Period
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { Location, Route } from '../../shell/route.js';
-import { ledgerOf, type Candidate, type Ledger } from './model.js';
+import { ledgerOf, type AmountFit, type Candidate, type Ledger } from './model.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 
 let memo: { books: Index; ledger: Ledger } | undefined;
@@ -37,3 +37,9 @@ export const at = (route: Route, date: string | undefined, current?: Period): Lo
 /** How far a payment is from the receipt's date: "gleicher Tag", "2 Tage vorher". */
 export const dayText = (days: number) =>
   days === 0 ? t('receipts.sameDay') : t(days < 0 ? 'receipts.daysBefore' : 'receipts.daysAfter', { n: Math.abs(days) });
+
+/** A payment's amount against the receipt's in words: «Betrag weicht um CHF 28.75 ab», «2 % weniger · Skonto?»; nothing when it is the same. */
+export const fitText = (fit: AmountFit | undefined) =>
+  fit?.kind === 'off' ? t('receipts.whyOff', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })
+    : fit?.kind === 'skonto' ? t('receipts.whySkonto', { percent: fit.percent })
+      : '';
