@@ -3,6 +3,7 @@
  * runs run, an amber dot while tasks wait for a person, nothing when all is quiet. A click opens a
  * panel with what runs, what waits and what finished last; a click elsewhere or Esc closes it.
  */
+import { BotIcon } from '../areas/automation/Graph.js';
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { useAutomation } from '../automation/store.js';
@@ -10,7 +11,7 @@ import { corner, fillTask, textIn } from '../../workflows/model.js';
 import { language } from '../i18n/index.js';
 import type { Route } from './route.js';
 
-export function Corner({ onGo }: { onGo(route: Route): void }) {
+export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssistant(): void }) {
   const { view } = useAutomation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -22,14 +23,17 @@ export function Corner({ onGo }: { onGo(route: Route): void }) {
     document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
   }, [open]);
-  if (!view) return null;
+  // The AI's button is always there, at the top right as in the mockup; the status beside it only when something runs or waits.
+  const ai = <button type="button" className="cornerbtn aibtn" title={`${t('assistant.title')} · ⌘J`} aria-label={t('assistant.title')} onClick={onAssistant}><BotIcon /></button>;
+  if (!view) return <div className="corner">{ai}</div>;
   const c = corner(view);
-  if (c.kind === 'quiet' && !open) return null;
+  if (c.kind === 'quiet' && !open) return <div className="corner">{ai}</div>;
   const go = (route: Route) => { setOpen(false); onGo(route); };
   const label = (id: string) => textIn(view.workflows.find((w) => w.id === id)?.label ?? { en: id }, language());
   const running = view.runs.filter((r) => r.status === 'running' || r.status === 'queued');
   return (
     <div className="corner" ref={ref}>
+      {ai}
       <button type="button" className={`cornerbtn ${c.kind}`} aria-expanded={open} onClick={() => setOpen(!open)}>
         {c.kind === 'running' ? <span className="spin" aria-hidden="true" /> : c.kind === 'needs-you' ? <span className="amber" aria-hidden="true" /> : null}
         {c.kind === 'running' ? t('corner.running', { n: c.count }) : c.kind === 'needs-you' ? t('corner.needsYou', { n: c.count }) : t('corner.nothing')}

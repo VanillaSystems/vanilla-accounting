@@ -272,7 +272,9 @@ main.full { display: flex; flex-direction: column; }
 .bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
 
 /* the status corner (docs/0.4.0/views.md "Status, top right") */
-.corner { position: fixed; top: 14px; right: calc(16px + var(--aiw)); z-index: 22; }
+.corner { position: fixed; top: 14px; right: calc(16px + var(--aiw)); z-index: 22; display: flex; align-items: flex-start; gap: 8px; }
+.cornerbtn.aibtn { width: 30px; padding: 0; justify-content: center; color: var(--ai, var(--ink)); }
+.cornerbtn.aibtn svg { width: 16px; height: 16px; }
 .cornerbtn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(18px); color: var(--ink); font: 500 12.5px "Instrument Sans"; cursor: pointer; box-shadow: var(--shadow); }
 .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .9s linear infinite; flex: none; }
 .spin.small { width: 10px; height: 10px; }

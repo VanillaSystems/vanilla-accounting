@@ -1,4 +1,3 @@
-import { BotIcon } from '../areas/automation/Graph.js';
 import { t } from '../i18n/index.js';
 import { ZOOM_STEPS } from './prefs.js';
 import { ICONS } from '../areas/icons.js';
@@ -15,7 +14,6 @@ interface Props {
   onZoom(step: -1 | 0 | 1): void;
   onTheme(): void;
   onExport(): void;
-  onAssistant(): void;
   language: string;
   onLanguage(anchor: HTMLElement): void;
 }
@@ -40,7 +38,6 @@ export function TopBar(p: Props & { hold?: boolean }) {
       <button type="button" className="chip" title={t('export.chipTip')} aria-label={t('export.dialog')} onClick={used(p.onExport)}>{ICONS.download}</button>
       <button type="button" className="chip" title={t('shell.theme')} aria-label={t('shell.theme')} onClick={p.onTheme}>◐</button>
       <button type="button" className="chip" aria-label={t('app.language')} aria-haspopup="menu" onClick={(e) => p.onLanguage(e.currentTarget)}>{p.language.toUpperCase()}</button>
-      <button type="button" className="chip aibtn" title={`${t('assistant.title')} · ⌘J`} aria-label={t('assistant.title')} onClick={used(p.onAssistant)}><BotIcon /></button>
     </Fold>
   );
 }
