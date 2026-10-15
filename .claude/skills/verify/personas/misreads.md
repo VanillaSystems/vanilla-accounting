@@ -5,13 +5,13 @@ can be wrong. Sandra must be able to see what was read, put it right herself (by
 Claude) and by a wish in the sidebar, and see why it was booked so. Drop the October statement
 `camt053_Raiffeisen_Okt-2026.xml`, then these files, and look at what the app made of each:
 
-- `Malerbedarf_Konstanz_RE-4471.pdf`: a German supplier, 19 % MwSt, paid CHF 386.60 for EUR 412.30.
+- `Malerbedarf_Konstanz_RE-4471.pdf`: a German supplier, 19 % MwSt, invoiced in EUR and paid in CHF.
   No Swiss VAT: no input tax. Did the app claim input tax? Can she correct it?
 - `Rechnung_2026-031_Konstanz.pdf`: her own invoice for a job in Konstanz (Germany), no Swiss VAT,
   «Leistungsort Deutschland». The sale is not taxable in Switzerland; which code, which Ziffer?
-- `Farbmix_Rechnung_FM-79010.pdf`: invoice total 1'537.20, paid 1'506.45 with 2 % Skonto. Does it
+- `Farbmix_Rechnung_FM-79010.pdf`: paid 2 % less than its total (Skonto). Does it
   match? How is the difference booked?
-- `IMG_4733.jpg`: a crumpled, blurred till photo (total 187.35, VAT 8.1 %). Read right?
+- `IMG_4733.jpg`: a crumpled, blurred till photo (VAT 8.1 %; the total is in persona-files.mjs). Read right?
 
 Then make the app wrong on purpose where it was right, and correct it each way:
 - a receipt's amount and date wrong → correct by hand in Belege (Angaben bearbeiten), then check
