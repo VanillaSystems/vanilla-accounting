@@ -179,7 +179,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 25, MWST 107, ESTV 17, Ziffer 45, eCH-0217 2, form 0535 4, UID 1, camt.053 11, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 25, MWST 109, ESTV 17, Ziffer 45, eCH-0217 2, form 0535 4, UID 1, camt.053 11, QR-bill 1 |
 | `src/app/i18n/locales/en.ts` | CHF 25, MWST 2, ESTV 16, eCH-0217 2, form 0535 4, UID 1, camt.053 11, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 25, MWST 1, eCH-0217 2, form 0535 4, UID 1, camt.053 11, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 25, MWST 1, eCH-0217 2, form 0535 4, UID 1, camt.053 11, QR-bill 1 |
