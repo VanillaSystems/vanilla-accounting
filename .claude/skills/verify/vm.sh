@@ -33,7 +33,17 @@ KEY="$HOME/.vanilla-accounting/e2e/id_ed25519"
 VENV="$ROOT/venv"
 cmd=${1:-}; [ $# -gt 0 ] && shift
 
-runid() { r=${1:-${VERIFY_VM:-}}; [ -n "$r" ] || r=$(ls "$ROOT" 2>/dev/null | grep -v '^venv$' | head -1); [ -n "$r" ] || { echo "no VM run; vm.sh up first" >&2; exit 1; }; echo "$r"; }
+# The run: the argument, else $VERIFY_VM, else the only run there is (never a guess among several:
+# testers run side by side, and acting on another's VM restarts its app).
+runid() {
+  r=${1:-${VERIFY_VM:-}}
+  if [ -z "$r" ]; then
+    runs=$(ls "$ROOT" 2>/dev/null | grep -v '^venv$' || true)
+    [ "$(printf '%s\n' "$runs" | grep -c .)" -eq 1 ] || { echo "several or no VM runs ($(echo $runs)): name one or set VERIFY_VM" >&2; exit 1; }
+    r=$runs
+  fi
+  echo "$r"
+}
 load() { RUN=$(runid "${1:-}"); D="$ROOT/$RUN"; [ -f "$D/env" ] || { echo "no run $RUN" >&2; exit 1; }; . "$D/env"; }
 ssh_() { ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 "admin@$IP" "$@"; }
 vnc() { "$VENV/bin/vncdo" -s "$IP::5900" -u admin -p admin "$@" 2>/dev/null; }
