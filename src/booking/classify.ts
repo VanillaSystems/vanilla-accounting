@@ -26,6 +26,8 @@ export interface EntryContext {
   fx: FxResolver;
   /** The earliest date of the receipts mapped to the transaction (a Shopify order date). */
   receiptDate: string | undefined;
+  /** The receipts mapped to the transaction, which the model saw: stamped on the entries. */
+  receipts: string[];
   bankAccount: string;
   lock: PeriodLock;
 }
@@ -36,14 +38,14 @@ export interface EntryContext {
  * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
  * in a closed period: then the payment date, because nothing new is ever dated there.
  */
-export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, bankAccount, lock }: EntryContext): JournalEntry[] {
+export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const orderDate = receiptDate && !lock.isClosed(receiptDate) ? receiptDate : tx.date;
   const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>): JournalEntry =>
-    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify' });
+    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort() });
 
   const entries = llmEntries.map((e) => {
     const accountDebit = e.accountDebit || (tx.direction === 'CRDT' ? bankAccount : '');
@@ -211,8 +213,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, 'no entries in response');
           continue;
         }
-        const receiptDate = mappedReceipts(books, tx).map((r) => r.date).filter((d): d is string => !!d).sort()[0];
-        books.journalEntries.push(...entriesFor(tx, llmEntries, { fx, receiptDate, bankAccount: bankAccountFor(tx, context.bankAccounts), lock }));
+        const mapped = mappedReceipts(books, tx);
+        const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
+        books.journalEntries.push(...entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount: bankAccountFor(tx, context.bankAccounts), lock }));
         log(`  [Batch ${batchNum}]  ${tx.ref}  → ${llmEntries.length} entries (${llmEntries.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
         outcome.classified.push(tx.ref);
       }

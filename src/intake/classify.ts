@@ -7,7 +7,7 @@
  * entriesForceMayRemove) and books those transactions again.
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
-import { entriesForceMayRemove } from '../accounting/classify-force.js';
+import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { BATCH_SIZE, CONCURRENCY, classifyTransactions, loadClassifyContext } from '../booking/classify.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { JournalEntry } from '../types/index.js';
@@ -29,6 +29,16 @@ export function classifyStep({ force = false } = {}): StepRun {
         return remove.size;
       });
       log(`--force: removed ${removed} entries classify booked in the open period, to book their transactions again. Kept: closed periods, corrections, entries without a bank transaction, rebook-shopify payouts.\n`);
+    }
+
+    // A receipt linked after its payment was booked: the booking is made again, with what the receipt says.
+    if (!force && ask) {
+      const again = books.update((index) => {
+        const remove = new Set(entriesWithoutTheirReceipts(index.journalEntries, index.mappings, new Set(index.transactions.map((tx) => tx.ref)), periodLock(index).closedThrough));
+        index.journalEntries = index.journalEntries.filter((je) => !remove.has(je));
+        return new Set([...remove].map((je) => je.transactionRef)).size;
+      });
+      if (again) log(`${again} payment(s) got a receipt after they were booked: booking them again.\n`);
     }
 
     const scratch = books.read();

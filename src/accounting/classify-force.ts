@@ -32,6 +32,27 @@ export function entriesForceMayRemove(
   return removable;
 }
 
+/**
+ * The classifier's open-period entries of payments whose receipts changed since it booked them: a
+ * receipt linked later (or unlinked) is evidence the booking never saw, its VAT above all. Only
+ * entries that recorded what they saw take part, under the same rules as --force.
+ */
+export function entriesWithoutTheirReceipts(
+  entries: readonly JournalEntry[],
+  mappings: ReadonlyArray<{ transactionRef: string; receiptId: string }>,
+  transactionRefs: ReadonlySet<string>,
+  closedThrough: string | undefined,
+): JournalEntry[] {
+  const linked = new Map<string, Set<string>>();
+  for (const m of mappings) (linked.get(m.transactionRef) ?? linked.set(m.transactionRef, new Set()).get(m.transactionRef)!).add(m.receiptId);
+  const same = (a: readonly string[], b: Set<string> | undefined) => a.length === (b?.size ?? 0) && a.every((id) => b!.has(id));
+  const removable = new Set(entriesForceMayRemove(entries, transactionRefs, closedThrough));
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of entries) if (removable.has(e)) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
+  return [...byRef.entries()].flatMap(([ref, group]) =>
+    (group.every((e) => e.origin === 'classify' && e.receipts) && !same(group[0].receipts!, linked.get(ref)) ? group : []));
+}
+
 function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined): boolean {
   if (closedThrough && e.date <= closedThrough) return false;
   if (e.corrects) return false;

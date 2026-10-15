@@ -135,6 +135,13 @@ export interface JournalEntry {
   origin?: 'classify' | 'manual' | 'year-close' | 'invoice';
   /** The workflow run that booked it (src/workflows/engine.ts): its history explains why it is booked like this. */
   run?: string;
+  /**
+   * The receipts linked to the payment when the classifier booked it. A receipt linked later is
+   * evidence the booking never saw (its VAT above all): the next classify books it again
+   * (src/accounting/classify-force.ts entriesWithoutTheirReceipts). Absent: booked before this
+   * field existed, or by another writer; such an entry is never booked again for this reason.
+   */
+  receipts?: string[];
 }
 
 /** A VAT quarter, e.g. "2026-Q2". */

@@ -14,6 +14,7 @@ import { readStep } from '../intake/read.js';
 import { vatCandidates, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
 import { classifyStep } from '../intake/classify.js';
+import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
@@ -80,9 +81,11 @@ const receiptsWhere = (keep: (r: Books['receipts'][number]) => boolean) => (b: B
   const rs = b.receipts.filter(keep);
   return rs.length ? [{ kind: 'receipts', ids: rs.map((r) => r.id), files: rs.map((r) => r.filename) }] : [];
 };
+/** New payments, and payments booked before a receipt was linked to them (booked again). */
 const unbooked = (b: Books): Took[] => {
   const booked = new Set(b.journalEntries.map((e) => e.transactionRef));
-  const n = b.transactions.filter((t) => !booked.has(t.ref) && !periodLock(b).isClosed(t.date)).length;
+  const again = new Set(entriesWithoutTheirReceipts(b.journalEntries, b.mappings, new Set(b.transactions.map((t) => t.ref)), periodLock(b).closedThrough).map((e) => e.transactionRef));
+  const n = b.transactions.filter((t) => (!booked.has(t.ref) || again.has(t.ref)) && !periodLock(b).isClosed(t.date)).length;
   return n ? [{ kind: 'transactions', n }] : [];
 };
 
