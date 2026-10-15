@@ -22,6 +22,7 @@ compared yet).
 | S1 | The open top bar floats over free space; the list heading and its add button («+ Beleg», «+ Auszug», «+ Buchung», «+ Rechnung») stay visible | as the mockup | fixed |
 | S2 | Dock at the bottom edge (both mockups) | Activity bar down the left edge (try of 15.10., f2e8660), with the bolt button for Automatisierung above it | decided (owner to confirm) |
 | S3 | Period picker, ⌘K palette, export dialog, AI sidebar, status corner | not compared yet | to compare |
+| S4 | No page names a developer command | FX hints («npm run restamp-fx», «npm run fetch-rates»), Firma › Perioden and Eröffnung («npm run seal», «npm run import-opening»), the first-run questions («npm run init») and the sources («npm run secret») still do | open |
 
 ## Belege
 
@@ -45,7 +46,8 @@ No deviation beyond S1: the lists, details, figures and links match.
 
 | # | Mockup | Built | Status |
 |---|---|---|---|
-| A1 | Each check in a person's words, one short line under it | Some checks name commands («npm run seal …», «npm run doctor findet nichts zu beheben») and long lists of accounts | open |
+| A1 | Each check in a person's words, one short line under it | as the mockup: no command in a check; before 31.12. one line for the bank checks | fixed |
+| A2 | Closing and sealing a quarter happen when its return is filed | Only on the command line (`npm run seal`); Firma › Perioden says so; there is no button | open (missing feature) |
 
 ## Firma
 

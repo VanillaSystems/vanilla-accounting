@@ -78,7 +78,8 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
     const sealedLater = c.id === 'quartersSealed' && c.problems.every((p) => p.code === 'notClosed' || p.code === 'unsealed');
     const state: State = waits ? 'later' : sealedLater ? 'open' : 'warn';
     const go: Go | undefined = c.id === 'quartersSealed' || c.id === 'q4Filed' ? { area: 'vat' } : c.id === 'bankReconciled' || c.id === 'statementsComplete' ? { area: 'bank' } : undefined;
-    return { id: c.id, state, label, detail: c.id === 'q4Filed' && waits ? t('close.q4Later', { next: String(+year + 1) }) : text(c.problems), go };
+    const later = c.id === 'q4Filed' ? t('close.q4Later', { next: String(+year + 1) }) : c.id === 'bankReconciled' ? t('close.bankLater') : t('close.statementsLater');
+    return { id: c.id, state, label, detail: waits ? later : text(c.problems), go };
   });
 
   const toBook = d.revaluations.filter((r) => r.status === 'to-book');
