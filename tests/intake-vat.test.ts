@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { loadBooks, type Books } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import type { Ask, BooksPort } from '../src/intake/pipeline.js';
-import { vatStep } from '../src/intake/vat.js';
+import { vatCandidates, vatStep } from '../src/intake/vat.js';
 import type { Receipt } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
@@ -65,4 +65,31 @@ test('facts the books already hold are not asked for again; a receipt without th
   assert.equal(fresh.vatId, 'CHE-111.222.333');
   assert.ok(fresh.vatExtractedAt);
   assert.deepEqual(result.notes, []);
+});
+
+test('a scan too poor to read is set aside once, with a note, and not taken up again; a receipt of a filed quarter is never taken up', async () => {
+  const books: Books = JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT))));
+  const closed = books.config.closedThrough!;
+  const filedTx = books.transactions.find((t) => t.date <= closed)!;
+  const POOR: Receipt = { ...structuredClone(NEW), id: 'vat-step-poor', filename: '20260814-coop-pronto.pdf', originalFilename: '20260814-coop-pronto.pdf', extractedText: 'mit Tankstelle\n|', date: '2026-08-14' };
+  const FILED: Receipt = { ...structuredClone(NEW), id: 'vat-step-filed', filename: '20260104-filed.pdf', originalFilename: '20260104-filed.pdf', extractedText: 'Laden AG\nTotal CHF 59.06\nMWST 8.1% CHF 4.42' };
+  books.receipts.push(POOR, FILED);
+  books.mappings.push({ transactionRef: filedTx.ref, receiptId: FILED.id });
+  const port: BooksPort = { read: () => structuredClone(books), update: (fn) => fn(books) };
+  const asked: string[] = [];
+  const ask: Ask = async (prompt) => { asked.push(prompt); return JSON.stringify({ vatId: '', currency: 'CHF', total: 1, hasSwissVat: false, vatSummary: [] }); };
+  const step = () => vatStep()({ ws: undefined as never, books: port, ask, progress: () => {}, log: () => {} });
+
+  assert.deepEqual(vatCandidates(books).map((r) => r.id).filter((id) => id === POOR.id || id === FILED.id), [POOR.id], 'the filed receipt is not even listed');
+  const first = await step();
+  assert.deepEqual(first.notes.filter((n) => n.code === 'poorScan'), [{ code: 'poorScan', files: [POOR.filename] }]);
+  assert.equal(books.receipts.find((r) => r.id === POOR.id)!.needsVisionReview, true);
+  assert.ok(!asked.some((p) => p.includes('Laden AG')), 'the filed receipt was not sent to the model');
+  assert.deepEqual(facts(books.receipts.find((r) => r.id === FILED.id)!), facts(FILED), 'nor changed');
+
+  const askedBefore = asked.length;
+  assert.equal(vatCandidates(books).some((r) => r.id === POOR.id || r.id === FILED.id), false);
+  const second = await step();
+  assert.deepEqual(second.notes, [], 'nothing to say the second time');
+  assert.equal(asked.length, askedBefore);
 });

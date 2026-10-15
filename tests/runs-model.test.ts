@@ -16,7 +16,7 @@ const books = loadBooks(workspaceAt(DEMO_ROOT)) as unknown as Index;
 const bal = books.statementBalances!.find((b) => b.account === '1021' && b.date === '2026-09-30')!;
 const run = (o: Partial<RunSummary> = {}): RunSummary => ({
   id: 'r', workflow: 'receipt-intake', item: { kind: 'company', id: 'inbox' }, mode: 'live', startedAt: '2026-10-15T11:00:00Z', status: 'done', path: [],
-  startedBy: { kind: 'outside', file: 'x' }, digest: { files: [], receipts: 0, links: 0, entries: 0 }, ...o,
+  startedBy: { kind: 'outside', file: 'x' }, digest: { files: [], receipts: 0, links: 0, entries: 0, poorScans: [] }, ...o,
 });
 const statement = (amount: number): Arrival => ({ kind: 'statement', file: 'Raiffeisen/s.pdf', account: '1021', added: 3, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30', closing: { date: '2026-09-30', amount } });
 const linked = books.mappings[0];
@@ -52,5 +52,5 @@ test('where a run stands: running, stuck, waiting before anything else; a run th
   assert.equal(standOf(run({ status: 'stuck', error: 'x' }), lines), 'error');
   assert.equal(standOf(run({ status: 'waiting' }), lines), 'you');
   assert.equal(standOf(run(), []), 'idle');
-  assert.equal(standOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0 } }), linesOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0 } }), books)), 'ok');
+  assert.equal(standOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0, poorScans: [] } }), linesOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0, poorScans: [] } }), books)), 'ok');
 });

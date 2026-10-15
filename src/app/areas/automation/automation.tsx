@@ -362,13 +362,14 @@ function Made({ s, nav }: { s: StepRecord; nav: Nav }) {
 }
 
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
-type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'error'; detail: string };
+type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'poorScan'; files: string[] } | { code: 'error'; detail: string };
 function noteText(n: StepNote): string {
   switch (n.code) {
     case 'noModel': return t('automation.note.noModel', { n: n.waiting });
     case 'failed': return t('automation.note.failed', { n: n.count, detail: n.detail });
     case 'unmatched': return t('automation.note.unmatched', { n: n.files.length, files: n.files.join(', ') });
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });
+    case 'poorScan': return t('automation.note.poorScan', { n: n.files.length, files: n.files.join(', ') });
     case 'error': return n.detail;
   }
 }

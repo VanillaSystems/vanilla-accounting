@@ -85,11 +85,20 @@ function outText(r: RunSummary, lines: Line[]): [string, string] {
   ].filter(Boolean).join(', ');
   const ok = st.filter((l) => l.balance.kind === 'matches').length;
   const off = st.filter((l) => l.balance.kind === 'differs').length;
-  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : ''].filter(Boolean).join(', ');
+  const poor = r.digest.poorScans?.length ?? 0;
+  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', poor ? t('runs.out.poorScan', { n: poor }) : ''].filter(Boolean).join(', ');
   return [head || t('runs.out.nothing'), small];
 }
 
 function LineRow({ l, go }: { l: Line; go(route: Route): void }) {
+  if (l.kind === 'poorScan') {
+    return (
+      <tr className="rline"><td /><td />
+        <td className="what"><span className="rk">{t('runs.kind.receipt')}</span><span className="mono">{l.file}</span></td>
+        <td className="res"><span className="warn-t">{t('runs.line.poorScan')}</span></td>
+        <td className="st"><span className="rpill check">{t('runs.st.check')}</span>{l.receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: l.receipt!.id })}>{t('runs.view')}</button> : null}</td></tr>
+    );
+  }
   if (l.kind === 'file') {
     return <tr className="rline"><td /><td /><td className="what"><span className="rk">{t('runs.kind.file')}</span><span className="mono">{l.name}</span></td><td className="res" /><td /></tr>;
   }
@@ -194,7 +203,7 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
                     <td className="tog">{expandable ? <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg> : null}</td>
                     <td className="when"><b className="mono">{sameDay(started, today) ? `${pad(started.getHours())}:${pad(started.getMinutes())}` : `${pad(started.getDate())}.${pad(started.getMonth() + 1)}.`}</b><small>{sameDay(started, today) ? '' : `${pad(started.getHours())}:${pad(started.getMinutes())} · `}{byText(r, view)}</small></td>
                     <td className="what"><b>{inHead}</b>{inSmall ? <small>{inSmall}</small> : null}</td>
-                    <td className="res"><b>{outHead}</b>{outSmall ? <small className={lines.some((l) => l.kind === 'statement' && l.balance.kind === 'differs') ? 'warn-t' : ''}>{outSmall}</small> : null}</td>
+                    <td className="res"><b>{outHead}</b>{outSmall ? <small className={lines.some((l) => (l.kind === 'statement' && l.balance.kind === 'differs') || l.kind === 'poorScan') ? 'warn-t' : ''}>{outSmall}</small> : null}</td>
                     <td className="st" onClick={(e) => e.stopPropagation()}>
                       <span className={`rpill ${stand}`}>{t(`runs.st.${stand}` as 'runs.st.ok')}</span>
                       {stand === 'ok' || stand === 'check' ? <button type="button" className="linkbtn rreview" onClick={() => review(r.id, true)}>{t('runs.review')}</button> : null}

@@ -14,7 +14,8 @@ export type Line =
   | { kind: 'statement'; a: Extract<Arrival, { kind: 'statement' }>; balance: Balance }
   | { kind: 'receipt'; a: Extract<Arrival, { kind: 'receipt' }>; receipt?: Index['receipts'][number]; payments: Index['transactions']; entries: number }
   | { kind: 'refused'; a: Extract<Arrival, { kind: 'refused' }> }
-  | { kind: 'file'; name: string };
+  | { kind: 'file'; name: string }
+  | { kind: 'poorScan'; file: string; receipt?: Index['receipts'][number] };
 
 /** The bank's closing balance against the books on the same day, in the account's currency. */
 export type Balance = { kind: 'none' } | { kind: 'matches'; date: string } | { kind: 'differs'; date: string; diff: number };
@@ -29,8 +30,9 @@ export function balanceOf(a: Extract<Arrival, { kind: 'statement' }>, books: Ind
 }
 
 export function linesOf(r: RunSummary, books: Index): Line[] {
-  if (!r.arrived?.length) return r.digest.files.map((name) => ({ kind: 'file', name }));
-  return r.arrived.map((a): Line => {
+  const poor = (r.digest.poorScans ?? []).map((file): Line => ({ kind: 'poorScan', file, receipt: books.receipts.find((x) => x.filename === file) }));
+  if (!r.arrived?.length) return [...r.digest.files.map((name): Line => ({ kind: 'file', name })), ...poor];
+  return [...r.arrived.map((a): Line => {
     if (a.kind === 'statement') return { kind: 'statement', a, balance: balanceOf(a, books) };
     if (a.kind === 'refused') return { kind: 'refused', a };
     const refs = new Set(books.mappings.filter((m) => m.receiptId === a.id).map((m) => m.transactionRef));
@@ -39,11 +41,11 @@ export function linesOf(r: RunSummary, books: Index): Line[] {
       payments: books.transactions.filter((x) => refs.has(x.ref)),
       entries: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length,
     };
-  });
+  }), ...poor];
 }
 
 /** A line the person has to look at: a balance that differs, a refused file, a receipt the finished run did not read. */
-const isIssue = (l: Line, finished: boolean) => (l.kind === 'statement' && l.balance.kind === 'differs') || l.kind === 'refused' || (l.kind === 'receipt' && finished && !l.receipt);
+const isIssue = (l: Line, finished: boolean) => (l.kind === 'statement' && l.balance.kind === 'differs') || l.kind === 'refused' || l.kind === 'poorScan' || (l.kind === 'receipt' && finished && !l.receipt);
 
 export function standOf(r: RunSummary, lines: Line[]): Stand {
   if (r.status === 'queued' || r.status === 'running' || r.status === 'parked') return 'running';
@@ -52,6 +54,6 @@ export function standOf(r: RunSummary, lines: Line[]): Stand {
   if (r.status === 'discarded') return 'discarded';
   if (r.reviewed) return 'reviewed';
   if (lines.some((l) => isIssue(l, true))) return 'check';
-  if (!r.arrived?.length && !r.digest.files.length && !r.digest.receipts && !r.digest.links && !r.digest.entries) return 'idle';
+  if (!r.arrived?.length && !r.digest.files.length && !r.digest.poorScans?.length && !r.digest.receipts && !r.digest.links && !r.digest.entries) return 'idle';
   return 'ok';
 }

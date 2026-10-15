@@ -361,20 +361,24 @@ export interface RunDigest {
   receipts: number;
   links: number;
   entries: number;
+  /** Receipts a step set aside for a person: too poorly scanned to read (a vision read brings them back). */
+  poorScans: string[];
 }
 
 export function digestOf(run: Pick<Run, 'steps'>): RunDigest {
   const files = new Set<string>();
+  const poor = new Set<string>();
   const ids = { receipt: new Set<string>(), link: new Set<string>(), entry: new Set<string>() };
   for (const s of run.steps) {
     for (const t of (s.output?.took as Took[] | undefined) ?? []) if (t.kind === 'files') for (const n of t.names) files.add(n);
+    for (const n of (s.output?.notes as Array<{ code: string; files?: string[] }> | undefined) ?? []) if (n.code === 'poorScan') for (const f of n.files ?? []) poor.add(f);
     for (const m of (s.output?.made as Made[] | undefined) ?? []) {
       if (m.kind === 'receipt') ids.receipt.add(m.id);
       else if (m.kind === 'link') ids.link.add(`${m.transaction}:${m.receipt}`);
       else ids.entry.add(m.id);
     }
   }
-  return { files: [...files], receipts: ids.receipt.size, links: ids.link.size, entries: ids.entry.size };
+  return { files: [...files], receipts: ids.receipt.size, links: ids.link.size, entries: ids.entry.size, poorScans: [...poor] };
 }
 
 /** An ISO duration (P30D, PT5M, P1DT2H) added to an ISO time. */

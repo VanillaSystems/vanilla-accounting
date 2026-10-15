@@ -24,6 +24,8 @@ export type IntakeNote =
   | { code: 'unmatched'; files: string[] }
   /** A receipt link or bank payment of a filed quarter is gone; kept as it was, a person must look. */
   | { code: 'filedKept'; count: number }
+  /** Receipts whose text is too poor to read: flagged for a vision read, out of the runs until then. */
+  | { code: 'poorScan'; files: string[] }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -174,6 +176,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'failed': return `⚠ ${n.count} item(s) failed: ${n.detail}`;
       case 'unmatched': return `⛔ ${n.files.length} bank statement(s) belong to no bank account; nothing was written:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;
+      case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

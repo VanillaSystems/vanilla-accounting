@@ -11,7 +11,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
 import { noteLines, type BooksPort, type StepRun } from '../intake/pipeline.js';
 import { readStep } from '../intake/read.js';
-import { hasFacts, vatStep } from '../intake/vat.js';
+import { vatCandidates, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
 import { classifyStep } from '../intake/classify.js';
 import { FILING_ACTIONS } from './filing.js';
@@ -128,7 +128,7 @@ export const ACTIONS: Record<string, Action> = {
   ...COLLECT_ACTIONS,
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
   'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
-  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), receiptsWhere((r) => !hasFacts(r))) },
+  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b)); return receiptsWhere((r) => todo.has(r))(b); }) },
   'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(matchStep, receiptsWhere((r) => r.location === 'staged')) },
   'intake.book': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(classifyStep(), unbooked) },
   'parsers.statement': declared(['ok']),

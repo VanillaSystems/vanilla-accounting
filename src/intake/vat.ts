@@ -4,13 +4,16 @@
  * receipt is the source of truth for whether Swiss MWST was charged and at which rate(s); the
  * accounting code is decided later, at classify time, from these facts.
  *
- * Takes up only receipts without VAT facts (all of them with `force`): facts the books wrote
+ * Takes up only receipts without VAT facts (all of them with `force`), never one of a filed quarter
+ * and never one waiting for a vision read: a text too poor to read is flagged so once (with a
+ * note naming it) and stays out until a vision read gives it text. Facts the books wrote
  * themselves (an invoice's receipt, a tutti purchase) carry no vatExtractedAt and stay. A text
  * without any VAT indicator is recorded hasSwissVat=false without a model call, on a receipt
  * that has no facts. Only a model answer that parses as VAT facts replaces facts.
  */
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
+import { periodLock, type Books } from '../books/store.js';
 import type { Receipt } from '../types/index.js';
 import { hasVatIndicator } from '../parsers/receipt-text.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
@@ -32,9 +35,24 @@ const NO_VAT: Omit<Facts, 'vatExtractedAt'> = { vatId: undefined, hasSwissVat: f
 /** A receipt whose VAT facts were read (or decided) already: the step leaves it. */
 export const hasFacts = (r: Receipt) => r.vatExtractedAt != null || r.hasSwissVat !== undefined;
 
+/**
+ * A receipt of a filed quarter: every payment it is linked to (unlinked: its own date) lies in the
+ * closed period. Its VAT was declared as booked; a wrong one is a correction in the open period.
+ */
+export function filedReceipt(books: Pick<Books, 'config' | 'mappings' | 'transactions' | 'journalEntries'>, r: Receipt): boolean {
+  const lock = periodLock(books);
+  const refs = new Set(books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef));
+  const dates = [...books.transactions.filter((t) => refs.has(t.ref)).map((t) => t.date), ...books.journalEntries.filter((e) => refs.has(e.transactionRef)).map((e) => e.date)];
+  return dates.length ? dates.every(lock.isClosed) : !!r.date && lock.isClosed(r.date);
+}
+
+/** The receipts the step takes up: what the run view lists as read is what the step works on. */
+export const vatCandidates = (books: Books, force = false): Receipt[] =>
+  books.receipts.filter((r) => force || (!hasFacts(r) && !r.needsVisionReview && !filedReceipt(books, r)));
+
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
-    const candidates = books.read().receipts.filter((r) => force || !hasFacts(r));
+    const candidates = vatCandidates(books.read(), force);
     if (candidates.length === 0) {
       log('All receipts already have VAT facts extracted (use --force to redo).');
       return { notes: [] };
@@ -65,6 +83,11 @@ export function vatStep({ force = false } = {}): StepRun {
     progress(done, total);
 
     const notes: IntakeNote[] = [];
+    // A scan too poor to read waits for a vision read instead of coming back in every run.
+    if (noText.length && !force) {
+      books.update((index) => { for (const r of index.receipts) if (noText.some((x) => x.id === r.id)) r.needsVisionReview = true; });
+      notes.push({ code: 'poorScan', files: noText.map((r) => r.filename) });
+    }
     if (needsLlm.length && !ask) notes.push({ code: 'noModel', waiting: needsLlm.length });
     if (needsLlm.length && ask) {
       let firstError: string | undefined;
