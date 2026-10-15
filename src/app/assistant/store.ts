@@ -10,7 +10,8 @@ import { language } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
 import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
 
-export const SIDEBAR_WIDTH = 400;
+/** 400 px, less on a small window, so the page keeps room for its list and its detail. */
+export const SIDEBAR_WIDTH = 'min(400px, 34vw)';
 
 export interface AssistantState {
   open: boolean;
@@ -35,7 +36,7 @@ function set(patch: Partial<AssistantState>): void {
   state = { ...state, ...patch };
   if ('open' in patch) {
     remember('assistant.open', state.open ? '1' : null);
-    document.documentElement.style.setProperty('--aiw', state.open ? `${SIDEBAR_WIDTH}px` : '0px');
+    document.documentElement.style.setProperty('--aiw', state.open ? SIDEBAR_WIDTH : '0px');
   }
   for (const l of listeners) l();
 }
@@ -43,7 +44,7 @@ function set(patch: Partial<AssistantState>): void {
 export const useAssistant = (): AssistantState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
 
 /** The shell sets the page's width at start, from the remembered state. */
-export const syncSidebarWidth = () => document.documentElement.style.setProperty('--aiw', state.open ? `${SIDEBAR_WIDTH}px` : '0px');
+export const syncSidebarWidth = () => document.documentElement.style.setProperty('--aiw', state.open ? SIDEBAR_WIDTH : '0px');
 
 export function toggleAssistant(): void { set({ open: !state.open }); }
 export function closeAssistant(): void { set({ open: false }); }

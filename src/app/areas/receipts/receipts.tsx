@@ -201,7 +201,7 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       data-id={r.id}
       onClick={() => onSelect(r.id)}
     >
-      <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? formatDate(v.date) : <span className="d none">{t('receipts.noDate')}</span>}</span>
+      <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
       <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
