@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assistantArgs, assistantSystem, draftPatterns, streamParser } from '../src/assistant/claude.js';
@@ -20,6 +20,7 @@ import type { AssistantEvent, MadeChange } from '../src/types/assistant.js';
 import type { Index } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
+import { SESSION } from './support/inbox-run.js';
 
 const REPO = process.cwd();
 const listAfter = (args: string[], flag: string) => {
@@ -120,6 +121,9 @@ test('the changes an answer asks for are made at once, each undone on its own; o
   const log = mkdtempSync(join(tmpdir(), 'assistant-changes-'));
   const changes = join(log, 'changes.json');
   const api = await startApi('demo/vanilla-accounting', { PATH: `${join(REPO, 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_CHANGES: changes });
+  // New VAT facts book the receipt's payment again: the inbox run needs the receipts' files.
+  cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+  const { rest } = SESSION(api);
   try {
     const books = async () => (await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as Index;
     const post = async (body: unknown) => {
@@ -132,6 +136,7 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     assert.deepEqual(events.slice(-2).map((e) => e.type), ['changes', 'done'], 'the changes come before done');
     const made = (events.at(-2) as Extract<AssistantEvent, { type: 'changes' }>).changes;
     assert.equal(made.length, 1);
+    await rest();
     const after = (await books()).receipts.find((r) => r.id === open.id)!;
     assert.deepEqual([after.date, after.amount, after.currency, after.hasSwissVat, after.vatSummary, after.vatId], ['2026-06-28', 108.1, 'CHF', true, vat.vatSummary, vat.vatId]);
     assert.equal(after.vatBy, 'human', 'she asked for them: the VAT step never reads them over');
@@ -141,6 +146,7 @@ test('the changes an answer asks for are made at once, each undone on its own; o
 
     const undo = await api.send('POST', `/api/assistant/${id}/changes/${made[0].id}/undo`);
     assert.equal(undo.status, 200);
+    await rest();
     const back = (await books()).receipts.find((r) => r.id === open.id)!;
     for (const k of ['date', 'amount', 'currency', 'hasSwissVat', 'vatSummary', 'vatId', 'lineItems', 'vatBy'] as const) assert.deepEqual(back[k], open[k], k);
 
@@ -151,6 +157,7 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     assert.equal(untouched.receipts.find((r) => r.id === open.id)!.description, open.description, 'nothing of a refused answer is written');
     assert.equal(untouched.receipts.find((r) => r.id === filed.id)!.amount, filed.amount);
   } finally {
+    await rest().catch(() => {});
     api.stop();
     rmSync(log, { recursive: true, force: true });
   }

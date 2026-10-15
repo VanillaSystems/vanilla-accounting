@@ -21,6 +21,7 @@ import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view
 import { Kbd, accept, runAct } from './commands.js';
 import { deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
+import { ByHand, VatFields } from './VatFields.js';
 import { Paper } from './Paper.js';
 import { I } from './icons.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -97,6 +98,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             ? vat.map((g) => <span key={g.ratePercent} title={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
             : r.hasSwissVat === undefined ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
             : <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>}
+          {r.vatBy === 'human' && <ByHand />}
           {vat.length > 0 && (r.vatId
             ? <span title={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')}</span>
             : <span className="nov" title={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
@@ -323,6 +325,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
           <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
           <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
+        <VatFields v={v} nav={nav} edit={edit} />
         <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!edit} /></label>
         <label>{t('receipts.field.remarks')}<textarea name="remarks" defaultValue={r.remarks ?? ''} readOnly={!edit} placeholder={t('receipts.remarksPlaceholder')} /></label>
         <div className="err" role="alert">{err}</div>

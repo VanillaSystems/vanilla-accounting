@@ -26,12 +26,12 @@ test('only the classifier\'s open bookings whose linked receipts changed are boo
   assert.deepEqual(entriesWithoutTheirReceipts(entries, mappings, refs, '2026-06-30').map((e) => e.transactionRef).sort(), ['gone', 'late']);
 });
 
-test('new VAT facts take away only the classifier\'s own open bookings of the receipt\'s payments', () => {
+test('new VAT facts take away only the classifier\'s open bookings of the receipt\'s payments, as --force would', () => {
   const entries = [
     je('auto', { receipts: ['r'] }),                 // the classifier's, open: booked again
     je('hand', { origin: 'manual' }),                // a person's booking: left alone
     je('mixed'), je('mixed', { id: 'mixed-2', origin: 'manual' }), // one of them a person's: the payment stays as it is
-    je('legacy', { origin: undefined }),             // booked before origin existed: left alone
+    je('legacy', { origin: undefined }),             // booked before origin existed: the classifier's, as for --force
     je('filed', { date: '2026-03-10' }),             // a filed quarter: left alone
     je('other'),                                     // a payment of another receipt
   ];
@@ -41,6 +41,6 @@ test('new VAT facts take away only the classifier\'s own open bookings of the re
     transactions: entries.map((e) => ({ ref: e.transactionRef })),
     config: { closedThrough: '2026-06-30' },
   };
-  assert.deepEqual(unbookForNewFacts(books, 'r'), ['auto']);
-  assert.deepEqual(books.journalEntries.map((e) => e.id), entries.filter((e) => e.transactionRef !== 'auto').map((e) => e.id));
+  assert.deepEqual(unbookForNewFacts(books, 'r'), ['auto', 'legacy']);
+  assert.deepEqual(books.journalEntries.map((e) => e.id), entries.filter((e) => !['auto', 'legacy'].includes(e.transactionRef)).map((e) => e.id));
 });

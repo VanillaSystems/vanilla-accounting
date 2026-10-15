@@ -3,7 +3,7 @@
  * again. Every change says what it did in the toast and can be taken back there (or with ⌘Z);
  * the undo is the opposite write, for a delete the receipt back from the trash.
  */
-import type { BankTransaction, ReceiptKind, ReceiptPatch } from '../../../types/index.js';
+import type { BankTransaction, ReceiptKind, ReceiptPatch, VatFacts } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
@@ -77,6 +77,19 @@ export function saveFields(nav: Nav, v: ReceiptView, patch: ReceiptPatch, change
   if ('remarks' in patch) back.remarks = r.remarks ?? '';
   const names = changed.map((f) => t(`receipts.field.${f}`)).join(', ');
   return run(nav, () => api.patchReceipt(r.id, patch), t('receipts.saved', { fields: names }), () => api.patchReceipt(r.id, back));
+}
+
+/**
+ * The receipt's VAT facts as the owner sets them (a person's: the AI never reads them over); a
+ * payment booked with the old ones is booked again. Undo puts back what was there: facts the AI
+ * read as the AI's, none as none.
+ */
+export function saveVat(nav: Nav, v: ReceiptView, vat: VatFacts) {
+  const { r } = v;
+  const back: ReceiptPatch = r.hasSwissVat === undefined ? { vat: null }
+    : { vat: { hasSwissVat: r.hasSwissVat, vatSummary: r.vatSummary ?? [], ...(r.vatId && { vatId: r.vatId }) }, ...(r.vatBy ? {} : { vatBy: null }) };
+  const message = v.links.length ? t('receipts.vatSavedRebook') : t('receipts.saved', { fields: t('receipts.field.vat') });
+  return run(nav, () => api.patchReceipt(r.id, { vat }), message, () => api.patchReceipt(r.id, back));
 }
 
 export const deleteReceipt = (nav: Nav, v: ReceiptView) =>

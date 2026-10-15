@@ -71,6 +71,16 @@
 .form .fhint { color: var(--faint); font-size: 11.5px; }
 .form select:disabled { border-color: transparent; padding-left: 0; background: transparent; appearance: none; opacity: 1; }
 .form input[readonly], .form textarea[readonly] { border-color: transparent; padding-left: 0; background: transparent; }
+.form .vatf { display: grid; gap: 6px; justify-items: start; }
+.form .vatf > * { justify-self: stretch; }
+.form .vatf > .seg2, .form .vatf > .addlink { justify-self: start; }
+.form .vatf .lbl { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
+.form .vline { display: grid; grid-template-columns: 76px 1fr 18px; gap: 8px; align-items: center; }
+.form .vline .rm { color: var(--muted); font-size: 15px; line-height: 1; }
+.form .vline .rm:hover { color: var(--ink); }
+.byhand { font: 11px "Instrument Sans"; color: var(--muted); border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; white-space: nowrap; }
+.facts > .byhand { margin-left: 8px; align-self: center; }
+.facts > .byhand::before { content: none; }
 .kv { display: grid; grid-template-columns: 74px 1fr; gap: 5px 10px; font-size: 12.5px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; overflow: hidden; text-overflow: ellipsis; }
 .ocr { margin-top: 12px; font: 11px/1.5 "Geist Mono"; color: var(--muted); background: var(--hover); border-radius: 8px; padding: 10px; max-height: 120px; overflow: auto; white-space: pre-wrap; }

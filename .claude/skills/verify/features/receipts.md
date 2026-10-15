@@ -33,6 +33,17 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   fields `filename`, `date` (TT.MM.JJJJ), `currency`, `amount`, `description`, `remarks` (a
   textarea); Enter or leaving the form saves only the changed fields in one
   `PATCH /api/receipts/:id`.
+- `rc-vat`: in Angaben, `.vatf` (VatFields.tsx): `Schweizer MWST auf dem Beleg` with
+  `.seg2 [role=radio]` `keine` / `ja`; for `ja` one `.vline` per rate (a `select` of the
+  jurisdiction's rates in force, from the VAT engine, and the VAT amount), `weiterer Satz` adds one,
+  `×` removes one, and `MWST-Nummer`. `ja` on a receipt with an amount fills the first line at once
+  (amount × rate / (100 + rate), to the cent) and saves; a rate change refills a figure that was
+  filled so. Each change saves `PATCH /api/receipts/:id {vat}`: the facts become the person's
+  (`vatBy: human`, `.byhand` «von Hand» in the facts line and beside the label) and the VAT step
+  never reads them over, not with `--force`. The classifier's open bookings of the receipt's
+  payments go and the inbox run books them again (toast `MWST gespeichert · die Zahlung wird damit
+  neu gebucht`); the undo puts back what the AI read (`vatBy: null`), or no facts (`vat: null`,
+  read again by the next run).
 - `rc-kind`: Datei › `Kein Beleg` sets `kind: noise` (kindBy human), `Ist doch ein Beleg` (also
   the check button of a hidden row) sets `kind: invoice`.
 - `rc-undo`: link, unlink, private outlay, edit and kind answer with a toast `.toast` whose button
@@ -70,6 +81,12 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 - **Delete.** Select a row, `Backspace`, Enter: `- receipts <id>` and its mappings; the file is
   in `$SB/data/trash/<id>/`, the repo's `demo/receipts` still has it. The toast's undo must be
   taken within 6 s (no diff in between).
+- **VAT by hand.** Link the stub (`ln -sf $PWD/tests/support/stub-bin/claude $SB/bin/claude`),
+  open a receipt of the open quarter linked to a payment, click `.vatf .seg2` `ja`: `$S diff`
+  shows `~ receipts <id> .hasSwissVat/.vatSummary/.vatBy` and, once `GET /api/automation` has no
+  running run, the payment's entry replaced (`-`/`+ journalEntries`, the stub books `I81`). The run
+  also rewrites `bankStatements` in another key order: those lines are noise. Evidence:
+  `.verify/evidence/vatedit/vat/`.
 - **Filed quarter.** `$UI/receipts?period=$CLOSED_Q`: `.notice` says it is filed, `l` only toasts.
 - **Intake.** On any page dispatch `dragenter` + `drop` with a `DataTransfer` holding a PDF
   (`$B js`): the URL becomes `/receipts/<id>`, `.row.reading` shows, `curl $API/api/inbox` lists
