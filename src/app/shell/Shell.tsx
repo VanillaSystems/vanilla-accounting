@@ -69,7 +69,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [loc, go] = useLocationState();
   const [theme, setTheme, dark] = useTheme();
   const [zoom, zoomStep] = useZoom();
-  const { toast, dismiss: dismissToast, undo, node: toastNode } = useToast();
+  const { toast, note, dismiss: dismissToast, undo, node: toastNode } = useToast();
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);
@@ -136,7 +136,13 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const reload = useRef(refresh);
   reload.current = refresh;
   useEffect(() => onBooksChanged(() => reload.current()), []);
-  useEffect(() => (STATIC_EXPORT ? undefined : watchIntakeRuns((run) => { reload.current(); toast(run.status === 'done' ? t('intake.finished') : t('intake.note.error', { detail: run.error ?? run.status })); })), [toast]);
+  const noteRef = useRef(note);
+  noteRef.current = note;
+  useEffect(() => (STATIC_EXPORT ? undefined : watchIntakeRuns((run) => {
+    reload.current();
+    if (run.status === 'done') noteRef.current(t('intake.finished'));
+    else toast(t('intake.note.error', { detail: run.error ?? run.status }));
+  })), [toast]);
 
   useShellKeys({
     overlayOpen: () => overlay !== null || dropOpen(),

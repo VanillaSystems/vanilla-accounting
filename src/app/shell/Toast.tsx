@@ -21,6 +21,10 @@ export function useToast() {
   }, [shown]);
 
   const dismiss = useCallback(() => setVisible(false), []);
+  /** A message that waits for nothing: it does not take the place of a shown undo (a run finishing right after a delete). */
+  const note = useCallback((msg: string) => {
+    if (!(visible && shown?.undo)) toast(msg);
+  }, [visible, shown, toast]);
 
   /** Runs the shown undo; false when there is none. */
   const undo = useCallback(() => {
@@ -38,5 +42,5 @@ export function useToast() {
       )}
     </div>
   );
-  return { toast, dismiss, undo, node };
+  return { toast, note, dismiss, undo, node };
 }
