@@ -240,7 +240,7 @@ export interface CreditRequest {
   settlement?: 'refund' | 'offset';
 }
 
-/** A credit note drafted from an invoice: its lines negated (or a part of its total), the same customer, currency and language. */
+/** A credit note drafted from an invoice: its lines with negated prices (or a part of its total, one line per rate), the same customer, currency and language. */
 export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Envelope, date: string): Draft {
   if (inv.status !== 'issued' || inv.kind !== 'invoice') throw new InvoiceRuleError('notIssued', 'Eine Gutschrift bezieht sich auf eine ausgestellte Rechnung.');
   if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
@@ -248,7 +248,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
   const reason = req.reason.trim();
   let lines: InvoiceLine[];
   if (req.amount === undefined) {
-    lines = inv.lines.map((l) => ({ ...l, text: reason ? `${l.text} (${reason})` : l.text, quantity: -l.quantity }));
+    lines = inv.lines.map((l) => ({ ...l, text: reason ? `${l.text} (${reason})` : l.text, price: -l.price }));
   } else {
     const gross = toRappen(req.amount);
     if (gross <= 0 || gross > toRappen(t.gross)) throw new InvoiceRuleError('incomplete', 'Der Betrag einer Gutschrift liegt zwischen 0 und dem Total der Rechnung.');
@@ -262,7 +262,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
       left -= share;
       const net = fromRappen(Math.round(share * 100 / (100 + r.rate)));
       const account = inv.lines.find((l) => l.vatRate === r.rate)?.account;
-      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: -1, unit: 'flat' as const, price: net, vatRate: r.rate, ...(account ? { account } : {}) };
+      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -net, vatRate: r.rate, ...(account ? { account } : {}) };
     }).filter((l) => l.price !== 0);
   }
   return {
@@ -273,7 +273,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     date,
     currency: inv.currency,
     language: inv.language,
-    subject: `${TEXTS[inv.language].credit} ${inv.number}`,
+    subject: `${TEXTS[inv.language].forInvoice} ${inv.number}`,
     lines,
     ...(inv.exemption ? { exemption: inv.exemption } : {}),
     creditFor: inv.id,

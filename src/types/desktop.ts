@@ -14,6 +14,8 @@ export interface DesktopBridge {
   onMenu(listener: (command: MenuCommand) => void): () => void;
   /** The UI's language, so the native menu speaks it too. */
   setLanguage(code: string): void;
+  /** Saves a file of the local server (`url`) through the system's Save dialog; false when the person cancelled. */
+  saveFile(url: string, name: string): Promise<boolean>;
 }
 
 /**

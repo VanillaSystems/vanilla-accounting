@@ -20,7 +20,7 @@ import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
-import { byRouteId, customerOf, routeId, rowState, type RowState } from './model.js';
+import { byRouteId, customerOf, issuedLater, routeId, rowState, wasSent, type RowState } from './model.js';
 import { fixFor, parseNumber, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder } from './actions.js';
@@ -99,7 +99,7 @@ function InvoiceDetail(props: DetailProps) {
   return (
     <div className="detail-in" data-for={inv.id}>
       <div className="head">
-        <h2 className="who">{customer?.name || t('invoices.noCustomer')}<small>{inv.subject ?? ''}</small></h2>
+        <h2 className="who">{customer?.name || t('invoices.noCustomer')}<small>{inv.kind === 'credit-note' && inv.status === 'issued' ? `${t('invoices.creditNo', { number: inv.number })} ${inv.subject ?? ''}` : inv.subject ?? ''}</small></h2>
         <div className="amount"><small>{inv.currency}</small>{fmt(t0.gross)}</div>
       </div>
       <div className="facts">
@@ -153,10 +153,28 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
     return () => { live = false; };
   }, [inv.id, awaits]);
 
-  if (inv.status === 'draft') return <div className="status"><span className="notice">{t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span></div>;
+  if (inv.status === 'draft') {
+    const later = issuedLater(d.invoices, inv);
+    return (
+      <div className="status">
+        <span className="notice">{t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span>
+        {later?.status === 'issued' && <div className="notice warn" role="note">{I.dot}<span>{t('invoices.dateBeforeLast', { number: later.number, date: formatDate(later.date) })}</span></div>}
+      </div>
+    );
+  }
   if (reminder) {
     const r = reminderDraft(inv, d.invoices, today);
-    return <div className="status"><span className="notice">{t('invoices.reminderStatus', { level: r.level, date: formatDate(r.dueDate) })}</span></div>;
+    return (
+      <div className="status">
+        <span className="notice">{t('invoices.reminderStatus', { level: r.level, date: formatDate(r.dueDate) })}</span>
+        {!wasSent(d.sent, inv) && (
+          <div className="notice warn" role="note">
+            {I.dot}<span>{t('invoices.remindUnsent')}</span>
+            {canEdit && <button type="button" className="btn ghost" onClick={() => setUi({ reminder: null, preview: false, dialog: { kind: 'send' } })}>{t('invoices.sendFirst')}</button>}
+          </div>
+        )}
+      </div>
+    );
   }
   const sent = d.sent.filter((x) => x.invoiceId === inv.id).sort((a, b) => a.sentAt.localeCompare(b.sentAt));
   const firstSent = sent.find((x) => x.kind === 'invoice' || x.kind === 'credit-note');

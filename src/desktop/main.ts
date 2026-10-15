@@ -6,9 +6,10 @@
  * src/workspace/workspace.ts finds APP_ROOT.
  */
 import { createServer, type Server } from 'node:http';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell } from 'electron';
 import type { Express } from 'express';
 import { usePrintPages } from '../invoices/pdf.js';
@@ -17,6 +18,7 @@ import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { MenuCommand } from '../types/desktop.js';
 import { findClaude } from './claude.js';
+import { sameOrigin, saveFile } from './save-file.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer } from './server.js';
@@ -98,6 +100,23 @@ async function start(): Promise<void> {
 
   if (SMOKE) smokeHandles();
   ipcMain.handle('desktop:chooseFolder', (_e, title: unknown) => chooseFolder(typeof title === 'string' ? title : ''));
+  ipcMain.handle('desktop:saveFile', async (e, url: unknown, name: unknown) => {
+    const href = typeof url === 'string' ? sameOrigin(url, e.sender.getURL()) : undefined;
+    if (!href) return false;
+    return saveFile(href, typeof name === 'string' ? basename(name) : 'document.pdf', {
+      ask: async (file) => {
+        const options = { defaultPath: join(app.getPath('downloads'), file) };
+        const r = win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+        return r.canceled || !r.filePath ? undefined : r.filePath;
+      },
+      read: async (u) => {
+        const res = await fetch(u);
+        if (!res.ok) throw new Error(`${u}: HTTP ${res.status}`);
+        return new Uint8Array(await res.arrayBuffer());
+      },
+      write: (path, bytes) => writeFile(path, bytes),
+    });
+  });
   ipcMain.on('desktop:language', (_e, code: unknown) => {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }

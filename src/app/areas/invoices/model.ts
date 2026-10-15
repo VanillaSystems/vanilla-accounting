@@ -23,6 +23,19 @@ export function rowState(inv: Invoice, invoices: readonly Invoice[], today: stri
   return isOverdue(inv, invoices, today) ? 'overdue' : 'open';
 }
 
+/** The invoice or credit note itself went to the customer (by e-mail or as a saved PDF), not only a reminder or notice. */
+export const wasSent = (sent: readonly SentDocument[], inv: Invoice): boolean => sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note' || x.kind === 'resend'));
+
+/**
+ * The last document issued in the draft's year with a later date: the draft would take the next
+ * number with an earlier date, and the numbers would no longer follow the dates.
+ */
+export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'>): Invoice | undefined {
+  return invoices
+    .filter((i) => i.status === 'issued' && !i.deleted && i.number.startsWith(`${draft.date.slice(0, 4)}-`) && i.date > draft.date)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
 /** The id an invoice has in a link: its number once issued, `draft-<id>` before (docs/urls.md). */
 export const routeId = (inv: Invoice): string => (inv.status === 'issued' ? inv.number : `draft-${inv.id}`);
 
@@ -39,11 +52,15 @@ export function customerOf(d: InvoiceList, inv: Invoice): Pick<Customer, 'name' 
 
 export interface InvoiceRow { inv: Invoice; state: RowState; gross: number; customer: string }
 
-/** The invoices of a period (by invoice date; drafts always), searched by number, subject, customer and amount. */
+/**
+ * The invoices of a period (by invoice date), every draft, and every invoice of an earlier period
+ * still open (an overdue invoice from last quarter is still owed), searched by number, subject,
+ * customer and amount.
+ */
 export function rowsOf(d: InvoiceList, period: Period, q: string | undefined, today: string): InvoiceRow[] {
   const needle = q?.trim().toLowerCase();
   return d.invoices
-    .filter((inv) => inv.status === 'draft' || (inv.date >= period.from && inv.date <= period.to))
+    .filter((inv) => inv.status === 'draft' || (inv.date >= period.from && inv.date <= period.to) || (inv.date < period.from && openAmount(inv, d.invoices) > 0))
     .map((inv) => ({ inv, state: rowState(inv, d.invoices, today), gross: totals(inv.lines).gross, customer: customerOf(d, inv)?.name ?? '' }))
     .filter((r) => !needle || [r.inv.status === 'issued' ? r.inv.number : '', r.inv.subject ?? '', r.customer, r.gross.toFixed(2)].join(' ').toLowerCase().includes(needle));
 }

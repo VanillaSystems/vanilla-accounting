@@ -60,6 +60,14 @@ function List(props: Props) {
   const load = useInvoices();
   useUi();
 
+  // A statement dropped or a run may have paid an invoice: read them again whenever the books change.
+  const books = useRef(props.books);
+  useEffect(() => {
+    if (books.current === props.books) return;
+    books.current = props.books;
+    void reloadInvoices();
+  }, [props.books]);
+
   // /invoices/new?customer=<id>: a new draft for that customer, then its own link.
   const creating = useRef(false);
   useEffect(() => {
@@ -98,7 +106,7 @@ function InvoiceList(props: Props & { d: Records }) {
   // A link to an invoice of another period opens that period (urls.md rule 1).
   useEffect(() => {
     const inv = byRouteId(d.invoices, selected);
-    if (inv?.status === 'issued' && !query.period && (inv.date < period.from || inv.date > period.to)) nav.go(invoiceAt(inv));
+    if (inv?.status === 'issued' && !query.period && !rows.some((r) => r.inv.id === inv.id)) nav.go(invoiceAt(inv));
   }, [selected]);
 
   return (

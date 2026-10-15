@@ -143,7 +143,7 @@ test('credit notes: a part over the invoice rates, or at one rate; they reduce w
   assert.equal(part.lines.length, 2);
   assert.ok(Math.abs(totals(part.lines).gross + 100) <= 0.01, 'the parts make the amount, give or take the VAT rounding of a Rappen');
   const one = creditNoteDraft(inv, { amount: 51.3, vatRate: 2.6, reason: '1 Sack' }, env('in_o'), '2026-10-12');
-  assert.deepEqual(one.lines.map((l) => [l.vatRate, l.quantity, l.price]), [[2.6, -1, 50]]);
+  assert.deepEqual(one.lines.map((l) => [l.vatRate, l.quantity, l.price]), [[2.6, 1, -50]], 'one line «1 × −50.00»');
   const credited: Issued = { ...issued(one, all), id: 'in_o' };
   assert.equal(openAmount(inv, [inv, credited]), Math.round((totals(inv.lines).gross - 51.3) * 100) / 100);
   assert.equal(openAmount(inv, [inv, credited], '2026-10-01'), totals(inv.lines).gross, 'a credit note written later does not count for an earlier payment');

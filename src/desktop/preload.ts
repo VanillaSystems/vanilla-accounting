@@ -13,6 +13,7 @@ const bridge: DesktopBridge = {
     return () => { ipcRenderer.off('desktop:menu', handler); };
   },
   setLanguage: (code) => ipcRenderer.send('desktop:language', code),
+  saveFile: (url, name) => ipcRenderer.invoke('desktop:saveFile', url, name),
 };
 
 contextBridge.exposeInMainWorld('vanilla', bridge);

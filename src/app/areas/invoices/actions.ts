@@ -13,6 +13,7 @@ import { setUi } from './state.js';
 import { put, reloadInvoices } from './data.js';
 import { customerChange, routeId } from './model.js';
 import { invoicing } from '../../../engines/index.js';
+import { desktop } from '../../desktop/bridge.js';
 
 export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: 'list' as const, id: routeId(inv) });
 
@@ -74,6 +75,16 @@ export async function issue(nav: Nav, draft: Draft): Promise<Issued | undefined>
   return issued;
 }
 
+/**
+ * The PDF saved where the person says: in the Mac app through the Save dialog, which tells whether
+ * it was saved; in a browser by its download, which does not.
+ */
+async function savePdf(href: string, name: string): Promise<boolean> {
+  if (desktop?.saveFile) return desktop.saveFile(href, name);
+  download(href, name);
+  return true;
+}
+
 function download(href: string, name: string): void {
   const a = Object.assign(document.createElement('a'), { href, download: name });
   document.body.append(a);
@@ -86,7 +97,8 @@ function download(href: string, name: string): void {
  * otherwise; either way it is recorded with its bytes. A failed e-mail records nothing.
  */
 export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<boolean> {
-  if (!email) download(api.documentUrl(inv.pdf.file), `${inv.number}.pdf`);
+  // Cancelled in the Save dialog: nothing went out, nothing is recorded.
+  if (!email && !(await savePdf(api.documentUrl(inv.pdf.file), `${inv.number}.pdf`))) return false;
   const doc = await run(nav, api.recordSend(inv.id, email ? { email } : { to: 'download' }));
   if (!doc) return false;
   await reloadInvoices();
@@ -96,7 +108,7 @@ export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<
 
 export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
   const { customerId, currency, language, subject, lines, intro, closing, exemption } = inv;
-  const lines2 = inv.kind === 'credit-note' ? lines.map((l) => ({ ...l, quantity: -l.quantity })) : lines;
+  const lines2 = inv.kind === 'credit-note' ? lines.map((l) => ({ ...l, price: -l.price })) : lines;
   const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, { currency, language, lines: lines2, ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}) });
   if (draft) nav.toast(t('invoices.copied', { number: inv.number }));
 }

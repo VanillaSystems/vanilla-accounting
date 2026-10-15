@@ -91,7 +91,7 @@ export interface InvoiceContent {
   language: InvoiceLanguage;
   /** A short title for lists ("Teamporträts"); not printed. */
   subject?: string;
-  /** A credit note's lines carry negative quantities, so its totals are negative. */
+  /** A credit note's lines carry negative prices (older ones negative quantities), so its totals are negative. */
   lines: InvoiceLine[];
   /** The text above the table and below the totals; absent: the layout's default for the language. */
   intro?: string;
