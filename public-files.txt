@@ -7,6 +7,7 @@
 # Private, never listed: the workspace (see README), and any file not matched below.
 
 README.md
+MISSION.md
 CHANGELOG.md
 LICENSE
 AGENTS.md

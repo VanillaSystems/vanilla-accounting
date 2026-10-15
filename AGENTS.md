@@ -1,5 +1,9 @@
 # Vanilla Accounting
 
+Read [MISSION.md](MISSION.md) first: every change is judged by it. Work goes to code first, to the AI
+where judgement is needed, to the person only for what only they can decide; a person's
+correction is kept and learned from; whatever the AI does, a person can also do by hand.
+
 Vanilla Accounting is the app; one company's books are a workspace: the folder `vanilla-accounting/`
 of the company's repository (ADR 0013), opened by `VANILLA_WORKSPACE` (the repository or that
 folder) or found from the cwd. Inside it: the settings (`belege.workspace.yaml`, `sources/`, …) and

@@ -5,6 +5,10 @@ bank statements, collects receipts, matches each receipt to its bank transaction
 journal entries with Claude, and writes the quarterly VAT return as the eCH-0217 XML that the
 ESTV "MWST abrechnen" portal imports.
 
+**[Mission](MISSION.md):** take the bookkeeping off the people who run a small company. Code does
+what rules can decide, the AI what needs judgement, the person only what only they can know; and
+every person can automate the rest by asking the app's AI in their own words.
+
 ## Who built this
 
 Vanilla Accounting is built by Ken Steiner, vibe-coded with Claude Code. Ken is a former SAP
