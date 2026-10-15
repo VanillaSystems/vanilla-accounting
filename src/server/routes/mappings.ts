@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { withBooks, RequestError } from '../books.js';
-import { link, unlink } from '../edits.js';
+import { updateBooks, RequestError } from '../books.js';
+import { link, relinked, unlink } from '../edits.js';
+import type { BookChange } from '../../types/assistant.js';
+import { bookAgain } from './automation.js';
 
 export const router = Router();
 
@@ -10,18 +12,22 @@ function linkBody(body: unknown): { receiptId: string; transactionRef: string } 
   return { receiptId, transactionRef };
 }
 
-router.post('/api/mapping/add', (req, res) => {
-  const { receiptId, transactionRef } = linkBody(req.body);
-  return withBooks(res, (books) => {
-    link(books, receiptId, transactionRef);
-    return { ok: true };
+/** A link made or taken back by hand: the payment's automatic booking is made again with what is linked now. */
+async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: true; again: string[] }> {
+  const { receiptId: receipt, transactionRef: payment } = linkBody(body);
+  const change: BookChange = { kind, receipt, payment };
+  const { payments, file } = updateBooks((books) => {
+    (kind === 'link' ? link : unlink)(books, receipt, payment);
+    return relinked(books, [change]);
   });
+  if (payments.length) await bookAgain(file ?? payment);
+  return { ok: true, again: payments };
+}
+
+router.post('/api/mapping/add', async (req, res) => {
+  res.json(await relink('link', req.body));
 });
 
-router.post('/api/mapping/remove', (req, res) => {
-  const { receiptId, transactionRef } = linkBody(req.body);
-  return withBooks(res, (books) => {
-    unlink(books, receiptId, transactionRef);
-    return { ok: true };
-  });
+router.post('/api/mapping/remove', async (req, res) => {
+  res.json(await relink('unlink', req.body));
 });

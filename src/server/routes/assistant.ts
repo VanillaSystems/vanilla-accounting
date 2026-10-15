@@ -11,7 +11,7 @@ import { RequestError, WS, refusalOf, updateBooks } from '../books.js';
 import { listConversations, readConversation, RefusedChanges, sendMessage, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
 import type { AssistantEvent, AssistantSend, BookChange, ContextRef } from '../../types/assistant.js';
 import type { Books } from '../../books/store.js';
-import { applyAnswer, applyChange, unbookedPayments } from '../edits.js';
+import { applyAnswer, applyChange, relinked, unbookedPayments } from '../edits.js';
 import { bookAgain } from './automation.js';
 
 export const router = Router();
@@ -59,11 +59,16 @@ router.post('/api/assistant', async (req, res) => {
   res.end();
 });
 
-/** Receipts whose VAT facts changed took their payments' bookings away (src/server/edits.ts setReceipt): the inbox run books them again. */
+/**
+ * Changes that took payments' bookings away: new VAT facts of a receipt (src/server/edits.ts
+ * setReceipt), a link made or taken back (relinked). The inbox run books them again.
+ */
 function bookedAgain(books: Books, changes: readonly BookChange[]): () => void {
+  const links = relinked(books, changes);
   const receipts = changes.flatMap((c) => (c.kind === 'receipt' && c.set.vat ? [c.id] : []));
-  const file = books.receipts.find((r) => receipts.includes(r.id))?.filename;
-  return file && unbookedPayments(books, receipts).length ? () => void bookAgain(file) : () => {};
+  const payments = [...links.payments, ...unbookedPayments(books, receipts)];
+  const file = links.file ?? books.receipts.find((r) => receipts.includes(r.id))?.filename ?? payments[0];
+  return payments.length ? () => { bookAgain(file).catch((e) => console.error(`receipt-intake: ${(e as Error).message}`)); } : () => {};
 }
 
 /** All of an answer's changes in one write of the books: a refused one leaves the books as they were. */

@@ -10,7 +10,7 @@ import { isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { paymentDates, paymentSides } from '../accounting/payment-entries.js';
 import { baseCurrency, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
-import { unbookForNewFacts } from '../accounting/classify-force.js';
+import { unbookPayments } from '../accounting/classify-force.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
@@ -40,7 +40,7 @@ export function setReceipt(books: Books, id: string, set: ReceiptSet): BookChang
     const { vatBy, ...was } = heldFacts(r);
     before.vat = was;
     if (!vatBy) before.vatBy = null;
-    if (setVatFacts(r, set.vat, set.vatBy === null ? null : 'human')) unbookForNewFacts(books, id);
+    if (setVatFacts(r, set.vat, set.vatBy === null ? null : 'human')) unbookPayments(books, books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef), 'facts');
   }
   return { kind: 'receipt', id, set: before };
 }
@@ -67,6 +67,18 @@ export function unlink(books: Books, receipt: string, payment: string): BookChan
   const had = books.mappings.length;
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === payment && m.receiptId === receipt));
   return books.mappings.length < had ? { kind: 'link', receipt, payment } : undefined;
+}
+
+/**
+ * After links changed by hand (the dialog, the AI sidebar, an undo): the automatic bookings of
+ * their payments go, to be booked again from what is linked now (unbookPayments).
+ * Returns the payments to book again and a receipt's file to name the run by.
+ */
+export function relinked(books: Books, changes: readonly BookChange[]): { payments: string[]; file?: string } {
+  const links = changes.filter((c): c is Extract<BookChange, { kind: 'link' | 'unlink' }> => c.kind === 'link' || c.kind === 'unlink');
+  const payments = links.length ? unbookPayments(books, links.map((c) => c.payment), 'links') : [];
+  const file = books.receipts.find((r) => links.some((c) => c.receipt === r.id))?.filename;
+  return { payments, ...(file ? { file } : {}) };
 }
 
 export function setEntry(books: Books, id: string, set: EntrySet): BookChange {

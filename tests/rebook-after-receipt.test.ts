@@ -2,11 +2,11 @@
  * A payment booked before its receipt arrived is booked again once the receipt is linked
  * (src/accounting/classify-force.ts entriesWithoutTheirReceipts): the usability test of
  * 2026-10-15 lost every receipt's VAT because the statement was booked first. So is a payment whose
- * receipt's VAT facts a person corrected (unbookForNewFacts).
+ * receipt's VAT facts a person corrected (unbookPayments, 'facts').
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { entriesWithoutTheirReceipts, unbookForNewFacts } from '../src/accounting/classify-force.js';
+import { entriesWithoutTheirReceipts, unbookPayments } from '../src/accounting/classify-force.js';
 import type { JournalEntry } from '../src/types/index.js';
 
 const je = (ref: string, x: Partial<JournalEntry> = {}): JournalEntry =>
@@ -41,6 +41,6 @@ test('new VAT facts take away only the classifier\'s open bookings of the receip
     transactions: entries.map((e) => ({ ref: e.transactionRef })),
     config: { closedThrough: '2026-06-30' },
   };
-  assert.deepEqual(unbookForNewFacts(books, 'r'), ['auto', 'legacy']);
+  assert.deepEqual(unbookPayments(books, books.mappings.filter((m) => m.receiptId === 'r').map((m) => m.transactionRef), 'facts'), ['auto', 'legacy']);
   assert.deepEqual(books.journalEntries.map((e) => e.id), entries.filter((e) => !['auto', 'legacy'].includes(e.transactionRef)).map((e) => e.id));
 });

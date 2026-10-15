@@ -53,39 +53,37 @@ export function entriesWithoutTheirReceipts(
     (group.every((e) => e.origin === 'classify' && e.receipts) && !same(group[0].receipts!, linked.get(ref)) ? group : []));
 }
 
+type Relinkable = { mappings: Mapping[]; journalEntries: JournalEntry[]; transactions: ReadonlyArray<{ ref: string }>; config?: { closedThrough?: string } };
+
 /**
- * A receipt leaves the books (deleted, or a drop taken back): its links go, and with them the
- * classifier's entries that saw it, so none claims the receipt's VAT without it. Returns the
- * payments left without an entry: the inbox run's book step books them again.
+ * The evidence of these payments changed: the classifier's open-period entries that no longer fit
+ * it go at once, and the inbox run's book step books the payments again. Returns the payments left
+ * without an entry. Hand bookings, filed quarters, corrections and rebook-shopify payouts stay
+ * (entriesForceMayRemove), whichever the change:
+ * - 'links': a receipt linked, taken back or deleted. Only entries that recorded the receipts they
+ *   saw take part, and only when those differ from what is linked now (entriesWithoutTheirReceipts).
+ *   An older entry without that record cannot tell whether it saw the receipt, and a person may
+ *   have shaped it before `origin` existed: it stays.
+ * - 'facts': a person corrected the VAT facts of a receipt linked to them. Every entry --force may
+ *   remove goes, older ones too: whatever it saw, it was booked with the facts as they were.
  */
-export function removeReceipt(
-  books: { receipts: Receipt[]; mappings: Mapping[]; journalEntries: JournalEntry[]; transactions: ReadonlyArray<{ ref: string }>; config?: { closedThrough?: string } },
-  id: string,
-): string[] {
-  const refs = new Set(books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef));
-  books.receipts = books.receipts.filter((r) => r.id !== id);
-  books.mappings = books.mappings.filter((m) => m.receiptId !== id);
-  const known = new Set(books.transactions.map((t) => t.ref).filter((ref) => refs.has(ref)));
-  const stale = new Set(entriesWithoutTheirReceipts(books.journalEntries, books.mappings, known, books.config?.closedThrough));
+export function unbookPayments(books: Relinkable, refs: Iterable<string>, changed: 'links' | 'facts'): string[] {
+  const want = new Set(refs);
+  const known = new Set(books.transactions.map((t) => t.ref).filter((ref) => want.has(ref)));
+  const closed = books.config?.closedThrough;
+  const stale = new Set(changed === 'links'
+    ? entriesWithoutTheirReceipts(books.journalEntries, books.mappings, known, closed)
+    : entriesForceMayRemove(books.journalEntries, known, closed));
   books.journalEntries = books.journalEntries.filter((e) => !stale.has(e));
   return [...new Set([...stale].map((e) => e.transactionRef))];
 }
 
-/**
- * A person corrected a receipt's VAT facts: the classifier's open-period entries of its payments
- * were booked with the facts it had, so they go, under the rules of --force (a payment with a
- * person's entry, a closed one or a correction stays as it is). Returns the payments left without
- * an entry: the inbox run's book step books them again with the new facts.
- */
-export function unbookForNewFacts(
-  books: { mappings: Mapping[]; journalEntries: JournalEntry[]; transactions: ReadonlyArray<{ ref: string }>; config?: { closedThrough?: string } },
-  id: string,
-): string[] {
-  const linked = new Set(books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef));
-  const refs = new Set(books.transactions.map((t) => t.ref).filter((ref) => linked.has(ref)));
-  const stale = new Set(entriesForceMayRemove(books.journalEntries, refs, books.config?.closedThrough));
-  books.journalEntries = books.journalEntries.filter((e) => !stale.has(e));
-  return [...new Set([...stale].map((e) => e.transactionRef))];
+/** A receipt leaves the books (deleted, or a drop taken back): its links go, and with them the classifier's entries that saw it. */
+export function removeReceipt(books: Relinkable & { receipts: Receipt[] }, id: string): string[] {
+  const refs = books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef);
+  books.receipts = books.receipts.filter((r) => r.id !== id);
+  books.mappings = books.mappings.filter((m) => m.receiptId !== id);
+  return unbookPayments(books, refs, 'links');
 }
 
 function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined): boolean {
