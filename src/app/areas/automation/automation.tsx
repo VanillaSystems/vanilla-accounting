@@ -442,7 +442,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
         {data.status === 'done' || data.status === 'stuck' ? <button type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</button> : null}
-        <AskAi context={{ kind: 'run', id, label: t('automation.run', { id }) }} mode={data.status === 'stuck' ? 'ask' : 'change'} />
+        <AskAi context={{ kind: 'run', id, label: t('automation.run', { id }) }} />
         {data.status !== 'done' && data.status !== 'discarded' ? <button type="button" className="btn ghost" onClick={act({ kind: 'discard', run: id })}>{t('automation.discard')}</button> : null}
       </div>
       {runDocuments(data, books).slice(0, 3).map((r) => <RunDocument key={r.id} r={r} nav={nav} />)}

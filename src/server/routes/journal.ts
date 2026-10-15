@@ -5,6 +5,8 @@ import { isIsoDate, parsePeriod, isFilingKey } from '../../accounting/periods.js
 import { nextManualRef } from '../../books/refs.js';
 import { assertOpen, patchBody, refDates, stringField, withBooks, RequestError } from '../books.js';
 import { filing } from '../../engines/index.js';
+import type { EntrySet } from '../../types/assistant.js';
+import { setEntry } from '../edits.js';
 
 export const router = Router();
 
@@ -14,24 +16,11 @@ function amountField(b: Record<string, unknown>): number {
 }
 
 router.patch('/api/journal-entries/:id', (req, res) => {
-  const { id } = req.params;
   const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount']);
-  const updates = b as Partial<{ date: string; accountDebit: string; accountCredit: string; vatCode: string; description: string }>;
-  const amount = 'amount' in b ? amountField(b) : undefined;
-
+  const set = b as EntrySet;
+  if ('amount' in b) set.amount = amountField(b);
   return withBooks(res, (books) => {
-    const entry = books.journalEntries.find((je) => je.id === id);
-    if (!entry) throw new RequestError(404, 'Journal entry not found');
-    assertOpen(books, [entry.date, updates.date], 'editEntry');
-    if (entry.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
-
-    if (updates.date !== undefined) entry.date = updates.date;
-    if (updates.accountDebit !== undefined) entry.accountDebit = updates.accountDebit;
-    if (updates.accountCredit !== undefined) entry.accountCredit = updates.accountCredit;
-    if (updates.vatCode !== undefined) entry.vatCode = updates.vatCode || undefined;
-    if (updates.description !== undefined) entry.description = updates.description || undefined;
-    if (amount !== undefined) entry.amount = amount;
-    entry.origin = 'manual';
+    setEntry(books, req.params.id, set);
     return { ok: true };
   });
 });

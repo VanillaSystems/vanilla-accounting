@@ -32,9 +32,6 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .aicompose textarea { resize: none; min-height: 64px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; }
 .aibar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .aibar .btn .bot { width: 14px; height: 14px; }
-.aimode { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--hover); }
-.aimode button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
-.aimode button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
 .aimention { position: absolute; left: 14px; right: 14px; bottom: calc(100% - 6px); display: flex; flex-direction: column; padding: 4px; border-radius: 10px; background: var(--glass); border: 1px solid var(--glass-line); box-shadow: var(--shadow); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
 .aimention button { display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 0; border-radius: 7px; background: none; color: inherit; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
 .aimention button.on, .aimention button:hover { background: var(--hover); }
@@ -86,3 +83,8 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .droprow .dacts { display: inline-flex; gap: 12px; }
 .droprow .dacts .linkbtn:disabled { color: var(--faint); cursor: default; }
 .droprow.s-undone { opacity: .55; }
+.aichanges { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.aichanges li { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; padding: 7px 10px; border-radius: 8px; background: var(--hover); font-size: 12.5px; }
+.aichanges li.undone span { color: var(--muted); text-decoration: line-through; }
+.aichanges small { color: var(--muted); white-space: nowrap; }
+.aichanges .linkbtn { white-space: nowrap; }

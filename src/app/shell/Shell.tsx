@@ -37,7 +37,7 @@ import { TopBar } from './TopBar.js';
 import { Corner } from './Corner.js';
 import { Sidebar } from './Sidebar.js';
 import { pageContext } from '../assistant/context.js';
-import { syncSidebarWidth, toggleAssistant } from '../assistant/store.js';
+import { onBooksChanged, syncSidebarWidth, toggleAssistant } from '../assistant/store.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
 
@@ -134,6 +134,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   // The inbox processing runs on the server; the books are loaded again when a job ends.
   const reload = useRef(refresh);
   reload.current = refresh;
+  useEffect(() => onBooksChanged(() => reload.current()), []);
   useEffect(() => (STATIC_EXPORT ? undefined : watchIntakeRuns((run) => { reload.current(); toast(run.status === 'done' ? t('intake.finished') : t('intake.note.error', { detail: run.error ?? run.status })); })), [toast]);
 
   useShellKeys({
@@ -251,7 +252,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
-      <Sidebar page={pageContext(loc.route, books)} onGo={(route) => nav.go({ route, query: {} })} />
+      <Sidebar page={pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
       <DropDialog books={books} onGo={(route) => nav.go({ route, query: {} })} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />

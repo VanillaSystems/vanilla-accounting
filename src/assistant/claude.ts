@@ -4,11 +4,12 @@
  * of a conversation (--resume), its answer streamed (stream-json). Unlike src/llm/ask.ts (one lean
  * call from an empty folder) it runs in the workspace.
  *
- * What it may change is set by its permissions, not by the prompt: no settings of the workspace or
- * the person are loaded (they could allow more), Fragen has only Read, Glob and Grep, and Ändern
- * adds Edit and Write under data/draft/ for the customizing folders only. So the AI never writes
- * the books (ledger.json, transactional-data/), never the approvals (outside the workspace), and
- * never a file in place: a person saves the draft in Änderungen (docs/0.4.0/saving.md).
+ * It does what the person asks. A change to the books it names in a ```vanilla-changes block at
+ * the end of its answer, which the app checks and applies with an undo for each change
+ * (src/assistant/changes.ts, src/server/edits.ts): its file tools never write the books. What it
+ * may write is set by its permissions, not by the prompt: no settings of the workspace or the
+ * person are loaded (they could allow more), and Edit and Write reach only data/draft/ for the
+ * customizing folders, which a person saves in Änderungen (docs/0.4.0/saving.md).
  */
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
@@ -16,7 +17,7 @@ import { join } from 'node:path';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { claudeCommand, NoClaudeError, record, type Model } from '../llm/ask.js';
 import { customizingNames } from '../saving/changes.js';
-import type { AssistantEvent, AssistantMode, AssistantSend } from '../types/assistant.js';
+import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
 const APP_FILES = APP_ROOT.replace(/app\.asar(?=$|\/)/, 'app.asar.unpacked');
@@ -28,36 +29,38 @@ export function draftPatterns(): string[] {
   return customizingNames().map((n) => (/\.[a-z]+$/i.test(n) ? `data/draft/${n}` : `data/draft/${n}/**`));
 }
 
-export function assistantSystem(mode: AssistantMode, language: string): string {
+export function assistantSystem(language: string): string {
   return [
-    'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them.',
-    'The current directory is the company\'s app folder: ledger.json, master-data/, transactional-data/<year>/ (the books, receipts, statements, filings, the run log), knowledge/ (rules, precedents, counterparties), workflows/ (the company\'s changes to the app\'s workflows), modules/, belege.workspace.yaml.',
+    'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them. They are not an accountant and not technical. Do what they ask.',
+    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, transactions = payments, mappings = links, journalEntries = bookings), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml.',
     `The app's own rules: ${join(APP_FILES, 'AGENTS.md')}. Its workflows: ${join(APP_FILES, 'workflows')}/<id>/workflow.yaml and <step>/step.yaml. The company's notes: ../docs/company/AGENTS.md when it exists.`,
-    'A filed quarter never changes. You never change the books: bookings are made by the app\'s workflows, which the person starts.',
-    mode === 'ask'
-      ? 'You only read and answer. If the person wants something changed, say what you would change, and that they can switch to «Ändern».'
-      : [
-        'You change how the app works (rules, workflows, knowledge, settings) in the draft, never in place:',
-        'to change a file X of this folder, write data/draft/X. If data/draft/X does not exist yet, Read X first and Write its whole new content to data/draft/X; a new file is written to data/draft/ directly.',
-        'The person sees the draft under Änderungen and saves it there. Say which files you changed and why, in one or two sentences.',
-      ].join(' '),
+    'To change the books, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, each with an undo for the person:',
+    '```vanilla-changes',
+    '[{"kind":"receipt","id":"<receipt id>","set":{"date":"2026-06-28","amount":1243.55,"currency":"<ISO code>","description":"Farbmix AG, Farben","vat":{"hasSwissVat":true,"vatId":"<the VAT number on the receipt>","vatSummary":[{"ratePercent":8.1,"net":1150.35,"vat":93.2,"gross":1243.55}]}}},',
+    ' {"kind":"link","receipt":"<receipt id>","payment":"<transaction ref>"}, {"kind":"unlink","receipt":"<receipt id>","payment":"<transaction ref>"},',
+    ' {"kind":"entry","id":"<journal entry id>","set":{"accountDebit":"4000","accountCredit":"1020","vatCode":"<VAT code>","amount":1243.55,"date":"2026-07-03","description":"…"}}]',
+    '```',
+    'Only the fields that change go into "set". "vat" with "hasSwissVat":false means the receipt shows no Swiss VAT. Take ids from what the person refers to or from the books. Check the receipt itself (Read its PDF) before you set facts from it.',
+    'A filed quarter (dated on or before config.closedThrough) never changes: say so, and that a correction is booked in the open quarter.',
+    'How the app works (rules, workflows, knowledge, settings) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). Tell the person it takes effect when they press «Speichern» under Änderungen.',
+    'Before the block, say in one or two plain sentences what you changed. Never mention files, JSON, ids, git or commits to the person.',
     `Answer in ${LANGUAGES[language] ?? 'German'}, short and plain.`,
   ].join('\n');
 }
 
-export function assistantArgs(send: Pick<AssistantSend, 'mode' | 'language'>, session: string | undefined, repository: string): string[] {
-  const writes = send.mode === 'change' ? draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]) : [];
+export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string): string[] {
+  const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   return [
     '-p',
     '--model', 'sonnet',
     '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--append-system-prompt', assistantSystem(send.mode, send.language),
+    '--append-system-prompt', assistantSystem(send.language),
     '--setting-sources', '',
     '--strict-mcp-config',
     '--permission-mode', 'default',
     '--add-dir', APP_FILES, repository,
     '--allowedTools', 'Read', 'Glob', 'Grep', ...writes,
-    '--disallowedTools', 'Bash', 'NotebookEdit', 'WebFetch', 'WebSearch', ...(send.mode === 'ask' ? ['Edit', 'Write'] : []),
+    '--disallowedTools', 'Bash', 'NotebookEdit', 'WebFetch', 'WebSearch',
     ...(session ? ['--resume', session] : []),
   ];
 }
@@ -203,7 +206,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
     try { m = JSON.parse(line) as Line; } catch { return; }
     const u = m.usage ?? {};
     record({
-      at: new Date().toISOString(), step: `assistant#${call.send.mode}`, model: modelOf(m.modelUsage), ok: !m.is_error, ms: Date.now() - started,
+      at: new Date().toISOString(), step: 'assistant', model: modelOf(m.modelUsage), ok: !m.is_error, ms: Date.now() - started,
       input: u.input_tokens ?? 0, cacheCreate: u.cache_creation_input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0,
       output: u.output_tokens ?? 0, turns: m.num_turns ?? 0,
     });

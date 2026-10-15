@@ -1,14 +1,14 @@
 /**
  * The AI sidebar in the browser (docs/0.4.0/views.md, "The AI, as a sidebar"): whether it is
- * open, the conversation in it, what it refers to beyond the page, its mode, and the answer as it
- * streams. One store for the shell, the areas' «Mit KI ändern…» and the sidebar itself. Open, the
+ * open, the conversation in it, what it refers to beyond the page, and the answer as it streams,
+ * with the changes it made to the books. One store for the shell, the areas' «Mit KI ändern…» and the sidebar itself. Open, the
  * sidebar takes its width from the page (--aiw), and every fixed element centres on what is left.
  */
 import { useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
 import { language } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
-import type { AssistantEvent, AssistantMode, ContextRef, ConversationSummary, Turn } from '../../types/assistant.js';
+import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
 
 export const SIDEBAR_WIDTH = 400;
 
@@ -18,7 +18,6 @@ export interface AssistantState {
   listing: boolean;
   conversation?: string;
   turns: Turn[];
-  mode: AssistantMode;
   /** Added by «Mit KI ändern…» or @, beside the page's own reference. */
   extra: ContextRef[];
   /** The page's reference is left out of the next message. */
@@ -28,7 +27,7 @@ export interface AssistantState {
   error?: string;
 }
 
-let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], mode: 'ask', extra: [], pageOff: false, sending: false };
+let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], extra: [], pageOff: false, sending: false };
 const listeners = new Set<() => void>();
 let stop: AbortController | undefined;
 
@@ -50,12 +49,15 @@ export function toggleAssistant(): void { set({ open: !state.open }); }
 export function closeAssistant(): void { set({ open: false }); }
 
 /** «Mit KI ändern…» on an object: the sidebar opens in a new conversation, that object as its context. */
-export function askAbout(ref: ContextRef, mode: AssistantMode): void {
+export function askAbout(ref: ContextRef): void {
   if (state.sending) { set({ open: true }); return; }
-  set({ open: true, listing: false, conversation: undefined, turns: [], mode, extra: [ref], pageOff: true, error: undefined });
+  set({ open: true, listing: false, conversation: undefined, turns: [], extra: [ref], pageOff: true, error: undefined });
 }
 
-export function setMode(mode: AssistantMode): void { set({ mode }); }
+/** The page reloads the books when an answer changed them or a change was taken back. */
+const changed = new Set<() => void>();
+export function onBooksChanged(f: () => void): () => void { changed.add(f); return () => { changed.delete(f); }; }
+const booksChanged = () => { for (const f of changed) f(); };
 export function addContext(ref: ContextRef): void { if (!state.extra.some((r) => r.kind === ref.kind && r.id === ref.id)) set({ extra: [...state.extra, ref] }); }
 export function removeContext(ref: ContextRef | 'page'): void { set(ref === 'page' ? { pageOff: true } : { extra: state.extra.filter((r) => !(r.kind === ref.kind && r.id === ref.id)) }); }
 export function newConversation(): void { if (!state.sending) set({ listing: false, conversation: undefined, turns: [], extra: [], pageOff: false, error: undefined }); }
@@ -86,6 +88,8 @@ function apply(e: AssistantEvent): void {
     case 'text': withAi((t) => ({ ...t, text: t.text + e.text })); break;
     case 'tool': withAi((t) => ({ ...t, tools: [...t.tools, { name: e.name, detail: e.detail, ...(e.denied ? { denied: true } : {}) }] })); break;
     case 'error': withAi((t) => ({ ...t, error: e.message, done: true })); break;
+    case 'changes': withAi((t) => ({ ...t, changes: e.changes })); booksChanged(); break;
+    case 'refused': withAi((t) => ({ ...t, refused: e.message })); break;
     case 'done': withAi((t) => ({ ...t, done: true })); break;
     case 'session': break;
   }
@@ -98,13 +102,13 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
   const at = new Date().toISOString();
   set({
     sending: true, error: undefined, extra: [], pageOff: false,
-    turns: [...state.turns, { role: 'me', text, at, mode: state.mode, context }, { role: 'ai', text: '', at, tools: [], done: false }],
+    turns: [...state.turns, { role: 'me', text, at, context }, { role: 'ai', text: '', at, tools: [], done: false }],
   });
   stop = new AbortController();
   try {
     const res = await fetch('/api/assistant', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: stop.signal,
-      body: JSON.stringify({ conversation: state.conversation, text, context, mode: state.mode, language: language() }),
+      body: JSON.stringify({ conversation: state.conversation, text, context, language: language() }),
     });
     if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `HTTP ${res.status}`);
     const reader = res.body.getReader();
@@ -128,3 +132,13 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
 
 /** Whether an answer wrote into the draft: the sidebar then links to Änderungen. */
 export const wroteDraft = (t: Turn): boolean => t.role === 'ai' && t.tools.some((u) => !u.denied && /^(Edit|Write)$/.test(u.name) && u.detail.startsWith('data/draft/'));
+
+/** «Rückgängig» on one change an answer made. */
+export async function undoChange(change: MadeChange): Promise<void> {
+  if (!state.conversation) return;
+  try {
+    await api.assistantUndo(state.conversation, change.id);
+    set({ turns: state.turns.map((t) => (t.role === 'ai' && t.changes?.some((c) => c.id === change.id) ? { ...t, changes: t.changes.map((c) => (c.id === change.id ? { ...c, undone: true } : c)) } : t)) });
+    booksChanged();
+  } catch (e) { set({ error: errorText(e) }); }
+}

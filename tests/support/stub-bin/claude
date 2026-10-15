@@ -46,7 +46,10 @@ if (process.argv.includes('stream-json')) {
   const line = (o) => process.stdout.write(JSON.stringify({ ...o, session_id: session }) + '\n');
   line({ type: 'system', subtype: 'init', cwd: process.cwd() });
   const asked = prompt.trim().split('\n').at(-1) ?? '';
-  const answer = `Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}`;
+  // $CLAUDE_STUB_CHANGES: a file with the changes to the books the answer asks for (the sidebar's block), when it exists.
+  const file = process.env.CLAUDE_STUB_CHANGES;
+  const changes = file && existsSync(file) ? `\n\n\`\`\`vanilla-changes\n${readFileSync(file, 'utf8')}\n\`\`\`` : '';
+  const answer = `Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}`;
   line({ type: 'stream_event', event: { type: 'message_start' } });
   line({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'text', text: '' } } });
   for (const piece of answer.match(/.{1,12}/gs)) line({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: piece } } });

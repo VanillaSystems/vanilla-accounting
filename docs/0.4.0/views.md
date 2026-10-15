@@ -82,10 +82,10 @@ bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search onl
   opens the status panel.
 - **Gespräche:** past conversations with their title, time and context; a click continues one.
 - **The composer**, at the bottom: a tip ("mit @ erwähnst du eine Buchung, einen Beleg oder einen
-  Ablauf"), the context as chips, the text, the mode **Ändern** or **Nur fragen**, the model
-  (**Auto**), send. No dictation in 0.4.0: speech to text would need a large local library. Underneath: where it
-  runs ("Lokal · Claude") and what it may do ("Darf Workspace-Dateien ändern, nicht speichern";
-  in *Nur fragen*: "Liest nur, ändert nichts").
+  Ablauf"), the context as chips, the text, the model (**Auto**), send. No mode to choose: the
+  AI does what the person asks (usability test 2026-10-15: an owner asked it to fix a receipt and
+  was told to switch modes and save drafts). No dictation in 0.4.0: speech to text would need a
+  large local library. Underneath: where it runs ("Lokal · Claude").
 - **The composer shows its state:** empty, the send arrow is grey; with text, it turns blue, and
   the frame is blue while it has focus. After sending, the field empties, the arrow goes grey,
   the tip line hides, the frame's border rotates in a gradient while the AI works, and a small
@@ -102,7 +102,13 @@ bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search onl
      conversation only.
 - **«Mit KI ändern…»** on any object opens the sidebar with that object as context.
 
-What the AI changes lands under Änderungen, unsaved ([saving.md](saving.md)).
+**What it changes.** A change to the books (a receipt's date, amount, currency, description or
+VAT; a link between a receipt and a payment; a booking's accounts, VAT code, amount, date or
+text) is made at once and shows in the answer as a card with **Rückgängig**. The AI never writes
+the books' files: it names the changes at the end of its answer, and the app checks them and
+makes them all in one write, or none and says why (a filed quarter refuses as any edit does;
+src/assistant/changes.ts, src/server/edits.ts). A change to how the app works (rules, workflows,
+knowledge, settings) lands under Änderungen, unsaved ([saving.md](saving.md)).
 
 The app window does not scroll as a page: the list, the detail and the sidebar each scroll on
 their own, so the composer and the dock stay in place.

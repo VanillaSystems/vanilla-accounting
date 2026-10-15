@@ -21,7 +21,7 @@ import type { ReturnFigures } from '../../engines/return.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
-import type { Conversation, ConversationSummary } from '../../types/assistant.js';
+import type { Conversation, ConversationSummary, MadeChange } from '../../types/assistant.js';
 import type { DropAction, DropSession } from '../../types/drop.js';
 import type { SourceRow } from '../../platform/sources/model.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
@@ -157,6 +157,7 @@ export const api = {
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
+  assistantUndo: (id: string, change: string) => request<MadeChange>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
   sources: () => request<SourceRow[]>('GET', '/api/sources'),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),

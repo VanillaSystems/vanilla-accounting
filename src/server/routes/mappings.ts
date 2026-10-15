@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { assertOpen, refDates, withBooks, RequestError } from '../books.js';
+import { withBooks, RequestError } from '../books.js';
+import { link, unlink } from '../edits.js';
 
 export const router = Router();
 
@@ -12,13 +13,7 @@ function linkBody(body: unknown): { receiptId: string; transactionRef: string } 
 router.post('/api/mapping/add', (req, res) => {
   const { receiptId, transactionRef } = linkBody(req.body);
   return withBooks(res, (books) => {
-    if (!books.receipts.some((r) => r.id === receiptId)) throw new RequestError(404, 'Receipt not found');
-    if (!books.transactions.some((t) => t.ref === transactionRef)) throw new RequestError(404, 'Transaction not found');
-    assertOpen(books, refDates(books, transactionRef), 'mapping');
-
-    if (!books.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receiptId)) {
-      books.mappings.push({ transactionRef, receiptId });
-    }
+    link(books, receiptId, transactionRef);
     return { ok: true };
   });
 });
@@ -26,10 +21,7 @@ router.post('/api/mapping/add', (req, res) => {
 router.post('/api/mapping/remove', (req, res) => {
   const { receiptId, transactionRef } = linkBody(req.body);
   return withBooks(res, (books) => {
-    assertOpen(books, refDates(books, transactionRef), 'mapping');
-    books.mappings = books.mappings.filter(
-      (m) => !(m.transactionRef === transactionRef && m.receiptId === receiptId),
-    );
+    unlink(books, receiptId, transactionRef);
     return { ok: true };
   });
 });

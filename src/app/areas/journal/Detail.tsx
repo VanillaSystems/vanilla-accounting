@@ -135,7 +135,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <dt>{t('journal.booked')}</dt><dd>{t(`journal.originText.${e.origin ?? 'other'}`)}</dd>
               {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} nav={nav} /></dd></> : null}
             </dl>
-            <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} mode="ask" />
+            <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (
               <div className="dangers">
                 {tx && <button type="button" title={t('journal.reclassifyTip')} onClick={() => reclassify(nav, tx.ref, (j.byRef.get(tx.ref) ?? []).map((x) => x.e)).then((es) => es?.[0] && selectNew(nav, es[0].id))}>{t('journal.reclassify')}</button>}

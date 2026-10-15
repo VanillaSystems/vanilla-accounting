@@ -101,7 +101,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.entriesOf(tx.ref).length ? 'booked' : 'unbooked']} nav={nav} canEdit={canEdit} /> : null}
-              {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} mode="ask" /> : null}
+              {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
               {src && <a className="dl inline" href={src} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
             </div>
