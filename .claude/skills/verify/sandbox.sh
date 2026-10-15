@@ -123,7 +123,7 @@ EVIDENCE=$EVIDENCE
 API_PID=$(cat "$SB/api.pid")
 UI_PID=$(cat "$SB/ui.pid")
 VITE_CONFIG=$VITE_CONFIG
-WS_SRC=$WS_SRC
+WS_SRC=$(printf '%q' "$WS_SRC")
 REAL_INDEX_SHA=$(books_sha "$WS_SRC")
 EOF
   source "$SB/env"
@@ -162,7 +162,7 @@ cmd_doctor() {
   check "UI serves the sandbox books"             "[[ \"\$(get $UI/books.json | shasum -a 256 | cut -d' ' -f1)\" == \"\$(get $API/books.json | shasum -a 256 | cut -d' ' -f1)\" ]]"
   check "UI serves the sandbox receipts"          "served receipts"
   check "UI serves the sandbox bank statements"   "served bank-statements"
-  check "real workspace books untouched since up" "[[ \"\$(books_sha $WS_SRC)\" == $REAL_INDEX_SHA ]]"
+  check "real workspace books untouched since up" "[[ \"\$(books_sha \"\$WS_SRC\")\" == $REAL_INDEX_SHA ]]"
   check "api opened the sandbox workspace"        "ps eww -p $API_PID | grep -q 'VANILLA_WORKSPACE=$SB '"
   check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude </dev/null 2>/dev/null"
   echo "closedThrough: $(get "$API/api/config" | jq -r '.closedThrough // "none"')"
