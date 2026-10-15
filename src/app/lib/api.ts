@@ -185,6 +185,10 @@ export const api = {
   },
 
   /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
+  /** A bank account's opening balance of `year`; null takes it back (src/accounting/opening-balance.ts). */
+  setOpeningBalance: (year: string, account: string, amount: number | null) =>
+    request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount }),
+
   importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {
     if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
     const qs = new URLSearchParams({ name, ...into });

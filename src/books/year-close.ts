@@ -55,7 +55,8 @@ export function bankBalances(ws: Workspace, books: Books): BankBalance[] {
   return [...fromPdf, ...fromCamt];
 }
 
-const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []));
+/** The account numbers of the workspace's chart. */
+export const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []));
 
 /** The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before it). */
 export function receivablesOf(ws: Workspace, year: string, rates: EstvRates): Receivables {

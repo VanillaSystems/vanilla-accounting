@@ -16,6 +16,8 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Books that start with a bank's first camt.053 take its opening balance in one click: when the books have no opening for that account, the statement's line in Automatisierung says what the bank showed before the statement and offers «Als Eröffnungssaldo übernehmen» (undo in the toast). It becomes the account's opening of that year, retained earnings (2970) on the other side, and the balance check agrees. Not for a year with a closed period, nor for a foreign-currency account.
+
 - A fourth starting point in «Neue Buchhaltung anlegen» and `npm run init -- --preset trades`: «Handwerk, Bau (GmbH)» (services and material, staff, private use of car and phone, effective method, quarterly, vereinnahmt), so a trades business no longer has to guess «Beratung».
 
 - The app's icon is the brand's wave in tram blue, in the Dock and as the browser tab's icon.

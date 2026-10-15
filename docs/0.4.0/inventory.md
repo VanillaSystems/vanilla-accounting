@@ -11,7 +11,7 @@ and the providers.
 | core | 40 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 44 | 26 |
+| split | 45 | 26 |
 | infrastructure | 27 | 4 |
 | workflow | 17 | 0 |
 | view | 188 | 60 |
@@ -76,7 +76,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/migrate.ts` | ESTV 1 |
 | `src/workspace/reads.ts` | ESTV 1 |
 | `src/workspace/scaffold.ts` | MWST 2, ESTV 1, form 0535 1 |
-| `src/workspace/setup.ts` | CHF 1, MWST 3, ESTV 2, eCH-0217 2 |
+| `src/workspace/setup.ts` | CHF 1, MWST 3, ESTV 2, eCH-0217 2, camt.053 1 |
 | `src/workspace/uid.ts` | MWST 2 |
 | `src/workspace/workspace.ts` | ESTV 1 |
 

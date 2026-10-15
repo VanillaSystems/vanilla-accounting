@@ -11,6 +11,7 @@ import type { SetupRefusal } from '../workspace/create.js';
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
   'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement', 'newEntry',
+  'openingBalance',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 

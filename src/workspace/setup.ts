@@ -98,7 +98,7 @@ export const QUESTIONS = {
       { value: 'new', label: 'new company, empty books' },
       {
         value: 'switching', label: 'switching from other bookkeeping',
-        caveat: 'Bring the opening balances: npm run import-opening reads them from a Banana Konten XML export, or enter them later in books.json (config.openingBalances).',
+        caveat: 'Bring the opening balances: npm run import-opening reads them from a Banana Konten XML export. The first camt.053 of a bank account offers its starting balance as the opening balance.',
       },
     ],
   },

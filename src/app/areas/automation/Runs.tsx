@@ -14,6 +14,7 @@ import { linesOf, standOf, type Line, type Stand } from './runs-model.js';
 import type { Index } from '../../../types/index.js';
 import type { Nav } from '../index.js';
 import type { Route } from '../../shell/route.js';
+import { takeOpening } from '../bank/actions.js';
 
 type Filter = 'all' | 'unreviewed' | 'check' | 'you' | 'error';
 const FILTERS: Filter[] = ['all', 'unreviewed', 'check', 'you', 'error'];
@@ -86,11 +87,12 @@ function outText(r: RunSummary, lines: Line[]): [string, string] {
   const ok = st.filter((l) => l.balance.kind === 'matches').length;
   const off = st.filter((l) => l.balance.kind === 'differs').length;
   const poor = r.digest.poorScans?.length ?? 0;
-  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', poor ? t('runs.out.poorScan', { n: poor }) : ''].filter(Boolean).join(', ');
+  const noOpening = st.some((l) => l.opening);
+  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', noOpening ? t('runs.out.noOpening') : '', poor ? t('runs.out.poorScan', { n: poor }) : ''].filter(Boolean).join(', ');
   return [head || t('runs.out.nothing'), small];
 }
 
-function LineRow({ l, go }: { l: Line; go(route: Route): void }) {
+function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) {
   if (l.kind === 'poorScan') {
     return (
       <tr className="rline"><td /><td />
@@ -112,7 +114,9 @@ function LineRow({ l, go }: { l: Line; go(route: Route): void }) {
   }
   if (l.kind === 'statement') {
     const b = l.balance;
+    const o = l.opening;
     return (
+      <>
       <tr className="rline"><td /><td />
         <td className="what"><span className="rk">{t(/\.xml$/i.test(l.a.file) ? 'runs.kind.camt' : 'runs.kind.pdf')}</span>{statementTitle(l.a)}<small className="mono">{fileOf(l.a.file)}</small></td>
         <td className="res">
@@ -126,6 +130,14 @@ function LineRow({ l, go }: { l: Line; go(route: Route): void }) {
           {b.kind === 'differs' ? <span className="rpill check">{t('runs.st.check')}</span> : null}
           <button type="button" className="linkbtn" onClick={() => go({ area: 'bank', statement: `${l.a.account}-${l.a.to.slice(0, 7)}` })}>{t('runs.view')}</button>
         </td></tr>
+      {o ? (
+        <tr className="rline"><td /><td /><td />
+          <td className="res" colSpan={2}>
+            {t('runs.line.openingOffer', { amount: `${l.a.currency} ${fmt(o.amount)}`, date: swiss(o.date) })}{' '}
+            <button type="button" className="btn primary" onClick={() => void takeOpening(nav, o)}>{t('runs.line.openingTake')}</button>
+          </td></tr>
+      ) : null}
+      </>
     );
   }
   const x = l.receipt;
@@ -212,7 +224,7 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
                   </tr>
                   {isOpen ? (
                     <>
-                      {lines.map((l, i) => <LineRow key={i} l={l} go={go} />)}
+                      {lines.map((l, i) => <LineRow key={i} l={l} go={go} nav={nav} />)}
                       <tr className="rline last"><td /><td /><td colSpan={3}><button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'run', run: r.id })}>{t('runs.open')}</button></td></tr>
                     </>
                   ) : null}

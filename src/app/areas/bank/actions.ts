@@ -5,6 +5,9 @@
  */
 import { startIntake } from '../../automation/intake.js';
 import type { BankTransaction } from '../../../types/index.js';
+import type { OpeningOffer } from '../../../accounting/opening-balance.js';
+import { fmt } from '../../lib/utils.js';
+import { baseCurrency } from '../../../engines/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
@@ -34,6 +37,18 @@ export async function setNote(nav: Nav, tx: BankTransaction, text: string, undoi
   }
   nav.refresh();
   if (!undoing) nav.toast(t(text ? 'bank.noteSaved' : 'bank.noteCleared'), () => setNote(nav, { ...tx, remarks: text }, before, true));
+}
+
+/** A statement's opening balance as the account's opening of the books; the toast's undo takes it back. */
+export async function takeOpening(nav: Nav, o: OpeningOffer, undoing = false): Promise<void> {
+  try {
+    await api.setOpeningBalance(o.year, o.account, undoing ? null : o.amount);
+  } catch (e) {
+    nav.toast(errorText(e));
+    return;
+  }
+  nav.refresh();
+  if (!undoing) nav.toast(t('bank.openingTaken', { amount: `${baseCurrency()} ${fmt(o.amount)}` }), () => takeOpening(nav, o, true));
 }
 
 const STATEMENT_FILE = /\.(xml|pdf)$/i;

@@ -102,6 +102,8 @@ export interface StatementImport {
   to: string;
   /** The bank's closing balance on its last day, in the account's currency: what the books must show then. */
   closing?: { date: string; amount: number };
+  /** A camt export's opening balance (OPBD), the bank's balance before its first day: what the account starts the books with. */
+  opening?: { date: string; amount: number };
 }
 
 export interface JournalEntry {

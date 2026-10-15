@@ -22,7 +22,10 @@ import type { StatementRefusal } from '../../types/api-error.js';
 import type { StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
-import { RequestError, WS, assertOpen, readBooks, updateBooks } from '../books.js';
+import { RequestError, WS, assertOpen, readBooks, updateBooks, withBooks } from '../books.js';
+import { withOpening } from '../../accounting/opening-balance.js';
+import { yearEndAccounts } from '../../accounting/year-close.js';
+import { chartOf } from '../../books/year-close.js';
 import { baseCurrency } from '../../engines/index.js';
 
 export const router = Router();
@@ -35,6 +38,8 @@ interface Placed {
   last: string;
   /** A camt export's last closing balance (CLBD); a PDF's comes from its text after it is placed. */
   closing?: { date: string; amount: number };
+  /** A camt export's first opening balance (OPBD). */
+  opening?: { date: string; amount: number };
 }
 
 const refuse = (status: number, error: string, reason: StatementRefusal, detail?: string): never => {
@@ -50,6 +55,7 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   let account: LedgerBankAccount | undefined;
   const dates: string[] = [];
   const closings: Array<{ date: string; amount: number }> = [];
+  const openings: Array<{ date: string; amount: number }> = [];
   for (const statement of camt.statements) {
     const match = accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
     if ('problem' in match) return refuse(400, match.problem, 'account', match.problem);
@@ -58,12 +64,14 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
     const balances = parseStatementBalances(statement, account.bank, filename);
     dates.push(...transactionsOf(statement, match.account).map((t) => t.date), ...balances.map((b) => b.date));
     closings.push(...balances.filter((b) => b.type === 'CLBD').map((b) => ({ date: b.date, amount: b.amount })));
+    openings.push(...balances.filter((b) => b.type === 'OPBD' && b.currency === match.account.currency).map((b) => ({ date: b.date, amount: b.amount })));
   }
   const sorted = dates.filter(Boolean).sort();
   const last = sorted.at(-1);
   if (!account || !last) return refuse(400, 'Der Auszug hat keine Daten.', 'notCamt');
   const closing = closings.sort((a, b) => a.date.localeCompare(b.date)).at(-1);
-  return { account, filename, first: sorted[0], last, ...(closing ? { closing } : {}) };
+  const opening = openings.sort((a, b) => a.date.localeCompare(b.date))[0];
+  return { account, filename, first: sorted[0], last, ...(closing ? { closing } : {}), ...(opening ? { opening } : {}) };
 }
 
 const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
@@ -172,6 +180,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         ...(placed.first ? { from: placed.first } : {}),
         to: placed.last,
         ...(closing ? { closing } : {}),
+        ...(placed.opening ? { opening: placed.opening } : {}),
       };
     });
   } catch (e) {
@@ -179,3 +188,24 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     throw e;
   }
 }
+
+/**
+ * A bank account's opening balance of a year, as its first statement offers it
+ * (src/accounting/opening-balance.ts): `amount` sets it, null takes it back; the difference goes
+ * to retained earnings. A year with a closed period keeps its openings.
+ */
+router.put('/api/opening-balances/:year/:account', (req, res) => {
+  const { year, account } = req.params;
+  const amount: unknown = req.body?.amount;
+  if (!/^\d{4}$/.test(year)) throw new RequestError(400, 'Kein Jahr.');
+  if (!imported().some((a) => a.account === account && a.currency === baseCurrency())) throw new RequestError(400, `Konto ${account} ist kein Bankkonto in ${baseCurrency()}.`);
+  if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount))) throw new RequestError(400, 'Betrag fehlt.');
+  const equity = yearEndAccounts(chartOf(WS)).retainedEarnings;
+  withBooks(res, (books) => {
+    assertOpen(books, [`${year}-01-01`], 'openingBalance');
+    const next = withOpening(books.config.openingBalances, year, account, amount, equity);
+    if (next) books.config.openingBalances = next;
+    else delete books.config.openingBalances;
+    return { ok: true };
+  });
+});

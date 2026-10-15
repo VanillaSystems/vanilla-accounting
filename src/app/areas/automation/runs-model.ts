@@ -4,6 +4,7 @@
  */
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
 import { toRappen } from '../../../accounting/rappen.js';
+import { openingOffer, type OpeningOffer } from '../../../accounting/opening-balance.js';
 import type { Arrival, RunSummary } from '../../../workflows/model.js';
 import type { Index } from '../../../types/index.js';
 
@@ -11,7 +12,7 @@ import type { Index } from '../../../types/index.js';
 export type Stand = 'running' | 'error' | 'you' | 'discarded' | 'reviewed' | 'check' | 'idle' | 'ok';
 
 export type Line =
-  | { kind: 'statement'; a: Extract<Arrival, { kind: 'statement' }>; balance: Balance }
+  | { kind: 'statement'; a: Extract<Arrival, { kind: 'statement' }>; balance: Balance; opening?: OpeningOffer }
   | { kind: 'receipt'; a: Extract<Arrival, { kind: 'receipt' }>; receipt?: Index['receipts'][number]; payments: Index['transactions']; entries: number }
   | { kind: 'refused'; a: Extract<Arrival, { kind: 'refused' }> }
   | { kind: 'file'; name: string }
@@ -33,7 +34,11 @@ export function linesOf(r: RunSummary, books: Index): Line[] {
   const poor = (r.digest.poorScans ?? []).map((file): Line => ({ kind: 'poorScan', file, receipt: books.receipts.find((x) => x.filename === file) }));
   if (!r.arrived?.length) return [...r.digest.files.map((name): Line => ({ kind: 'file', name })), ...poor];
   return [...r.arrived.map((a): Line => {
-    if (a.kind === 'statement') return { kind: 'statement', a, balance: balanceOf(a, books) };
+    if (a.kind === 'statement') {
+      const balance = balanceOf(a, books);
+      const opening = balance.kind === 'differs' ? openingOffer(books, a) : undefined;
+      return { kind: 'statement', a, balance, ...(opening && { opening }) };
+    }
     if (a.kind === 'refused') return { kind: 'refused', a };
     const refs = new Set(books.mappings.filter((m) => m.receiptId === a.id).map((m) => m.transactionRef));
     return {
