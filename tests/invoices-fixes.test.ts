@@ -24,7 +24,7 @@ const customer: Customer = {
   id: 'cu_1', createdAt: '2026-07-01T08:00:00Z', origin: 'manual', deleted: false,
   name: 'Familie Keller', address: { street: 'Rosenweg', number: '5', postcode: '9500', town: 'Wil', country: 'CH' }, language: 'de', paymentTermsDays: 30,
 };
-const sender = { name: 'Malerei AG', uid: 'CHE-123.456.789', address: { street: 'Hauptstrasse', number: '1', postcode: '9500', town: 'Wil', country: 'CH' }, payTo: { account: '1020', iban: 'CH1180808001234567891' } };
+const sender = { name: 'Malerei AG', uid: 'CHE-123.456.789', address: { street: 'Hauptstrasse', number: '1', postcode: '9500', town: 'Wil', country: 'CH' }, payTo: { account: '1020', iban: 'CH6580808000000000001' } };
 const env = (id: string) => ({ id, createdAt: '2026-10-01T08:00:00Z', origin: 'manual' as const, deleted: false });
 const draft = (over: Partial<Draft> = {}): Draft => ({
   ...env('in_d'), status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-15', currency: 'CHF', language: 'de', comments: [],
