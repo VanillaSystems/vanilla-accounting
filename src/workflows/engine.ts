@@ -231,7 +231,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       }
     }
     // An effect the engine holds no handle for (a seal, a filing) cannot be checked on a copy: a dry run or a replay skips the step and says so.
-    const unchecked = step.effects.filter((e) => e !== 'ledger.book' && e !== 'books.write');
+    const unchecked = step.effects.filter((e) => e !== 'ledger.book' && e !== 'books.write' && e !== 'runs.start');
     if (run.mode !== 'live' && unchecked.length) {
       record.effects.push(...unchecked.map((effect) => ({ effect, key: `${w.id}:${run.item.id}:${step.id}`, applied: false, wrote: {}, would: 'skipped: not run in a dry run' })));
       const done = { ...run, steps: [...run.steps, { ...record, outcome: action.outcomes[0], finishedAt: now() }] };
@@ -263,6 +263,19 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     const actor: Actor = { kind: 'run', id: run.id, workflow: w.id };
     const key = `${w.id}:${run.item.id}:${step}`;
     if (declared.includes('books.write')) effects['books.write'] = booksPort(run, actor, key, record);
+    if (declared.includes('runs.start')) {
+      effects['runs.start'] = (id, item) => {
+        const w = workflow(id);
+        const open = [...runs.values()].some((r) => r.workflow === id && r.mode === 'live' && r.item.id === item.id && r.item.kind === item.kind && !['done', 'discarded'].includes(r.state.status));
+        const rec: EffectRecord = { effect: 'runs.start', key: `${key}:${id}:${item.id}`, applied: false, wrote: {} };
+        record.effects.push(rec);
+        if (run.mode !== 'live') { rec.would = `${id} ${item.id}`; return; }
+        // One open question per payment: a later inbox run that finds it still unbooked asks nothing new.
+        if (!w?.runnable.ok || open) return;
+        rec.applied = true;
+        void create(w, item, { kind: 'event', name: 'rule.ask', run: run.id }, 'live');
+      };
+    }
     if (!declared.includes('ledger.book')) return effects;
     effects['ledger.book'] = (entries: JournalEntry[]) => {
       const stamped = entries.map((e) => ({ ...e, run: run.id }));

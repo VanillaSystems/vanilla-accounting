@@ -1,0 +1,5 @@
+label: {"de": "Dich fragen, ohne Vorschlag", "en": "Ask you, without a proposal", "fr": "Vous demander, sans proposition", "it": "Chiederti, senza proposta"}
+by: person
+task: {"title": {"de": "Frag: {question}", "en": "Question: {question}", "fr": "Question : {question}", "it": "Domanda: {question}"}, "why": {"de": "Deine Regel sagt, bei dieser Zahlung zuerst zu fragen. Die App hat keinen Vorschlag: buch sie selbst.", "en": "Your rule says to ask about this payment first. The app has no proposal: book it yourself.", "fr": "Votre règle demande de poser la question d’abord. L’app n’a pas de proposition : comptabilisez-le vous-même.", "it": "La tua regola chiede di domandare prima. L’app non ha proposte: registralo tu."}, "do": "open-item"}
+reads: ["transaction", "question"]
+outcomes: {"byHand": "done"}

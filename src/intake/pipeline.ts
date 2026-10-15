@@ -28,6 +28,8 @@ export type IntakeNote =
   | { code: 'poorScan'; files: string[] }
   /** Inbox files with the bytes of a file the books or the inbox hold (`of`): removed from the inbox. */
   | { code: 'sameBytes'; files: Array<{ file: string; of: string }> }
+  /** Payments a company rule holds for the person (src/booking/rules.ts): not booked, each a question in Automatisierung. */
+  | { code: 'asked'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -76,6 +78,8 @@ export interface StepContext {
   ask?: Ask;
   progress(done: number, total: number): void;
   log(line: string): void;
+  /** Payments a company rule holds for the person: a run of the engine asks each (src/workflows/actions.ts); the CLI only says so. */
+  hold?(refs: string[]): void;
 }
 
 export interface StepResult {
@@ -180,6 +184,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;
       case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
+      case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

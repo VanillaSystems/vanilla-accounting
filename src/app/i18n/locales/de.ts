@@ -2501,6 +2501,19 @@ export const messages = {
   'automation.xml.where': 'Die Datei für die Steuerverwaltung liegt in {path}.',
   'automation.xml.download': '{file} laden',
   'automation.xml.next': 'Lade sie bei der Steuerverwaltung hoch, reiche die Abrechnung dort ein und klicke dann hier «Eingereicht».',
+  'rules.say.text': 'Text enthält {text}',
+  'rules.say.in': 'Eingang',
+  'rules.say.out': 'Ausgang',
+  'rules.say.over': 'über {amount}',
+  'rules.say.under': 'unter {amount}',
+  'rules.say.between': 'zwischen {over} und {under}',
+  'rules.say.account': 'vom Konto {account}',
+  'rules.say.or': ' oder ',
+  'rules.say.any': 'jede Zahlung',
+  'rules.say.book': 'Konto {account}, MWST {vat}',
+  'rules.say.bookNoVat': 'Konto {account}, ohne MWST',
+  'rules.say.ask': 'frag mich: «{question}»',
+  'rules.say.askWith': 'frag mich: «{question}» (Vorschlag: {booking})',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

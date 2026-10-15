@@ -20,7 +20,7 @@ const unbooked = (books: Books) => {
 };
 
 export function classifyStep({ force = false } = {}): StepRun {
-  return async ({ ws, books, ask, progress, log }) => {
+  return async ({ ws, books, ask, progress, log, hold }) => {
     // Without a model nothing could be booked again: --force removes nothing then.
     if (force && ask) {
       const removed = books.update((index) => {
@@ -52,8 +52,6 @@ export function classifyStep({ force = false } = {}): StepRun {
       log('All transactions are already classified.');
       return { notes: [] };
     }
-    if (!ask) return { notes: [{ code: 'noModel', waiting: todo.length }] };
-
     progress(0, todo.length);
     log(`Classifying ${todo.length} transactions in ${Math.ceil(todo.length / BATCH_SIZE)} batches of ${BATCH_SIZE} (${CONCURRENCY} concurrent)...\n`);
     const applied = new Set<JournalEntry>();
@@ -67,8 +65,9 @@ export function classifyStep({ force = false } = {}): StepRun {
     };
     scratch.journalEntries.forEach((je) => applied.add(je));
     const todoRefs = new Set(todo.map((tx) => tx.ref));
-    const { classified, failed } = await classifyTransactions(scratch, todo, {
+    const { classified, failed, asked, unasked } = await classifyTransactions(scratch, todo, {
       ask,
+      proposeAsked: false,
       fx: loadFxResolver(),
       context: loadClassifyContext(ws),
       log,
@@ -83,7 +82,13 @@ export function classifyStep({ force = false } = {}): StepRun {
     log(`\nDone.`);
     log(`  Classified: ${classified.length}`);
     log(`  Failed    : ${failed.length}`);
-    const notes: IntakeNote[] = failed.length ? [{ code: 'failed', count: failed.length, detail: failed[0].reason.slice(0, 300) }] : [];
+    log(`  Asked     : ${asked.length}`);
+    if (asked.length) hold?.(asked.map((a) => a.ref));
+    const notes: IntakeNote[] = [
+      ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
+      ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),
+      ...(asked.length ? [{ code: 'asked' as const, count: asked.length }] : []),
+    ];
     return { notes };
   };
 }

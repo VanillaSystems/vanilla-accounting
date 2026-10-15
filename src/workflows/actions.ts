@@ -19,6 +19,7 @@ import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
 import { madeBetween, type Took } from './summary.js';
+import type { ItemRef } from './model.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -32,6 +33,8 @@ export interface ActionContext {
 
 export interface Effects {
   'ledger.book'?: (entries: JournalEntry[]) => void;
+  /** Starts a run of another workflow for an item, unless one for it is still open; the starting run goes on (no parking). */
+  'runs.start'?: (workflow: string, item: ItemRef) => void;
   /** The books through the write door as the run's actor; in a dry run or a replay, a copy that is never saved. */
   'books.write'?: BooksPort;
 }
@@ -64,7 +67,10 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace) => Took[]): No
     const port = effects['books.write']!;
     const before = structuredClone(port.read());
     const todo = took(before, ws);
-    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {} });
+    const start = effects['runs.start'];
+    // A payment a company rule holds for the person becomes a question of its own (workflows/ask).
+    const hold = start && ((refs: string[]) => refs.forEach((id) => start('ask', { kind: 'transaction', id })));
+    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}) });
     if (r.stop) throw new Error(noteLines(r.notes).join('; '));
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
@@ -114,6 +120,24 @@ export const ACTIONS: Record<string, Action> = {
       const { failed } = await classifyTransactions(scratch, [tx(input)], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
       if (failed.length) return { outcome: 'undecided' };
       return { outcome: 'decided', output: { entries: scratch.journalEntries.slice(before) } };
+    },
+  },
+
+  'booking.rule-question': {
+    outcomes: ['proposed', 'open', 'gone'],
+    effects: [],
+    ai: true,
+    async run(input, _effects, { ws, ask }) {
+      const b = books(input);
+      const t = tx(input);
+      if (periodLock(b).isClosed(t.date) || b.journalEntries.some((e) => e.transactionRef === t.ref)) return { outcome: 'gone' };
+      const { asked } = await classifyTransactions(structuredClone(b), [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+      const held = asked[0];
+      // The rule was removed or switched off meanwhile: the next inbox run books the payment.
+      if (!held) return { outcome: 'gone' };
+      return held.entries.length
+        ? { outcome: 'proposed', output: { question: held.question, entries: held.entries } }
+        : { outcome: 'open', output: { question: held.question } };
     },
   },
 

@@ -456,8 +456,9 @@ export function taskOf(w: WorkflowDecl, run: Run, now = new Date().toISOString()
   };
 }
 
-/** "{transaction}" in a task text becomes the run's item. */
-export const fillTask = (text: string, item: ItemRef): string => text.replace(/\{[a-z]+\}/g, item.id);
+/** "{question}" in a task text becomes what the step read under that name, when it is text; any other "{…}" the run's item. */
+export const fillTask = (text: string, item: ItemRef, reads?: Record<string, unknown>): string =>
+  text.replace(/\{([a-z]+)\}/g, (_, k: string) => (typeof reads?.[k] === 'string' ? reads[k] as string : item.id));
 
 export interface AutomationView {
   /** Changes whenever a declaration or a run changed: the poll sends it back as `since`. */

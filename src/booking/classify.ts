@@ -15,8 +15,14 @@ import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
-import { REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { baseCurrency } from '../engines/index.js';
+import { lookupVatCode } from '../accounting/vat-codes.js';
+import { loadKnowledge } from '../knowledge/layers.js';
+import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
+import { wordsIn } from '../export/texts.js';
+import { ruleFor, ruleWords, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
+import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 
 export const BATCH_SIZE = 10;
 export const CONCURRENCY = 3;
@@ -113,6 +119,10 @@ export interface ClassifyContext extends ClassifyPromptContext {
   bankAccounts: readonly LedgerBankAccount[];
   /** The casebook (examples/cases/): examples for a company with little history of its own. */
   casebook?: readonly BookingCase[];
+  /** The company's executable booking rules (src/booking/rules.ts): code decides what they cover, never the model. */
+  rules?: readonly PlacedRule[];
+  /** The businesses a payment can route to, for a rule of one business. */
+  counterparties?: readonly Counterparty[];
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -148,12 +158,18 @@ function priorYearExport(historyDir: string): string | undefined {
 }
 
 /** accounts.json (npm run init writes it) in the Konten.txt layout, for a company without a prior-year export. */
-function chartFromAccounts(ws: Workspace): string {
+function chartFromAccounts(ws: Pick<Workspace, 'paths'>): string {
   if (!existsSync(ws.paths.accounts)) {
     throw new Error(`classify needs a chart of accounts: ${ws.paths.accounts} (npm run init writes it), or a prior-year Banana export in ${ws.paths.history} (<name>.Konten.txt and <name>.Buchungen-sample.tsv)`);
   }
   const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string }[];
   return ['Konto\tBeschreibung', ...accounts.map((a) => `${a.number}\t${a.name}`)].join('\n');
+}
+
+/** The chart the classifier books on, as `number<TAB>name` lines: the prior-year export, else accounts.json. */
+export function chartOf(ws: Pick<Workspace, 'paths'>): string {
+  const prior = priorYearExport(ws.paths.history);
+  return prior ? readFileSync(join(ws.paths.history, `${prior}.Konten.txt`), 'utf8') : chartFromAccounts(ws);
 }
 
 /**
@@ -163,14 +179,75 @@ function chartFromAccounts(ws: Workspace): string {
 export function loadClassifyContext(ws: Workspace): ClassifyContext {
   const read = (dir: string, file: string) => readFileSync(join(dir, file), 'utf8');
   const prior = priorYearExport(ws.paths.history);
+  const chartOfAccounts = chartOf(ws);
+  const { counterparties } = loadKnowledge(APP_ROOT, ws.paths.root);
+  const facts = factsOf(chartNames(chartOfAccounts), new Set(counterparties.map((c) => c.id)));
   return {
     companyName: ws.company.name,
     bankAccounts: ws.bankAccounts,
-    chartOfAccounts: prior ? read(ws.paths.history, `${prior}.Konten.txt`) : chartFromAccounts(ws),
+    chartOfAccounts,
     historicEntries: prior ? read(ws.paths.history, `${prior}.Buchungen-sample.tsv`) : '',
     vatCodes: read(REFERENCE_DIR, 'MWST-codes.txt'),
     casebook: loadCases(),
+    rules: placedRules(companyRules(ws, facts)),
+    counterparties,
   };
+}
+
+/** The money a rule names, in the books' currency, as the books write it. */
+const money = (n: number) => `${baseCurrency()} ${n.toLocaleString('de-CH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+/** A rule in plain German words, for the booking's reason (booking texts stay German, docs/i18n.md). */
+export function ruleLine(placed: PlacedRule, context: Pick<ClassifyContext, 'chartOfAccounts' | 'counterparties'>): string {
+  const accounts = chartNames(context.chartOfAccounts);
+  const names: RuleNames = {
+    account: (n) => accounts.get(n),
+    business: (id) => context.counterparties?.find((c) => c.id === id)?.name,
+    money,
+  };
+  const de = wordsIn('de');
+  return ruleWords(placed, names, (key, vars) => de.t(key, vars as Record<string, string>)).line;
+}
+
+/** The rule that decides `tx`, if one does: its business by routing, its amount in the books' currency at the payment day's rate. */
+export function ruleOfPayment(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): PlacedRule | undefined {
+  if (!context.rules?.length) return undefined;
+  const routing = identify(signalsOfTransaction(tx, mappedReceipts(books, tx)), context.counterparties ?? []);
+  const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
+  return ruleFor(context.rules, {
+    tx, counterparty: routing.kind === 'known' ? routing.counterparty : undefined,
+    bankAccount: bankAccountFor(tx, context.bankAccounts), amount: tx.amount * rate,
+  });
+}
+
+/**
+ * The VAT code a rule's booking takes on this payment. Only the receipt decides a rate (AGENTS.md
+ * § VAT code rules): an input-tax code with a rate falls to its zero code when no linked receipt
+ * shows Swiss VAT. Money coming back on a purchase, or going out on a sale, takes the code's minus.
+ */
+export function ruleVatCode(code: string | null, tx: BankTransaction, swissVat: boolean): string | undefined {
+  if (!code) return undefined;
+  const found = lookupVatCode(code);
+  if (!found || found.negative) return code;
+  const { family, rate } = found.entry;
+  const purchase = family === 'I' || family === 'M';
+  const unsigned = purchase && rate && rate > 0 && !swissVat ? `${family}0` : code;
+  const back = (purchase || family === 'B') ? tx.direction === 'CRDT' : family === 'V' ? tx.direction === 'DBIT' : false;
+  return back ? `-${unsigned}` : unsigned;
+}
+
+/** The entry a rule's booking makes for `tx`: the whole amount on the rule's account, the bank on the other side, stamped with the rule. */
+export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRule, booking: RuleBooking, context: ClassifyContext, fx: FxResolver): JournalEntry[] {
+  const mapped = mappedReceipts(books, tx);
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const out = tx.direction === 'DBIT';
+  const line: ClassifyEntry = {
+    accountDebit: out ? booking.account : '', accountCredit: out ? '' : booking.account, amount: tx.amount,
+    vatCode: ruleVatCode(booking.vat, tx, mapped.some((r) => r.hasSwissVat)) ?? '', description: merchantOf(tx.description),
+  };
+  const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
+  return entriesFor(tx, [line], { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}` })
+    .map((e) => ({ ...e, rule: placed.rule.id }));
 }
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
@@ -205,35 +282,70 @@ function mappedReceipts(books: Books, tx: BankTransaction) {
 }
 
 export interface ClassifyDeps {
-  ask: (prompt: string, opts: AskOptions) => Promise<string>;
+  /** Absent: no model; what no rule decides is left in `unasked`. */
+  ask?: (prompt: string, opts: AskOptions) => Promise<string>;
   fx: FxResolver;
   context: ClassifyContext;
   log?: (line: string) => void;
   /** Runs after each wave of concurrent batches, e.g. to save the books so far. */
   afterWave?: () => void;
+  /** A held payment whose rule proposes no booking gets the model's proposal; false: no model call for it (its task proposes later). */
+  proposeAsked?: boolean;
 }
+
+/** A payment a rule says to ask the person about: not booked; `entries` is what the app would book (empty: no proposal). */
+export interface Asked { ref: string; rule: string; question: string; entries: JournalEntry[] }
 
 export interface ClassifyOutcome {
   classified: string[];
   /** `refusal`: the answer came, but would have booked the payment wrong (paymentRefusal). */
   failed: Array<{ ref: string; reason: string; refusal?: ClassifyRefusal }>;
+  /** Payments a rule holds for the person, never booked here. */
+  asked: Asked[];
+  /** Payments no rule decided, left unbooked because there is no model. */
+  unasked: string[];
 }
 
 /**
- * Asks the model for the entries of `txs`, ten transactions per call, three calls at a time,
- * and appends them to `books.journalEntries`. A transaction the model gives no entries for
- * is reported in `failed` and left unbooked.
+ * Books `txs`: first by the company's rules, in code (a rule that books books; a rule that asks
+ * holds the payment in `asked`, never booked), then the rest by the model, ten transactions per
+ * call, three calls at a time, appended to `books.journalEntries`. A transaction the model gives
+ * no entries for is reported in `failed` and left unbooked.
  */
 export async function classifyTransactions(books: Books, txs: BankTransaction[], deps: ClassifyDeps): Promise<ClassifyOutcome> {
-  const { ask, fx, context, log = () => {}, afterWave } = deps;
+  const { ask, fx, context, log = () => {}, afterWave, proposeAsked = true } = deps;
   const lock = periodLock(books);
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
-  const outcome: ClassifyOutcome = { classified: [], failed: [] };
+  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [] };
+  const toModel: BankTransaction[] = [];
+  /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
+  const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
+  for (const tx of txs) {
+    const placed = ruleOfPayment(books, tx, context, fx);
+    const then = placed?.rule.then;
+    if (!placed || !then) { toModel.push(tx); continue; }
+    if (then.kind === 'book') {
+      books.journalEntries.push(...ruleEntries(books, tx, placed, then.booking, context, fx));
+      log(`  ${tx.ref}  → rule ${placed.rule.id}`);
+      outcome.classified.push(tx.ref);
+      continue;
+    }
+    const asked = { ref: tx.ref, rule: placed.rule.id, question: then.question, entries: then.booking ? ruleEntries(books, tx, placed, then.booking, context, fx) : [] };
+    log(`  ${tx.ref}  waits for the person (rule ${placed.rule.id})`);
+    outcome.asked.push(asked);
+    if (!then.booking && proposeAsked) { proposing.set(tx.ref, asked); toModel.push(tx); }
+  }
+  afterWave?.();
+  if (!ask) {
+    outcome.unasked = toModel.filter((tx) => !proposing.has(tx.ref)).map((tx) => tx.ref);
+    return outcome;
+  }
   const batches: BankTransaction[][] = [];
-  for (let i = 0; i < txs.length; i += BATCH_SIZE) batches.push(txs.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < toModel.length; i += BATCH_SIZE) batches.push(toModel.slice(i, i + BATCH_SIZE));
 
   const processBatch = async (batch: BankTransaction[], batchNum: number) => {
-    const fail = (tx: BankTransaction, reason: string) => outcome.failed.push({ ref: tx.ref, reason });
+    // An asked payment the model could not propose for still waits for the person, without a proposal.
+    const fail = (tx: BankTransaction, reason: string) => { if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason }); };
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
       const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context, examples);
@@ -260,9 +372,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
-          outcome.failed.push({ ref: tx.ref, ...refused });
+          if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...refused });
           continue;
         }
+        const held = proposing.get(tx.ref);
+        if (held) { held.entries = entries.map((e) => ({ ...e, rule: held.rule })); continue; }
         books.journalEntries.push(...entries);
         log(`  [Batch ${batchNum}]  ${tx.ref}  → ${llmEntries.length} entries (${llmEntries.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
         outcome.classified.push(tx.ref);

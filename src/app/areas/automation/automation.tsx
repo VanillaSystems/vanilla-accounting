@@ -605,9 +605,9 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             const pay = canEdit ? unbooked(task) : undefined;
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
-                <b>{fillTask(tx(task.title), task.item)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
+                <b>{fillTask(tx(task.title), task.item, task.reads)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
-                {task.why ? <p>{fillTask(tx(task.why), task.item)}</p> : null}
+                {task.why ? <p>{fillTask(tx(task.why), task.item, task.reads)}</p> : null}
                 {Object.entries(task.reads ?? {}).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 <span className="wfactions">

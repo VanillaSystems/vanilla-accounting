@@ -148,6 +148,8 @@ export interface JournalEntry {
   run?: string;
   /** Why the classifier booked it so, in the model's words (src/booking/classify.ts): the booking page shows it. */
   reason?: string;
+  /** The id of the company's rule that booked it (src/booking/rules.ts): Firma › Regeln counts how often each applied. */
+  rule?: string;
   /**
    * The receipts linked to the payment when the classifier booked it. A receipt linked later is
    * evidence the booking never saw (its VAT above all): the next classify books it again

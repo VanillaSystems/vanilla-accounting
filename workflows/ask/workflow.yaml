@@ -1,0 +1,11 @@
+# A payment a company rule says to ask about (src/booking/rules.ts, `then: { ask: … }`): the inbox
+# processing does not book it and starts this run instead. It waits for the person with the rule's
+# question and the booking the app would make; nothing here reads a guide, so it needs no switching on.
+label: {"de": "Nachfragen", "en": "Ask first", "fr": "Demander d’abord", "it": "Chiedere prima"}
+desc: {"de": "Eine Regel der Firma sagt, bei dieser Zahlung zuerst zu fragen. Die Zahlung bleibt ungebucht, bis du die vorgeschlagene Buchung übernimmst oder selbst buchst.", "en": "A company rule says to ask about this payment first. It stays unbooked until you take the proposed booking or book it yourself.", "fr": "Une règle de l’entreprise demande de poser la question d’abord pour ce paiement. Il reste non comptabilisé jusqu’à ce que vous repreniez l’écriture proposée ou que vous le comptabilisiez vous-même.", "it": "Una regola dell’azienda chiede di domandare prima per questo pagamento. Resta non registrato finché non accetti la registrazione proposta o lo registri tu."}
+phase: book
+cadence: {"de": "wenn eine Regel fragen lässt", "en": "when a rule says to ask", "fr": "quand une règle demande de poser la question", "it": "quando una regola chiede di domandare"}
+for: transaction
+emits: ["entry.booked"]
+start: propose
+steps: ["propose", "ask", "open", "book"]

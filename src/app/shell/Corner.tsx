@@ -47,7 +47,7 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
           ))}
           {view.tasks.map((task) => (
             <button key={task.run} type="button" className="cprow" onClick={() => go({ area: 'automation', view: 'tasks', run: task.run })}>
-              <span className="amber" aria-hidden="true" /><b>{fillTask(textIn(task.title, language()), task.item)}</b>
+              <span className="amber" aria-hidden="true" /><b>{fillTask(textIn(task.title, language()), task.item, task.reads)}</b>
             </button>
           ))}
           {!running.length && !view.tasks.length ? <p className="m">{t('corner.nothing')}</p> : null}

@@ -1,0 +1,191 @@
+/**
+ * The company's rules the app carries out (src/booking/rules.ts): a rule that books books the next
+ * matching payment in code, without the model; a rule that asks holds the payment and the inbox run
+ * turns it into a question in Automatisierung (workflows/ask), never a booking, until the person
+ * takes the proposal. A rule written as sentences loads as a note and decides nothing.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
+import { parseRule, ruleFor, ruleWords, type PlacedRule, type RuleFacts } from '../src/booking/rules.js';
+import { companyRules, factsOf, chartNames } from '../src/booking/rule-book.js';
+import { loadFxResolver } from '../src/accounting/fx-rates.js';
+import { loadBooks, type Books } from '../src/books/store.js';
+import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { openEngine } from '../src/workflows/engine.js';
+import { taskOf, fillTask } from '../src/workflows/model.js';
+import { loadWorkflows } from '../src/workflows/load.js';
+import type { BankTransaction, Receipt } from '../src/types/index.js';
+import { DEMO_ROOT } from './support/workspace.js';
+import './support/jurisdiction.js';
+
+process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'rules-runs-'));
+
+const RULES = `process: booking
+steps:
+  classify:
+    rules:
+      - id: cash-ask
+        when: { text: "Bargeldbezug|Bancomat", direction: out, amount: { over: 500 } }
+        then: { ask: "Wofür war der Barbezug?", account: "2451", vat: none }
+        source: wish 2026-10-15
+      - id: fuel
+        when: { text: "Tankstelle" }
+        then: { account: "6200", vat: I81 }
+        source: wish 2026-10-15
+      - id: old-note
+        when: coffee for the office
+        then: 6570 when the receipt shows Swiss VAT
+        source: decision 2026-01-15, owner
+`;
+
+/** The demo with the rules above and, when given, a statement in the inbox. */
+function company(rules = RULES): Workspace {
+  const dir = mkdtempSync(join(tmpdir(), 'rules-ws-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  mkdirSync(join(dir, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(dir, 'knowledge', 'rules', 'booking.guide.yaml'), rules);
+  return workspaceAt(dir);
+}
+
+const tx = (t: Partial<BankTransaction> & Pick<BankTransaction, 'ref'>): BankTransaction =>
+  ({ bank: 'Raiffeisen', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Bank text', ...t });
+
+function booksOf(txs: BankTransaction[], receipts: Array<Partial<Receipt> & { id: string; ref: string }> = []): Books {
+  return {
+    transactions: txs,
+    receipts: receipts.map(({ ref, ...r }) => ({ filename: `${r.id}.pdf`, extractedText: 'Beleg mit genug Text', ...r }) as Receipt),
+    mappings: receipts.map((r) => ({ transactionRef: r.ref, receiptId: r.id })),
+    bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' },
+  } as unknown as Books;
+}
+
+/** A model that books everything on 6570 and counts the payments it was asked about. */
+function model() {
+  const asked: string[] = [];
+  const ask: NonNullable<ClassifyDeps['ask']> = async (prompt) => {
+    const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
+    asked.push(...refs);
+    return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries: [{ accountDebit: '6570', accountCredit: '', amount: 300, vatCode: 'I0', description: 'Model' }] }])));
+  };
+  return { ask, asked };
+}
+
+test('a rule that books books the next matching payment in code: its account, its VAT code only with Swiss VAT on the receipt, the model never asked', async () => {
+  const ws = company();
+  const context = loadClassifyContext(ws);
+  const books = booksOf([
+    tx({ ref: 'FUEL-1', description: 'Tankstelle Wil Ost', amount: 74.2 }),
+    tx({ ref: 'FUEL-2', description: 'Tankstelle Wil Ost', amount: 60 }),
+  ], [{ id: 'r1', ref: 'FUEL-1', hasSwissVat: true }]);
+  const m = model();
+  const out = await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context });
+  assert.deepEqual(m.asked, [], 'no model call for a payment a rule decides');
+  assert.deepEqual(out.classified.sort(), ['FUEL-1', 'FUEL-2']);
+  const by = (ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '', e.rule]);
+  assert.deepEqual(by('FUEL-1'), [['6200', '1021', 74.2, 'I81', 'fuel']]);
+  assert.deepEqual(by('FUEL-2'), [['6200', '1021', 60, 'I0', 'fuel']], 'no receipt with Swiss VAT: the zero code');
+  assert.match(books.journalEntries[0].reason ?? '', /^Regel: Text enthält «Tankstelle» → Konto 6200 Fahrzeugaufwand, MWST I81$/);
+});
+
+test('a rule that asks holds the payment: not booked, its question and proposal returned; a smaller withdrawal goes to the model', async () => {
+  const ws = company();
+  const books = booksOf([
+    tx({ ref: 'CASH-800', description: 'Bargeldbezug Bancomat Wil', amount: 800 }),
+    tx({ ref: 'CASH-300', description: 'Bargeldbezug Bancomat Wil', amount: 300 }),
+  ]);
+  const m = model();
+  const out = await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(books.journalEntries.filter((e) => e.transactionRef === 'CASH-800'), [], 'the 800 withdrawal is not booked');
+  assert.deepEqual(out.asked.map((a) => [a.ref, a.rule, a.question, a.entries.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode])]),
+    [['CASH-800', 'cash-ask', 'Wofür war der Barbezug?', [['2451', '1021', 800, undefined]]]]);
+  assert.deepEqual(m.asked, ['CASH-300']);
+  assert.deepEqual(out.classified, ['CASH-300']);
+});
+
+test('a rule switched off decides nothing; a rule written as sentences loads as a note and decides nothing', async () => {
+  const ws = company(RULES.replace('source: wish 2026-10-15\n      - id: fuel', 'source: wish 2026-10-15\n        off: true\n      - id: fuel'));
+  const rows = companyRules(ws, factsOf(chartNames(loadClassifyContext(ws).chartOfAccounts), new Set()));
+  assert.deepEqual(rows.filter((r) => r.file === 'knowledge/rules/booking.guide.yaml').map((r) => [r.id, r.kind, r.off]), [['cash-ask', 'rule', true], ['fuel', 'rule', false], ['old-note', 'note', false]]);
+  const books = booksOf([tx({ ref: 'CASH-800', description: 'Bargeldbezug Bancomat', amount: 800 })]);
+  const m = model();
+  const out = await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual([out.asked, m.asked], [[], ['CASH-800']]);
+});
+
+test('a business\'s own rule holds only for a payment that routes to that business', () => {
+  const facts: RuleFacts = { account: () => true, vat: () => true, counterparty: () => true };
+  const parsed = parseRule({ id: 'post', then: { account: '6513', vat: 'I81' } }, facts, true);
+  assert.ok(parsed.ok);
+  const rules: PlacedRule[] = [{ rule: parsed.rule, business: 'swiss-post' }];
+  const p = { tx: tx({ ref: 'x' }), bankAccount: '1021', amount: 50 };
+  assert.equal(ruleFor(rules, { ...p, counterparty: 'swiss-post' })?.rule.id, 'post');
+  assert.equal(ruleFor(rules, { ...p, counterparty: 'other' }), undefined);
+  assert.equal(ruleFor(rules, p), undefined);
+});
+
+test('what a rule cannot carry out is refused, each with its reason', () => {
+  const facts: RuleFacts = { account: (n) => ['6200', '2451'].includes(n), vat: (c) => ['I81'].includes(c), counterparty: (id) => id === 'swisscom' };
+  const why = (raw: Record<string, unknown>, inBusiness = false) => { const r = parseRule(raw, facts, inBusiness); return r.ok ? 'ok' : r.refusal.code; };
+  assert.equal(why({ id: 'a', when: 'cash over 500', then: 'ask the owner first' }), 'prose');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { schedule: 'weekly' } }), 'field');
+  assert.equal(why({ id: 'a', then: { account: '6200', vat: 'I81' } }), 'noCondition', 'a general rule needs a condition');
+  assert.equal(why({ id: 'a', then: { account: '6200', vat: 'I81' } }, true), 'ok', 'a business\'s rule has its business');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '9999', vat: 'I81' } }), 'account');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'Q7' } }), 'vat');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200' } }), 'vat', 'a booking names its VAT code, or none');
+  assert.equal(why({ id: 'a', when: { text: '(' }, then: { account: '6200', vat: 'I81' } }), 'pattern');
+  assert.equal(why({ id: 'a', when: { amount: { over: 500, under: 100 } }, then: { ask: 'Wofür?' } }), 'amount');
+  assert.equal(why({ id: 'a', when: { counterparty: 'nobody' }, then: { ask: 'Wofür?' } }), 'counterparty');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { ask: '' } }), 'question');
+  assert.equal(why({ id: 'a', when: { amount: { over: 500 }, direction: 'out' }, then: { ask: 'Wofür?', account: '2451', vat: 'none' } }), 'ok');
+});
+
+test('a rule reads in one plain line', () => {
+  const facts: RuleFacts = { account: () => true, vat: () => true, counterparty: () => true };
+  const r = parseRule({ id: 'a', when: { text: 'Bargeldbezug|Bancomat', direction: 'out', amount: { over: 500 } }, then: { ask: 'Wofür?', account: '2451', vat: 'none' } }, facts);
+  assert.ok(r.ok);
+  const words = (k: string, v: Record<string, string>) => `${k.split('.').pop()}(${Object.values(v).join(';')})`;
+  const names = { account: (n: string) => (n === '2451' ? 'Kontokorrent' : undefined), business: () => undefined, money: (n: number) => `CHF ${n}` };
+  assert.equal(ruleWords({ rule: r.rule }, names, words as never).line, 'text(«Bargeldbezug»or()«Bancomat»), out(), over(CHF 500) → askWith(Wofür?;bookNoVat(2451 Kontokorrent))');
+});
+
+/** A camt.053 of the demo's Raiffeisen account: a cash withdrawal of 800 and one of 300. */
+const STATEMENT = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>R-1</MsgId><CreDtTm>2026-10-16T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>R-1</Id><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Ntry><Amt Ccy="CHF">800.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-15</Dt></BookgDt><AcctSvcrRef>REF-CASH-800</AcctSvcrRef><AddtlNtryInf>Bargeldbezug Bancomat Wil</AddtlNtryInf></Ntry>
+<Ntry><Amt Ccy="CHF">300.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-15</Dt></BookgDt><AcctSvcrRef>REF-CASH-300</AcctSvcrRef><AddtlNtryInf>Bargeldbezug Bancomat Wil</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+
+test('an ask rule turns the next matching payment into a task «Frag: …», not a booking; one click on «accept» books the proposal, stamped with the rule', async () => {
+  const ws = company();
+  writeFileSync(join(ws.paths.root, 'transactional-data/2026/bank-statements/Raiffeisen/oktober.xml'), STATEMENT);
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const started = await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
+  assert.ok(started.ok, JSON.stringify(started));
+  await engine.idle();
+  const booked = (ref: string) => loadBooks(ws).journalEntries.filter((e) => e.transactionRef === ref);
+  assert.deepEqual(booked('REF-CASH-800'), [], 'the 800 withdrawal is not booked');
+
+  const workflows = loadWorkflows(APP_ROOT, ws.paths.root).workflows;
+  const asks = engine.runs().filter((r) => r.workflow === 'ask');
+  assert.deepEqual(asks.map((r) => [r.item.id, r.state.status, 'at' in r.state ? r.state.at : '']), [['REF-CASH-800', 'waiting', 'ask']]);
+  const task = taskOf(workflows.find((w) => w.id === 'ask')!, asks[0])!;
+  assert.equal(fillTask(task.title.de!, task.item, task.reads), 'Frag: Wofür war der Barbezug?');
+  assert.deepEqual(task.outcomes, ['accept', 'byHand']);
+  assert.deepEqual((task.reads?.entries as Array<{ accountDebit: string; accountCredit: string; amount: number }>).map((e) => [e.accountDebit, e.accountCredit, e.amount]), [['2451', '1021', 800]]);
+
+  // A second inbox run finds the payment still unbooked and asks nothing new.
+  await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
+  await engine.idle();
+  assert.equal(engine.runs().filter((r) => r.workflow === 'ask').length, 1);
+
+  assert.deepEqual(await engine.command({ kind: 'answer', run: asks[0].id, outcome: 'accept' }), { ok: true, run: asks[0].id });
+  await engine.idle();
+  assert.deepEqual(booked('REF-CASH-800').map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode, e.rule]), [['2451', '1021', 800, undefined, 'cash-ask']]);
+  assert.equal(engine.run(asks[0].id)!.state.status, 'done');
+});
