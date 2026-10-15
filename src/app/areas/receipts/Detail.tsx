@@ -100,7 +100,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>}
           {r.vatBy === 'human' && <ByHand />}
           {vat.length > 0 && (r.vatId
-            ? <span title={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')}</span>
+            ? <span title={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')} <span className="mono">{r.vatId}</span></span>
             : <span className="nov" title={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
         </div>
       )}
