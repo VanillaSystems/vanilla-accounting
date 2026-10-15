@@ -2081,7 +2081,7 @@ export const messages = {
   'drop.sumNothing': 'Nichts zu übernehmen.',
   'drop.add': 'Hinzufügen ({n})',
   'drop.done': { one: '{n} Datei übernommen.', other: '{n} Dateien übernommen.' },
-  'drop.openRun': 'Lauf {id} ansehen',
+  'drop.openRun': 'Verarbeitung im Detail ansehen',
   'drop.entries': { one: '{n} Bewegung', other: '{n} Bewegungen' },
   'drop.reason.duplicate': 'schon in den Büchern oder im Eingang',
   'drop.reason.not-receipt': 'kein Beleg (Preisliste oder Katalog)',
@@ -2119,6 +2119,17 @@ export const messages = {
   'company.appVersion': 'Vanilla Accounting {version}',
   'company.appBuilt': 'gebaut {at}',
   'company.appCommitted': 'Stand {at}',
+  'drop.titleWorking': 'Wird verarbeitet',
+  'drop.titleDone': 'Hinzugefügt',
+  'drop.overall': 'Gesamt {pct} % · {done} von {n} Dateien fertig',
+  'drop.atStep': 'Schritt {i} von {n}: {step}',
+  'drop.p.working': 'in Arbeit',
+  'drop.p.read': 'gelesen, noch keine Zahlung',
+  'drop.p.matched': 'zugeordnet',
+  'drop.p.waits': 'wartet auf dich',
+  'drop.p.statement': 'eingelesen',
+  'drop.waitsHint': 'Was auf dich wartet, findest du unter Belege.',
+  'drop.background': 'Im Hintergrund weiter',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

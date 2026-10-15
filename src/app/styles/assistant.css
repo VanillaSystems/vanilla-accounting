@@ -66,5 +66,10 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .dpw input { width: 150px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .dropdlg .dfoot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
 .dropdlg .dfoot .m { flex: 1; font-size: 12px; }
-.dropdlg .ddone { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.dropdlg .dprog { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.dropdlg .dbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.dropdlg .dbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+.dchip.p-working { background: var(--hover); color: var(--ink-2); }
+.dchip.p-waits { background: var(--warn-soft); color: var(--warn); }
+.dchip.p-matched { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
 .dpw input { font-size: 12px; }

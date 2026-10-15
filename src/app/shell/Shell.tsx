@@ -253,7 +253,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         onAssistant={toggleAssistant}
       />
       <Sidebar page={pageContext(loc.route, books)} onGo={(route) => nav.go({ route, query: {} })} />
-      <DropDialog onGo={(route) => nav.go({ route, query: {} })} />
+      <DropDialog books={books} onGo={(route) => nav.go({ route, query: {} })} />
       <Corner onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}

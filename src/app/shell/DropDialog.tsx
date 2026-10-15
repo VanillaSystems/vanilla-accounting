@@ -6,8 +6,11 @@
  */
 import { useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
-import { t } from '../i18n/index.js';
-import { formatDate } from '../lib/utils.js';
+import { language, t } from '../i18n/index.js';
+import { fmt, formatDate } from '../lib/utils.js';
+import { useAutomation } from '../automation/store.js';
+import { textIn } from '../../workflows/model.js';
+import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import type { Route } from './route.js';
 
@@ -82,8 +85,73 @@ function Row({ r, session }: { r: DropRow; session: DropSession }) {
   );
 }
 
-export function DropDialog({ onGo }: { onGo(route: Route): void }) {
+/** Whether the run that takes up the dropped files has come to rest (or there is none). */
+const restingRun = (view: ReturnType<typeof useAutomation>['view'], done: NonNullable<DropSession['done']>): boolean => {
+  const run = done.run ? view?.runs.find((r) => r.id === done.run) : undefined;
+  return !done.run || (!!run && run.status !== 'queued' && run.status !== 'running');
+};
+
+/** Where one taken file is, read from the books and the run: still in its step, read, matched, or waiting for a person. */
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' };
+
+/**
+ * After «Hinzufügen» (mockup screen 8): the run's progress over all files, each file with where it
+ * is, and «Im Hintergrund weiter», since the run goes on the same when the dialog closes.
+ */
+function Progress({ done, rows, books, onGo }: { done: NonNullable<DropSession['done']>; rows: DropRow[]; books: Index; onGo(route: Route): void }) {
+  const { view } = useAutomation();
+  const run = done.run ? view?.runs.find((r) => r.id === done.run) : undefined;
+  const steps = view?.workflows.find((w) => w.id === run?.workflow)?.steps ?? [];
+  const resting = restingRun(view, done);
+  const stepAt = run?.at ? steps.findIndex((x) => x.id === run.at) : -1;
+  const stepLabel = stepAt >= 0 ? textIn(steps[stepAt].label, language()) : undefined;
+  const taken = rows.filter((r) => r.state === 'take');
+  const stateOf = (r: DropRow): FileState => {
+    if (r.kind === 'camt' || r.kind === 'statement-pdf') return { kind: 'statement' };
+    if (books.mappings.some((m) => m.receiptId === r.id)) return { kind: 'matched' };
+    const receipt = books.receipts.find((x) => x.id === r.id);
+    if (receipt?.location === 'archived') return resting ? { kind: 'read' } : { kind: 'working', step: stepLabel };
+    return resting ? { kind: 'waits' } : { kind: 'working', step: stepLabel };
+  };
+  const states = taken.map(stateOf);
+  const finished = states.filter((x) => x.kind !== 'working').length;
+  const pct = taken.length ? Math.round((resting ? 1 : (finished + (stepAt >= 0 ? (stepAt + 1) / (steps.length + 1) : 0) * (taken.length - finished)) / taken.length) * 100) : 100;
+  const waits = run?.status === 'waiting' || states.some((x) => x.kind === 'waits');
+  return (
+    <div className="dprog">
+      <div className="dbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
+      <p className="m">
+        {t('drop.overall', { pct, done: finished, n: taken.length })}
+        {!resting && stepLabel ? ` · ${t('drop.atStep', { i: stepAt + 1, n: steps.length, step: stepLabel })}` : ''}
+      </p>
+      <div className="drows">
+        {taken.map((r, i) => {
+          const x = states[i];
+          const receipt = books.receipts.find((y) => y.id === r.id);
+          const facts = receipt && (receipt.date || receipt.amount !== undefined)
+            ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
+          return (
+            <div key={r.key} className="droprow">
+              <div className="dn"><b className="mono">{r.name}</b><small>{receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
+              <div className="dgo"><span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span></div>
+              <span />
+            </div>
+          );
+        })}
+      </div>
+      {done.refused.map((x) => <p key={x.name} className="warnline">{x.name}: {x.message}</p>)}
+      {resting && waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
+      <div className="dfoot">
+        <span className="m">{done.run ? <button type="button" className="linkbtn" onClick={() => { closeDrop(); onGo({ area: 'automation', view: 'run', run: done.run! }); }}>{t('drop.openRun')}</button> : null}</span>
+        <button type="button" className="btn primary" onClick={closeDrop}>{resting ? t('common.close') : t('drop.background')}</button>
+      </div>
+    </div>
+  );
+}
+
+export function DropDialog({ onGo, books }: { onGo(route: Route): void; books: Index }) {
   const s = useDrop();
+  const { view } = useAutomation();
   const [tab, setTab] = useState<Tab>('all');
   if (!s.open) return null;
   const rows = s.session?.rows ?? [];
@@ -103,17 +171,12 @@ export function DropDialog({ onGo }: { onGo(route: Route): void }) {
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={() => !s.busy && closeDrop()} />
       <div className="palette dropdlg" role="dialog" aria-label={t('drop.dialog')}>
         <div className="dhd">
-          <b>{t('drop.dialog')}</b>
+          <b>{done ? t(restingRun(view, done) ? 'drop.titleDone' : 'drop.titleWorking') : t('drop.dialog')}</b>
           {s.adding ? <span className="wfpill st-running">{t('drop.reading', { n: s.adding })}</span> : null}
           <button type="button" className="chip" aria-label={t('common.close')} onClick={closeDrop}>×</button>
         </div>
         {done ? (
-          <div className="ddone">
-            <p>{t('drop.done', { n: done.taken })}</p>
-            {done.run ? <button type="button" className="linkbtn" onClick={() => { closeDrop(); onGo({ area: 'automation', view: 'run', run: done.run! }); }}>{t('drop.openRun', { id: done.run })}</button> : null}
-            {done.refused.map((x) => <p key={x.name} className="warnline">{x.name}: {x.message}</p>)}
-            <div className="dfoot"><button type="button" className="btn primary" onClick={closeDrop}>{t('common.close')}</button></div>
-          </div>
+          <Progress done={done} rows={rows} books={books} onGo={onGo} />
         ) : (
           <>
             <div className="wftabs" role="tablist">
