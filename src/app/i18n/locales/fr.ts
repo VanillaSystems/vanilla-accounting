@@ -1724,6 +1724,7 @@ export default {
     'desktop.setup.bankTwice': '{bank} {detail} figure deux fois dans la liste.',
     'desktop.q.preset.consultant': 'Conseil, services (Sàrl)',
     'desktop.q.preset.webshop': 'Boutique en ligne, marchandises (Sàrl)',
+    'desktop.q.preset.trades': 'Artisanat, construction (Sàrl)',
     'desktop.q.preset.freelancer': 'Indépendant·e, sans TVA',
     'desktop.q.preset.custom': 'Réponses propres',
     'desktop.q.preset.freelancer.unsupported': 'L’app ne sait pas encore tenir une comptabilité sans TVA: aujourd’hui chaque écriture porte un code TVA et chaque trimestre est décompté.',

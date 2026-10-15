@@ -1724,6 +1724,7 @@ export default {
     'desktop.setup.bankTwice': '{bank} {detail} is listed twice.',
     'desktop.q.preset.consultant': 'Consulting, services (GmbH)',
     'desktop.q.preset.webshop': 'Webshop, goods (GmbH)',
+    'desktop.q.preset.trades': 'Trades, construction (GmbH)',
     'desktop.q.preset.freelancer': 'Freelancer, no VAT',
     'desktop.q.preset.custom': 'Own answers',
     'desktop.q.preset.freelancer.unsupported': 'The app cannot keep books without VAT yet: today every entry carries a VAT code and every quarter is filed.',

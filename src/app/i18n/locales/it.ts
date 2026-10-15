@@ -1724,6 +1724,7 @@ export default {
     'desktop.setup.bankTwice': '{bank} {detail} è due volte nella lista.',
     'desktop.q.preset.consultant': 'Consulenza, servizi (Sagl)',
     'desktop.q.preset.webshop': 'Negozio online, merci (Sagl)',
+    'desktop.q.preset.trades': 'Artigianato, edilizia (Sagl)',
     'desktop.q.preset.freelancer': 'Indipendente, senza IVA',
     'desktop.q.preset.custom': 'Risposte proprie',
     'desktop.q.preset.freelancer.unsupported': 'L’app non sa ancora tenere una contabilità senza IVA: oggi ogni registrazione porta un codice IVA e ogni trimestre viene conteggiato.',

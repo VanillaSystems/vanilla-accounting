@@ -16,6 +16,8 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- A fourth starting point in «Neue Buchhaltung anlegen» and `npm run init -- --preset trades`: «Handwerk, Bau (GmbH)» (services and material, staff, private use of car and phone, effective method, quarterly, vereinnahmt), so a trades business no longer has to guess «Beratung».
+
 - The app's icon is the brand's wave in tram blue, in the Dock and as the browser tab's icon.
 - Every build says which it is and how old: `0.4.0-rc.56+g36b66d6`, built or committed when (the version worked toward, commits since
   the last release, the commit), under Firma's sections, in `npm run doctor`, in the Mac app's dmg

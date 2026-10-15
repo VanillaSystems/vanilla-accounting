@@ -1721,6 +1721,7 @@ export const messages = {
   'desktop.setup.bankTwice': '{bank} {detail} steht zweimal in der Liste.',
   'desktop.q.preset.consultant': 'Beratung, Dienstleistungen (GmbH)',
   'desktop.q.preset.webshop': 'Webshop, Waren (GmbH)',
+  'desktop.q.preset.trades': 'Handwerk, Bau (GmbH)',
   'desktop.q.preset.freelancer': 'Selbständig, ohne MWST',
   'desktop.q.preset.custom': 'Eigene Antworten',
   'desktop.q.preset.freelancer.unsupported': 'Eine Buchhaltung ohne MWST kann die App noch nicht führen: heute trägt jede Buchung einen MWST-Code und jedes Quartal wird abgerechnet.',

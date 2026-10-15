@@ -178,6 +178,14 @@ export const PRESETS = {
       employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'yes',
     },
   },
+  trades: {
+    label: 'Trades / construction GmbH',
+    answers: {
+      legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
+      fiscalYear: 'calendar', start: 'new', sells: 'both', foreignCustomers: 'no', imports: 'no',
+      employees: 'staff', ownerPaysPrivately: 'yes', privateUse: ['car', 'phone'], payouts: 'no',
+    },
+  },
   freelancer: {
     label: 'Freelancer, not registered for VAT (not supported yet)',
     answers: { legalForm: 'Einzelfirma', vatRegistered: 'no' },

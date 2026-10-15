@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
-import { QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, isSupported, type Answers } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt, workspacePaths, yearPaths } from '../src/workspace/workspace.js';
 import { loadBooks, saveBooks } from '../src/books/store.js';
@@ -71,6 +71,18 @@ test('chart: profile and legal form pick the accounts; a rule broken in the file
   writeFileSync(join(dir, 'chart.yaml'), bad);
   assert.throws(() => loadChart(join(dir, 'chart.yaml')), (e: Error) => e instanceof ChartError && /3400: a asset account must be in class 1/.test(e.message));
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('preset trades: a small Swiss trades GmbH, fully supported, with the chart it needs', () => {
+  assert.deepEqual(PRESETS.trades.answers, {
+    legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
+    fiscalYear: 'calendar', start: 'new', sells: 'both', foreignCustomers: 'no', imports: 'no',
+    employees: 'staff', ownerPaysPrivately: 'yes', privateUse: ['car', 'phone'], payouts: 'no',
+  });
+  assert.ok(isSupported(PRESETS.trades.answers as unknown as Answers), 'every answer is one the engine runs on');
+  assert.deepEqual(PRESET_NAMES, ['consultant', 'webshop', 'trades', 'freelancer', 'custom']);
+  const numbers = new Set(chartFor(loadChart(), PRESETS.trades.answers.sells, 'GmbH').map((a) => a.number));
+  for (const n of ['3000', '3400', '4000', '4400', '5000', '2451']) assert.ok(numbers.has(n), `${n} is in the trades chart`);
 });
 
 test('init without a terminal: the workspace opens, doctor passes, a rerun changes nothing', () => {
