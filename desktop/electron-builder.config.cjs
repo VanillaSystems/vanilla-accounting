@@ -29,6 +29,7 @@ module.exports = {
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
   files: [
     'package.json',
+    'AGENTS.md',
     'out/desktop/*.{mjs,cjs}',
     'dist/**/*',
     'reference/**/*',
@@ -56,6 +57,9 @@ module.exports = {
     '!node_modules/**/*.{map,d.ts,d.mts,d.cts}',
   ],
   asar: true,
+  // The AI sidebar's Claude reads the app's rules, workflows and country modules with its own file
+  // tools, which cannot look inside app.asar (src/assistant/claude.ts APP_FILES).
+  asarUnpack: ['AGENTS.md', 'workflows/**/*', 'modules/**/*'],
   // Chromium's own translations only for the app's languages.
   electronLanguages: ['de', 'fr', 'it', 'en'],
   // Hardening of the release build: the app's binary cannot be run as Node, takes no NODE_OPTIONS
