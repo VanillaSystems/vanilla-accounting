@@ -17,7 +17,7 @@ Two markers flag an entry you must read before you update:
 ### Added
 
 - The app's icon is the brand's wave in tram blue, in the Dock and as the browser tab's icon.
-- Every build says which it is: `0.4.0-rc.56+g36b66d6` (the version worked toward, commits since
+- Every build says which it is and how old: `0.4.0-rc.56+g36b66d6`, built or committed when (the version worked toward, commits since
   the last release, the commit), under Firma's sections, in `npm run doctor`, in the Mac app's dmg
   name, and as `Vanilla-Build:` in every commit the app makes in the books.
 - `npm run workflow -- booking <ref>` (or `--open`) books a transaction by a run of

@@ -2117,6 +2117,8 @@ export const messages = {
   'sources.approve': 'Einschalten',
   'sources.approveWhy': 'Eingeschaltet holt die Quelle live, mit genau dieser Reichweite. Jede Änderung an ihr wartet wieder aufs Einschalten.',
   'company.appVersion': 'Vanilla Accounting {version}',
+  'company.appBuilt': 'gebaut {at}',
+  'company.appCommitted': 'Stand {at}',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

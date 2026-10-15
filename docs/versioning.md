@@ -32,7 +32,8 @@ total commit count (`git rev-list --count HEAD`), so it always climbs.
 
 ## Where it shows
 
-Under Firma's sections in the app, the first line of `npm run doctor`, the dmg name, and a
+Under Firma's sections in the app, with its age (the Mac app: «gebaut» and the time it was built;
+`npm start`: «Stand» and the time of its commit), the first line of `npm run doctor`, the dmg name, and a
 `Vanilla-Build:` trailer on every commit the app makes in a workspace's books (find which build
 wrote an entry with `git log --grep 'Vanilla-Build: 0.4.0-rc.56'`). The packed Mac app has no git:
 `tools/desktop/build.mjs` bakes the string in at build time from a clean tree.

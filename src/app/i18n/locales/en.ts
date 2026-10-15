@@ -2120,5 +2120,7 @@ export default {
     'sources.approve': 'Switch on',
     'sources.approveWhy': 'Switched on, the source collects live, with exactly this reach. Any change to it waits to be switched on again.',
     'company.appVersion': 'Vanilla Accounting {version}',
+    'company.appBuilt': 'built {at}',
+    'company.appCommitted': 'as of {at}',
   },
 } satisfies Locale;

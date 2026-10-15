@@ -2120,5 +2120,7 @@ export default {
     'sources.approve': 'Attiva',
     'sources.approveWhy': 'Attivata, la fonte raccoglie dal vivo, con esattamente questa portata. Ogni modifica attende una nuova attivazione.',
     'company.appVersion': 'Vanilla Accounting {version}',
+    'company.appBuilt': 'compilato il {at}',
+    'company.appCommitted': 'stato del {at}',
   },
 } satisfies Locale;

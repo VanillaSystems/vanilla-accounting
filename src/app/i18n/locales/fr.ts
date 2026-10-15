@@ -2120,5 +2120,7 @@ export default {
     'sources.approve': 'Activer',
     'sources.approveWhy': 'Activée, la source relève en réel, avec exactement cette portée. Toute modification attend d’être réactivée.',
     'company.appVersion': 'Vanilla Accounting {version}',
+    'company.appBuilt': 'compilé le {at}',
+    'company.appCommitted': 'état du {at}',
   },
 } satisfies Locale;

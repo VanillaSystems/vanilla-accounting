@@ -10,7 +10,7 @@ import { partDirs, type Workspace } from '../workspace/workspace.js';
 import type { Seal } from './seal.js';
 import { sealsOf, type Books } from './store.js';
 import { bankBalances } from './year-close.js';
-import { appVersion } from '../version.js';
+import { appTime, appVersion } from '../version.js';
 
 /** A quarter's seal file as checked against today's books. */
 export type SealView =
@@ -23,8 +23,9 @@ export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' 
   seals: SealView[];
   /** The latest balance a statement shows, per ledger account, in the account's currency. */
   statementBalances: Array<{ account: string; date: string; amount: number }>;
-  /** The build of the app serving these books (src/version.ts). */
+  /** The build of the app serving these books (src/version.ts), and how old it is. */
   appVersion: string;
+  appTime?: { at: string; kind: 'built' | 'committed' };
 }
 
 function filedQuarters(ws: Workspace): QuarterKey[] {
@@ -53,5 +54,6 @@ export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
     seals,
     statementBalances: [...latest.values()],
     appVersion: appVersion(),
+    ...(appTime() ? { appTime: appTime() } : {}),
   };
 }

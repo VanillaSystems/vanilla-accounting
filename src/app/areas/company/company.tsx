@@ -103,9 +103,21 @@ function List({ route, books, nav }: Props) {
           </Fragment>
         ))}
       </div>
-      {ws ? <div className="appver mono">{t('company.appVersion', { version: ws.appVersion })}</div> : null}
+      {ws ? (
+        <div className="appver mono">
+          <div>{t('company.appVersion', { version: ws.appVersion })}</div>
+          {ws.appTime ? <div>{t(ws.appTime.kind === 'built' ? 'company.appBuilt' : 'company.appCommitted', { at: localTime(ws.appTime.at) })}</div> : null}
+        </div>
+      ) : null}
     </>
   );
+}
+
+/** 15.10.2026 11:32, in the viewer's time zone. */
+function localTime(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${formatDate(iso)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 function Detail(props: Props) {

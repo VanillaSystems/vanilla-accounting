@@ -10,7 +10,8 @@
  *
  * The count climbs with every commit and resets at every tag; the sha tells two branches at the
  * same count apart. The packed Mac app has no git: tools/desktop/build.mjs bakes the string in as
- * VANILLA_BUILD. Imports only node: modules, so the build scripts load it with plain node.
+ * VANILLA_BUILD, and the time it was built as VANILLA_BUILT_AT. Imports only node: modules, so the
+ * build scripts load it with plain node.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -24,6 +25,8 @@ export interface Build {
   file: string;
   /** Commits on the line: always climbs, the bundle version macOS compares. */
   number: number;
+  /** When the commit was made (ISO), so a person sees how old a build is; undefined without git. */
+  committedAt?: string;
 }
 
 const LONG = /^(.*)-(\d+)-g([0-9a-f]+)(-dirty)?$/;
@@ -59,12 +62,21 @@ export function describeBuild(root: string): Build {
   const planned = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }).version;
   const checkout = existsSync(join(root, '.git'));
   const version = versionFrom(planned, checkout ? git(root, 'describe', '--tags', '--long', '--dirty', '--always') : undefined);
-  return { version, file: version.replace(/\+/g, '-'), number: Number((checkout && git(root, 'rev-list', '--count', 'HEAD')) || 0) };
+  const committedAt = checkout ? git(root, 'log', '-1', '--format=%cI') : undefined;
+  return { version, file: version.replace(/\+/g, '-'), number: Number((checkout && git(root, 'rev-list', '--count', 'HEAD')) || 0), ...(committedAt ? { committedAt } : {}) };
 }
 
-let described: string | undefined;
+let described: Build | undefined;
+const here = (): Build => (described ??= describeBuild(fileURLToPath(new URL('..', import.meta.url))));
 
 /** This process's build. */
 export function appVersion(): string {
-  return process.env.VANILLA_BUILD ?? (described ??= describeBuild(fileURLToPath(new URL('..', import.meta.url))).version);
+  return process.env.VANILLA_BUILD ?? here().version;
+}
+
+/** How old this build is (ISO): when the Mac app was built, or when the checkout's commit was made. */
+export function appTime(): { at: string; kind: 'built' | 'committed' } | undefined {
+  if (process.env.VANILLA_BUILT_AT) return { at: process.env.VANILLA_BUILT_AT, kind: 'built' };
+  const at = here().committedAt;
+  return at ? { at, kind: 'committed' } : undefined;
 }
