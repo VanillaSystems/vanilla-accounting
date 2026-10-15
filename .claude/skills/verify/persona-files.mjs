@@ -64,6 +64,36 @@ fs.writeFileSync(`${OUT}/${CAMT}`, `<?xml version="1.0" encoding="UTF-8"?>
 // the CSV a bank's e-banking offers first
 fs.writeFileSync(`${OUT}/Kontoauszug_Juli-Sept.csv`, 'Buchungsdatum;Text;Belastung;Gutschrift;Saldo\n' + tx.map(([dt, d, a, who, txt]) => `${dt.split('-').reverse().join('.')};${who} ${txt};${d === 'DBIT' ? n(a) : ''};${d === 'CRDT' ? n(a) : ''};`).join('\n'));
 
+// October: the payments of the hard cases (persona scenario misreads.md), as a statement of its own.
+const oct = [
+  ['2026-10-02','DBIT',386.60,'Malerbedarf Konstanz GmbH','RE-4471 EUR 412.30'],
+  ['2026-10-05','DBIT',187.35,'Baucenter Gossau','Karte 5412 Einkauf'],
+  ['2026-10-08','DBIT',1506.45,'Farbmix AG','Rechnung FM-79010 abzgl. 2% Skonto'],
+  ['2026-10-12','CRDT',3200.00,'Bauer Michael','Rechnung 2026-031 Malerarbeiten Konstanz'],
+];
+let balOct = bal; const openOct = bal;
+for (const [, d, a] of oct) balOct += d === 'CRDT' ? a : -a;
+const ntryOct = oct.map(([dt, d, a, who, txt], i) => `
+      <Ntry><Amt Ccy="CHF">${n(a)}</Amt><CdtDbtInd>${d}</CdtDbtInd><Sts>BOOK</Sts>
+        <BookgDt><Dt>${dt}</Dt></BookgDt><ValDt><Dt>${dt}</Dt></ValDt>
+        <NtryDtls><TxDtls><Refs><AcctSvcrRef>RB-2026-1${String(i + 1).padStart(3, '0')}</AcctSvcrRef></Refs>
+          <Amt Ccy="CHF">${n(a)}</Amt><CdtDbtInd>${d}</CdtDbtInd>
+          <RltdPties>${d === 'CRDT' ? `<Dbtr><Nm>${who}</Nm></Dbtr>` : `<Cdtr><Nm>${who}</Nm></Cdtr>`}</RltdPties>
+          <RmtInf><Ustrd>${txt}</Ustrd></RmtInf></TxDtls></NtryDtls>
+        <AddtlNtryInf>${d === 'CRDT' ? 'Gutschrift' : 'Belastung'} ${who}</AddtlNtryInf></Ntry>`).join('');
+fs.writeFileSync(`${OUT}/camt053_Raiffeisen_Okt-2026.xml`, `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr><MsgId>RB-20261015-1</MsgId><CreDtTm>2026-10-15T06:00:00</CreDtTm></GrpHdr>
+    <Stmt><Id>RB-STMT-OKT</Id>
+      <Acct><Id><IBAN>${IBAN}</IBAN></Id><Ccy>CHF</Ccy><Ownr><Nm>Malerei Huber GmbH</Nm></Ownr><Svcr><FinInstnId><Nm>Raiffeisenbank Wil und Umgebung</Nm></FinInstnId></Svcr></Acct>
+      <Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">${n(openOct)}</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-09-30</Dt></Dt></Bal>
+      <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">${n(balOct)}</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-14</Dt></Dt></Bal>${ntryOct}
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>
+`);
+
 const css = `body{font-family:Helvetica,Arial;font-size:12px;margin:40px;color:#222} h1{font-size:20px} table{width:100%;border-collapse:collapse;margin-top:20px} td,th{border-bottom:1px solid #ccc;padding:6px;text-align:left} .r{text-align:right} .small{font-size:10px;color:#555}`;
 const inv = (vendor, addr, uid, no, date, rows, to = 'Malerei Huber GmbH<br>Industriestrasse 14<br>9500 Wil SG') => {
   const net = rows.reduce((s, r) => s + r[1], 0); const vat = Math.round(net * 0.081 * 20) / 20;
@@ -72,6 +102,9 @@ const inv = (vendor, addr, uid, no, date, rows, to = 'Malerei Huber GmbH<br>Indu
   <tr><td>Total exkl. MWST</td><td class=r>${n(net)}</td></tr><tr><td>MWST 8.1%</td><td class=r>${n(vat)}</td></tr><tr><th>Total CHF</th><th class=r>${n(net + vat)}</th></tr></table><p>Zahlbar innert 30 Tagen. IBAN ${SUPPLIER_IBAN}</p>`;
 };
 const docs = {
+  'Malerbedarf_Konstanz_RE-4471.pdf': `<style>${css}</style><h1>Malerbedarf Konstanz GmbH</h1><div class=small>Reichenaustrasse 12, 78467 Konstanz, Deutschland<br>USt-IdNr. DE 811 234 567</div><p style="margin-top:30px">Malerei Huber GmbH<br>Industriestrasse 14<br>9500 Wil SG, Schweiz</p><h2>Rechnung RE-4471</h2><p>Rechnungsdatum: 29.09.2026</p><table><tr><th>Artikel</th><th class=r>Betrag EUR</th></tr><tr><td>Lasur Holz aussen 5 l, 6 Stk</td><td class=r>346.47</td></tr><tr><td>Nettobetrag</td><td class=r>346.47</td></tr><tr><td>MwSt. 19 %</td><td class=r>65.83</td></tr><tr><th>Gesamtbetrag EUR</th><th class=r>412.30</th></tr></table><p>Abholung im Laden Konstanz.</p>`,
+  'Rechnung_2026-031_Konstanz.pdf': `<style>${css}</style><h1>Malerei Huber GmbH</h1><div class=small>Industriestrasse 14, 9500 Wil SG<br>MWST-Nr. ${uidOf(['3456', '7891'].join(''))} MWST</div><p style="margin-top:30px">Familie Bauer<br>Seestrasse 4<br>78462 Konstanz, Deutschland</p><h2>Rechnung 2026-031</h2><p>Datum: 25.09.2026</p><table><tr><th>Leistung</th><th class=r>Betrag CHF</th></tr><tr><td>Malerarbeiten Wohnung Seestrasse 4, Konstanz</td><td class=r>3200.00</td></tr><tr><th>Total CHF</th><th class=r>3200.00</th></tr></table><p class=small>Leistungsort Deutschland: nicht der schweizerischen MWST unterstellt.</p>`,
+  'Farbmix_Rechnung_FM-79010.pdf': inv('Farbmix AG', 'Farbweg 3, 9000 St. Gallen', uidOf('1234'+'5678'), 'FM-79010', '28.09.2026', [['Dispersionsfarbe weiss 15 l, 10 Stk', 853.00], ['Spachtel und Kellen', 569.02]]).replace('Zahlbar innert 30 Tagen.', 'Zahlbar innert 10 Tagen mit 2 % Skonto: CHF 1506.45, sonst innert 30 Tagen netto.'),
   'Farbmix_Rechnung_FM-77812.pdf': inv('Farbmix AG', 'Farbweg 3, 9000 St. Gallen', uidOf('1234'+'5678'), 'FM-77812', '28.06.2026', [['Dispersionsfarbe weiss 15 l, 8 Stk', 682.40], ['Abdeckvlies 50 m², 4 Rollen', 196.00], ['Malerkrepp 50 mm, 24 Stk', 271.95]]),
   'Farbmix_Rechnung_FM-78230.pdf': inv('Farbmix AG', 'Farbweg 3, 9000 St. Gallen', uidOf('1234'+'5678'), 'FM-78230', '30.07.2026', [['Fassadenfarbe Silikon 12.5 l, 10 Stk', 1890.00], ['Grundierung tiefenwirksam 10 l, 3 Stk', 340.20]]),
   'Geruest_August.pdf': inv('Gerüstbau Thurtal GmbH', 'Thurstrasse 88, 9500 Wil', uidOf('9876'+'5432'), '2026-0815', '01.08.2026', [['Gerüstmiete MFH Bronschhofen, August', 1036.10]]),
@@ -86,6 +119,7 @@ for (const [f, html] of Object.entries(docs)) { await p.setContent(html); await 
 const till = (shop, lines, total, uid) => `<body style="margin:0;background:#6b5d4f;display:flex;justify-content:center;padding:40px"><div style="transform:rotate(-3deg);background:#f1eee6;width:300px;padding:20px;font-family:Courier;font-size:13px;box-shadow:4px 6px 12px #0006">
 <center><b>${shop}</b><br>${uid}</center><hr>${lines.map((l) => `${l[0]}<span style="float:right">${n(l[1])}</span><br>`).join('')}<hr><b>TOTAL CHF<span style="float:right">${n(total)}</span></b><br><br>inkl. MWST 8.1%: ${n(total / 1.081 * 0.081)}<br>Karte ****5412<br>Danke für Ihren Einkauf</div></body>`;
 const photos = {
+  'IMG_4733.jpg': till('Baucenter Gossau', [['Abdeckfolie 4x5 m', 24.90], ['Pinselset', 39.95], ['Silikon weiss 3 Stk', 32.70], ['Schleifpapier', 89.80]], 187.35, uidFor('5556'+'6677')).replace('transform:rotate(-3deg)', 'transform:rotate(-7deg) skewX(4deg);filter:blur(1.6px) contrast(.8)'),
   'IMG_4471.jpg': till('Tankstelle Wil Ost', [['Diesel 41.2 l', 86.40]], 86.40, uidFor('2223'+'3344')),
   'IMG_4502.jpg': till('Baucenter Gossau', [['Spachtelmasse 5 kg', 38.90], ['Farbroller Set', 64.50], ['Leiter Alu 3x9', 209.50]], 312.90, uidFor('5556'+'6677')),
   'IMG_4588.jpg': till('Restaurant Hirschen', [['Menu 2x', 39.00], ['Mineral', 6.50]], 45.50, uidFor('4445'+'5566')),
