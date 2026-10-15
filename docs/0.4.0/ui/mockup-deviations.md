@@ -21,7 +21,7 @@ compared yet).
 |---|---|---|---|
 | S1 | The open top bar floats over free space; the list heading and its add button («+ Beleg», «+ Auszug», «+ Buchung», «+ Rechnung») stay visible | as the mockup | fixed |
 | S2 | Dock at the bottom edge (both mockups) | Activity bar down the left edge (try of 15.10., f2e8660), with the bolt button for Automatisierung above it | decided (owner to confirm) |
-| S3 | Period picker, ⌘K palette, export dialog, AI sidebar, status corner | not compared yet | to compare |
+| S3 | Period picker, ⌘K palette, export dialog, AI sidebar, status corner | period picker as the mockup; the palette has the same parts, without the mockup's icon per action and its «Postfach abrufen», «Nur offene zeigen», «Ausgeblendete Dateien zeigen»; export dialog, AI sidebar and status corner not compared yet | open (palette actions), to compare (the rest) |
 | S4 | No page names a developer command | none does any more; where the app has no button for it yet (exchange rates, opening balances, sealing, the audit export, a source's password), the text says what is missing | fixed (the missing buttons: A2, S5) |
 | S5 | — | No button to load ESTV rates, import opening balances or enter a source's password in the app | open (missing features) |
 
@@ -37,7 +37,7 @@ compared yet).
 
 | # | Mockup | Built | Status |
 |---|---|---|---|
-| R1 | List, detail with the A4 sheet, Kunden, Versand | The real books hold no invoices: compare on the demo | to compare |
+| R1 | List, detail with the A4 sheet, Kunden, Versand | compared on the demo: as the mockup (its overdue and reminder states need an issued invoice) | fixed |
 
 ## Kontoauszüge, Buchungen, MWST, MWST-Codes, Bilanz & ER
 
