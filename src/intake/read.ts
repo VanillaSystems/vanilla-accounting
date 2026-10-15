@@ -252,7 +252,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     }
     const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
-    // Paid invoices first (ADR 0010): a payment with an invoice's reference is booked from the invoice, before classify sees it.
+    // Paid invoices first (ADR 0010): a payment with an invoice's reference or number, or a credit note's refund, is booked from the document before classify sees it.
     const paid = payments ? matchPayments(index, invoices, payments) : undefined;
     if (paid) {
       fileReceipts(ws, index, paid.files);
@@ -295,8 +295,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
 
 function reportPayments(paid: PaymentOutcome, log: (line: string) => void): void {
   for (const p of paid.paid) {
-    log(`  Rechnung ${p.number}: ${p.amount.toFixed(2)}${p.fee ? ` + Mahngebühr ${p.fee.toFixed(2)}` : ''} bezahlt (${p.transactionRef})${p.booked ? ', Ertrag gebucht' : ''}`);
+    log(`  ${p.number}: ${p.amount.toFixed(2)}${p.fee ? ` + Mahngebühr ${p.fee.toFixed(2)}` : ''} bezahlt (${p.transactionRef})${p.booked ? ', Ertrag gebucht' : ''}`);
   }
   const why = { cancelled: 'die Rechnung ist storniert', currency: 'andere Währung als die Rechnung', surplus: 'mehr als offen', batch: 'Sammelzahlung mit Teilen ohne Rechnung, nicht gebucht', booked: 'die Zahlung ist schon gebucht, ohne die Rechnung', closed: 'in einer abgeschlossenen Periode' };
-  for (const q of paid.questions) log(`  ⚠ Zahlung ${q.transactionRef} (${q.amount.toFixed(2)}) mit der Referenz von Rechnung ${q.number}: ${why[q.problem]}. Bitte entscheiden.`);
+  for (const q of paid.questions) log(`  ⚠ Zahlung ${q.transactionRef} (${q.amount.toFixed(2)}) zu ${q.number}: ${why[q.problem]}. Bitte entscheiden.`);
 }

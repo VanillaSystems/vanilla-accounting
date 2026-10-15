@@ -2,14 +2,17 @@
  * Paid invoices found by their reference on camt.053 import (ADR 0010, src/invoices/payments.ts):
  * the camt parser reads the structured reference, the payment is allocated and its revenue booked
  * from the invoice's lines, the invoice PDF becomes the entry's receipt; partial payments, closed
- * periods, cancelled invoices and payments without a reference are left for a person.
+ * periods, cancelled invoices and payments without a reference are left for a person. A payment
+ * naming an open invoice's number with its amount, and a refund naming a credit note, are booked
+ * by rule too: the refund with the minus code, so the VAT return lowers the revenue and its tax.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { camt053Xml, type CamtEntry } from '../tools/demo/camt053.js';
 import { confirmPayment, matchPayments, paymentProposals, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
-import { cancel, issue, status, totals } from '../src/invoices/rules.js';
+import { cancel, creditNoteDraft, issue, refundDue, status, totals } from '../src/invoices/rules.js';
+import { vat } from '../src/engines/index.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
 import { scorReference } from '../src/providers/qr-bill/reference.js';
 import type { Books } from '../src/books/store.js';
@@ -133,4 +136,77 @@ test('a hand-booked payment is not replaced by a confirmation', () => {
   const b = books(fromCamt([credit('B1', '2026-08-04', totals(inv.lines).gross)]));
   b.journalEntries.push({ id: 'm', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3000', amount: 963.72, origin: 'manual' });
   assert.throws(() => confirmPayment(b, book, inv.id, 'B1', ctx), /von Hand gebucht/);
+});
+
+const debit = (ref: string, date: string, amount: number, text: string, payee = 'Beispiel Bistro AG'): CamtEntry =>
+  ({ ref, date, amount, direction: 'DBIT', text: 'Zahlung', details: [{ amount, counterparty: payee, reference: text, text: `Zahlung ${payee}` }] });
+
+test('a payment without reference whose text names an open invoice and pays it: booked from the invoice, the classifier\'s V0 replaced', () => {
+  const inv = invoice('in_a', []);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
+  const b = books(fromCamt([credit('B1', '2026-08-04', 963.72, 'Garage Rechnung 2026-001', 'Hans Meier')]));
+  b.journalEntries.push({ id: 'cl', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3300', amount: 963.72, vatCode: 'V0', origin: 'classify' });
+  const out = matchPayments(b, book, ctx);
+  assert.deepEqual(out.paid, [{ transactionRef: 'B1', number: '2026-001', amount: 963.72, fee: 0, booked: true }]);
+  assert.equal((book.invoices[0] as Issued).payments[0].by, 'number');
+  assert.deepEqual(b.journalEntries.map((e) => [e.accountCredit, e.vatCode, e.amount, e.origin]), [['3300', 'V26', 574.56, 'invoice'], ['3600', 'V81', 389.16, 'invoice']]);
+  assert.equal(status(book.invoices[0], book.invoices), 'paid');
+  matchPayments(b, book, ctx);
+  assert.equal(b.journalEntries.length, 2, 'once');
+});
+
+test('a number in the text but another amount, a longer number, or a hand booking: not booked, a proposal or a question', () => {
+  const a = invoice('in_a', []);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [a], sent: [] };
+  const b = books(fromCamt([
+    credit('B1', '2026-08-04', 500, 'Anzahlung Rechnung 2026-001', 'Hans Meier'),
+    credit('B2', '2026-08-05', 963.72, 'Auftrag 2026-0012', 'Hans Meier'),
+  ]));
+  assert.deepEqual(matchPayments(b, book, ctx).paid, []);
+  assert.deepEqual(b.journalEntries, []);
+  assert.deepEqual(paymentProposals(b, book).map((p) => [p.transactionRef, p.numberMatches, p.payer]), [['B1', true, 'Hans Meier'], ['B2', false, 'Hans Meier']], 'the part payment naming it first; the payer, not the text');
+
+  const c = books(fromCamt([credit('B3', '2026-08-04', 963.72, 'Rechnung 2026-001')]));
+  c.journalEntries.push({ id: 'm', transactionRef: 'B3', date: '2026-08-04', accountDebit: '1021', accountCredit: '3000', amount: 963.72, origin: 'manual' });
+  const out = matchPayments(c, book, ctx);
+  assert.deepEqual(out.questions.map((q) => [q.transactionRef, q.problem]), [['B3', 'booked']]);
+  assert.deepEqual(c.journalEntries.map((e) => e.id), ['m'], 'her booking stays');
+});
+
+function paidWithCredit() {
+  const inv = invoice('in_k', [], { lines: [{ text: 'Malerarbeiten Wohnzimmer', quantity: 1, price: 2352.5, vatRate: 8.1 }] });
+  const pay = { transactionRef: 'P1', date: '2026-08-04', amount: 2543.05, by: 'reference' as const };
+  const paid: Issued = { ...inv, payments: [pay] };
+  const draft = creditNoteDraft(paid, { amount: 200, reason: 'Kratzer im Parkett, Kulanz', settlement: 'refund' }, { id: 'cn_1', createdAt: '2026-08-10T09:00:00Z', origin: 'manual', deleted: false }, '2026-08-10');
+  const cn: Issued = { ...issue(draft, { customer, sender, layout: DEFAULT_LAYOUT, invoices: [paid], now: '2026-08-10T10:00:00Z' }), pdf: { file: 'invoices/cn.pdf', sha256: 'x' } };
+  return { paid, cn, book: { schema: 1, customers: [customer], invoices: [paid, cn], sent: [] } as InvoiceBook };
+}
+
+test('a credit note\'s refund naming its number: matched, booked with the minus code, and the VAT return lowers revenue and tax (no export)', () => {
+  const { cn, book } = paidWithCredit();
+  assert.equal(cn.number, '2026-002');
+  assert.equal(refundDue(cn, book.invoices), 200);
+  const b = books(fromCamt([debit('R1', '2026-08-20', 200, 'Gutschrift 2026-002 Kulanz Parkett', 'Peter Keller')]));
+  const out = matchPayments(b, book, ctx);
+  assert.deepEqual(out.paid, [{ transactionRef: 'R1', number: '2026-002', amount: 200, fee: 0, booked: true }]);
+  assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description]), [['3300', '1021', '-V81', 200, 'Gutschrift 2026-002 Beispiel Bistro AG']]);
+  assert.equal(refundDue(book.invoices[1], book.invoices), 0, 'paid back');
+  assert.equal(b.receipts[0].filename, '20260810-gutschrift-2026-002.pdf');
+
+  const z = Object.fromEntries(vat().report(b.journalEntries, '2026-Q3', []).ziffern.map((x) => [x.number, x.amount]));
+  assert.equal(z['220'] ?? 0, 0, 'not an export');
+  assert.equal(z['200'], -200, 'the turnover goes down by the refund');
+  assert.deepEqual([z['303'], z['399']], [-185.01, -14.99], 'at 8.1 %: 200 × 8.1/108.1 less output tax');
+  assert.equal(vat().figures(b.journalEntries, '2026-Q3', []).payable, -14.99);
+});
+
+test('a refund to the customer without the number is proposed; confirmed, it is booked the same way', () => {
+  const { cn, book } = paidWithCredit();
+  const b = books(fromCamt([debit('R1', '2026-08-20', 200, 'Rückzahlung', 'Beispiel Bistro AG'), debit('R2', '2026-08-21', 200, 'Miete')  ]));
+  b.transactions[1].counterparty = 'Vermieter AG';
+  assert.deepEqual(matchPayments(b, book, ctx).paid, []);
+  assert.deepEqual(paymentProposals(b, book).map((p) => [p.transactionRef, p.direction, p.number]), [['R1', 'DBIT', '2026-002']], 'not the rent');
+  confirmPayment(b, book, cn.id, 'R1', ctx);
+  assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.vatCode, e.amount]), [['3300', '-V81', 200]]);
+  assert.throws(() => confirmPayment(b, book, cn.id, 'R2', ctx), PaymentError);
 });

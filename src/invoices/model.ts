@@ -113,15 +113,18 @@ export interface Sender {
   payTo: { account: string; iban: string; qrIban?: string; bank?: string };
 }
 
-/** Money that arrived for an invoice: found by its reference, or confirmed by a person. */
+/**
+ * Money that arrived for an invoice, or went back for a credit note: found by its reference, by
+ * the document's number in its text (and the amount), or confirmed by a person.
+ */
 export interface PaymentAllocation {
   transactionRef: string;
   date: string;
-  /** In the invoice's currency, the reminder fee not included. */
+  /** In the invoice's currency, the reminder fee not included; a credit note's refund as a positive amount. */
   amount: number;
   /** The part of the payment that paid reminder fees. */
   fee?: number;
-  by: 'reference' | 'confirmed';
+  by: 'reference' | 'number' | 'confirmed';
 }
 
 export interface Reminder {

@@ -68,6 +68,24 @@ export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string)
   return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - paid - credited));
 }
 
+/**
+ * What a credit note still pays back: the part of it beyond what its invoice still owed when it
+ * was issued (with `settlement: 'refund'`, the default), less the refunds made. 0 when it is set off
+ * against the next invoice, cancelled, or a draft.
+ */
+export function refundDue(cn: Invoice, invoices: readonly Invoice[]): number {
+  if (cn.status !== 'issued' || cn.kind !== 'credit-note' || cn.cancelled || cn.settlement === 'offset') return 0;
+  const target = live(invoices).find((i) => i.id === cn.creditFor);
+  if (!target || target.status !== 'issued') return 0;
+  const earlier = creditNotesOf(target, invoices).filter((c) => c.id !== cn.id && (c.date < cn.date || (c.date === cn.date && c.issuedAt < cn.issuedAt)));
+  const owed = toRappen(totals(target.lines).gross) - toRappen(paidAmount(target)) + earlier.reduce((s, c) => s + toRappen(totals(c.lines).gross), 0);
+  const back = Math.max(0, -toRappen(totals(cn.lines).gross) - Math.max(0, owed));
+  return fromRappen(Math.max(0, back - toRappen(paidAmount(cn))));
+}
+
+/** The text names the document's number, not as part of a longer number ("Rechnung 2026-005", "RE2026-005/Garage"). */
+export const namesNumber = (text: string, number: string): boolean => new RegExp(`(?<![0-9])${number.replace(/[^0-9A-Za-z]/g, (c) => `\\${c}`)}(?![0-9])`).test(text);
+
 /** Reminder fees not paid yet. */
 export function openFees(inv: Issued): number {
   const charged = inv.reminders.reduce((s, r) => s + toRappen(r.fee ?? 0), 0);

@@ -41,8 +41,13 @@ revenue is booked when the money arrives, from the invoice's own lines.
 - **Partial and multiple payments:** a payment smaller than the invoice leaves the rest open; one
   payment for several invoices, or several payments for one, are allocations
   ([ADR 0003](0003-deployment-and-collaboration.md), section 3).
-- **Payments without the reference** (a customer typed the amount by hand) fall back to matching
-  by amount, customer and date, proposed and confirmed like other matches.
+- **Payments without the reference** (a customer typed the amount by hand): one whose text names
+  an open invoice's number and pays what it owes is booked from that invoice by rule; any other
+  falls back to matching by amount, customer and date, proposed and confirmed like other matches.
+- **A credit note's refund** (money going back to the customer): an outgoing payment naming the
+  credit note's number for what it still pays back is booked by rule from its lines with the minus
+  codes (-V81), so the return lowers the revenue and its tax; one to the customer without the
+  number is proposed.
 - **Year-end:** invoices still open on 31 December are proposed as receivables (Debitoren) in the
   year-end checklist ([year-end.md](../year-end.md)); the opening of the next year reverses them.
 
