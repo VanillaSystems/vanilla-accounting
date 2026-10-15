@@ -196,7 +196,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const sure = answer.confidence >= MAPPING_THRESHOLD && (answer.matchedTransactionRefs?.length ?? 0) > 0;
     let linked: string[] = [];
     const target = archive(receipt, normalizeFilename(answer.suggestedFilename), (r, index) => {
-      Object.assign(r, { date: answer.date, description: answer.description, amount: answer.amount, currency: answer.currency });
+      Object.assign(r, { date: answer.date, description: answer.description, amount: answer.amount, currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
       if (!sure) return;
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);

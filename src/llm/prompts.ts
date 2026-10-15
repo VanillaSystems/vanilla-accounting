@@ -4,12 +4,26 @@ import { formatCase, type BookingCase } from "../knowledge/cases.js";
 
 export interface MatchResult {
   suggestedFilename: string;
+  /** The short title a list shows (TITLE_RULES): parsed into { vendor, what } when both are there. */
+  title?: { vendor: string; what: string };
   matchedTransactionRefs: string[];
   date: string;
   description: string;
   amount: number;
   currency: string;
   confidence: number;
+}
+
+/** How a receipt's short title is written (the mockup's titles: the vendor, then 1–3 words). */
+export const TITLE_RULES = `two parts, in German.
+- "v": the vendor as people say it: brand only, no legal form (AG, GmbH, s.r.o., e.K.), no address, no numbers. E.g. "Coop Pronto", "FedEx", "Shopify", "AliExpress", "Google Cloud", "Die Post", "Wise". For the company's own sales (shop orders and payouts, own invoices) use "Verkauf".
+- "w": what it is, 1 to 3 German words, the essence only. No amounts, no dates, no invoice numbers, no VAT info, no parentheses. E.g. "Benzin", "Zoll", "Fracht", "Monatsabo", "Autowäsche", "Leere Datei" (a blank capture). For a sale the order number, e.g. "#1132". For a bank statement the month and currency, e.g. "Kontoauszug USD Feb".`;
+
+/** A model's {v, w}, kept only when both are short text. */
+export function parseTitle(x: unknown): { vendor: string; what: string } | undefined {
+  const o = x as { v?: unknown; w?: unknown } | undefined;
+  const v = typeof o?.v === 'string' ? o.v.trim() : '', w = typeof o?.w === 'string' ? o.w.trim() : '';
+  return v && w && v.length <= 40 && w.length <= 40 ? { vendor: v, what: w } : undefined;
 }
 
 export function buildMatchPrompt(
@@ -68,8 +82,11 @@ Return ONLY a valid JSON object with these fields:
   "description": "Vendor / purpose (for a shipping or customs invoice: include total amount, invoice number, and the webshop order number prefixed with # when the shipment names one, e.g. #1001)",
   "amount": 85.40,
   "currency": "CHF",
-  "confidence": 0.95
+  "confidence": 0.95,
+  "title": { "v": "Coop Pronto", "w": "Benzin" }
 }
+
+Rules for title: ${TITLE_RULES}
 
 Rules for suggestedFilename: YYYYMMDD prefix, lowercase, hyphens instead of spaces, no special chars, end with .pdf.
 
@@ -433,7 +450,9 @@ export function parseMatchResult(raw: string): MatchResult | null {
   if (!parsed.suggestedFilename || !parsed.suggestedFilename.trim().toLowerCase().endsWith('.pdf')) {
     return null;
   }
-  return parsed;
+  const title = parseTitle((parsed as { title?: unknown }).title);
+  delete parsed.title;
+  return title ? { ...parsed, title } : parsed;
 }
 
 /**

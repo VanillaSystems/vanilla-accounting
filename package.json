@@ -25,6 +25,7 @@
     "update": "tsx src/cli/update.ts",
     "extract": "tsx src/cli/extract.ts",
     "extract-vat": "tsx src/cli/extract-vat.ts",
+    "titles": "tsx src/cli/titles.ts",
     "match": "tsx src/cli/match.ts",
     "rename": "tsx src/cli/rename.ts",
     "classify": "tsx src/cli/classify.ts",

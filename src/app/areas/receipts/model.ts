@@ -72,7 +72,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     const links = linksOf.get(r.id) ?? [];
     const fileDate = FILE_DATE.exec(r.filename);
     const date = r.date ?? (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
-    const [vendor, desc] = splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
+    const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
     const none = NON_RECEIPT_KINDS.includes(r.kind)
       || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
     return { r, date, day: date ?? (r.indexedAt.slice(0, 10) || undefined), vendor, desc, links, none, locked: links.some(refClosed) };
@@ -95,10 +95,10 @@ const FILTERS: Record<ReceiptFilter, (v: ReceiptView) => boolean> = {
   ohneDatum: (v) => !v.date,
 };
 
-/** The text a search looks in: vendor, description, file, note, date, amount, VAT number. */
+/** The text a search looks in: title, description, file, note, date, amount, VAT number. */
 function haystack(v: ReceiptView): string {
   const { r } = v;
-  return [r.description, r.filename, r.remarks, v.date, v.date && v.date.split('-').reverse().join('.'), r.amount?.toFixed(2), r.vatId].join(' ').toLowerCase();
+  return [v.vendor, v.desc, r.description, r.filename, r.remarks, v.date, v.date && v.date.split('-').reverse().join('.'), r.amount?.toFixed(2), r.vatId].join(' ').toLowerCase();
 }
 
 export interface Visible {

@@ -55,7 +55,11 @@ export interface Receipt {
   kindRule?: string;
   /** The workflow run that took it up (src/workflows/engine.ts): the receipt's page links to it. */
   run?: string;
+  /** What a list shows: the vendor as people say it and what it is in 1–3 words (src/intake/titles.ts). */
+  title?: ReceiptTitle;
 }
+
+export interface ReceiptTitle { vendor: string; what: string }
 
 /** A PDF in the workspace's inbox that no receipt holds yet (GET /api/inbox). */
 export interface InboxFile {
