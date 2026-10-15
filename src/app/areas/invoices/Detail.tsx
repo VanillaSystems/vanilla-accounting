@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { localToday, parseSwissDate } from '../../../accounting/periods.js';
 import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
-import { missingForIssue, openAmount, paidAmount, reminderDraft, totals } from '../../../invoices/rules.js';
+import { missingForIssue, openAmount, paidAmount, refundDue, reminderDraft, totals } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -181,12 +181,15 @@ function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value
 function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { state: RowState; reminder: boolean }) {
   const today = localToday();
   const [proposals, setProposals] = useState<PaymentProposal[]>([]);
+  // An open invoice may be paid, a credit note may be paid back: what the bank shows that could be it.
+  const awaits = inv.status === 'issued' && (state === 'open' || state === 'overdue' || (state === 'credit' && refundDue(inv, d.invoices) > 0));
   useEffect(() => {
-    if (inv.status !== 'issued' || (state !== 'open' && state !== 'overdue')) return;
+    setProposals([]);
+    if (!awaits) return;
     let live = true;
     api.paymentProposals().then((p) => { if (live) setProposals(p.filter((x) => x.invoiceId === inv.id)); }, () => undefined);
     return () => { live = false; };
-  }, [inv.id, state]);
+  }, [inv.id, awaits]);
 
   if (inv.status === 'draft') {
     const customer = d.customers.find((c) => c.id === inv.customerId);
@@ -212,7 +215,8 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
       <span className="notice">
         {t('invoices.creditFor')}{' '}
         {target && <button type="button" className="golink" onClick={() => nav.go(invoiceAt(target))}>{t('invoices.invoiceNo', { number: routeId(target) })}</button>}
-        {inv.settlement ? ` · ${t(`invoices.settlement.${inv.settlement}`)}` : ''}
+        {inv.payments.length ? ` · ${t('invoices.refundedOn', { date: formatDate(inv.payments.at(-1)!.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` })}`
+          : inv.settlement ? ` · ${t(`invoices.settlement.${inv.settlement}`)}` : ''}
       </span>
     );
   } else if (state === 'paid') {
@@ -235,7 +239,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
       {line}
       {proposals.map((p) => (
         <div key={p.transactionRef} className="notice ivpay">
-          <span>{t('invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}</span>
+          <span>{t(p.direction === 'DBIT' ? 'invoices.refundProposal' : 'invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}</span>
           {canEdit && <button type="button" className="btn ghost" onClick={() => void confirmPayment(nav, inv, p.transactionRef)}>{t('invoices.confirmPayment')}</button>}
         </div>
       ))}
@@ -401,7 +405,8 @@ function Log({ d, inv }: DetailProps) {
   if (inv.status === 'issued') {
     rows.push([inv.issuedAt.slice(0, 10), t('invoices.log.issued', { number: inv.number })]);
     for (const x of d.sent.filter((y) => y.invoiceId === inv.id)) rows.push([x.sentAt.slice(0, 10), t('invoices.log.sent', { title: x.title })]);
-    for (const p of inv.payments) rows.push([p.date, t(p.by === 'reference' ? 'invoices.log.paidRef' : 'invoices.log.paidConfirmed', { amount: `${inv.currency} ${fmt(p.amount)}` })]);
+    const how = { reference: 'invoices.log.paidRef', number: 'invoices.log.paidNumber', confirmed: 'invoices.log.paidConfirmed' } as const;
+    for (const p of inv.payments) rows.push([p.date, t(inv.kind === 'credit-note' ? 'invoices.log.refunded' : how[p.by], { amount: `${inv.currency} ${fmt(p.amount)}` })]);
     if (inv.cancelled) rows.push([inv.cancelled.date, t('invoices.log.cancelled')]);
   }
   rows.sort((a, b) => a[0].localeCompare(b[0]));
