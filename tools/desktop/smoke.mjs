@@ -153,6 +153,10 @@ check('the window is dragged by its top edge (no title bar on the Mac)', await p
   const bar = document.querySelector('.dragbar');
   return !!bar && getComputedStyle(bar).getPropertyValue('-webkit-app-region') === 'drag' && bar.getBoundingClientRect().height >= 28;
 }));
+const blocking = async (p) => p.evaluate(() => [...document.querySelectorAll('*')].filter((el) => {
+  const r = el.getBoundingClientRect();
+  return getComputedStyle(el).getPropertyValue('-webkit-app-region') === 'no-drag' && r.width >= innerWidth * 0.9 && r.top <= 0 && r.bottom >= 36;
+}).map((el) => el.className || el.tagName));
 check('the app keeps its state in the given user data folder', existsSync(join(userData, 'desktop.json')));
 check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o', 'command=', String(first.child.pid)], { encoding: 'utf8' }).includes('PATH=/usr/bin:/bin'));
 
@@ -160,6 +164,7 @@ check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o
 await Promise.all([page.waitForNavigation(), page.click('[data-act=demo]')]);
 await settle(page, 'nav.activity');
 await shot(page, '02-demo');
+check('nothing covers the title bar zone with no-drag in the books (the window moves by its top edge)', (await blocking(page)).length === 0, JSON.stringify(await blocking(page)));
 const demoName = (await api(page, '/api/workspace')).json?.company?.name;
 check('Demo ansehen opens a copy in the user data folder', existsSync(join(userData, 'Demo', 'vanilla-accounting', 'belege.workspace.yaml')), demoName);
 

@@ -262,7 +262,8 @@ main.full { display: flex; flex-direction: column; }
 
 /* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable. */
 .dragbar { position: fixed; top: 0; left: 0; right: 0; height: 36px; -webkit-app-region: drag; z-index: 15; }
-.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop, .corner, .aside) { -webkit-app-region: no-drag; }
+/* .drop only while it shows: hidden, it still spans the window, and its no-drag switched off moving the window everywhere. */
+.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop.show, .corner, .aside) { -webkit-app-region: no-drag; }
 /* Whatever can be clicked stays clickable inside the title bar zone. */
 .no-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=tab]) { -webkit-app-region: no-drag; }
 

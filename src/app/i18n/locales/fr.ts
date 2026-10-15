@@ -2160,5 +2160,13 @@ export default {
     'automation.note.failed': '{n} en échec : {detail}',
     'automation.note.unmatched': '{n} relevés n’appartiennent à aucun compte, rien d’écrit : {files}',
     'automation.note.filedKept': '{n} liens d’un trimestre déclaré ont perdu leur fichier et sont restés tels quels : à vérifier.',
+    'automation.doc.date': 'Date',
+    'automation.doc.amount': 'Montant',
+    'automation.doc.vat': 'TVA',
+    'automation.doc.swissVat': 'TVA suisse',
+    'automation.doc.what': 'Quoi',
+    'automation.doc.state': 'État',
+    'automation.doc.archived': 'classé sous Pièces',
+    'automation.doc.staged': 'encore dans la boîte',
   },
 } satisfies Locale;

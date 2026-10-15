@@ -18,6 +18,8 @@ import { BotIcon, Graph } from './Graph.js';
 import type { Index } from '../../../types/index.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
+import { sources } from '../../lib/api.js';
+import { Paper } from '../receipts/Paper.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -366,6 +368,37 @@ function noteText(n: StepNote): string {
   }
 }
 
+/** The documents a run worked on: the receipts it took up or changed, else the file that started it. */
+function runDocuments(data: RunDetail, books: Index): Index['receipts'] {
+  const ids = new Set(data.steps.flatMap((s) => ((s.output?.made as MadeThing[] | undefined) ?? []).flatMap((m) => (m.kind === 'receipt' ? [m.id] : m.kind === 'link' ? [m.receipt] : []))));
+  const made = books.receipts.filter((r) => ids.has(r.id));
+  if (made.length) return made;
+  const file = data.startedBy.kind === 'outside' ? data.startedBy.file : undefined;
+  return file ? books.receipts.filter((r) => r.originalFilename === file || r.filename === file) : [];
+}
+
+/** The document beside its facts, to check the run against it. */
+function RunDocument({ r, nav }: { r: Index['receipts'][number]; nav: Nav }) {
+  const src = sources.receipt(r.id);
+  return (
+    <div className="rundoc">
+      <div className="paper real"><Paper key={src} src={src} maxWidth={420} /></div>
+      <div className="rdfacts">
+        <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'receipts', id: r.id }, query: {} })}><b>{r.filename}</b></button>
+        {r.originalFilename && r.originalFilename !== r.filename ? <small className="mono">{r.originalFilename}</small> : null}
+        <dl>
+          {r.date ? <><dt>{t('automation.doc.date')}</dt><dd>{formatDate(r.date)}</dd></> : null}
+          {r.amount !== undefined ? <><dt>{t('automation.doc.amount')}</dt><dd className="mono">{money(r.amount, r.currency)}</dd></> : null}
+          <dt>{t('automation.doc.vat')}</dt><dd>{r.hasSwissVat ? (r.vatId ?? t('automation.doc.swissVat')) : r.hasSwissVat === false ? t('automation.made.noSwissVat') : '—'}</dd>
+          {r.description ? <><dt>{t('automation.doc.what')}</dt><dd>{r.description}</dd></> : null}
+          <dt>{t('automation.doc.state')}</dt><dd>{r.location === 'archived' ? t('automation.doc.archived') : t('automation.doc.staged')}</dd>
+        </dl>
+        <a className="linkbtn" href={src} download={r.filename}>{t('receipts.download')}</a>
+      </div>
+    </div>
+  );
+}
+
 const short = (v: unknown): string => { const j = typeof v === 'string' ? v : JSON.stringify(v); return j.length > 240 ? `${j.slice(0, 240)} …` : j; };
 
 function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; nav: Nav; books: Index }) {
@@ -395,6 +428,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         <AskAi context={{ kind: 'run', id, label: t('automation.run', { id }) }} mode={data.status === 'stuck' ? 'ask' : 'change'} />
         {data.status !== 'done' && data.status !== 'discarded' ? <button type="button" className="btn ghost" onClick={act({ kind: 'discard', run: id })}>{t('automation.discard')}</button> : null}
       </div>
+      {runDocuments(data, books).slice(0, 3).map((r) => <RunDocument key={r.id} r={r} nav={nav} />)}
       {w ? <div className="wfscroll"><Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /></div> : null}
       <ol className="wfsteps">
         {data.steps.map((s, i) => {

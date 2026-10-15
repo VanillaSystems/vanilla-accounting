@@ -2160,5 +2160,13 @@ export default {
     'automation.note.failed': '{n} falliti: {detail}',
     'automation.note.unmatched': '{n} estratti non appartengono a nessun conto, nulla scritto: {files}',
     'automation.note.filedKept': '{n} collegamenti di un trimestre dichiarato hanno perso il file e sono rimasti com’erano: da controllare.',
+    'automation.doc.date': 'Data',
+    'automation.doc.amount': 'Importo',
+    'automation.doc.vat': 'IVA',
+    'automation.doc.swissVat': 'IVA svizzera',
+    'automation.doc.what': 'Cosa',
+    'automation.doc.state': 'Stato',
+    'automation.doc.archived': 'archiviato sotto Documenti',
+    'automation.doc.staged': 'ancora nella casella',
   },
 } satisfies Locale;

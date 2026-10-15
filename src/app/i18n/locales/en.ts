@@ -2160,5 +2160,13 @@ export default {
     'automation.note.failed': '{n} failed: {detail}',
     'automation.note.unmatched': '{n} statements belong to no bank account, nothing written: {files}',
     'automation.note.filedKept': '{n} links of a filed quarter lost their file and were kept as they were: please look.',
+    'automation.doc.date': 'Date',
+    'automation.doc.amount': 'Amount',
+    'automation.doc.vat': 'VAT',
+    'automation.doc.swissVat': 'Swiss VAT',
+    'automation.doc.what': 'What',
+    'automation.doc.state': 'State',
+    'automation.doc.archived': 'filed under Receipts',
+    'automation.doc.staged': 'still in the inbox',
   },
 } satisfies Locale;

@@ -2157,6 +2157,14 @@ export const messages = {
   'automation.note.failed': '{n} fehlgeschlagen: {detail}',
   'automation.note.unmatched': '{n} Kontoauszüge gehören zu keinem Bankkonto, nichts geschrieben: {files}',
   'automation.note.filedKept': '{n} Verknüpfungen eines eingereichten Quartals haben ihre Datei verloren und blieben, wie sie waren: bitte ansehen.',
+  'automation.doc.date': 'Datum',
+  'automation.doc.amount': 'Betrag',
+  'automation.doc.vat': 'MWST',
+  'automation.doc.swissVat': 'Schweizer MWST',
+  'automation.doc.what': 'Was',
+  'automation.doc.state': 'Stand',
+  'automation.doc.archived': 'abgelegt unter Belege',
+  'automation.doc.staged': 'noch im Eingang',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;
