@@ -44,3 +44,11 @@ file records every decision a person might have made differently, newest last.
    link only those that recorded their receipts, because an older entry without that record may
    have been shaped by a person and, without a model, would be left unbooked.
 10. Duplicates and receipt detection merged (content duplicates, receipt-or-not at the drop, in the run and in mail collection, skip-sender offer).
+11. Wishes test (25 wishes): 9 right, 5 partly, 5 refused honestly, 5 wrong, 1 pretended. Two
+    batches for the mission: the sidebar knows and uses the whole app (invoices, settings,
+    exports, accounts, receipt kinds; VAT family follows the account); rules that act («frag
+    mich» becomes a task), a rules page, one click to keep a rule from its card. Settings changes
+    from the sidebar apply at once with undo instead of the draft detour (owner wants one click).
+12. Treuhänderin without AI: booking a payment by hand is a blocker (fix running); questions to
+    the owner and accountant tools (opening balance form, accrual reversal, Gegenbuchung, journal
+    filter/PDF) follow once the by-hand fix is merged (same areas).
