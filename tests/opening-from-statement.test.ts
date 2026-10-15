@@ -29,7 +29,7 @@ const q3 = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd
 const books = (): Index => loadBooks(workspaceAt(api.ws.paths.root));
 const lineOf = (a: Arrival) => {
   const run = { arrived: [a], digest: { files: [] } } as unknown as RunSummary;
-  const [line] = linesOf(run, books());
+  const [line] = linesOf(run, books(), true);
   assert.equal(line.kind, 'statement');
   return line as Extract<typeof line, { kind: 'statement' }>;
 };

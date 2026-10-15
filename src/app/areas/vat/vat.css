@@ -75,3 +75,5 @@ a.vlink:hover { text-decoration-color: currentColor; color: var(--ink); }
   .f0535 .ldl { display: none; }
   .ftable .fl.chg { background: none; font-weight: 600; }
 }
+.notice.vnovat { align-items: flex-start; gap: 0; margin: 0 0 16px; line-height: 1.45; }
+.notice.vnovat .dot { flex: none; margin-top: 7px; }

@@ -23,34 +23,34 @@ const linked = books.mappings[0];
 
 test('a statement whose closing balance is the ledger\'s matches; 4.10 more at the bank is a line to check, unless the run is marked', () => {
   const ok = run({ arrived: [statement(bal.amount)] });
-  const [line] = linesOf(ok, books);
+  const [line] = linesOf(ok, books, true);
   assert.deepEqual(line.kind === 'statement' && line.balance, { kind: 'matches', date: '2026-09-30' });
-  assert.equal(standOf(ok, linesOf(ok, books)), 'ok');
+  assert.equal(standOf(ok, linesOf(ok, books, true)), 'ok');
 
   const off = run({ arrived: [statement(bal.amount + 4.1)] });
-  const [l2] = linesOf(off, books);
+  const [l2] = linesOf(off, books, true);
   assert.deepEqual(l2.kind === 'statement' && l2.balance, { kind: 'differs', date: '2026-09-30', diff: -4.1 }, 'the books hold 4.10 too little');
-  assert.equal(standOf(off, linesOf(off, books)), 'check');
+  assert.equal(standOf(off, linesOf(off, books, true)), 'check');
   const marked = { ...off, reviewed: '2026-10-15T12:00:00Z' };
-  assert.equal(standOf(marked, linesOf(marked, books)), 'reviewed', 'a person who checked it decides');
+  assert.equal(standOf(marked, linesOf(marked, books, true)), 'reviewed', 'a person who checked it decides');
 });
 
 test('a receipt is read when the books hold it, with the payments it is linked to; one the finished run did not read is to check; a refused file too', () => {
   const r = run({ arrived: [{ kind: 'receipt', file: 'a.pdf', id: linked.receiptId }] });
-  const [line] = linesOf(r, books);
+  const [line] = linesOf(r, books, true);
   assert.ok(line.kind === 'receipt' && line.receipt && line.payments.some((p) => p.ref === linked.transactionRef));
-  assert.equal(standOf(r, linesOf(r, books)), 'ok');
+  assert.equal(standOf(r, linesOf(r, books, true)), 'ok');
   const unread = run({ arrived: [{ kind: 'receipt', file: 'b.pdf', id: 'ffffffffffffffff' }] });
-  assert.equal(standOf(unread, linesOf(unread, books)), 'check');
+  assert.equal(standOf(unread, linesOf(unread, books, true)), 'check');
   const refused = run({ arrived: [{ kind: 'refused', file: 'c.docx', reason: 'Word' }] });
-  assert.equal(standOf(refused, linesOf(refused, books)), 'check');
+  assert.equal(standOf(refused, linesOf(refused, books, true)), 'check');
 });
 
 test('where a run stands: running, stuck, waiting before anything else; a run that took and made nothing has nothing to do', () => {
-  const lines = linesOf(run({ arrived: [statement(bal.amount + 1)] }), books);
+  const lines = linesOf(run({ arrived: [statement(bal.amount + 1)] }), books, true);
   assert.equal(standOf(run({ status: 'running' }), lines), 'running');
   assert.equal(standOf(run({ status: 'stuck', error: 'x' }), lines), 'error');
   assert.equal(standOf(run({ status: 'waiting' }), lines), 'you');
   assert.equal(standOf(run(), []), 'idle');
-  assert.equal(standOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0, poorScans: [] } }), linesOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0, poorScans: [] } }), books)), 'ok');
+  assert.equal(standOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0, poorScans: [] } }), linesOf(run({ digest: { files: ['a.pdf'], receipts: 1, links: 0, entries: 0, poorScans: [] } }), books, true)), 'ok');
 });

@@ -16,6 +16,7 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Customer payments booked without VAT because no invoice was linked are shown where you look: MWST names them for the period («2 Zahlungen von Kunden ohne Rechnung sind ohne MWST gebucht»), the statement's line in Automatisierung marks the run as to check, and the payment in Kontoauszüge offers «Rechnung hochladen» (the payment is then booked again with the invoice's VAT) or «keine MWST darauf» (the payment's existing «braucht keinen Beleg» mark). What gets booked does not change: without an invoice a sale is still booked at the zero code. Usability finding (Malerei Huber, invoices 2026-028 and 2026-030).
 - Books that start with a bank's first camt.053 take its opening balance in one click: when the books have no opening for that account, the statement's line in Automatisierung says what the bank showed before the statement and offers «Als Eröffnungssaldo übernehmen» (undo in the toast). It becomes the account's opening of that year, retained earnings (2970) on the other side, and the balance check agrees. Not for a year with a closed period, nor for a foreign-currency account.
 
 - A fourth starting point in «Neue Buchhaltung anlegen» and `npm run init -- --preset trades`: «Handwerk, Bau (GmbH)» (services and material, staff, private use of car and phone, effective method, quarterly, vereinnahmt), so a trades business no longer has to guess «Beratung».

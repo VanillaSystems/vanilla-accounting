@@ -15,6 +15,7 @@ import type { Index } from '../../../types/index.js';
 import type { Nav } from '../index.js';
 import type { Route } from '../../shell/route.js';
 import { takeOpening } from '../bank/actions.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 
 type Filter = 'all' | 'unreviewed' | 'check' | 'you' | 'error';
 const FILTERS: Filter[] = ['all', 'unreviewed', 'check', 'you', 'error'];
@@ -88,7 +89,8 @@ function outText(r: RunSummary, lines: Line[]): [string, string] {
   const off = st.filter((l) => l.balance.kind === 'differs').length;
   const poor = r.digest.poorScans?.length ?? 0;
   const noOpening = st.some((l) => l.opening);
-  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', noOpening ? t('runs.out.noOpening') : '', poor ? t('runs.out.poorScan', { n: poor }) : ''].filter(Boolean).join(', ');
+  const noVat = st.reduce((n, l) => n + l.withoutVat.length, 0);
+  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', noOpening ? t('runs.out.noOpening') : '', noVat ? t('runs.out.noVat', { n: noVat }) : '', poor ? t('runs.out.poorScan', { n: poor }) : ''].filter(Boolean).join(', ');
   return [head || t('runs.out.nothing'), small];
 }
 
@@ -127,7 +129,7 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
             : <span className="m">{t('runs.line.noBalance')}</span>}
         </td>
         <td className="st">
-          {b.kind === 'differs' ? <span className="rpill check">{t('runs.st.check')}</span> : null}
+          {b.kind === 'differs' || l.withoutVat.length ? <span className="rpill check">{t('runs.st.check')}</span> : null}
           <button type="button" className="linkbtn" onClick={() => go({ area: 'bank', statement: `${l.a.account}-${l.a.to.slice(0, 7)}` })}>{t('runs.view')}</button>
         </td></tr>
       {o ? (
@@ -135,6 +137,13 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
           <td className="res" colSpan={2}>
             {t('runs.line.openingOffer', { amount: `${l.a.currency} ${fmt(o.amount)}`, date: swiss(o.date) })}{' '}
             <button type="button" className="btn primary" onClick={() => void takeOpening(nav, o)}>{t('runs.line.openingTake')}</button>
+          </td></tr>
+      ) : null}
+      {l.withoutVat.length ? (
+        <tr className="rline"><td /><td /><td />
+          <td className="res" colSpan={2}>
+            <span className="warn-t">{t('sales.noVat', { n: l.withoutVat.length })}</span> {t('sales.noVatDo')}{' '}
+            {l.withoutVat.map(({ payment: p }) => <button key={p.ref} type="button" className="linkbtn" onClick={() => go({ area: 'bank', payment: p.ref })}>{swiss(p.date)} · {p.currency} {fmt(p.amount)}</button>)}
           </td></tr>
       ) : null}
       </>
@@ -163,7 +172,8 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [shown, setShown] = useState(30);
   const go = (route: Route) => nav.go({ route, query: {} });
-  const rows = view.runs.filter((r) => r.mode === 'live').map((r) => { const lines = linesOf(r, books); return { r, lines, stand: standOf(r, lines) }; });
+  const vatRegistered = !!useWorkspace()?.company.vat;
+  const rows = view.runs.filter((r) => r.mode === 'live').map((r) => { const lines = linesOf(r, books, vatRegistered); return { r, lines, stand: standOf(r, lines) }; });
   const counts = Object.fromEntries(FILTERS.map((f) => [f, rows.filter((x) => inFilter(f, x.stand)).length])) as Record<Filter, number>;
   const visible = rows.filter((x) => inFilter(filter, x.stand));
   const today = new Date();
@@ -215,7 +225,7 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
                     <td className="tog">{expandable ? <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg> : null}</td>
                     <td className="when"><b className="mono">{sameDay(started, today) ? `${pad(started.getHours())}:${pad(started.getMinutes())}` : `${pad(started.getDate())}.${pad(started.getMonth() + 1)}.`}</b><small>{sameDay(started, today) ? '' : `${pad(started.getHours())}:${pad(started.getMinutes())} · `}{byText(r, view)}</small></td>
                     <td className="what"><b>{inHead}</b>{inSmall ? <small>{inSmall}</small> : null}</td>
-                    <td className="res"><b>{outHead}</b>{outSmall ? <small className={lines.some((l) => (l.kind === 'statement' && l.balance.kind === 'differs') || l.kind === 'poorScan') ? 'warn-t' : ''}>{outSmall}</small> : null}</td>
+                    <td className="res"><b>{outHead}</b>{outSmall ? <small className={lines.some((l) => (l.kind === 'statement' && (l.balance.kind === 'differs' || l.withoutVat.length > 0)) || l.kind === 'poorScan') ? 'warn-t' : ''}>{outSmall}</small> : null}</td>
                     <td className="st" onClick={(e) => e.stopPropagation()}>
                       <span className={`rpill ${stand}`}>{t(`runs.st.${stand}` as 'runs.st.ok')}</span>
                       {stand === 'ok' || stand === 'check' ? <button type="button" className="linkbtn rreview" onClick={() => review(r.id, true)}>{t('runs.review')}</button> : null}

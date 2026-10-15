@@ -5,7 +5,11 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import './vat.css';
-import { localToday, booksOpenPeriod } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, inPeriod, type Period } from '../../../accounting/periods.js';
+import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
+import type { Index } from '../../../types/index.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
+import { at } from '../receipts/view.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { WorkflowButtons } from '../../automation/marks.js';
@@ -14,13 +18,13 @@ import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
-import type { Area, AreaProps, LegendItem } from '../index.js';
+import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import {
   FORM_0535, SECTIONS, SUMS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, vatKeyOf, vatReturn,
   type Section, type VatReturn,
 } from './model.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
-import { entryAt } from './links.js';
+import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
 import type { ReturnFigures } from '../../../engines/return.js';
@@ -76,6 +80,7 @@ function List(props: Props) {
         ) : <span>{t('vat.stateOverview')}</span>}
         <button type="button" className="clink2" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('vatCodes.open')}</button>
       </div>
+      <SalesWithoutVat books={books} period={period} nav={nav} />
       <button type="button" className="vresult" onClick={() => select(result)}>
         <span>{t(result === '510' ? 'vat.credit' : 'vat.toPay')}</span>
         <b className="mono"><small>CHF</small>{fmt(v.report.credit || v.report.toPay)}</b>
@@ -108,6 +113,22 @@ function List(props: Props) {
   );
 }
 
+/** The period's customer payments booked without output tax for want of an invoice, each a link to the payment. */
+function SalesWithoutVat({ books, period, nav }: { books: Index; period: Period; nav: Nav }) {
+  const sales = salesWithoutVat(books, !!useWorkspace()?.company.vat).filter((s) => inPeriod(period, s.payment.date));
+  if (!sales.length) return null;
+  return (
+    <div className="notice warn vnovat" data-testid="sales-without-vat">
+      <span className="dot" aria-hidden="true" />
+      <span>
+        {t('sales.noVat', { n: sales.length })} {t('sales.noVatDo')}{' '}
+        {sales.map(({ payment: p }, i) => (
+          <Fragment key={p.ref}>{i > 0 && ', '}<Go to={at({ area: 'bank', payment: p.ref }, p.date, period)} nav={nav}>{formatDate(p.date)} · {p.currency} {fmt(p.amount)}</Go></Fragment>
+        ))}
+      </span>
+    </div>
+  );
+}
 
 function ZifferRow({ v, n, filed, sel, onSelect }: { v: VatReturn; n: string; filed?: ReturnFigures; sel: boolean; onSelect(n: string): void }) {
   const r = rateOf(v, n);

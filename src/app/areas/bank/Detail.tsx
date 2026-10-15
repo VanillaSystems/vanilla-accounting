@@ -25,6 +25,8 @@ import { StatementPaper, type Mark } from './StatementPaper.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
+import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
+import { intakeAdd } from '../receipts/intake.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -151,13 +153,16 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
 }
 
 /** The chosen payment in one line: its receipt, its entry, what is missing; a hint while none is chosen. */
-function PayBar({ b, tx, nav, canEdit, closed, onClear }: Props & { b: Bank; tx?: BankTransaction; closed: boolean; onClear(): void }) {
+function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean; onClear(): void }) {
+  const { b, tx, nav, canEdit, closed, onClear } = props;
+  const vatRegistered = !!useWorkspace()?.company.vat;
   if (!tx) return <span className="payhint">{t('bank.payHint')}</span>;
   const receipts = b.receiptsOf(tx.ref);
   const entry = b.entriesOf(tx.ref)[0];
   const fee = b.feeOf(tx.ref);
   const first = receipts[0] ? b.receiptOf(receipts[0]) : undefined;
   const edit = canEdit && !closed;
+  const saleWithoutVat = salesWithoutVat({ ...props.books, transactions: [tx] }, vatRegistered).length > 0;
   return (
     <>
       <b className="mono">{formatDate(tx.date)}</b> {payText(tx).name}{payText(tx).note && <small> {payText(tx).note}</small>} <span className="mono"><Amount tx={tx} /></span>
@@ -166,6 +171,11 @@ function PayBar({ b, tx, nav, canEdit, closed, onClear }: Props & { b: Bank; tx?
         <> · <button type="button" className="golink" data-testid="go-receipt" title={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
           {t('bank.receipt', { name: first?.name ?? receipts[0] })}{receipts.length > 1 && ` +${receipts.length - 1}`}
         </button></>
+      ) : saleWithoutVat ? (
+        <> · <span className="wn" data-testid="sale-without-vat">{t('bank.saleNoVat')}</span>{edit && <>
+          {' '}<button type="button" className="golink" title={t('bank.uploadInvoiceTip')} onClick={() => intakeAdd.run(props)}>{t('bank.uploadInvoice')}</button>
+          {' · '}<button type="button" className="golink" title={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</button>
+        </>}</>
       ) : b.needsReceipt(tx) ? (
         <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noReceiptNeeded')}</button></>}</>
       ) : tx.noReceiptNeeded ? (
