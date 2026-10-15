@@ -26,6 +26,8 @@ export interface SheetData {
   /** A reminder's level: the title becomes "1. Mahnung · Rechnung …". */
   reminderLevel?: number;
   date: string;
+  /** The day or period of the supply when it is not the invoice date. */
+  supplied?: { from: string; to?: string };
   dueDate?: string;
   currency: InvoiceCurrency;
   customer: CustomerFields;
@@ -62,7 +64,7 @@ export interface ScreenSheet {
     scope: 'draft' | 'texts';
     customers: Array<{ id: string; name: string }>;
     customerId?: string;
-    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string };
+    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string };
   };
 }
 
@@ -78,6 +80,8 @@ const editable = (key: string, html: string, ph = '', cls = '') =>
 const pick = (key: string, options: Array<[string, string]>, value: string) =>
   `<select class="ed edsel" data-ed="${esc(key)}">${options.map(([v, l]) => `<option value="${esc(v)}"${v === value ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
+/** A day, or a period from – to. */
+export const suppliedText = (s: { from: string; to?: string }, date: (iso: string) => string): string => (s.to && s.to !== s.from ? `${date(s.from)} – ${date(s.to)}` : date(s.from));
 
 const countryName = (code: string, lang: InvoiceLanguage): string => {
   try { return new Intl.DisplayNames([lang], { type: 'region' }).of(code) ?? code; } catch { return code; }
@@ -99,7 +103,9 @@ export function addressLines(a: Address, lang: InvoiceLanguage): string[] {
   return out.filter(Boolean);
 }
 
-const oneLine = (a: Address) => `${[a.street, a.number].filter(Boolean).join(' ')}, ${a.postcode} ${a.town}`;
+/** The address on one line, its empty parts left out (a company not yet given its address). */
+export const oneLine = (a: Address): string => [[a.street, a.number].filter(Boolean).join(' '), `${a.postcode ?? ''} ${a.town ?? ''}`.trim()].filter(Boolean).join(', ');
+const withAddress = (name: string, a: Address, sep: string) => [name, oneLine(a)].filter(Boolean).join(sep);
 
 /** Where the money goes, and whether the QR-bill can carry it (a Swiss or Liechtenstein IBAN). */
 function payment(d: SheetData): { iban: string; qr: boolean } | undefined {
@@ -141,6 +147,8 @@ export function sheetBlocks(d: SheetData): Block[] {
   if (d.cancelled) B.push({ html: `<p class="cxnote">${esc(L.cancelledOn(formatDate(d.cancelled.date, d.language), d.cancelled.reason))}</p>` });
   const meta = [
     `<span>${L.date} ${date('date', d.date)}</span>`,
+    draft ? `<span>${L.supplied} ${editable('supplied', d.supplied ? esc(suppliedText(d.supplied, dmy)) : '', ed.words.supplied)}</span>`
+      : d.supplied ? `<span>${L.supplied} ${esc(suppliedText(d.supplied, (iso) => formatDate(iso, d.language)))}</span>` : '',
     d.kind === 'credit-note' && d.credit ? `<span>${L.forInvoice} ${esc(d.credit.number)}</span>` : d.dueDate ? `<span>${L.due} ${date('dueDate', d.dueDate)}</span>` : '',
     show.customerVatId && d.customer.vatId && d.customer.address.country !== 'CH' ? `<span>${L.yourVat} ${esc(d.customer.vatId)}</span>` : '',
   ].join('');
@@ -219,7 +227,7 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const uid = `${esc(s.uid)} ${L.vatSuffix}`;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
   const footer = (k: number, qrHere = false) => show.footer && !qrHere
-    ? `<div class="foot"><span>${esc(s.name)}<br>${esc(oneLine(s.address))}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${L.vatNo}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
+    ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${L.vatNo}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
     : n > 1 ? `<div class="foot bare"><span class="pno">${L.page(k, n)}</span></div>` : '';
   const style = `--ivf:${FONT_STACK[layout.font]};--iva:${layout.accent};--lh:${LOGO_MM[layout.logoSize]}mm`;
   const sheet = (cls: string, inner: string) => `<div class="a4 ${cls}" style="${style}" lang="${d.language}">${inner}</div>`;
@@ -230,9 +238,9 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
     ? pick('customer', [...(ed.customerId ? [] : [['', ed.words.chooseCustomer] as [string, string]]), ...ed.customers.map((c): [string, string] => [c.id, c.name]), ['+', `＋ ${ed.words.newCustomer}`]], ed.customerId ?? '')
     : esc(cust.name);
   const guide = d.screen?.windowGuide ? `<div class="winframe scr"><span>${esc(d.screen.windowGuide)}</span></div>` : '';
-  const to = `${guide}<div class="to${addr.length + (cust.attn ? 1 : 0) > 4 ? ' many' : ''}">${show.senderLine ? `<span class="sl">${esc(`${s.name} · ${oneLine(s.address)}`)}</span>` : ''}<span>${name}</span>${cust.attn ? `<span>${esc(cust.attn)}</span>` : ''}${addr.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
+  const to = `${guide}<div class="to${addr.length + (cust.attn ? 1 : 0) > 4 ? ' many' : ''}">${show.senderLine ? `<span class="sl">${esc(withAddress(s.name, s.address, ' · '))}</span>` : ''}<span>${name}</span>${cust.attn ? `<span>${esc(cust.attn)}</span>` : ''}${addr.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
   const logo = show.logo ? `<div class="logo pos-${layout.logoPosition} sz-${layout.logoSize}">${d.logoSrc ? `<img src="${esc(d.logoSrc)}" alt="${esc(s.name)}">` : `<span class="wordmark">${esc(s.name)}</span>`}</div>` : '';
-  const from = `<div class="from"><b>${esc(s.name)}</b><span>${esc(oneLine(s.address))}</span><span>${uid}</span></div>`;
+  const from = `<div class="from"><b>${esc(s.name)}</b>${oneLine(s.address) ? `<span>${esc(oneLine(s.address))}</span>` : ''}${s.uid ? `<span>${uid}</span>` : ''}</div>`;
   let h = '';
   pages.forEach((ids, i) => {
     const k = i + 1;

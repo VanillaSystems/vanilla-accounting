@@ -16,7 +16,7 @@ before(async () => { api = await startApi('tests/fixtures/period-lock-index.json
 after(() => api?.stop());
 
 const address = { street: 'Rosenweg', number: '5', postcode: '9500', town: 'Wil', country: 'CH' };
-const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', addLine: 'Position', removeLine: 'Entfernen', intro: 'Intro', closing: 'Gruss', desc: 'Beschreibung', noExemption: 'Grund' };
+const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', addLine: 'Position', removeLine: 'Entfernen', intro: 'Intro', closing: 'Gruss', desc: 'Beschreibung', noExemption: 'Grund', supplied: 'wie Datum' };
 
 /** The sheet's HTML as the screen shows a draft, with its select fields. */
 function sheetOf(d: Draft, customers: Customer[]): string {

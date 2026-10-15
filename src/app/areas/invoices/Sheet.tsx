@@ -85,7 +85,7 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
       if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus && !numeric(next)) sel?.collapseToEnd(); }
     }
     return () => ro.disconnect();
-  }, [html]);
+  }, [html, focus]);
 
   // The sheet's HTML is not React's: React never sees a <select> in it change (its onChange follows
   // React's own elements), so the sheet listens to the DOM's change event, which bubbles.

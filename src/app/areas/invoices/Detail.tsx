@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
-import { missingForIssue, openAmount, paidAmount, refundDue, reminderDraft, totals } from '../../../invoices/rules.js';
+import { missingForIssue, openAmount, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -21,7 +21,7 @@ import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
 import { byRouteId, customerOf, routeId, rowState, type RowState } from './model.js';
-import { parseNumber, sheetEdit } from './edit.js';
+import { fixFor, parseNumber, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
@@ -153,16 +153,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
     return () => { live = false; };
   }, [inv.id, awaits]);
 
-  if (inv.status === 'draft') {
-    const customer = d.customers.find((c) => c.id === inv.customerId);
-    const missing = missingForIssue(inv, { customer, sender: senderFor(contextOf(ws), inv.currency), invoices: d.invoices });
-    return (
-      <div className="status">
-        <span className="notice">{t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span>
-        {missing.length > 0 && <div className="notice warn ivmissing" role="note">{I.dot}<span>{t('invoices.missing', { list: missing.map(missingText).join(', ') })}</span></div>}
-      </div>
-    );
-  }
+  if (inv.status === 'draft') return <div className="status"><span className="notice">{t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span></div>;
   if (reminder) {
     const r = reminderDraft(inv, d.invoices, today);
     return <div className="status"><span className="notice">{t('invoices.reminderStatus', { level: r.level, date: formatDate(r.dueDate) })}</span></div>;
@@ -209,7 +200,34 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
   );
 }
 
-function Actions({ d, inv, state, reminderLevel, nav, canEdit }: DetailProps & { state: RowState; reminderLevel?: number }) {
+/** What the draft still lacks before it can be issued, each with the way to fix it. */
+function MissingList({ d, inv, nav, missing }: DetailProps & { inv: Draft; missing: Missing[] }) {
+  const fix = (f: Fix) => {
+    if ('company' in f) nav.go({ route: { area: 'company', section: f.company }, query: {} });
+    else if ('customer' in f) { if (f.customer === 'edit') setUi({ dialog: { kind: 'customer', id: inv.customerId } }); else setUi({ focus: 'customer', preview: false }); }
+    else if ('field' in f) setUi({ focus: f.field, preview: false });
+    else void saveDraft(nav, inv, { lines: [...inv.lines, firstLine(false)] });
+  };
+  return (
+    <div className="notice warn ivmissing" id="ivmissing" role="note">
+      {I.dot}
+      <span>{t('invoices.missingHead')}{' '}
+        {missing.map((m, i) => {
+          const f = fixFor(m);
+          return (
+            <span key={`${m.field}${m.line ?? ''}`}>
+              {i > 0 && ', '}
+              {f ? <button type="button" className="golink" onClick={() => fix(f)}>{missingText(m)}</button> : missingText(m)}
+            </span>
+          );
+        })}
+      </span>
+    </div>
+  );
+}
+
+function Actions(props: DetailProps & { state: RowState; reminderLevel?: number }) {
+  const { d, ws, inv, state, reminderLevel, nav, canEdit } = props;
   const s = useUi();
   const dl = inv.status === 'issued'
     ? <a className="dl inline" href={api.documentUrl(inv.pdf.file)} download={`${inv.number}.pdf`} title={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.download')}</span></a>
@@ -217,14 +235,25 @@ function Actions({ d, inv, state, reminderLevel, nav, canEdit }: DetailProps & {
   if (!canEdit) return <div className="ivacts">{dl}</div>;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
   if (inv.status === 'draft') {
+    const missing = missingForIssue(inv, { customer: d.customers.find((c) => c.id === inv.customerId), sender: senderFor(contextOf(ws), inv.currency), invoices: d.invoices });
+    const tryIssue = () => {
+      if (missing.length) {
+        // Issuing would be refused: the person is taken to the first thing to fix.
+        document.querySelector<HTMLButtonElement>('.ivmissing button')?.focus();
+        nav.toast(t('invoices.missing', { list: missing.map(missingText).join(', ') }));
+        return;
+      }
+      void issue(nav, inv).then((x) => { if (x) setUi({ preview: false }); });
+    };
     return (
       <div className="ivacts">
         {preview}
-        <button type="button" className="btn primary" data-act="issue" onClick={() => void issue(nav, inv).then((x) => { if (x) setUi({ preview: false }); })}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</button>
+        <button type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</button>
         <button type="button" className="btn ghost danger" data-act="delete" onClick={() => {
           const i = d.invoices.indexOf(inv);
           void deleteDraft(nav, inv, d.invoices[i + 1] ?? d.invoices[i - 1]);
         }}>{t('common.delete')}</button>
+        {missing.length > 0 && <MissingList {...props} inv={inv} missing={missing} />}
       </div>
     );
   }

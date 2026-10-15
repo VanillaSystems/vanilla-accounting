@@ -94,7 +94,7 @@ function parseLines(v: unknown): InvoiceLine[] {
   });
 }
 
-const DRAFT_FIELDS = ['customerId', 'date', 'dueDate', 'currency', 'language', 'subject', 'lines', 'intro', 'closing', 'exemption', 'settlement'] as const;
+const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'intro', 'closing', 'exemption', 'settlement'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /** A draft patch from a request body; `null` clears an optional field. */
@@ -105,9 +105,14 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & 
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
+    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
     if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.'); out.customerId = v as string; }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
+    else if (k === 'supplied') {
+      const p = (v ?? {}) as Record<string, unknown>;
+      if (typeof v !== 'object' || !isDate(p.from) || (p.to !== undefined && (!isDate(p.to) || (p.to as string) < (p.from as string))) || Object.keys(p).some((x) => x !== 'from' && x !== 'to')) bad('supplied ist { from, to? }, Daten JJJJ-MM-TT, to nicht vor from.');
+      out.supplied = { from: p.from as string, ...(p.to !== undefined && p.to !== p.from ? { to: p.to as string } : {}) };
+    }
     else if (k === 'currency') { if (!INVOICE_CURRENCIES.includes(v as never)) bad('currency ist CHF oder EUR.'); out.currency = v as InvoiceContent['currency']; }
     else if (k === 'language') { if (!INVOICE_LANGUAGES.includes(v as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = v as InvoiceContent['language']; }
     else if (k === 'lines') out.lines = parseLines(v);

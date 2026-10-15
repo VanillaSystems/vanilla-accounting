@@ -6,6 +6,7 @@
 import { parseSwissDate } from '../../../accounting/periods.js';
 import type { Customer, Draft } from '../../../invoices/model.js';
 import { UNITS, type Unit } from '../../../invoices/model.js';
+import type { Missing } from '../../../invoices/rules.js';
 import { invoicing } from '../../../engines/index.js';
 import type { DraftChange } from '../../lib/api.js';
 import { customerChange } from './model.js';
@@ -30,6 +31,16 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     const iso = parseSwissDate(value);
     if (!iso) return { refused: 'date' };
     return iso === inv[key] ? undefined : changed({ [key]: iso });
+  }
+  if (key === 'supplied') {
+    const parts = value.split(/\s*(?:–|—|\s-\s|\bbis\b|\bau\b|\bal\b|\bto\b)\s*/).map((x) => x.trim()).filter(Boolean);
+    if (parts.length === 0) return inv.supplied ? changed({ supplied: null }) : undefined;
+    const to = parts[1] ? parseSwissDate(parts[1]) : null;
+    // «01.09. – 15.09.2026»: the first day takes the year of the last.
+    const from = parseSwissDate(parts[0]) ?? (to && /^\d{1,2}\.\d{1,2}\.?$/.test(parts[0]) ? parseSwissDate(`${parts[0].replace(/\.?$/, '.')}${to.slice(0, 4)}`) : null);
+    if (!from || parts.length > 2 || (parts.length === 2 && (!to || to < from))) return { refused: 'date' };
+    const supplied = to && to !== from ? { from, to } : { from };
+    return supplied.from === inv.supplied?.from && (supplied as { to?: string }).to === inv.supplied?.to ? undefined : changed({ supplied });
   }
   if (key === 'exemption') return value === (inv.exemption ?? '') ? undefined : changed({ exemption: value === 'abroad' || value === 'export' ? value : null });
   if (key === 'customer') {
@@ -72,4 +83,23 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     return changed({ lines });
   }
   return undefined;
+}
+
+/** Where a person fixes what an invoice still lacks: a part of Firma, the customer, or a field on the sheet. */
+export type Fix = { company: 'profile' | 'invoice-layout' } | { customer: 'edit' | 'choose' } | { field: string } | { addLine: true };
+
+export function fixFor(m: Missing): Fix | undefined {
+  switch (m.field) {
+    case 'sender.name': case 'sender.address': case 'sender.uid': return { company: 'profile' };
+    case 'payTo': return { company: 'invoice-layout' };
+    case 'customer': return { customer: 'choose' };
+    case 'customer.name': case 'customer.address': return { customer: 'edit' };
+    case 'date': return { field: 'date' };
+    case 'lines': return { addLine: true };
+    case 'line.text': return { field: `l:${m.line ?? 0}:text` };
+    case 'line.quantity': return { field: `l:${m.line ?? 0}:quantity` };
+    case 'line.vatRate': return { field: `l:${m.line ?? 0}:vatRate` };
+    case 'exemption': return { field: 'exemption' };
+    default: return undefined;
+  }
 }

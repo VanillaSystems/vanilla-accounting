@@ -80,6 +80,11 @@ export interface InvoiceContent {
   customerId: string;
   /** The invoice date. */
   date: string;
+  /**
+   * When the supply was made, a day or a period (Art. 26 Abs. 2 lit. d MWSTG), printed when it
+   * differs from the invoice date; absent: the invoice date.
+   */
+  supplied?: { from: string; to?: string };
   /** Absent on a draft: the invoice date plus the customer's payment terms. */
   dueDate?: string;
   currency: InvoiceCurrency;
