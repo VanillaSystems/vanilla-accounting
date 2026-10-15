@@ -288,7 +288,7 @@ main.full { display: flex; flex-direction: column; }
 .cprow b { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cplinks { display: flex; gap: 12px; padding: 6px 8px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
 /* While the top bar stands open (new or pinned), the pages start below it instead of under it. */
-body:has(.topbar.open) :is(.detail, main.full) { padding-top: 76px; }
+body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
 
 /* Automatisierung above the areas (Dock.tsx): a round button wider than the dock, flat, in the accent */
 .activity { padding-top: 96px; }
