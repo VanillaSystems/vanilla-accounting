@@ -15,9 +15,9 @@ The owner's verdict: "it tells me which steps ran at what time, but not what the
 
 | Mockup | Built |
 |---|---|
-| Title in words: «Lauf 1047 · FedEx Express 412.35», the item it ran for | «Lauf receipt-intake-0c20062f» |
+| Title in words: «Lauf 1047 · FedEx Express» and the amount: the item it ran for | «Lauf receipt-intake-0c20062f» |
 | Under it: started when, by what («durch Knopf «Buchen»»), the item, where the AI decided | status chip and a timestamp |
-| Per step: **LIEST** (its input) and **ERGEBNIS** (its output, in words: «transaction: BT-2026-10-14-03, CHF 412.35 · rate: CHF, kein Kurs nötig»), the step's folder and file | step name → outcome, «books.write geschrieben», «1 KI-Antwort» |
+| Per step: **LIEST** (its input) and **ERGEBNIS** (its output, in words: the transaction with its amount, «rate: CHF, kein Kurs nötig»), the step's folder and file | step name → outcome, «books.write geschrieben», «1 KI-Antwort» |
 | What it wrote, as the books' records (entries, receipts), each a link | an effect name |
 | The run strip (latest runs as dots) and Starten ▾ | none |
 | Waiting: a yellow box «Wartet auf dich bei … seit 2 Std.», the reason, and the decision as a button | (to check with a waiting run) |
@@ -92,7 +92,7 @@ The owner's verdict: "it tells me which steps ran at what time, but not what the
 | Mockup | Built |
 |---|---|
 | Title «9 Dateien hinzufügen · Erkannt und noch nicht übernommen. Ändere, was nicht stimmt.» | «Dateien hinzufügen» |
-| Rows: an icon per kind, the facts read (Coop Pronto · 14.10.2026 · CHF 23.80), KI/STRUKTUR/HINWEISE tag, «→ Beleg aufnehmen» naming the workflow, «erkannt» chip, «Ändern» | name, kind, a chip |
+| Rows: an icon per kind, the facts read (vendor · date · amount), KI/STRUKTUR/HINWEISE tag, «→ Beleg aufnehmen» naming the workflow, «erkannt» chip, «Ändern» | name, kind, a chip |
 | Footer: «4 werden übernommen · 3 brauchen dich · 2 nicht übernommen», «Hinzufügen (4, 3 warten im Eingang)» | a sum and «Hinzufügen (n)» |
 | After «Hinzufügen»: «Wird verarbeitet», overall bar, each row its bar and step, «Im Hintergrund weiter», a chip in the title bar «Import läuft · 62 %»; how each file ends (gebucht, wartet, braucht dich) | **in progress (15.10.)**: title, overall bar, per file where it is, «Im Hintergrund weiter»; the title-bar chip is missing |
 
