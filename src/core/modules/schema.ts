@@ -183,6 +183,23 @@ export interface SetupData {
   answers: { payouts: string[]; imports: string[] };
 }
 
+/**
+ * documents.yaml: the words that say what a document is, in the languages of the jurisdiction's
+ * receipts (src/intake/document-kind.ts). Each list is matched as words, ignoring case.
+ */
+export interface DocumentsData {
+  /** Words of a receipt: its title, its total, its due date, a payment slip, the label of its number. */
+  receipt: Record<'title' | 'total' | 'due' | 'slip' | 'number', string[]>;
+  /** Documents kept as proof beside an invoice, never paid on their own. */
+  supporting: Record<'order-confirmation' | 'delivery-note', string[]>;
+  /** Documents that are no receipt at all. */
+  other: Record<'newsletter' | 'terms' | 'price-list' | 'tracking' | 'no-receipt', string[]>;
+}
+
+/** A document kept beside an invoice, and a document that is no receipt, by what its words say. */
+export type SupportingWhy = keyof DocumentsData['supporting'];
+export type OtherWhy = keyof DocumentsData['other'];
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
@@ -195,4 +212,5 @@ export interface Jurisdiction {
   yearEnd: YearEndData;
   invoicing: InvoicingData;
   setup: SetupData;
+  documents: DocumentsData;
 }

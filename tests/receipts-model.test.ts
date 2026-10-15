@@ -2,6 +2,7 @@
  * Belege's list and link dialog (src/app/areas/receipts/model.ts): what a period shows, what
  * needs you, what is locked by a filed quarter, and which payments rank first for a receipt.
  */
+import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';

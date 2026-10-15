@@ -25,7 +25,8 @@ import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { documentTypeOf } from '../knowledge/counterparties.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
-import { filing } from '../engines/index.js';
+import { documents, filing } from '../engines/index.js';
+import { duplicatesIn } from '../intake/duplicates.js';
 
 const ws = openWorkspace();
 const BEFORE_DAYS = 45; // invoice dated up to 45 days before the payment
@@ -105,6 +106,7 @@ function main() {
   const kindOf = (r: Receipt) => kinded.find((k) => k.receipt.id === r.id)?.kind ?? r.kind;
 
   const linkedReceipts = new Set(index.mappings.map((m) => m.receiptId));
+  const twins = duplicatesIn(index.receipts, linkedReceipts, documents());
   const receiptsOf = (ref: string) => index.mappings.filter((m) => m.transactionRef === ref).map((m) => index.receipts.find((r) => r.id === m.receiptId)).filter(Boolean) as Receipt[];
   // A Wise fee row shares its transfer's reference and amount pattern; it is never what a receipt pays.
   const txs = index.transactions.filter((t) => !lock.isClosed(t.date) && !t.ref.startsWith('FEE-') && t.type !== 'wise-fee');
@@ -118,6 +120,8 @@ function main() {
   const open = index.receipts
     .filter((r) => !linkedReceipts.has(r.id) && r.location === 'archived' && inPeriod(r.date) && !/shopify-order-\d+/.test(r.filename) && !NOT_A_RECEIPT.test(r.filename))
     .filter((r) => (kindOf(r) ?? 'invoice') === 'invoice')
+    // A copy of another receipt (by its facts) is no second receipt for a payment: a person says first (Belege).
+    .filter((r) => twins.get(r.id)?.relation !== 'duplicate')
     .sort((a, b) => receiptRank(a) - receiptRank(b) || a.filename.localeCompare(b.filename));
   const claimed = new Map<string, Receipt[]>(); // tx ref → receipts this run links to it
   // A payment reference printed on the receipt proves the link, whatever the amount or date.

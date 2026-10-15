@@ -7,7 +7,8 @@ import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptPatch } from
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
 import type { Period } from '../../../accounting/periods.js';
 import type { ReceiptFilter } from '../../shell/route.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, documents } from '../../../engines/index.js';
+import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 
 /** The kinds of document that are not a receipt of their own. */
 const NON_RECEIPT_KINDS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
@@ -31,6 +32,8 @@ export interface ReceiptView {
   none: boolean;
   /** Linked to a payment or entry of a filed quarter: it never changes again (golden rule 1). */
   locked: boolean;
+  /** Another receipt it seems to repeat (asked: «ist dasselbe» or «verschieden»), or the invoice it accompanies. */
+  twin?: Twin;
 }
 
 export interface Ledger {
@@ -68,6 +71,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     (linksOf.get(m.receiptId) ?? linksOf.set(m.receiptId, []).get(m.receiptId)!).push(m.transactionRef);
     (receiptsByRef.get(m.transactionRef) ?? receiptsByRef.set(m.transactionRef, []).get(m.transactionRef)!).push(m.receiptId);
   }
+  const twins = duplicatesIn(books.receipts, new Set(linksOf.keys()), documents());
   const refClosed = (ref: string) => isClosed(txByRef.get(ref)?.date) || (entriesByRef.get(ref) ?? []).some((e) => isClosed(e.date));
 
   const views = books.receipts.map((r): ReceiptView => {
@@ -78,7 +82,8 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     const none = NON_RECEIPT_KINDS.includes(r.kind)
       || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
-    return { r, date, day: date ?? (r.indexedAt.slice(0, 10) || undefined), vendor, desc, links, paid, none, locked: links.some(refClosed) };
+    const twin = twins.get(r.id);
+    return { r, date, day: date ?? (r.indexedAt.slice(0, 10) || undefined), vendor, desc, links, paid, none, locked: links.some(refClosed), ...(twin ? { twin } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
 }
@@ -225,7 +230,7 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
  * currency, within a month of the receipt, that has no receipt yet.
  */
 export function suggestion(v: ReceiptView, l: Ledger, toChf: ToChf): Candidate | undefined {
-  if (!needsYou(v, l) || v.r.amount == null) return undefined;
+  if (!needsYou(v, l) || v.r.amount == null || v.twin?.relation === 'duplicate') return undefined;
   const fits = candidates(v, l, toChf).best.filter((c) => c.sameAmount && !c.taken && Math.abs(c.days ?? 99) <= 31);
   return fits.length === 1 ? fits[0] : undefined;
 }

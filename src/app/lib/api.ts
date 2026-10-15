@@ -144,6 +144,7 @@ export const api = {
     request<{ receipt: Receipt }>('PATCH', `/api/receipts/${id}`, patch).then((r) => r.receipt),
   deleteReceipt: (id: string) => request<{ ok: true; deletion: string }>('DELETE', `/api/receipts/${id}`).then((r) => r.deletion),
   restoreReceipt: (id: string, deletion: string) => request<Ok>('POST', `/api/receipts/${id}/restore`, { deletion }),
+  answerTwin: (id: string, answer: 'same' | 'distinct', of: string) => request<Ok>('POST', `/api/receipts/${id}/twin`, { answer, of }),
   visionExtract: (receiptId: string) => request<Ok>('POST', '/api/vision/extract', { receiptId }),
 
   patchTransaction: (ref: string, patch: TransactionPatch) =>

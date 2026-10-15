@@ -4,7 +4,7 @@
  * inbox, a statement read into the books as the Bank area reads it, what is no receipt into
  * data/quarantine/ with its reason. Each taken file is handed to the inbox's run with what it is
  * (an Arrival); one dropped while that run is under way goes to the run that waits behind it. A
- * file with an open question (a password, a duplicate, unknown content) waits in data/drop/<session>/
+ * file with an open question (a password, a duplicate by its bytes or its facts, unknown content) waits in data/drop/<session>/
  * (outside git) for its answer. «Rückgängig» takes a taken file back out. A ZIP's password is used
  * to unpack it and never written anywhere.
  *
@@ -25,6 +25,10 @@ import { importStatement } from './statements.js';
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
+import { twinFinder, type Comparable } from '../../intake/duplicates.js';
+import { textFacts } from '../../parsers/receipt-text.js';
+import { documents } from '../../engines/index.js';
+import { periodLock } from '../../books/store.js';
 import type { DropAction, DropRow, DropSession } from '../../types/drop.js';
 
 export const router = Router();
@@ -32,6 +36,8 @@ export const router = Router();
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const dir = (id: string) => join(WS.paths.data, 'drop', id);
 const fileOf = (id: string, key: string) => join(dir(id), 'files', key);
+/** A row's text, read at drop: what a later row of the session is compared with. */
+const textOf = (id: string, key: string) => join(dir(id), 'texts', key);
 const sha16 = (b: Buffer) => createHash('sha256').update(b).digest('hex').slice(0, 16);
 
 function load(id: string): DropSession {
@@ -51,7 +57,7 @@ function known(): Set<string> {
 async function add(s: DropSession, name: string, bytes: Buffer, from?: string, password?: string): Promise<void> {
   const id = sha16(bytes);
   const seen = new Set([...known(), ...s.rows.filter((r) => r.state !== 'refused' && r.state !== 'undone').map((r) => r.id)]);
-  const r = recognize(bytes, name);
+  const { text, ...r } = recognize(bytes, name);
   const row: DropRow = { key: randomUUID().slice(0, 8), id, name, size: bytes.length, ...(from ? { from } : {}), ...r };
   if (row.kind === 'zip') {
     const out = await unzip(bytes, password);
@@ -61,8 +67,32 @@ async function add(s: DropSession, name: string, bytes: Buffer, from?: string, p
     return;
   }
   if (row.state !== 'refused' && seen.has(id)) Object.assign(row, { state: 'duplicate', reason: 'duplicate' });
+  if (row.state === 'take' && row.kind === 'receipt' && text) {
+    const twin = twinOf(s, row, text);
+    if (twin) Object.assign(row, { twin }, twin.relation === 'duplicate' ? { state: 'duplicate', reason: 'possible-duplicate' } : {});
+    mkdirSync(join(dir(s.id), 'texts'), { recursive: true });
+    writeFileSync(textOf(s.id, row.key), text);
+  }
   if (row.state !== 'refused') writeFileSync(fileOf(s.id, row.key), bytes);
   s.rows.push(row);
+}
+
+/**
+ * A receipt of the books, or a file of this session, whose facts a new PDF repeats or accompanies
+ * (src/intake/duplicates.ts). Here, at the drop, because a digital PDF's text and its plain facts
+ * are there before anything is written, so the person answers in the row; a photo's text comes
+ * only from the run's reading, whose matching step asks the same question before it links.
+ */
+function twinOf(s: DropSession, row: DropRow, text: string): DropRow['twin'] {
+  const facts = (t: string) => { const f = textFacts(t); return { date: f.date, amount: f.amount, currency: f.currency, vatId: f.vatId }; };
+  const rows = s.rows.filter((r) => r.state !== 'refused' && r.state !== 'undone' && r.state !== 'quarantine' && existsSync(textOf(s.id, r.key)));
+  const own: Comparable[] = rows.map((r) => { const t = readFileSync(textOf(s.id, r.key), 'utf8'); return { id: r.id, extractedText: t, ...facts(t), ...(r.document === 'order-confirmation' || r.document === 'delivery-note' ? { kind: 'supporting' as const } : {}) }; });
+  const books = readBooks().receipts;
+  const me: Comparable = { id: row.id, extractedText: text, ...facts(text), ...(row.document === 'order-confirmation' || row.document === 'delivery-note' ? { kind: 'supporting' as const } : {}) };
+  const twin = twinFinder([...books, ...own], documents()).find(me);
+  if (!twin) return undefined;
+  const name = books.find((r) => r.id === twin.of)?.filename ?? rows.find((r) => r.id === twin.of)?.name ?? twin.of;
+  return { ...twin, name };
 }
 
 router.post('/api/drop', (_req, res) => {
@@ -119,6 +149,22 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       s.rows = s.rows.filter((r) => r !== row);
       rmSync(fileOf(s.id, row.key), { force: true });
       for (const f of out.files) await add(s, f.name, f.bytes, row.name);
+      break;
+    }
+    case 'twin': {
+      if (row.state !== 'duplicate' || !row.twin || row.twin.relation !== 'duplicate') throw new RequestError(400, 'Nur ein möglicher Doppelbeleg wird so beantwortet.');
+      if (a.answer === 'same') {
+        Object.assign(row, { reason: 'same' });
+        break;
+      }
+      // «verschieden» is remembered on the receipt of the books, so no step asks again; a receipt of
+      // a filed quarter stays as filed (and no payment of it can take the new file anyway).
+      const of = row.twin.of;
+      updateBooks((b) => {
+        const r = b.receipts.find((x) => x.id === of);
+        if (r && !receiptDates(b, of).some(periodLock(b).isClosed) && !r.distinctFrom?.includes(row.id)) r.distinctFrom = [...(r.distinctFrom ?? []), row.id];
+      });
+      Object.assign(row, { state: 'take', reason: undefined });
       break;
     }
     default: throw new RequestError(400, 'Unbekannte Aktion.');

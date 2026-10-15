@@ -110,3 +110,9 @@ export function deleteReceipt(nav: Nav, v: ReceiptView) {
 /** The text read again by the model, from the PDF's image (sends the page to Claude). */
 export const readAgain = (nav: Nav, v: ReceiptView) =>
   run(nav, () => api.visionExtract(v.r.id), t('receipts.readAgainDone'));
+
+/** «ist dasselbe»: the receipt becomes a copy of `of` (no link, no input tax); undo makes it a receipt again. «verschieden»: never asked again. */
+export const answerTwin = (nav: Nav, v: ReceiptView, answer: 'same' | 'distinct', of: string, name: string) =>
+  run(nav, () => api.answerTwin(v.r.id, answer, of),
+    answer === 'same' ? t('receipts.twin.sameDone', { name }) : t('receipts.twin.distinctDone', { name }),
+    answer === 'same' ? () => api.patchReceipt(v.r.id, { kind: v.r.kind ?? null }) : undefined);

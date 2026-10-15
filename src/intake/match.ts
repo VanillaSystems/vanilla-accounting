@@ -12,8 +12,9 @@ import type { BankTransaction, Receipt } from '../types/index.js';
 import { periodLock, receiptHome, type Books } from '../books/store.js';
 import { findFile } from '../workspace/workspace.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
-import { baseCurrency } from '../engines/index.js';
+import { baseCurrency, documents } from '../engines/index.js';
 import { textFacts } from '../parsers/receipt-text.js';
+import { twinFinder } from './duplicates.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -200,9 +201,13 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const answer = result;
     const sure = answer.confidence >= MAPPING_THRESHOLD && (answer.matchedTransactionRefs?.length ?? 0) > 0;
     let linked: string[] = [];
+    let twin: string | undefined;
     const target = archive(receipt, normalizeFilename(answer.suggestedFilename), (r, index) => {
       Object.assign(r, { date: answer.date, description: answer.description, amount: answer.amount, currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
-      if (!sure) return;
+      // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
+      if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
+      const t = twinFinder(index.receipts, documents()).find(r);
+      if (t?.relation === 'duplicate') { twin = index.receipts.find((x) => x.id === t.of)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
       linked = answer.matchedTransactionRefs.filter((ref) => {
@@ -217,6 +222,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     });
     const pct = `(${((answer.confidence ?? 0) * 100).toFixed(0)}%)`;
     if (!target) line('is not staged in beleg-import/ any more, skipping');
+    else if (twin) { unlinked++; line(`→ ${target}  possibly the same as ${twin}: not linked, Belege asks`); }
     else if (linked.length) { matched++; line(`→ ${target}  ${pct} refs: ${linked.join(', ')}`); }
     else { unlinked++; line(`→ ${target}  ${pct} unlinked${sure ? ' — all refs in closed period' : ''}`); }
   }

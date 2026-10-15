@@ -25,6 +25,8 @@ import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
 import type { Ask, IntakeNote, StepRun } from './pipeline.js';
+import { documentKind } from './document-kind.js';
+import { documents } from '../engines/index.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
 
@@ -142,6 +144,19 @@ function unmatchedOf(bank: BankFiles): string[] {
 
 interface Extracted { text: string; method: Receipt['extractionMethod']; fileSize: number }
 
+/**
+ * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
+ * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
+ * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
+ * where the person can say «doch ein Beleg».
+ */
+function kindOfText(fresh: Extracted): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule'> {
+  const v = documentKind(fresh.text, documents());
+  if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}` };
+  if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
+  return {};
+}
+
 // ─── The step ────────────────────────────────────────────────────────────────
 
 export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
@@ -225,6 +240,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         currency: existing?.currency ?? plain.currency,
         needsVisionReview: fresh.text.length === 0 || undefined,
         remarks: existing?.remarks ?? detectVatProofIssue(fresh.text),
+        ...(existing?.kind ? {} : kindOfText(fresh)),
       } as Receipt];
     });
     // The books keep their order, new receipts after them: a second run writes the same file.

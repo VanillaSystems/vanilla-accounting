@@ -7,6 +7,8 @@
  */
 
 import type { UnknownAccount } from './api-error.js';
+import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
+import type { TwinWhy } from './index.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
 export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'zip';
@@ -50,12 +52,21 @@ export interface DropRow {
   quarantined?: string;
   /** A statement: its file under bank-statements/ and the payments it added. */
   statement?: { file: string; refs: string[] };
+  /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */
+  document?: SupportingWhy | OtherWhy;
+  /**
+   * A receipt of the books (or a row of this session) whose facts it repeats or accompanies
+   * (src/intake/duplicates.ts): its id and name. A possible duplicate waits for «ist dasselbe» or
+   * «verschieden»; a companion (an order confirmation beside its invoice) is taken.
+   */
+  twin?: { of: string; name: string; why: TwinWhy; relation: 'duplicate' | 'companion' };
 }
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
+/** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */
 export type DropReason =
-  | 'duplicate' | 'not-receipt' | 'held' | 'pdf-password'
+  | 'duplicate' | 'possible-duplicate' | 'same' | 'not-receipt' | 'held' | 'pdf-password'
   | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported'
   /** A statement of an account the owner said is private: set aside, not read into the books. */
   | 'private';
@@ -74,4 +85,6 @@ export type DropAction =
   /** Take a taken file back out: the inbox file, or what it made in the books. */
   | { kind: 'undo' }
   /** A statement of an unknown account is the owner's private one: set aside. */
-  | { kind: 'private' };
+  | { kind: 'private' }
+  /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
+  | { kind: 'twin'; answer: 'same' | 'distinct' };

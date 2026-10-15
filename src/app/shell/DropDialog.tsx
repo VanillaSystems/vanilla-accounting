@@ -66,13 +66,17 @@ function metaOf(r: DropRow): string {
     r.facts?.iban,
     r.facts?.from && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to!)}`,
     r.facts?.entries !== undefined && t('drop.entries', { n: r.facts.entries }),
+    r.document && t(`drop.doc.${r.document}` as 'drop.doc.newsletter'),
+    r.twin && t(r.twin.relation === 'companion' ? 'drop.twin.companion' : 'drop.twin.duplicate', { name: r.twin.name }),
+    r.twin?.relation === 'duplicate' && t(`drop.twin.why.${r.twin.why}` as 'drop.twin.why.same-text'),
   ].filter(Boolean).join(' · ');
 }
 
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
-  const chip = r.state === 'take' ? t('drop.taking') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
+  const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
+  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   return (
     <div className={`droprow s-${r.state}`}>
       <div className="dn">
@@ -88,7 +92,13 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
             <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
           </>
         ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
-        {(r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{t('drop.takeAnyway')}</button> : null}
+        {asked ? (
+          <span className="dacts">
+            <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
+            <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
+          </span>
+        ) : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf'
+          ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
         {r.state === 'locked' ? (
           <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
             <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
@@ -171,7 +181,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   return (
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`}>
-        <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}</small></div>
+        <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {missing ? <small className="dwhy">{missing}</small> : null}

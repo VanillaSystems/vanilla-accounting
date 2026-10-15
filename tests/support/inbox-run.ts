@@ -3,13 +3,14 @@
  * demo with the model stub where one payment is booked with its receipt.
  */
 import assert from 'node:assert/strict';
-import { cpSync, readFileSync } from 'node:fs';
+import { cpSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DropSession } from '../../src/types/drop.js';
 import type { JournalEntry, Receipt } from '../../src/types/index.js';
 import type { RunDetail } from '../../src/workflows/model.js';
 import { DEMO_ROOT } from './workspace.js';
 import { startApi } from './api-server.js';
+import { textPdf } from './text-pdf.js';
 
 export const RECEIPT = join(DEMO_ROOT, 'transactional-data/2026/receipts/20260105-example-cloud-invoice-2026-01.pdf');
 
@@ -34,7 +35,7 @@ export const SESSION = (api: { port: number }) => {
     }
     throw new Error('the inbox run did not come to rest');
   };
-  const books = async () => (await (await fetch(`${base}/books.json`)).json()) as { receipts: Array<{ id: string }>; transactions: Array<{ ref: string }> };
+  const books = async () => (await (await fetch(`${base}/books.json`)).json()) as { receipts: Array<{ id: string; filename: string }>; transactions: Array<{ ref: string }> };
   return { post, runOf, rest, books };
 };
 
@@ -58,7 +59,8 @@ export async function bookedWithReceipt(env: Record<string, string> = {}) {
   s = await session.post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(SCAFFOLD));
   await session.rest();
   assert.deepEqual(await onG(), [[]], 'the statement run booked the payment without a receipt');
-  const pdf = Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% Geruest_August\n')]);
+  // An invoice of its own, not a copy of a demo receipt: that would be a possible duplicate.
+  const pdf = await textPdf(['Malerbedarf Muster AG', 'Rechnung G-2026-08', 'Datum: 01.08.2026', 'Gerüstmiete August 1036.08', 'Total CHF 1120.00']);
   s = await session.post(`/api/drop/${s.id}/files?name=Geruest_August.pdf`, pdf);
   await session.rest();
   const rc = s.rows.at(-1)!;

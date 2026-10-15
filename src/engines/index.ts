@@ -41,3 +41,6 @@ export const baseCurrency = (): string => loaded().source.manifest.baseCurrency;
 
 /** What a new workspace gets from the setup's answers, the owner's private account among them. */
 export const setup = (): Jurisdiction['setup'] => loaded().source.setup;
+
+/** The words that say what a document is: a receipt, a document beside one, or none. */
+export const documents = (): Jurisdiction['documents'] => loaded().source.documents;

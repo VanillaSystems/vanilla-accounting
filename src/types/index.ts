@@ -59,9 +59,14 @@ export interface Receipt {
   run?: string;
   /** What a list shows: the vendor as people say it and what it is in 1–3 words (src/intake/titles.ts). */
   title?: ReceiptTitle;
+  /** Receipts a person said are other documents, though their facts look alike (src/intake/duplicates.ts): never paired again. */
+  distinctFrom?: string[];
 }
 
 export interface ReceiptTitle { vendor: string; what: string }
+
+/** Why two receipts are taken for one document (src/intake/duplicates.ts): the same text, a number only they carry, the same vendor, total and day. */
+export type TwinWhy = 'same-text' | 'same-number' | 'same-facts';
 
 /** A PDF in the workspace's inbox that no receipt holds yet (GET /api/inbox). */
 export interface InboxFile {

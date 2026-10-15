@@ -4,6 +4,7 @@
  * a protected ZIP waits for its password, which is used and never written; a duplicate is not
  * taken; nothing enters the inbox before «Hinzufügen», which then starts the inbox's run.
  */
+import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -17,10 +18,13 @@ import type { RunDetail } from '../src/workflows/model.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 import { RECEIPT, SESSION, bookedWithReceipt } from './support/inbox-run.js';
+import { textPdf } from './support/text-pdf.js';
 
 configure({ useWebWorkers: false });
 
 const PASSWORD = 'geheim-7Q2x';
+/** A made-up invoice the demo books do not hold: a file of its own by its bytes and its facts. */
+const invoicePdf = (no: string, what: string) => textPdf([`Malerbedarf Muster AG`, `Rechnung ${no}`, `Datum: 12.08.2026`, `${what} 100.00`, `Total CHF 108.10`]);
 
 async function zipOf(files: Array<[string, Uint8Array | string]>, opts: { password?: string; level?: number } = {}): Promise<Buffer> {
   const w = new ZipWriter(new Uint8ArrayWriter(), { password: opts.password, level: opts.level ?? 6 });
@@ -74,7 +78,7 @@ test('the dialog: a file is taken as it comes, a duplicate is not, a ZIP waits f
     })).json()) as DropSession;
     const inbox = () => (existsSync(join(api.root, 'beleg-import')) ? readdirSync(join(api.root, 'beleg-import')) : []);
     let s = await post('/api/drop');
-    const fresh = Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% fresh\n')]);
+    const fresh = await invoicePdf('R-1001', 'Pinsel');
     s = await post(`/api/drop/${s.id}/files?name=archived.pdf`, readFileSync(RECEIPT));
     s = await post(`/api/drop/${s.id}/files?name=locked.zip`, await zipOf([['fresh.pdf', fresh]], { password: PASSWORD }));
     s = await post(`/api/drop/${s.id}/files?name=notes.docx`, Buffer.from('word'));
@@ -95,6 +99,47 @@ test('the dialog: a file is taken as it comes, a duplicate is not, a ZIP waits f
   }
 });
 
+test('by their words and facts: a newsletter waits in quarantine until «doch ein Beleg», an order confirmation is taken beside its invoice, a copy of a receipt in the books asks «ist dasselbe» or «verschieden»', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, rest, books } = SESSION(api);
+    const inbox = () => (existsSync(join(api.root, 'beleg-import')) ? readdirSync(join(api.root, 'beleg-import')).sort() : []);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=Herbstaktion.pdf`, await textPdf(['Farbmix Herbstaktion', 'Bis 31. Oktober 20 % auf alle Fassadenfarben.', 'Sie erhalten diesen Newsletter als Kundin. Abmelden: farbmix.example/abmelden']));
+    s = await post(`/api/drop/${s.id}/files?name=AB-5521.pdf`, await textPdf(['Farbmix AG', 'Auftragsbestätigung AB-5521', 'Datum: 24.07.2026', 'Fassadenfarbe Silikon 12.5 l, 10 Stk', 'Die Rechnung folgt mit der Lieferung.']));
+    s = await post(`/api/drop/${s.id}/files?name=Invoice-2026-01.pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% downloaded again\n')]));
+    const [news, order, copy] = s.rows;
+    assert.deepEqual([news.state, news.reason, news.document], ['quarantine', 'not-receipt', 'newsletter']);
+    assert.ok(news.quarantined && existsSync(join(api.root, 'data/quarantine', news.quarantined)), 'it lies in quarantine with its reason');
+    assert.deepEqual([order.state, order.document], ['taken', 'order-confirmation']);
+    const original = (await books()).receipts.find((r) => r.filename === '20260105-example-cloud-invoice-2026-01.pdf')!;
+    assert.deepEqual([copy.state, copy.reason, copy.twin?.of, copy.twin?.name, copy.twin?.relation], ['duplicate', 'possible-duplicate', original.id, original.filename, 'duplicate'], 'the same text under another name and other bytes');
+    assert.deepEqual(inbox(), ['AB-5521.pdf'], 'neither the newsletter nor the copy went in');
+
+    s = await post(`/api/drop/${s.id}/rows/${copy.key}`, { kind: 'twin', answer: 'same' });
+    assert.deepEqual([s.rows[2].state, s.rows[2].reason], ['duplicate', 'same']);
+    assert.deepEqual(inbox(), ['AB-5521.pdf'], 'the same: not taken');
+
+    const SEPT = '20260910-gruenkaffee-muster-rechnung-2026-09.pdf';
+    s = await post(`/api/drop/${s.id}/files?name=Rechnung-2026-09.pdf`, Buffer.concat([readFileSync(join(DEMO_ROOT, 'transactional-data/2026/receipts', SEPT)), Buffer.from('\n% once more\n')]));
+    const again = s.rows.at(-1)!;
+    assert.equal(again.twin?.name, SEPT);
+    s = await post(`/api/drop/${s.id}/rows/${again.key}`, { kind: 'twin', answer: 'distinct' });
+    assert.equal(s.rows.at(-1)!.state, 'taken', 'different: taken');
+    const remembered = (await books()).receipts.find((r) => r.filename === SEPT) as { distinctFrom?: string[] };
+    assert.deepEqual(remembered.distinctFrom, [again.id], 'and the pair is not asked again');
+
+    s = await post(`/api/drop/${s.id}/rows/${news.key}`, { kind: 'take' });
+    assert.equal(s.rows[0].state, 'taken', '«doch ein Beleg»');
+    assert.equal(existsSync(join(api.root, 'data/quarantine', news.quarantined!)), false, 'out of quarantine');
+    assert.ok(inbox().includes('Herbstaktion.pdf'));
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    api.stop();
+  }
+});
+
 
 test('each file tells its run what it is: a statement by its bank, account and days, a receipt by its id', async () => {
   const api = await startApi('demo');
@@ -107,7 +152,7 @@ test('each file tells its run what it is: a statement by its bank, account and d
     rmSync(placed);
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=${encodeURIComponent(name)}`, statement);
-    s = await post(`/api/drop/${s.id}/files?name=fresh.pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% arrival\n')]));
+    s = await post(`/api/drop/${s.id}/files?name=fresh.pdf`, await invoicePdf('R-1002', 'Rollen'));
     assert.deepEqual(s.rows.map((r) => r.state), ['taken', 'taken'], 'both taken as they came, without «Hinzufügen»');
     const [st, rc] = s.rows;
     // The demo's PDFs print no closing balance, so the run claims none.
@@ -131,7 +176,7 @@ test('«Rückgängig» takes a file back out: a receipt the run read leaves the 
 <Ntry><Amt Ccy="CHF">12.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-25</Dt></BookgDt><AcctSvcrRef>REF-UNDO</AcctSvcrRef><AddtlNtryInf>Undo me</AddtlNtryInf></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
     let s = await post('/api/drop');
-    s = await post(`/api/drop/${s.id}/files?name=wrong.pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% dropped by mistake\n')]));
+    s = await post(`/api/drop/${s.id}/files?name=wrong.pdf`, await invoicePdf('R-1003', 'Abdeckfolie'));
     s = await post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(camt));
     const [rc, st] = s.rows;
     assert.deepEqual([rc.state, st.state], ['taken', 'taken']);

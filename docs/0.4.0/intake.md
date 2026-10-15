@@ -27,10 +27,12 @@ page adds the dialog and how it hands over to the workflows of 0.4.0.
 
    | Row | Action |
    |---|---|
-   | duplicate (same checksum, or same supplier, date, amount, number) | not taken; «trotzdem übernehmen» |
+   | duplicate by its bytes (the same checksum) | not taken; «trotzdem übernehmen» |
+   | possible duplicate by its facts (the same text, or the same total within days and a number only the two carry; src/intake/duplicates.ts) | «möglicher Doppelbeleg von …»: «ist dasselbe» (not taken) or «verschieden» (taken; the pair is remembered on the receipt of the books and not asked again) |
+   | order confirmation, delivery note (by its words, modules/ch/documents.yaml) | taken; the read step makes it kind `supporting`, shown beside its invoice, never paid on its own |
    | PDF with a password | a password field; the original is stored, not the decrypted copy |
    | unsure kind | the two likely kinds as buttons |
-   | not a receipt (catalogue, price list) | quarantine; «doch übernehmen» |
+   | not a receipt by its words (newsletter, terms, price list or brochure, shipping notice; src/intake/document-kind.ts) | quarantine with what it is; «doch ein Beleg» |
    | own photo or scan | made smaller before its id; a received PDF stays byte for byte |
 
 5. **Tabs by category:** Alle, **Bankdaten** (camt.053, Wise exports), **Kontoauszüge** (PDF),
@@ -109,6 +111,26 @@ exactly one of three places, each with its reason:
 The inbox is `beleg-import/`, outside git. The drop zone, the folder, mail collection and the
 phone upload all deliver into it; nothing goes from a channel straight into the books. Quarantine
 is `data/quarantine/`, outside git, with the reason.
+
+## Duplicates and non-receipts past the drop
+
+The drop judges a PDF by its own text, before anything is written, so the person answers in the
+row. A photo has no text until the run's reading, and mail, the Finder and the phone bypass the
+dialog, so the same checks run again later:
+
+- **Mail collection** (src/platform/sources/host.ts) puts an attachment whose words say it is no
+  receipt into `data/quarantine/` instead of the inbox; its ledger line keeps the sender. When 3
+  or more of one sender's attachments, and nearly all of them, were no receipt (quarantined, or
+  marked so by a person in Belege), Firma › Quellen offers to skip that address: one click adds it
+  to `reach.mail.skip` and, since that only narrows the reach, switches the new version on.
+- **The read step** makes an order confirmation or delivery note kind `supporting`, and a text the
+  model read off a photo that says it is no receipt kind `noise` (both by rule; a person's kind wins).
+- **The matching step** asks the duplicate check with the facts the model read: a possible copy is
+  archived but linked to nothing. Belege shows «möglicher Doppelbeleg von …» on it, derived from
+  the books every time (`ReceiptView.twin`): «ist dasselbe» makes it kind `duplicate` and removes
+  its links and the entries booked with it (POST /api/receipts/:id/twin), «verschieden» stores the
+  pair in `distinctFrom` of the receipt in the open period. A receipt of kind `duplicate` never
+  reaches the booking's prompt, so it never claims input tax.
 
 ## Open
 

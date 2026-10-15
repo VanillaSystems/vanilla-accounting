@@ -22,6 +22,7 @@ import { Kbd, accept, runAct } from './commands.js';
 import { deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { ByHand, VatFields } from './VatFields.js';
+import { TwinNotice } from './TwinNotice.js';
 import { Paper } from './Paper.js';
 import { I } from './icons.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -112,9 +113,10 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: open ? periodName(open) : '' })}</a>
         </div>
       )}
+      <TwinNotice {...props} />
       {v.none
         ? <div className="notice">{t('receipts.noneNotice')} {edit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
-        : <div className="status"><Status {...props} /></div>}
+        : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
 
       <div className="body">
         <div className="desk">

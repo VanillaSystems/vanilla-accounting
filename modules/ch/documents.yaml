@@ -1,0 +1,23 @@
+# What a document is, by its words (src/intake/document-kind.ts), in the languages Swiss receipts
+# come in: German, French, Italian and English. Each entry is matched as words, ignoring case; a
+# workspace overlay may add its suppliers' words.
+
+receipt:
+  title: [Rechnung, Faktura, Quittung, Kassenbon, Kassenzettel, Zollrechnung, Gutschrift, Invoice, Tax invoice, Receipt, Bill, Credit note, Facture, Quittance, Reçu, Note de crédit, Fattura, Ricevuta, Scontrino, Nota di credito]
+  total: [Total, Totalbetrag, Gesamtbetrag, Rechnungsbetrag, Endbetrag, zu bezahlen, Summe, Amount due, Amount paid, Grand total, Montant total, Montant à payer, Totale, Importo totale]
+  due: [zahlbar bis, zahlbar innert, fällig am, Fälligkeit, Zahlungsfrist, Due date, Payable by, Payment due, Date d'échéance, payable jusqu'au, Scadenza, pagabile entro]
+  slip: [Zahlteil, Empfangsschein, Section paiement, Récépissé, Sezione pagamento, Payment part]
+  number: [Rechnungsnummer, Rechnungs-Nr., Rechnung Nr., Rechnungsnr., Rechnung, Belegnummer, Beleg-Nr., Quittungsnummer, Invoice number, Invoice No., "Invoice #", Invoice, Receipt number, "Receipt #", Bill number, Numéro de facture, Facture n°, Facture no, Facture, Numero fattura, Fattura n., Fattura nr., Fattura]
+
+supporting:
+  order-confirmation: [Auftragsbestätigung, Bestellbestätigung, Bestelleingang, Order confirmation, Confirmation de commande, Confirmation d'ordre, Conferma d'ordine, Conferma dell'ordine]
+  delivery-note: [Lieferschein, Delivery note, Packing slip, Bulletin de livraison, Bon de livraison, Bolla di consegna, Documento di trasporto]
+
+# Newsletter words count anywhere (they stand in the footer); the others where a document names
+# what it is, in its first lines.
+other:
+  newsletter: [Abmelden, Newsletter abbestellen, vom Newsletter abmelden, im Browser ansehen, Unsubscribe, View in browser, View this email in your browser, Se désabonner, Se désinscrire, Voir dans le navigateur, Disiscriviti, Annulla l'iscrizione]
+  terms: [Allgemeine Geschäftsbedingungen, AGB, Widerrufsbelehrung, Terms and conditions, Terms of service, General terms, Conditions générales, Conditions générales de vente, Condizioni generali, Condizioni generali di vendita]
+  price-list: [Preisliste, Katalog, Prospekt, Broschüre, Produktbroschüre, Price list, Catalogue, Catalog, Brochure, Liste de prix, Listino prezzi, Listino]
+  tracking: [Sendungsverfolgung, Sendung verfolgen, Ihr Paket ist unterwegs, Track your parcel, Track your package, Tracking number, Suivi de colis, Suivre mon colis, Tracciamento, Traccia la spedizione]
+  no-receipt: [Kein Beleg, Keine Rechnung, Not a receipt, Not an invoice, Pas un justificatif, Pas une facture, Non è un giustificativo, Non è una fattura]
