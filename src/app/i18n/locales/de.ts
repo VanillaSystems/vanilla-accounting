@@ -697,6 +697,7 @@ export const messages = {
   'receipts.openEntry': 'Buchung zeigen',
   'receipts.openPayment': 'Zahlung und Kontoauszug öffnen',
   'receipts.origin': 'Herkunft',
+  'receipts.run': 'Lauf',
   'receipts.originArchive': 'Archiv',
   'receipts.originInbox': 'Eingang · beleg-import',
   'receipts.other': 'Andere',

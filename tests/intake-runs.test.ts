@@ -52,7 +52,7 @@ test('a run gives the books the old job gave; what it added carries its id', asy
   assert.deepEqual(comparable(loadBooks(run)), comparable(loadBooks(job)));
   const added = r.steps.flatMap((s) => s.effects.flatMap((e) => e.wrote.receipts ?? []));
   assert.equal(added.length, 1, 'the scan is the one receipt it added');
-  assert.ok(loadBooks(run).receipts.some((x) => x.id === added[0] && x.filename === 'scan.pdf'));
+  assert.ok(loadBooks(run).receipts.some((x) => x.id === added[0] && x.filename === 'scan.pdf' && x.run === r.id), 'the receipt names the run that took it up');
 });
 
 test('a run that crashed between two steps resumes at its step and writes nothing twice', async () => {

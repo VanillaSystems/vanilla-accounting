@@ -3,14 +3,16 @@
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { BankTransaction, InboxFile } from '../../../types/index.js';
+import type { BankTransaction, InboxFile, Receipt } from '../../../types/index.js';
 import { parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
 import { sources, api } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
-import { t } from '../../i18n/index.js';
+import { language, t } from '../../i18n/index.js';
+import { useAutomation } from '../../automation/store.js';
+import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
 import type { Ledger, ReceiptView } from './model.js';
@@ -309,14 +311,32 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
   );
 }
 
+/**
+ * The runs behind a receipt: the one that took it up (stamped on it, or, for a receipt taken up
+ * before that, the run its file arrived with) and the ones that linked it to a payment.
+ */
+function runsOf(r: Receipt, books: Props['books'], view: ReturnType<typeof useAutomation>['view']): RunSummary[] {
+  const ids = [
+    r.run ?? view?.runs.find((x) => x.arrived?.some((a) => a.kind === 'receipt' && a.id === r.id))?.id,
+    ...books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.run),
+  ].filter((id): id is string => !!id);
+  return [...new Set(ids)].map((id) => view?.runs.find((x) => x.id === id)).filter((x): x is RunSummary => !!x);
+}
+
 function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
-  const { v, nav, edit } = props;
+  const { v, nav, edit, books } = props;
   const { r } = v;
+  const { view } = useAutomation();
+  const runs = runsOf(r, books, view);
   const kb = `${Math.max(1, Math.round(r.fileSize / 1024))} KB`;
   return (
     <Sec k="datei" val={kb}>
       <dl className="kv">
         <dt>{t('receipts.origin')}</dt><dd>{r.location === 'staged' ? t('receipts.originInbox') : t('receipts.originArchive')}</dd>
+        {runs.length ? <><dt>{t('receipts.run')}</dt><dd>{runs.map((x) => {
+          const w = view?.workflows.find((y) => y.id === x.workflow);
+          return <button key={x.id} type="button" className="linkbtn" style={{ display: 'block', textAlign: 'left', padding: 0 }} onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: x.id }, query: {} })}>{w ? textIn(w.label, language()) : x.workflow} · {formatDate(x.startedAt.slice(0, 10))} {new Date(x.startedAt).toTimeString().slice(0, 5)} →</button>;
+        })}</dd></> : null}
         <dt>{t('receipts.file')}</dt><dd className="mono" style={{ fontSize: 11.5 }} title={r.filename}>{r.filename}</dd>
         <dt>{t('receipts.size')}</dt><dd className="mono">{kb}</dd>
         <dt>{t('receipts.sha')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{r.id}…</dd>

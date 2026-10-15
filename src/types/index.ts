@@ -53,6 +53,8 @@ export interface Receipt {
   /** Who set the kind: a rule (named in kindRule) or a person. A person's kind is never overwritten. */
   kindBy?: 'rule' | 'human';
   kindRule?: string;
+  /** The workflow run that took it up (src/workflows/engine.ts): the receipt's page links to it. */
+  run?: string;
 }
 
 /** A PDF in the workspace's inbox that no receipt holds yet (GET /api/inbox). */

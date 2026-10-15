@@ -311,7 +311,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
           const r = fn(b);
           for (const e of b.journalEntries) if (!had.entries.has(e.id)) { e.run = run.id; wrote.entries.push(e.id); }
           for (const m of b.mappings) if (!had.mappings.has(link(m))) { m.run = run.id; wrote.mappings.push(link(m)); }
-          for (const x of b.receipts) if (!had.receipts.has(x.id)) wrote.receipts.push(x.id);
+          for (const x of b.receipts) if (!had.receipts.has(x.id)) { x.run = run.id; wrote.receipts.push(x.id); }
           return r;
         });
         if (live) saveBooks(ws, books);

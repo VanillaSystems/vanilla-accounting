@@ -700,6 +700,7 @@ export default {
     'receipts.openEntry': 'Show the entry',
     'receipts.openPayment': 'Open the payment and its statement',
     'receipts.origin': 'Origin',
+    'receipts.run': 'Run',
     'receipts.originArchive': 'Archive',
     'receipts.originInbox': 'Inbox · beleg-import',
     'receipts.other': 'Other',
