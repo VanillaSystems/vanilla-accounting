@@ -54,7 +54,7 @@ No deviation beyond S1: the lists, details, figures and links match.
 
 | # | Mockup | Built | Status |
 |---|---|---|---|
-| F1 | Rechnungslayout: the editor (language, font, colour, logo, place, size, window, elements) beside a live A4 preview | Without an `invoicing` block in `belege.workspace.yaml`, only a sentence about the missing block | open |
+| F1 | Rechnungslayout: the editor (language, font, colour, logo, place, size, window, elements) beside a live A4 preview | as the mockup; without an invoicing block, «Rechnungen einrichten» first asks where customers pay (with the IBAN when it is missing), the revenue account and the term, then the editor shows | fixed |
 | F2 | — | E-Mail-Versand and Quellen in the list (later units) | decided |
 
 ## Automatisierung

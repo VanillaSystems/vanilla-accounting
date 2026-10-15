@@ -169,3 +169,12 @@ test('API: a logo upload is stored by its checksum and becomes the layout\'s log
     api.stop();
   }
 });
+
+test('Rechnungen einrichten: setup writes an invoicing block the reader takes, with the layout in the same change; a second setup is refused', () => {
+  const setup = { currency: 'CHF', account: '1021', revenueAccount: '3400', paymentTermsDays: 30 };
+  const { text } = patchManifestText(MANIFEST, { invoicing: { setup, layout: { font: 'Inter' } } }, 'm.yaml');
+  const doc = parse(text) as { invoicing: Record<string, unknown> };
+  assert.deepEqual(doc.invoicing, { payTo: { CHF: { account: '1021' } }, revenueAccount: '3400', paymentTermsDays: 30, layout: { font: 'Inter' } });
+  assert.ok(text.startsWith('# Muster GmbH: hand-kept, keep this comment'), 'the rest of the file stays');
+  assert.throws(() => patchManifestText(text, { invoicing: { setup } }, 'm.yaml'), /set up already/);
+});

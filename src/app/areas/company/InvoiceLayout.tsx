@@ -13,6 +13,7 @@ import type { InvoicingPatch } from '../../../workspace/manifest-write.js';
 import { api, errorText } from '../../lib/api.js';
 import { reloadWorkspace } from '../../hooks/use-workspace.js';
 import { localToday } from '../../../accounting/periods.js';
+import { getAccountMap } from '../../lib/accounts.js';
 import { usePersistedFlag } from '../../shell/prefs.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
@@ -35,7 +36,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   const [guide, setGuide] = usePersistedFlag('invoices.windowGuide', true);
   const [local, setLocal] = useState<InvoiceLayout | undefined>(settings?.layout);
   const load = useInvoices();
-  if (!settings || !local) return <p className="m">{t('invoiceLayout.noInvoicing')}</p>;
+  if (!settings || !local) return <InvoicingSetup ws={ws} nav={nav} canEdit={canEdit} onDone={(l) => setLocal(l)} />;
   const layout = local;
 
   async function patch(change: InvoicingPatch, next?: InvoiceLayout) {
@@ -148,4 +149,49 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
   }, [d, ws, layout, lang, texts.intro, texts.closing, guide, canEdit]);
   if (!data) return null;
   return <Sheet data={data} editing={canEdit} className="lkprev" onEdit={(key, value, final) => { if (final && (key === 'intro' || key === 'closing')) onText(key, value); }} />;
+}
+
+/**
+ * Before the first invoice: the three things an invoice needs that the layout does not hold, with
+ * the likely answers filled in (the CHF bank account, a revenue account). «Rechnungen einrichten»
+ * writes the invoicing block; the layout editor takes over.
+ */
+function InvoicingSetup({ ws, nav, canEdit, onDone }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; onDone(layout: InvoiceLayout | undefined): void }) {
+  const banks = ws.bankAccounts.filter((a) => a.bank !== 'manual');
+  const names = getAccountMap();
+  const revenue = Object.keys(names).filter((n) => n.startsWith('3')).sort();
+  const [account, setAccount] = useState((banks.find((a) => a.currency === 'CHF') ?? banks[0])?.account ?? '');
+  const [revenueAccount, setRevenue] = useState(revenue.find((n) => n === '3400') ?? revenue[0] ?? '');
+  const [days, setDays] = useState('30');
+  const [iban, setIban] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!banks.length) return <p className="m">{t('invoiceLayout.needsBank')}</p>;
+  async function setup() {
+    setBusy(true);
+    try {
+      const bank = banks.find((a) => a.account === account)!;
+      const info = await api.patchWorkspace({ ...(bank.iban ? {} : { banks: [{ bank: bank.bank, currency: bank.currency, iban: iban.trim() }] }), invoicing: { setup: { currency: bank.currency, account, revenueAccount, paymentTermsDays: Number(days) } } });
+      reloadWorkspace();
+      onDone(info.invoicing?.layout);
+      nav.toast(t('invoiceLayout.setupDone'));
+    } catch (e) { nav.toast(errorText(e)); } finally { setBusy(false); }
+  }
+  return (
+    <div className="invsetup">
+      <p className="lead">{t('invoiceLayout.setupLead')}</p>
+      <label>{t('invoiceLayout.payTo')}
+        <select value={account} onChange={(e) => setAccount(e.target.value)} disabled={!canEdit}>
+          {banks.map((a) => <option key={a.account} value={a.account}>{a.label} · {a.currency}{a.iban ? ` · ${a.iban}` : ''}</option>)}
+        </select>
+      </label>
+      {!banks.find((a) => a.account === account)?.iban ? <label>{t('invoiceLayout.iban')}<input className="mono wide" value={iban} placeholder="CH00 0000 0000 0000 0000 0" onChange={(e) => setIban(e.target.value)} disabled={!canEdit} /></label> : null}
+      <label>{t('invoiceLayout.revenue')}
+        <select value={revenueAccount} onChange={(e) => setRevenue(e.target.value)} disabled={!canEdit}>
+          {revenue.map((n) => <option key={n} value={n}>{n} {names[n]}</option>)}
+        </select>
+      </label>
+      <label>{t('invoiceLayout.days')}<input className="mono" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ''))} disabled={!canEdit} /></label>
+      <button type="button" className="btn primary" disabled={!canEdit || busy || !account || !revenueAccount || !days || (!banks.find((a) => a.account === account)?.iban && !iban.trim())} onClick={() => void setup()}>{t('invoiceLayout.setup')}</button>
+    </div>
+  );
 }

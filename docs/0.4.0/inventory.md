@@ -151,7 +151,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/codes/codes.tsx` | MWST 1, Ziffer 1 |
 | `src/app/areas/codes/model.ts` | CHF 1 |
 | `src/app/areas/codes/vat-card.tsx` | MWST 1, Ziffer 1 |
-| `src/app/areas/company/InvoiceLayout.tsx` | CHF 1 |
+| `src/app/areas/company/InvoiceLayout.tsx` | CHF 3 |
 | `src/app/areas/export/state.ts` | MWST 1 |
 | `src/app/areas/index.ts` | MWST 1 |
 | `src/app/areas/invoices/Detail.tsx` | CHF 1, QR-bill 1 |

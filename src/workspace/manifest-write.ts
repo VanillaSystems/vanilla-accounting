@@ -43,6 +43,8 @@ export interface NewBank {
 
 /** Firma › Rechnungslayout: the invoicing block's layout and its texts per language; null removes a field (the app's default again). */
 export interface InvoicingPatch {
+  /** Sets invoicing up when the block is missing: the account customers pay to (in its currency), the revenue account, the payment term. */
+  setup?: { currency: string; account: string; revenueAccount: string; paymentTermsDays: number };
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
   texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
 }
@@ -107,6 +109,11 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
   }
   const inv = patch.invoicing;
   if (inv) {
+    if (inv.setup) {
+      if (isMap(doc.get('invoicing'))) throw new WorkspaceError(`${path}: invoicing is set up already`);
+      const s = inv.setup;
+      doc.set('invoicing', doc.createNode({ payTo: { [s.currency]: { account: s.account } }, revenueAccount: s.revenueAccount, paymentTermsDays: s.paymentTermsDays }));
+    }
     if (!isMap(doc.get('invoicing'))) throw new WorkspaceError(`${path} has no invoicing block: add one (payTo, revenueAccount) before the layout`);
     const { show, ...layout } = inv.layout ?? {};
     for (const [key, value] of Object.entries(layout)) set(doc, ['invoicing', 'layout', key], value);

@@ -82,8 +82,18 @@ function newBank(raw: unknown): NewBank {
 
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['layout', 'texts']);
+  const b = patchBody(raw, ['setup', 'layout', 'texts']);
   const out: InvoicingPatch = {};
+  if (b.setup !== undefined) {
+    const s = patchBody(b.setup, ['currency', 'account', 'revenueAccount', 'paymentTermsDays']);
+    // Its IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
+    const bank = WS.bankAccounts.find((a) => a.account === stringField(s, 'account') && a.bank !== 'manual');
+    if (!bank) throw new RequestError(400, 'Das Konto, auf das Kunden zahlen, muss ein Bankkonto sein.');
+    const days = Number(s.paymentTermsDays ?? 30);
+    if (!Number.isInteger(days) || days < 1 || days > 120) throw new RequestError(400, 'Zahlungsfrist: 1 bis 120 Tage.');
+    if (!/^\d{3,6}$/.test(stringField(s, 'revenueAccount'))) throw new RequestError(400, 'Ertragskonto: eine Kontonummer.');
+    out.setup = { currency: bank.currency, account: bank.account, revenueAccount: stringField(s, 'revenueAccount'), paymentTermsDays: days };
+  }
   if (b.layout !== undefined) {
     const l = patchBody(b.layout, ['font', 'accent', 'window', 'logo', 'logoPosition', 'logoSize', 'show']);
     const layout: NonNullable<InvoicingPatch['layout']> = {};
