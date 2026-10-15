@@ -143,6 +143,42 @@ test('receipt: closed period refuses the whole edit (403)', async () => {
   assert.ok(existsSync(join(receiptsDir, 'closed.pdf')) && !existsSync(join(receiptsDir, 'neu.pdf')));
 });
 
+const VAT = { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 1.62 }], vatId: ' CHE-111.222.333 ' };
+
+test('receipt: VAT facts set by hand are a person\'s; an undo puts back facts the AI read, null leaves none', async () => {
+  const { status, json } = await api.send('PATCH', '/api/receipts/ro', { vat: VAT });
+  assert.equal(status, 200, String(json.error));
+  const ro = () => readIndex().receipts.find((r) => r.id === 'ro')!;
+  assert.deepEqual([ro().hasSwissVat, ro().vatSummary, ro().vatId, ro().vatBy], [true, VAT.vatSummary, 'CHE-111.222.333', 'human']);
+  assert.deepEqual(json.receipt, ro(), 'the response is the saved receipt');
+  assert.deepEqual(changedFields(readIndex()), ['receipts[ro].hasSwissVat', 'receipts[ro].vatBy', 'receipts[ro].vatId', 'receipts[ro].vatSummary'], 'a booking that is not the classifier\'s stays');
+
+  assert.equal((await api.send('PATCH', '/api/receipts/ro', { vat: { hasSwissVat: false }, vatBy: null })).status, 200);
+  assert.deepEqual([ro().hasSwissVat, ro().vatSummary, ro().vatId, ro().vatBy], [false, [], undefined, undefined]);
+  assert.equal((await api.send('PATCH', '/api/receipts/ro', { vat: null })).status, 200);
+  assert.deepEqual(changedFields(readIndex()), [], 'no facts: as read in, the VAT step reads it again');
+});
+
+test('receipt: VAT facts are checked at the door (400), nothing changes', async () => {
+  const before = JSON.stringify(booksOnDisk(api.ws));
+  for (const vat of [
+    { hasSwissVat: true, vatSummary: [] },
+    { hasSwissVat: true, vatSummary: [{ ratePercent: 19, vat: 3.8 }] },
+    { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 'viel' }] },
+    { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 1 }, { ratePercent: 8.1, vat: 2 }] },
+    { hasSwissVat: false, vatSummary: [{ ratePercent: 8.1, vat: 1 }] },
+    { vatSummary: [] },
+  ]) assert.equal((await api.send('PATCH', '/api/receipts/ro', { description: 'neu', vat })).status, 400, JSON.stringify(vat));
+  assert.equal((await api.send('PATCH', '/api/receipts/ro', { vatBy: null })).status, 400, 'vatBy only with facts');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
+});
+
+test('receipt: VAT facts of a receipt in a filed quarter are refused (403)', async () => {
+  const before = JSON.stringify(booksOnDisk(api.ws));
+  assert.equal((await api.send('PATCH', '/api/receipts/rc', { vat: VAT })).status, 403);
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
+});
+
 test('transaction: all sent fields land in one write', async () => {
   const { status, json } = await api.send('PATCH', '/api/transactions/O1', { description: '  Neu  ', remarks: 'Notiz', noReceiptNeeded: true });
   assert.equal(status, 200, String(json.error));

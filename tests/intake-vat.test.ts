@@ -23,12 +23,13 @@ const NEW: Receipt = {
   fileSize: 2000, indexedAt: '2026-08-01T00:00:00.000Z', location: 'archived',
 };
 
-function run(answer: () => Promise<string>, force = false) {
+/** The step on the demo's books with `receipt` added; `answer` sees the books, as a person editing meanwhile would. */
+function run(answer: (books: Books) => Promise<string>, force = false, receipt: Receipt = NEW) {
   const books: Books = JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT))));
-  books.receipts.push(structuredClone(NEW));
+  books.receipts.push(structuredClone(receipt));
   const port: BooksPort = { read: () => structuredClone(books), update: (fn) => fn(books) };
   const asked: string[] = [];
-  const ask: Ask = async (prompt) => { asked.push(prompt); return answer(); };
+  const ask: Ask = async (prompt) => { asked.push(prompt); return answer(books); };
   const before = structuredClone(books.receipts);
   return vatStep({ force })({ ws: undefined as never, books: port, ask, progress: () => {}, log: () => {} })
     .then((result) => ({ result, before, after: books.receipts, asked }));
@@ -65,6 +66,23 @@ test('facts the books already hold are not asked for again; a receipt without th
   assert.equal(fresh.vatId, 'CHE-111.222.333');
   assert.ok(fresh.vatExtractedAt);
   assert.deepEqual(result.notes, []);
+});
+
+test('facts a person set are never read again: not with --force, and not when she sets them while the model reads', async () => {
+  const answer = JSON.stringify({ vatId: 'CHE-999.888.777', currency: 'CHF', total: 10.8, hasSwissVat: true, vatSummary: [{ ratePercent: 2.6, vat: 0.27 }] });
+  const mine: Receipt = { ...NEW, hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 0.81 }], vatBy: 'human' };
+  for (const force of [false, true]) {
+    const { after, asked } = await run(async () => answer, force, mine);
+    assert.equal(asked.some((p) => p.includes('Kaffee AG')), false, `not asked${force ? ' (--force)' : ''}`);
+    const r = after.find((x) => x.id === NEW.id)!;
+    assert.deepEqual([facts(r), r.vatBy], [facts(mine), 'human']);
+  }
+  const { after } = await run(async (books) => {
+    Object.assign(books.receipts.find((x) => x.id === NEW.id)!, { hasSwissVat: false, vatSummary: [], vatBy: 'human' });
+    return answer;
+  }, true);
+  const r = after.find((x) => x.id === NEW.id)!;
+  assert.deepEqual([r.hasSwissVat, r.vatSummary, r.vatId, r.vatBy], [false, [], undefined, 'human'], 'her facts win over the answer that came after');
 });
 
 test('a scan too poor to read is set aside once, with a note, and not taken up again; a receipt of a filed quarter is never taken up', async () => {

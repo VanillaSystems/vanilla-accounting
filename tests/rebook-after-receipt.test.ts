@@ -1,11 +1,12 @@
 /**
  * A payment booked before its receipt arrived is booked again once the receipt is linked
  * (src/accounting/classify-force.ts entriesWithoutTheirReceipts): the usability test of
- * 2026-10-15 lost every receipt's VAT because the statement was booked first.
+ * 2026-10-15 lost every receipt's VAT because the statement was booked first. So is a payment whose
+ * receipt's VAT facts a person corrected (unbookForNewFacts).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { entriesWithoutTheirReceipts } from '../src/accounting/classify-force.js';
+import { entriesWithoutTheirReceipts, unbookForNewFacts } from '../src/accounting/classify-force.js';
 import type { JournalEntry } from '../src/types/index.js';
 
 const je = (ref: string, x: Partial<JournalEntry> = {}): JournalEntry =>
@@ -23,4 +24,23 @@ test('only the classifier\'s open bookings whose linked receipts changed are boo
   const mappings = ['late', 'same', 'old', 'hand', 'filed'].map((ref) => ({ transactionRef: ref, receiptId: `r-${ref}` }));
   const refs = new Set(entries.map((e) => e.transactionRef));
   assert.deepEqual(entriesWithoutTheirReceipts(entries, mappings, refs, '2026-06-30').map((e) => e.transactionRef).sort(), ['gone', 'late']);
+});
+
+test('new VAT facts take away only the classifier\'s own open bookings of the receipt\'s payments', () => {
+  const entries = [
+    je('auto', { receipts: ['r'] }),                 // the classifier's, open: booked again
+    je('hand', { origin: 'manual' }),                // a person's booking: left alone
+    je('mixed'), je('mixed', { id: 'mixed-2', origin: 'manual' }), // one of them a person's: the payment stays as it is
+    je('legacy', { origin: undefined }),             // booked before origin existed: left alone
+    je('filed', { date: '2026-03-10' }),             // a filed quarter: left alone
+    je('other'),                                     // a payment of another receipt
+  ];
+  const books = {
+    mappings: ['auto', 'hand', 'mixed', 'legacy', 'filed'].map((ref) => ({ transactionRef: ref, receiptId: 'r' })).concat({ transactionRef: 'other', receiptId: 'x' }),
+    journalEntries: entries,
+    transactions: entries.map((e) => ({ ref: e.transactionRef })),
+    config: { closedThrough: '2026-06-30' },
+  };
+  assert.deepEqual(unbookForNewFacts(books, 'r'), ['auto']);
+  assert.deepEqual(books.journalEntries.map((e) => e.id), entries.filter((e) => e.transactionRef !== 'auto').map((e) => e.id));
 });

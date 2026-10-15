@@ -134,6 +134,7 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     assert.equal(made.length, 1);
     const after = (await books()).receipts.find((r) => r.id === open.id)!;
     assert.deepEqual([after.date, after.amount, after.currency, after.hasSwissVat, after.vatSummary, after.vatId], ['2026-06-28', 108.1, 'CHF', true, vat.vatSummary, vat.vatId]);
+    assert.equal(after.vatBy, 'human', 'she asked for them: the VAT step never reads them over');
     const id = (events[0] as { id: string }).id;
     const stored = (await api.send('GET', `/api/assistant/${id}`)).json.turns as Array<{ role: string; text: string; changes?: MadeChange[] }>;
     assert.doesNotMatch(stored[1].text, /vanilla-changes/, 'the person never sees the block');
@@ -141,7 +142,7 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     const undo = await api.send('POST', `/api/assistant/${id}/changes/${made[0].id}/undo`);
     assert.equal(undo.status, 200);
     const back = (await books()).receipts.find((r) => r.id === open.id)!;
-    for (const k of ['date', 'amount', 'currency', 'hasSwissVat', 'vatSummary', 'vatId'] as const) assert.deepEqual(back[k], open[k], k);
+    for (const k of ['date', 'amount', 'currency', 'hasSwissVat', 'vatSummary', 'vatId', 'lineItems', 'vatBy'] as const) assert.deepEqual(back[k], open[k], k);
 
     writeFileSync(changes, JSON.stringify([{ kind: 'receipt', id: open.id, set: { description: 'neu' } }, { kind: 'receipt', id: filed.id, set: { amount: 1, currency: 'CHF' } }]));
     const refused = await post({ text: 'Beides ändern', language: 'de', context: [] });

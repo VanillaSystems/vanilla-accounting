@@ -9,8 +9,10 @@ import { randomUUID } from 'node:crypto';
 import { Router, type Response } from 'express';
 import { RequestError, WS, refusalOf, updateBooks } from '../books.js';
 import { listConversations, readConversation, RefusedChanges, sendMessage, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
-import type { AssistantEvent, AssistantSend, ContextRef } from '../../types/assistant.js';
-import { applyAnswer, applyChange } from '../edits.js';
+import type { AssistantEvent, AssistantSend, BookChange, ContextRef } from '../../types/assistant.js';
+import type { Books } from '../../books/store.js';
+import { applyAnswer, applyChange, unbookedPayments } from '../edits.js';
+import { bookAgain } from './automation.js';
 
 export const router = Router();
 
@@ -57,10 +59,24 @@ router.post('/api/assistant', async (req, res) => {
   res.end();
 });
 
+/** Receipts whose VAT facts changed took their payments' bookings away (src/server/edits.ts setReceipt): the inbox run books them again. */
+function bookedAgain(books: Books, changes: readonly BookChange[]): () => void {
+  const receipts = changes.flatMap((c) => (c.kind === 'receipt' && c.set.vat ? [c.id] : []));
+  const file = books.receipts.find((r) => receipts.includes(r.id))?.filename;
+  return file && unbookedPayments(books, receipts).length ? () => void bookAgain(file) : () => {};
+}
+
 /** All of an answer's changes in one write of the books: a refused one leaves the books as they were. */
 const apply: ApplyChanges = (changes) => {
   try {
-    return updateBooks((books) => applyAnswer(books, changes, WS.bankAccounts).map((m) => ({ id: randomUUID().slice(0, 8), ...m })));
+    let after = () => {};
+    const made = updateBooks((books) => {
+      const out = applyAnswer(books, changes, WS.bankAccounts).map((m) => ({ id: randomUUID().slice(0, 8), ...m }));
+      after = bookedAgain(books, changes);
+      return out;
+    });
+    after();
+    return made;
   } catch (e) {
     throw new RefusedChanges((e as Error).message, refusalOf(e));
   }
@@ -68,7 +84,12 @@ const apply: ApplyChanges = (changes) => {
 
 /** Undoes one change, with the others of its answer on the same payment (newest first), in one write. */
 router.post('/api/assistant/:id/changes/:change/undo', (req, res) => {
-  const made = undoChange(WS, req.params.id, req.params.change, (undos) => updateBooks((books) => { for (const c of undos) applyChange(books, c); }));
+  let after = () => {};
+  const made = undoChange(WS, req.params.id, req.params.change, (undos) => updateBooks((books) => {
+    for (const c of undos) applyChange(books, c);
+    after = bookedAgain(books, undos);
+  }));
   if (!made) throw new RequestError(404, 'Diese Änderung gibt es nicht.');
+  after();
   res.json(made);
 });

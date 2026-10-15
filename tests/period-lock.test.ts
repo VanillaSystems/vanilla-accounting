@@ -68,6 +68,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'PATCH', path: '/api/receipts/rc', body: { filename: 'neu.pdf' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { kind: 'noise' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { date: null }, status: 403 },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { vat: { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 0.81 }] } }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { amount: null }, status: 403 },
   { method: 'POST', path: '/api/vision/extract', body: { receiptId: 'rc' }, status: 403 },
   { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'ro', transactionRef: 'C1' }, status: 403 },

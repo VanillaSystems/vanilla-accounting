@@ -15,13 +15,18 @@ export type ContextRef =
   | { kind: 'workflow'; id: string; label: string }
   | { kind: 'file'; id: string; label: string };
 
-/** A receipt's facts as a person sets them; `null` clears a date or an amount, `vat` replaces the VAT facts. */
+/**
+ * A receipt's facts as a person sets them; `null` clears a date or an amount, `vat` replaces the
+ * VAT facts (as a person's, vatBy 'human'). An undo puts back the facts as they were: with their
+ * line items, and `vatBy: null` for facts the AI had read.
+ */
 export interface ReceiptSet {
   date?: string | null;
   amount?: number | null;
   currency?: string;
   description?: string;
-  vat?: Pick<Receipt, 'hasSwissVat' | 'vatSummary' | 'vatId'>;
+  vat?: Pick<Receipt, 'hasSwissVat' | 'vatSummary' | 'vatId' | 'lineItems'>;
+  vatBy?: null;
 }
 
 /** A booking's fields as a change sets them; `origin` only from an undo, `null` for a booking that had none. */

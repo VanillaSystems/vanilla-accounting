@@ -7,7 +7,8 @@
  * Takes up only receipts without VAT facts (all of them with `force`), never one of a filed quarter
  * and never one waiting for a vision read: a text too poor to read is flagged so once (with a
  * note naming it) and stays out until a vision read gives it text. Facts the books wrote
- * themselves (an invoice's receipt, a tutti purchase) carry no vatExtractedAt and stay. A text
+ * themselves (an invoice's receipt, a tutti purchase) carry no vatExtractedAt and stay, and facts a
+ * person set (vatBy 'human', src/accounting/vat-facts.ts) are never taken up, with `force` too. A text
  * without any VAT indicator is recorded hasSwissVat=false without a model call, on a receipt
  * that has no facts. Only a model answer that parses as VAT facts replaces facts.
  */
@@ -46,9 +47,9 @@ export function filedReceipt(books: Pick<Books, 'config' | 'mappings' | 'transac
   return dates.length ? dates.every(lock.isClosed) : !!r.date && lock.isClosed(r.date);
 }
 
-/** The receipts the step takes up: what the run view lists as read is what the step works on. */
+/** The receipts the step takes up: what the run view lists as read is what the step works on. Facts a person set are never taken up, not even with `force`. */
 export const vatCandidates = (books: Books, force = false): Receipt[] =>
-  books.receipts.filter((r) => force || (!hasFacts(r) && !r.needsVisionReview && !filedReceipt(books, r)));
+  books.receipts.filter((r) => r.vatBy !== 'human' && (force || (!hasFacts(r) && !r.needsVisionReview && !filedReceipt(books, r))));
 
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
@@ -72,7 +73,8 @@ export function vatStep({ force = false } = {}): StepRun {
     const apply = (items: Array<[Receipt, Facts]>, replace: boolean) => books.update((index) => {
       for (const [was, facts] of items) {
         const r = index.receipts.find((x) => x.id === was.id);
-        if (r && r.extractedText === was.extractedText && (replace || !hasFacts(r))) Object.assign(r, facts);
+        // A person may have set the facts while the model read them.
+        if (r && r.vatBy !== 'human' && r.extractedText === was.extractedText && (replace || !hasFacts(r))) Object.assign(r, facts);
       }
     });
 

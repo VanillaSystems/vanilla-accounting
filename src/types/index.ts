@@ -49,6 +49,8 @@ export interface Receipt {
   vatSummary?: VatRateGroup[]; // the receipt's MWST block, grouped by rate
   lineItems?: ReceiptLine[]; // best-effort itemization (only when multi-account/rate)
   vatExtractedAt?: string; // ISO timestamp — idempotency guard for extract-vat
+  /** A person set the VAT facts (by hand or through the AI sidebar): the VAT step never overwrites them. */
+  vatBy?: 'human';
   kind?: ReceiptKind;
   /** Who set the kind: a rule (named in kindRule) or a person. A person's kind is never overwritten. */
   kindBy?: 'rule' | 'human';
@@ -266,13 +268,17 @@ export interface BankTransaction {
   counterparty?: string;
 }
 
+/** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */
+export interface VatFacts { hasSwissVat: boolean; vatSummary: VatRateGroup[]; vatId?: string }
+
 /**
  * The body of PATCH /api/receipts/:id. amount and currency go together; null clears a date, an
- * amount or a kind (an undo puts back what was not there); an empty description or remark clears
- * it. A kind sent here is a person's (kindBy 'human').
+ * amount, a kind or the VAT facts (an undo puts back what was not there); an empty description or
+ * remark clears it. A kind or VAT facts sent here are a person's (kindBy, vatBy 'human'); only an
+ * undo sends `vatBy: null` with them, to put back facts the AI read.
  */
 export type ReceiptPatch = Partial<Pick<Receipt, 'filename' | 'currency' | 'description' | 'remarks'>>
-  & { date?: string | null; amount?: number | null; kind?: ReceiptKind | null };
+  & { date?: string | null; amount?: number | null; kind?: ReceiptKind | null; vat?: VatFacts | null; vatBy?: null };
 
 /** The body of PATCH /api/transactions/:ref. An empty remark or noReceiptNeeded false clears the field. */
 export type TransactionPatch = Partial<Pick<BankTransaction, 'description' | 'remarks' | 'noReceiptNeeded'>>;

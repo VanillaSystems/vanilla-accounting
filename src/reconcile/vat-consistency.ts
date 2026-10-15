@@ -29,7 +29,7 @@ export function auditVat(index: Index): VatAuditReport {
     const recs = index.mappings
       .filter((m) => m.transactionRef === tx.ref)
       .map((m) => index.receipts.find((r) => r.id === m.receiptId))
-      .filter((r): r is NonNullable<typeof r> => !!r && r.vatExtractedAt != null);
+      .filter((r): r is NonNullable<typeof r> => !!r && (r.vatExtractedAt != null || r.vatBy === 'human'));
     receiptsByTx.set(tx.ref, recs);
   }
 

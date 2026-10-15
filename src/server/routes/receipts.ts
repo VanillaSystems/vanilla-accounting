@@ -3,6 +3,8 @@ import { renameSync, existsSync, createReadStream, mkdirSync, readFileSync, read
 import { basename, dirname, join, relative } from 'node:path';
 import { RECEIPT_KINDS, type Mapping, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
+import { parseVatFacts } from '../../accounting/vat-facts.js';
+import { setReceipt, unbookedPayments } from '../edits.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
@@ -11,9 +13,11 @@ import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateB
 
 export const router = Router();
 
-/** An empty description or remark clears it; null clears a date, an amount or a kind. */
+const refuse = (what: string): never => { throw new RequestError(400, `${what}.`); };
+
+/** An empty description or remark clears it; null clears a date, an amount, a kind or the VAT facts. */
 function parseReceiptPatch(body: unknown): ReceiptPatch {
-  const b = patchBody(body, ['filename', 'date', 'amount', 'currency', 'description', 'remarks', 'kind']);
+  const b = patchBody(body, ['filename', 'date', 'amount', 'currency', 'description', 'remarks', 'kind', 'vat', 'vatBy']);
   const patch: ReceiptPatch = {};
   if ('filename' in b) {
     const filename = stringField(b, 'filename').trim();
@@ -49,11 +53,16 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
     if (b.kind !== null && !RECEIPT_KINDS.includes(b.kind as ReceiptKind)) throw new RequestError(400, `kind muss eines von ${RECEIPT_KINDS.join(', ')} sein.`);
     patch.kind = b.kind as ReceiptKind | null;
   }
+  if ('vat' in b) patch.vat = b.vat === null ? null : parseVatFacts(b.vat, refuse);
+  if ('vatBy' in b) {
+    if (b.vatBy !== null || !patch.vat) throw new RequestError(400, 'vatBy nur als null, mit vat.');
+    patch.vatBy = null;
+  }
   return patch;
 }
 
-/** The receipt with the patch applied: null removes a field, a kind is a person's. */
-function patched(receipt: Receipt, { date, amount, kind, ...rest }: ReceiptPatch): Receipt {
+/** The receipt with the patch applied: null removes a field, a kind is a person's. The VAT facts go through setReceipt. */
+function patched(receipt: Receipt, { date, amount, kind, vat: _vat, vatBy: _vatBy, ...rest }: ReceiptPatch): Receipt {
   const out: Receipt = { ...receipt, ...rest };
   if (date !== undefined) out.date = date ?? undefined;
   if (amount !== undefined) out.amount = amount ?? undefined;
@@ -172,26 +181,35 @@ router.post('/api/vision/extract', async (req, res) => {
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and
-// a file rename is undone if the books are not saved, so a receipt is never half-edited.
-router.patch('/api/receipts/:id', (req, res) => {
+// a file rename is undone if the books are not saved, so a receipt is never half-edited. New VAT
+// facts take the classifier's bookings of the receipt's payments away; the inbox run books them again.
+router.patch('/api/receipts/:id', async (req, res) => {
   const patch = parseReceiptPatch(req.body);
   const { id } = req.params;
   let undoRename = () => {};
+  let again: string[] = [];
+  let receipt: Receipt;
   try {
-    withBooks(res, (books) => {
+    receipt = updateBooks((books) => {
       const idx = books.receipts.findIndex((r) => r.id === id);
       if (idx === -1) throw new RequestError(404, 'Receipt not found');
       assertOpen(books, receiptDates(books, id), 'editReceipt');
 
-      const receipt = books.receipts[idx];
-      if (patch.filename !== undefined) undoRename = renameReceiptFile(receiptPath(books, receipt), patch.filename);
-      books.receipts[idx] = patched(receipt, patch);
-      return { ok: true, receipt: books.receipts[idx] };
+      const was = books.receipts[idx];
+      if (patch.filename !== undefined) undoRename = renameReceiptFile(receiptPath(books, was), patch.filename);
+      books.receipts[idx] = patched(was, patch);
+      if (patch.vat !== undefined) {
+        setReceipt(books, id, { vat: patch.vat ?? { lineItems: undefined }, ...(patch.vat === null || patch.vatBy === null ? { vatBy: null } : {}) });
+        again = unbookedPayments(books, [id]);
+      }
+      return books.receipts[idx];
     });
   } catch (err) {
     undoRename();
     throw err;
   }
+  if (again.length) await bookAgain(receipt.filename);
+  res.json({ ok: true, receipt });
 });
 
 /** Renames the receipt's PDF on disk (a missing file is left alone) and returns the undo. A name another year folder holds is a clash too. */

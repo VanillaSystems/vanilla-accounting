@@ -4,17 +4,17 @@
  * that undoes it.
  */
 import { randomBytes } from 'node:crypto';
-import type { Books } from '../books/store.js';
+import { periodLock, type Books } from '../books/store.js';
 import { nextManualRef } from '../books/refs.js';
 import { isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { paymentDates, paymentSides } from '../accounting/payment-entries.js';
 import { baseCurrency, filing } from '../engines/index.js';
+import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
+import { unbookForNewFacts } from '../accounting/classify-force.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
-
-const VAT_FACTS = ['hasSwissVat', 'vatSummary', 'vatId'] as const;
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -37,11 +37,20 @@ export function setReceipt(books: Books, id: string, set: ReceiptSet): BookChang
   if ('currency' in set) { before.currency = r.currency; r.currency = set.currency; }
   if ('description' in set) { before.description = r.description ?? ''; r.description = set.description || undefined; }
   if (set.vat) {
-    before.vat = Object.fromEntries(VAT_FACTS.map((k) => [k, r[k]]));
-    for (const k of VAT_FACTS) delete r[k];
-    Object.assign(r, Object.fromEntries(Object.entries(set.vat).filter(([, v]) => v !== undefined)));
+    const { vatBy, ...was } = heldFacts(r);
+    before.vat = was;
+    if (!vatBy) before.vatBy = null;
+    if (setVatFacts(r, set.vat, set.vatBy === null ? null : 'human')) unbookForNewFacts(books, id);
   }
   return { kind: 'receipt', id, set: before };
+}
+
+/** The open payments of these receipts without a booking (new VAT facts took theirs away): the inbox run books them. */
+export function unbookedPayments(books: Books, receipts: readonly string[]): string[] {
+  const lock = periodLock(books);
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const refs = new Set(books.mappings.filter((m) => receipts.includes(m.receiptId)).map((m) => m.transactionRef));
+  return books.transactions.filter((t) => refs.has(t.ref) && !booked.has(t.ref) && !lock.isClosed(t.date)).map((t) => t.ref);
 }
 
 export function link(books: Books, receipt: string, payment: string): BookChange | undefined {

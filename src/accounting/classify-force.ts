@@ -71,6 +71,25 @@ export function removeReceipt(
   return [...new Set([...stale].map((e) => e.transactionRef))];
 }
 
+/**
+ * A person corrected a receipt's VAT facts: the classifier's open-period entries of its payments
+ * were booked with the facts it had, so they go, under the same rules as --force but only where
+ * every entry is the classifier's (origin classify). Returns the payments left without an entry:
+ * the inbox run's book step books them again with the new facts.
+ */
+export function unbookForNewFacts(
+  books: { mappings: Mapping[]; journalEntries: JournalEntry[]; transactions: ReadonlyArray<{ ref: string }>; config?: { closedThrough?: string } },
+  id: string,
+): string[] {
+  const linked = new Set(books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef));
+  const refs = new Set(books.transactions.map((t) => t.ref).filter((ref) => linked.has(ref)));
+  const removable = entriesForceMayRemove(books.journalEntries, refs, books.config?.closedThrough);
+  const notOwn = new Set(removable.filter((e) => e.origin !== 'classify').map((e) => e.transactionRef));
+  const stale = new Set(removable.filter((e) => !notOwn.has(e.transactionRef)));
+  books.journalEntries = books.journalEntries.filter((e) => !stale.has(e));
+  return [...new Set([...stale].map((e) => e.transactionRef))];
+}
+
 function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined): boolean {
   if (closedThrough && e.date <= closedThrough) return false;
   if (e.corrects) return false;

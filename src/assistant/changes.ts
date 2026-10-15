@@ -4,6 +4,7 @@
  * change is checked here, at the edge, before src/server/edits.ts applies it.
  */
 import type { BookChange, EntrySet, NewEntry, ReceiptSet } from '../types/assistant.js';
+import { parseVatFacts } from '../accounting/vat-facts.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 
@@ -36,16 +37,7 @@ function receiptSet(v: unknown): ReceiptSet {
   if ('amount' in s) out.amount = s.amount === null ? null : num(s.amount, 'amount');
   if ('currency' in s) { const c = str(s.currency, 'currency').toUpperCase(); if (!/^[A-Z]{3}$/.test(c)) throw new ChangesError('currency'); out.currency = c; }
   if ('description' in s) out.description = typeof s.description === 'string' ? s.description : '';
-  if ('vat' in s) {
-    const v = obj(s.vat, 'vat');
-    if (typeof v.hasSwissVat !== 'boolean') throw new ChangesError('vat.hasSwissVat');
-    const groups = Array.isArray(v.vatSummary) ? v.vatSummary.map((g) => {
-      const o = obj(g, 'vatSummary');
-      return { ratePercent: num(o.ratePercent, 'ratePercent'), vat: num(o.vat, 'vat'), ...(o.net !== undefined ? { net: num(o.net, 'net') } : {}), ...(o.gross !== undefined ? { gross: num(o.gross, 'gross') } : {}) };
-    }) : [];
-    if (v.hasSwissVat && !groups.length) throw new ChangesError('vat.vatSummary');
-    out.vat = { hasSwissVat: v.hasSwissVat, vatSummary: groups, ...(typeof v.vatId === 'string' && v.vatId ? { vatId: v.vatId } : {}) };
-  }
+  if ('vat' in s) out.vat = parseVatFacts(s.vat, (what) => { throw new ChangesError(what); });
   if (!Object.keys(out).length) throw new ChangesError('set ist leer');
   return out;
 }
