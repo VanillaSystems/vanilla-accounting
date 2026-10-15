@@ -78,6 +78,22 @@ The block's line is the worst of its parts: `fails` when any part fails, `passes
 part passed, `partly` when some parts passed and none failed but some are untested, `untested`
 when nothing ran.
 
+## Count
+
+Use cases per file and the state of their **Status.** line, as of 2026-10-16 (wishes counted apart).
+
+| File | Use cases | passes | partly | fails | untested | not supported yet | wishes |
+|---|---|---|---|---|---|---|---|
+| [owner-trades.md](owner-trades.md) | 52 | 1 | 3 | 35 | 13 | 0 | 16 |
+| [webshop.md](webshop.md) | 25 | 0 | 0 | 0 | 24 | 1 | 8 |
+| [it-consultant.md](it-consultant.md) | 25 | 0 | 0 | 2 | 23 | 0 | 7 |
+| [treuhaender.md](treuhaender.md) | 39 | 0 | 0 | 16 | 21 | 2 | 6 |
+| [auditor.md](auditor.md) | 12 | 0 | 0 | 6 | 6 | 0 | 4 |
+| [employee.md](employee.md) | 12 | 0 | 0 | 2 | 8 | 2 | 4 |
+| [not-registered.md](not-registered.md) | 8 | 0 | 0 | 0 | 0 | 8 | 3 |
+| [saldo.md](saldo.md) | 8 | 0 | 0 | 2 | 0 | 6 | 3 |
+| total | 181 | 1 | 3 | 63 | 95 | 19 | 51 |
+
 ## Surfaces and tools
 
 All from `.claude/skills/verify/` (its SKILL.md says how):
@@ -102,33 +118,35 @@ shows. Check the books behind the screen.
 The fifteen corner cases with the most at stake that are untested or failing, ranked. A tester
 starts at the top.
 
-1. **OW-30 / OW-32** A hand correction (a VAT code, V0-E for a sale abroad) silently overwritten
-   by «Neu klassifizieren» (misreads-10, misreads-11, misreads-19). Every correction must teach,
-   never be overwritten.
-2. **OW-22** Receipts not matched to their obvious payment when the receipt has no date yet
+1. **OW-30 / TH-23** A hand correction (a VAT code, V0-E for a sale abroad) is silently
+   overwritten by «Neu klassifizieren» (misreads-10, misreads-11, misreads-19). Every correction
+   must teach, never be overwritten.
+2. **TH-06** Without the AI there is no way to book a bank payment by hand: «Buchen» loops back
+   to the same page, «Gebucht» on the task removes it with nothing booked (treuhaender-8,
+   treuhaender-9). The mission's «possible without the AI» fails at its core.
+3. **OW-22** Receipts not matched to their obvious payment when the receipt has no date yet
    (misreads-4): the matcher shows the model the wrong transactions.
-3. **OW-29** A receipt linked by hand after the payment was booked: the booking keeps M0 and the
+4. **OW-29** A receipt linked by hand after the payment was booked: the booking keeps M0 and the
    input tax is lost (misreads-8).
-4. **OW-36 / IT-07** A VAT-registered firm's customer payment without an uploaded invoice is
+5. **OW-36 / IT-07** A VAT-registered firm's customer payment without an uploaded invoice is
    booked at 0 % as an export (quarter-close-6, sidebar-wishes-14): output tax under-declared.
-5. **OW-46** Bilanz & ER show VAT gross and no debt to the ESTV within the year (quarter-close-11).
-6. **OW-26** Skonto: «Neu klassifizieren» books a one-leg entry, the Bilanz has a difference
+6. **OW-26** Skonto: «Neu klassifizieren» books a one-leg entry and the Bilanz shows a difference
    (misreads-14).
 7. **OW-14** Delete a receipt, then «Rückgängig»: the receipt comes back, its input tax does not
    (regression-14); a second delete of the same file cannot be undone (regression-15).
-8. **TH-05 / TH-06** Without a model: statement lines stay without any booking and nothing lists
-   them as work (treuhaender-5); photos stay «in Arbeit» forever (treuhaender-3).
-9. **OW-50 / TH-25** A mistake found in a filed quarter: correction entry in the open quarter,
+8. **OW-46** Bilanz & ER show VAT gross and no debt to the ESTV within the year
+   (quarter-close-11).
+9. **OW-49 / TH-25** A mistake found in a filed quarter: correction entry in the open quarter,
    declared on the Korrekturabrechnung (0535). Untested end to end.
-10. **OW-27** A supplier's credit note and a refund to the bank account: VAT reversed with the
-    minus code, nothing booked twice. Untested.
-11. **WS-02** A payout that bundles orders, refunds and fees: gross sales with VAT, fees apart,
-    the clearing account at zero. Untested in a persona test.
-12. **IT-19** A client in Liechtenstein: the app must book it as domestic (8.1 %), not as a
+10. **OW-15** A receipt that arrives after its quarter was filed: the input tax claimed later by
+    a correction, the filed booking untouched. Untested.
+11. **OW-27** A supplier's credit note and a refund to the bank account: VAT reduced with the
+    minus code, nothing booked as a sale. Untested.
+12. **WS-02** A payout that bundles orders, refunds and fees: gross sales with VAT, fees apart,
+    the clearing account at zero. Untested.
+13. **IT-05** A client in Liechtenstein: the app must book it as domestic (8.1 %), not as a
     service abroad. Untested.
-13. **OW-41** The invoice sheet's selects (unit, VAT rate, customer) save nothing (invoices-6):
+14. **OW-40** The invoice sheet's selects (unit, VAT rate, customer) save nothing (invoices-6):
     the screen shows a VAT rate the invoice does not carry.
-14. **TH-27** Asking the owner a question on an item and getting the answer back on it: not
-    built; the Treuhänderin works by mail.
-15. **EM-03** A receipt photographed while the Mac is closed: does the phone keep it and deliver
-    it later, and is nothing lost or doubled? Untested.
+15. **EM-03** A receipt photographed while the Mac is closed: does the phone keep it, deliver it
+    later, and is nothing lost or doubled? Untested.

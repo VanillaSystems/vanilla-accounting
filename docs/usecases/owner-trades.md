@@ -573,7 +573,7 @@ VAT number); it is marked «von Hand» and the booking follows.
 
 **What goes wrong.**
 
-**F1. No way to set the VAT by hand.** `fails (misreads-16), retest (7306656, 862c10f)`
+**F1. No way to set the VAT by hand.** `fails (misreads-16), retest (862c10f)`
 - Noticed: «Angaben bearbeiten» had no VAT fields.
 - By hand: since the fix, the VAT fields in Angaben.
 - By wish: works.

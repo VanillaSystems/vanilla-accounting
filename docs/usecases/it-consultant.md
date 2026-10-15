@@ -680,6 +680,34 @@ books to 2451 with K81-B (Ziffer 415).
 
 **Status.** untested
 
+### IT-25 Invoices from before the app
+
+**Goal.** «Drei Rechnungen habe ich noch im alten Programm geschrieben, die sind noch offen.»
+
+**Happy path.** At the start she enters the open invoices of the old software (number, client,
+amount, currency, date); their payments match them like the app's own; on cash basis their VAT
+falls when paid.
+
+**What goes wrong.**
+
+**F1. The payment of an old invoice booked V0 as a sale without invoice.** `fails (quarter-close-6 pattern)`
+- Noticed: MWST names it (regression-8).
+- By hand: V81 or V0-E as the old invoice says.
+- By wish: «das ist die alte Rechnung 2026-007 an München».
+- Learns: drop the old invoice PDF and it is matched as a sales document.
+
+**F2. No place to enter open invoices of before.** `untested`
+- Noticed: Rechnungen knows only its own.
+- By hand: drop the PDFs; they become receipts, not sales.
+- By wish: none.
+- Learns: an import of open invoices.
+
+**Automation target.** Code: match old invoices by number. Person: the list.
+
+**Test.** Sandbox on `demo-consulting/`, a made-up old invoice PDF and its payment.
+
+**Status.** fails (quarter-close-6)
+
 ## Extending the automation
 
 | id | Eva says | Becomes | The next case must | Status |

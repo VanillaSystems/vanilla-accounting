@@ -57,6 +57,7 @@ docs/quarter-workflow.md
 docs/year-end.md
 docs/adr/**
 docs/personas/**
+docs/usecases/**
 docs/redesign/**
 docs/0.4.0/**
 docs/casebook.md
