@@ -19,7 +19,7 @@ export const AUTOMATION_TABS = ['graph', 'triggers', 'runs', 'files'] as const;
 export type AutomationTab = typeof AUTOMATION_TABS[number];
 
 /** Segments under /automation that name a page, not a workflow: no workflow may take these ids. */
-export const AUTOMATION_PAGES = ['runs', 'map', 'queue', 'tasks'] as const;
+export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] as const;
 
 export const INVOICE_STATUSES = ['open', 'overdue', 'draft', 'paid'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
@@ -37,6 +37,8 @@ export type Route =
   | { area: 'company'; section: CompanySection | (string & {}) }
   | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string }
   /** Automatisierung (docs/0.4.0/ui/design.md): a workflow with its tab, one run, the process map, the queue, the tasks. */
+  /** The area's home: the latest runs, each with what came in and what came of it. */
+  | { area: 'automation'; view: 'runs' }
   | { area: 'automation'; view: 'workflow'; workflow?: string; tab: AutomationTab; step?: string }
   | { area: 'automation'; view: 'run'; run: string }
   | { area: 'automation'; view: 'map'; map: 'phases' | 'events' }
@@ -59,7 +61,7 @@ export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
   reports: { area: 'reports', report: 'income' },
   close: { area: 'close' },
   company: { area: 'company', section: 'profile' },
-  automation: { area: 'automation', view: 'workflow', tab: 'graph' },
+  automation: { area: 'automation', view: 'runs' },
   changes: { area: 'changes' },
 };
 
@@ -139,7 +141,10 @@ function routeOf([a, b, c, d]: string[]): Route {
 
 function automationSegments(r: RouteOf<'automation'>): Array<string | undefined> {
   switch (r.view) {
-    case 'workflow': return r.step ? ['automation', r.workflow, 'graph', r.step] : ['automation', r.workflow, r.tab === 'graph' ? undefined : r.tab];
+    case 'runs': return ['automation'];
+    case 'workflow':
+      if (!r.workflow) return ['automation', 'workflows'];
+      return r.step ? ['automation', r.workflow, 'graph', r.step] : ['automation', r.workflow, r.tab === 'graph' ? undefined : r.tab];
     case 'run': return ['automation', 'runs', r.run];
     case 'map': return ['automation', 'map', r.map === 'phases' ? undefined : r.map];
     case 'queue': return ['automation', 'queue'];
@@ -152,7 +157,8 @@ function automationRoute(b?: string, c?: string, d?: string): Route {
   if (b === 'map') return { area: 'automation', view: 'map', map: c === 'events' ? 'events' : 'phases' };
   if (b === 'queue') return { area: 'automation', view: 'queue' };
   if (b === 'tasks') return defined({ area: 'automation', view: 'tasks', run: c });
-  if (!b || b === 'runs') return { area: 'automation', view: 'workflow', tab: 'graph' };
+  if (!b || b === 'runs') return { area: 'automation', view: 'runs' };
+  if (b === 'workflows') return { area: 'automation', view: 'workflow', tab: 'graph' };
   if (c === 'graph' && d) return { area: 'automation', view: 'workflow', workflow: b, tab: 'graph', step: d };
   return { area: 'automation', view: 'workflow', workflow: b, tab: isOneOf(AUTOMATION_TABS, c) ? c : 'graph' };
 }

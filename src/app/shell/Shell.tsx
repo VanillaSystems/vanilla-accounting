@@ -227,7 +227,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       )}
       <a className="skip" href="#list">{t('shell.skip')}</a>
       <FxProvider index={books}>
-        {Detail ? (
+        {Detail && !area.fullPage?.(loc.route) ? (
           <main data-area={loc.route.area} style={mainStyle}>
             <section className="list" id="list" ref={listRef} aria-label={area.label()}><List {...props} /></section>
             <section className="detail" aria-live="polite"><Detail {...props} /></section>

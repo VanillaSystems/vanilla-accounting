@@ -289,3 +289,22 @@ main.full { display: flex; flex-direction: column; }
 .cplinks { display: flex; gap: 12px; padding: 6px 8px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
 /* While the top bar stands open (new or pinned), the pages start below it instead of under it. */
 body:has(.topbar.open) :is(.detail, main.full) { padding-top: 76px; }
+
+/* Automatisierung above the areas (Dock.tsx): a round button wider than the dock, flat, in the accent */
+.activity { padding-top: 96px; }
+.no-titlebar .activity { padding-top: 124px; }
+.activity .it.go { position: absolute; left: 14px; top: 18px; width: 60px; height: 60px; z-index: 2; }
+.no-titlebar .activity .it.go { top: 46px; }
+.activity .it.go::before { top: -4px; bottom: -4px; left: -4px; width: auto; right: -4px; border-radius: 50%; background: var(--bg); }
+.activity .it.go.on::before { background: var(--bg); }
+.activity .it.go .face { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); transition: filter .12s; }
+.activity .it.go .face svg { width: 28px; height: 28px; stroke-width: 1.7; }
+.activity .it.go:hover .face, .activity .it.go:focus-visible .face { filter: brightness(1.1); }
+.activity .it.go.on .face { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.activity .it.go:focus-visible { box-shadow: none; }
+.activity .it.go .ring { position: absolute; inset: -6px; width: 72px; height: 72px; stroke-width: 2; fill: none; pointer-events: none; }
+.activity .it.go .ring circle { stroke: transparent; }
+.activity .it.go.running .ring circle { stroke: var(--accent); stroke-dasharray: 50 176; transform-origin: 50% 50%; animation: go-spin 1.3s linear infinite; }
+.activity .it.go .cnt { position: absolute; top: -5px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #d98a00; color: #fff; font: 600 11px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
+@keyframes go-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .activity .it.go.running .ring circle { animation: none; stroke-dasharray: none; } }

@@ -125,3 +125,47 @@
 .rundoc dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 6px 0; }
 .rundoc dt { color: var(--muted); }
 .rundoc dd { margin: 0; }
+
+/* The area's home: the latest runs (Runs.tsx) */
+.runshome { width: 100%; max-width: 1280px; padding: 36px 44px 60px 56px; }
+.runshome .rhead { display: flex; align-items: baseline; gap: 16px; }
+.runshome .rhead h1 { margin: 0; }
+.runshome .racts { margin-left: auto; display: flex; gap: 4px; }
+.runshome .racts .btn { border: 1px solid var(--line-2); }
+.runshome .rsub { color: var(--ink-2); font-size: 15px; margin: 10px 0 18px; }
+.runshome .rfilters { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
+.runshome .rfilters button { border: 0; background: none; padding: 8px 0; font: inherit; font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.runshome .rfilters button.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+.runshome .rfilters .mono { font-size: 11.5px; margin-left: 3px; }
+.runshome .rempty { color: var(--muted); padding: 28px 0; }
+.rtable { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.rtable th { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); text-align: left; padding: 12px 10px 8px; }
+.rtable td { padding: 11px 10px; border-top: 1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+.rtable .st { text-align: right; white-space: nowrap; width: 160px; }
+.rtable small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+.rtable small.mono { font-size: 11px; overflow: hidden; text-overflow: ellipsis; max-width: 460px; }
+.rrun { cursor: pointer; }
+.rrun:hover > td { background: var(--hover); }
+.rrun td.tog { width: 26px; color: var(--faint); }
+.rrun td.tog svg { width: 14px; height: 14px; transition: transform .12s; }
+.rrun.open td.tog svg { transform: rotate(90deg); }
+.rrun td.when { width: 120px; white-space: nowrap; }
+.rrun td.when b { font-size: 13px; font-weight: 500; }
+.rrun td.what b, .rrun td.res b { font-weight: 500; }
+.rrun.unseen td.what b, .rrun.unseen td.res b { font-weight: 650; }
+.rrun.s-reviewed, .rrun.s-idle, .rrun.s-discarded { color: var(--ink-2); }
+.rline td { border-top: 0; padding-top: 4px; padding-bottom: 4px; }
+.rline.last td { padding-bottom: 14px; }
+.rline .rk { display: inline-block; min-width: 44px; margin-right: 8px; padding: 0 6px; border: 1px solid var(--line-2); border-radius: 5px; font: 500 10.5px "Geist Mono"; color: var(--muted); text-align: center; }
+.rline .linkbtn, .rrun .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.rline .res .linkbtn + .linkbtn { margin-left: 10px; }
+.rpill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; background: var(--hover); color: var(--muted); }
+.rpill.ok, .rpill.reviewed { background: var(--pos-soft); color: var(--pos); }
+.rpill.check, .rpill.you { background: var(--warn-soft); color: var(--warn); }
+.rpill.error { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }
+.rpill.running { background: var(--accent-soft); color: var(--accent); }
+.rtable .rreview { display: block; margin: 6px 0 0 auto; }
+.rtable .rreview.m { color: var(--muted); }
+.runshome .ok-t, .rtable .ok-t { color: var(--pos); }
+.runshome .warn-t, .rtable .warn-t { color: var(--warn); }
+.runshome .rmore { margin-top: 14px; border: 0; background: none; color: var(--accent); cursor: pointer; font: inherit; font-size: 13px; }

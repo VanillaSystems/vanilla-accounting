@@ -1,0 +1,57 @@
+/**
+ * What the runs table (Runs.tsx) says about a run, without the page: one line per file that came
+ * in, with its result read from the books, and where the run stands for the person checking it.
+ */
+import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
+import { toRappen } from '../../../accounting/rappen.js';
+import type { Arrival, RunSummary } from '../../../workflows/model.js';
+import type { Index } from '../../../types/index.js';
+
+/** Where a run stands for the person checking it; the first that applies wins. */
+export type Stand = 'running' | 'error' | 'you' | 'discarded' | 'reviewed' | 'check' | 'idle' | 'ok';
+
+export type Line =
+  | { kind: 'statement'; a: Extract<Arrival, { kind: 'statement' }>; balance: Balance }
+  | { kind: 'receipt'; a: Extract<Arrival, { kind: 'receipt' }>; receipt?: Index['receipts'][number]; payments: Index['transactions']; entries: number }
+  | { kind: 'refused'; a: Extract<Arrival, { kind: 'refused' }> }
+  | { kind: 'file'; name: string };
+
+/** The bank's closing balance against the books on the same day, in the account's currency. */
+export type Balance = { kind: 'none' } | { kind: 'matches'; date: string } | { kind: 'differs'; date: string; diff: number };
+
+export function balanceOf(a: Extract<Arrival, { kind: 'statement' }>, books: Index): Balance {
+  const closing = a.closing ?? books.statementBalances?.filter((b) => b.account === a.account && b.date === a.to).map((b) => ({ date: b.date, amount: b.amount }))[0];
+  if (!closing) return { kind: 'none' };
+  const year = closing.date.slice(0, 4);
+  const book = bookBalanceNative(books.journalEntries ?? [], a.account, a.currency, year, closing.date, nativeOpening(books, a.account, a.currency, year));
+  const diff = (toRappen(book) - toRappen(closing.amount)) / 100;
+  return Math.abs(diff) <= 0.01 ? { kind: 'matches', date: closing.date } : { kind: 'differs', date: closing.date, diff };
+}
+
+export function linesOf(r: RunSummary, books: Index): Line[] {
+  if (!r.arrived?.length) return r.digest.files.map((name) => ({ kind: 'file', name }));
+  return r.arrived.map((a): Line => {
+    if (a.kind === 'statement') return { kind: 'statement', a, balance: balanceOf(a, books) };
+    if (a.kind === 'refused') return { kind: 'refused', a };
+    const refs = new Set(books.mappings.filter((m) => m.receiptId === a.id).map((m) => m.transactionRef));
+    return {
+      kind: 'receipt', a, receipt: books.receipts.find((x) => x.id === a.id),
+      payments: books.transactions.filter((x) => refs.has(x.ref)),
+      entries: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length,
+    };
+  });
+}
+
+/** A line the person has to look at: a balance that differs, a refused file, a receipt the finished run did not read. */
+const isIssue = (l: Line, finished: boolean) => (l.kind === 'statement' && l.balance.kind === 'differs') || l.kind === 'refused' || (l.kind === 'receipt' && finished && !l.receipt);
+
+export function standOf(r: RunSummary, lines: Line[]): Stand {
+  if (r.status === 'queued' || r.status === 'running' || r.status === 'parked') return 'running';
+  if (r.status === 'stuck') return 'error';
+  if (r.status === 'waiting') return 'you';
+  if (r.status === 'discarded') return 'discarded';
+  if (r.reviewed) return 'reviewed';
+  if (lines.some((l) => isIssue(l, true))) return 'check';
+  if (!r.arrived?.length && !r.digest.files.length && !r.digest.receipts && !r.digest.links && !r.digest.entries) return 'idle';
+  return 'ok';
+}

@@ -15,6 +15,7 @@ import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type Au
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
+import { RunsHome } from './Runs.js';
 import type { Index } from '../../../types/index.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -37,6 +38,7 @@ const when = (iso: string) => { const d = new Date(iso); const p = (n: number) =
 function rowsOf(view: AutomationView | undefined): R[] {
   const ws = view?.workflows ?? [];
   return [
+    { area: 'automation', view: 'runs' },
     { area: 'automation', view: 'map', map: 'phases' },
     { area: 'automation', view: 'queue' },
     { area: 'automation', view: 'tasks' },
@@ -53,8 +55,9 @@ function selectedRow(route: R, view: AutomationView | undefined): R | undefined 
   return w ? { area: 'automation', view: 'workflow', workflow: w, tab: 'runs' } : undefined;
 }
 
-function List({ route, nav }: Props) {
+function List({ route, nav, books }: Props) {
   const { view, error } = useAutomation();
+  if (route.view === 'runs') return view ? <RunsHome view={view} books={books} nav={nav} /> : <><h1>{t('area.automation')}</h1>{error ? <p className="warnline">{error}</p> : <p className="m">{t('automation.empty')}</p>}</>;
   const sel = selectedRow(route, view);
   const waiting = view?.tasks ?? [];
   const row = (r: R, content: ReactNode) => {
@@ -71,6 +74,7 @@ function List({ route, nav }: Props) {
       {error ? <p className="warnline">{error}</p> : null}
       <div className="rows" role="listbox" aria-label={t('area.automation')}>
         <div className="group"><span>{t('automation.overview')}</span></div>
+        {row({ area: 'automation', view: 'runs' }, <span className="t">{t('runs.latest')}</span>)}
         {row({ area: 'automation', view: 'map', map: 'phases' }, <span className="t">{t('automation.map')}</span>)}
         {row({ area: 'automation', view: 'queue' }, <span className="t">{t('automation.queue')}</span>)}
         {row({ area: 'automation', view: 'tasks' }, <><span className="t">{t('automation.tasks')}</span>{waiting.length ? <span className="a"><span className="wfpill warn">{waiting.length}</span></span> : null}</>)}
@@ -106,6 +110,7 @@ function Detail({ route, nav, books }: Props) {
   const { view } = useAutomation();
   if (!view) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   switch (route.view) {
+    case 'runs': return null;
     case 'workflow': {
       if (!route.workflow) return <div className="detail-empty"><div>{t('automation.pick')}</div></div>;
       const w = view.workflows.find((x) => x.id === route.workflow);
@@ -576,10 +581,11 @@ export const automation: Area<RouteOf<'automation'>> = {
   Detail,
   legend,
   periodless: true,
+  fullPage: (r) => r.view === 'runs',
   title: (r) => (r.view === 'workflow' ? r.workflow : r.view === 'run' ? r.run : undefined),
   keys(e, { route, nav }) {
     const d = moveKey(e);
-    if (!d) return false;
+    if (!d || route.view === 'runs') return false;
     const view = automationNow();
     const rows = rowsOf(view);
     const sel = selectedRow(route, view);

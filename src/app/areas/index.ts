@@ -75,6 +75,8 @@ export interface Area<R extends Route = Route> {
   title(route: R, books: Index): string | undefined;
   /** Wider list column (journal, reports). */
   wide?: boolean;
+  /** A route whose page takes the whole width: the list shows it, there is no detail column. */
+  fullPage?(route: R): boolean;
   /** Pages without a period (company, codes): no period in the top bar or the heading. */
   periodless?: boolean;
   /** Its rows belong to a period: another period opens the new list at its first row instead of keeping the object. */

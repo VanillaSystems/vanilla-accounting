@@ -348,6 +348,7 @@ export interface RunSummary {
   reason?: QueueReason;
   /** Still open past its workflow's deadline. */
   overdue?: boolean;
+  startedBy: StartedBy;
   arrived?: Arrival[];
   reviewed?: string;
   digest: RunDigest;
@@ -400,13 +401,14 @@ export function summaryOf(run: Run, w?: WorkflowDecl, now = new Date().toISOStri
     ...(s.status === 'stuck' ? { error: s.reason } : s.status === 'discarded' ? { error: s.reason } : {}),
     ...(s.status === 'queued' && s.reason ? { reason: s.reason } : {}),
     ...(overdue(run, w, now) ? { overdue: true } : {}),
+    startedBy: run.startedBy,
     ...(run.arrived?.length ? { arrived: run.arrived } : {}),
     ...(run.reviewed ? { reviewed: run.reviewed } : {}),
     digest: digestOf(run),
   };
 }
 
-export interface RunDetail extends RunSummary { steps: StepRecord[]; startedBy: StartedBy }
+export interface RunDetail extends RunSummary { steps: StepRecord[] }
 
 /** A task: a waiting run seen from the person it waits for. Never stored on its own. */
 export interface Task {
