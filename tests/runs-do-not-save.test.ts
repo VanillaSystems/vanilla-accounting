@@ -1,8 +1,8 @@
 /**
- * The records path of git (src/saving/records.ts, src/workflows/runlog.ts): a run that wrote
- * commits once at rest with its run-log line; a run that changed nothing and needed nobody leaves
- * neither a line nor a commit; a waiting run leaves its line; a direct edit is one commit; records
- * a crash left uncommitted are committed at start. Checked with the git program as an independent reader.
+ * Runs write, they do not save (the mockup's screen 7; src/workflows/runlog.ts): a run that wrote
+ * leaves its booking and its run-log line uncommitted, waiting in Änderungen as the books; a run
+ * that changed nothing and needed nobody leaves neither a line nor a change; a waiting run leaves
+ * its line; a direct edit waits the same way. Checked with the git program as an independent reader.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +14,7 @@ import { loadBooks, saveBooks, update, PERSON } from '../src/books/store.js';
 import type { JournalEntry } from '../src/types/index.js';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
-import { openRecordsCommitter } from '../src/saving/records.js';
+import { changesView } from '../src/saving/changes.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import { openEngine } from '../src/workflows/engine.js';
 import { readLog } from '../src/workflows/runlog.js';
@@ -52,30 +52,28 @@ function app(): string {
 }
 
 async function engineFor(ws: Workspace) {
-  const commits: Array<Promise<boolean>> = [];
-  const records = openRecordsCommitter(ws);
-  const engine = openEngine(ws, { appRoot: app(), onRest: (run, line) => { if (line) commits.push(records.commitRun({ id: run.id, workflow: run.workflow, label: run.workflow, item: run.item.id })); } });
-  const settle = async () => { await engine.idle(); await Promise.all(commits); };
-  return { engine, settle };
+  const engine = openEngine(ws, { appRoot: app() });
+  return { engine, settle: () => engine.idle() };
 }
 
-test('a run that wrote commits once at rest: its booking and its run-log line, nothing else', async () => {
+test('a run writes its booking and its run-log line and does not save: both wait in Änderungen as the books', async () => {
   const { ws, git } = await company();
   writeFileSync(join(ws.paths.repository, 'notes.md'), 'not part of the books');
   const { engine, settle } = await engineFor(ws);
   const r = await engine.start('booker', { kind: 'transaction', id: 'rc' }, { kind: 'manual' });
   await settle();
   const id = r.ok ? r.run! : '';
-  assert.match(git('log', '-1', '--format=%B'), new RegExp(`Vanilla-Run: ${id}`));
-  const files = git('show', '--name-only', '--format=', 'HEAD').split('\n');
-  assert.deepEqual(files.sort(), ['vanilla-accounting/transactional-data/2026/books/entries.jsonl', 'vanilla-accounting/transactional-data/2026/runs.jsonl']);
-  assert.equal(git('status', '--porcelain'), '?? notes.md');
+  assert.equal(git('log', '--format=%s'), 'Workspace set up', 'no commit of its own');
+  assert.deepEqual(git('status', '--porcelain').split('\n').map((l) => l.trim()).sort(), [
+    'M vanilla-accounting/transactional-data/2026/books/entries.jsonl', '?? notes.md', '?? vanilla-accounting/transactional-data/2026/runs.jsonl',
+  ].sort());
+  assert.equal((await changesView(ws)).books.files, 2, 'the books wait to be saved');
   const [line] = readLog(ws);
   assert.deepEqual([line.run, line.event, line.wrote?.entries], [id, 'done', ['rc1']]);
   assert.equal(loadBooks(ws).journalEntries.find((e) => e.id === 'rc1')?.run, id);
 });
 
-test('a run that changed nothing and needed nobody leaves no line and no commit', async () => {
+test('a run that changed nothing and needed nobody leaves no line and nothing to save', async () => {
   const { ws, git } = await company();
   const { engine, settle } = await engineFor(ws);
   await engine.start('quiet', { kind: 'transaction', id: 'q' }, { kind: 'manual' });
@@ -83,6 +81,7 @@ test('a run that changed nothing and needed nobody leaves no line and no commit'
   assert.equal(git('log', '--format=%s'), 'Workspace set up');
   assert.deepEqual(readLog(ws), []);
   assert.equal(existsSync(yearPaths(ws.paths, '2026').runLog), false);
+  assert.equal((await changesView(ws)).books.files, 0);
 });
 
 test('a run that waits for a person leaves its line; its answer leaves the closing line', async () => {
@@ -94,22 +93,15 @@ test('a run that waits for a person leaves its line; its answer leaves the closi
   await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'done' });
   await settle();
   assert.deepEqual(readLog(ws).map((l) => l.event), ['waiting', 'done']);
-  assert.equal(git('log', '--format=%s').split('\n').length, 3, 'two commits after the set-up');
+  assert.equal(git('log', '--format=%s'), 'Workspace set up', 'nothing saved without the person');
   assert.equal(readFileSync(yearPaths(ws.paths, '2026').runLog, 'utf8').split('\n').filter(Boolean).length, 2, 'lines are appended, never rewritten');
 });
 
-test('a direct edit is one commit; what a crash left uncommitted is committed at start', async () => {
+test('a direct edit waits too', async () => {
   const { ws, git } = await company();
   const books = loadBooks(ws);
   update(books, PERSON, (b) => { b.journalEntries.push({ id: 'p1', transactionRef: 'p', date: '2026-09-21', accountDebit: '6500', accountCredit: '1020', amount: 3, origin: 'manual' }); });
   saveBooks(ws, books);
-  assert.equal(await openRecordsCommitter(ws).commitEdit('Buchung bearbeitet'), true);
-  assert.equal(git('log', '-1', '--format=%s'), 'Buchung bearbeitet');
-  const again = loadBooks(ws);
-  update(again, PERSON, (b) => { b.journalEntries.push({ id: 'p2', transactionRef: 'p2', date: '2026-09-22', accountDebit: '6500', accountCredit: '1020', amount: 4, origin: 'manual' }); });
-  saveBooks(ws, again);
-  assert.equal(await openRecordsCommitter(ws).recover(), true);
-  assert.match(git('log', '-1', '--format=%B'), /Vanilla-Recovered: true/);
-  assert.equal(git('status', '--porcelain'), '');
-  assert.equal(await openRecordsCommitter(ws).recover(), false, 'nothing left: no empty commit');
+  assert.equal(git('log', '--format=%s'), 'Workspace set up');
+  assert.deepEqual(await changesView(ws).then((v) => v.books), { files: 1, runs: [] });
 });

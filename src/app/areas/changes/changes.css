@@ -1,4 +1,4 @@
-/* Änderungen: files waiting to be saved, Verlauf by day, a diff. */
+/* Änderungen (the mockup's screen 7): Verlauf on the left; what changed since the last save, a proposal, a diff on the right. */
 .row.chrow { grid-template-columns: minmax(0, 1fr) auto; }
 .chrow .a { display: inline-flex; align-items: center; gap: 8px; }
 .chnothing { margin: 8px 0 14px; }
@@ -45,3 +45,19 @@
 .chpage .linkbtn:disabled { opacity: .45; cursor: default; text-decoration: none; }
 .chkind.e-needs-switch-on { background: var(--warn-soft); color: var(--warn); }
 .chkind.e-needs-maintainer { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }
+.row.chsave-row { grid-template-columns: minmax(0, 1fr); height: auto; padding-top: 7px; padding-bottom: 7px; row-gap: 1px; }
+.chsave-row .t { display: flex; align-items: center; gap: 8px; }
+.chsub { display: block; padding-left: 24px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chwho { display: inline-grid; place-items: center; width: 16px; margin-right: 8px; color: var(--muted); flex: none; vertical-align: -3px; }
+.chwho svg { width: 15px; height: 15px; }
+.chlead { margin: 2px 0 14px; }
+.chpage .group { margin: 16px 0 4px; }
+.chraw { display: flex; flex-direction: column; }
+.chrawrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.chrawrow:hover { background: var(--hover); }
+.chrawrow .mono { font-size: 12.5px; }
+.chback { margin: 0 0 6px; border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.chsync .m { font-size: 12px; }
+.chpage .chlead, .chsave .m { font-size: 12.5px; color: var(--muted); }
+.chpage .head h2.who { font-size: 16px; }
+.chsync .m { color: var(--muted); }

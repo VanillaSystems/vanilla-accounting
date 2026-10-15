@@ -1,9 +1,10 @@
 /**
- * Änderungen, write (src/saving/saving.ts): the AI's proposal covers every changed file, a file
- * changed since makes it stale and a stale proposal is never saved, refresh keeps the saves that
- * did not move, a held save stays unsaved, a save holds its files and no books file, Rückgängig
- * of a customizing save goes back to the draft and of a run reverses its bookings in an open
- * period only, and sync pushes, refusing two diverged lines. Checked with the git program.
+ * Änderungen, write (src/saving/saving.ts): the AI's proposal covers every change, a change since
+ * makes it stale and a stale proposal is never saved, refresh keeps the saves that did not move, a
+ * held save stays unsaved, the books are a save of their own with the runs that wrote them,
+ * Rückgängig of a customizing save goes back to the draft and of a run reverses its bookings in an
+ * open period only (the reversal waits to be saved), and sync pushes, refusing two diverged lines.
+ * Checked with the git program.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +15,9 @@ import { join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { draftDir } from '../src/saving/changes.js';
-import { openRecordsCommitter } from '../src/saving/records.js';
+import { recordsPaths } from '../src/saving/changes.js';
+import { commitExactly } from '../src/workspace/git.js';
+import { relative } from 'node:path';
 import { openSaving, type Ask } from '../src/saving/saving.js';
 import { loadBooks, saveBooks, update, moduleActor } from '../src/books/store.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -77,20 +80,25 @@ test('a proposal covers every changed file; a file changed since makes it stale,
   assert.deepEqual(model.calls, ['saving#prepare', 'saving#prepare']);
 });
 
-test('a held save stays unsaved; a save commits exactly its files, never a books file', async () => {
+test('a held save stays unsaved; the books are a save of their own, with the run that wrote them; each save commits exactly its part', async () => {
   const { ws, git } = await company();
   changeBoth(ws);
   const books = loadBooks(ws);
   update(books, moduleActor('test'), (b) => { b.journalEntries.push({ id: 'w1', transactionRef: 'w', date: '2026-09-20', accountDebit: '6500', accountCredit: '1020', amount: 1 }); });
   saveBooks(ws, books);
-  const saving = openSaving(ws, fakeModel());
+  const run = { run: 'booking-w1', workflow: 'booking', label: 'Buchen', at: '2026-10-15T10:00:00.000Z', entries: 1, links: 0, receipts: 0 };
+  const saving = openSaving(ws, { ...fakeModel(), runs: () => [run] });
+  assert.deepEqual((await saving.view()).books, { files: 1, runs: [run] });
   await saving.command({ kind: 'prepare' });
   assert.deepEqual(await saving.command({ kind: 'talk', text: 'workflows noch nicht' }), { ok: true, reply: 'Gut.' });
   const result = await saving.command({ kind: 'save' });
-  assert.deepEqual(result, { ok: true, saved: 1 });
-  assert.deepEqual(git('show', '--name-only', '--format=', 'HEAD').split('\n'), [`vanilla-accounting/${RULES}`]);
-  assert.match(git('log', '-1', '--format=%B'), /Vanilla-Kind: customizing/);
-  assert.match(git('status', '--porcelain'), /entries\.jsonl/, 'the books file is left for the app to commit');
+  assert.deepEqual(result, { ok: true, saved: 2 });
+  const [rules, books1] = git('log', '-2', '--format=%H').split('\n');
+  assert.deepEqual(git('show', '--name-only', '--format=', rules).split('\n'), [`vanilla-accounting/${RULES}`]);
+  assert.match(git('log', '-1', '--format=%B', rules), /Vanilla-Kind: customizing/);
+  assert.deepEqual(git('show', '--name-only', '--format=', books1).split('\n'), ['vanilla-accounting/transactional-data/2026/books/entries.jsonl']);
+  assert.match(git('log', '-1', '--format=%B', books1), /Vanilla-Kind: books\nVanilla-Run: booking-w1/);
+  assert.doesNotMatch(git('status', '--porcelain'), /entries\.jsonl/, 'the books are saved');
   const view = await saving.view();
   assert.deepEqual(view.proposal!.saves.map((s) => [s.files[0].path, s.held]), [[STEP, true]]);
   assert.ok(existsSync(join(draftDir(ws), STEP)), 'the held draft stays in the draft');
@@ -117,7 +125,7 @@ test('Rückgängig of a run reverses its bookings in an open period and refuses 
     const books = loadBooks(ws);
     update(books, { kind: 'run', id, workflow: 'booking' }, (b) => { b.journalEntries.push({ id: `e-${id}`, transactionRef: id, date, accountDebit: '6500', accountCredit: '1020', amount: 5, vatCode: 'I81', run: id }); });
     saveBooks(ws, books);
-    await openRecordsCommitter(ws).commitRun({ id, workflow: 'booking', label: 'Buchen', item: id });
+    await commitExactly(ws.paths.repository, `Buchen: ${id}\n\nVanilla-Kind: books\nVanilla-Run: ${id}`, recordsPaths(ws).map((p) => relative(ws.paths.repository, p)));
     return git('rev-parse', 'HEAD');
   };
   const open = await book('r-open', '2026-09-20');
@@ -125,7 +133,8 @@ test('Rückgängig of a run reverses its bookings in an open period and refuses 
   assert.deepEqual(await saving.command({ kind: 'undo', oid: open }), { ok: true, reversed: 1 });
   const storno = loadBooks(ws).journalEntries.find((e) => e.id === 'storno-e-r-open')!;
   assert.deepEqual([storno.accountDebit, storno.accountCredit, storno.vatCode, storno.date], ['1020', '6500', '-I81', '2026-09-20']);
-  assert.equal(git('log', '-1', '--format=%s'), 'Storno: Buchungen von Lauf r-open');
+  assert.equal(git('log', '-1', '--format=%s'), 'Buchen: r-open', 'the reversal is not saved by itself');
+  assert.match(git('status', '--porcelain'), /entries\.jsonl/, 'it waits in Änderungen');
   const again = await saving.command({ kind: 'undo', oid: open });
   assert.equal(again.ok ? '' : again.refusal, 'cannot-undo', 'reversed once only');
 

@@ -15,11 +15,11 @@ import { loadWorkflows } from '../../workflows/load.js';
 import { classifyChange } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { ask } from '../../llm/ask.js';
-import { queueCommit } from './automation.js';
+import { queueCommit, runsWroteSince } from './automation.js';
 
 export const router = Router();
 
-const saving = () => openSaving(WS, { ask: (prompt, opts) => ask(prompt, { ...opts, model: 'sonnet' }) });
+const saving = () => openSaving(WS, { ask: (prompt, opts) => ask(prompt, { ...opts, model: 'sonnet' }), runs: runsWroteSince });
 
 /** Each waiting change with how it will take effect: the structure decides (switch-on.ts). */
 async function withEffects(view: ChangesView): Promise<ChangesView> {

@@ -1,10 +1,10 @@
 /**
- * Änderungen, write (docs/0.4.0/saving.md, docs/0.4.0/ui/design.md "Two paths into git"). The AI
- * prepares saves from the customizing that changed (the draft and edits outside the app), the
- * person talks to it, and «Speichern» commits each prepared save exactly. Each of prepare, talk
- * and refresh is one model call. A proposal remembers the hash of every file it covers; when a
- * file moved since, the proposal is stale and is never saved. The books are not saved here: the
- * app commits them itself (records.ts).
+ * Änderungen, write (docs/0.4.0/saving.md, the mockup's screen 7). Workflows and the AI write;
+ * they do not save. The AI prepares saves from everything that changed since the last save (the
+ * books as the runs and edits wrote them, the draft, edits outside the app), the person talks to
+ * it, and «Speichern» commits each prepared save exactly. Each of prepare, talk and refresh is one
+ * model call. A proposal remembers the hash of everything it covers; when something moved since,
+ * the proposal is stale and is never saved.
  */
 import { execFile } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -17,9 +17,8 @@ import { loadBooks, PERSON, saveBooks, update, ClosedPeriodError, type Books } f
 import type { JournalEntry } from '../types/index.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { openRecordsCommitter } from './records.js';
-import { changesView, customizingNames, draftDir, fileDiff, saveDetail } from './changes.js';
-import { diffLines, hunks, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type SavingCommand, type SavingResult, type SyncState } from './model.js';
+import { booksBasis, changesView, customizingNames, draftDir, fileDiff, lastSaveAt, recordsPaths, saveDetail } from './changes.js';
+import { BOOKS, diffLines, hunks, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type RunWrote, type SavingCommand, type SavingResult, type SyncState } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 export type Ask = (prompt: string, opts: { step: string; system?: string }) => Promise<string>;
@@ -39,18 +38,23 @@ function writeProposal(ws: Ws, p: Proposal | undefined): void {
 /** Where a changed file's current content lies: the draft's copy, or the file in the books folder. */
 const fileOf = (ws: Ws, source: ChangeSource, path: string) => (source === 'draft' ? join(draftDir(ws), path) : join(ws.paths.root, path));
 export const basisOf = (ws: Ws, source: ChangeSource, path: string): string => {
+  if (source === 'books') return booksBasis(ws);
   const p = fileOf(ws, source, path);
   return existsSync(p) ? createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 16) : 'gone';
 };
 
-const changedFiles = (view: Pick<ChangesView, 'draft' | 'outside'>): Array<FileChange & { source: ChangeSource }> => [
+type Changed = Pick<ChangesView, 'draft' | 'outside' | 'books'>;
+
+/** Everything that waits, the books as one item counted by the entries their runs booked. */
+const changedFiles = (view: Changed): Array<FileChange & { source: ChangeSource }> => [
+  ...(view.books.files ? [{ path: BOOKS, state: 'modified' as const, added: view.books.runs.reduce((n, r) => n + r.entries, 0), removed: 0, source: 'books' as const }] : []),
   ...view.draft.map((f) => ({ ...f, source: 'draft' as const })),
   ...view.outside.map((f) => ({ ...f, source: 'outside' as const })),
 ];
 const keyOf = (f: { source: ChangeSource; path: string }) => `${f.source}:${f.path}`;
 
 /** The proposal against the files as they are now: which saves moved, which changes no save covers. */
-export function proposalView(ws: Ws, p: Proposal, view: Pick<ChangesView, 'draft' | 'outside'>): ProposalView {
+export function proposalView(ws: Ws, p: Proposal, view: Changed): ProposalView {
   const now = new Map(changedFiles(view).map((f) => [keyOf(f), f]));
   const covered = new Set(p.saves.flatMap((s) => s.files.map(keyOf)));
   const stale = p.saves.filter((s) => s.files.some((f) => !now.has(keyOf(f)) || basisOf(ws, f.source, f.path) !== f.basis)).map((s) => s.id);
@@ -65,10 +69,14 @@ export interface Saving {
 
 const refuse = (refusal: Extract<SavingResult, { ok: false }>['refusal'], message: string): SavingResult => ({ ok: false, refusal, message });
 
-const SYSTEM = 'You prepare saves (commits) of a small company\'s changes to how its bookkeeping app works: rules, workflows, knowledge, settings. You write for the owner, in German, without git words. Answer with JSON only.';
+const SYSTEM = 'You prepare saves (commits) of a small company\'s changes: its books as the app\'s runs wrote them, and how its bookkeeping app works (rules, workflows, knowledge, settings). You write for the owner, in German, without git words. Answer with JSON only.';
 
 /** What the model sees of one changed file: its path and its changed lines, cut to a few thousand characters. */
-function shown(ws: Ws, f: FileChange & { source: ChangeSource }, before: string): string {
+function shown(ws: Ws, f: FileChange & { source: ChangeSource }, before: string, runs: RunWrote[]): string {
+  if (f.source === 'books') {
+    const lines = runs.map((r) => `- ${r.label} (${r.at.slice(0, 16).replace('T', ' ')}): ${r.entries} Buchungen, ${r.links} Zuordnungen, ${r.receipts} Belege`);
+    return `### ${BOOKS} (die Bücher, wie die Läufe sie geschrieben haben)\n${lines.length ? lines.join('\n') : '- direkt in der App geändert'}`;
+  }
   const after = existsSync(fileOf(ws, f.source, f.path)) ? readFileSync(fileOf(ws, f.source, f.path), 'utf8') : '';
   const body = hunks(diffLines(before, after), 2).map((l) => (l ? `${l.kind}${l.text}` : '…')).join('\n');
   return `### ${f.path} (${f.source === 'draft' ? 'von der KI vorbereitet' : 'ausserhalb der App geändert'}, ${f.state})\n${body.length > 3000 ? body.slice(0, 3000) + '\n… (gekürzt)' : body}`;
@@ -81,11 +89,18 @@ function parseAnswer(text: string): Answer {
   return JSON.parse(json) as Answer;
 }
 
-export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date }): Saving {
+/** `runs` names the runs that wrote into the books since a moment (the engine's): the books' item says whose they are. */
+export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date; runs?: (since: string | undefined) => RunWrote[] }): Saving {
   const now = deps.now ?? (() => new Date());
 
-  async function view(): Promise<ChangesView> {
+  /** The view with the runs that wrote the waiting books. */
+  async function changes(): Promise<ChangesView> {
     const v = await changesView(ws);
+    return v.books.files && deps.runs ? { ...v, books: { ...v.books, runs: deps.runs(await lastSaveAt(ws)) } } : v;
+  }
+
+  async function view(): Promise<ChangesView> {
+    const v = await changes();
     const p = readProposal(ws);
     const proposal = p ? proposalView(ws, p, v) : undefined;
     const sync = await syncState(ws);
@@ -103,15 +118,15 @@ export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date }): Saving
     const kept = new Set(keep.flatMap((s) => s.files.map(keyOf)));
     const files = changedFiles(v).filter((f) => !kept.has(keyOf(f)));
     if (!files.length && !said) return refuse('nothing', 'Nichts zu speichern.');
-    const before = await Promise.all(files.map(async (f) => (await fileDiff(ws, f.source, f.path))?.before ?? ''));
+    const before = await Promise.all(files.map(async (f) => (f.source === 'books' ? '' : (await fileDiff(ws, f.source, f.path))?.before ?? '')));
     const prompt = [
-      'Group these changed files into saves. Keep together what belongs together (a template and the logo it points to). Write each save\'s message (one line, German, what changes for the company) and why (one sentence). A save that changes figures in the books says so in why.',
+      `Group these changes into saves. Keep together what belongs together (a template and the logo it points to). «${BOOKS}» is the books as the runs wrote them: one item, in a save of its own unless a change of how the app works produced it. Write each save\'s message (one line, German, what changes for the company) and why (one sentence). A save that changes figures in the books says so in why.`,
       said ? 'The owner may hold a save back ("noch nicht": held true), take it back in ("doch": held false), merge saves or rename them. Do what they say with the saves; you cannot edit files here.' : '',
       'Answer: {"reply": "<one or two sentences to the owner>", "saves": [{"message": "...", "why": "...", "files": ["<path>", ...], "held": false}]}. Every path below must be in exactly one save.',
       keep.length ? `Saves that stay as they are (do not repeat them): ${keep.map((s) => `«${s.message}»`).join(', ')}` : '',
       talk.length ? `Conversation so far:\n${talk.map((t) => `Owner: ${t.me}\nYou: ${t.ai}`).join('\n')}` : '',
       said ? `Current saves:\n${JSON.stringify((readProposal(ws)?.saves ?? []).filter((s) => !keep.includes(s)).map((s) => ({ message: s.message, why: s.why, files: s.files.map((f) => f.path), held: !!s.held })))}\nThe owner says: ${said}` : '',
-      `Changed files:\n\n${files.map((f, i) => shown(ws, f, before[i])).join('\n\n')}`,
+      `Changed files:\n\n${files.map((f, i) => shown(ws, f, before[i], v.books.runs)).join('\n\n')}`,
     ].filter(Boolean).join('\n\n');
     let answer: Answer;
     try {
@@ -138,11 +153,12 @@ export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date }): Saving
     if (!repo) return refuse('no-repository', 'Der Workspace ist kein Git-Repository.');
     const p = readProposal(ws);
     if (!p) return refuse('no-proposal', 'Erst Speichern vorbereiten.');
-    const pv = proposalView(ws, p, await changesView(ws));
+    const v = await changes();
+    const pv = proposalView(ws, p, v);
     if (!pv.ready) return refuse('stale', `Seit dem Vorschlag geändert: ${[...pv.uncovered, ...p.saves.filter((s) => pv.stale.includes(s.id)).flatMap((s) => s.files.map((f) => f.path))].join(', ')}`);
     const customizing = customizingNames();
     const go = p.saves.filter((s) => !s.held);
-    const outsideCustomizing = go.flatMap((s) => s.files).filter((f) => !customizing.some((n) => f.path === n || f.path.startsWith(`${n}/`)));
+    const outsideCustomizing = go.flatMap((s) => s.files).filter((f) => f.source !== 'books' && !customizing.some((n) => f.path === n || f.path.startsWith(`${n}/`)));
     if (outsideCustomizing.length) return refuse('not-customizing', `Nicht über Änderungen zu speichern: ${outsideCustomizing.map((f) => f.path).join(', ')}`);
     let saved = 0;
     for (const s of go) {
@@ -152,8 +168,15 @@ export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date }): Saving
         copyFileSync(from, to);
         rmSync(from);
       }
-      const paths = s.files.map((f) => relative(repo, join(ws.paths.root, f.path)));
-      if (await commitExactly(repo, `${s.message}\n\n${s.why ? `${s.why}\n\n` : ''}Vanilla-Kind: customizing\nVanilla-Person: the app's user`, paths)) saved++;
+      const books = s.files.some((f) => f.source === 'books');
+      const paths = [
+        ...s.files.filter((f) => f.source !== 'books').map((f) => relative(repo, join(ws.paths.root, f.path))),
+        ...(books ? recordsPaths(ws).map((p) => relative(repo, p)) : []),
+      ];
+      const trailers = books
+        ? ['Vanilla-Kind: books', ...v.books.runs.map((r) => `Vanilla-Run: ${r.run}`), "Vanilla-Person: the app's user"]
+        : ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
+      if (await commitExactly(repo, `${s.message}\n\n${s.why ? `${s.why}\n\n` : ''}${trailers.join('\n')}`, paths)) saved++;
     }
     writeProposal(ws, { ...p, saves: p.saves.filter((s) => s.held) });
     if (sync) {
@@ -183,8 +206,8 @@ export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date }): Saving
     try {
       const reversed = update(books, PERSON, (b) => reverseRun(b, detail.run!));
       if (!reversed) return refuse('cannot-undo', `Lauf ${detail.run} hat keine Buchungen mehr, die sich stornieren lassen.`);
+      // The reversal waits in Änderungen like any change of the books.
       saveBooks(ws as Workspace, books);
-      await openRecordsCommitter(ws).commitEdit(`Storno: Buchungen von Lauf ${detail.run}`);
       return { ok: true, reversed };
     } catch (e) {
       if (e instanceof ClosedPeriodError) return refuse('closed', `${e.message} Eine Korrektur bucht der Ablauf «Korrektur» in der offenen Periode.`);
@@ -195,7 +218,7 @@ export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date }): Saving
   return {
     view,
     async command(c) {
-      const v = await changesView(ws);
+      const v = await changes();
       const p = readProposal(ws);
       switch (c.kind) {
         case 'prepare': return prepare(v, [], []);

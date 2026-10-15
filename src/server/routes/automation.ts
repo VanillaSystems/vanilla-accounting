@@ -14,7 +14,6 @@ import { askIfReady } from '../../intake/run.js';
 import { lockIntake } from '../../intake/pipeline.js';
 import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import { openRecordsCommitter } from '../../saving/records.js';
 import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type WorkflowDecl } from '../../workflows/model.js';
 import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { setSchedule } from '../../workflows/direct.js';
@@ -22,6 +21,7 @@ import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
 import { inboxFiles } from './scan.js';
 import type { JournalEntry } from '../../types/index.js';
+import type { RunWrote } from '../../saving/model.js';
 
 export const router = Router();
 
@@ -34,27 +34,35 @@ export function queueCommit(f: () => Promise<boolean>): Promise<unknown> {
   return commits;
 }
 
-/** The engine of the open workspace; a workspace opened later gets its own. Opening it commits what a crash left uncommitted. */
+/** The engine of the open workspace; a workspace opened later gets its own. What its runs write waits in Änderungen to be saved. */
 export function engine(): Engine {
   const ws = WS;
   let e = engines.get(ws.paths.root);
   if (!e) {
-    const records = openRecordsCommitter(ws);
-    void queueCommit(() => records.recover());
     const sw = openSwitch(ws);
     baseline(ws, loadWorkflows(APP_ROOT, ws.paths.root).workflows);
     e = openEngine(ws, {
       appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws),
       isApproved: sw.isApproved, approve: sw.approve,
-      onRest: (run, line) => {
-        if (!line) return;
-        const w = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((x) => x.id === run.workflow);
-        void queueCommit(() => records.commitRun({ id: run.id, workflow: run.workflow, label: w ? textIn(w.label, 'de') : run.workflow, item: run.item.id }));
-      },
     });
     engines.set(ws.paths.root, e);
   }
   return e;
+}
+
+/** The live runs that wrote into the books and came to rest after `since` (the last save), newest first: Änderungen's «Bücher · aus Läufen». */
+export function runsWroteSince(since: string | undefined): RunWrote[] {
+  const workflows = loadWorkflows(APP_ROOT, WS.paths.root).workflows;
+  return engine().runs().flatMap((r): RunWrote[] => {
+    if (r.mode !== 'live') return [];
+    const at = r.state.status === 'done' ? r.state.finishedAt : r.steps.at(-1)?.finishedAt;
+    if (!at || (since && at <= since)) return [];
+    const wrote = r.steps.flatMap((s) => s.effects.filter((x) => x.applied).map((x) => x.wrote));
+    const n = (k: 'entries' | 'mappings' | 'receipts') => wrote.reduce((sum, w) => sum + (w[k]?.length ?? 0), 0);
+    if (!n('entries') && !n('mappings') && !n('receipts')) return [];
+    const w = workflows.find((x) => x.id === r.workflow);
+    return [{ run: r.id, workflow: r.workflow, label: w ? textIn(w.label, 'de') : r.workflow, at, entries: n('entries'), links: n('mappings'), receipts: n('receipts') }];
+  }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
 export function automationView(): AutomationView {

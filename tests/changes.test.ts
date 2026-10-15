@@ -1,7 +1,7 @@
 /**
- * Änderungen read (src/saving/changes.ts, model.ts): the AI's draft and files changed outside the
- * app show with their line counts, the books never wait there, Verlauf says whose a save was, a
- * save lists its files, and the line diff keeps every line once and in order.
+ * Änderungen read (src/saving/changes.ts, model.ts): the books wait as one item, the AI's draft and
+ * files changed outside the app show with their line counts, Verlauf says whose a save was, a save
+ * lists its files, and the line diff keeps every line once and in order.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,9 @@ import { join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { changesView, draftDir, fileDiff, saveDetail } from '../src/saving/changes.js';
-import { openRecordsCommitter } from '../src/saving/records.js';
+import { commitExactly } from '../src/workspace/git.js';
+import { recordsPaths } from '../src/saving/changes.js';
+import { relative } from 'node:path';
 import { diffLines, hunks } from '../src/saving/model.js';
 import { loadBooks, saveBooks, update, PERSON } from '../src/books/store.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -37,7 +39,7 @@ test('the line diff keeps every line once, in order, and hunks cut the unchanged
   assert.deepEqual(h.map((l) => l && `${l.kind}${l.text}`), [' l17', ' l18', '-l19', '+x']);
 });
 
-test('the AI\'s draft and an outside edit wait in Änderungen; the books never do', async () => {
+test('the books wait as one item, beside the AI\'s draft and an outside edit', async () => {
   const ws = await company();
   writeFileSync(join(ws.paths.root, 'knowledge', 'rules', 'house.guide.yaml'), 'rules:\n  - one\n  - two\n  - three\n');
   mkdirSync(join(draftDir(ws), 'workflows', 'booking', 'classify'), { recursive: true });
@@ -48,7 +50,7 @@ test('the AI\'s draft and an outside edit wait in Änderungen; the books never d
   const view = await changesView(ws);
   assert.deepEqual(view.outside.map((f) => [f.path, f.state, f.added, f.removed]), [['knowledge/rules/house.guide.yaml', 'modified', 1, 0]]);
   assert.deepEqual(view.draft.map((f) => [f.path, f.state]), [['workflows/booking/classify/step.yaml', 'added']]);
-  assert.equal(view.booksUnsaved, 1, 'the books file shows as unsaved, not as a change to save here');
+  assert.deepEqual(view.books, { files: 1, runs: [] }, 'the books as one item: the runs that wrote are the engine\'s to name');
   assert.equal(view.outside.some((f) => f.path.includes('transactional-data') || f.path === 'ledger.json'), false);
   const diff = await fileDiff(ws, 'outside', 'knowledge/rules/house.guide.yaml');
   assert.deepEqual([diff!.before.split('\n').length, diff!.after.endsWith('three\n')], [4, true]);
@@ -59,7 +61,7 @@ test('Verlauf says whose a save was; a save lists the files it changed', async (
   const books = loadBooks(ws);
   update(books, PERSON, (b) => { b.journalEntries.push({ id: 'x2', transactionRef: 'y', date: '2026-09-21', accountDebit: '6500', accountCredit: '1020', amount: 2, origin: 'manual' }); });
   saveBooks(ws, books);
-  await openRecordsCommitter(ws).commitEdit('Buchung bearbeitet');
+  await commitExactly(ws.paths.repository, 'Buchung bearbeitet\n\nVanilla-Kind: books', recordsPaths(ws).map((p) => relative(ws.paths.repository, p)));
   const view = await changesView(ws);
   assert.deepEqual(view.history.map((s) => [s.subject, s.kind]), [['Buchung bearbeitet', 'books'], ['Workspace set up', 'outside']]);
   const detail = await saveDetail(ws, view.history[0].oid);

@@ -1,11 +1,27 @@
 /**
- * Änderungen as data (docs/0.4.0/ui/design.md, "Two paths into git"). Browser-safe. The books are
- * committed by the app; what waits here is customizing: the AI's draft (data/draft/, a copy of
- * the files it changed) and files changed outside the app (Claude Code, an editor). Verlauf is
- * git's log, by day.
+ * Änderungen as data (docs/0.4.0/ui/design.md; the mockup's screen 7). Browser-safe. Everything
+ * that changed since the last save waits here until the person saves it: the books as the runs
+ * and direct edits wrote them, the AI's draft (data/draft/, a copy of the files it changed) and
+ * files changed outside the app (Claude Code, an editor). Workflows and the AI write; they do not
+ * save. Verlauf is git's log.
  */
 
-export type ChangeSource = 'draft' | 'outside';
+/** Where a change waits: the books (one item, written by runs and edits), the AI's draft, a file changed outside the app. */
+export type ChangeSource = 'draft' | 'outside' | 'books';
+
+/** The path that stands for the books in a prepared save. */
+export const BOOKS = 'Bücher';
+
+/** What one run wrote into the books since the last save. */
+export interface RunWrote { run: string; workflow: string; label: string; at: string; entries: number; links: number; receipts: number }
+
+/** The books' changes since the last save. */
+export interface BooksChange {
+  /** The books' own files that differ from the last save (ledger, books/*.jsonl, run log, invoices). */
+  files: number;
+  /** The runs that wrote since the last save, newest first. A direct edit in the app has none. */
+  runs: RunWrote[];
+}
 
 /** How a saved change takes effect (workflows.md "Changing a workflow"): at once, once switched on, or after its maintainer's review. */
 export type ChangeEffect = 'applies-now' | 'needs-switch-on' | 'needs-maintainer';
@@ -39,8 +55,7 @@ export interface ChangesView {
   repository: boolean;
   draft: FileChange[];
   outside: FileChange[];
-  /** Records files the app has not committed yet (normally none: runs and edits commit at once). */
-  booksUnsaved: number;
+  books: BooksChange;
   history: SaveSummary[];
   proposal?: ProposalView;
   sync: SyncState;

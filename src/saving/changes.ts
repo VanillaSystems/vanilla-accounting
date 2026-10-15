@@ -1,7 +1,8 @@
 /**
- * What Änderungen reads (docs/0.4.0/ui/design.md): the AI's draft in data/draft/ against the books
- * folder, customizing files changed outside the app against git's HEAD, records the app has not
- * committed, and Verlauf. Only this module and records.ts read or write git.
+ * What Änderungen reads (docs/0.4.0/ui/design.md, the mockup's screen 7): the books as they differ
+ * from the last save, the AI's draft in data/draft/ against the books folder, customizing files
+ * changed outside the app against git's HEAD, and Verlauf. Only this module and saving.ts read or
+ * write git (and the year close, which commits itself as a locked save).
  */
 import fs, { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -9,7 +10,7 @@ import { join, relative } from 'node:path';
 import git from 'isomorphic-git';
 import { repositoryAt } from '../workspace/git.js';
 import { LAYOUT, yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
-import { counts, type ChangesView, type FileChange, type FileDiff, type SaveDetail, type SaveSummary } from './model.js';
+import { counts, type BooksChange, type ChangesView, type FileChange, type FileDiff, type SaveDetail, type SaveSummary } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
@@ -19,7 +20,7 @@ export function customizingNames(): string[] {
   return [...top, 'logos', 'master-data'];
 }
 
-/** The records: committed by the app (records.ts), never through Änderungen. */
+/** The records: the books, which a save of kind books commits. */
 export const recordsPaths = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.transactional, ws.paths.invoices, join(ws.paths.root, 'collected')];
 
 export const draftDir = (ws: Ws): string => join(ws.paths.data, 'draft');
@@ -71,14 +72,28 @@ export async function outsideChanges(ws: Ws): Promise<FileChange[]> {
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-/** How many of the books' own files differ from HEAD (the app commits them; normally zero). */
-export async function booksUnsaved(ws: Ws): Promise<number> {
+/** The books' own files: hashing every receipt and statement (hundreds of MB) would make the page slow. */
+const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog])];
+
+/** How many of the books' own files differ from the last save. The runs that wrote them are the engine's to name. */
+export async function booksChange(ws: Ws): Promise<BooksChange> {
   const repo = await repositoryAt(ws.paths.repository);
-  if (!repo) return 0;
-  // Only the books' own files: hashing every receipt and statement (hundreds of MB) would make the page slow.
-  const own = [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog])];
-  const rows = await git.statusMatrix({ fs, dir: repo, filepaths: own.map((p) => relative(repo, p)) });
-  return rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1) && !(head === 0 && workdir === 0)).length;
+  if (!repo) return { files: 0, runs: [] };
+  const rows = await git.statusMatrix({ fs, dir: repo, filepaths: ownBooks(ws).map((p) => relative(repo, p)) });
+  return { files: rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1) && !(head === 0 && workdir === 0)).length, runs: [] };
+}
+
+/** The books as they are now, as one fingerprint: their own files' content and the names of the receipts and statements beside them. */
+export function booksBasis(ws: Ws): string {
+  const h = createHash('sha256');
+  for (const p of ownBooks(ws)) for (const f of existsSync(p) && statSync(p).isDirectory() ? files(p).sort().map((x) => join(p, x)) : [p]) h.update(f).update(read(f));
+  for (const y of yearsOf(ws.paths)) for (const part of [yearPaths(ws.paths, y).receipts, yearPaths(ws.paths, y).statements]) h.update(files(part).sort().join('\n'));
+  return h.digest('hex').slice(0, 16);
+}
+
+/** When the last save was made: what counts as since. */
+export async function lastSaveAt(ws: Ws): Promise<string | undefined> {
+  return (await history(ws, 1))[0]?.at;
 }
 
 const trailer = (message: string, key: string): string | undefined => message.match(new RegExp(`^${key}: (.+)$`, 'm'))?.[1];
@@ -105,9 +120,9 @@ export async function history(ws: Ws, depth = 200): Promise<SaveSummary[]> {
 
 export async function changesView(ws: Ws): Promise<ChangesView> {
   const repository = !!(await repositoryAt(ws.paths.repository));
-  const [draft, outside, unsaved, log] = [draftChanges(ws), await outsideChanges(ws), await booksUnsaved(ws), await history(ws)];
-  const rev = createHash('sha256').update(JSON.stringify([draft, outside, unsaved, log[0]?.oid])).digest('hex').slice(0, 16);
-  return { rev, repository, draft, outside, booksUnsaved: unsaved, history: log, sync: { remote: false, ahead: 0 } };
+  const [draft, outside, books, log] = [draftChanges(ws), await outsideChanges(ws), await booksChange(ws), await history(ws)];
+  const rev = createHash('sha256').update(JSON.stringify([draft, outside, books, log[0]?.oid])).digest('hex').slice(0, 16);
+  return { rev, repository, draft, outside, books, history: log, sync: { remote: false, ahead: 0 } };
 }
 
 /** One save: its message and the files it changed against its parent. */

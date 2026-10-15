@@ -14,12 +14,11 @@ import { router as files } from './files.js';
 import { router as invoices } from './routes/invoices.js';
 import { router as statements } from './routes/statements.js';
 import { router as exportBundle } from './routes/export.js';
-import { router as automation, queueCommit } from './routes/automation.js';
+import { router as automation } from './routes/automation.js';
 import { router as changes } from './routes/changes.js';
 import { router as assistant } from './routes/assistant.js';
 import { router as drop } from './routes/drop.js';
 import { router as sourcesRoute } from './routes/sources.js';
-import { openRecordsCommitter } from '../saving/records.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
@@ -64,19 +63,6 @@ if (READONLY) {
 
 app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
-});
-
-// A person's direct edit of the books is one commit (docs/0.4.0/ui/design.md, "Two paths into git"):
-// after a write to the records succeeded, the app commits ledger.json and transactional-data/.
-const RECORDS: Array<[RegExp, string]> = [
-  [/^\/api\/receipts/, 'Beleg bearbeitet'], [/^\/api\/vision/, 'Beleg gelesen'], [/^\/api\/transactions/, 'Bewegung bearbeitet'],
-  [/^\/api\/mapping/, 'Zuordnung bearbeitet'], [/^\/api\/journal-entries/, 'Buchung bearbeitet'], [/^\/api\/statements/, 'Kontoauszug eingelesen'],
-  [/^\/api\/year-close/, 'Jahresabschluss'], [/^\/api\/invoices/, 'Rechnung bearbeitet'], [/^\/api\/customers/, 'Kunde bearbeitet'], [/^\/api\/drop\/[^/]+\/commit$/, 'Kontoauszug eingelesen'],
-];
-app.use((req, res, next) => {
-  const hit = req.method !== 'GET' ? RECORDS.find(([re]) => re.test(req.path)) : undefined;
-  if (hit) res.on('finish', () => { if (res.statusCode < 400) void queueCommit(() => openRecordsCommitter(WS).commitEdit(hit[1])); });
-  next();
 });
 
 app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, sourcesRoute);
