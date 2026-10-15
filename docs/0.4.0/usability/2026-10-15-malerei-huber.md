@@ -46,3 +46,21 @@ good (keep).
 | 30 | ai | blocker | By design the sidebar never changes the books (src/assistant/claude.ts:36-42): "Fragen" says "switch to Ändern"; "Ändern" only drafts rules/settings into data/draft/ for saving under Änderungen. "This invoice is wrong, change it to …" cannot be fulfilled. | 42 |
 | 31 | ai | medium | Opening the sidebar squeezes the receipt detail into a one-word-wide column; the top bar overlaps the detail. Fragen/Ändern toggle is a choice the owner shouldn't have to make. | 41 |
 | 32 | layout | low | A horizontal scrollbar under the list on a 1024-pt-wide window. | 33 |
+| 33 | receipts | high | Books that never filed: a June invoice paid in July sat in Q2 while the owner works on Q3. | retest |
+| 34 | bank | high | A firm that starts its books mid-year has no opening balance: the first statement run says «1 weicht ab». Setup says the balances «can be entered later», but nothing shows where. | retest 09 |
+
+## Fixed on 2026-10-15 (app branch 0.4.0-drop), checked again in a fresh VM (rc.95)
+
+| # | Fix | Commit |
+|---|-----|--------|
+| 3, 6 | The app offers to move itself into Applications; moved by the app, macOS does not ask again. | 2ff0fdd |
+| 12, 13 | Setup jumps to the first error, focuses it, and names every wrong field next to the button; only the wrong bank field is marked. | 2ff0fdd |
+| 15, 22 | New books show three first steps; books that never filed open on the period of their first payment (Q3), everywhere. | 9363ad3 |
+| 17, 19, 21, 24, 26 | Drop texts: files are taken at once; a bank CSV and Word/Excel files are refused with what works; one «Kontoauszüge» tab; a statement shows its dates and payments; a waiting receipt says what it lacks. | 2ff0fdd, 784f832 |
+| 23 | Without a model the text gives date, total and Swiss VAT when the figures add up at a Swiss rate; unknown VAT reads «MWST noch nicht gelesen», never «keine CH-MWST». | d6b2c87 |
+| 28, 33 | An open receipt without a date, or from before the working period, needs you in «Braucht dich». | 2ff0fdd, 784f832 |
+| 30, 31 | The AI sidebar does what the owner asks: receipt facts, links and bookings change at once, each with «Rückgängig»; no Fragen/Ändern switch; a small window keeps room for the page. | 8df9203, 98594d6 |
+
+Still open: 1, 2 (signing, waits for the Developer ID), 8 (trades preset), 10 (Saldosteuersatz), 18 (the
+upload hang did not come back in the retest), 25 (photos need Claude), 29 (Claude Code needs a terminal),
+34 (opening balances).

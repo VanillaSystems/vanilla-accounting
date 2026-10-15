@@ -10,6 +10,9 @@
 #   vm.sh type TEXT | key KEY    keyboard (click a password field first; key: enter, tab, esc …)
 #   vm.sh sh 'CMD'          a shell command in the VM (user admin)
 #   vm.sh put FILE…         copy files into the VM's ~/Downloads, quarantined as a download
+#   vm.sh claude            Claude Code into the VM (as an owner installs it); with the owner's token
+#                           in ~/.vanilla-accounting/e2e/claude-token (claude setup-token) the app's
+#                           model calls run on that subscription
 #   vm.sh app               (re)start the installed app with its DevTools port, log in /tmp/va.log
 #   vm.sh down [run]        stop and delete the VM and the tunnel; the evidence stays
 #   vm.sh list
@@ -62,9 +65,15 @@ click) load; vnc move "$(px "$1")" "$(px "$2")" click 1 ;;
 dclick) load; vnc move "$(px "$1")" "$(px "$2")" click 1 pause 0.1 click 1 ;;
 type) load; vnc type "$1" ;;
 key) load; vnc key "$1" ;;
+claude)
+  load
+  ssh_ 'curl -fsSL https://claude.ai/install.sh | bash >/tmp/claude-install.log 2>&1; grep -q ".local/bin" ~/.zshrc 2>/dev/null || echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.zshrc; ~/.local/bin/claude --version'
+  TOKEN="$HOME/.vanilla-accounting/e2e/claude-token"
+  if [ -f "$TOKEN" ]; then ssh_ 'umask 077; cat > ~/.claude-token' < "$TOKEN"; echo "token in the VM; vm.sh app passes it to the app"; else echo "no $TOKEN: the app's model calls fail with not logged in"; fi
+  ;;
 app)
   load
-  ssh_ 'pkill -9 -f "/Applications/Vanilla Accounting.app" 2>/dev/null; sleep 2; (nohup "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222 > /tmp/va.log 2>&1 &); for i in $(seq 1 30); do curl -s localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "app did not open its DevTools port" >&2; exit 1'
+  ssh_ 'pkill -9 -f "/Applications/Vanilla Accounting.app" 2>/dev/null; sleep 2; [ -f ~/.claude-token ] && export CLAUDE_CODE_OAUTH_TOKEN=$(cat ~/.claude-token); (nohup "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222 > /tmp/va.log 2>&1 &); for i in $(seq 1 30); do curl -s localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "app did not open its DevTools port" >&2; exit 1'
   [ -f "$ROOT/$RUN/tunnel.pid" ] && kill "$(cat "$ROOT/$RUN/tunnel.pid")" 2>/dev/null || true
   PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
   ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -N -L "$PORT:127.0.0.1:9222" "admin@$IP" & echo $! > "$ROOT/$RUN/tunnel.pid"
