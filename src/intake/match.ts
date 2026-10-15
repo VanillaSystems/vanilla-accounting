@@ -13,48 +13,15 @@ import { periodLock, receiptHome, type Books } from '../books/store.js';
 import { findFile } from '../workspace/workspace.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
 import { baseCurrency } from '../engines/index.js';
+import { textFacts } from '../parsers/receipt-text.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
 
-function filterByDateWindow(txs: BankTransaction[], centerDate?: string, windowDays = 14) {
-  if (!centerDate) return txs.slice(0, 60);
-  const center = new Date(centerDate).getTime();
-  const window = windowDays * 24 * 60 * 60 * 1000;
-  return txs.filter((tx) => tx.date && Math.abs(new Date(tx.date).getTime() - center) <= window);
-}
-
-function filterByAmount(txs: BankTransaction[], receiptAmount?: number, receiptCurrency?: string): BankTransaction[] {
-  if (!receiptAmount || receiptAmount <= 0) return txs;
-
-  // Convert receipt amount to CHF for comparison (simplified rates)
-  const chfAmount = toCHF(receiptAmount, receiptCurrency || baseCurrency());
-
-  // Allow ±30% range to account for fees, partial payments, currency fluctuations
-  const minAmount = chfAmount * 0.7;
-  const maxAmount = chfAmount * 1.3;
-
-  return txs.filter((tx) => {
-    const txAmount = toCHF(tx.amount, tx.currency || baseCurrency());
-    return txAmount >= minAmount && txAmount <= maxAmount;
-  });
-}
-
 // Amazon/AliExpress/FedEx group multiple separate purchases (each its own receipt) into a
 // single bank transaction — a receipt's amount is often only a fraction of the transaction
-// total, so the amount filter must not exclude the transaction for these vendors (AGENTS.md).
+// total, so the amount must not rank the transaction out for these vendors (AGENTS.md).
 const GROUPED_VENDOR_PATTERN = /amazon|aliexpress|fedex/i;
-
-function isGroupedVendorReceipt(text?: string): boolean {
-  return !!text && GROUPED_VENDOR_PATTERN.test(text);
-}
-
-function filterByVendorKeyword(txs: BankTransaction[], text: string): BankTransaction[] {
-  const match = text.match(GROUPED_VENDOR_PATTERN);
-  if (!match) return txs;
-  const keyword = match[0].toLowerCase();
-  return txs.filter((tx) => (tx.description || '').toLowerCase().includes(keyword));
-}
 
 function toCHF(amount: number, currency: string): number {
   const rates: Record<string, number> = {
@@ -65,17 +32,6 @@ function toCHF(amount: number, currency: string): number {
   };
   const rate = rates[currency] || 1;
   return amount * rate;
-}
-
-function rankByProximity(txs: BankTransaction[], targetAmount: number, targetCurrency: string): BankTransaction[] {
-  const chfTarget = toCHF(targetAmount, targetCurrency);
-  return txs
-    .map((tx) => ({
-      tx,
-      diff: Math.abs(toCHF(tx.amount, tx.currency || baseCurrency()) - chfTarget)
-    }))
-    .sort((a, b) => a.diff - b.diff)
-    .map((item) => item.tx);
 }
 
 function guessDate(filename: string): string | undefined {
@@ -102,16 +58,63 @@ function resolveCollision(desiredName: string, taken: (name: string) => boolean)
   return `${base}-${i}.pdf`;
 }
 
-/** The payments the model is shown for one receipt: near its date, near its amount (or its vendor's), best first, at most 20. */
-function candidates(receipt: Receipt, all: BankTransaction[]): BankTransaction[] {
-  let txs = filterByDateWindow(all, receipt.date ?? guessDate(receipt.filename));
-  // Grouped vendors (Amazon/AliExpress/FedEx) bundle multiple receipts into one transaction,
-  // so a receipt's amount can be much smaller than the transaction total — filter by vendor
-  // keyword instead of amount so the correct transaction isn't excluded as a candidate.
-  if (isGroupedVendorReceipt(receipt.extractedText)) txs = filterByVendorKeyword(txs, receipt.extractedText!);
-  else if (receipt.amount && receipt.amount > 0) txs = filterByAmount(txs, receipt.amount, receipt.currency);
-  if (receipt.amount && receipt.amount > 0) txs = rankByProximity(txs, receipt.amount, receipt.currency || baseCurrency());
-  return txs.slice(0, 20);
+/** What a receipt says before the model reads it: its date and total as stored, from the file name, the VAT block or the text. */
+function factsOf(r: Receipt): { date?: string; amount?: number; currency?: string } {
+  const text = textFacts(r.extractedText ?? '');
+  const groups = r.vatSummary ?? [];
+  const gross = groups.length && groups.every((g) => g.gross != null) ? groups.reduce((sum, g) => sum + g.gross!, 0) : undefined;
+  return { date: r.date ?? guessDate(r.filename) ?? text.date, amount: r.amount ?? gross ?? text.amount, currency: r.currency ?? text.currency };
+}
+
+const squash = (s: string) => s.toUpperCase().replace(/[\s\-/]/g, '');
+
+/** Invoice, order and customer numbers in a receipt's text («FM-79010», «RE-4471», «2026-031»): no dates, amounts or postcodes. */
+function numbersIn(text: string): string[] {
+  const tokens = text.split(/[\s,;:()[\]«»"']+/).map((x) => x.replace(/^[-/#]+|[-/#.]+$/g, ''));
+  return [...new Set(tokens.filter((x) => !x.includes('.') && /\d/.test(x) && (/[A-Za-z\-/]/.test(x) || x.length >= 5)).map(squash).filter((x) => x.length >= 5))];
+}
+
+/** Words of a payment's text that name who was paid, not what the bank calls the booking. */
+const BANK_WORDS = new Set(['zahlung', 'gutschrift', 'belastung', 'lastschrift', 'einkauf', 'karte', 'debit', 'kredit', 'transfer', 'payment', 'rechnung', 'auftrag', 'dauerauftrag', 'ebanking', 'twint', 'mastercard', 'visa', 'august', 'september', 'oktober', 'november', 'dezember', 'januar', 'februar', 'april', 'juni', 'juli']);
+const nameWords = (tx: BankTransaction) => [...new Set([tx.description, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference ?? ''])].join(' ').toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !BANK_WORDS.has(w));
+
+const DAY = 864e5;
+const CANDIDATES = 20;
+
+/**
+ * The payments the model is shown for one receipt, at most 20, best first: the open payments (no
+ * receipt yet, not in a filed quarter), ranked by an invoice number of the receipt in the payment's
+ * text, the amount, the vendor's name and the date; newest first where nothing tells them apart. A
+ * grouped vendor's payment (Amazon, AliExpress, FedEx) stays a candidate with receipts on it, and
+ * its amount does not count.
+ */
+export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false): BankTransaction[] {
+  const text = receipt.extractedText ?? '';
+  const grouped = text.match(GROUPED_VENDOR_PATTERN)?.[0].toLowerCase();
+  const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee' && !isClosed(tx.date));
+  const ofVendor = grouped ? usable.filter((tx) => (tx.description || '').toLowerCase().includes(grouped)) : [];
+  const pool = ofVendor.length ? ofVendor : usable.filter((tx) => !linked.has(tx.ref));
+  const { date, amount, currency } = factsOf(receipt);
+  const want = amount ? Math.abs(toCHF(amount, currency || baseCurrency())) : undefined;
+  const numbers = numbersIn(text);
+  const lower = text.toLowerCase();
+  const score = (tx: BankTransaction): number => {
+    const paid = squash([tx.description, ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' '));
+    let s = numbers.some((n) => paid.includes(n)) ? 50 : 0;
+    if (want && !grouped) {
+      const off = Math.abs(Math.abs(toCHF(tx.amount, tx.currency || baseCurrency())) - want) / want;
+      s += off <= 0.005 ? 40 : off <= 0.05 ? 25 : off <= 0.3 ? 10 : 0;
+    }
+    s += 8 * Math.min(2, nameWords(tx).filter((w) => lower.includes(w)).length);
+    if (date && tx.date) {
+      const days = Math.abs(Date.parse(tx.date) - Date.parse(date)) / DAY;
+      s += days <= 3 ? 12 : days <= 14 ? 8 : days <= 45 ? 3 : days > 120 ? -5 : 0;
+    }
+    return s;
+  };
+  return pool.map((tx) => ({ tx, s: score(tx) }))
+    .sort((a, b) => b.s - a.s || (b.tx.date ?? '').localeCompare(a.tx.date ?? ''))
+    .slice(0, CANDIDATES).map((x) => x.tx);
 }
 
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
@@ -124,6 +127,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   }
   const visionNeeded = staged.filter((r) => r.needsVisionReview);
   const toProcess = staged.filter((r) => !r.needsVisionReview);
+  const taken = new Set(snapshot.mappings.map((m) => m.transactionRef));
+  const lock = periodLock(snapshot);
   const total = staged.length;
   let completed = 0;
   progress(0, total);
@@ -176,7 +181,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     }
     const useVision = (receipt.extractedText?.length ?? 0) < 200;
     // absolute: the lean call runs from an empty directory
-    const prompt = buildMatchPrompt(receipt.extractedText, candidates(receipt, snapshot.transactions), useVision ? srcPath : undefined);
+    const prompt = buildMatchPrompt(receipt.extractedText, candidates(receipt, snapshot.transactions, taken, lock.isClosed), useVision ? srcPath : undefined);
     let result: MatchResult | null;
     try {
       result = parseMatchResult(await ask!(prompt, { step: 'evidence.guide.yaml#ai', model: 'sonnet', timeoutMs: 120_000, read: useVision ? [IMPORT_DIR] : undefined }));

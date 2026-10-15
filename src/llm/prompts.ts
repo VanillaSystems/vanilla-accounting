@@ -39,7 +39,7 @@ export function buildMatchPrompt(
 
 ${receiptSection}
 
-## Bank Statement Transactions (filtered by date window)
+## Bank Statement Transactions (the open payments most likely to fit, best first)
 ${JSON.stringify(transactions, null, 2)}
 
 ## Instructions
@@ -53,7 +53,7 @@ Rules:
 - One receipt can match multiple transactions (e.g. Wise multi-currency splits where one purchase debits multiple accounts)
 - Multiple receipts can match one transaction (e.g. FedEx freight invoice + customs invoice)
 - Multi-currency: receipt may be in EUR/USD, bank transaction in CHF
-- Transactions are already pre-filtered by amount proximity and date window
+- Transactions are a short selection of the open payments, ranked by an invoice number in their text, amount, vendor name and date
 - If no good match exists, return empty matchedTransactionRefs and confidence < 0.5
 
 ## Grouped Vendor Note (Amazon, AliExpress, FedEx)
