@@ -103,6 +103,7 @@ function List({ route, books, nav }: Props) {
           </Fragment>
         ))}
       </div>
+      {ws ? <div className="appver mono">{t('company.appVersion', { version: ws.appVersion })}</div> : null}
     </>
   );
 }

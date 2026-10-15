@@ -11,10 +11,19 @@ const signed = Boolean(env.CSC_LINK);
 const notarize = signed && Boolean(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID);
 /** owner/repo of the GitHub releases the app updates from; without it the app has no update feed. */
 const releases = env.VANILLA_RELEASES?.split('/');
+/** The build tools/desktop/build.mjs described (src/version.ts): names the dmg, and its number is the bundle version. */
+const build = (() => {
+  const file = join(__dirname, '..', 'out', 'desktop', 'build.json');
+  if (require('node:fs').existsSync(file)) return JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
+  // Read before a build (tests): the version package.json names.
+  const { version } = require('../package.json');
+  return { version, file: version, number: 0 };
+})();
 
 module.exports = {
   appId: 'org.vanilla-accounting.desktop',
   productName: 'Vanilla Accounting',
+  buildVersion: String(build.number),
   directories: { output: 'release', buildResources: 'desktop' },
   // What the app reads at run time from its own folder (APP_ROOT): the bundle, the built UI and the
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
@@ -75,7 +84,7 @@ module.exports = {
     identity: signed ? undefined : null,
     notarize,
   },
-  dmg: { artifactName: '${productName}-${version}-${arch}.${ext}' },
+  dmg: { artifactName: '${productName}-' + build.file + '-${arch}.${ext}' },
   // electron-updater reads its feed from here; the app checks only when package.json's desktop.autoUpdate is on.
   publish: releases?.length === 2 ? { provider: 'github', owner: releases[0], repo: releases[1] } : null,
 };

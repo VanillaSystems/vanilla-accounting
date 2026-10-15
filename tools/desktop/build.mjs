@@ -4,14 +4,19 @@
  * dependency in package.json, since electron-builder packs only those. A package the app does not
  * pack (desktop/not-packed.cjs) may only be imported dynamically, on a path the app does not take.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
+import { describeBuild } from '../../src/version.ts';
 
 const { NOT_PACKED } = createRequire(import.meta.url)('../../desktop/not-packed.cjs');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-const common = { bundle: true, platform: 'node', target: 'node22', packages: 'external', sourcemap: 'linked', logLevel: 'warning', metafile: true };
+// The packed app has no git: its build is baked in, and electron-builder names the dmg after it.
+const app = describeBuild(process.cwd());
+mkdirSync('out/desktop', { recursive: true });
+writeFileSync('out/desktop/build.json', JSON.stringify(app));
+const common = { define: { 'process.env.VANILLA_BUILD': JSON.stringify(app.version) }, bundle: true, platform: 'node', target: 'node22', packages: 'external', sourcemap: 'linked', logLevel: 'warning', metafile: true };
 
 const results = await Promise.all([
   build({ ...common, entryPoints: ['src/desktop/main.ts'], outfile: 'out/desktop/main.mjs', format: 'esm' }),
@@ -34,4 +39,4 @@ if (unpacked.length) {
   console.error(`The desktop bundle imports ${unpacked.join(', ')} at start, which desktop/not-packed.cjs leaves out of the app: import it dynamically where it is used.`);
   process.exit(1);
 }
-console.log(`out/desktop: main.mjs, preload.cjs (packages: ${[...imported].sort().join(', ')})`);
+console.log(`out/desktop: main.mjs, preload.cjs, build ${app.version} (packages: ${[...imported].sort().join(', ')})`);

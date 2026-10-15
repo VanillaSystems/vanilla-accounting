@@ -24,6 +24,7 @@ import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { fail, ok, warn, workspaceChecks, type Result } from '../workspace/checks.js';
 import { APP_ROOT, openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
+import { appVersion } from '../version.js';
 
 function run(cmd: string, args: string[]): string | undefined {
   try {
@@ -105,6 +106,7 @@ async function mailChecks(ws: Workspace, login: boolean): Promise<Result[]> {
 
 async function main(): Promise<number> {
   const { values } = parseArgs({ options: { workspace: { type: 'string' }, mail: { type: 'boolean' } } });
+  console.log(`Vanilla Accounting ${appVersion()}\n`);
   const results = toolChecks();
   let ws: Workspace | undefined;
   try {

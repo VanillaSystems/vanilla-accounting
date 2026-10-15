@@ -2116,6 +2116,7 @@ export const messages = {
   'sources.more': 'und {n} weitere',
   'sources.approve': 'Einschalten',
   'sources.approveWhy': 'Eingeschaltet holt die Quelle live, mit genau dieser Reichweite. Jede Änderung an ihr wartet wieder aufs Einschalten.',
+  'company.appVersion': 'Vanilla Accounting {version}',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

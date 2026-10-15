@@ -16,6 +16,9 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Every build says which it is: `0.4.0-rc.56+g36b66d6` (the version worked toward, commits since
+  the last release, the commit), under Firma's sections, in `npm run doctor`, in the Mac app's dmg
+  name, and as `Vanilla-Build:` in every commit the app makes in the books.
 - `npm run workflow -- booking <ref>` (or `--open`) books a transaction by a run of
   `workflows/booking/`: each step, its outcome and the model's answer are recorded outside the
   workspace, and `--replay <run-id>` shows what a recorded run would book today without writing.

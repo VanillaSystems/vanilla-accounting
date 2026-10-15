@@ -18,6 +18,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/accounting/', 'split'],
   ['src/books/', 'core'],
   ['src/core/', 'core'],
+  ['src/version.ts', 'core'],
   ['src/types/', 'core'],
   ['src/workspace/', 'core'],
   ['src/engines/', 'engine'],

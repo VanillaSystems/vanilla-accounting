@@ -8,7 +8,7 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 39 | 22 |
+| core | 40 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
 | split | 43 | 26 |
@@ -26,6 +26,7 @@ Layers are assigned by path prefix, most specific first:
 - `src/accounting/` → split
 - `src/books/` → core
 - `src/core/` → core
+- `src/version.ts` → core
 - `src/types/` → core
 - `src/workspace/` → core
 - `src/engines/` → engine

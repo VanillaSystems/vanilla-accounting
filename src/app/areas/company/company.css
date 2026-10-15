@@ -14,3 +14,6 @@
 .srclines summary { cursor: pointer; color: var(--accent); }
 .srcproblems { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--neg); }
 .srcon { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 0 0 10px; }
+
+/* The app's build under the sections, for a person reporting what they run. */
+.appver { margin: 18px 12px 0; font-size: 11px; color: var(--faint); user-select: text; }

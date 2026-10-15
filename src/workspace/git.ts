@@ -9,6 +9,7 @@ import fs, { existsSync, readFileSync, renameSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import git from 'isomorphic-git';
+import { appVersion } from '../version.js';
 
 /** The repository `dir` is the root of, or null when it is none or lies inside another one. */
 export async function repositoryAt(dir: string): Promise<string | null> {
@@ -59,7 +60,9 @@ export async function commitExactly(dir: string, message: string, paths: string[
       else await git.add({ fs, dir, filepath });
     }
     if (!(await git.statusMatrix({ fs, dir, filepaths: wanted })).some(differs)) return false;
-    await git.commit({ fs, dir, message, author: await authorOf(dir) });
+    // The app's own commits (they carry Vanilla-Kind) say which build made them.
+    const stamped = /\nVanilla-Kind: /.test(message) ? `${message}\nVanilla-Build: ${appVersion()}` : message;
+    await git.commit({ fs, dir, message: stamped, author: await authorOf(dir) });
     return true;
   } finally {
     for (const [filepath] of others) {
