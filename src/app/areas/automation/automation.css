@@ -198,3 +198,10 @@
 .wfchip .bot { width: 12px; height: 12px; color: var(--ai); }
 .qsec p.m, .qh .m, .qrow .m { font-size: 12px; color: var(--muted); }
 .qsec p.m { margin: 8px 2px; }
+
+/* The workflow list (the mockup's list): the name, its trigger chips under it, the open count */
+.row.wfrow:has(.wftrig) { grid-template-rows: auto auto; height: auto; padding-top: 7px; padding-bottom: 7px; row-gap: 4px; }
+.wfrow .t .bot { width: 13px; height: 13px; margin-left: 6px; color: var(--ai); vertical-align: -1px; }
+.wftrig { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; }
+.wftrig .trig { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 11px; line-height: 18px; color: var(--muted); }
+.wftrig .trig svg { width: 11px; height: 11px; }

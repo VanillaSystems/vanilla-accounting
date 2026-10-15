@@ -35,6 +35,14 @@ const phaseLabel = (p: string) => t(`automation.phase.${p}` as 'automation.phase
 /** 15.10.2026 11:30, in the viewer's time zone (runs store UTC). */
 const when = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
+/** The small icon before a trigger chip (the mockup's list): a clock, a tray, a bolt, a hand. */
+const TRIGGER_ICON: Record<Trigger['kind'], ReactNode> = {
+  schedule: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></svg>,
+  outside: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4" /><path d="M5 16v3h14v-3" /></svg>,
+  event: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 13h6l-1 8 8-10h-6z" /></svg>,
+  manual: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v5M12 10V4a1.5 1.5 0 0 1 3 0v6M15 10V6a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 2.5-1.5L9 12" /></svg>,
+};
+
 /** The rows of the list, in order: what J and K move through. */
 function rowsOf(view: AutomationView | undefined): R[] {
   const ws = view?.workflows ?? [];
@@ -86,13 +94,15 @@ function List({ route, nav, books }: Props) {
             <Fragment key={p}>
               <div className="group"><span>{phaseLabel(p)}</span></div>
               {ws.map((w) => {
-                const runs = view!.runs.filter((r) => r.workflow === w.id).length;
+                const open = view!.tasks.filter((x) => x.workflow === w.id).length + view!.runs.filter((r) => r.workflow === w.id && r.status === 'stuck').length;
+                const on = w.triggers.filter((tr) => !tr.off);
                 return row({ area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph' }, (
                   <>
-                    <span className="t">{hasAi(w, view!.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}{label(w)}</span>
+                    <span className="t">{label(w)}{hasAi(w, view!.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}</span>
                     <span className="a">
-                      {w.runnable.ok ? <span className="m">{runs ? t('automation.runCount', { n: runs }) : tx(w.cadence)}</span> : <span className="wfpill muted">{t('automation.notRunnable')}</span>}
+                      {!w.runnable.ok ? <span className="wfpill muted">{t('automation.notRunnable')}</span> : open ? <span className="wfpill warn">{t('automation.openCount', { n: open })}</span> : null}
                     </span>
+                    {on.length ? <span className="wftrig">{on.map((tr, i) => <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>)}</span> : null}
                   </>
                 ));
               })}
