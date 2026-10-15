@@ -143,11 +143,53 @@ test('the prompt carries each receipt\'s VAT facts', async () => {
 
 test('ten transactions per model call, and an unanswered one stays unbooked', async () => {
   const b = books(Array.from({ length: 12 }, (_, i) => tx({ ref: `T${i}` })));
-  const { ask, prompts } = stubAsk((ref) => (ref === 'T11' ? [] : [expense(1)]));
+  const { ask, prompts } = stubAsk((ref) => (ref === 'T11' ? [] : [expense(50)]));
   const { failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
   assert.equal(prompts.length, 2);
   assert.deepEqual(failed, [{ ref: 'T11', reason: 'no entries in response' }]);
   assert.ok(!b.journalEntries.some((e) => e.transactionRef === 'T11'));
+});
+
+test('an answer with an entry without an account, or one that does not add up to the payment, never lands', async () => {
+  const b = books([tx({ ref: 'NOACC', amount: 100 }), tx({ ref: 'SHORT', amount: 100 }), tx({ ref: 'OK', amount: 100 })]);
+  const { ask } = stubAsk((ref) => ref === 'NOACC'
+    ? [{ accountDebit: '', accountCredit: '', amount: 100, vatCode: 'I0', description: 'Leer' }]
+    : ref === 'SHORT' ? [expense(60)] : [expense(100)]);
+  const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(classified, ['OK']);
+  assert.deepEqual(failed.map((f) => [f.ref, f.refusal?.code]), [['NOACC', 'classifyAccount'], ['SHORT', 'classifyBalance']]);
+  assert.deepEqual(failed[1].refusal, { code: 'classifyBalance', params: { date: '2026-08-14', currency: 'CHF', paid: 100, booked: 60 } });
+  assert.match(failed[1].reason, /nichts gebucht, die Zahlung bleibt/);
+  assert.deepEqual([...new Set(b.journalEntries.map((e) => e.transactionRef))], ['OK']);
+});
+
+test('Skonto answered as the model did (invoice total, and a discount line with the bank left empty) books balanced on the bank', async () => {
+  const b = books([tx({ ref: 'FM', bank: 'Raiffeisen', amount: 1506.45 })]);
+  const { ask } = stubAsk(() => [
+    { accountDebit: '4400', accountCredit: '', amount: 1537.22, vatCode: 'M81', description: 'Farbmix, Material' },
+    { accountDebit: '', accountCredit: '4400', amount: 30.77, vatCode: '-M81', description: 'Farbmix, Skonto 2 %' },
+  ]);
+  const { failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(failed, []);
+  assert.deepEqual(
+    b.journalEntries.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode]),
+    [['4400', '1021', 1537.22, 'M81'], ['1021', '4400', 30.77, '-M81']],
+  );
+});
+
+test('a VAT-amount code (M81-2) keeps its one empty leg: the code is its other side', async () => {
+  const b = books([tx({ ref: 'SH', amount: 50 })]);
+  const { ask } = stubAsk(() => [expense(50), { accountDebit: '', accountCredit: '6580', amount: 3.75, vatCode: 'M81-2', description: 'Shopify, Vorsteuer' }]);
+  const { failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(failed, []);
+  assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.accountCredit]), [['6570', '1022'], ['', '6580']]);
+});
+
+test('the model\'s reason is stamped on every entry of its payment', async () => {
+  const b = books([tx({ ref: 'R' })]);
+  const ask: ClassifyDeps['ask'] = async () => JSON.stringify({ R: { entries: [expense(20), expense(30)], reason: 'Beleg zeigt keine MWST: I0.' } });
+  await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(b.journalEntries.map((e) => e.reason), ['Beleg zeigt keine MWST: I0.', 'Beleg zeigt keine MWST: I0.']);
 });
 
 test('UI re-classify books through the classifier: daily rate, VAT facts, origin', async () => {

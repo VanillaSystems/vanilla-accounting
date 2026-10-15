@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stands in for the `claude` CLI that src/llm/ask.ts spawns, so a test runs the real code with
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
-// carries Swiss VAT facts. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
+// carries Swiss VAT facts, or the answer $CLAUDE_STUB_CLASSIFY (JSON keyed by ref) gives its ref. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
 // reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
 // answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
 // $CLAUDE_STUB_PROMPTS: each prompt is appended there; $CLAUDE_STUB_ARGS: each call's arguments.
@@ -30,12 +30,13 @@ if (gate) {
 }
 
 function classify() {
+  const scripted = process.env.CLAUDE_STUB_CLASSIFY ? JSON.parse(process.env.CLAUDE_STUB_CLASSIFY) : {};
   const answer = {};
   for (const section of prompt.split('## Chart of Accounts')[0].split(/^### Transaction \d+: /m).slice(1)) {
     const ref = section.split('\n')[0].trim();
     const amount = Number(section.match(/Amount: (-?[\d.]+) /)[1]);
     const vatCode = /VAT facts: Swiss MWST/.test(section) ? 'I81' : 'I0';
-    answer[ref] = { entries: [{ accountDebit: '6570', accountCredit: '', amount, vatCode, description: 'Stub, Aufwand' }] };
+    answer[ref] = scripted[ref] ?? { entries: [{ accountDebit: '6570', accountCredit: '', amount, vatCode, description: 'Stub, Aufwand' }] };
   }
   return JSON.stringify(answer);
 }

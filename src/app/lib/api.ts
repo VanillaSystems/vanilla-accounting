@@ -68,6 +68,12 @@ export function errorText(e: unknown): string {
       const { date, currency, paid, booked } = b.params;
       return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
+    case 'classifyAccount': return t('error.classifyAccount', b.params);
+    case 'classifyBalance': {
+      const { date, currency, paid, booked } = b.params;
+      return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
+    }
+    case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'notInTrash': return t('error.notInTrash');
     case 'deletedAgain': return t('error.deletedAgain');
@@ -154,8 +160,8 @@ export const api = {
   createJournalEntry: (input: JournalEntryInput) =>
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
-  classifyTransaction: (txRef: string) =>
-    request<{ entries: JournalEntry[] }>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`).then((r) => r.entries),
+  classifyTransaction: (txRef: string, overwrite = false) =>
+    request<{ entries: JournalEntry[] }>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`, { overwrite }).then((r) => r.entries),
 
   yearClose: (year: string) => request<YearCloseView>('GET', `/api/year-close/${year}`),
   automation: (since?: string) => request<AutomationView | { unchanged: true }>('GET', `/api/automation${since ? `?since=${encodeURIComponent(since)}` : ''}`),

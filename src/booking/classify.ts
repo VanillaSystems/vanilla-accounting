@@ -9,9 +9,11 @@ import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry,
 import { NoClaudeError, type AskOptions } from '../llm/ask.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor } from '../accounting/bank-accounts.js';
-import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
+import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
+import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
+import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { baseCurrency } from '../engines/index.js';
@@ -28,26 +30,34 @@ export interface EntryContext {
   receipts: string[];
   bankAccount: string;
   lock: PeriodLock;
+  /** The model's reason in words, stamped on the entries. */
+  reason?: string;
 }
 
 /**
- * The journal entries for one transaction from the model's answer. The bank side the model
- * left empty is the transaction's bank account; a foreign entry carries the ESTV daily sell
+ * The journal entries for one transaction from the model's answer. The side the model left empty
+ * is the transaction's bank account (a Skonto line the bank received back is the bank's debit on a
+ * payment out), except on a VAT-amount code (M81-2), whose code is its other leg; whether the bank
+ * really was the missing side, paymentRefusal decides. A foreign entry carries the ESTV daily sell
  * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
  * in a closed period: then the payment date, because nothing new is ever dated there.
  */
-export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock }: EntryContext): JournalEntry[] {
+export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const orderDate = receiptDate && !lock.isClosed(receiptDate) ? receiptDate : tx.date;
   const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>): JournalEntry =>
-    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort() });
+    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(reason && { reason }) });
 
   const entries = llmEntries.map((e) => {
-    const accountDebit = e.accountDebit || (tx.direction === 'CRDT' ? bankAccount : '');
-    const accountCredit = e.accountCredit || (tx.direction === 'DBIT' ? bankAccount : '');
+    let accountDebit = e.accountDebit || (tx.direction === 'CRDT' ? bankAccount : '');
+    let accountCredit = e.accountCredit || (tx.direction === 'DBIT' ? bankAccount : '');
+    if (!isVatAmountCode(e.vatCode)) {
+      accountDebit ||= e.accountCredit && bankAccount;
+      accountCredit ||= e.accountDebit && bankAccount;
+    }
     const onShopify = accountDebit === SHOPIFY_ACCOUNT || accountCredit === SHOPIFY_ACCOUNT;
     return entry({
       date: onShopify ? orderDate : tx.date,
@@ -69,6 +79,34 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
     }));
   }
   return entries;
+}
+
+const day = (iso: string) => iso.split('-').reverse().join('.');
+
+/**
+ * Why the classifier's entries for `tx` must not be booked: an entry without an account (other than
+ * a VAT-amount code's one leg), or entries that do not move the bank account by what the bank paid,
+ * the rule the AI sidebar's changes keep too (src/server/edits.ts applyAnswer). The payment then
+ * stays unbooked for the person, with this reason.
+ */
+export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEntry[], bankAccount: string): { reason: string; refusal: ClassifyRefusal } | undefined {
+  const legless = entries.find((e) => !e.accountDebit !== !e.accountCredit ? !isVatAmountCode(e.vatCode) : !e.accountDebit);
+  if (legless) {
+    const description = legless.description ?? '';
+    return {
+      reason: `Claudes Antwort hat eine Buchung ohne Konto («${description}»): nichts gebucht, die Zahlung bleibt, wie sie war.`,
+      refusal: { code: 'classifyAccount', params: { description } },
+    };
+  }
+  const account = { bank: tx.bank, currency: tx.currency, account: bankAccount, label: bankAccount };
+  const [side] = paymentSides({ transactions: [tx], journalEntries: [...entries] }, tx.ref, [account]);
+  if (side.booked === side.paid) return undefined;
+  const sign = side.paid < 0 ? -1 : 1;
+  const params = { date: side.date, currency: side.currency, paid: Math.abs(side.paid), booked: sign * side.booked };
+  return {
+    reason: `Claudes Buchungen der Zahlung vom ${day(side.date)} über ${side.currency} ${params.paid.toFixed(2)} ergäben zusammen ${side.currency} ${params.booked.toFixed(2)}: nichts gebucht, die Zahlung bleibt, wie sie war.`,
+    refusal: { code: 'classifyBalance', params },
+  };
 }
 
 export interface ClassifyContext extends ClassifyPromptContext {
@@ -176,7 +214,8 @@ export interface ClassifyDeps {
 
 export interface ClassifyOutcome {
   classified: string[];
-  failed: Array<{ ref: string; reason: string }>;
+  /** `refusal`: the answer came, but would have booked the payment wrong (paymentRefusal). */
+  failed: Array<{ ref: string; reason: string; refusal?: ClassifyRefusal }>;
 }
 
 /**
@@ -213,7 +252,17 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const mapped = mappedReceipts(books, tx);
         const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
-        books.journalEntries.push(...entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount: bankAccountFor(tx, context.bankAccounts), lock }));
+        const bankAccount = bankAccountFor(tx, context.bankAccounts);
+        const said = result[tx.ref].reason;
+        const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
+        const entries = entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason });
+        const refused = paymentRefusal(tx, entries, bankAccount);
+        if (refused) {
+          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
+          outcome.failed.push({ ref: tx.ref, ...refused });
+          continue;
+        }
+        books.journalEntries.push(...entries);
         log(`  [Batch ${batchNum}]  ${tx.ref}  → ${llmEntries.length} entries (${llmEntries.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
         outcome.classified.push(tx.ref);
       }

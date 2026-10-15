@@ -139,6 +139,8 @@ export interface JournalEntry {
   origin?: 'classify' | 'manual' | 'year-close' | 'invoice';
   /** The workflow run that booked it (src/workflows/engine.ts): its history explains why it is booked like this. */
   run?: string;
+  /** Why the classifier booked it so, in the model's words (src/booking/classify.ts): the booking page shows it. */
+  reason?: string;
   /**
    * The receipts linked to the payment when the classifier booked it. A receipt linked later is
    * evidence the booking never saw (its VAT above all): the next classify books it again

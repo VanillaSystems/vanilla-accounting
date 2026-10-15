@@ -112,7 +112,8 @@ export interface ClassifyEntry {
 }
 
 export interface BatchClassifyResult {
-  [txRef: string]: { entries: ClassifyEntry[] };
+  /** `reason`: why it is booked so, in a sentence the person reads on the booking. */
+  [txRef: string]: { entries: ClassifyEntry[]; reason?: string };
 }
 
 interface TxInput {
@@ -140,7 +141,13 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    - Assign each receipt to its correct expense account based on what was purchased (read the receipt text carefully).
    - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4210/6100/6570.
    - If two receipts genuinely go to the same account, they still get separate rows with separate descriptions.
-6. The sum of all entry amounts for a transaction must equal the transaction amount.
+6. The entries must move the bank account by exactly the transaction amount: the bank paid what the bank paid.
+   Every row has both accounts, except the bank side you leave "" (and the single-leg VAT-amount row of rule 9b).
+6b. Skonto / a discount taken at payment (the bank paid less than the invoice total): book what the bank paid,
+   ONE entry for the transaction amount on the expense account with the receipt's VAT code. Cash basis: the
+   discount reduces the expense and the input tax, which is the tax on the amount paid. Never add a separate
+   Skonto row with an empty account. Example: invoice 1000.00 incl. 8.1% MWST, paid 980.00 with 2% Skonto
+   → { "accountDebit": "4400", "accountCredit": "", "amount": 980.00, "vatCode": "M81", "description": "Lieferant, Material (2% Skonto)" }.
 7. VAT code rules (CRITICAL — follow exactly):
    a) Code prefix is determined by the ACCOUNT NUMBER, not the vendor:
       - 4xxx accounts (material/goods) → M-codes (M0, M81, M26, ...)
@@ -292,18 +299,22 @@ ${cases.map(formatCase).join('\n')}
 ` : ''}
 ${CLASSIFY_INSTRUCTIONS}
 
-Return ONLY a valid JSON object keyed by transaction ref. Each value has an "entries" array.
+Return ONLY a valid JSON object keyed by transaction ref. Each value has an "entries" array and a "reason":
+one short German sentence the bookkeeper reads on the booking, naming the receipt fact and the rule behind the
+account and the VAT code (e.g. "Beleg DigitalOcean zeigt 8.1 % MWST mit CHE-Nummer: Webhosting auf 6570, I81.").
 Example:
 {
   "WEUR000042": {
     "entries": [
       { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vatCode": "I81", "description": "DigitalOcean, Webhosting" }
-    ]
+    ],
+    "reason": "Beleg DigitalOcean zeigt 8.1 % MWST mit CHE-Nummer: Webhosting auf 6570, I81."
   },
   "20123456790": {
     "entries": [
       { "accountDebit": "6940", "accountCredit": "", "amount": 0.02, "vatCode": "I0", "description": "Wise, Kartengebühren" }
-    ]
+    ],
+    "reason": "Wise-Gebühr ohne Beleg: Bankspesen 6940, ohne Vorsteuer (I0)."
   }
 }`;
 }

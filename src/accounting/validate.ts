@@ -31,7 +31,7 @@ function isValidVatCode(code: string): boolean {
 // the code supplies its own counter-leg to the VAT account. Such entries are booked
 // single-legged in Banana — exactly one of Soll/Haben is filled (e.g. the Shopify
 // Vorsteuer-Korrekturbuchung: C 6580 / M81-2, Soll blank). See docs/runbooks.
-function isVatAmountCode(code: string | undefined): boolean {
+export function isVatAmountCode(code: string | undefined): boolean {
   if (!code) return false;
   const clean = code.startsWith('-') ? code.slice(1) : code;
   return clean.endsWith('-2');

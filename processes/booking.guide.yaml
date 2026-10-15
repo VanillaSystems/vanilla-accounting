@@ -114,6 +114,11 @@ steps:
         when: always
         then: the entries sum to the transaction amount in its currency; a difference (rounding, FX, a platform's deduction) is its own entry, never spread across the others
         source: proposed 2026-10-07 by Claude — confirm or replace
+      - id: spl-skonto
+        when: the bank paid less than the invoice because a discount (Skonto) was taken at payment
+        then: "book what the bank paid: one entry for the payment amount on the expense account with the receipt's VAT code (an invoice less 2 % Skonto: 4400 / bank, M81, on the 98 % the bank paid). Never a separate Skonto row with an empty account; the classifier refuses entries that do not move the bank by the payment amount"
+        why: "effective method on cash basis: the discount reduces the consideration, so the expense and the input tax are those of the amount paid (MWSTG Art. 41 Abs. 1); a one-leg Skonto row left the balance sheet off by the discount (persona test misreads, 2026-10-15)"
+        source: MWSTG Art. 41 Abs. 1; src/booking/classify.ts paymentRefusal
     precedents: []
 
   side:

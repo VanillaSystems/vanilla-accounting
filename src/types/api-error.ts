@@ -26,6 +26,9 @@ export type ApiRefusal =
   | { code: 'paymentDate'; params: { date: string } }
   /** The bookings of a payment would no longer add up to it: `paid` and `booked` in its currency. */
   | { code: 'paymentBalance'; params: { date: string; currency: string; paid: number; booked: number } }
+  | ClassifyRefusal
+  /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
+  | { code: 'personsBooking'; params: { entries: number } }
   | { code: 'fileExists'; params: { filename: string } }
   /** A restore of a deleted receipt (POST /api/receipts/:id/restore): gone from the trash, deleted again later, or back already. */
   | { code: 'notInTrash' }
@@ -37,6 +40,14 @@ export type ApiRefusal =
   | { code: 'noWorkspace' }
   | { code: 'notWorkspace' }
   | { code: 'setup'; params: SetupRefusal };
+
+/**
+ * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):
+ * an entry without an account, or entries that do not add up to what the bank paid.
+ */
+export type ClassifyRefusal =
+  | { code: 'classifyAccount'; params: { description: string } }
+  | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no
