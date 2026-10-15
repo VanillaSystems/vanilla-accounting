@@ -62,7 +62,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
       />
       <span className="acn">{name0 ?? (value ? t('journal.noSuchAccount') : t('journal.noAccount'))}</span>
       {open && (
-        <ul ref={list} id={listId} role="listbox" aria-label={label} className="acl">
+        <ul ref={list} id={listId} role="listbox" aria-label={label} className="acl" tabIndex={-1}>
           {matches.length === 0 && <li className="none">{t('combobox.none')}</li>}
           {matches.map((m, i) => (
             <li

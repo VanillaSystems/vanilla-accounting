@@ -4,6 +4,7 @@
  * the opposite write. A refusal (a filed quarter, the year-end revaluation) shows in the toast.
  */
 import type { JournalEntry } from '../../../types/index.js';
+import type { BookingLine } from '../../../accounting/manual-booking.js';
 import { api, errorText, type JournalEntryInput, type JournalEntryPatch } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
@@ -63,3 +64,9 @@ export function reclassify(nav: Nav, ref: string, before: JournalEntry[], overwr
     for (const e of before) await api.createJournalEntry(inputOf(e));
   });
 }
+
+/** A payment booked by hand in one or more lines (src/server/edits.ts bookPayment); undo deletes them again. */
+export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[]) =>
+  run(nav, () => api.bookPayment(ref, lines), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { ref })), async (entries) => {
+    for (const e of entries) await api.deleteJournalEntry(e.id);
+  });

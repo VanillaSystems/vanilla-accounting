@@ -2,7 +2,8 @@
  * One receipt: who and what, the amount, one line of facts, its payment (or the suggestion, or
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { PaymentBooking } from '../journal/PaymentBooking.js';
 import type { BankTransaction, InboxFile, Receipt } from '../../../types/index.js';
 import { parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
@@ -233,8 +234,10 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
             </div>
           );
         }
+        const book = edit && !v.locked && tx.amount && !(l.entriesByRef.get(ref) ?? []).length;
         return (
-          <div key={ref} className="tx go" title={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
+          <Fragment key={ref}>
+          <div className="tx go" title={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
             <span className="d">{formatDate(tx.date)} · {bankOf(tx)}</span>
             <span className="am">{amountOf(tx)}</span>
             <span className="tt">{tx.description}</span>
@@ -242,6 +245,8 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
               ? <button type="button" className="un" title={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
               : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>)}
           </div>
+          {book ? <PaymentBooking books={props.books} nav={nav} payment={ref} narrow /> : null}
+          </Fragment>
         );
       })}
       {edit && (

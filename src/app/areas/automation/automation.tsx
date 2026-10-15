@@ -3,7 +3,7 @@
  * runs and files; the process map; the queue and the tasks. Everything comes from the declarations
  * and the stored runs (GET /api/automation); nothing here is a list of its own.
  */
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { api, errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -22,6 +22,7 @@ import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
 import { Paper } from '../receipts/Paper.js';
+import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { fileName, returnSummary } from './filing-summary.js';
 import type { PeriodReturn, PreparedXml } from '../../../workflows/filing.js';
 import { baseCurrency, vat } from '../../../engines/index.js';
@@ -120,7 +121,7 @@ function List({ route, nav, books }: Props) {
   );
 }
 
-function Detail({ route, nav, books }: Props) {
+function Detail({ route, nav, books, canEdit }: Props) {
   const { view } = useAutomation();
   if (!view) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   switch (route.view) {
@@ -133,7 +134,7 @@ function Detail({ route, nav, books }: Props) {
     case 'run': return <RunPage id={route.run} view={view} nav={nav} books={books} />;
     case 'map': return <MapPage view={view} map={route.map} nav={nav} />;
     case 'queue': return <QueuePage view={view} nav={nav} />;
-    case 'tasks': return <TasksPage view={view} nav={nav} run={route.run} />;
+    case 'tasks': return <TasksPage view={view} nav={nav} run={route.run} books={books} canEdit={canEdit} />;
   }
 }
 
@@ -580,8 +581,19 @@ function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'ev
   );
 }
 
-function TasksPage({ view, nav, run }: { view: AutomationView; nav: Nav; run?: string }) {
-  const answer = (task: Task, outcome: string) => () => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); }); };
+function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; nav: Nav; run?: string; books: Index; canEdit: boolean }) {
+  const send = (task: Task, outcome: string) => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); }); };
+  const forms = useRef(new Map<string, HTMLFormElement | null>());
+  /** A payment still without an entry: the task carries its booking form, and «Gebucht» leads there instead of claiming it. */
+  const unbooked = (task: Task) => (task.item.kind === 'transaction' && books.transactions.some((x) => x.ref === task.item.id) && !(books.journalEntries ?? []).some((e) => e.transactionRef === task.item.id) ? task.item.id : undefined);
+  const answer = (task: Task, outcome: string) => () => {
+    const form = outcome === 'booked' && unbooked(task) ? forms.current.get(task.run) : undefined;
+    if (!form) { send(task, outcome); return; }
+    nav.toast(t('automation.bookFirst'));
+    form.scrollIntoView({ block: 'nearest' });
+    const inputs = [...form.querySelectorAll<HTMLInputElement>('input')];
+    (inputs.find((i) => !i.value) ?? inputs[0])?.focus();
+  };
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
@@ -589,12 +601,14 @@ function TasksPage({ view, nav, run }: { view: AutomationView; nav: Nav; run?: s
         <div className="wftasks">
           {view.tasks.map((task) => {
             const w = view.workflows.find((x) => x.id === task.workflow);
+            const pay = canEdit ? unbooked(task) : undefined;
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
                 <b>{fillTask(tx(task.title), task.item)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item)}</p> : null}
                 {Object.entries(task.reads ?? {}).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
+                {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
                   {task.outcomes.map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}

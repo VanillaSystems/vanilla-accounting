@@ -131,7 +131,7 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
 
 /**
  * A payment booked by hand (src/accounting/manual-booking.ts): its lines as a person's entries,
- * each dated on the payment (cash basis), at the ESTV rate of that day when it is foreign, with
+ * each dated on the payment (cash basis), at the official rate of that day when it is foreign, with
  * the receipts linked now, so a later run sees nothing new and keeps them. Refused when the
  * payment is booked already or the lines do not add up to what the bank paid.
  */
@@ -144,7 +144,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   for (const l of lines) {
     if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
     if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.');
-    if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `MWST-Code ${l.vatCode} gibt es nicht.`);
+    if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `Den Steuercode ${l.vatCode} gibt es nicht.`);
     if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
   }
   const off = offSide(books, ref, lines, accounts);

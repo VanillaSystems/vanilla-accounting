@@ -53,3 +53,22 @@
 .jnew .form { padding: 8px 20px 18px; }
 .jnew .dacts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .jnew .form .two { grid-template-columns: 1fr 1fr; }
+
+/* A payment booked by hand where it shows (PaymentBooking.tsx): per line Soll, Haben, MWST, Betrag, and the text below. */
+.form.pbook { max-width: 640px; padding: 12px 14px; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.form.pbook .pbh { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; }
+.form.pbook .pbh .m { color: var(--muted); font-size: 11.5px; }
+.form.pbook .pbl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.3fr) 18px; gap: 8px; align-items: start; }
+.form.pbook .pbl + .pbl { padding-top: 10px; border-top: 1px solid var(--line); }
+.form.pbook .pbl .pbt { grid-column: 1 / 5; }
+.form.pbook .pbl .rm { grid-column: 5; grid-row: 1; color: var(--muted); font-size: 15px; line-height: 1; margin-top: 24px; }
+.form.pbook .pbl .rm:hover { color: var(--ink); }
+.form.pbook .pbv .acn { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.form.pbook .pbf { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.form.pbook .pbf .wn { color: var(--warn); font-size: 12px; }
+.form.pbook .pbf .ok { color: var(--muted); font-size: 12px; }
+.form.pbook .pbf .btn { margin-left: auto; }
+.form.pbook.narrow { padding: 10px; }
+.form.pbook.narrow .pbl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.form.pbook.narrow .pbl .pbt { grid-column: 1 / -1; }
+.form.pbook.narrow .pbl .rm { grid-column: 1 / -1; grid-row: auto; justify-self: end; margin-top: 0; }

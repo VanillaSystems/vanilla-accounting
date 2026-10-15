@@ -27,6 +27,7 @@ import { WorkflowButtons } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
 import { intakeAdd } from '../receipts/intake.js';
+import { PaymentBooking } from '../journal/PaymentBooking.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -110,6 +111,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
               {file && <a className="dl inline" href={file} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
             </div>
           )}
+          {tx && canEdit && !closed && tx.amount && !b.entriesOf(tx.ref).length ? <PaymentBooking key={tx.ref} books={props.books} nav={nav} payment={tx.ref} /> : null}
           {src ? (
             <div className="paper real stmt" role="button" tabIndex={0} aria-label={t('bank.openLarge')} onClick={() => setUi({ overlay: 'quick' })}>
               <StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.detail')} />

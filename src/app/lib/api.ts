@@ -1,4 +1,5 @@
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { BookingLine } from '../../accounting/manual-booking.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
@@ -152,6 +153,9 @@ export const api = {
   deleteTransaction: (ref: string) => request<Ok>('DELETE', `/api/transactions/${encodeURIComponent(ref)}`),
   createManualTransaction: (input: ManualTransactionInput) =>
     request<{ ref: string }>('POST', '/api/transactions/manual', input).then((r) => r.ref),
+
+  bookPayment: (ref: string, lines: BookingLine[]) =>
+    request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines }).then((r) => r.entries),
 
   addMapping: (link: Link) => request<Ok>('POST', '/api/mapping/add', link),
   removeMapping: (link: Link) => request<Ok>('POST', '/api/mapping/remove', link),
