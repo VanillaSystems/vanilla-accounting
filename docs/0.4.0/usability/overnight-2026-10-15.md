@@ -52,3 +52,7 @@ file records every decision a person might have made differently, newest last.
 12. Treuhänderin without AI: booking a payment by hand is a blocker (fix running); questions to
     the owner and accountant tools (opening balance form, accrual reversal, Gegenbuchung, journal
     filter/PDF) follow once the by-hand fix is merged (same areas).
+13. Phone sync: the packed Mac app does not accept phone uploads at all (loopback only, host
+    guard, no pairing). Fix: the phone paths only, on the local network, switched on by the person,
+    with a pairing token in a QR code; the rest of the API stays loopback-only. The iOS app learns
+    to pair. The desktop app also starts processing arriving files by itself.
