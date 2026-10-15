@@ -7,9 +7,11 @@ import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { desktop } from '../desktop/bridge.js';
 import { store, stored } from './storage.js';
+import { ZOOM_STEPS, tight, type Theme } from './look.js';
+
+export { ZOOM_STEPS, nextTheme, type Theme } from './look.js';
 
 
-export type Theme = 'system' | 'light' | 'dark';
 const darkOS = () => matchMedia('(prefers-color-scheme: dark)');
 
 function applyTheme(dark: boolean) {
@@ -38,8 +40,6 @@ export function useTheme(): [Theme, (t: Theme) => void, boolean] {
   return [theme, setTheme, dark];
 }
 
-export const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6] as const;
-
 /** The whole page scales (text, rows, PDFs): CSS zoom on <html>, and --z for the heights that must undo it. */
 export function useZoom(): [number, (step: -1 | 0 | 1) => void] {
   const [zoom, setZoom] = useState(() => {
@@ -54,6 +54,11 @@ export function useZoom(): [number, (step: -1 | 0 | 1) => void] {
     root.style.setProperty('--z', String(zoom));
     store('zoom', String(zoom));
     dispatchEvent(new Event('resize'));
+    // A media query does not see the page zoom: the page says itself when the room left is small (shell.css `.tight`).
+    const fit = () => root.classList.toggle('tight', tight(innerWidth, zoom));
+    fit();
+    addEventListener('resize', fit);
+    return () => removeEventListener('resize', fit);
   }, [zoom]);
   const step = (d: -1 | 0 | 1) => setZoom((z) => {
     if (d === 0) return 1;

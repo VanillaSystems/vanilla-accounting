@@ -159,7 +159,9 @@ async function takeWaiting(s: DropSession): Promise<void> {
         row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) };
         arrival = { kind: 'statement', ...done };
       } catch (e) {
-        Object.assign(row, { state: 'refused', reason: 'not-imported', message: (e as Error).message });
+        const refusal = e instanceof RequestError ? e.refusal : undefined;
+        const unknown = refusal?.code === 'statement' ? refusal.params.unknown : undefined;
+        Object.assign(row, { state: 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}) });
         continue;
       }
     } else {

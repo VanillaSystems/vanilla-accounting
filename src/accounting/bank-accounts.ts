@@ -28,7 +28,8 @@ export interface StatementAccount {
 
 export type StatementMatch =
   | { account: LedgerBankAccount & { statements: StatementKind }; by: 'iban' | 'folder' }
-  | { problem: string };
+  /** `unknown`: the statement's IBAN and currency when the manifest lacks that account (the UI offers to add it). */
+  | { problem: string; unknown?: { iban: string; currency: string } };
 
 /**
  * The ledger account a statement lands on: the account with its IBAN and currency, else the
@@ -44,8 +45,8 @@ export function accountForStatement(accounts: readonly LedgerBankAccount[], s: S
   const where = s.folder ? `bank-statements/${s.folder}/` : 'bank-statements/';
   const of = `${iban ? `IBAN ${iban}` : 'an account without IBAN'} in ${s.currency}`;
   if (byFolder?.iban && iban) {
-    return { problem: `statement of ${of} is in ${where}, but ${byFolder.bank} ${byFolder.currency} has IBAN ${byFolder.iban}. Add that account to bankAccounts in belege.workspace.yaml (another bank label, its own ledger account, iban: ${iban}), or move the file to its bank's folder.` };
+    return { problem: `statement of ${of} is in ${where}, but ${byFolder.bank} ${byFolder.currency} has IBAN ${byFolder.iban}. Add that account to bankAccounts in belege.workspace.yaml (another bank label, its own ledger account, iban: ${iban}), or move the file to its bank's folder.`, unknown: { iban, currency: s.currency } };
   }
   if (byFolder) return { account: byFolder, by: 'folder' };
-  return { problem: `statement of ${of} in ${where} matches no bank account. Add { bank: ${s.folder || '<bank>'}, currency: ${s.currency}, account: "<ledger account>", label: <name>${iban ? `, iban: ${iban}` : ''} } to bankAccounts in belege.workspace.yaml.` };
+  return { problem: `statement of ${of} in ${where} matches no bank account. Add { bank: ${s.folder || '<bank>'}, currency: ${s.currency}, account: "<ledger account>", label: <name>${iban ? `, iban: ${iban}` : ''} } to bankAccounts in belege.workspace.yaml.`, ...(iban ? { unknown: { iban, currency: s.currency } } : {}) };
 }

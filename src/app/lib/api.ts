@@ -65,9 +65,9 @@ export function errorText(e: unknown): string {
     case 'yearClose': return t('error.yearClose');
     case 'fileExists': return t('error.fileExists', b.params);
     case 'statement': {
-      const { reason, detail = '' } = b.params;
+      const { reason, detail = '', unknown } = b.params;
       if (reason === 'duplicate') return t('error.statement.duplicate', { detail });
-      if (reason === 'account') return detail ? b.error : t('error.statement.account');
+      if (reason === 'account') return unknown ? t('error.statement.unknownAccount', unknown) : detail ? b.error : t('error.statement.account');
       return t(`error.statement.${reason}`);
     }
     case 'noBrowser': return t('error.noBrowser');

@@ -58,7 +58,7 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   const openings: Array<{ date: string; amount: number }> = [];
   for (const statement of camt.statements) {
     const match = accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
-    if ('problem' in match) return refuse(400, match.problem, 'account', match.problem);
+    if ('problem' in match) throw new RequestError(400, match.problem, { code: 'statement', params: { reason: 'account', detail: match.problem, ...(match.unknown ? { unknown: match.unknown } : {}) } });
     if (account && account.bank !== match.account.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
     account = match.account;
     const balances = parseStatementBalances(statement, account.bank, filename);

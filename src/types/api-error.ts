@@ -23,7 +23,7 @@ export type ApiRefusal =
   | { code: 'hasEntries' }
   | { code: 'yearClose' }
   | { code: 'fileExists'; params: { filename: string } }
-  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string } }
+  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string; unknown?: { iban: string; currency: string } } }
   | { code: 'noBrowser' }
   | { code: 'noClaude' }
   | { code: 'noWorkspace' }

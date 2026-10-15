@@ -4,7 +4,7 @@
  * periods and seals are read only (a quarter closes with the seal CLI, the year with Abschluss);
  * Darstellung is this browser's own.
  */
-import { Fragment, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
 import { COMPANY_SECTIONS, companySection, type CompanySection, type RouteOf } from '../../shell/route.js';
 import { reloadWorkspace, useWorkspace } from '../../hooks/use-workspace.js';
@@ -24,6 +24,7 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
+import { clearBankDraft, peekBankDraft, type BankDraft } from './bank-draft.js';
 import { MailSection } from './MailSection.js';
 import { SourcesSection } from './SourcesSection.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
@@ -233,7 +234,9 @@ const prettyIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 
 function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const [edit, setEdit] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [draft] = useState(peekBankDraft);
+  useEffect(clearBankDraft, []);
+  const [adding, setAdding] = useState(!!draft);
   const key = (b: { bank: string; currency: string }) => `${b.bank} ${b.currency}`;
   const [f, setF] = useState<Record<string, { label: string; iban: string }>>({});
   const start = () => { setF(Object.fromEntries(ws.bankAccounts.map((b) => [key(b), { label: b.label, iban: b.iban ?? '' }]))); setEdit(true); };
@@ -288,14 +291,14 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
           </div>
         )}
       </form>
-      {adding && <AddBank nav={nav} onDone={() => setAdding(false)} />}
+      {adding && <AddBank nav={nav} draft={draft} onDone={() => setAdding(false)} />}
       <p className="m src-note">{t('company.banksSource')}</p>
     </>
   );
 }
 
-function AddBank({ nav, onDone }: { nav: Nav; onDone(): void }) {
-  const [f, setF] = useState({ bank: '', currency: baseCurrency(), account: '', label: '', iban: '' });
+function AddBank({ nav, draft, onDone }: { nav: Nav; draft?: BankDraft; onDone(): void }) {
+  const [f, setF] = useState({ bank: '', currency: draft?.currency ?? baseCurrency(), account: '', label: '', iban: draft?.iban ?? '' });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const valid = !!f.bank.trim() && /^[A-Za-z]{3}$/.test(f.currency.trim()) && /^\d{4}$/.test(f.account.trim()) && !!f.label.trim();
   async function save(e: FormEvent) {

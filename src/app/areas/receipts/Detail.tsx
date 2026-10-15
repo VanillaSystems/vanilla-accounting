@@ -252,6 +252,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
   const s = useUi();
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
+  const wrong = useRef(new Set<string>());
   const currencies = useMemo(() => [...new Set([...CURRENCIES, r.currency || baseCurrency()])], [r.currency]);
 
   useEffect(() => {
@@ -260,21 +261,40 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
     setUi({ focus: undefined });
   }, [s.open.angaben, s.focus]);
 
+  function field(name: string): HTMLInputElement | null {
+    return form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
+  }
+
+  // The form keeps what is typed while a field is left: a saved receipt only rewrites the fields not being edited.
+  useEffect(() => {
+    const values: Record<string, string> = {
+      filename: r.filename, date: r.date ? formatDate(r.date) : '', amount: r.amount == null ? '' : fmt(r.amount),
+      description: r.description ?? '', remarks: r.remarks ?? '', currency: r.currency || baseCurrency(),
+    };
+    for (const [name, value] of Object.entries(values)) {
+      const el = field(name);
+      if (el && el !== document.activeElement && !wrong.current.has(name) && el.value !== value) el.value = value;
+    }
+  }, [r.filename, r.date, r.amount, r.currency, r.description, r.remarks]);
+
+  // Every field is saved on its own: one that is wrong is reported, the others still save.
   function save() {
     if (!edit || !form.current) return;
     const f = Object.fromEntries(new FormData(form.current)) as Record<string, string>;
     const date = f.date.trim() ? parseSwissDate(f.date) : null;
-    if (f.date.trim() && !date) { setErr(t('receipts.errDate')); return; }
+    const dateWrong = !!f.date.trim() && !date;
     const amount = f.amount.trim() ? parseAmount(f.amount) : null;
-    if (f.amount.trim() && amount == null) { setErr(t('receipts.errAmount')); return; }
-    setErr('');
+    const amountWrong = !!f.amount.trim() && amount == null;
+    wrong.current = new Set([...(dateWrong ? ['date'] : []), ...(amountWrong ? ['amount'] : [])]);
+    setErr(dateWrong ? t('receipts.errDate') : amountWrong ? t('receipts.errAmount') : '');
+    if (dateWrong || amountWrong) nav.dismissToast();
     const changed: Field[] = [];
     const patch: Parameters<typeof saveFields>[2] = {};
     const filename = f.filename.trim() || r.filename;
     if (filename !== r.filename) { patch.filename = filename; changed.push('filename'); }
-    if ((date ?? undefined) !== r.date) { patch.date = date; changed.push('date'); }
+    if (!dateWrong && (date ?? undefined) !== r.date) { patch.date = date; changed.push('date'); }
     const cur = f.currency || r.currency || baseCurrency();
-    if ((amount ?? undefined) !== r.amount || (amount != null && cur !== (r.currency || baseCurrency()))) {
+    if (!amountWrong && ((amount ?? undefined) !== r.amount || (amount != null && cur !== (r.currency || baseCurrency())))) {
       if (amount == null) patch.amount = null;
       else { patch.amount = amount; patch.currency = cur; }
       if ((amount ?? undefined) !== r.amount) changed.push('amount');
@@ -282,19 +302,19 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
     }
     if (f.description !== (r.description ?? '')) { patch.description = f.description; changed.push('description'); }
     if (f.remarks !== (r.remarks ?? '')) { patch.remarks = f.remarks; changed.push('remarks'); }
+    if (date) { const el = field('date'); if (el) el.value = formatDate(date); }
+    if (amount != null) { const el = field('amount'); if (el) el.value = fmt(amount); }
     if (changed.length) saveFields(nav, v, patch, changed);
   }
 
-  const key = [r.filename, r.date, r.amount, r.currency, r.description, r.remarks].join('|');
   return (
     <Sec k="angaben" val={edit ? t('receipts.editable') : t('receipts.readOnly')}>
       <form
-        key={key}
         ref={form}
         className="form"
         autoComplete="off"
         onSubmit={(e) => { e.preventDefault(); save(); }}
-        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) save(); }}
+        onBlur={save}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); save(); } }}
       >
         <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} style={{ fontSize: 12 }} /></label>

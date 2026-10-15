@@ -29,6 +29,8 @@ export interface Nav {
   /** The page's period, search or filter: replaces the history entry. */
   setQuery(query: Query): void;
   toast(msg: string, undo?: () => void): void;
+  /** Takes the shown toast away (a form that now shows an error must not keep the earlier «Gespeichert»). */
+  dismissToast(): void;
   refresh(): void;
 }
 

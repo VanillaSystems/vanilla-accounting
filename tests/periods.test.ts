@@ -139,7 +139,9 @@ test('parseSwissDate: typed dd.mm.yyyy, with or without leading zeros; no imposs
   assert.equal(parseSwissDate('09.10.2026'), '2026-10-09');
   assert.equal(parseSwissDate(' 9.1.2026 '), '2026-01-09');
   assert.equal(parseSwissDate('29.02.2028'), '2028-02-29');
-  for (const bad of ['29.02.2026', '2026-10-09', '9/10/2026', '32.01.2026', '1.13.2026', '']) assert.equal(parseSwissDate(bad), null, bad);
+  assert.equal(parseSwissDate('28.6.26'), '2026-06-28');
+  assert.equal(parseSwissDate('11.7.26'), '2026-07-11');
+  for (const bad of ['29.02.2026', '1.1.202', '1.1.2', '29.02.26', '2026-10-09', '9/10/2026', '32.01.2026', '1.13.2026', '']) assert.equal(parseSwissDate(bad), null, bad);
 });
 
 test('periodContaining: a link keeps the current period when it holds the date, else the quarter', async () => {

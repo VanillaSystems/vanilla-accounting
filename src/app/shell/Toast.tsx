@@ -20,6 +20,8 @@ export function useToast() {
     return () => clearTimeout(id);
   }, [shown]);
 
+  const dismiss = useCallback(() => setVisible(false), []);
+
   /** Runs the shown undo; false when there is none. */
   const undo = useCallback(() => {
     if (!visible || !shown?.undo) return false;
@@ -36,5 +38,5 @@ export function useToast() {
       )}
     </div>
   );
-  return { toast, undo, node };
+  return { toast, dismiss, undo, node };
 }

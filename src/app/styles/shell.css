@@ -121,6 +121,13 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .activity .div { width: 24px; height: 1px; margin: 8px 0; background: var(--line); }
 main { margin-left: var(--abw); }
 
+/* little room (a small window, or a high zoom: useZoom sets .tight): the top bar keeps search, period, zoom, export, theme and language; the legend steps aside */
+.tight .topbar > .chip:first-child, .tight .topbar > .chip:first-child + .sep { display: none; }
+.tight .topbar .chip .k { display: none; }
+.tight .topbar { gap: 2px; }
+.tight .topbar .chip { padding: 0 8px; }
+.tight .legend { display: none; }
+
 /* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
 .topbar.folded { padding: 4px; border-radius: 999px; }
 .barpill { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 12px "Instrument Sans"; cursor: pointer; white-space: nowrap; }

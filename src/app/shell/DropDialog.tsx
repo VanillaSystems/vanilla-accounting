@@ -15,6 +15,7 @@ import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import type { Route } from './route.js';
+import { setBankDraft } from '../areas/company/bank-draft.js';
 
 interface State { open: boolean; session?: DropSession; adding: number; error?: string }
 let state: State = { open: false, adding: 0 };
@@ -54,25 +55,39 @@ const needsYou = (r: DropRow) => r.state === 'locked' || r.state === 'unclear';
 const act = (session: DropSession, r: DropRow, action: Parameters<typeof api.dropRow>[2]) =>
   api.dropRow(session.id, r.key, action).then((next) => set({ session: next }), (e) => set({ error: errorText(e) }));
 
+const groupIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
+
+/** What a waiting row says about its file, the parts apart: its kind (when known), how it was recognized, the ZIP it came out of, the statement's account and period. */
+function metaOf(r: DropRow): string {
+  return [
+    r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
+    r.how && t(`drop.how.${r.how}` as 'drop.how.structure'),
+    r.from && t('drop.from', { name: r.from }),
+    r.facts?.iban,
+    r.facts?.from && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to!)}`,
+    r.facts?.entries !== undefined && t('drop.entries', { n: r.facts.entries }),
+  ].filter(Boolean).join(' · ');
+}
+
 /** A row with an open question, or one not taken: what it is and its small action. */
-function Waiting({ r, session }: { r: DropRow; session: DropSession }) {
+function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
   const chip = r.state === 'take' ? t('drop.taking') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   return (
     <div className={`droprow s-${r.state}`}>
       <div className="dn">
         <b className="mono">{r.name}</b>
-        <small>
-          {r.kind ? t(`drop.kind.${r.kind}` as 'drop.kind.receipt') : t('drop.kind.unknown')}
-          {r.how ? <span className="drophow">{t(`drop.how.${r.how}` as 'drop.how.structure')}</span> : null}
-          {r.from ? ` · ${t('drop.from', { name: r.from })}` : ''}
-          {r.facts ? ` · ${[r.facts.iban, r.facts.from && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to!)}`, r.facts.entries !== undefined && t('drop.entries', { n: r.facts.entries })].filter(Boolean).join(' · ')}` : ''}
-        </small>
+        <small>{metaOf(r)}</small>
       </div>
       <div className="dgo">
         <span className={`dchip c-${r.state}`}>{chip}</span>
-        {r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
-        {r.state === 'duplicate' || r.state === 'quarantine' ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{t('drop.takeAnyway')}</button> : null}
+        {r.unknownAccount ? (
+          <>
+            <small>{t('error.statement.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency })}</small>
+            <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('company.addBank')}</button>
+          </>
+        ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
+        {(r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{t('drop.takeAnyway')}</button> : null}
         {r.state === 'locked' ? (
           <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
             <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
@@ -217,7 +232,7 @@ export function DropDialog({ onGo, books }: { onGo(route: Route): void; books: I
         <div className="drows">
           {shown.length ? shown.map((r) => (r.state === 'taken'
             ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} />
-            : <Waiting key={r.key} r={r} session={s.session!} />)) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>}
+            : <Waiting key={r.key} r={r} session={s.session!} go={go} />)) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>}
         </div>
         {s.error ? <p className="warnline">{s.error}</p> : null}
         {waits ? <p className="m">{t('drop.waitsHint')}</p> : null}

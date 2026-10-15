@@ -38,6 +38,8 @@ export interface DropRow {
   reason?: DropReason;
   /** A refusal the books gave in their own words (a statement of a filed quarter, of no account). */
   message?: string;
+  /** A statement of an account the books do not know: its IBAN and currency, so the UI can offer «Bankkonto hinzufügen». */
+  unknownAccount?: { iban: string; currency: string };
   /** Taken: the run that takes it up. */
   run?: string;
   /** A receipt: the name it got in the inbox. */

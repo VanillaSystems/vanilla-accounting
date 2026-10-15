@@ -14,6 +14,12 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Fixed
+
+- Dropping a camt.053 of a bank account the books do not know no longer ends in a developer message: the row names the IBAN and currency in the viewer's language and offers «Bankkonto hinzufügen», which opens Firma › Bankkonten with both filled in. A refused CSV shows no kind «unbekannt», the parts of a row's line are separated by « · », and a duplicate statement no longer offers «trotzdem übernehmen».
+- The receipt form saves when a field is left with Tab, as its hint says. Dates are accepted as `28.6.26` or `28.6.2026`; a wrong date or amount no longer keeps the valid fields from saving, and the earlier «Gespeichert» goes when an error shows.
+- At a high zoom or in a small window the top bar drops its company name and shortcut hints and the shortcut legend hides, so nothing is clipped or covered. The theme button's first click leaves «System» for the look the system does not have, so it changes the page.
+
 ### Added
 
 - Customer payments booked without VAT because no invoice was linked are shown where you look: MWST names them for the period («2 Zahlungen von Kunden ohne Rechnung sind ohne MWST gebucht»), the statement's line in Automatisierung marks the run as to check, and the payment in Kontoauszüge offers «Rechnung hochladen» (the payment is then booked again with the invoice's VAT) or «keine MWST darauf» (the payment's existing «braucht keinen Beleg» mark). What gets booked does not change: without an invoice a sale is still booked at the zero code. Usability finding (Malerei Huber, invoices 2026-028 and 2026-030).

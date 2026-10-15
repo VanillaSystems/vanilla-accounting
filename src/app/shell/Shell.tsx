@@ -29,7 +29,7 @@ import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
 import { PeriodPicker } from './PeriodPicker.js';
-import { usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
+import { nextTheme, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
 import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
@@ -69,7 +69,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [loc, go] = useLocationState();
   const [theme, setTheme, dark] = useTheme();
   const [zoom, zoomStep] = useZoom();
-  const { toast, undo, node: toastNode } = useToast();
+  const { toast, dismiss: dismissToast, undo, node: toastNode } = useToast();
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);
@@ -92,8 +92,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       go({ route: current.current.route, query });
     },
     toast,
+    dismissToast,
     refresh,
-  }), [go, toast, refresh, open.token]);
+  }), [go, toast, dismissToast, refresh, open.token]);
 
   const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit };
   const propsRef = useRef(props);
@@ -106,7 +107,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   }, [go]);
 
   const cycleTheme = () => {
-    const next: Theme = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system';
+    const next = nextTheme(theme, matchMedia('(prefers-color-scheme: dark)').matches);
     setTheme(next);
     const name = t(next === 'light' ? 'app.themeLight' : next === 'dark' ? 'app.themeDark' : 'app.themeSystem');
     const before = theme;
