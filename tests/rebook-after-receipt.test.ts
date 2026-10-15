@@ -44,3 +44,15 @@ test('new VAT facts take away only the classifier\'s open bookings of the receip
   assert.deepEqual(unbookPayments(books, books.mappings.filter((m) => m.receiptId === 'r').map((m) => m.transactionRef), 'facts'), ['auto', 'legacy']);
   assert.deepEqual(books.journalEntries.map((e) => e.id), entries.filter((e) => !['auto', 'legacy'].includes(e.transactionRef)).map((e) => e.id));
 });
+
+test('a link changed by hand takes away the same bookings a receipt linked later would, and an older booking without its receipts recorded stays', () => {
+  const entries = [je('late'), je('old', { origin: undefined, receipts: undefined }), je('hand', { origin: 'manual' })];
+  const books = {
+    mappings: entries.map((e) => ({ transactionRef: e.transactionRef, receiptId: 'r' })),
+    journalEntries: entries,
+    transactions: entries.map((e) => ({ ref: e.transactionRef })),
+    config: { closedThrough: '2026-06-30' },
+  };
+  assert.deepEqual(unbookPayments(books, ['late', 'old', 'hand'], 'links'), ['late']);
+  assert.deepEqual(books.journalEntries.map((e) => e.transactionRef), ['old', 'hand']);
+});
