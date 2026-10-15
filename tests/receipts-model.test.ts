@@ -103,3 +103,16 @@ test('books that never filed: an open receipt dated before the working period ne
   assert.equal(badgeCount(lf), 2);
   assert.deepEqual(visible(lf, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'its own quarter still shows it');
 });
+
+test('a receipt linked to a payment of the period shows there too: a June invoice paid in July is in Q3 and still in Q2', () => {
+  const paid: Index = {
+    config: { closedThrough: '2026-03-31' },
+    receipts: [receipt('june', { date: '2026-06-28', amount: 1243.55 }), receipt('may', { date: '2026-05-20', amount: 30 })],
+    transactions: [tx('T-june', '2026-07-03', 1243.55), tx('T-may', '2026-05-21', 30)],
+    mappings: [{ receiptId: 'june', transactionRef: 'T-june' }, { receiptId: 'may', transactionRef: 'T-may' }], bankStatements: [],
+  };
+  const lp = ledgerOf(paid, '2026-04-01');
+  assert.deepEqual(visible(lp, q3, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'paid in Q3, so in Q3; the May one, paid in May, is not');
+  assert.deepEqual(visible(lp, q3, undefined, undefined).counts.zugeordnet, 1);
+  assert.deepEqual(visible(lp, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id).sort(), ['june', 'may']);
+});

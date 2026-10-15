@@ -54,6 +54,8 @@ Two markers flag an entry you must read before you update:
   trial balance, so the income statement's result was too low by twice that amount. The balance
   sheet and the VAT return were right. After the update, `npm run test:books` shows the changed
   sign of these accounts in the open periods; accept it with `npm run test:books:update`.
+- Belege shows a receipt in the period of its payment too: an invoice of 28 June paid on
+  3 July is in Q3's list, not only in Q2's.
 
 ### Changed
 

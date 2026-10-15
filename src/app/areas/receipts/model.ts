@@ -22,6 +22,8 @@ export interface ReceiptView {
   desc: string;
   /** The payments (or bookings without one) it is linked to. */
   links: string[];
+  /** The days its linked payments were made: it shows in their periods too. */
+  paid: string[];
   /**
    * Needs no payment: typed as supporting/statement/noise/duplicate, or worth exactly 0 (not
    * merely unread) with no VAT and no link (brochures, labels, blank captures).
@@ -75,7 +77,8 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
     const none = NON_RECEIPT_KINDS.includes(r.kind)
       || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
-    return { r, date, day: date ?? (r.indexedAt.slice(0, 10) || undefined), vendor, desc, links, none, locked: links.some(refClosed) };
+    const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
+    return { r, date, day: date ?? (r.indexedAt.slice(0, 10) || undefined), vendor, desc, links, paid, none, locked: links.some(refClosed) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
 }
@@ -114,9 +117,10 @@ export interface Visible {
 }
 
 export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undefined, q: string | undefined): Visible {
-  // The working period also shows what from before it still needs you.
+  // A period shows its own receipts and those of its payments; the working period also what from before it still needs you.
   const working = period.from <= l.openFrom && l.openFrom <= period.to;
-  const pool = l.views.filter((v) => !!v.day && ((v.day >= period.from && v.day <= period.to) || (working && v.day < period.from && needsYou(v, l))));
+  const within = (d: string) => d >= period.from && d <= period.to;
+  const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (working && v.day < period.from && needsYou(v, l))));
   const receipts = pool.filter((v) => !v.none);
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const match = (v: ReceiptView) => { const h = haystack(v); return words.every((w) => h.includes(w)); };
