@@ -617,7 +617,7 @@ export default {
     'receipts.daysAfter': { one: '{n} jour après', other: '{n} jours après' },
     'receipts.daysBefore': { one: '{n} jour avant', other: '{n} jours avant' },
     'receipts.deleteKey': 'Supprimer (⌫)',
-    'receipts.deleteText': 'Le fichier est supprimé du disque, avec toutes ses attributions. Impossible de l’annuler.',
+    'receipts.deleteText': 'Le justificatif quitte les livres avec toutes ses attributions ; son paiement est recomptabilisé sans lui. Le fichier reste 30 jours dans la corbeille de l’espace de travail (data/trash) : « Annuler » dans le message qui suit le récupère.',
     'receipts.deleteTitle': 'Supprimer le justificatif ?',
     'receipts.deleted': 'Supprimé · {file}',
     'receipts.details': 'Détails',

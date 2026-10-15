@@ -56,6 +56,14 @@ Two markers flag an entry you must read before you update:
   sign of these accounts in the open periods; accept it with `npm run test:books:update`.
 - Belege shows a receipt in the period of its payment too: an invoice of 28 June paid on
   3 July is in Q3's list, not only in Q2's.
+- «Rückgängig» on a receipt in the drop dialog books its payment again as it would be without
+  the receipt; before, the payment was left with no entry at all. The same file dropped again
+  in the open dialog is taken again instead of «schon da».
+- Deleting a receipt in Belege books its payment again without it; before, the entry kept the
+  receipt's input tax (I81) and pointed at a receipt that no longer existed. The file waits in
+  the workspace's trash (`data/trash/`, 30 days) and «Rückgängig» in the toast brings receipt,
+  links and booking back (`POST /api/receipts/:id/restore`).
+- After «Rückgängig» in the drop dialog the Belege list no longer shows the receipt until a reload.
 
 ### Changed
 

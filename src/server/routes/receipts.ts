@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { renameSync, existsSync, unlinkSync, createReadStream } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
-import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
+import { renameSync, existsSync, createReadStream, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, relative } from 'node:path';
+import { RECEIPT_KINDS, type Mapping, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
+import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
+import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { findFile } from '../../workspace/workspace.js';
-import { WS, receiptPath, assertOpen, receiptDates, readBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
@@ -76,20 +78,69 @@ router.get('/api/receipts/:id', (req, res) => {
   createReadStream(pdfPath).pipe(res);
 });
 
-router.delete('/api/receipts/:id', (req, res) => {
-  const { id } = req.params;
-  let pdfPath = '';
-  withBooks(res, (books) => {
-    const idx = books.receipts.findIndex((r) => r.id === id);
-    if (idx === -1) throw new RequestError(404, 'Receipt not found');
-    assertOpen(books, receiptDates(books, id), 'deleteReceipt');
+/**
+ * A deleted receipt waits in data/trash/<id>/ for TRASH_DAYS: its file, and what the books held
+ * of it, so a restore («Rückgängig» in the toast) puts both back.
+ */
+interface Trashed { deletedAt: string; receipt: Receipt; mappings: Mapping[]; file: string }
+const TRASH_DAYS = 30;
+const trashOf = (id: string) => join(WS.paths.data, 'trash', id);
+const ID = /^[\w-]+$/;
 
-    pdfPath = receiptPath(books, books.receipts[idx]);
-    books.receipts.splice(idx, 1);
-    books.mappings = books.mappings.filter((m) => m.receiptId !== id);
-    return { ok: true };
+function emptyOldTrash(): void {
+  const root = join(WS.paths.data, 'trash');
+  if (!existsSync(root)) return;
+  const before = new Date(Date.now() - TRASH_DAYS * 864e5).toISOString();
+  for (const id of readdirSync(root)) {
+    const meta = join(root, id, 'trashed.json');
+    const at = existsSync(meta) ? (JSON.parse(readFileSync(meta, 'utf8')) as Trashed).deletedAt : '';
+    if (at < before) rmSync(join(root, id), { recursive: true, force: true });
+  }
+}
+
+/** The receipt leaves the books with its links and the entries booked with it; its payments are booked again without it. */
+router.delete('/api/receipts/:id', async (req, res) => {
+  const { id } = req.params;
+  const { trashed, pdfPath, again } = updateBooks((books) => {
+    const receipt = books.receipts.find((r) => r.id === id);
+    if (!receipt) throw new RequestError(404, 'Receipt not found');
+    assertOpen(books, receiptDates(books, id), 'deleteReceipt');
+    const pdfPath = receiptPath(books, receipt);
+    const trashed: Trashed = { deletedAt: new Date().toISOString(), receipt, mappings: books.mappings.filter((m) => m.receiptId === id), file: relative(WS.paths.root, pdfPath) };
+    return { trashed, pdfPath, again: removeReceipt(books, id) };
   });
-  try { unlinkSync(pdfPath); } catch {}
+  emptyOldTrash();
+  mkdirSync(trashOf(id), { recursive: true });
+  writeFileSync(join(trashOf(id), 'trashed.json'), JSON.stringify(trashed, null, 2));
+  if (existsSync(pdfPath)) renameSync(pdfPath, join(trashOf(id), basename(pdfPath)));
+  if (again.length) await bookAgain(trashed.receipt.filename);
+  res.json({ ok: true });
+});
+
+/** A deleted receipt back from the trash, with its links to payments that are still there; those payments are booked again with it. */
+router.post('/api/receipts/:id/restore', async (req, res) => {
+  const { id } = req.params;
+  const meta = join(trashOf(id), 'trashed.json');
+  if (!ID.test(id) || !existsSync(meta)) throw new RequestError(404, 'Dieser Beleg liegt nicht mehr im Papierkorb.');
+  const t = JSON.parse(readFileSync(meta, 'utf8')) as Trashed;
+  const from = join(trashOf(id), basename(t.file));
+  const to = join(WS.paths.root, t.file);
+  const again = updateBooks((books) => {
+    if (books.receipts.some((r) => r.id === id)) throw new RequestError(409, 'Dieser Beleg ist schon in den Büchern.');
+    if (existsSync(to) || findFile(WS.paths, 'receipts', t.receipt.filename)) {
+      throw new RequestError(409, `Datei ${t.receipt.filename} existiert bereits.`, { code: 'fileExists', params: { filename: t.receipt.filename } });
+    }
+    const refs = new Set(books.transactions.map((x) => x.ref));
+    const links = t.mappings.filter((m) => refs.has(m.transactionRef));
+    assertOpen(books, links.flatMap((m) => refDates(books, m.transactionRef)), 'editReceipt');
+    books.receipts.push(t.receipt);
+    books.mappings.push(...links);
+    return entriesWithoutTheirReceipts(books.journalEntries, books.mappings, new Set(links.map((m) => m.transactionRef)), books.config.closedThrough).length > 0;
+  });
+  if (existsSync(from)) { mkdirSync(dirname(to), { recursive: true }); renameSync(from, to); }
+  rmSync(trashOf(id), { recursive: true, force: true });
+  if (again) await bookAgain(t.receipt.filename);
+  res.json({ ok: true, receipt: t.receipt });
 });
 
 /**

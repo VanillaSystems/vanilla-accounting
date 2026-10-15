@@ -19,7 +19,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { basename, extname, join } from 'node:path';
 import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, refDates, updateBooks } from '../books.js';
 import { findFile } from '../../workspace/workspace.js';
-import { engine, handedOver } from './automation.js';
+import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
+import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement } from './statements.js';
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
@@ -49,7 +50,7 @@ function known(): Set<string> {
 /** One file as a row (stored in the session unless refused); a ZIP becomes the rows of its files. */
 async function add(s: DropSession, name: string, bytes: Buffer, from?: string, password?: string): Promise<void> {
   const id = sha16(bytes);
-  const seen = new Set([...known(), ...s.rows.filter((r) => r.state !== 'refused').map((r) => r.id)]);
+  const seen = new Set([...known(), ...s.rows.filter((r) => r.state !== 'refused' && r.state !== 'undone').map((r) => r.id)]);
   const r = recognize(bytes, name);
   const row: DropRow = { key: randomUUID().slice(0, 8), id, name, size: bytes.length, ...(from ? { from } : {}), ...r };
   if (row.kind === 'zip') {
@@ -106,7 +107,7 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       break;
     case 'undo':
       if (row.state !== 'taken') throw new RequestError(400, 'Nur eine übernommene Datei lässt sich zurücknehmen.');
-      undo(row);
+      if (undo(row).length) await bookAgain(row.name);
       break;
     case 'unlock': {
       if (row.state !== 'locked' || typeof a.password !== 'string') throw new RequestError(400, 'Nur ein ZIP mit Passwort wird entsperrt.');
@@ -132,7 +133,6 @@ function freeName(folder: string, name: string): string {
   return out;
 }
 
-const INTAKE = 'receipt-intake';
 const QUARANTINE = () => join(WS.paths.data, 'quarantine');
 
 /**
@@ -186,12 +186,13 @@ function unquarantine(row: DropRow): void {
 
 /**
  * «Rückgängig» for a taken file. A receipt leaves the inbox and the books, with its links and the
- * entries the automation booked on its payments. A
- * statement leaves with its file, its closing balances, the payments it added, and their links and
- * entries. Never while its run works on it, never in the closed period, never an entry a person
- * booked by hand (such a payment stays, and the refusal says so).
+ * entries booked with it (removeReceipt); returns its payments, to be booked again as they would
+ * be without it. A statement leaves with its file, its closing balances, the payments it added,
+ * and their links and entries. Never while its run works on it, never in the closed period, never
+ * an entry a person booked by hand (such a payment stays, and the refusal says so).
  */
-function undo(row: DropRow): void {
+function undo(row: DropRow): string[] {
+  let again: string[] = [];
   const run = row.run ? engine().run(row.run) : undefined;
   if (run && run.state.status === 'running') throw new RequestError(409, 'Der Lauf arbeitet gerade daran. Gleich noch einmal.');
   if (row.statement) {
@@ -213,19 +214,15 @@ function undo(row: DropRow): void {
     const receipt = books.receipts.find((r) => r.id === row.id);
     if (receipt) {
       assertOpen(books, receiptDates(books, row.id), 'deleteReceipt');
-      const refs = new Set(books.mappings.filter((m) => m.receiptId === row.id).map((m) => m.transactionRef));
       const pdf = receiptPath(books, receipt);
-      updateBooks((b) => {
-        b.receipts = b.receipts.filter((r) => r.id !== row.id);
-        b.mappings = b.mappings.filter((m) => m.receiptId !== row.id);
-        b.journalEntries = b.journalEntries.filter((e) => !(refs.has(e.transactionRef) && e.run && e.origin !== 'manual'));
-      });
+      again = updateBooks((b) => removeReceipt(b, row.id));
       rmSync(pdf, { force: true });
     }
     if (row.inbox) rmSync(join(WS.paths.inbox, row.inbox), { force: true });
   }
   if (row.run) engine().withdraw(row.run, row.inbox ? row.name : row.statement?.file ?? row.name);
   row.state = 'undone';
+  return again;
 }
 
 router.delete('/api/drop/:id', (req, res) => {

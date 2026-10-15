@@ -617,7 +617,7 @@ export default {
     'receipts.daysAfter': { one: '{n} day after', other: '{n} days after' },
     'receipts.daysBefore': { one: '{n} day before', other: '{n} days before' },
     'receipts.deleteKey': 'Delete (⌫)',
-    'receipts.deleteText': 'The file is deleted from disk, with all its links. This cannot be undone.',
+    'receipts.deleteText': 'The receipt leaves the books with all its links; its payment is booked again without it. The file stays in the workspace’s trash (data/trash) for 30 days: «Undo» in the message that follows brings it back.',
     'receipts.deleteTitle': 'Delete this receipt?',
     'receipts.deleted': 'Deleted · {file}',
     'receipts.details': 'Details',

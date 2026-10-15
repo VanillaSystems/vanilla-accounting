@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { JournalEntry } from '../types/index.js';
+import type { JournalEntry, Mapping, Receipt } from '../types/index.js';
 
 /**
  * The entries `classify --force` may remove so it can book their transactions again.
@@ -51,6 +51,24 @@ export function entriesWithoutTheirReceipts(
   for (const e of entries) if (removable.has(e)) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
   return [...byRef.entries()].flatMap(([ref, group]) =>
     (group.every((e) => e.origin === 'classify' && e.receipts) && !same(group[0].receipts!, linked.get(ref)) ? group : []));
+}
+
+/**
+ * A receipt leaves the books (deleted, or a drop taken back): its links go, and with them the
+ * classifier's entries that saw it, so none claims the receipt's VAT without it. Returns the
+ * payments left without an entry: the inbox run's book step books them again.
+ */
+export function removeReceipt(
+  books: { receipts: Receipt[]; mappings: Mapping[]; journalEntries: JournalEntry[]; transactions: ReadonlyArray<{ ref: string }>; config?: { closedThrough?: string } },
+  id: string,
+): string[] {
+  const refs = new Set(books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef));
+  books.receipts = books.receipts.filter((r) => r.id !== id);
+  books.mappings = books.mappings.filter((m) => m.receiptId !== id);
+  const known = new Set(books.transactions.map((t) => t.ref).filter((ref) => refs.has(ref)));
+  const stale = new Set(entriesWithoutTheirReceipts(books.journalEntries, books.mappings, known, books.config?.closedThrough));
+  books.journalEntries = books.journalEntries.filter((e) => !stale.has(e));
+  return [...new Set([...stale].map((e) => e.transactionRef))];
 }
 
 function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined): boolean {

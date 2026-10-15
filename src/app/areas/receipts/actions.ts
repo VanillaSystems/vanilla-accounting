@@ -1,7 +1,7 @@
 /**
  * What a person does to a receipt, each one write through the API and then the books loaded
- * again. Every change but a delete says what it did in the toast and can be taken back there
- * (or with ⌘Z); the undo is the opposite write.
+ * again. Every change says what it did in the toast and can be taken back there (or with ⌘Z);
+ * the undo is the opposite write, for a delete the receipt back from the trash.
  */
 import type { BankTransaction, ReceiptKind, ReceiptPatch } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
@@ -80,7 +80,7 @@ export function saveFields(nav: Nav, v: ReceiptView, patch: ReceiptPatch, change
 }
 
 export const deleteReceipt = (nav: Nav, v: ReceiptView) =>
-  run(nav, () => api.deleteReceipt(v.r.id), t('receipts.deleted', { file: v.r.filename }));
+  run(nav, () => api.deleteReceipt(v.r.id), t('receipts.deleted', { file: v.r.filename }), () => api.restoreReceipt(v.r.id));
 
 /** The text read again by the model, from the PDF's image (sends the page to Claude). */
 export const readAgain = (nav: Nav, v: ReceiptView) =>

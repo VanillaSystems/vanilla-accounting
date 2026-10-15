@@ -617,7 +617,7 @@ export default {
     'receipts.daysAfter': { one: '{n} giorno dopo', other: '{n} giorni dopo' },
     'receipts.daysBefore': { one: '{n} giorno prima', other: '{n} giorni prima' },
     'receipts.deleteKey': 'Elimina (⌫)',
-    'receipts.deleteText': 'Il file viene eliminato dal disco, con tutte le assegnazioni. Non si può annullare.',
+    'receipts.deleteText': 'Il giustificativo lascia i libri con tutte le assegnazioni; il suo pagamento viene registrato di nuovo senza di esso. Il file resta 30 giorni nel cestino dello spazio di lavoro (data/trash): «Annulla» nel messaggio che segue lo recupera.',
     'receipts.deleteTitle': 'Eliminare il giustificativo?',
     'receipts.deleted': 'Eliminato · {file}',
     'receipts.details': 'Dettagli',

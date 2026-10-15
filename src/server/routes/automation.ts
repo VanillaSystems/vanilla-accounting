@@ -124,6 +124,17 @@ router.patch('/api/automation/workflows/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+export const INTAKE = 'receipt-intake';
+
+/**
+ * The inbox's run for payments a receipt left (deleted, taken back, restored): its book step books
+ * them again. It joins a run that has not started yet, else waits behind the one under way.
+ */
+export async function bookAgain(file: string): Promise<void> {
+  const r = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'outside', file }, 'live');
+  if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
+}
+
 /** Inbox files a run was started for: a file no step can read starts no second run on its own. */
 const attempted = new Set<string>();
 /** Files the drop dialog put into the inbox and handed to a run itself. */

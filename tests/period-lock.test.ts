@@ -38,6 +38,9 @@ function withInvoice(root: string): void {
 before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');
   withInvoice(api.root);
+  // A receipt deleted while its payment C1 was open, put back after the quarter was filed.
+  mkdirSync(join(api.root, 'data/trash/rx'), { recursive: true });
+  writeFileSync(join(api.root, 'data/trash/rx/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));
 });
 after(() => api?.stop());
 
@@ -57,6 +60,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/transactions/O1', status: 400 },
   { method: 'POST', path: '/api/transactions/manual', body: { date: '2026-06-20', description: 'rückdatiert', amount: 1, currency: 'CHF' }, status: 403 },
   { method: 'DELETE', path: '/api/receipts/rc', status: 403 },
+  { method: 'POST', path: '/api/receipts/rx/restore', status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { remarks: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { date: '2026-05-11' }, status: 403 },
@@ -135,6 +139,8 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => i.mappings.some((m) => m.receiptId === 'ro' && m.transactionRef === 'O1') },
   { method: 'DELETE', path: '/api/receipts/ro',
     check: (i) => !i.receipts.some((r) => r.id === 'ro') && !i.mappings.some((m) => m.receiptId === 'ro') },
+  { method: 'POST', path: '/api/receipts/ro/restore',
+    check: (i) => i.receipts.some((r) => r.id === 'ro') && i.mappings.some((m) => m.receiptId === 'ro' && m.transactionRef === 'O1') },
   { method: 'DELETE', path: '/api/transactions/M2026-002',
     check: (i) => !i.transactions.some((t) => t.ref === 'M2026-002') && !i.mappings.some((m) => m.transactionRef === 'M2026-002') },
   { method: 'DELETE', path: '/api/journal-entries/jo',

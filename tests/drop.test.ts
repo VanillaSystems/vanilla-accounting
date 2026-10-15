@@ -177,3 +177,73 @@ test('«Rückgängig» takes a file back out: a receipt the run read leaves the 
     api.stop();
   }
 });
+
+const STUB = join(process.cwd(), 'tests/support/stub-bin');
+/** A camt.053 of the demo's Raiffeisen account with the one payment of CHF 1120.00 that the stub links the receipt to. */
+const SCAFFOLD = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>G-1</MsgId><CreDtTm>2026-08-01T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>G-1</Id><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Ntry><Amt Ccy="CHF">1120.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-01</Dt></BookgDt><AcctSvcrRef>REF-G</AcctSvcrRef><AddtlNtryInf>Geruestbau</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+const LINKS_TO_G = { suggestedFilename: '20260801-geruestbau.pdf', date: '2026-08-01', description: 'Gerüstbau, Gerüstmiete', amount: 1120, currency: 'CHF', confidence: 0.95, matchedTransactionRefs: ['REF-G'] };
+
+/** The demo with the model stub, the statement read and booked, then the receipt dropped, linked and the payment booked again with it. */
+async function bookedWithReceipt() {
+  const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_ANSWER: JSON.stringify(LINKS_TO_G) });
+  cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+  const session = SESSION(api);
+  const full = async () => (await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as { receipts: Array<{ id: string }>; mappings: Array<{ receiptId: string; transactionRef: string }>; journalEntries: Array<{ transactionRef: string; receipts?: string[] }> };
+  const onG = async () => (await full()).journalEntries.filter((e) => e.transactionRef === 'REF-G').map((e) => e.receipts);
+  let s = await session.post('/api/drop');
+  s = await session.post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(SCAFFOLD));
+  await session.rest();
+  assert.deepEqual(await onG(), [[]], 'the statement run booked the payment without a receipt');
+  const pdf = Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% Geruest_August\n')]);
+  s = await session.post(`/api/drop/${s.id}/files?name=Geruest_August.pdf`, pdf);
+  await session.rest();
+  const rc = s.rows.at(-1)!;
+  assert.deepEqual(await onG(), [[rc.id]], 'linked, and booked again with the receipt');
+  return { api, session, s, rc, pdf, full, onG };
+}
+
+test('«Rückgängig» on a receipt books its payment again as without it; the same file dropped again is taken, not «schon da»', async () => {
+  const { api, session, s: s0, rc, pdf, onG } = await bookedWithReceipt();
+  try {
+    let s = await session.post(`/api/drop/${s0.id}/rows/${rc.key}`, { kind: 'undo' });
+    await session.rest();
+    assert.deepEqual(await onG(), [[]], 'the payment has its booking again, without the receipt');
+    s = await session.post(`/api/drop/${s.id}/files?name=Geruest_August.pdf`, pdf);
+    assert.equal(s.rows.at(-1)!.state, 'taken', 'taken back, so it is new again');
+    await session.rest();
+    assert.deepEqual(await onG(), [[rc.id]], 'and booked with it once more');
+  } finally {
+    await session.rest().catch(() => {});
+    api.stop();
+  }
+});
+
+test('deleting a receipt books its payment again without it; the trash gives it back, booked with it again', async () => {
+  const { api, session, rc, full, onG } = await bookedWithReceipt();
+  try {
+    const del = await api.send('DELETE', `/api/receipts/${rc.id}`);
+    assert.equal(del.status, 200);
+    assert.equal((await full()).receipts.some((r) => r.id === rc.id), false);
+    await session.rest();
+    assert.deepEqual(await onG(), [[]], 'no input tax on a receipt that is gone');
+    const trash = join(api.root, 'data/trash', rc.id);
+    assert.deepEqual(readdirSync(trash).sort(), ['20260801-geruestbau.pdf', 'trashed.json'], 'the file waits in the trash');
+
+    const back = await api.send('POST', `/api/receipts/${rc.id}/restore`);
+    assert.equal(back.status, 200, back.json.error as string);
+    const b = await full();
+    assert.ok(b.receipts.some((r) => r.id === rc.id) && b.mappings.some((m) => m.receiptId === rc.id && m.transactionRef === 'REF-G'), 'receipt and link back');
+    assert.equal(existsSync(trash), false);
+    assert.ok(existsSync(join(api.root, 'transactional-data/2026/receipts/20260801-geruestbau.pdf')), 'the file back in its place');
+    await session.rest();
+    assert.deepEqual(await onG(), [[rc.id]], 'booked with it again');
+    assert.equal((await api.send('POST', `/api/receipts/${rc.id}/restore`)).status, 404, 'once');
+  } finally {
+    await session.rest().catch(() => {});
+    api.stop();
+  }
+});

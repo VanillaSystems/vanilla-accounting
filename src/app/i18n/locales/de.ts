@@ -614,7 +614,7 @@ export const messages = {
   'receipts.daysAfter': { one: '{n} Tag nachher', other: '{n} Tage nachher' },
   'receipts.daysBefore': { one: '{n} Tag vorher', other: '{n} Tage vorher' },
   'receipts.deleteKey': 'Löschen (⌫)',
-  'receipts.deleteText': 'Die Datei wird vom Datenträger gelöscht, mit allen Zuordnungen. Das lässt sich nicht rückgängig machen.',
+  'receipts.deleteText': 'Der Beleg verlässt die Bücher mit allen Zuordnungen; seine Zahlung wird ohne ihn neu gebucht. Die Datei bleibt 30 Tage im Papierkorb des Arbeitsbereichs (data/trash): «Rückgängig» im Hinweis danach holt ihn zurück.',
   'receipts.deleteTitle': 'Beleg löschen?',
   'receipts.deleted': 'Gelöscht · {file}',
   'receipts.details': 'Details',
