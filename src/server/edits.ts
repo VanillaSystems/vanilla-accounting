@@ -7,13 +7,17 @@ import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
 import { nextManualRef } from '../books/refs.js';
 import { isFilingKey, parsePeriod } from '../accounting/periods.js';
-import { paymentDates, paymentSides } from '../accounting/payment-entries.js';
+import { paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
+import type { FxResolver } from '../accounting/fx-rates.js';
+import { offSide, type BookingLine } from '../accounting/manual-booking.js';
+import { lookupVatCode } from '../accounting/vat-codes.js';
+import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 
 function receiptOf(books: Books, id: string): Receipt {
@@ -125,6 +129,37 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   return entry;
 }
 
+/**
+ * A payment booked by hand (src/accounting/manual-booking.ts): its lines as a person's entries,
+ * each dated on the payment (cash basis), at the ESTV rate of that day when it is foreign, with
+ * the receipts linked now, so a later run sees nothing new and keeps them. Refused when the
+ * payment is booked already or the lines do not add up to what the bank paid.
+ */
+export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver): JournalEntry[] {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) throw new RequestError(404, 'Transaction not found');
+  assertOpen(books, refDates(books, ref), 'newEntry');
+  if (books.journalEntries.some((e) => e.transactionRef === ref)) throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
+  if (!lines.length) throw new RequestError(400, 'lines: mindestens eine Zeile.');
+  for (const l of lines) {
+    if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
+    if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.');
+    if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `MWST-Code ${l.vatCode} gibt es nicht.`);
+    if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
+  }
+  const off = offSide(books, ref, lines, accounts);
+  if (off) throw unbalanced(off);
+  const rate = tx.currency === baseCurrency() ? {} : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
+  const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
+  const entries = lines.map((l): JournalEntry => ({
+    id: randomBytes(8).toString('hex'), transactionRef: ref, date: tx.date,
+    accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
+    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts,
+  }));
+  books.journalEntries.push(...entries);
+  return entries;
+}
+
 /** Deletes a booking of the open period; returns it as it was. */
 export function deleteEntry(books: Books, id: string): JournalEntry {
   const entry = entryOf(books, id);
@@ -155,6 +190,13 @@ function paymentOf(books: Books, c: BookChange): string | undefined {
 
 const day = (iso: string) => iso.split('-').reverse().join('.');
 
+/** The refusal of bookings that leave a bank side off what the bank paid. */
+function unbalanced(off: PaymentSide): RequestError {
+  const sign = off.paid < 0 ? -1 : 1;
+  const params = { date: off.date, currency: off.currency, paid: Math.abs(off.paid), booked: sign * off.booked };
+  return new RequestError(400, `Die Buchungen der Zahlung vom ${day(off.date)} über ${off.currency} ${params.paid.toFixed(2)} ergäben zusammen ${off.currency} ${params.booked.toFixed(2)}: alle Teile müssen zusammen die Zahlung ergeben.`, { code: 'paymentBalance', params });
+}
+
 /**
  * An answer of the AI sidebar (src/server/routes/assistant.ts): its changes as a person's, all or
  * none, and two refusals more. A booking of a payment it dates keeps the payment's date (cash basis,
@@ -183,11 +225,7 @@ export function applyAnswer(books: Books, changes: BookChange[], accounts: reado
   for (const [ref, before] of payments) {
     const sides = paymentSides(books, ref, accounts);
     const off = sides.find((s) => s.booked !== s.paid);
-    if (off && JSON.stringify(sides.map((s) => s.booked)) !== before) {
-      const sign = off.paid < 0 ? -1 : 1;
-      const params = { date: off.date, currency: off.currency, paid: Math.abs(off.paid), booked: sign * off.booked };
-      throw new RequestError(400, `Die Buchungen der Zahlung vom ${day(off.date)} über ${off.currency} ${params.paid.toFixed(2)} ergäben zusammen ${off.currency} ${params.booked.toFixed(2)}: alle Teile müssen zusammen die Zahlung ergeben.`, { code: 'paymentBalance', params });
-    }
+    if (off && JSON.stringify(sides.map((s) => s.booked)) !== before) throw unbalanced(off);
   }
   return made;
 }

@@ -40,7 +40,7 @@ test('every text of an app workflow is in de, en, fr and it', () => {
 
 test('the kind of a step follows from its body: AI, person, call, effect, decision', () => {
   const b = byId('booking');
-  assert.deepEqual(b.steps.map((s) => [s.id, s.kind]), [['open', 'decision'], ['classify', 'agent'], ['manual', 'human'], ['book', 'effect']]);
+  assert.deepEqual(b.steps.map((s) => [s.id, s.kind]), [['open', 'decision'], ['classify', 'agent'], ['manual', 'human'], ['confirm', 'decision'], ['book', 'effect']]);
   assert.equal(stepOf(byId('collection'), 'collect')!.kind, 'call');
   assert.equal(stepOf(byId('evidence'), 'wait')!.kind, 'wait');
   assert.equal(hasAi(b, app.workflows), true);

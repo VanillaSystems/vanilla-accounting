@@ -1,0 +1,102 @@
+/**
+ * A bank payment booked by hand, without the AI (MISSION.md: an accountant without a subscription
+ * books what the classifier would): the form's first lines, decided by rules only, and whether
+ * the lines add up to the payment. The write is src/server/edits.ts bookPayment.
+ */
+import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
+import type { LedgerBankAccount } from '../workspace/workspace.js';
+import { paymentSides, type PaymentSide } from './payment-entries.js';
+import { codeForRate } from './vat-codes.js';
+import { fromRappen, toRappen } from './rappen.js';
+
+/** One line of the booking, in the payment's currency. */
+export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string }
+
+/** What the form opens with. `vat` is as a person would type it: a code, or a receipt's rate («8.1») that becomes a code once the accounts are known. */
+export interface DraftLine { accountDebit: string; accountCredit: string; amount: number; vat: string; description: string }
+
+export interface BookingDraft {
+  ref: string;
+  /** The payment's: under cash basis every line carries it. */
+  date: string;
+  currency: string;
+  /** The ledger account of the bank the payment moved, and the side it stands on (money out: Haben). */
+  bank?: { account: string; side: 'accountDebit' | 'accountCredit' };
+  /** The receipts linked now: the entries record them, so a later run keeps the booking. */
+  receipts: string[];
+  lines: DraftLine[];
+  /** The earlier booking of the same vendor the account was taken from. */
+  precedent?: Pick<JournalEntry, 'id' | 'transactionRef' | 'date'>;
+}
+
+type Books = Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts'>;
+
+const vatRates = (r: Receipt) => (r.hasSwissVat ? (r.vatSummary ?? []).filter((g) => g.ratePercent > 0) : []);
+const gross = (g: NonNullable<Receipt['vatSummary']>[number]) => g.gross ?? (g.net !== undefined ? g.net + g.vat : undefined);
+const norm = (s: string | undefined) => s?.toLowerCase().replace(/[^a-z0-9äöü]/g, '') || undefined;
+
+/** What names the other party of a payment: the VAT numbers and vendors of its receipts, the bank's counterparty. */
+function vendorKeys(books: Books, tx: BankTransaction): Set<string> {
+  const ids = new Set(books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => m.receiptId));
+  const keys = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => [norm(r.vatId), norm(r.title?.vendor)]);
+  return new Set([...keys, norm(tx.counterparty)].filter((k): k is string => !!k));
+}
+
+/** The account the newest booking of the same vendor used on the side opposite the bank, with that entry. */
+function precedentOf(books: Books, tx: BankTransaction, bank: NonNullable<BookingDraft['bank']>, bankAccounts: Set<string>) {
+  const mine = vendorKeys(books, tx);
+  if (!mine.size) return undefined;
+  const other = bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit';
+  const byRef = new Map(books.transactions.map((t) => [t.ref, t]));
+  const same = new Map<string, boolean>();
+  const isSame = (ref: string) => {
+    if (!same.has(ref)) { const t = byRef.get(ref); same.set(ref, !!t && [...vendorKeys(books, t)].some((k) => mine.has(k))); }
+    return same.get(ref)!;
+  };
+  const hit = (books.journalEntries ?? [])
+    .filter((e) => e.transactionRef !== tx.ref && e.origin !== 'year-close' && bankAccounts.has(e[bank.side]) && e[other] && !bankAccounts.has(e[other]) && isSame(e.transactionRef))
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+  return hit && { account: hit[other], entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date } };
+}
+
+/**
+ * The booking a person starts from, by rules only: the bank on its side, the amount of the payment,
+ * the account of the vendor's last booking, the receipt's VAT rate as its code (codeForRate), and
+ * a line per rate when the receipt states several that add up to the payment. Undefined when no
+ * payment has the ref.
+ */
+export function bookingDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[]): BookingDraft | undefined {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) return undefined;
+  const [side] = paymentSides({ transactions: books.transactions, journalEntries: [] }, ref, accounts);
+  const bank = side && { account: side.account, side: side.paid < 0 ? 'accountCredit' as const : 'accountDebit' as const };
+  const paid = side ? Math.abs(side.paid) : tx.amount;
+  const receiptIds = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
+  const receipts = books.receipts.filter((r) => receiptIds.includes(r.id));
+  const precedent = bank && precedentOf(books, tx, bank, new Set(accounts.map((a) => a.account)));
+  const text = receipts.find((r) => r.description)?.description ?? tx.description;
+  const line = (amount: number, rate?: number): DraftLine => {
+    const accountDebit = bank?.side === 'accountDebit' ? bank.account : precedent?.account ?? '';
+    const accountCredit = bank?.side === 'accountCredit' ? bank.account : precedent?.account ?? '';
+    const vat = rate === undefined ? '' : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
+    return { accountDebit, accountCredit, amount, vat, description: text };
+  };
+  const groups = receipts.length === 1 && receipts[0].currency === tx.currency ? vatRates(receipts[0]) : [];
+  const split = groups.length > 1 && groups.every((g) => gross(g) !== undefined) && toRappen(groups.reduce((s, g) => s + gross(g)!, 0)) === toRappen(paid);
+  const rates = new Set(receipts.flatMap(vatRates).map((g) => g.ratePercent));
+  const lines = split ? groups.map((g) => line(gross(g)!, g.ratePercent)) : [line(paid, rates.size === 1 ? [...rates][0] : undefined)];
+  return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(precedent && { precedent: precedent.entry }) };
+}
+
+const sidesWith = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
+  paymentSides({ transactions: books.transactions, journalEntries: lines.map((l, i) => ({ id: String(i), transactionRef: ref, date: '', ...l })) }, ref, accounts);
+
+/** The first bank side these lines would leave off what the bank paid, or undefined when every side adds up. */
+export const offSide = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): PaymentSide | undefined =>
+  sidesWith(books, ref, lines, accounts).find((s) => s.booked !== s.paid);
+
+/** What is still to book on the payment's first bank side, in its currency and as the bank paid it (out: positive). */
+export function restOf(books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): number {
+  const [side] = sidesWith(books, ref, lines, accounts);
+  return side ? fromRappen((side.paid < 0 ? -1 : 1) * (toRappen(side.paid) - toRappen(side.booked))) : 0;
+}

@@ -173,3 +173,11 @@ export function codeForRate(rate: number, accountDebit: string, accountCredit: s
   if (type(accountDebit) === 'asset') return signed(purchase(accountDebit), false);
   return null;
 }
+
+/** A code as a person types it, or the code a typed rate («8.1») stands for on these accounts; null when it is neither. */
+export function vatCodeOf(typed: string, accountDebit: string, accountCredit: string): { code: string; fromRate?: number } | null {
+  if (!typed || lookupVatCode(typed)) return { code: typed };
+  const r = parseRate(typed);
+  const code = r && codeForRate(r.rate, accountDebit, accountCredit, r.negative);
+  return code ? { code, fromRate: r!.rate } : null;
+}

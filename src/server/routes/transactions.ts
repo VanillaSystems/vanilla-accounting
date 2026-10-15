@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import type { TransactionPatch } from '../../types/index.js';
 import { nextManualRef } from '../../books/refs.js';
-import { assertOpen, refDates, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { assertOpen, refDates, withBooks, RequestError, patchBody, stringField, WS } from '../books.js';
+import { bookPayment } from '../edits.js';
+import { loadFxResolver } from '../../accounting/fx-rates.js';
+import type { BookingLine } from '../../accounting/manual-booking.js';
 
 export const router = Router();
 
@@ -79,4 +82,21 @@ router.delete('/api/transactions/:ref', (req, res) => {
     books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
     return { ok: true };
   });
+});
+
+/** One line of a booking by hand: accounts, an amount in the payment's currency, a VAT code, a text. */
+function bookingLine(raw: unknown): BookingLine {
+  const b = patchBody(raw, ['accountDebit', 'accountCredit', 'amount', 'vatCode', 'description']);
+  const text = (k: string) => (b[k] === undefined ? '' : stringField(b, k).trim());
+  if (typeof b.amount !== 'number') throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
+  const vatCode = text('vatCode');
+  return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description') };
+}
+
+/** A payment booked by hand, in one or more lines that add up to it (src/server/edits.ts bookPayment). */
+router.post('/api/transactions/:ref/entries', (req, res) => {
+  const lines = (req.body as { lines?: unknown })?.lines;
+  if (!Array.isArray(lines)) throw new RequestError(400, 'lines: eine Liste von Zeilen.');
+  const parsed = lines.map(bookingLine);
+  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver()) }));
 });

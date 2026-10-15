@@ -11,5 +11,5 @@ triggers:
   - event: {"name": "transaction.settled", "off": true}
 emits: ["entry.booked"]
 start: open
-steps: ["open", "classify", "manual", "book"]
+steps: ["open", "classify", "manual", "confirm", "book"]
 guide: booking.guide.yaml

@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
-import { codeForRate, lookupVatCode, parseRate, vatCodes } from '../../../accounting/vat-codes.js';
+import { lookupVatCode, parseRate, vatCodeOf, vatCodes } from '../../../accounting/vat-codes.js';
 import type { BankTransaction, JournalEntry } from '../../../types/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -239,14 +239,6 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
       if (el && el !== document.activeElement && el.value !== value) el.value = value;
     }
   }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description]);
-
-  /** A code as typed, or the code a typed rate stands for on these accounts. */
-  function vatCodeOf(typed: string, debit: string, credit: string): { code: string; fromRate?: number } | null {
-    if (!typed || lookupVatCode(typed)) return { code: typed };
-    const r = parseRate(typed);
-    const code = r && codeForRate(r.rate, debit, credit, r.negative);
-    return code ? { code, fromRate: r!.rate } : null;
-  }
 
   function fail(message: string) { wrong.current = true; setErr(message); setNote(''); nav.dismissToast(); }
 
