@@ -31,7 +31,10 @@ export const router = Router();
 interface Placed {
   account: LedgerBankAccount;
   filename: string;
+  first?: string;
   last: string;
+  /** A camt export's last closing balance (CLBD); a PDF's comes from its text after it is placed. */
+  closing?: { date: string; amount: number };
 }
 
 const refuse = (status: number, error: string, reason: StatementRefusal, detail?: string): never => {
@@ -46,16 +49,21 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   if (camt.message !== 'camt.053' || !camt.statements.length) return refuse(400, 'Keine camt.053-Datei (Kontoauszug).', 'notCamt');
   let account: LedgerBankAccount | undefined;
   const dates: string[] = [];
+  const closings: Array<{ date: string; amount: number }> = [];
   for (const statement of camt.statements) {
     const match = accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
     if ('problem' in match) return refuse(400, match.problem, 'account', match.problem);
     if (account && account.bank !== match.account.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
     account = match.account;
-    dates.push(...transactionsOf(statement, match.account).map((t) => t.date), ...parseStatementBalances(statement, account.bank, filename).map((b) => b.date));
+    const balances = parseStatementBalances(statement, account.bank, filename);
+    dates.push(...transactionsOf(statement, match.account).map((t) => t.date), ...balances.map((b) => b.date));
+    closings.push(...balances.filter((b) => b.type === 'CLBD').map((b) => ({ date: b.date, amount: b.amount })));
   }
-  const last = dates.filter(Boolean).sort().at(-1);
+  const sorted = dates.filter(Boolean).sort();
+  const last = sorted.at(-1);
   if (!account || !last) return refuse(400, 'Der Auszug hat keine Daten.', 'notCamt');
-  return { account, filename, last };
+  const closing = closings.sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+  return { account, filename, first: sorted[0], last, ...(closing ? { closing } : {}) };
 }
 
 const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
@@ -72,7 +80,7 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
     if (!hint || !month) return refuse(400, 'Der Dateiname sagt nicht, welchen Monat der Auszug zeigt.', 'name');
     const from = `${month}-01`, to = monthEnd(month);
     const canonical = hint.statements === 'wise' ? `statement_0_${hint.currency}_${from}_${to}.pdf` : `Kontoauszug ${swiss(from)} - ${swiss(to)}.pdf`;
-    return { account: hint, filename: canonical, last: to };
+    return { account: hint, filename: canonical, first: from, last: to };
   }
   const iban = /\b([A-Z]{2}\d{2}[A-Z0-9]{11,30})\b/.exec(filename.replace(/\s+(?=\d)/g, ''))?.[1];
   const byIban = iban ? imported().find((a) => a.iban && a.iban === parseIban(iban)) : undefined;
@@ -80,7 +88,7 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
   const chf = imported().filter((a) => a.statements !== 'wise' && a.currency === baseCurrency());
   const account = byIban ?? wise ?? hint ?? (chf.length === 1 ? chf[0] : undefined);
   if (!account) return refuse(400, 'Zu welchem Konto gehört der Auszug? Aus dem fehlenden Monat hinzufügen.', 'account');
-  return { account, filename, last: named.toDate };
+  return { account, filename, first: named.fromDate, last: named.toDate };
 }
 
 /** The new closing balances replace those of the same account and day; the others stay. */
@@ -152,11 +160,18 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
       if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
+      const closing = placed.closing ?? balances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)
+        .sort((a, b) => a.date.localeCompare(b.date)).map((b) => ({ date: b.date, amount: b.amount })).at(-1);
       return {
         file: `${placed.account.bank}/${placed.filename}`,
         account: placed.account.account,
         month: placed.last.slice(0, 7),
         added: books.transactions.filter((t) => !before.has(t.ref)).length,
+        bank: placed.account.bank,
+        currency: placed.account.currency,
+        ...(placed.first ? { from: placed.first } : {}),
+        to: placed.last,
+        ...(closing ? { closing } : {}),
       };
     });
   } catch (e) {

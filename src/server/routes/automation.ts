@@ -96,12 +96,13 @@ router.get('/api/automation/runs/:id', (req, res) => {
   res.json(detail);
 });
 
-const KINDS = new Set(['start', 'answer', 'resume', 'replay', 'discard', 'pause', 'check', 'approve']);
+const KINDS = new Set(['start', 'answer', 'resume', 'replay', 'discard', 'pause', 'check', 'approve', 'review']);
 
 router.post('/api/automation', async (req, res) => {
   const cmd = req.body as AutomationCommand;
   if (!cmd || typeof cmd !== 'object' || !KINDS.has(cmd.kind)) throw new RequestError(400, 'Unbekannter Befehl.');
   if (cmd.kind === 'start' && (typeof cmd.workflow !== 'string' || typeof cmd.item?.id !== 'string' || typeof cmd.item?.kind !== 'string')) throw new RequestError(400, 'start braucht workflow und item.');
+  if (cmd.kind === 'review' && (typeof cmd.run !== 'string' || typeof cmd.on !== 'boolean')) throw new RequestError(400, 'review braucht run und on.');
   res.json(await engine().command(cmd));
 });
 

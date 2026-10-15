@@ -89,6 +89,13 @@ export interface StatementImport {
   account: string;
   month: string;
   added: number;
+  bank: string;
+  currency: string;
+  /** The days it covers, as far as the file says (a camt export: its first and last booking). */
+  from?: string;
+  to: string;
+  /** The bank's closing balance on its last day, in the account's currency: what the books must show then. */
+  closing?: { date: string; amount: number };
 }
 
 export interface JournalEntry {

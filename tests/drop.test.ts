@@ -6,12 +6,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { configure, TextReader, Uint8ArrayReader, Uint8ArrayWriter, ZipWriter } from '@zip.js/zip.js';
 import { recognize } from '../src/intake/recognize.js';
 import { unzip } from '../src/intake/unzip.js';
 import type { DropSession } from '../src/types/drop.js';
+import type { RunDetail } from '../src/workflows/model.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 
@@ -85,6 +86,35 @@ test('the dialog: a duplicate is not taken, the password is never written, «Hin
     assert.ok(s.done?.run, 'the inbox run started');
     assert.deepEqual(inbox(), ['fresh.pdf'], 'only the new file went in: not the duplicate, not the Word file');
     assert.equal(existsSync(join(api.root, 'data/drop', s.id, 'files')), false, 'the session keeps no files');
+  } finally {
+    api.stop();
+  }
+});
+
+test('«Hinzufügen» tells the run what came in: a statement by its bank, account and days, a receipt by its id', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const base = `http://127.0.0.1:${api.port}`;
+    const post = async (path: string, body?: Buffer): Promise<DropSession> => (await (await fetch(base + path, {
+      method: 'POST', body: body ? new Uint8Array(body) : undefined, headers: { 'Content-Type': 'application/octet-stream' },
+    })).json()) as DropSession;
+    const name = 'Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf';
+    const placed = join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen', name);
+    const statement = readFileSync(placed);
+    rmSync(placed);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=${encodeURIComponent(name)}`, statement);
+    s = await post(`/api/drop/${s.id}/files?name=fresh.pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% arrival\n')]));
+    const receipt = s.rows.find((r) => r.name === 'fresh.pdf')!;
+    s = await post(`/api/drop/${s.id}/commit`);
+    assert.equal(s.done?.taken, 2);
+    const run = (await (await fetch(`${base}/api/automation/runs/${s.done!.run}`)).json()) as RunDetail;
+    assert.deepEqual(run.arrived, [
+      // The demo's PDFs print no closing balance, so the run claims none.
+      { kind: 'statement', file: `Raiffeisen/${name}`, account: '1021', added: 0, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30' },
+      { kind: 'receipt', file: 'fresh.pdf', id: receipt.id },
+    ]);
   } finally {
     api.stop();
   }

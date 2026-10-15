@@ -4,6 +4,8 @@
  * use the same types and the same derivations, so the graph that is drawn, the map that is shown
  * and the buttons in other areas cannot disagree with what runs.
  */
+import type { StatementImport } from '../types/index.js';
+import type { Made, Took } from './summary.js';
 
 /** Route segments of /automation/<x>: no workflow may take these ids (load.ts checks). */
 export const RESERVED_WORKFLOW_IDS = ['runs', 'map', 'queue', 'tasks'] as const;
@@ -289,6 +291,16 @@ export type StartedBy =
   /** A dry run of a case, to check a version waiting to be switched on against how the case went. */
   | { kind: 'check'; of: string };
 
+/**
+ * A file that came in with a run (the drop dialog's «Hinzufügen»), said as a person checks it: a
+ * statement by its bank, account and days with what it added and the bank's closing balance, a
+ * receipt by the id it will have, a file that was refused with the reason.
+ */
+export type Arrival =
+  | ({ kind: 'statement' } & Omit<StatementImport, 'month'>)
+  | { kind: 'receipt'; file: string; id: string }
+  | { kind: 'refused'; file: string; reason: string };
+
 export interface Run {
   schema: 2;
   id: string;
@@ -305,6 +317,10 @@ export interface Run {
   steps: StepRecord[];
   /** How many step records the run log already covers (runlog.ts). */
   logged?: number;
+  /** The files that came in with it; a drop while it runs adds to them (engine.ts annotate). */
+  arrived?: Arrival[];
+  /** When a person marked it as checked («Geprüft»). */
+  reviewed?: string;
 }
 
 /** What a step can read: the outputs of the steps before it, in order. Derived, never stored twice. */
@@ -332,6 +348,32 @@ export interface RunSummary {
   reason?: QueueReason;
   /** Still open past its workflow's deadline. */
   overdue?: boolean;
+  arrived?: Arrival[];
+  reviewed?: string;
+  digest: RunDigest;
+}
+
+/** What a run's steps read and made, counted: the runs table's words for a run. */
+export interface RunDigest {
+  /** The files its steps had in front of them (the inbox's). */
+  files: string[];
+  receipts: number;
+  links: number;
+  entries: number;
+}
+
+export function digestOf(run: Pick<Run, 'steps'>): RunDigest {
+  const files = new Set<string>();
+  const ids = { receipt: new Set<string>(), link: new Set<string>(), entry: new Set<string>() };
+  for (const s of run.steps) {
+    for (const t of (s.output?.took as Took[] | undefined) ?? []) if (t.kind === 'files') for (const n of t.names) files.add(n);
+    for (const m of (s.output?.made as Made[] | undefined) ?? []) {
+      if (m.kind === 'receipt') ids.receipt.add(m.id);
+      else if (m.kind === 'link') ids.link.add(`${m.transaction}:${m.receipt}`);
+      else ids.entry.add(m.id);
+    }
+  }
+  return { files: [...files], receipts: ids.receipt.size, links: ids.link.size, entries: ids.entry.size };
 }
 
 /** An ISO duration (P30D, PT5M, P1DT2H) added to an ISO time. */
@@ -358,6 +400,9 @@ export function summaryOf(run: Run, w?: WorkflowDecl, now = new Date().toISOStri
     ...(s.status === 'stuck' ? { error: s.reason } : s.status === 'discarded' ? { error: s.reason } : {}),
     ...(s.status === 'queued' && s.reason ? { reason: s.reason } : {}),
     ...(overdue(run, w, now) ? { overdue: true } : {}),
+    ...(run.arrived?.length ? { arrived: run.arrived } : {}),
+    ...(run.reviewed ? { reviewed: run.reviewed } : {}),
+    digest: digestOf(run),
   };
 }
 
@@ -448,7 +493,9 @@ export type AutomationCommand =
   /** Dry runs of the workflow's latest finished cases, on the version as it is now. */
   | { kind: 'check'; workflow: string; limit?: number }
   /** Switch the waiting version on: from now on it runs live. */
-  | { kind: 'approve'; workflow: string };
+  | { kind: 'approve'; workflow: string }
+  /** Mark a run as checked by a person («Geprüft»), or take the mark back. */
+  | { kind: 'review'; run: string; on: boolean };
 
 export type CommandResult =
   | { ok: true; run?: string; runs?: string[] }

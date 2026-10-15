@@ -16,7 +16,7 @@ import { ACTIONS, type Effects } from './actions.js';
 import { cronMatches } from './cron.js';
 import { loadWorkflows, type Loaded } from './load.js';
 import {
-  outputsOf, plusDuration, stepOf, transition,
+  type Arrival, outputsOf, plusDuration, stepOf, transition,
   type AutomationCommand, type CommandResult, type EffectRecord, type ItemRef, type QueueReason, type Run, type RunState, type StartedBy, type StepRecord, type WorkflowDecl,
 } from './model.js';
 import { listRuns, saveRun } from './store.js';
@@ -51,7 +51,8 @@ export interface Engine {
   /** Bumped on every change of a run, so a poll can answer "unchanged". */
   readonly counter: number;
   command(cmd: AutomationCommand): Promise<CommandResult>;
-  start(workflow: string, item: ItemRef, by: StartedBy, mode?: Run['mode']): Promise<CommandResult>;
+  /** `arrived`: the files that came in with it; a start that finds the company's run under way adds them to it. */
+  start(workflow: string, item: ItemRef, by: StartedBy, mode?: Run['mode'], arrived?: Arrival[]): Promise<CommandResult>;
   /** Starts the scheduled workflows whose cron matches this minute. */
   tick(at?: Date): Promise<void>;
   /** Resolves when no run is running or queued (for tests and the CLI). */
@@ -83,7 +84,23 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   let waiters: Array<() => void> = [];
 
   const workflow = (id: string) => declared.workflows.find((w) => w.id === id);
-  const save = (run: Run) => { runs.set(run.id, run); saveRun(ws, run); counter++; };
+  /**
+   * A step saves the run it started from; what a drop or a person added meanwhile (arrivals, the
+   * «Geprüft» mark) stays: only annotate() writes those.
+   */
+  const save = (run: Run) => {
+    const kept = runs.get(run.id);
+    const next: Run = kept ? { ...run, arrived: kept.arrived, reviewed: kept.reviewed } : run;
+    if (!next.arrived) delete next.arrived;
+    if (!next.reviewed) delete next.reviewed;
+    runs.set(run.id, next); saveRun(ws, next); counter++;
+  };
+  const annotate = (id: string, patch: Pick<Run, 'arrived' | 'reviewed'>) => {
+    const next: Run = { ...runs.get(id)!, ...patch };
+    if (!next.arrived?.length) delete next.arrived;
+    if (!next.reviewed) delete next.reviewed;
+    runs.set(id, next); saveRun(ws, next); counter++;
+  };
   const move = (run: Run, next: RunState): Run => { const r = transition(run, next); save(r); return r; };
 
   // A run the process left running when it stopped goes back into the queue at its step.
@@ -347,10 +364,10 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     pump();
   }
 
-  async function create(w: WorkflowDecl, item: ItemRef, by: StartedBy, mode: Run['mode']): Promise<Run> {
+  async function create(w: WorkflowDecl, item: ItemRef, by: StartedBy, mode: Run['mode'], arrived?: Arrival[]): Promise<Run> {
     const run: Run = {
       schema: 2, id: `${w.id}-${randomBytes(4).toString('hex')}`, workflow: w.id, version: w.version, item, mode, startedBy: by,
-      startedAt: now(), state: { status: 'queued', at: w.start, since: now() }, steps: [],
+      startedAt: now(), state: { status: 'queued', at: w.start, since: now() }, steps: [], ...(arrived?.length ? { arrived } : {}),
     };
     save(run);
     pump();
@@ -388,7 +405,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     return item.id;
   }
 
-  async function start(id: string, item: ItemRef, by: StartedBy, mode: Run['mode'] = 'live'): Promise<CommandResult> {
+  async function start(id: string, item: ItemRef, by: StartedBy, mode: Run['mode'] = 'live', arrived?: Arrival[]): Promise<CommandResult> {
     declared = loadWorkflows(deps.appRoot, ws.paths.root);
     const w = workflow(id);
     if (!w) return { ok: false, refusal: 'not-found', detail: id };
@@ -398,8 +415,11 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     const open = item.kind === 'company' && mode === 'live'
       ? [...runs.values()].find((r) => r.workflow === w.id && r.mode === 'live' && ['queued', 'running', 'retrying'].includes(r.state.status))
       : undefined;
-    if (open) return { ok: true, run: open.id };
-    const run = await create(w, item, by, mode);
+    if (open) {
+      if (arrived?.length) annotate(open.id, { arrived: [...(open.arrived ?? []), ...arrived] });
+      return { ok: true, run: open.id };
+    }
+    const run = await create(w, item, by, mode, arrived);
     return { ok: true, run: run.id };
   }
 
@@ -464,6 +484,12 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
           started.push(r.run!);
         }
         return { ok: true, runs: started };
+      }
+      case 'review': {
+        const r = runs.get(cmd.run);
+        if (!r) return { ok: false, refusal: 'not-found' };
+        annotate(r.id, { reviewed: cmd.on ? now() : undefined });
+        return { ok: true, run: r.id };
       }
       case 'approve': {
         declared = loadWorkflows(deps.appRoot, ws.paths.root);

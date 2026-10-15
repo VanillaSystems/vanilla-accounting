@@ -177,10 +177,11 @@ test('refused: DELETE of a manual payment that is booked -> 409 hasEntries, inde
   assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
 });
 
-/** A camt.053 of the demo's Raiffeisen account with one payment on `date`. */
+/** A camt.053 of the demo's Raiffeisen account with one payment on `date` and the bank's closing balance that day. */
 const camt = (id: string, date: string) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
 <GrpHdr><MsgId>${id}</MsgId><CreDtTm>${date}T06:00:00</CreDtTm></GrpHdr>
 <Stmt><Id>${id}</Id><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">4321.10</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>${date}</Dt></Dt></Bal>
 <Ntry><Amt Ccy="CHF">12.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>${date}</Dt></BookgDt><AcctSvcrRef>REF-${id}</AcctSvcrRef><AddtlNtryInf>Upload ${id}</AddtlNtryInf></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
 
@@ -200,7 +201,10 @@ test('refused: POST /api/statements with a statement wholly inside the filed qua
 test('open period: POST /api/statements reads the statement in, keeps every payment it does not hold', async () => {
   const { status, json } = await upload('august.xml', camt('S-AUG', '2026-08-25'));
   assert.equal(status, 200, json.error as string);
-  assert.deepEqual(json, { file: 'Raiffeisen/august.xml', account: '1021', month: '2026-08', added: 1 });
+  assert.deepEqual(json, {
+    file: 'Raiffeisen/august.xml', account: '1021', month: '2026-08', added: 1,
+    bank: 'Raiffeisen', currency: 'CHF', from: '2026-08-25', to: '2026-08-25', closing: { date: '2026-08-25', amount: 4321.1 },
+  });
   const now: Index = loadBooks(workspaceAt(api.ws.paths.root));
   assert.ok(now.transactions.some((t) => t.ref === 'REF-S-AUG' && t.date === '2026-08-25' && t.amount === 12));
   assert.ok(['C1', 'O1', 'CI', 'OI'].every((ref) => now.transactions.some((t) => t.ref === ref)), 'payments of no file stay');

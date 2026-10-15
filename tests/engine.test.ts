@@ -15,7 +15,7 @@ import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import { openEngine } from '../src/workflows/engine.js';
 import { transition, RunStateError, type Run } from '../src/workflows/model.js';
-import { saveRun } from '../src/workflows/store.js';
+import { listRuns, saveRun } from '../src/workflows/store.js';
 import { DEMO_ROOT, booksOnDisk } from './support/workspace.js';
 
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'engine-runs-'));
@@ -87,6 +87,33 @@ test('two AI steps run at a time; the third waits for an AI slot', async () => {
   open();
   await engine.idle();
   assert.deepEqual(engine.runs().map((r) => r.state.status), ['done', 'done', 'done']);
+  gate = Promise.resolve();
+});
+
+test('what came in rides with the run: a drop while it is under way adds its files, and the step that finishes keeps them and the «Geprüft» mark', async () => {
+  const root = app({ inbox: { 'workflow.yaml': 'label: T\nphase: collect\nfor: company\nsteps: [think]\n', 'think/step.yaml': 'uses: test.think\noutcomes: { ok: done }\n' } });
+  let open!: () => void;
+  gate = new Promise((r) => { open = r; });
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: root });
+  const company = { kind: 'company', id: 'inbox' } as const;
+  const first = await engine.start('inbox', company, { kind: 'outside', file: 'a.pdf' }, 'live', [{ kind: 'receipt', file: 'a.pdf', id: 'aaaa000000000000' }]);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(engine.run(first.ok ? first.run! : '')!.state.status, 'running');
+  const second = await engine.start('inbox', company, { kind: 'outside', file: 'b.docx' }, 'live', [{ kind: 'refused', file: 'b.docx', reason: 'Word' }]);
+  const id = first.ok ? first.run! : '';
+  assert.deepEqual(second, { ok: true, run: id }, 'the drop joins the run under way');
+  assert.deepEqual(await engine.command({ kind: 'review', run: id, on: true }), { ok: true, run: id });
+  open();
+  await engine.idle();
+  const done = engine.run(id)!;
+  assert.equal(done.state.status, 'done');
+  assert.deepEqual(done.arrived?.map((x) => x.file), ['a.pdf', 'b.docx'], 'the finishing step did not drop the second file');
+  assert.ok(done.reviewed, 'nor the mark set while it ran');
+  assert.deepEqual(listRuns(ws).find((r) => r.id === id)?.arrived?.length, 2, 'both are stored');
+  await engine.command({ kind: 'review', run: id, on: false });
+  assert.equal(engine.run(id)!.reviewed, undefined);
+  assert.deepEqual(await engine.command({ kind: 'review', run: 'nope', on: true }), { ok: false, refusal: 'not-found' });
   gate = Promise.resolve();
 });
 

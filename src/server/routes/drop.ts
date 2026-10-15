@@ -18,6 +18,7 @@ import { basename, extname, join } from 'node:path';
 import { RequestError, WS, readBooks } from '../books.js';
 import { engine } from './automation.js';
 import { importStatement } from './statements.js';
+import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
 import type { DropAction, DropRow, DropSession } from '../../types/drop.js';
@@ -123,15 +124,25 @@ router.post('/api/drop/:id/commit', async (req, res) => {
   const s = load(req.params.id);
   if (s.done) { res.json(s); return; }
   const refused: Array<{ name: string; message: string }> = [];
+  // What came in, file by file, for the run that takes it up: the runs table says each in words.
+  const arrived: Arrival[] = [];
   let taken = 0;
   for (const row of s.rows) {
     const bytes = () => readFileSync(fileOf(s.id, row.key));
     if (row.state === 'take' && (row.kind === 'receipt' || row.kind === 'photo')) {
       mkdirSync(WS.paths.inbox, { recursive: true });
       writeFileSync(join(WS.paths.inbox, freeName(WS.paths.inbox, row.name)), bytes());
+      arrived.push({ kind: 'receipt', file: row.name, id: row.id });
       taken++;
     } else if (row.state === 'take' && (row.kind === 'camt' || row.kind === 'statement-pdf')) {
-      try { await importStatement(bytes(), row.name); taken++; } catch (e) { refused.push({ name: row.name, message: (e as Error).message }); }
+      try {
+        const { month: _month, ...done } = await importStatement(bytes(), row.name);
+        arrived.push({ kind: 'statement', ...done });
+        taken++;
+      } catch (e) {
+        refused.push({ name: row.name, message: (e as Error).message });
+        arrived.push({ kind: 'refused', file: row.name, reason: (e as Error).message });
+      }
     } else if (row.state === 'quarantine') {
       const q = join(WS.paths.data, 'quarantine');
       mkdirSync(q, { recursive: true });
@@ -140,7 +151,7 @@ router.post('/api/drop/:id/commit', async (req, res) => {
       writeFileSync(join(q, `${name}.reason.txt`), `${row.reason ?? ''}\n`);
     }
   }
-  const started = taken ? await engine().start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'outside', file: s.rows.find((r) => r.state === 'take')?.name ?? '' }) : undefined;
+  const started = taken ? await engine().start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'outside', file: s.rows.find((r) => r.state === 'take')?.name ?? '' }, 'live', arrived) : undefined;
   s.done = { taken, ...(started?.ok && started.run ? { run: started.run } : {}), refused };
   rmSync(join(dir(s.id), 'files'), { recursive: true, force: true });
   save(s);
