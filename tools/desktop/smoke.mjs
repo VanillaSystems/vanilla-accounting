@@ -149,6 +149,10 @@ await clickText(page, '.st-top .seg2 button', 'DE');
 await sleep(500);
 await shot(page, '01-start');
 check('first start shows the start screen', await page.$('[data-act=demo]'));
+check('the window is dragged by its top edge (no title bar on the Mac)', await page.evaluate(() => {
+  const bar = document.querySelector('.dragbar');
+  return !!bar && getComputedStyle(bar).getPropertyValue('-webkit-app-region') === 'drag' && bar.getBoundingClientRect().height >= 28;
+}));
 check('the app keeps its state in the given user data folder', existsSync(join(userData, 'desktop.json')));
 check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o', 'command=', String(first.child.pid)], { encoding: 'utf8' }).includes('PATH=/usr/bin:/bin'));
 

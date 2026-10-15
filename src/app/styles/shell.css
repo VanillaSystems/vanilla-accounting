@@ -261,8 +261,10 @@ main.full { display: flex; flex-direction: column; }
 .drop .ic { margin: 0 auto; }
 
 /* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable. */
-.no-titlebar body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 28px; -webkit-app-region: drag; z-index: 15; }
-.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop, .corner) { -webkit-app-region: no-drag; }
+.dragbar { position: fixed; top: 0; left: 0; right: 0; height: 36px; -webkit-app-region: drag; z-index: 15; }
+.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop, .corner, .aside) { -webkit-app-region: no-drag; }
+/* Whatever can be clicked stays clickable inside the title bar zone. */
+.no-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=tab]) { -webkit-app-region: no-drag; }
 
 /* Fixed elements centre on the page, not the window: the AI sidebar (when open) is not page. */
 :root { --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }

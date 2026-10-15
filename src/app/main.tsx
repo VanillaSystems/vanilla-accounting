@@ -20,7 +20,14 @@ import { useLanguage } from './shell/prefs.js';
 import { desktop, noTitleBar } from './desktop/bridge.js';
 import { StartScreen, useStartScreen } from './desktop/StartScreen.js';
 
-if (noTitleBar) document.documentElement.classList.add('no-titlebar');
+if (noTitleBar) {
+  document.documentElement.classList.add('no-titlebar');
+  // The window's title bar zone: a real element, since Electron takes the drag regions from elements.
+  const bar = document.createElement('div');
+  bar.className = 'dragbar';
+  bar.setAttribute('aria-hidden', 'true');
+  document.body.prepend(bar);
+}
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
 function Root() {
