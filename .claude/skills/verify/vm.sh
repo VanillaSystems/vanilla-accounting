@@ -4,7 +4,8 @@
 # and the app's DevTools port through an SSH tunnel (inside the app). Never on the person's desktop.
 #
 #   vm.sh up [run] [--from SNAP]   clone vanilla-clean (or a snapshot), boot, key, Gatekeeper on,
-#                           dmg + persona files into ~/Downloads; 6 GB, so three VMs run side by side
+#                           dmg + persona files into ~/Downloads; macOS runs at most two macOS VMs at
+#                           once (Apple's limit), so `up` refuses a third instead of waiting for SSH
 #   vm.sh install           the app of release/mac-arm64 (npm run desktop:dir, 15 s) into /Applications,
 #                           over the one there, past Gatekeeper: for iterating, not for install tests
 #   vm.sh snap NAME         keep this VM's state as snapshot belege-snap-NAME (books set up, files in …)
@@ -46,12 +47,14 @@ up)
   DMG=$(ls -t "$REPO"/release/*arm64.dmg 2>/dev/null | head -1)
   [ -n "$DMG" ] || { echo "no release/*arm64.dmg: npm run desktop:build first" >&2; exit 1; }
   [ -f "$KEY" ] || { echo "no SSH key $KEY" >&2; exit 1; }
+  RUNNING=$(tart list | awk '$NF=="running" && $1=="local"' | wc -l | tr -d ' ')
+  [ "$RUNNING" -lt 2 ] || { echo "two VMs run already (macOS allows two): $(tart list | awk '$NF=="running"{print $2}' | tr '\n' ' ')" >&2; exit 1; }
   [ -x "$VENV/bin/vncdo" ] || { python3 -m venv "$VENV" && "$VENV/bin/pip" install -q vncdotool; }
   mkdir -p "$D"; EVIDENCE="$REPO/.verify/evidence/$RUN"; mkdir -p "$EVIDENCE"
   tart clone "$BASE" "$VM"; tart set "$VM" --memory 6144
   (tart run "$VM" > "$D/tart.log" 2>&1 & echo $! > "$D/tart.pid")
   IP=; for _ in $(seq 1 60); do IP=$(tart ip "$VM" 2>/dev/null || true); [ -n "$IP" ] && nc -z -w2 "$IP" 22 2>/dev/null && break; IP=; sleep 3; done
-  [ -n "$IP" ] || { echo "VM $VM got no IP / SSH" >&2; exit 1; }
+  [ -n "$IP" ] || { echo "VM $VM got no IP / SSH: $(tail -2 "$D/tart.log")" >&2; tart stop "$VM" >/dev/null 2>&1; tart delete "$VM" >/dev/null 2>&1; rm -rf "$D"; exit 1; }
   [ "$BASE" = vanilla-clean ] && expect -c "set timeout 30; spawn ssh-copy-id -i $KEY.pub -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null admin@$IP; expect -re {assword:} { send \"admin\r\" }; expect eof" >/dev/null
   printf 'RUN=%s\nVM=%s\nIP=%s\nEVIDENCE=%s\nDMG="%s"\n' "$RUN" "$VM" "$IP" "$EVIDENCE" "$DMG" > "$D/env"
   # vanilla-clean has Gatekeeper off; a person's Mac has it on.
@@ -111,7 +114,9 @@ doctor)
   if [ -n "${CDP:-}" ]; then curl -s "$CDP/json/list" | grep -q '127.0.0.1:' && ok "app DevTools at $CDP" || bad "app DevTools at $CDP (vm.sh app)"; else echo "--   app not started with vm.sh app"; fi
   ;;
 down)
-  RUN=$(runid "${1:-}"); D="$ROOT/$RUN"; . "$D/env"
+  RUN=$(runid "${1:-}"); D="$ROOT/$RUN"
+  if [ ! -f "$D/env" ]; then tart stop "belege-vm-$RUN" >/dev/null 2>&1; tart delete "belege-vm-$RUN" >/dev/null 2>&1; rm -rf "$D"; echo "down $RUN (no env)"; exit 0; fi
+  . "$D/env"
   [ -f "$D/tunnel.pid" ] && kill "$(cat "$D/tunnel.pid")" 2>/dev/null || true
   ssh_ 'cat /tmp/va.log' > "$EVIDENCE/app.log" 2>/dev/null || true
   tart stop "$VM" >/dev/null 2>&1 || true; tart delete "$VM" >/dev/null 2>&1 || true

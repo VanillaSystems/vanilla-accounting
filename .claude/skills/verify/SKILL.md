@@ -142,7 +142,7 @@ Each call runs its steps, saves `$EVIDENCE/<name>.png` (the page) and prints the
 - To get past Gatekeeper quickly after proving the dialog once: `ditto` the app from the mounted dmg to `/Applications` and `xattr -dr com.apple.quarantine` it. Moving it to Applications by hand makes macOS ask again.
 - Before relaunching with a debug port, kill every app process (`$V app` does `pkill -9` on the bundle path); a leftover helper keeps 9222 and DevTools does not start.
 - The VM has no `claude`. Reading a photo or a scan needs it; a persona test reports those paths as what an owner without Claude sees. To exercise them, `$V put tests/support/stub-bin/claude` and move it onto the app's PATH (see `tools/desktop/vm-e2e.sh`).
-- Two VMs fit (8 GB each); stop one before a third.
+- macOS runs at most two macOS VMs at once (Apple's limit); `vm.sh up` refuses a third. The CLI tools (`strings`, `git`) in the VM ask to install the Xcode tools: avoid them.
 
 ## Feature map
 
