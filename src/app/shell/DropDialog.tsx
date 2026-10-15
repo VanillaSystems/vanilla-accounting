@@ -153,7 +153,7 @@ function ReceiptDetails({ id, books, go }: { id: string; books: Index; go(route:
 }
 
 /** A taken file: where it is, its quick details, the way to its page, and «Rückgängig». */
-function Taken({ r, session, books, go }: { r: DropRow; session: DropSession; books: Index; go(route: Route): void }) {
+function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSession; books: Index; go(route: Route): void; refresh(): void }) {
   const { view } = useAutomation();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -165,7 +165,8 @@ function Taken({ r, session, books, go }: { r: DropRow; session: DropSession; bo
   const lacks = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
   const missing = x.kind !== 'waits' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : t('drop.p.payment');
   const shown = !!receipt && open;
-  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
+  // The books changed under the page: Belege must not show the receipt any more.
+  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
   return (
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`}>
@@ -189,7 +190,7 @@ function Taken({ r, session, books, go }: { r: DropRow; session: DropSession; bo
   );
 }
 
-export function DropDialog({ onGo, books }: { onGo(route: Route): void; books: Index }) {
+export function DropDialog({ onGo, books, refresh }: { onGo(route: Route): void; books: Index; refresh(): void }) {
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<Tab>('all');
@@ -231,7 +232,7 @@ export function DropDialog({ onGo, books }: { onGo(route: Route): void; books: I
         </div>
         <div className="drows">
           {shown.length ? shown.map((r) => (r.state === 'taken'
-            ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} />
+            ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} refresh={refresh} />
             : <Waiting key={r.key} r={r} session={s.session!} go={go} />)) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>}
         </div>
         {s.error ? <p className="warnline">{s.error}</p> : null}
