@@ -38,3 +38,8 @@ file records every decision a person might have made differently, newest last.
    30 of 32 labelled duplicates found (0 before), no real receipt quarantined. Merging after the
    agent rebases onto the latest branch. «ist dasselbe» at the drop does not take the file at all
    (rather than taking it as kind duplicate): it adds nothing the books lack.
+9. Linking merged: a link or unlink (by hand, sidebar, undo) rebooks the payment; matching ranks
+   open payments by invoice number, amount, vendor and date. One shared function decides what a
+   change rebooks: a corrected VAT rebooks every automatic entry (older ones included); a hand
+   link only those that recorded their receipts, because an older entry without that record may
+   have been shaped by a person and, without a model, would be left unbooked.
