@@ -1,7 +1,9 @@
 /**
  * The drop dialog's session (docs/0.4.0/intake.md): every file dropped while it is open, as a row
- * with what it was recognized as and what will happen to it. Nothing is written into the books or
- * the inbox until «Hinzufügen». Passwords are never part of it.
+ * with what it was recognized as and what became of it. A file that can be taken is taken at once
+ * (a receipt into the inbox, a statement read into the books) and handed to the inbox's run; a file
+ * with an open question waits for its answer. «Rückgängig» takes a file back out. Passwords are
+ * never part of it.
  */
 
 /** What a file is. Unset while nobody knows (the row asks). */
@@ -11,11 +13,12 @@ export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'zip';
 export type DropHow = 'structure' | 'hint';
 
 /**
- * What happens on «Hinzufügen»: taken (into the inbox, or read as a bank statement), not taken as
- * a duplicate, quarantined (not a receipt), refused (not stored at all), waiting for a password,
- * or waiting for the person to say what it is.
+ * Where a file stands: to be taken (a moment, while it is written), taken (into the inbox, or read
+ * as a bank statement), taken back («Rückgängig»), not taken as a duplicate, quarantined (not a
+ * receipt), refused (not stored at all), waiting for a password, or waiting for the person to say
+ * what it is.
  */
-export type DropState = 'take' | 'duplicate' | 'quarantine' | 'refused' | 'locked' | 'unclear';
+export type DropState = 'take' | 'taken' | 'undone' | 'duplicate' | 'quarantine' | 'refused' | 'locked' | 'unclear';
 
 export interface DropRow {
   /** The row's own key in the session. */
@@ -33,19 +36,27 @@ export interface DropRow {
   state: DropState;
   /** Why it is not taken, or what it waits for; the UI words it. */
   reason?: DropReason;
+  /** A refusal the books gave in their own words (a statement of a filed quarter, of no account). */
+  message?: string;
+  /** Taken: the run that takes it up. */
+  run?: string;
+  /** A receipt: the name it got in the inbox. */
+  inbox?: string;
+  /** Not a receipt: the name it got in data/quarantine/. */
+  quarantined?: string;
+  /** A statement: its file under bank-statements/ and the payments it added. */
+  statement?: { file: string; refs: string[] };
 }
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
 export type DropReason =
   | 'duplicate' | 'not-receipt' | 'held' | 'pdf-password'
-  | 'as-zip' | 'as-pdf' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password';
+  | 'as-zip' | 'as-pdf' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported';
 
 export interface DropSession {
   id: string;
   rows: DropRow[];
-  /** After «Hinzufügen»: how many went in, the run that takes them up, and what a statement import refused. */
-  done?: { taken: number; run?: string; refused: Array<{ name: string; message: string }> };
 }
 
 export type DropAction =
@@ -53,4 +64,6 @@ export type DropAction =
   | { kind: 'remove' }
   | { kind: 'as'; as: 'receipt' | 'quarantine' }
   /** The password of a protected ZIP: used to unpack it, never stored. */
-  | { kind: 'unlock'; password: string };
+  | { kind: 'unlock'; password: string }
+  /** Take a taken file back out: the inbox file, or what it made in the books. */
+  | { kind: 'undo' };

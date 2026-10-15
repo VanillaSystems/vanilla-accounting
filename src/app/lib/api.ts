@@ -166,7 +166,6 @@ export const api = {
     return res.json() as Promise<DropSession>;
   },
   dropRow: (session: string, key: string, action: DropAction) => request<DropSession>('POST', `/api/drop/${session}/rows/${key}`, action),
-  dropCommit: (session: string) => request<DropSession>('POST', `/api/drop/${session}/commit`),
   dropClose: (session: string) => request<{ ok: true }>('DELETE', `/api/drop/${session}`),
   changesCommand: (cmd: SavingCommand) => request<SavingResult>('POST', '/api/changes', cmd),
   changesDiff: (source: string, path: string) => request<FileDiff>('GET', `/api/changes/diff?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`),

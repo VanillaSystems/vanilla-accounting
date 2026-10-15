@@ -1,22 +1,25 @@
 /**
- * The drop dialog's session (docs/0.4.0/intake.md): files dropped while it is open wait in
- * data/drop/<session>/ (outside git), recognized and checked; nothing enters the inbox or the books
- * before «Hinzufügen». Then receipts and photos go into the inbox, statements are read as the Bank
- * area reads them, what is no receipt goes to data/quarantine/ with its reason, and the inbox's
- * workflow starts. A ZIP's password is used to unpack it and never written anywhere.
+ * The drop dialog's session (docs/0.4.0/intake.md): each file dropped while it is open is
+ * recognized and, when nothing is unclear about it, taken at once: a receipt or photo into the
+ * inbox, a statement read into the books as the Bank area reads it, what is no receipt into
+ * data/quarantine/ with its reason. Each taken file is handed to the inbox's run with what it is
+ * (an Arrival); one dropped while that run is under way goes to the run that waits behind it. A
+ * file with an open question (a password, a duplicate, unknown content) waits in data/drop/<session>/
+ * (outside git) for its answer. «Rückgängig» takes a taken file back out. A ZIP's password is used
+ * to unpack it and never written anywhere.
  *
  *   POST   /api/drop                      a new session
- *   POST   /api/drop/:id/files?name=      add a file (a ZIP is unpacked into its files)
+ *   POST   /api/drop/:id/files?name=      add a file (a ZIP is unpacked into its files), taken at once
  *   POST   /api/drop/:id/rows/:key        a DropAction on one row
- *   POST   /api/drop/:id/commit           «Hinzufügen»
- *   DELETE /api/drop/:id                  close without adding
+ *   DELETE /api/drop/:id                  close the dialog (what was taken stays)
  */
 import express, { Router } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
-import { RequestError, WS, readBooks } from '../books.js';
-import { engine } from './automation.js';
+import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, refDates, updateBooks } from '../books.js';
+import { findFile } from '../../workspace/workspace.js';
+import { engine, handedOver } from './automation.js';
 import { importStatement } from './statements.js';
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
@@ -70,11 +73,11 @@ router.post('/api/drop', (_req, res) => {
 
 router.post('/api/drop/:id/files', express.raw({ type: () => true, limit: '200mb' }), async (req, res) => {
   const s = load(req.params.id);
-  if (s.done) throw new RequestError(409, 'Schon hinzugefügt.');
   const body = req.body as unknown;
   if (!Buffer.isBuffer(body) || !body.length) throw new RequestError(400, 'Keine Datei erhalten.');
   const name = basename(String(req.query.name ?? '')).replace(/[\u0000-\u001f]/g, '').trim().slice(-160) || 'datei';
   await add(s, name, body);
+  await takeWaiting(s);
   save(s);
   res.json(s);
 });
@@ -84,18 +87,26 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
   const row = s.rows.find((r) => r.key === req.params.key);
   if (!row) throw new RequestError(404, 'Diese Zeile gibt es nicht.');
   const a = req.body as DropAction;
+  const settled = row.state === 'taken' || row.state === 'undone';
   switch (a?.kind) {
     case 'remove':
+      if (settled) throw new RequestError(400, 'Schon übernommen: «Rückgängig» nimmt es zurück.');
       s.rows = s.rows.filter((r) => r !== row);
       rmSync(fileOf(s.id, row.key), { force: true });
       break;
     case 'take':
-      if (row.state === 'refused' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      if (settled || row.state === 'refused' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      unquarantine(row);
       Object.assign(row, { state: 'take', reason: undefined });
       break;
     case 'as':
-      if (row.state === 'refused' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      if (settled || row.state === 'refused' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      if (a.as === 'receipt') unquarantine(row);
       Object.assign(row, a.as === 'quarantine' ? { state: 'quarantine', reason: 'held' } : { kind: 'receipt', state: 'take', reason: undefined });
+      break;
+    case 'undo':
+      if (row.state !== 'taken') throw new RequestError(400, 'Nur eine übernommene Datei lässt sich zurücknehmen.');
+      undo(row);
       break;
     case 'unlock': {
       if (row.state !== 'locked' || typeof a.password !== 'string') throw new RequestError(400, 'Nur ein ZIP mit Passwort wird entsperrt.');
@@ -108,6 +119,7 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
     }
     default: throw new RequestError(400, 'Unbekannte Aktion.');
   }
+  await takeWaiting(s);
   save(s);
   res.json(s);
 });
@@ -120,43 +132,99 @@ function freeName(folder: string, name: string): string {
   return out;
 }
 
-router.post('/api/drop/:id/commit', async (req, res) => {
-  const s = load(req.params.id);
-  if (s.done) { res.json(s); return; }
-  const refused: Array<{ name: string; message: string }> = [];
-  // What came in, file by file, for the run that takes it up: the runs table says each in words.
-  const arrived: Arrival[] = [];
-  let taken = 0;
+const INTAKE = 'receipt-intake';
+const QUARANTINE = () => join(WS.paths.data, 'quarantine');
+
+/**
+ * Takes every row that can be taken: a receipt goes into the inbox, a statement is read into the
+ * books, each handed to the inbox's run with what it is; what is no receipt goes to quarantine.
+ */
+async function takeWaiting(s: DropSession): Promise<void> {
   for (const row of s.rows) {
-    const bytes = () => readFileSync(fileOf(s.id, row.key));
-    if (row.state === 'take' && (row.kind === 'receipt' || row.kind === 'photo')) {
-      mkdirSync(WS.paths.inbox, { recursive: true });
-      writeFileSync(join(WS.paths.inbox, freeName(WS.paths.inbox, row.name)), bytes());
-      arrived.push({ kind: 'receipt', file: row.name, id: row.id });
-      taken++;
-    } else if (row.state === 'take' && (row.kind === 'camt' || row.kind === 'statement-pdf')) {
-      try {
-        const { month: _month, ...done } = await importStatement(bytes(), row.name);
-        arrived.push({ kind: 'statement', ...done });
-        taken++;
-      } catch (e) {
-        refused.push({ name: row.name, message: (e as Error).message });
-        arrived.push({ kind: 'refused', file: row.name, reason: (e as Error).message });
-      }
-    } else if (row.state === 'quarantine') {
-      const q = join(WS.paths.data, 'quarantine');
-      mkdirSync(q, { recursive: true });
-      const name = freeName(q, row.name);
-      writeFileSync(join(q, name), bytes());
-      writeFileSync(join(q, `${name}.reason.txt`), `${row.reason ?? ''}\n`);
+    if (row.state === 'quarantine' && !row.quarantined && existsSync(fileOf(s.id, row.key))) {
+      mkdirSync(QUARANTINE(), { recursive: true });
+      const name = freeName(QUARANTINE(), row.name);
+      writeFileSync(join(QUARANTINE(), name), readFileSync(fileOf(s.id, row.key)));
+      writeFileSync(join(QUARANTINE(), `${name}.reason.txt`), `${row.reason ?? ''}\n`);
+      row.quarantined = name;
+      continue;
     }
+    if (row.state !== 'take') continue;
+    const bytes = readFileSync(fileOf(s.id, row.key));
+    let arrival: Arrival;
+    if (row.kind === 'camt' || row.kind === 'statement-pdf') {
+      const had = new Set(readBooks().transactions.map((t) => t.ref));
+      try {
+        const { month: _month, ...done } = await importStatement(bytes, row.name);
+        row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) };
+        arrival = { kind: 'statement', ...done };
+      } catch (e) {
+        Object.assign(row, { state: 'refused', reason: 'not-imported', message: (e as Error).message });
+        continue;
+      }
+    } else {
+      mkdirSync(WS.paths.inbox, { recursive: true });
+      row.inbox = freeName(WS.paths.inbox, row.name);
+      writeFileSync(join(WS.paths.inbox, row.inbox), bytes);
+      handedOver([row.id]);
+      arrival = { kind: 'receipt', file: row.name, id: row.id };
+    }
+    const started = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'outside', file: row.name }, 'live', [arrival]);
+    Object.assign(row, { state: 'taken', ...(started.ok && started.run ? { run: started.run } : {}) });
+    rmSync(fileOf(s.id, row.key), { force: true });
   }
-  const started = taken ? await engine().start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'outside', file: s.rows.find((r) => r.state === 'take')?.name ?? '' }, 'live', arrived) : undefined;
-  s.done = { taken, ...(started?.ok && started.run ? { run: started.run } : {}), refused };
-  rmSync(join(dir(s.id), 'files'), { recursive: true, force: true });
-  save(s);
-  res.json(s);
-});
+}
+
+function unquarantine(row: DropRow): void {
+  if (!row.quarantined) return;
+  rmSync(join(QUARANTINE(), row.quarantined), { force: true });
+  rmSync(join(QUARANTINE(), `${row.quarantined}.reason.txt`), { force: true });
+  delete row.quarantined;
+}
+
+/**
+ * «Rückgängig» for a taken file. A receipt leaves the inbox and the books, with its links and the
+ * entries the automation booked on its payments. A
+ * statement leaves with its file, its closing balances, the payments it added, and their links and
+ * entries. Never while its run works on it, never in the closed period, never an entry a person
+ * booked by hand (such a payment stays, and the refusal says so).
+ */
+function undo(row: DropRow): void {
+  const run = row.run ? engine().run(row.run) : undefined;
+  if (run && run.state.status === 'running') throw new RequestError(409, 'Der Lauf arbeitet gerade daran. Gleich noch einmal.');
+  if (row.statement) {
+    const refs = new Set(row.statement.refs);
+    const books = readBooks();
+    assertOpen(books, [...refs].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
+    if ((books.journalEntries ?? []).some((e) => refs.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
+    const path = findFile(WS.paths, 'statements', row.statement.file);
+    const file = basename(row.statement.file);
+    updateBooks((b) => {
+      b.transactions = b.transactions.filter((t) => !refs.has(t.ref));
+      b.journalEntries = b.journalEntries.filter((e) => !refs.has(e.transactionRef));
+      b.mappings = b.mappings.filter((m) => !refs.has(m.transactionRef));
+      if (b.statementBalances) b.statementBalances = b.statementBalances.filter((x) => x.sourceFile !== file);
+    });
+    if (path) rmSync(path, { force: true });
+  } else {
+    const books = readBooks();
+    const receipt = books.receipts.find((r) => r.id === row.id);
+    if (receipt) {
+      assertOpen(books, [...receiptDates(books, row.id), receipt.date], 'deleteReceipt');
+      const refs = new Set(books.mappings.filter((m) => m.receiptId === row.id).map((m) => m.transactionRef));
+      const pdf = receiptPath(books, receipt);
+      updateBooks((b) => {
+        b.receipts = b.receipts.filter((r) => r.id !== row.id);
+        b.mappings = b.mappings.filter((m) => m.receiptId !== row.id);
+        b.journalEntries = b.journalEntries.filter((e) => !(refs.has(e.transactionRef) && e.run && e.origin !== 'manual'));
+      });
+      rmSync(pdf, { force: true });
+    }
+    if (row.inbox) rmSync(join(WS.paths.inbox, row.inbox), { force: true });
+  }
+  if (row.run) engine().withdraw(row.run, row.inbox ? row.name : row.statement?.file ?? row.name);
+  row.state = 'undone';
+}
 
 router.delete('/api/drop/:id', (req, res) => {
   load(req.params.id);

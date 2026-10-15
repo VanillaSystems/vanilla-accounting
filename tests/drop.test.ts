@@ -59,7 +59,7 @@ test('a protected ZIP waits for its password; a wrong one says so; the right one
   assert.ok(right.ok && right.files.length === 1);
 });
 
-test('the dialog: a duplicate is not taken, the password is never written, «Hinzufügen» fills the inbox and starts the run', async () => {
+test('the dialog: a file is taken as it comes, a duplicate is not, a ZIP waits for its password, which is never written', async () => {
   const api = await startApi('demo');
   try {
     cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
@@ -78,27 +78,49 @@ test('the dialog: a duplicate is not taken, the password is never written, «Hin
     assert.deepEqual(inbox(), [], 'nothing in the inbox while the dialog is open');
     const locked = s.rows.find((r) => r.state === 'locked')!;
     s = await post(`/api/drop/${s.id}/rows/${locked.key}`, { kind: 'unlock', password: PASSWORD });
-    assert.deepEqual(s.rows.map((r) => [r.name, r.state, r.from]), [['archived.pdf', 'duplicate', undefined], ['notes.docx', 'refused', undefined], ['fresh.pdf', 'take', 'locked.zip']]);
+    assert.deepEqual(s.rows.map((r) => [r.name, r.state, r.from]), [['archived.pdf', 'duplicate', undefined], ['notes.docx', 'refused', undefined], ['fresh.pdf', 'taken', 'locked.zip']], 'the unpacked file is taken at once');
     const written = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? written(join(d, f)) : [join(d, f)]));
     assert.ok(!written(api.root).some((f) => readFileSync(f).includes(PASSWORD)), 'the password is in no file of the workspace');
-    s = await post(`/api/drop/${s.id}/commit`);
-    assert.equal(s.done?.taken, 1);
-    assert.ok(s.done?.run, 'the inbox run started');
+    assert.ok(s.rows.find((r) => r.name === 'fresh.pdf')?.run, 'the inbox run took it');
     assert.deepEqual(inbox(), ['fresh.pdf'], 'only the new file went in: not the duplicate, not the Word file');
-    assert.equal(existsSync(join(api.root, 'data/drop', s.id, 'files')), false, 'the session keeps no files');
+    assert.deepEqual(readdirSync(join(api.root, 'data/drop', s.id, 'files')).sort(), [s.rows.find((r) => r.name === 'archived.pdf')!.key], 'the session keeps only the file that waits for an answer');
   } finally {
+    // The run a drop started works on; the workspace goes only once it rests.
+    await SESSION(api).rest().catch(() => {});
     api.stop();
   }
 });
 
-test('«Hinzufügen» tells the run what came in: a statement by its bank, account and days, a receipt by its id', async () => {
+const SESSION = (api: { port: number }) => {
+  const base = `http://127.0.0.1:${api.port}`;
+  const post = async (path: string, body?: Buffer | object): Promise<DropSession> => {
+    const r = await fetch(base + path, {
+      method: 'POST', body: Buffer.isBuffer(body) ? new Uint8Array(body) : body ? JSON.stringify(body) : undefined,
+      headers: Buffer.isBuffer(body) ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' },
+    });
+    const json = await r.json();
+    if (!r.ok) throw new Error(`${r.status} ${json.error}`);
+    return json as DropSession;
+  };
+  const runOf = async (id: string) => (await (await fetch(`${base}/api/automation/runs/${id}`)).json()) as RunDetail;
+  /** Until no run of the inbox works any more. */
+  const rest = async () => {
+    for (let i = 0; i < 200; i++) {
+      const v = (await (await fetch(`${base}/api/automation`)).json()) as { runs: Array<{ status: string }> };
+      if (!v.runs.some((r) => r.status === 'running' || r.status === 'queued')) return;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error('the inbox run did not come to rest');
+  };
+  const books = async () => (await (await fetch(`${base}/books.json`)).json()) as { receipts: Array<{ id: string }>; transactions: Array<{ ref: string }> };
+  return { post, runOf, rest, books };
+};
+
+test('each file tells its run what it is: a statement by its bank, account and days, a receipt by its id', async () => {
   const api = await startApi('demo');
   try {
     cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
-    const base = `http://127.0.0.1:${api.port}`;
-    const post = async (path: string, body?: Buffer): Promise<DropSession> => (await (await fetch(base + path, {
-      method: 'POST', body: body ? new Uint8Array(body) : undefined, headers: { 'Content-Type': 'application/octet-stream' },
-    })).json()) as DropSession;
+    const { post, runOf } = SESSION(api);
     const name = 'Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf';
     const placed = join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen', name);
     const statement = readFileSync(placed);
@@ -106,16 +128,49 @@ test('«Hinzufügen» tells the run what came in: a statement by its bank, accou
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=${encodeURIComponent(name)}`, statement);
     s = await post(`/api/drop/${s.id}/files?name=fresh.pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% arrival\n')]));
-    const receipt = s.rows.find((r) => r.name === 'fresh.pdf')!;
-    s = await post(`/api/drop/${s.id}/commit`);
-    assert.equal(s.done?.taken, 2);
-    const run = (await (await fetch(`${base}/api/automation/runs/${s.done!.run}`)).json()) as RunDetail;
-    assert.deepEqual(run.arrived, [
-      // The demo's PDFs print no closing balance, so the run claims none.
-      { kind: 'statement', file: `Raiffeisen/${name}`, account: '1021', added: 0, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30' },
-      { kind: 'receipt', file: 'fresh.pdf', id: receipt.id },
-    ]);
+    assert.deepEqual(s.rows.map((r) => r.state), ['taken', 'taken'], 'both taken as they came, without «Hinzufügen»');
+    const [st, rc] = s.rows;
+    // The demo's PDFs print no closing balance, so the run claims none.
+    assert.deepEqual((await runOf(st.run!)).arrived?.find((a) => a.file.endsWith(name)), { kind: 'statement', file: `Raiffeisen/${name}`, account: '1021', added: 0, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30' });
+    assert.deepEqual((await runOf(rc.run!)).arrived?.find((a) => a.file === 'fresh.pdf'), { kind: 'receipt', file: 'fresh.pdf', id: rc.id });
   } finally {
+    // The run a drop started works on; the workspace goes only once it rests.
+    await SESSION(api).rest().catch(() => {});
+    api.stop();
+  }
+});
+
+test('«Rückgängig» takes a file back out: a receipt the run read leaves the books, a statement leaves with the payments it added', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, runOf, rest, books } = SESSION(api);
+    const camt = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>U-1</MsgId><CreDtTm>2026-08-25T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>U-1</Id><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Ntry><Amt Ccy="CHF">12.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-25</Dt></BookgDt><AcctSvcrRef>REF-UNDO</AcctSvcrRef><AddtlNtryInf>Undo me</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=wrong.pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% dropped by mistake\n')]));
+    s = await post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(camt));
+    const [rc, st] = s.rows;
+    assert.deepEqual([rc.state, st.state], ['taken', 'taken']);
+    assert.deepEqual(st.statement, { file: 'Raiffeisen/august.xml', refs: ['REF-UNDO'] });
+    await rest();
+    assert.ok((await books()).receipts.some((r) => r.id === rc.id), 'the run read the receipt');
+
+    s = await post(`/api/drop/${s.id}/rows/${rc.key}`, { kind: 'undo' });
+    s = await post(`/api/drop/${s.id}/rows/${st.key}`, { kind: 'undo' });
+    assert.deepEqual(s.rows.map((r) => r.state), ['undone', 'undone']);
+    const after = await books();
+    assert.equal(after.receipts.some((r) => r.id === rc.id), false, 'the receipt left the books');
+    assert.equal(after.transactions.some((t) => t.ref === 'REF-UNDO'), false, 'the payment the statement added left too');
+    assert.equal(existsSync(join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen/august.xml')), false, 'and its file');
+    assert.equal(((await runOf(rc.run!)).arrived ?? []).some((a) => a.file === 'wrong.pdf'), false, 'the run no longer counts it');
+    await assert.rejects(post(`/api/drop/${s.id}/rows/${rc.key}`, { kind: 'undo' }), /400/, 'once is enough');
+  } finally {
+    // The run a drop started works on; the workspace goes only once it rests.
+    await SESSION(api).rest().catch(() => {});
     api.stop();
   }
 });

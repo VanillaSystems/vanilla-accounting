@@ -53,6 +53,8 @@ export interface Engine {
   command(cmd: AutomationCommand): Promise<CommandResult>;
   /** `arrived`: the files that came in with it; a start that finds the company's run under way adds them to it. */
   start(workflow: string, item: ItemRef, by: StartedBy, mode?: Run['mode'], arrived?: Arrival[]): Promise<CommandResult>;
+  /** Takes a file back out of a run's arrivals (the drop dialog's «Rückgängig»). */
+  withdraw(run: string, file: string): void;
   /** Starts the scheduled workflows whose cron matches this minute. */
   tick(at?: Date): Promise<void>;
   /** Resolves when no run is running or queued (for tests and the CLI). */
@@ -124,6 +126,8 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     return w && at && stepOf(w, at)?.kind === 'agent' ? 'ai' : 'other';
   };
   const laneOf = (run: Run, books: Books): string | undefined => {
+    // The company is one item: its live runs of one workflow go one after the other.
+    if (run.item.kind === 'company' && run.mode === 'live') return `${run.workflow}:company:${run.item.id}`;
     const w = workflow(run.workflow);
     if (w?.lane !== 'account' || run.item.kind !== 'transaction') return undefined;
     return `${w.id}:${books.transactions.find((t) => t.ref === run.item.id)?.bank ?? '?'}`;
@@ -411,14 +415,19 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     if (!w) return { ok: false, refusal: 'not-found', detail: id };
     if (!w.runnable.ok) return { ok: false, refusal: 'not-runnable', detail: w.runnable.missing.map((m) => m.action).join(', ') };
     if (mode === 'live' && !isApproved(w)) return { ok: false, refusal: 'not-approved', detail: w.version };
-    // The company is one item: while a live run of it is under way, a second start is that run.
-    const open = item.kind === 'company' && mode === 'live'
-      ? [...runs.values()].find((r) => r.workflow === w.id && r.mode === 'live' && ['queued', 'running', 'retrying'].includes(r.state.status))
-      : undefined;
-    if (open) {
-      if (arrived?.length) annotate(open.id, { arrived: [...(open.arrived ?? []), ...arrived] });
-      return { ok: true, run: open.id };
+    // The company is one item. What arrives joins its run that has not started yet; while one is
+    // under way, it gets a run of its own that waits behind it (laneOf), so no file arrives after
+    // the step that would have read it. A plain second start is the run under way.
+    const live = item.kind === 'company' && mode === 'live'
+      ? [...runs.values()].filter((r) => r.workflow === w.id && r.mode === 'live' && r.item.kind === 'company' && r.item.id === item.id)
+      : [];
+    const notStarted = live.find((r) => r.state.status === 'queued' && r.steps.length === 0);
+    if (notStarted) {
+      if (arrived?.length) annotate(notStarted.id, { arrived: [...(notStarted.arrived ?? []), ...arrived] });
+      return { ok: true, run: notStarted.id };
     }
+    const underWay = live.find((r) => r.state.status === 'queued' || r.state.status === 'running');
+    if (underWay && !arrived?.length && by.kind !== 'outside') return { ok: true, run: underWay.id };
     const run = await create(w, item, by, mode, arrived);
     return { ok: true, run: run.id };
   }
@@ -521,6 +530,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     get counter() { return counter; },
     command,
     start,
+    withdraw: (id, file) => { const r = runs.get(id); if (r?.arrived?.some((a) => a.file === file)) annotate(id, { arrived: r.arrived.filter((a) => a.file !== file) }); },
     tick,
     idle: () => new Promise<void>((resolve) => { waiters.push(resolve); notifyIdle(); }),
   };

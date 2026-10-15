@@ -118,6 +118,8 @@ router.patch('/api/automation/workflows/:id', (req, res) => {
 
 /** Inbox files a run was started for: a file no step can read starts no second run on its own. */
 const attempted = new Set<string>();
+/** Files the drop dialog put into the inbox and handed to a run itself. */
+export const handedOver = (ids: string[]) => { for (const id of ids) attempted.add(id); };
 
 /**
  * The outside trigger (docs/0.4.0/workflows.md): files that arrived in the inbox (a drop, the
