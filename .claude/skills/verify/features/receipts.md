@@ -38,7 +38,10 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 - `rc-undo`: link, unlink, private outlay, edit and kind answer with a toast `.toast` whose button
   (or ⌘Z while it shows, 6 s) writes the opposite.
 - `rc-delete`: ⌫ or Datei › `Löschen` opens `.confirm` (`Beleg löschen?`); Enter or `.btn.danger`
-  deletes the record, its file and its mappings. No undo.
+  deletes the record and its mappings, with the classifier's entries that saw it; the inbox run
+  books those payments again without it. The file moves to `data/trash/<id>/` (30 days); the
+  toast's Rückgängig (`POST /api/receipts/<id>/restore`) brings record, links and file back and
+  the run books the payment with it again.
 - `rc-preview`: Space opens `.quick` (Space or Esc closes); D clicks `.detail a.dl` (download
   under the file name).
 - `rc-intake`: the add button (`[data-add]`, N) or a drop of PDFs on any page uploads to the inbox
@@ -65,7 +68,8 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 - **Edit.** `e`, `$B fill "form.form input[name=description]" "…"`, Enter: `~ receipts <id>
   .description`. A bad date shows `Datum als TT.MM.JJJJ.` in `.form .err`.
 - **Delete.** Select a row, `Backspace`, Enter: `- receipts <id>` and its mappings; the file is
-  gone from `$SB/receipts`, the repo's `demo/receipts` still has it.
+  in `$SB/data/trash/<id>/`, the repo's `demo/receipts` still has it. The toast's undo must be
+  taken within 6 s (no diff in between).
 - **Filed quarter.** `$UI/receipts?period=$CLOSED_Q`: `.notice` says it is filed, `l` only toasts.
 - **Intake.** On any page dispatch `dragenter` + `drop` with a `DataTransfer` holding a PDF
   (`$B js`): the URL becomes `/receipts/<id>`, `.row.reading` shows, `curl $API/api/inbox` lists
