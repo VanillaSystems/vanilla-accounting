@@ -7,7 +7,7 @@ file records every decision a person might have made differently, newest last.
 ## Setup of the run
 
 - A coordinator (the main session) sorts findings, hands batches to fix agents in their own git
-  worktrees (`../261009-accounting-fix-<name>`, branch `fix/<name>`), merges into 0.4.0-drop after
+  worktrees (a sibling folder per fix, branch `fix/<name>`), merges into 0.4.0-drop after
   `npm test`, the real-books golden master (18 tests, read-only on the real books) and a look at
   the evidence.
 - Test agents run the packed app in Tart VMs from snapshots (`huber-setup`, `huber-q3`; macOS runs
