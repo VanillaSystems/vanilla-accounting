@@ -6,7 +6,12 @@ import fs from 'fs';
 const OUT = process.argv[2]; fs.mkdirSync(OUT, { recursive: true });
 // Check digits computed, so no IBAN or UID literal sits in the public repo (src/publish/leak-guard.ts).
 const ibanOf = (bank, account) => { const b = bank + account; const n = BigInt([...`${b}CH00`].map((c) => parseInt(c, 36)).join('')); return `CH${String(98n - (n % 97n)).padStart(2, '0')}${b}`; };
-const uidOf = (eight) => { const sum = [...eight].reduce((s, d, i) => s + Number(d) * [5, 4, 3, 2, 7, 6, 5, 4][i], 0); const c = (11 - (sum % 11)) % 11; const d = `${eight}${c}`; return `CHE-${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`; };
+// A UID's check digit is (11 - sum mod 11) mod 11; 10 is no valid digit, so the next number is taken.
+const uidOf = (eight) => {
+  const check = (e) => (11 - ([...e].reduce((s, d, i) => s + Number(d) * [5, 4, 3, 2, 7, 6, 5, 4][i], 0) % 11)) % 11;
+  let e = eight; while (check(e) === 10) e = String(Number(e) + 1).padStart(8, '0');
+  const d = `${e}${check(e)}`; return `CHE-${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+};
 const spaced = (iban) => iban.replace(/(.{4})/g, '$1 ').trim();
 const IBAN = ibanOf('80808', ['0012', '3456', '7891'].join(''));
 const UID = uidOf(['3456', '7891'].join(''));
