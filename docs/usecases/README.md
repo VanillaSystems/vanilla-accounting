@@ -71,7 +71,7 @@ sums them up.
 | `untested` | no persona test has run it |
 | `passes (id)` | a persona test ran it and it worked; the id names the finding (`.verify/findings/<scenario>.md`, or `usability#n` for [the first usability test](../0.4.0/usability/2026-10-15-malerei-huber.md)) |
 | `fails (id)` | a persona test ran it and it went wrong |
-| `fails (id), retest` | it failed, a fix landed after the test (the commit is named); it counts as failing until a test passes it |
+| `fails (id), retest (commit)` | it failed, a fix landed after the test (the commit is named); it counts as failing until a test passes it |
 | `not supported yet` | the app does not do it; the block says what the persona needs |
 
 The block's line is the worst of its parts: `fails` when any part fails, `passes` when every
@@ -120,7 +120,7 @@ starts at the top.
 
 1. **OW-30 / TH-23** A hand correction (a VAT code, V0-E for a sale abroad) is silently
    overwritten by «Neu klassifizieren» (misreads-10, misreads-11, misreads-19). Every correction
-   must teach, never be overwritten.
+   must teach, never be overwritten. A fix landed since (0e8643f): retest first.
 2. **TH-06** Without the AI there is no way to book a bank payment by hand: «Buchen» loops back
    to the same page, «Gebucht» on the task removes it with nothing booked (treuhaender-8,
    treuhaender-9). The mission's «possible without the AI» fails at its core.
@@ -131,9 +131,10 @@ starts at the top.
 5. **OW-36 / IT-07** A VAT-registered firm's customer payment without an uploaded invoice is
    booked at 0 % as an export (quarter-close-6, sidebar-wishes-14): output tax under-declared.
 6. **OW-26** Skonto: «Neu klassifizieren» books a one-leg entry and the Bilanz shows a difference
-   (misreads-14).
+   (misreads-14). Fix landed (4a27218, 0e8643f): retest.
 7. **OW-14** Delete a receipt, then «Rückgängig»: the receipt comes back, its input tax does not
-   (regression-14); a second delete of the same file cannot be undone (regression-15).
+   (regression-14); a second delete of the same file cannot be undone (regression-15). Fix
+   landed (d38aa4b): retest.
 8. **OW-46** Bilanz & ER show VAT gross and no debt to the ESTV within the year
    (quarter-close-11).
 9. **OW-49 / TH-25** A mistake found in a filed quarter: correction entry in the open quarter,

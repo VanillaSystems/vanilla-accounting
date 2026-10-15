@@ -235,7 +235,7 @@ Swiss VAT.
 
 **What goes wrong.**
 
-**F1. A reclassified entry has no trace.** `fails (misreads-24)`
+**F1. A reclassified entry has no trace.** `fails (misreads-24), retest (0e8643f)`
 - Noticed: no run, no author.
 - By hand: git history.
 - By wish: none.

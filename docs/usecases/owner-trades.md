@@ -224,7 +224,7 @@ the period switches to Q3; the payments are booked.
 - By wish: none.
 - Learns: no «trotzdem» on a statement.
 
-**F3. The statement of another account (Thomas's private one).** `fails (regression-17, partly)`
+**F3. The statement of another account (Thomas's private one).** `fails (regression-17, partly), retest (commit «Unknown bank account in a dropped camt.053»)`
 - Noticed: plain German and «Bankkonto hinzufügen» with the IBAN prefilled.
 - By hand: decide; add the account or leave the file out.
 - By wish: «das ist das Privatkonto von Thomas» should keep it out for good.
@@ -481,13 +481,13 @@ links and booking with its VAT.
 
 **What goes wrong.**
 
-**F1. The receipt comes back, its input tax does not.** `fails (regression-14)`
+**F1. The receipt comes back, its input tax does not.** `fails (regression-14), retest (d38aa4b)`
 - Noticed: nothing on the screen; the booking stays I0 without receipt.
 - By hand: Buchungen › bearbeiten › MWST.
 - By wish: «die Vorsteuer ist weg».
 - Learns: restore books the payment with the receipt again, at once.
 
-**F2. A second delete of the same file cannot be undone.** `fails (regression-15)`
+**F2. A second delete of the same file cannot be undone.** `fails (regression-15), retest (d38aa4b)`
 - Noticed: «Diesen Beleg gibt es nicht».
 - By hand: drop the original again, if she still has it.
 - By wish: none.
@@ -863,7 +863,7 @@ one payment, one balanced booking.
 - By wish: «das ist mit Skonto bezahlt».
 - Learns: this supplier gives Skonto.
 
-**F2. «Neu klassifizieren» books a one-leg Skonto entry.** `fails (misreads-10, misreads-14, high)`
+**F2. «Neu klassifizieren» books a one-leg Skonto entry.** `fails (misreads-10, misreads-14, high), retest (4a27218, 0e8643f)`
 - Noticed: Bilanz «Differenz … 1 Buchung mit MWST-Code, aber ohne Gegenkonto».
 - By hand: set the empty account.
 - By wish: «in der Bilanz steht jetzt eine Differenz … bitte richtig eintragen» (misreads-15 passes).
@@ -981,13 +981,13 @@ or a run without asking; the run says «von Hand geändert, übersprungen».
 
 **What goes wrong.**
 
-**F1. «Neu klassifizieren» replaces her M81.** `fails (misreads-10, high)`
+**F1. «Neu klassifizieren» replaces her M81.** `fails (misreads-10, high), retest (0e8643f)`
 - Noticed: nothing; her entry is gone.
 - By hand: redo.
 - By wish: redo.
 - Learns: «Diese Buchung hast du von Hand geändert. Trotzdem neu?».
 
-**F2. «Neu klassifizieren» puts V0 back after V0-E.** `fails (misreads-11, misreads-19)`
+**F2. «Neu klassifizieren» puts V0 back after V0-E.** `fails (misreads-11, misreads-19), retest (0e8643f)`
 - Noticed: nothing.
 - By hand: redo.
 - By wish: redo; and the next reclassify undoes it again.
@@ -1048,13 +1048,13 @@ von Sandra». Änderungen lists runs, hand edits and wishes.
 
 **What goes wrong.**
 
-**F1. «Warum so gebucht?» shows the run and raw AI text, no reason in words.** `fails (misreads-24)`
+**F1. «Warum so gebucht?» shows the run and raw AI text, no reason in words.** `fails (misreads-24), retest (0e8643f)`
 - Noticed: she reads JSON.
 - By hand: none.
 - By wish: «warum hat diese Buchung keine MWST?» answers well (sidebar-wishes-13 passes).
 - Learns: one sentence per booking: «gebucht ohne Beleg, darum M0».
 
-**F2. After «Neu klassifizieren», no trace at all.** `fails (misreads-24)`
+**F2. After «Neu klassifizieren», no trace at all.** `fails (misreads-24), retest (0e8643f)`
 - Noticed: no run, no link.
 - By hand: none.
 - By wish: the AI cannot know either.
@@ -1183,7 +1183,7 @@ payment offers «Rechnung hochladen» and «keine MWST darauf».
 - By wish: «das ist eine Arbeit hier in Wil, mit MWST».
 - Learns: a domestic customer's payments are V81 by default (overnight decision 2, waits).
 
-**F2. «Neu klassifizieren» books V0 again.** `fails (quarter-close-7)`
+**F2. «Neu klassifizieren» books V0 again.** `fails (quarter-close-7), retest (0e8643f)`
 - Noticed: the same V0.
 - By hand: redo.
 - By wish: redo.

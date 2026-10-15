@@ -692,7 +692,7 @@ Treuhand».
 
 **What goes wrong.**
 
-**F1. The next run overwrites her correction.** `fails (misreads-10, misreads-11)`
+**F1. The next run overwrites her correction.** `fails (misreads-10, misreads-11), retest (0e8643f)`
 - Noticed: nothing.
 - By hand: redo.
 - By wish: none.
