@@ -1,5 +1,5 @@
 label: {"de": "Belege zuordnen, benennen und archivieren", "en": "Match, name and archive the receipts", "fr": "Rapprocher, nommer et archiver les pièces", "it": "Abbinare, nominare e archiviare i giustificativi"}
 uses: intake.match
 effects: ["books.write"]
-emits: ["notes"]
+emits: ["took", "made", "notes"]
 outcomes: {"ok": "book"}

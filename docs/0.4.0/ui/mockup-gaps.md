@@ -13,6 +13,14 @@ Order: what the owner hit first, then what every screen shares, then screen by s
 
 The owner's verdict: "it tells me which steps ran at what time, but not what the run did."
 
+**Closed in part (15.10.):** the title names what the run was for (the file, the transaction), the
+line under it says when, by what and how long, each step has **Liest** and **Ergebnis** side by side
+(the files or receipts it had to do; every receipt taken up or changed with date, amount and VAT,
+every payment linked, every entry booked, each a link), a step's notes say why it did less (no
+model, a failure), the AI's answer opens under the step, and times are local. The inbox steps
+record this (`took`, `made`, src/workflows/summary.ts); other workflows show their output's
+fields. Still open: the run strip, Starten ▾, the waiting box, «Als Testfall behalten».
+
 | Mockup | Built |
 |---|---|
 | Title in words: «Lauf 1047 · FedEx Express» and the amount: the item it ran for | «Lauf receipt-intake-0c20062f» |

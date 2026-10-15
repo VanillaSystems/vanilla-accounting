@@ -361,7 +361,7 @@ export function summaryOf(run: Run, w?: WorkflowDecl, now = new Date().toISOStri
   };
 }
 
-export interface RunDetail extends RunSummary { steps: StepRecord[] }
+export interface RunDetail extends RunSummary { steps: StepRecord[]; startedBy: StartedBy }
 
 /** A task: a waiting run seen from the person it waits for. Never stored on its own. */
 export interface Task {

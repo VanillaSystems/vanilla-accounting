@@ -11,12 +11,15 @@ import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
 import { noteLines, type BooksPort, type StepRun } from '../intake/pipeline.js';
 import { readStep } from '../intake/read.js';
-import { vatStep } from '../intake/vat.js';
+import { hasFacts, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
 import { classifyStep } from '../intake/classify.js';
 import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
+import { madeBetween, type Took } from './summary.js';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 export interface ActionContext {
   ws: Workspace;
@@ -55,13 +58,33 @@ const declared = (outcomes: string[], o: { effects?: string[]; ai?: boolean } = 
  * notes (what waits for the model, what failed) are its output, and a step that stops gets the
  * run stuck with its reason, nothing written.
  */
-function batch(step: StepRun): NonNullable<Action['run']> {
+function batch(step: StepRun, took: (books: Books, ws: Workspace) => Took[]): NonNullable<Action['run']> {
   return async (_input, effects, { ws, ask }) => {
-    const r = await step({ ws, books: effects['books.write']!, ask, progress: () => {}, log: () => {} });
+    const port = effects['books.write']!;
+    const before = structuredClone(port.read());
+    const todo = took(before, ws);
+    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {} });
     if (r.stop) throw new Error(noteLines(r.notes).join('; '));
-    return { outcome: 'ok', output: { notes: r.notes } };
+    // What it read and what it made, for the run view (src/workflows/summary.ts).
+    return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
   };
 }
+
+/** The documents lying in the inbox (PDFs and photos): what reading has in front of it. */
+const inboxFiles = (_b: Books, ws: Workspace): Took[] => {
+  const dir = ws.paths.inbox;
+  const names = existsSync(dir) ? readdirSync(dir).filter((f) => !f.startsWith('.') && /\.(pdf|png|jpe?g|heic|heif|webp|tiff?)$/i.test(f) && statSync(join(dir, f)).isFile()).sort() : [];
+  return names.length ? [{ kind: 'files', names }] : [];
+};
+const receiptsWhere = (keep: (r: Books['receipts'][number]) => boolean) => (b: Books): Took[] => {
+  const rs = b.receipts.filter(keep);
+  return rs.length ? [{ kind: 'receipts', ids: rs.map((r) => r.id), files: rs.map((r) => r.filename) }] : [];
+};
+const unbooked = (b: Books): Took[] => {
+  const booked = new Set(b.journalEntries.map((e) => e.transactionRef));
+  const n = b.transactions.filter((t) => !booked.has(t.ref) && !periodLock(b).isClosed(t.date)).length;
+  return n ? [{ kind: 'transactions', n }] : [];
+};
 
 const tx = (input: Record<string, unknown>) => input.transaction as BankTransaction;
 const books = (input: Record<string, unknown>) => input.books as Books;
@@ -104,10 +127,10 @@ export const ACTIONS: Record<string, Action> = {
   ...YEAR_END_ACTIONS,
   ...COLLECT_ACTIONS,
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
-  'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep) },
-  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep()) },
-  'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(matchStep) },
-  'intake.book': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(classifyStep()) },
+  'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
+  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), receiptsWhere((r) => !hasFacts(r))) },
+  'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(matchStep, receiptsWhere((r) => r.location === 'staged')) },
+  'intake.book': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(classifyStep(), unbooked) },
   'parsers.statement': declared(['ok']),
   'books.merge-statement': declared(['ok'], { effects: ['books.transactions'] }),
   'books.statement-balance': declared(['matches', 'differs']),

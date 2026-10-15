@@ -61,8 +61,6 @@
 .wfrun .wfpill { margin-left: 0; }
 .wfrun .date { white-space: nowrap; }
 
-.wftimeline { margin: 16px 0 0; padding-left: 20px; font-size: 13px; }
-.wftimeline li { padding: 5px 0; }
 
 .wfmap { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
 .wfmap .col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
@@ -93,3 +91,27 @@
 .wfsched label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
 .wfsched input { width: 130px; height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 12.5px; }
 .wfsched .m { flex-basis: 100%; font-size: 12px; }
+
+/* One run (mockup screen 3): per step what it read and what it made, side by side. */
+.wfpage .runid { margin: -6px 0 10px; font-size: 11px; color: var(--faint); }
+.wfsteps { list-style: none; margin: 18px 0 0; padding: 0 0 0 18px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px; }
+.wfsteps > li { position: relative; }
+.wfsteps > li::before { content: ''; position: absolute; left: -24px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--bg); box-shadow: 0 0 0 2px var(--accent); }
+.wfsteps > li.ok::before { background: var(--pos, #1a7f4b); box-shadow: 0 0 0 2px var(--pos, #1a7f4b); }
+.wfsteps > li.err::before { background: var(--neg); box-shadow: 0 0 0 2px var(--neg); }
+.wfsteps .sh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.wfsteps .sh b { font-weight: 600; font-size: 14px; }
+.wfsteps .sh .mono { font-size: 11.5px; }
+.wfsteps .io { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px; margin-top: 8px; }
+.wfsteps .box { background: var(--desk); border-radius: 8px; padding: 9px 12px; font-size: 12.5px; min-width: 0; }
+.wfsteps .box > small { display: block; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 5px; }
+.wfsteps .box ul { margin: 3px 0 0; padding-left: 16px; }
+.wfsteps .box .mono { font-size: 12px; overflow-wrap: anywhere; }
+.wfmade { list-style: none; margin: 0; padding: 0 !important; display: flex; flex-direction: column; gap: 6px; }
+.wfmade li { display: flex; flex-direction: column; gap: 1px; }
+.wfmade .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; text-align: left; cursor: pointer; }
+.wfmade .linkbtn:hover { text-decoration: underline; }
+.wfmade small { color: var(--muted); font-size: 11.5px; }
+.wfsteps details.llm { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.wfsteps details.llm summary { cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: var(--ai, var(--muted)); }
+.wfsteps details.llm pre { white-space: pre-wrap; font: 11.5px/1.5 "Geist Mono"; background: var(--desk); border-radius: 8px; padding: 9px 12px; max-height: 280px; overflow: auto; color: var(--ink-2); }

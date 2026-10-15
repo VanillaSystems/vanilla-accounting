@@ -29,7 +29,8 @@ type Facts = Pick<Receipt, 'vatId' | 'hasSwissVat' | 'vatSummary' | 'lineItems' 
 
 const NO_VAT: Omit<Facts, 'vatExtractedAt'> = { vatId: undefined, hasSwissVat: false, vatSummary: [], lineItems: undefined };
 
-const hasFacts = (r: Receipt) => r.vatExtractedAt != null || r.hasSwissVat !== undefined;
+/** A receipt whose VAT facts were read (or decided) already: the step leaves it. */
+export const hasFacts = (r: Receipt) => r.vatExtractedAt != null || r.hasSwissVat !== undefined;
 
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {

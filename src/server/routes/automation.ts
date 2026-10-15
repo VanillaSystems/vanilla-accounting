@@ -92,7 +92,7 @@ router.get('/api/automation', (req, res) => {
 router.get('/api/automation/runs/:id', (req, res) => {
   const run = engine().run(req.params.id);
   if (!run) throw new RequestError(404, `Lauf ${req.params.id} gibt es nicht.`);
-  const detail: RunDetail = { ...summaryOf(run, loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === run.workflow)), steps: run.steps };
+  const detail: RunDetail = { ...summaryOf(run, loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === run.workflow)), steps: run.steps, startedBy: run.startedBy };
   res.json(detail);
 });
 

@@ -11,10 +11,13 @@ import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js'
 import { moveKey } from '../../shell/keyboard.js';
 import { language, t, tData } from '../../i18n/index.js';
 import { automationCommand, automationNow, setSchedule, useAutomation, useRun } from '../../automation/store.js';
-import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunSummary, type StepDecl, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
+import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunDetail, type RunSummary, type StepDecl, type StepRecord, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
+import type { Index } from '../../../types/index.js';
+import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
+import { fmt, formatDate } from '../../lib/utils.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -25,7 +28,8 @@ const label = (w: WorkflowDecl) => tx(w.label);
 const forLabel = (kind: string) => t(`automation.for.${kind}` as 'automation.for.transaction');
 const status = (s: RunSummary['status']) => t(`automation.status.${s}` as 'automation.status.done');
 const phaseLabel = (p: string) => t(`automation.phase.${p}` as 'automation.phase.book');
-const when = (iso: string) => iso.slice(0, 16).replace('T', ' ');
+/** 15.10.2026 11:30, in the viewer's time zone (runs store UTC). */
+const when = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, '0'); return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
 /** The rows of the list, in order: what J and K move through. */
 function rowsOf(view: AutomationView | undefined): R[] {
@@ -96,7 +100,7 @@ function List({ route, nav }: Props) {
   );
 }
 
-function Detail({ route, nav }: Props) {
+function Detail({ route, nav, books }: Props) {
   const { view } = useAutomation();
   if (!view) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   switch (route.view) {
@@ -105,7 +109,7 @@ function Detail({ route, nav }: Props) {
       const w = view.workflows.find((x) => x.id === route.workflow);
       return w ? <WorkflowPage w={w} view={view} route={route} nav={nav} /> : <div className="detail-empty"><div>{t('automation.unknown', { id: route.workflow })}</div></div>;
     }
-    case 'run': return <RunPage id={route.run} view={view} nav={nav} />;
+    case 'run': return <RunPage id={route.run} view={view} nav={nav} books={books} />;
     case 'map': return <MapPage view={view} map={route.map} nav={nav} />;
     case 'queue': return <QueuePage view={view} nav={nav} />;
     case 'tasks': return <TasksPage view={view} nav={nav} run={route.run} />;
@@ -271,18 +275,118 @@ function RunList({ runs, nav }: { runs: RunSummary[]; nav: Nav }) {
   );
 }
 
-function RunPage({ id, view, nav }: { id: string; view: AutomationView; nav: Nav }) {
+/** What started a run, in words. */
+function startedText(by: RunDetail['startedBy']): string {
+  switch (by.kind) {
+    case 'manual': return t('automation.by.manual');
+    case 'event': return t('automation.by.event', { name: by.name });
+    case 'schedule': return t('automation.by.schedule');
+    case 'outside': return t('automation.by.outside', { file: by.file });
+    case 'parent': return t('automation.by.parent', { run: by.run });
+    case 'replay': return t('automation.by.replay', { run: by.of });
+    case 'check': return t('automation.by.check', { run: by.of });
+  }
+}
+
+/** What the run was for, as a person names it: the file, the transaction, the period. */
+function runTitle(data: RunDetail, books: Index, w?: WorkflowDecl): string {
+  if (data.startedBy.kind === 'outside') return data.startedBy.file;
+  if (data.item.kind === 'transaction') {
+    const tr = books.transactions.find((x) => x.ref === data.item.id);
+    if (tr) return `${tr.description} ${tr.currency} ${fmt(tr.direction === 'DBIT' ? -tr.amount : tr.amount)}`;
+  }
+  return data.item.kind === 'company' && w ? label(w) : data.item.id;
+}
+
+const money = (amount?: number, currency?: string) => (amount === undefined ? '' : `${currency ?? ''} ${fmt(amount)}`.trim());
+
+/** LIEST: what the step had in front of it. */
+function Took({ s }: { s: StepRecord }) {
+  const took = (s.output?.took as Took[] | undefined) ?? [];
+  const input = Object.entries(s.input).filter(([, v]) => v);
+  if (!took.length && !input.length) return <p className="m">—</p>;
+  return (
+    <>
+      {took.map((x, i) => (
+        x.kind === 'files' ? <div key={i}>{t('automation.took.files', { n: x.names.length })}<ul>{x.names.map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
+          : x.kind === 'receipts' ? <div key={i}>{t('automation.took.receipts', { n: x.ids.length })}<ul>{x.files.slice(0, 8).map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
+          : <div key={i}>{t('automation.took.transactions', { n: x.n })}</div>
+      ))}
+      {input.map(([k, v]) => <div key={k} className="mono">{k}: {v}</div>)}
+    </>
+  );
+}
+
+/** ERGEBNIS: what the step made, each thing a link to where it now is. */
+function Made({ s, nav }: { s: StepRecord; nav: Nav }) {
+  const made = (s.output?.made as MadeThing[] | undefined);
+  const go = (route: Route) => () => nav.go({ route, query: {} });
+  if (made) {
+    if (!made.length) return <p className="m">{t('automation.made.nothing')}</p>;
+    return (
+      <ul className="wfmade">
+        {made.map((x, i) => (
+          <li key={i}>
+            {x.kind === 'receipt' ? (
+              <>
+                <button type="button" className="linkbtn" onClick={go({ area: 'receipts', id: x.id })}>{x.file}</button>
+                <small>{[x.isNew ? t('automation.made.new') : t('automation.made.changed'), x.date && formatDate(x.date), money(x.amount, x.currency), x.swissVat === false ? t('automation.made.noSwissVat') : x.vatId].filter(Boolean).join(' · ')}</small>
+              </>
+            ) : x.kind === 'link' ? (
+              <>
+                <span>{t('automation.made.link')} </span>
+                <button type="button" className="linkbtn" onClick={go({ area: 'bank', payment: x.transaction })}>{[x.counterparty, x.date && formatDate(x.date), money(x.amount, x.currency)].filter(Boolean).join(' · ') || x.transaction}</button>
+                <small>{x.receiptFile}</small>
+              </>
+            ) : (
+              <>
+                <button type="button" className="linkbtn" onClick={go({ area: 'journal', id: x.id })}>{t('automation.made.entry', { debit: x.debit, credit: x.credit })}</button>
+                <small>{[formatDate(x.date), fmt(x.amount), x.vatCode, x.description].filter(Boolean).join(' · ')}</small>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  const rest = Object.entries(s.output ?? {}).filter(([k]) => k !== 'notes');
+  if (!rest.length) return <p className="m">{s.outcome ? t('automation.made.outcome', { outcome: s.outcome }) : '—'}</p>;
+  return <>{rest.map(([k, v]) => <div key={k} className="mono">{k}: {short(v)}</div>)}</>;
+}
+
+/** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
+type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'error'; detail: string };
+function noteText(n: StepNote): string {
+  switch (n.code) {
+    case 'noModel': return t('automation.note.noModel', { n: n.waiting });
+    case 'failed': return t('automation.note.failed', { n: n.count, detail: n.detail });
+    case 'unmatched': return t('automation.note.unmatched', { n: n.files.length, files: n.files.join(', ') });
+    case 'filedKept': return t('automation.note.filedKept', { n: n.count });
+    case 'error': return n.detail;
+  }
+}
+
+const short = (v: unknown): string => { const j = typeof v === 'string' ? v : JSON.stringify(v); return j.length > 240 ? `${j.slice(0, 240)} …` : j; };
+
+function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; nav: Nav; books: Index }) {
   const { data, error } = useRun(id, view.rev);
   if (error) return <div className="detail-empty"><div>{error}</div></div>;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
   const act = (cmd: AutomationCommand) => () => { void automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); }); };
+  const seconds = data.finishedAt ? Math.max(1, Math.round((Date.parse(data.finishedAt) - Date.parse(data.startedAt)) / 1000)) : undefined;
   return (
     <div className="detail-in wfpage" key={id}>
       <div className="head">
-        <h2 className="who">{t('automation.run', { id })}<small>{w ? label(w) : data.workflow} · {forLabel(data.item.kind)} <span className="mono">{data.item.id}</span></small></h2>
+        <h2 className="who">{t('automation.runOf', { what: runTitle(data, books, w) })}<small>{w ? label(w) : data.workflow}</small></h2>
       </div>
-      <p className="lead"><span className={`wfpill st-${data.status}`}>{status(data.status)}</span> {when(data.startedAt)}{data.mode !== 'live' ? ` · ${data.mode}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}</p>
+      <p className="lead">
+        <span className={`wfpill st-${data.status}`}>{status(data.status)}</span>{' '}
+        {t('automation.startedAt', { when: when(data.startedAt), by: startedText(data.startedBy) })}
+        {seconds ? ` · ${t('automation.duration', { n: seconds })}` : ''}
+        {data.mode !== 'live' ? ` · ${data.mode}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
+      </p>
+      <p className="m mono runid">{id}</p>
       {data.error ? <p className="warnline">{data.error}</p> : null}
       <div className="wfactions">
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
@@ -292,23 +396,31 @@ function RunPage({ id, view, nav }: { id: string; view: AutomationView; nav: Nav
         {data.status !== 'done' && data.status !== 'discarded' ? <button type="button" className="btn ghost" onClick={act({ kind: 'discard', run: id })}>{t('automation.discard')}</button> : null}
       </div>
       {w ? <div className="wfscroll"><Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /></div> : null}
-      <ol className="wftimeline">
-        {data.steps.map((s, i) => (
-          <li key={`${s.step}-${i}`}>
-            <b>{w ? tx(stepOf(w, s.step)?.label ?? { en: s.step }) : s.step}</b>
-            {s.outcome ? <span className="mono"> → {s.outcome}</span> : null}
-            {Object.entries(s.input).filter(([, v]) => v).map(([k, v]) => <div key={k} className="m mono">{k}: {v}</div>)}
-            {s.error ? <div className="warnline">{s.error}</div> : null}
-            {s.llm.length ? <div className="m">{t('automation.llm', { n: s.llm.length })}</div> : null}
-            {s.effects.map((e, j) => (
-              <div key={j} className={e.refused ? 'warnline' : 'm'}>
-                {e.refused ? t('automation.refused', { reason: e.refused })
-                  : e.applied ? t('automation.effect.applied', { effect: e.effect })
-                  : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.effect.muted', { effect: e.effect })}
+      <ol className="wfsteps">
+        {data.steps.map((s, i) => {
+          const decl = w ? stepOf(w, s.step) : undefined;
+          return (
+            <li key={`${s.step}-${i}`} className={s.error ? 'err' : s.outcome ? 'ok' : 'on'}>
+              <div className="sh">
+                <b>{decl ? tx(decl.label) : s.step}</b>
+                <span className="mono m">{decl?.body.kind === 'action' ? decl.body.uses : s.step}</span>
+                {s.outcome ? <span className="mono m">→ {s.outcome}</span> : null}
               </div>
-            ))}
-          </li>
-        ))}
+              <div className="io">
+                <div className="box"><small>{t('automation.io.took')}</small><Took s={s} /></div>
+                <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
+              </div>
+              {s.error ? <div className="warnline">{s.error}</div> : null}
+              {((s.output?.notes as StepNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
+              {s.effects.filter((e) => e.refused || (!e.applied && Array.isArray(e.would))).map((e, j) => (
+                <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : t('automation.wouldBook', { n: (e.would as unknown[]).length })}</div>
+              ))}
+              {s.llm.map((c, j) => (
+                <details key={j} className="llm"><summary><BotIcon /> {t('automation.io.llm')}</summary><pre>{c.answer}</pre></details>
+              ))}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
