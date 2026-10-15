@@ -6,10 +6,10 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { transactionsOf } from '../providers/camt053/camt053.js';
+import { statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
 import { pdfText } from '../parsers/pdf-text.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
-import type { BankStatement, BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
+import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { partDirs, type Workspace } from '../workspace/workspace.js';
 import { periodLock } from './store.js';
@@ -55,8 +55,20 @@ export function statementPdf(filename: string): { fromDate: string; toDate: stri
   return null;
 }
 
-/** The monthly statement PDFs in each bank's folder of each year, named the way Raiffeisen or Wise name them. */
-export function readStatementPdfs(ws: Ws): BankStatement[] {
+type Read = Extract<StatementFile, { status: 'read' }>;
+
+export interface StatementFiles {
+  statements: BankStatement[];
+  /** The balances each camt.053 states (OPBD, CLBD), as the account's balance at the end of a day. */
+  balances: StatementClosingBalance[];
+}
+
+/**
+ * Every statement in each bank's folder of each year: the monthly PDFs named the way Raiffeisen
+ * or Wise name them, and each camt.053, which covers the days from its opening to its closing
+ * balance. A camt holding statements of several accounts is no one statement and is left out.
+ */
+export function readStatementFiles(ws: Ws): StatementFiles {
   const statements: BankStatement[] = [];
   for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements).map((a) => a.bank))) {
     for (const dir of partDirs(ws.paths, 'statements').map((d) => join(d, bank)).filter((d) => existsSync(d))) for (const file of readdirSync(dir).filter((f) => f.endsWith('.pdf'))) {
@@ -64,7 +76,28 @@ export function readStatementPdfs(ws: Ws): BankStatement[] {
       if (parsed) statements.push({ bank, filename: file, ...parsed });
     }
   }
-  return statements.sort((a, b) => a.fromDate.localeCompare(b.fromDate));
+  const balances: StatementClosingBalance[] = [];
+  const byFile = new Map<string, Read[]>();
+  for (const f of readBankStatements(ws)) if (f.status === 'read') (byFile.get(f.file) ?? byFile.set(f.file, []).get(f.file)!).push(f);
+  for (const [file, reads] of byFile) {
+    const { account } = reads[0];
+    const [folder, filename, ...deeper] = file.split('/');
+    if (folder !== account.bank || !filename || deeper.length || reads.some((r) => r.account.account !== account.account)) continue;
+    const span = statementSpan(reads.map((r) => r.statement), account, filename);
+    if (!span) continue;
+    statements.push({ bank: account.bank, filename, fromDate: span.from, toDate: span.to, currency: account.currency });
+    balances.push(...span.balances);
+  }
+  return { statements: statements.sort((a, b) => a.fromDate.localeCompare(b.fromDate)), balances };
+}
+
+/** The balances read from the camt.053 files now, beside the others (a PDF's): the PDF's balance of a day wins. */
+export function withCamtBalances(others: StatementClosingBalance[] = [], camt: StatementClosingBalance[]): StatementClosingBalance[] | undefined {
+  const kept = others.filter((b) => b.source !== 'camt');
+  const day = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
+  const given = new Set(kept.map(day));
+  const out = [...kept, ...camt.filter((b) => !given.has(day(b)))].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
+  return out.length || others.length ? out : undefined;
 }
 
 /** Wise drops transfer references from camt053; its monthly PDFs keep them (Wise transaction id → reference). */
@@ -90,6 +123,8 @@ export interface Scan {
   /** Wise transaction id → transfer reference, from the monthly statement PDFs of the `wise` accounts. */
   wiseRefs: Map<string, string>;
   bankStatements: BankStatement[];
+  /** The balances the camt.053 files state (readStatementFiles). */
+  camtBalances: StatementClosingBalance[];
 }
 
 /**
@@ -100,7 +135,7 @@ export interface Scan {
  */
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
-  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank',
+  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank',
   source: 'kept', remarks: 'kept', noReceiptNeeded: 'kept',
 } as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
 
@@ -142,7 +177,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
     if (fromPdf && !out.reference) out.reference = fromPdf;
     // A closed transaction stays exactly as filed, so batch parts and references are only
     // attached in open periods.
-    if (isClosed(out)) { delete out.parts; delete out.reference; }
+    if (isClosed(out)) { delete out.parts; delete out.reference; delete out.counterparty; }
     return out;
   });
 
@@ -158,8 +193,14 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   });
 
   return {
-    index: { ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings },
+    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings }, withCamtBalances(previous.statementBalances, scan.camtBalances)),
     brokenClosedLinks,
     vanishedClosedTransactions,
   };
+}
+
+function withBalances(index: Index, balances: StatementClosingBalance[] | undefined): Index {
+  if (balances) return { ...index, statementBalances: balances };
+  const { statementBalances: _, ...rest } = index;
+  return rest;
 }

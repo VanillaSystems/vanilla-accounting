@@ -19,6 +19,10 @@ import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
+import { filingXml } from '../../workflows/filing.js';
+import { isFilingKey } from '../../accounting/periods.js';
+import { filing } from '../../engines/index.js';
+import { basename } from 'node:path';
 import { inboxFiles } from './scan.js';
 import type { JournalEntry } from '../../types/index.js';
 import type { RunWrote } from '../../saving/model.js';
@@ -102,6 +106,15 @@ router.get('/api/automation/runs/:id', (req, res) => {
   if (!run) throw new RequestError(404, `Lauf ${req.params.id} gibt es nicht.`);
   const detail: RunDetail = { ...summaryOf(run, loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === run.workflow)), steps: run.steps, startedBy: run.startedBy };
   res.json(detail);
+});
+
+/** A period's XML for the tax authority's import, as the filing workflow wrote it: to download and upload there. */
+router.get('/api/filing/:period', (req, res) => {
+  const key = req.params.period;
+  if (!isFilingKey(key, filing().length)) throw new RequestError(400, `${key} ist keine Abrechnungsperiode.`);
+  const path = filingXml(WS, key);
+  if (!path) throw new RequestError(404, `Für ${key} ist noch keine Datei erstellt.`);
+  res.download(path, basename(path));
 });
 
 const KINDS = new Set(['start', 'answer', 'resume', 'replay', 'discard', 'pause', 'check', 'approve', 'review']);

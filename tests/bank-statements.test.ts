@@ -99,7 +99,7 @@ test('what each bank shape reads as: QR batch parts, Ustrd lines, SCOR reference
   const byRef = (ref: string) => txs.find((t) => t.ref === ref);
   assert.deepEqual(byRef('8000000000001AB'), {
     ref: '8000000000001AB', bank: 'UBS', date: '2026-07-06', amount: 1200, currency: 'CHF', direction: 'CRDT',
-    description: 'Gutschrift QR-Rechnung', reference: '000000000000000000000012342',
+    description: 'Gutschrift QR-Rechnung', reference: '000000000000000000000012342', counterparty: 'Kunde Alpha AG',
   });
   assert.deepEqual(byRef('8000000000002AB')?.parts, [
     { amount: 500, currency: 'CHF', counterparty: 'Coworking Beispiel AG', reference: '000000000000000000000056781' },

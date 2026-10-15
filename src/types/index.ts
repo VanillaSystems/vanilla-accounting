@@ -197,16 +197,17 @@ export interface VatAdjustment {
   entryIds: string[];
 }
 
-// A month-end closing balance read off a bank statement PDF, used as the bank-side
-// source of truth for monthly reconciliation against the ledger (Bilanzkonten).
+// A balance at the end of a day as the bank states it: a month-end closing balance read off a
+// statement PDF, or a camt.053's opening (OPBD, as the close of the day before) and closing (CLBD).
+// The bank-side source of truth for the reconciliation against the ledger (Bilanzkonten).
 export interface StatementClosingBalance {
   account: string; // ledger account (1021..1024)
   bank: string;
   currency: string; // the account's own currency
-  date: string; // statement period end (month-end), YYYY-MM-DD
+  date: string; // the day the balance closes, YYYY-MM-DD
   amount: number; // closing balance in the account's own currency, natural sign
-  source: 'pdf';
-  sourceFile: string; // PDF filename the balance was read from
+  source: 'pdf' | 'camt';
+  sourceFile: string; // the statement file's name the balance was read from
 }
 
 export interface Index {
@@ -257,6 +258,12 @@ export interface BankTransaction {
    * receipt text by the evidence step. Only kept for open periods, like parts.
    */
   reference?: string;
+  /**
+   * The other party of a single payment as the bank names it (camt053 RltdPties), which the
+   * description, the remittance text, often leaves out: who paid or was paid. Only kept for open
+   * periods, like parts.
+   */
+  counterparty?: string;
 }
 
 /**

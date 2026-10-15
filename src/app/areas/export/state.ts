@@ -57,7 +57,7 @@ export function saveOwnPresets(list: OwnPreset[]): void {
 
 export const periodOf = (token: string): Period => parsePeriod(token, localToday())!;
 
-/** Sends the request and saves what comes back under the name the server gives it; returns that name. */
+/** Sends the request and hands what comes back to the browser under the name the server gives it; returns that name. The browser (or its Save dialog) finishes the file later, unseen by the page. */
 export async function download(req: Omit<ExportRequest, 'language'>): Promise<string> {
   const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, language: language() }) });
   if (!res.ok) {

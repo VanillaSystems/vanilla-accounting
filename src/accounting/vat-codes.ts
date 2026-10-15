@@ -8,7 +8,8 @@
  * (vatCodes.kind.<kind>.*), so the app, docs/vat-codes.md and the CLI explain a code alike.
  */
 import { BANANA_VAT_CODES, VAT_CODE_EXAMPLES, type VatCodeExample } from './vat-codes.source.js';
-import { vat } from '../engines/index.js';
+import { chart, statements, vat } from '../engines/index.js';
+import { inGroup } from '../engines/chart.js';
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
 
 /** Banana's families (MWST-codes.txt, "Erläuterungen"), in the order of the ESTV form. */
@@ -142,4 +143,33 @@ export function lookupVatCode(code: string): { entry: VatCodeEntry; negative: bo
   vatCodes();
   const entry = catalogue!.byCode.get(unsigned) ?? describe(unsigned);
   return entry ? { entry, negative } : null;
+}
+
+/** A rate as a person types it: «8.1», «8,1», «8.1 %», «-8.1» (a refund). */
+export function parseRate(text: string): { rate: number; negative: boolean } | null {
+  const m = /^(-)?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%?$/.exec(text.trim());
+  return m ? { rate: Number(m[2].replace(',', '.')), negative: !!m[1] } : null;
+}
+
+/**
+ * The code a typed rate stands for on an entry: a sale's code when one side is a revenue account,
+ * else the input-tax code of its expense or investment account, in the box its income section
+ * names. A revenue or expense account on its unusual side (a refund) gets the code's minus.
+ * Null when the rate is no rate of the jurisdiction or the accounts say neither.
+ */
+export function codeForRate(rate: number, accountDebit: string, accountCredit: string, negative = false): string | null {
+  if (!(rate > 0)) return null;
+  const type = (a: string) => (a ? chart().typeOf(a) : undefined);
+  const neg = vat().codes.negativePrefix;
+  const signed = (code: string | undefined, refund: boolean) => (code ? (refund !== negative ? neg + code : code) : null);
+  const purchase = (account: string) => {
+    const boxes = vat().codes.purchaseBoxes;
+    return vat().codes.purchaseAt(rate, inGroup(statements().income.costOfGoods)(account) ? boxes.costOfGoods : boxes.otherwise);
+  };
+  if (type(accountCredit) === 'revenue') return signed(vat().codes.saleAt(rate), false);
+  if (type(accountDebit) === 'revenue') return signed(vat().codes.saleAt(rate), true);
+  if (type(accountDebit) === 'expense') return signed(purchase(accountDebit), false);
+  if (type(accountCredit) === 'expense') return signed(purchase(accountCredit), true);
+  if (type(accountDebit) === 'asset') return signed(purchase(accountDebit), false);
+  return null;
 }

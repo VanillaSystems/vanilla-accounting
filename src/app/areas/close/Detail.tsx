@@ -6,7 +6,8 @@
 import { useState, type ReactNode } from 'react';
 import type { EntryTemplate, TemplateState } from '../../../accounting/year-close.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
-import { addDays, localToday, parsePeriod } from '../../../accounting/periods.js';
+import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
+import { filing } from '../../../engines/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, errorText, type YearCloseView, type YearEndEntryInput } from '../../lib/api.js';
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
@@ -70,9 +71,10 @@ function Step({ step, d, ...p }: Props & { step: Step; d: YearCloseView }) {
 
 type StepProps = Omit<Props, 'step'> & { d: YearCloseView };
 
-function Q4({ d, nav }: StepProps) {
+function Q4({ d, nav, books }: StepProps) {
   const ws = useWorkspace();
   const today = localToday();
+  const start = books.config?.closedThrough ? undefined : booksOpenPeriod(books, today, filing().length).from;
   return (
     <>
       <p className="lead">{t('close.q4Lead')}</p>
@@ -83,7 +85,7 @@ function Q4({ d, nav }: StepProps) {
           return (
             <button key={q.quarter} type="button" className="qcard" onClick={() => nav.go({ route: { area: 'vat' }, query: { period: range } })}>
               <b>{q.quarter.slice(5)}</b>
-              <span>{q.filed !== undefined ? t('close.qFiled') : range.to < today ? t('close.qOpenDue', { date: formatDate(addDays(range.to, 60)) }) : t('close.qRuns')}</span>
+              <span>{q.filed !== undefined ? t('close.qFiled') : start && range.to < start ? t('close.qBeforeBooks') : range.to < today ? t('close.qOpenDue', { date: formatDate(addDays(range.to, 60)) }) : t('close.qRuns')}</span>
               <span className="m">{seal?.status === 'intact' ? <>{ICONS.lock}{t('close.qSealed')}</> : seal ? <span className="bad">{t('close.qSealBroken')}</span> : q.filed !== undefined ? t('close.qNotSealed') : ''}</span>
             </button>
           );

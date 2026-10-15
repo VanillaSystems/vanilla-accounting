@@ -5,4 +5,5 @@ codes:
   S5: { rate: 5, revenue: "11" }
   X0: { rate: 0, deduction: "20" }
   P20: { rate: 20, inputTax: "30" }
+purchaseBoxes: { costOfGoods: "30", otherwise: "30" }
 patterns: []

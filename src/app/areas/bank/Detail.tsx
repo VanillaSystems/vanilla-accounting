@@ -17,7 +17,7 @@ import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { I } from '../receipts/icons.js';
-import { matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
+import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, pickStatements, setNote, setNoReceipt } from './actions.js';
 import { at } from '../receipts/view.js';
@@ -56,7 +56,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const tx = route.payment ? pays.find((p) => p.ref === route.payment) : undefined;
   const c = s.file ? b.check(s) : undefined;
   const closed = !!b.closedThrough && s.to <= b.closedThrough;
-  const src = s.file && sources.statement(s.file.bank, s.file.filename);
+  const file = s.file && sources.statement(s.file.bank, s.file.filename);
+  const camt = !!s.file && isCamt(s.file);
+  const src = camt ? undefined : file;
   const wise = s.account.statements === 'wise';
   const mark: Mark | undefined = tx && { tx, fee: b.feeOf(tx.ref), wise };
   const choose = (ref: string | undefined) => nav.select({ area: 'bank', statement: s.key, ...(ref && { payment: ref }) });
@@ -99,19 +101,21 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
 
       <div className="body">
         <div className="desk">
-          {(src || tx) && (
+          {(file || tx) && (
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.entriesOf(tx.ref).length ? 'booked' : 'unbooked']} nav={nav} canEdit={canEdit} /> : null}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
-              {src && <a className="dl inline" href={src} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
+              {file && <a className="dl inline" href={file} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
             </div>
           )}
           {src ? (
             <div className="paper real stmt" role="button" tabIndex={0} aria-label={t('bank.openLarge')} onClick={() => setUi({ overlay: 'quick' })}>
               <StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.detail')} />
             </div>
+          ) : camt ? (
+            <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>
           ) : !s.running && canEdit && !closed ? (
             <button type="button" className="well" style={{ width: '100%', maxWidth: 640 }} onClick={() => pickStatements((files) => importStatements(files, nav, { account: s.account, month: s.from.slice(0, 7) }))}>
               <span><b>{t('bank.well')}</b>{t('bank.wellFor', { bank: s.account.bank })}</span>

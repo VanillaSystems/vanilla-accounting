@@ -79,6 +79,8 @@ export interface TaxCodesData {
   /** Every code with a fixed meaning, in catalogue order. */
   codes: Record<string, CodeMeaning>;
   patterns: CodePattern[];
+  /** The input-tax box a purchase's tax goes to: by the income section of its account (material and goods), else `otherwise`. */
+  purchaseBoxes: { costOfGoods: BoxId; otherwise: BoxId };
 }
 
 /** A box that collects a field of the entries feeding it. */

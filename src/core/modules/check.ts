@@ -47,6 +47,8 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
     for (const [k, z] of Object.entries(p.correction)) if (!(z in r.inputTax)) add('tax-codes.yaml', `patterns[${i}].correction.${k}`, `Ziffer ${z} is not an input-tax Ziffer`);
   });
 
+  for (const [k, z] of Object.entries(j.taxCodes.purchaseBoxes)) if (!(z in r.inputTax)) add('tax-codes.yaml', `purchaseBoxes.${k}`, `Ziffer ${z} is not an input-tax Ziffer`);
+
   for (const [z, d] of Object.entries(r.derived)) {
     for (const ref of formulaRefs(d.formula)) if (!boxes.has(ref)) add('return.yaml', `derived.${z}.formula`, `Ziffer ${ref} does not exist`);
   }

@@ -4,12 +4,12 @@
  * and the stored runs (GET /api/automation); nothing here is a list of its own.
  */
 import { Fragment, useState, type ReactNode } from 'react';
-import { errorText } from '../../lib/api.js';
+import { api, errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
-import { language, t, tData } from '../../i18n/index.js';
+import { isKey, language, t, tData } from '../../i18n/index.js';
 import { automationCommand, automationNow, setSchedule, useAutomation, useRun } from '../../automation/store.js';
 import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunDetail, type RunSummary, type StepDecl, type StepRecord, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
@@ -22,6 +22,9 @@ import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
 import { Paper } from '../receipts/Paper.js';
+import { fileName, returnSummary } from './filing-summary.js';
+import type { PeriodReturn, PreparedXml } from '../../../workflows/filing.js';
+import { baseCurrency, vat } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -369,7 +372,47 @@ function Made({ s, nav }: { s: StepRecord; nav: Nav }) {
   }
   const rest = Object.entries(s.output ?? {}).filter(([k]) => k !== 'notes');
   if (!rest.length) return <p className="m">{s.outcome ? t('automation.made.outcome', { outcome: s.outcome }) : '—'}</p>;
-  return <>{rest.map(([k, v]) => <div key={k} className="mono">{k}: {short(v)}</div>)}</>;
+  return <>{rest.map(([k, v]) => <RunValue key={k} name={k} value={v} />)}</>;
+}
+
+/** A value a step hands on, in words where it has some (the return, its XML), else as data. */
+function RunValue({ name, value }: { name: string; value: unknown }) {
+  if (name === 'return') return <ReturnFacts ret={value as PeriodReturn} />;
+  if (name === 'xml') return <XmlFile x={value as PreparedXml} />;
+  return <div className="mono">{name}: {short(value)}</div>;
+}
+
+/** A box's name: a rate row by its rate, else the dictionary's name of the box, else the module's. */
+function boxLabel(box: string): string {
+  const row = vat().rateRows.find((r) => r.ziffer === box);
+  if (row) return t(row.kind === 'supply' ? 'vat.nSupply' : 'vat.nAcquisition', { rate: row.rate });
+  const key = `vat.n${box}`;
+  if (isKey(key)) return tData(key);
+  const f = vat().form;
+  return f.deductions[box]?.label ?? f.inputTax[box]?.label ?? f.derived[box]?.label ?? (box === f.turnoverBox ? f.turnoverLabel : box);
+}
+
+function ReturnFacts({ ret }: { ret: PeriodReturn }) {
+  const r = returnSummary(ret);
+  const amount = `${baseCurrency()} ${fmt(r.due.amount)}`;
+  return (
+    <div className="wfreturn" data-testid="return-facts">
+      <b>{r.due.kind === 'pay' ? t('automation.return.pay', { period: r.period, amount }) : r.due.kind === 'credit' ? t('automation.return.credit', { period: r.period, amount }) : t('automation.return.nothing', { period: r.period })}</b>
+      <dl>{r.boxes.map((b) => <Fragment key={b.box}><dt><span className="mono">{b.box}</span> {boxLabel(b.box)}</dt><dd className="mono">{fmt(b.amount)}</dd></Fragment>)}</dl>
+    </div>
+  );
+}
+
+function XmlFile({ x }: { x: PreparedXml }) {
+  const file = fileName(x.path);
+  return (
+    <div className="wfreturn" data-testid="xml-file">
+      <span>{t('automation.xml.where', { path: x.path })}</span>
+      <span className="wfactions"><a className="btn" href={api.filingXmlUrl(x.period)} download={file}>{t('automation.xml.download', { file })}</a></span>
+      <span className="m">{t('automation.xml.next')}</span>
+      {x.warnings.map((w) => <span key={w} className="warnline">{w}</span>)}
+    </div>
+  );
 }
 
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
@@ -551,6 +594,7 @@ function TasksPage({ view, nav, run }: { view: AutomationView; nav: Nav; run?: s
                 <b>{fillTask(tx(task.title), task.item)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item)}</p> : null}
+                {Object.entries(task.reads ?? {}).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
                   {task.outcomes.map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}

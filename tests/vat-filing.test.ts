@@ -16,7 +16,10 @@ import { vat } from '../src/engines/index.js';
 import { ech0217Xml } from '../src/providers/ech0217/xml.js';
 import { APP_ROOT, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
 import { openEngine } from '../src/workflows/engine.js';
-import { filedXml } from '../src/workflows/filing.js';
+import { filedXml, filingXml, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
+import { loadWorkflows } from '../src/workflows/load.js';
+import { taskOf } from '../src/workflows/model.js';
+import { returnSummary } from '../src/app/areas/automation/filing-summary.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'vat-filing-runs-'));
@@ -80,4 +83,31 @@ test('a dry run of a filing never closes or seals', async () => {
   assert.equal(run.steps.at(-1)!.effects[0].would, 'skipped: not run in a dry run');
   assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31');
   assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json')), false);
+});
+
+test('the person\'s tasks carry what they check: the review the return in words, the filing where the XML lies', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const w = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((x) => x.id === 'vat-filing')!;
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  const review = taskOf(w, engine.run(r.ok ? r.run! : '')!)!;
+  const ret = review.reads!.return as PeriodReturn;
+  const s = returnSummary(ret);
+  assert.deepEqual(s.due, ret.payable > 0 ? { kind: 'pay', amount: ret.payable } : { kind: 'credit', amount: -ret.payable });
+  assert.deepEqual(s.boxes, Object.entries(ret.figures).filter(([box, n]) => n && box !== vat().form.payable && box !== vat().form.credit).map(([box, amount]) => ({ box, amount })), 'every box with an amount, the payable apart');
+  assert.ok(s.boxes.some((b) => b.box === vat().form.turnoverBox));
+  assert.equal(filingXml(ws, Q), undefined, 'no file before the review');
+
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
+  await engine.idle();
+  const submit = taskOf(w, engine.run(r.ok ? r.run! : '')!)!;
+  const xml = submit.reads!.xml as PreparedXml;
+  assert.equal(xml.period, Q);
+  assert.equal(filingXml(ws, Q), xml.path, 'the prepared XML until it is filed');
+  assert.match(xml.path, /data[\\/]filing[\\/]mwst-ech0217-2026-Q2\.xml$/);
+
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'filed' });
+  await engine.idle();
+  assert.equal(filingXml(ws, Q), filedXml(ws, Q), 'then the filed one');
 });

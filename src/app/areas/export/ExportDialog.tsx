@@ -85,7 +85,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
       const items = Object.fromEntries(Object.entries(c.items).filter(([id]) => counts[id as ItemId]));
       const name = await download({ period: c.period, items, sums: c.sums, oneBook: c.oneBook, account });
       onClose();
-      toast(t('export.saved', { name }));
+      toast(t('export.saving', { name }));
     } catch (e) {
       setBusy(false);
       toast(t('export.failed', { error: errorText(e) }));

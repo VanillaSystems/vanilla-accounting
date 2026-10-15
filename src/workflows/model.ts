@@ -428,6 +428,8 @@ export interface Task {
   /** The person step's outcomes: the task's buttons. */
   outcomes: string[];
   overdue?: boolean;
+  /** What the step reads from the steps before it (its `reads`), for the person to check: a return, a written file. */
+  reads?: Record<string, unknown>;
 }
 
 export function taskOf(w: WorkflowDecl, run: Run, now = new Date().toISOString()): Task | undefined {
@@ -435,10 +437,13 @@ export function taskOf(w: WorkflowDecl, run: Run, now = new Date().toISOString()
   const step = stepOf(w, run.state.at);
   if (step?.body.kind !== 'person') return undefined;
   const task = step.body.task;
+  const out = outputsOf(run);
+  const reads = Object.fromEntries(step.reads.filter((k) => out[k] !== undefined).map((k) => [k, out[k]]));
   return {
     run: run.id, workflow: w.id, step: step.id, item: run.item, title: task.title, ...(task.why ? { why: task.why } : {}),
     ...(task.do ? { do: task.do } : {}), ...(task.due ? { due: task.due } : {}), since: run.state.since, outcomes: Object.keys(step.outcomes),
     ...(overdue(run, w, now) ? { overdue: true } : {}),
+    ...(Object.keys(reads).length ? { reads } : {}),
   };
 }
 

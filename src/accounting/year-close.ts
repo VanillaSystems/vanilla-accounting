@@ -16,7 +16,7 @@ import type { EstvRate, EstvRates } from './fx-conversion.js';
 import { chfAmount, computeBalances } from './ledger.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
-import { derivePeriod } from './periods.js';
+import { booksOpenPeriod, derivePeriod } from './periods.js';
 import { chart, vat, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
@@ -494,8 +494,11 @@ function preconditions(input: YearCloseInput): Check[] {
   for (const c of seals.checks) if (c.status === 'broken') sealProblems.push({ code: 'sealBroken', quarter: c.quarter, problem: c.problem });
   const sealed = new Set(seals.checks.filter((c) => c.status === 'intact').map((c) => c.quarter));
   const dates = [...books.transactions.map((t) => t.date), ...books.journalEntries.map((e) => e.date)];
+  // Books that never filed start with the quarter of their first payment: before it there is nothing to file.
+  const start = closedThrough ? undefined : booksOpenPeriod(books, yearEnd(year), 'quarter').from;
   for (const q of [q1, q2, q3]) {
     const { from, to } = derivePeriod(q)!;
+    if (start && to < start) continue;
     if (!closedThrough || closedThrough < to) sealProblems.push({ code: 'notClosed', quarter: q });
     else if (!sealed.has(q) && dates.some((d) => d >= from && d <= to)) sealProblems.push({ code: 'unsealed', quarter: q });
   }

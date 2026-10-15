@@ -5,7 +5,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { Index } from '../../../types/index.js';
-import { localToday, openFilingPeriod, type Period } from '../../../accounting/periods.js';
+import { booksOpenPeriod, localToday, type Period } from '../../../accounting/periods.js';
 import { api, errorText, STATIC_EXPORT, type YearCloseView } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import { filing } from '../../../engines/index.js';
@@ -34,7 +34,7 @@ export function useYearClose(year: string, books: Index): Pick<State, 'data' | '
 }
 
 /**
- * The year the page closes: the one the period names, else the open quarter's year; in the
+ * The year the page closes: the one the period names, else the open period's year (booksOpenPeriod); in the
  * half year after a close (closed through 31.12., profit allocation and opening still to do)
  * the closed year.
  */
@@ -42,5 +42,5 @@ export function closeYear(period: Period | undefined, books: Index, today = loca
   if (period && period.kind !== 'all') return period.from.slice(0, 4);
   const closed = books.config?.closedThrough;
   if (closed?.endsWith('-12-31') && today < `${+closed.slice(0, 4) + 1}-07-01`) return closed.slice(0, 4);
-  return openFilingPeriod(closed, today, filing().length).from.slice(0, 4);
+  return booksOpenPeriod(books, today, filing().length).from.slice(0, 4);
 }

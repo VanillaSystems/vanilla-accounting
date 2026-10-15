@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
-import { lookupVatCode, vatCodes } from '../../../accounting/vat-codes.js';
+import { codeForRate, lookupVatCode, parseRate, vatCodes } from '../../../accounting/vat-codes.js';
 import type { BankTransaction } from '../../../types/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -31,6 +31,7 @@ import { AskAi } from '../../assistant/AskAi.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
+import { isCamt } from '../bank/model.js';
 import { vat, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -170,6 +171,8 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
   const s = useUi();
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+  const wrong = useRef(false);
 
   useEffect(() => {
     if (!s.open.buchung || !s.focus) return;
@@ -177,32 +180,60 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     setUi({ focus: undefined });
   }, [s.open.buchung, s.focus]);
 
+  const field = (name: Field) => form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
+
+  // The form keeps what is typed while a field is left: a saved entry only rewrites the fields not being edited.
+  useEffect(() => {
+    if (wrong.current) return;
+    const values: Record<Field, string> = { accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '' };
+    for (const [name, value] of Object.entries(values) as [Field, string][]) {
+      const el = field(name);
+      if (el && el !== document.activeElement && el.value !== value) el.value = value;
+    }
+  }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description]);
+
+  /** A code as typed, or the code a typed rate stands for on these accounts. */
+  function vatCodeOf(typed: string, debit: string, credit: string): { code: string; fromRate?: number } | null {
+    if (!typed || lookupVatCode(typed)) return { code: typed };
+    const r = parseRate(typed);
+    const code = r && codeForRate(r.rate, debit, credit, r.negative);
+    return code ? { code, fromRate: r!.rate } : null;
+  }
+
+  function fail(message: string) { wrong.current = true; setErr(message); setNote(''); nav.dismissToast(); }
+
   function save() {
     if (!edit || !form.current) return;
     const f = Object.fromEntries(new FormData(form.current)) as Record<Field, string>;
     const accounts = getAccountMap();
     const next = { accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), vatCode: f.vatCode.trim(), description: f.description.trim(), amount: parseAmount(f.amount) };
     const unknown = [next.accountDebit, next.accountCredit].find((n) => n && !accounts[n]);
-    if (unknown) { setErr(t('journal.errAccount', { account: unknown })); return; }
-    if (!next.accountDebit && !next.accountCredit) { setErr(t('journal.errNoAccount')); return; }
-    if (next.vatCode && !lookupVatCode(next.vatCode)) { setErr(t('journal.errVat', { code: next.vatCode })); return; }
-    if (!next.amount) { setErr(t('journal.errAmount')); return; }
+    if (unknown) return fail(t('journal.errAccount', { account: unknown }));
+    if (!next.accountDebit && !next.accountCredit) return fail(t('journal.errNoAccount'));
+    const vatCode = vatCodeOf(next.vatCode, next.accountDebit, next.accountCredit);
+    if (!vatCode) return fail(parseRate(next.vatCode) ? t('journal.errVatRate', { rate: next.vatCode }) : t('journal.errVat', { code: next.vatCode }));
+    if (!next.amount) return fail(t('journal.errAmount'));
+    wrong.current = false;
     setErr('');
+    next.vatCode = vatCode.code;
+    if (vatCode.fromRate !== undefined) {
+      const el = field('vatCode'); if (el) el.value = vatCode.code;
+      setNote(t('journal.vatFromRate', { rate: String(vatCode.fromRate), code: vatCode.code, text: lookupVatCode(vatCode.code)?.entry.bananaText ?? '' }));
+    }
+    const el = field('amount'); if (el) el.value = fmt(next.amount);
     const changed = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as Field[]).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
     if (!changed.length) return;
     saveEntry(nav, e, Object.fromEntries(changed.map((k) => [k, next[k]])), changed);
   }
 
-  const key = [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description].join('|');
   return (
     <Sec k="buchung" val={edit ? t('journal.editable') : t('journal.readOnly')}>
       <form
-        key={key}
         ref={form}
         className="form"
         autoComplete="off"
         onSubmit={(ev) => { ev.preventDefault(); save(); }}
-        onBlur={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) save(); }}
+        onBlur={save}
         onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.defaultPrevented) { ev.preventDefault(); save(); } }}
       >
         <div className="two">
@@ -210,12 +241,13 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
           <AccountField name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={e.accountCredit} readOnly={!edit} onPick={save} />
         </div>
         <div className="two">
-          <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={e.vatCode ?? ''} readOnly={!edit} list="vat-codes" /></label>
+          <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={e.vatCode ?? ''} readOnly={!edit} list="vat-codes" placeholder={edit ? t('journal.vatPlaceholder') : undefined} /></label>
           <label>{t('journal.amountIn', { currency: e.exchangeCurrency || baseCurrency() })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
         <label>{t('journal.field.description')}<input name="description" defaultValue={e.description ?? ''} readOnly={!edit} /></label>
         <VatCodeList />
         <div className="err" role="alert">{err}</div>
+        {note && <div className="fhint" data-testid="vat-from-rate">{note}</div>}
         {edit && <div className="fhint">{t('journal.saveHint')}</div>}
       </form>
     </Sec>
@@ -233,7 +265,7 @@ function Excerpt({ books, nav, tx }: Props & { tx: BankTransaction }) {
   const [page, setPage] = useState('');
   const b = bankFor(books, ws?.bankAccounts);
   const s = b.statementOf(tx);
-  const src = s?.file && sources.statement(s.file.bank, s.file.filename);
+  const src = s?.file && !isCamt(s.file) && sources.statement(s.file.bank, s.file.filename);
   const toStatement = () => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date));
   const link = <button type="button" title={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
   if (!src) return <div className="src">{t('journal.noReceiptSource')} {link}</div>;

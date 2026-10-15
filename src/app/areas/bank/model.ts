@@ -20,7 +20,7 @@ export interface Statement {
   account: Account;
   from: IsoDate;
   to: IsoDate;
-  /** The PDF; absent when the month ended without a statement, or has not ended yet. */
+  /** The PDF or the bank's XML statement (isCamt); absent when the month ended without a statement, or has not ended yet. */
   file?: BankStatement;
   /** The month has not ended: its payments are there, its statement is still to come. */
   running?: boolean;
@@ -53,6 +53,9 @@ function monthAdd(ym: string, n: number): string {
   const m = Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7)) - 1 + n;
   return `${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, '0')}`;
 }
+
+/** The bank's XML statement: its payments and balances as data, no page to show. */
+export const isCamt = (f: Pick<BankStatement, 'filename'>) => /\.xml$/i.test(f.filename);
 
 export const statementKey = (account: string, from: IsoDate) => `${account}-${from.slice(0, 7)}`;
 
@@ -112,6 +115,19 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   for (const f of books.bankStatements) {
     const a = accountOf(f.bank, f.currency ?? baseCurrency());
     if (a) files.get(a.account)!.push({ key: statementKey(a.account, f.fromDate), account: a, from: f.fromDate, to: f.toDate, file: f });
+  }
+  // An XML statement counts from the first month no PDF covers; beside the PDFs of all its months it adds nothing to see. PDFs come first.
+  for (const [account, list] of files) {
+    const pdfs = list.filter((s) => !isCamt(s.file!));
+    const covered = (m: string) => pdfs.some((p) => p.from <= `${m}-01` && p.to >= monthEnd(`${m}-01`));
+    const months = (s: Statement) => { const out: string[] = []; for (let m = s.from.slice(0, 7); m <= s.to.slice(0, 7); m = monthAdd(m, 1)) out.push(m); return out; };
+    const camts = list.filter((s) => isCamt(s.file!)).flatMap((s): Statement[] => {
+      const first = months(s).find((m) => !covered(m));
+      if (!first) return [];
+      const from = first === s.from.slice(0, 7) ? s.from : `${first}-01`;
+      return [{ ...s, key: statementKey(account, from), from }];
+    });
+    files.set(account, [...pdfs, ...camts]);
   }
 
   // An account's months start with its first statement or payment, or the year its books open.

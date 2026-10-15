@@ -247,6 +247,7 @@ export const api = {
   confirmPayment: (id: string, transactionRef: string) => request<{ paid: unknown }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
   /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */
   documentUrl: (file: string) => `/${file.split('/').map(encodeURIComponent).join('/')}`,
+  filingXmlUrl: (period: string) => `/api/filing/${encodeURIComponent(period)}`,
 
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
   fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),

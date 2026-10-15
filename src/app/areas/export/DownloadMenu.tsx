@@ -45,7 +45,7 @@ export function DownloadMenu({ account, label, period, toast }: Props) {
   async function get(format: Format) {
     close();
     try {
-      toast(t('export.saved', { name: await download({ period: period.token, items: { ledger: [format] }, sums: false, oneBook: false, account }) }));
+      toast(t('export.saving', { name: await download({ period: period.token, items: { ledger: [format] }, sums: false, oneBook: false, account }) }));
     } catch (e) {
       toast(t('export.failed', { error: errorText(e) }));
     }

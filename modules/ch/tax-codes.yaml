@@ -92,6 +92,11 @@ codes:
   I37:
     rate: 3.7
     inputTax: "405"
+# Where a purchase's input tax goes (pv-prefix-from-account): material and goods (the income
+# statement's costOfGoods section) to 400, investments and operating costs to 405.
+purchaseBoxes:
+  costOfGoods: "400"
+  otherwise: "405"
 patterns:
   - match: ^K(\d*)-([ABC])$
     rateGroup: 1

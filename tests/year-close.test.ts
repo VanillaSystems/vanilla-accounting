@@ -279,3 +279,13 @@ test('in a company repository (ADR 0013) the close and the opening are committed
   assert.ok(git('show', '--name-only', '--format=', 'HEAD~1').split('\n').every((f) => f.startsWith('vanilla-accounting/')), 'only the books are in the close');
   assert.equal(git('status', '--porcelain'), '?? notes.md');
 });
+
+test('books that never filed and start in Q3 are not asked to file Q1 and Q2; books from February are', () => {
+  const fresh = (date: string): Books => {
+    const b = books();
+    return { ...b, transactions: b.transactions.map((x) => ({ ...x, date })), journalEntries: [], config: { openingBalances: b.config.openingBalances } };
+  };
+  const notClosed = (b: Books) => yearClose(input(b, { seals: { checks: [], unsealed: [] } })).checks.find((c) => c.id === 'quartersSealed')!.problems;
+  assert.deepEqual(notClosed(fresh('2026-07-14')), [{ code: 'notClosed', quarter: '2026-Q3' }]);
+  assert.deepEqual(notClosed(fresh('2026-02-10')).map((p) => 'quarter' in p && p.quarter), ['2026-Q1', '2026-Q2', '2026-Q3']);
+});

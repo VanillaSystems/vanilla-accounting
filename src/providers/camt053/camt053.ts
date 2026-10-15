@@ -10,7 +10,8 @@
  */
 import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
-import type { BankTransaction } from '../../types/index.js';
+import type { BankTransaction, StatementClosingBalance } from '../../types/index.js';
+import { parseStatementBalances } from './statement-balances.js';
 import type { StatementKind } from '../../workspace/banks.js';
 
 /** The ISO 20022 cash-management message a file holds: only camt.053 is a statement. */
@@ -140,6 +141,8 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     let description = String(entry.AddtlNtryInf ?? '');
     if (single) description = String(ustrd(single.RmtInf) ?? single.AddtlTxInf ?? description);
     if (!description.trim() && single) description = counterpartyOf(single);
+    const named = single ? counterpartyOf(single).trim() : '';
+    const counterparty = named && !description.includes(named) ? named : '';
 
     return {
       ref,
@@ -151,6 +154,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       description,
       ...(parts ? { parts } : {}),
       ...(reference !== undefined && String(reference).trim() ? { reference: String(reference).trim() } : {}),
+      ...(counterparty ? { counterparty } : {}),
       ...(account.statements === 'wise' && description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
     };
   });
@@ -194,3 +198,30 @@ export function assignUniqueRefs(transactions: BankTransaction[]): BankTransacti
 
   return transactions;
 }
+
+/**
+ * The days a camt.053 covers and the balances it states. Its opening (OPBD) is the balance at the
+ * start of its date: the close of the day before when the bank booked on that date, else the
+ * close of that date itself (with nothing booked that day the two are the same amount).
+ */
+export function statementSpan(camts: CamtStatement[], account: { account: string; bank: string; currency: string; statements: StatementKind }, filename: string): { from: string; to: string; balances: StatementClosingBalance[] } | null {
+  const booked = new Set(camts.flatMap((c) => transactionsOf(c, account).map((t) => t.date)).filter(Boolean));
+  const stated = camts.flatMap((c) => parseStatementBalances(c, account.bank, filename)).filter((b) => b.date && b.currency === account.currency);
+  const byDate = (a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date);
+  const opening = stated.filter((b) => b.type === 'OPBD').sort(byDate)[0];
+  const closing = stated.filter((b) => b.type === 'CLBD').sort(byDate).at(-1);
+  const days = [...booked].sort();
+  const openedOn = opening && (booked.has(opening.date) ? shiftDays(opening.date, -1) : opening.date);
+  const from = openedOn ? shiftDays(openedOn, 1) : days[0];
+  const to = closing?.date ?? days.at(-1);
+  if (!from || !to || to < from) return null;
+  const balance = (date: string, amount: number): StatementClosingBalance =>
+    ({ account: account.account, bank: account.bank, currency: account.currency, date, amount, source: 'camt', sourceFile: filename });
+  return { from, to, balances: [...(openedOn ? [balance(openedOn, opening.amount)] : []), ...(closing ? [balance(closing.date, closing.amount)] : [])] };
+}
+
+const shiftDays = (date: string, n: number) => {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};

@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import type { BankTransaction } from '../src/types/index.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import type { StatementKind } from '../src/workspace/banks.js';
+import { buildBatchClassifyPrompt } from '../src/llm/prompts.js';
 
 const RAIFFEISEN = 'uuid_camt053_001_08_raiffeisen.xml';
 const WISE_USD = 'uuid_statement_wise_USD.xml';
@@ -150,4 +151,18 @@ test('assignUniqueRefs: mixed directions across currencies are still split', () 
     'CARD-7~2026-07-01-DBIT-20.00EUR',
     'CARD-7~2026-07-05-CRDT-18.50CHF',
   ]);
+});
+
+test('a single payment keeps its counterparty beside the remittance text, which leaves the name out (finding quarter-close-10)', () => {
+  const [credit, debit] = parse(ntry(`
+<Ntry><Amt Ccy="CHF">4860.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-07-02</Dt></BookgDt>
+  <NtryDtls><TxDtls><Refs><AcctSvcrRef>RB-1</AcctSvcrRef></Refs><RltdPties><Dbtr><Nm>Familie Keller</Nm></Dbtr></RltdPties>
+  <RmtInf><Ustrd>Rechnung 2026-028 Malerarbeiten Wohnzimmer</Ustrd></RmtInf></TxDtls></NtryDtls><AddtlNtryInf>Gutschrift Familie Keller</AddtlNtryInf></Ntry>
+<Ntry><Amt Ccy="CHF">89.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-15</Dt></BookgDt>
+  <NtryDtls><TxDtls><Refs><AcctSvcrRef>RB-2</AcctSvcrRef></Refs><RltdPties><Cdtr><Nm>Swisscom (Schweiz) AG</Nm></Cdtr></RltdPties>
+  <RmtInf><Ustrd>Rechnung August Natel</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`));
+  assert.deepEqual([credit.description, credit.counterparty], ['Rechnung 2026-028 Malerarbeiten Wohnzimmer', 'Familie Keller']);
+  assert.deepEqual([debit.description, debit.counterparty], ['Rechnung August Natel', 'Swisscom (Schweiz) AG']);
+  const prompt = buildBatchClassifyPrompt([{ tx: credit, receipts: [] }], { companyName: 'Malerei', chartOfAccounts: '', historicEntries: '', vatCodes: '' });
+  assert.match(prompt, /Bank description: Rechnung 2026-028 Malerarbeiten Wohnzimmer\n {2}Counterparty: Familie Keller/, 'the model is told who paid');
 });

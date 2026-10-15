@@ -153,7 +153,7 @@ export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
       lineItems: r.lineItems,
     }));
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank },
+    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}) },
     receipts,
   };
 }

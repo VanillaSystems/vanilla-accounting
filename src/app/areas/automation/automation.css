@@ -76,6 +76,14 @@
 .wftask { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
 .wftask.sel { border-color: var(--accent); }
 .wftask p { margin: 4px 0 0; color: var(--ink-2); font-size: 13px; }
+/* What a filing step hands on, in words: the return's figures, the XML and where it lies. */
+.wfreturn { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; font-size: 13px; }
+.wfreturn > b { font-weight: 600; }
+.wfreturn dl { display: grid; grid-template-columns: auto max-content; gap: 3px 16px; margin: 0; max-width: 520px; }
+.wfreturn dt { color: var(--muted); }
+.wfreturn dt .mono { color: var(--ink-2); margin-right: 6px; }
+.wfreturn dd { margin: 0; text-align: right; }
+.wfreturn .m { color: var(--muted); }
 .wfbuttons { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
 .wfbuttons .btn { display: inline-flex; align-items: center; gap: 5px; }
 .runlink { display: inline-flex; align-items: center; gap: 5px; }

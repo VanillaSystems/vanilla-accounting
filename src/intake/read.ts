@@ -19,7 +19,7 @@ import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
-import { mergeIndex, readStatementPdfs, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
@@ -193,7 +193,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   })));
 
   const wiseRefs = await readWiseReferences(ws, (msg) => log(`  warn: ${msg}`));
-  const bankStatements = readStatementPdfs(ws);
+  const statementFiles = readStatementFiles(ws);
   const invoices = loadInvoices(ws);
   const payments = paymentContext(ws);
 
@@ -234,7 +234,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     if (kept.length < now.transactions.length) {
       log(`  skipped ${now.transactions.length - kept.length} bank transaction(s) dated before ${before}, when the books open (config.openingBalances)`);
     }
-    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements });
+    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
     // Paid invoices first (ADR 0010): a payment with an invoice's reference is booked from the invoice, before classify sees it.
     const paid = payments ? matchPayments(index, invoices, payments) : undefined;

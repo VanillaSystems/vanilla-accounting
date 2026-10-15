@@ -38,6 +38,7 @@ function scan(over: Partial<Scan> = {}): Scan {
     receipts: [receipt('r-closed'), receipt('r-open')],
     bankTransactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10')],
     wiseRefs: new Map(),
+    camtBalances: [],
     bankStatements: [],
     ...over,
   };

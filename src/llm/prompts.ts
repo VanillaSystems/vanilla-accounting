@@ -123,6 +123,8 @@ interface TxInput {
   direction: string;
   description: string;
   bank: string;
+  /** Who paid or was paid, as the bank names them; the description often leaves it out. */
+  counterparty?: string;
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -176,6 +178,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
 10. Description rules:
    - MUST be in German
    - Format: "Wer, Was" — vendor first, then purpose, comma-separated
+   - "Wer" is the real name: the receipt's vendor, else the transaction's Counterparty. Never a role ("Kunde", "Mitarbeiter", "Mobilfunkanbieter") in place of a name you were given
    - Max 60 characters
    - NEVER use raw bank text like "Card Transaction Of..." or "Received Money From..." or "Issued By..." — always clean it up
    - No amounts in description (the amount is its own field)
@@ -264,7 +267,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 

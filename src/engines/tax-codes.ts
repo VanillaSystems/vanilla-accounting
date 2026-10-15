@@ -26,6 +26,12 @@ export interface TaxCodeEngine {
   sourceBoxes(info: TaxCodeInfo): BoxId[];
   /** By meaning: the first catalogue code that books a sale at `rate`. */
   saleAt(rate: number): string | undefined;
+  /** The prefix that makes a code a refund or reversal. */
+  negativePrefix: string;
+  /** Where a purchase's input tax goes, by the income section of its account. */
+  purchaseBoxes: TaxCodesData['purchaseBoxes'];
+  /** By meaning: the first catalogue code that deducts input tax at `rate` in `box` (no acquisition tax). */
+  purchaseAt(rate: number, box: BoxId): string | undefined;
   /** By meaning: the first catalogue code whose turnover is deducted in `box`. */
   deductedIn(box: BoxId): string | undefined;
 }
@@ -57,6 +63,9 @@ export function taxCodeEngine(data: TaxCodesData, turnoverBox: BoxId): TaxCodeEn
   return {
     named: Object.keys(data.codes),
     saleAt: (rate) => entries.find(([, m]) => m.revenue && m.rate === rate)?.[0],
+    negativePrefix: data.negativePrefix,
+    purchaseBoxes: data.purchaseBoxes,
+    purchaseAt: (rate, box) => entries.find(([, m]) => m.inputTax === box && !m.acquisition && m.rate === rate)?.[0],
     deductedIn: (box) => entries.find(([, m]) => m.deduction === box)?.[0],
     parse(code) {
       if (!code) return null;

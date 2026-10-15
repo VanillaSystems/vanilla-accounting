@@ -9,7 +9,7 @@ import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { accountForStatement } from '../../accounting/bank-accounts.js';
-import { mergeIndex, readStatementPdfs, readTransactions, readWiseReferences, statementPdf, withinBooks } from '../../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, statementPdf, withinBooks } from '../../books/bank-import.js';
 import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../../providers/camt053/camt053.js';
@@ -160,7 +160,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       // An upload adds: a payment no file holds any more stays until extract's rebuild decides.
       const lock = periodLock(books);
       const stay = books.transactions.filter((t) => t.source !== 'manual' && !freshRefs.has(t.ref) && !lock.isClosed(t.date));
-      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: readStatementPdfs(WS) });
+      const files = readStatementFiles(WS);
+      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: files.statements, camtBalances: files.balances });
       // The books keep their order; the new payments come after them.
       const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);

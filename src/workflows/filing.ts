@@ -29,6 +29,14 @@ export const filedXml = (ws: Workspace, key: string): string => join(yearPaths(w
 /** Where the prepared XML waits until the person filed it. */
 const preparedXml = (ws: Workspace, key: string): string => join(ws.paths.data, 'filing', `mwst-ech0217-${key}.xml`);
 
+/** What the XML step hands on: where the file is, for the person to upload it. */
+export interface PreparedXml { path: string; period: string; warnings: string[] }
+
+/** A period's XML as it is now: the filed one once the period is sealed, else the prepared one; undefined before either. */
+export function filingXml(ws: Workspace, key: string): string | undefined {
+  return [filedXml(ws, key), preparedXml(ws, key)].find((p) => existsSync(p));
+}
+
 export const FILING_ACTIONS: Record<string, Action> = {
   'accounting.tax.vat-return': {
     outcomes: ['ok'],
@@ -56,7 +64,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const path = preparedXml(ws, ret.period);
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, xml);
-      return { outcome: 'ok', output: { xml: { path, warnings } } };
+      const prepared: PreparedXml = { path, period: ret.period, warnings };
+      return { outcome: 'ok', output: { xml: prepared } };
     },
   },
   'books.seal': {

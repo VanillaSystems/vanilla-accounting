@@ -48,7 +48,7 @@ function writeState(ws: Workspace, state: YearCloseState): void {
 
 /** The bank's own balances: the month-end balances read off statement PDFs, and every camt.053 closing balance. */
 export function bankBalances(ws: Workspace, books: Books): BankBalance[] {
-  const fromPdf = (books.statementBalances ?? []).map((b) => ({ account: b.account, date: b.date, amount: b.amount, source: b.sourceFile }));
+  const fromPdf = (books.statementBalances ?? []).filter((b) => b.source !== 'camt').map((b) => ({ account: b.account, date: b.date, amount: b.amount, source: b.sourceFile }));
   const fromCamt = readBankStatements(ws).flatMap((f) => f.status !== 'read' ? [] : parseStatementBalances(f.statement, f.account.bank, f.file)
     .filter((s) => s.type === 'CLBD' && s.currency === f.account.currency)
     .map((s) => ({ account: f.account.account, date: s.date, amount: s.amount, source: s.sourceFile })));
