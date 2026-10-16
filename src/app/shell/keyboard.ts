@@ -35,6 +35,10 @@ export interface ShellKeys {
 
 const plain = (e: KeyboardEvent) => !e.metaKey && !e.ctrlKey && !e.altKey;
 
+/** What answers Enter and Space itself: a button or link (the KI sidebar's «+», r7h-25), a tab, a details summary. A list row (`role=option`) does not: its Enter is the area's (r8c-7). */
+const OWN_ENTER = 'button, a[href], [role="button"], [role="tab"], summary';
+export const takesOwnEnter = (target: { closest(selectors: string): unknown } | null | undefined): boolean => !!target?.closest?.(OWN_ENTER);
+
 export function useShellKeys(keys: ShellKeys) {
   const ref = useRef(keys);
   ref.current = keys;
@@ -56,8 +60,7 @@ export function useShellKeys(keys: ShellKeys) {
         if (e.key === 'Escape') { target!.blur(); focusSelectedRow(); }
         return;
       }
-      // A focused button or link takes its own Enter and Space (the KI sidebar's «+» opens its picker, r7h-25): never a page shortcut.
-      if ((e.key === 'Enter' || e.key === ' ') && target?.closest?.('button, a[href], [role="button"], [role="option"], [role="tab"], summary')) return;
+      if ((e.key === 'Enter' || e.key === ' ') && takesOwnEnter(target)) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && k.undo()) { e.preventDefault(); return; }
       if (gPending && plain(e) && /^[a-z]$/.test(e.key)) { endG(); if (k.area(e.key)) e.preventDefault(); return; }
       if (plain(e) && e.shiftKey && e.key === 'E') { e.preventDefault(); k.exportOpen(); return; }
