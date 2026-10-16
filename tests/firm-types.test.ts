@@ -18,6 +18,7 @@ import { loadChart } from '../src/workspace/chart.js';
 import { patchManifestText } from '../src/workspace/manifest-write.js';
 import { asQuarter, closesTheYear, nextQuarter, periodKeyOf, sealFile } from '../src/books/seal.js';
 import { entriesForReturn } from '../src/accounting/declarations.js';
+import { bookingDraft } from '../src/accounting/manual-booking.js';
 import { domesticSale } from '../src/accounting/sales-without-vat.js';
 import { booksOpenPeriod, isFilingKey } from '../src/accounting/periods.js';
 import { parseFiledReturn } from '../src/accounting/filed-return.js';
@@ -209,4 +210,20 @@ test('the sale question names what «mit MWST» books for each kind of firm: the
   setJurisdiction(ch, NOT_REGISTERED);
   assert.equal(domesticSale(), undefined);
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
+test('r8f-50: the hand form of a firm without input tax never prefills a receipt\'s rate: no code can come of it', () => {
+  const books = {
+    transactions: [{ ref: 'T1', bank: 'Raiffeisen', date: '2026-08-14', amount: 2131.1, currency: 'CHF', direction: 'DBIT' as const, description: 'Holzhandel' }],
+    receipts: [{ id: 'r1', filename: 'a.pdf', originalFilename: 'a.pdf', extractedText: '', extractionMethod: 'pdftotext' as const, fileSize: 1, indexedAt: '', location: 'archived' as const, currency: 'CHF', vatId: 'CHE-123.456.789', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 159.7, gross: 2131.1 }], description: 'Holzhandel, Eiche' }],
+    mappings: [{ transactionRef: 'T1', receiptId: 'r1' }],
+    journalEntries: [],
+  };
+  const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen' }];
+  setJurisdiction(ch, NET_RATE);
+  assert.equal(bookingDraft(books, 'T1', accounts)!.lines[0].vat, '', 'net tax rate: no input tax, the field stays empty');
+  setJurisdiction(ch, NOT_REGISTERED);
+  assert.equal(bookingDraft(books, 'T1', accounts)!.lines[0].vat, '', 'not registered: no codes at all');
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  assert.equal(bookingDraft(books, 'T1', accounts)!.lines[0].vat, '8.1', 'effective method: the rate waits for the account');
 });
