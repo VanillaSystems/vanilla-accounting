@@ -10,7 +10,7 @@ import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, moduleActor, periodLock, saveBooks, update, PERSON, type Books } from '../src/books/store.js';
-import { bookingDraft } from '../src/accounting/manual-booking.js';
+import { bookingDraft, inputTaxWithoutReceipt } from '../src/accounting/manual-booking.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { bookPayment } from '../src/server/edits.js';
 import { classifyStep } from '../src/intake/classify.js';
@@ -159,4 +159,11 @@ test('the draft: the bank on its side, the payment\'s amount and date, the recei
 
   const alone = bookingDraft({ ...books, journalEntries: [] }, 'T1', accounts)!;
   assert.deepEqual(alone.lines[0], { accountDebit: '', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe' }, 'no precedent: the rate waits for the account');
+});
+
+test('the hand form warns when a code would deduct input tax no receipt shows, and names the zero code (corner-8)', () => {
+  assert.equal(inputTaxWithoutReceipt('I81'), 'I0');
+  assert.equal(inputTaxWithoutReceipt('M81'), 'M0');
+  assert.equal(inputTaxWithoutReceipt('M26-2'), 'M0');
+  for (const code of ['I0', 'M0', 'V81', '-I81', 'B81-1', '', undefined, 'XYZ']) assert.equal(inputTaxWithoutReceipt(code), undefined, String(code));
 });

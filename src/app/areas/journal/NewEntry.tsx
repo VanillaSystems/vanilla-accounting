@@ -3,7 +3,7 @@
  * amount in CHF, VAT code and text, booked in the open period. A correction names the filed
  * quarter it corrects, so the Korrekturabrechnung (0535) declares it.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { localToday, parsePeriod, parseSwissDate } from '../../../accounting/periods.js';
 import { lookupVatCode } from '../../../accounting/vat-codes.js';
 import type { RouteOf } from '../../shell/route.js';
@@ -41,6 +41,8 @@ export function NewEntry(props: Props) {
   const [reverse, setReverse] = useState<boolean | undefined>(undefined);
   /** The person was told the entry moves a bank account without its payment, and books it anyway with a second ↵. */
   const [sure, setSure] = useState(false);
+  // A form started again (another kind of correction, a payment picked) is read once it is there.
+  useEffect(() => redraw((n) => n + 1), [round]);
   if (s.overlay?.kind !== 'new') return null;
   const d = s.overlay.draft;
   const close = () => { setSure(false); setUi({ overlay: null }); };
@@ -100,7 +102,7 @@ export function NewEntry(props: Props) {
       : !text ? t('journal.errText')
       : '';
     if (problem) { setErr(problem); return; }
-    if (moved.length && !sure) { setSure(true); setErr(t('journal.movesBankAgain')); return; }
+    if (!tx && banksMoved({ accountDebit: dr, accountCredit: cr }, isBankAccount).length && !sure) { setSure(true); setErr(t('journal.movesBankAgain')); return; }
     if (tx) {
       const entries = await bookPayment(nav, tx.ref, [{ accountDebit: dr, accountCredit: cr, amount: amount!, ...(vat && { vatCode: vat }), description: text }]);
       if (!entries?.length) return;
