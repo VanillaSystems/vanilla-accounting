@@ -343,6 +343,7 @@ export default {
     'yearClose.problem.balanceDiffers': '{label}: the books show {currency} {book}, the bank {currency} {bank} on {date}. A payment is missing or doubled.',
     'yearClose.problem.statementGap': '{label}: no statement for {from} to {to}.',
     'yearClose.problem.unbooked': { one: '{n} transaction of the year is not booked ({refs}).', other: '{n} transactions of the year are not booked ({refs}).' },
+    'yearClose.problem.unbookedLinked': { one: '{n} transaction of the year is not booked:', other: '{n} transactions of the year are not booked:' },
     'yearClose.problem.doctor': '{label}',
     'yearClose.problem.noRate': 'The ESTV rate of 31.12. for {currency} is not published yet. The exchange difference is booked once it is.',
     'yearClose.problem.fxToBook': '{account}: exchange difference CHF {difference} is not booked yet.',

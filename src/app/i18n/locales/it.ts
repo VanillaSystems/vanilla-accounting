@@ -343,6 +343,7 @@ export default {
     'yearClose.problem.balanceDiffers': '{label}: la contabilità mostra {currency} {book}, la banca {currency} {bank} al {date}. Un pagamento manca o è doppio.',
     'yearClose.problem.statementGap': '{label}: nessun estratto dal {from} al {to}.',
     'yearClose.problem.unbooked': { one: '{n} transazione dell’anno non è registrata ({refs}).', other: '{n} transazioni dell’anno non sono registrate ({refs}).' },
+    'yearClose.problem.unbookedLinked': { one: '{n} transazione dell’anno non è registrata:', other: '{n} transazioni dell’anno non sono registrate:' },
     'yearClose.problem.doctor': '{label}',
     'yearClose.problem.noRate': 'Il corso AFC del 31.12. per {currency} non è ancora pubblicato. La differenza di cambio è registrata non appena lo è.',
     'yearClose.problem.fxToBook': '{account}: differenza di cambio CHF {difference} non ancora registrata.',

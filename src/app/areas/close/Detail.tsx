@@ -22,6 +22,8 @@ import { useShellUi } from '../../shell/ui.js';
 import { configOf } from '../export/state.js';
 import { STEPS, stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
 import { correctionName } from '../../lib/vat-words.js';
+import { Go } from '../vat/links.js';
+import { at } from '../receipts/view.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -106,8 +108,9 @@ function goCheck(c: CheckRow, { nav, d }: StepProps): (() => void) | undefined {
 }
 
 function Checks(p: StepProps) {
-  const { d } = p;
+  const { d, books, nav } = p;
   const rows = checkRows(d, localToday());
+  const dateOf = (ref: string) => books.transactions.find((x) => x.ref === ref)?.date;
   const v = d.vat;
   return (
     <>
@@ -118,7 +121,11 @@ function Checks(p: StepProps) {
           const inner = (
             <>
               <span className="ic">{c.state === 'ok' ? I.check : c.state === 'warn' ? '!' : c.state === 'open' ? '○' : '·'}</span>
-              <span className="cx"><b>{c.label}</b><span>{c.detail}</span></span>
+              <span className="cx">
+                <b>{c.label}</b>
+                <span>{c.detail}</span>
+                {c.payments && <span className="chklinks">{c.payments.map((ref) => <Go key={ref} to={at({ area: 'bank', payment: ref }, dateOf(ref))} nav={nav} className="mono">{ref} →</Go>)}</span>}
+              </span>
               {go ? <span className="arr">→</span> : <span />}
             </>
           );

@@ -481,6 +481,9 @@ export interface Check {
   problems: Problem[];
 }
 
+/** The payments the «every transaction booked» check names (the first few, as the check lists them): the UI links each to its payment (r8c-10). */
+export const unbookedRefs = (checks: readonly Check[]): string[] => checks.flatMap((c) => c.problems.flatMap((p) => (p.code === 'unbooked' ? p.refs : [])));
+
 /** A bank's balance at a date, in the account's own currency, as its statement shows it. */
 export interface BankBalance { account: string; date: string; amount: number; source: string }
 

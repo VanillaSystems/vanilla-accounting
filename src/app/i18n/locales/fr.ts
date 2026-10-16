@@ -343,6 +343,7 @@ export default {
     'yearClose.problem.balanceDiffers': '{label} : la comptabilité montre {currency} {book}, la banque {currency} {bank} au {date}. Un paiement manque ou est à double.',
     'yearClose.problem.statementGap': '{label} : pas de relevé du {from} au {to}.',
     'yearClose.problem.unbooked': { one: '{n} transaction de l’année n’est pas comptabilisée ({refs}).', other: '{n} transactions de l’année ne sont pas comptabilisées ({refs}).' },
+    'yearClose.problem.unbookedLinked': { one: '{n} transaction de l’année n’est pas comptabilisée :', other: '{n} transactions de l’année ne sont pas comptabilisées :' },
     'yearClose.problem.doctor': '{label}',
     'yearClose.problem.noRate': 'Le cours AFC du 31.12. pour {currency} n’est pas encore publié. La différence de change est comptabilisée dès qu’il l’est.',
     'yearClose.problem.fxToBook': '{account}: différence de change CHF {difference} pas encore comptabilisée.',

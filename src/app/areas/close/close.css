@@ -54,3 +54,8 @@ button.chk:hover { background: var(--hover); }
 .ftab.vatq .fh, .ftab.vatq .fr { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(110px, auto)); }
 .ftab.sums .fr { grid-template-columns: minmax(0, 1fr) auto; }
 .ftab.open .fh, .ftab.open .fr { grid-template-columns: 64px minmax(0, 1fr) minmax(130px, auto); }
+
+/* The unbooked payments of the year, each a link (r8c-10). */
+.chk .chklinks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
+.chk .chklinks a { color: var(--accent); text-decoration: none; }
+.chk .chklinks a:hover { text-decoration: underline; }

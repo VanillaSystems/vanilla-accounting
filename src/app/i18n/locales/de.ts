@@ -340,6 +340,7 @@ export const messages = {
   'yearClose.problem.balanceDiffers': '{label}: die Buchhaltung zeigt {currency} {book}, die Bank {currency} {bank} per {date}. Eine Zahlung fehlt oder ist doppelt.',
   'yearClose.problem.statementGap': '{label}: kein Auszug für {from} bis {to}.',
   'yearClose.problem.unbooked': { one: '{n} Transaktion des Jahres ist nicht verbucht ({refs}).', other: '{n} Transaktionen des Jahres sind nicht verbucht ({refs}).' },
+  'yearClose.problem.unbookedLinked': { one: '{n} Transaktion des Jahres ist nicht verbucht:', other: '{n} Transaktionen des Jahres sind nicht verbucht:' },
   'yearClose.problem.doctor': '{label}',
   'yearClose.problem.noRate': 'Der ESTV-Kurs vom 31.12. für {currency} ist noch nicht publiziert. Die Kursdifferenz wird gebucht, sobald es ihn gibt.',
   'yearClose.problem.fxToBook': '{account}: Kursdifferenz CHF {difference} ist noch nicht gebucht.',

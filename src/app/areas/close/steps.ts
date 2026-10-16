@@ -2,7 +2,7 @@
  * The year-end in seven steps (docs/year-end.md), each step's state and the checks of step 2,
  * all read off the close the API computed. Texts in the user's language.
  */
-import type { Problem, YearClose } from '../../../accounting/year-close.js';
+import { unbookedRefs, type Problem, type YearClose } from '../../../accounting/year-close.js';
 import type { YearCloseView } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
@@ -48,12 +48,16 @@ export function sealedLabel(year: string): string {
 export const tx = t as unknown as (key: string, vars?: Record<string, string | number>) => string;
 const signed = (n: number) => `${n > 0 ? '+' : ''}${fmt(n)}`;
 
-export function problemText(p: Problem, year: string): string {
+/** The unbooked check's sentence when its refs are shown as links beside it. */
+type ShownProblem = Problem | { code: 'unbookedLinked'; count: number };
+
+export function problemText(p: ShownProblem, year: string): string {
   switch (p.code) {
     case 'q4NotFiled': return tx('yearClose.problem.q4NotFiled', { quarter: p.quarter, year });
     case 'balanceDiffers': return tx('yearClose.problem.balanceDiffers', { ...p, book: fmt(p.book), bank: fmt(p.bank), date: formatDate(p.date) });
     case 'statementGap': return tx('yearClose.problem.statementGap', { ...p, from: formatDate(p.from), to: formatDate(p.to) });
     case 'unbooked': return tx('yearClose.problem.unbooked', { n: p.count, refs: p.refs.join(', ') + (p.count > p.refs.length ? ', …' : '') });
+    case 'unbookedLinked': return tx('yearClose.problem.unbookedLinked', { n: p.count });
     case 'fxToBook': return tx('yearClose.problem.fxToBook', { account: p.account, difference: signed(p.difference) });
     case 'undecided': return tx('yearClose.problem.undecided', { templates: p.templates.map((id) => tx(`yearClose.template.${id}`)).join(', ') });
     case 'unbalanced': return tx('yearClose.problem.unbalanced', { residual: fmt(p.residual) });
@@ -74,7 +78,8 @@ export function causeText(c: Cause): string {
 /** Where a check leads: another step of the close, or another page. */
 export type Go = { step: Step } | { area: 'vat' | 'bank' | 'balance' };
 
-export interface CheckRow { id: string; state: State; label: string; detail: string; go?: Go }
+/** `payments`: the unbooked transactions' refs, each a link to its payment (r8c-10). */
+export interface CheckRow { id: string; state: State; label: string; detail: string; go?: Go; payments?: string[] }
 
 const yearOver = (year: string, today: string) => today > `${year}-12-31`;
 
@@ -82,7 +87,7 @@ const yearOver = (year: string, today: string) => today > `${year}-12-31`;
 export function checkRows(d: YearCloseView, today: string): CheckRow[] {
   const year = d.year;
   const over = yearOver(year, today);
-  const text = (ps: readonly Problem[]) => ps.map((p) => problemText(p, year)).join(' ');
+  const text = (ps: readonly ShownProblem[]) => ps.map((p) => problemText(p, year)).join(' ');
   const engine = d.checks.map((c): CheckRow => {
     const label = c.id === 'quartersSealed' ? sealedLabel(year) : tx(`yearClose.check.${c.id}`);
     if (c.status === 'ok') return { id: c.id, state: 'ok', label, detail: t('close.checkOk') };
@@ -92,7 +97,10 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
     const state: State = waits ? 'later' : sealedLater ? 'open' : 'warn';
     const go: Go | undefined = c.id === 'quartersSealed' || c.id === 'q4Filed' ? { area: 'vat' } : c.id === 'bankReconciled' || c.id === 'statementsComplete' ? { area: 'bank' } : undefined;
     const later = c.id === 'q4Filed' ? t('close.q4Later', { next: String(+year + 1) }) : c.id === 'bankReconciled' ? t('close.bankLater') : t('close.statementsLater');
-    return { id: c.id, state, label, detail: waits ? later : text(c.problems), go };
+    // The unbooked payments are links on the page (r8c-10): the sentence says the count, the links the refs.
+    const payments = c.id === 'allBooked' ? unbookedRefs([c]) : [];
+    const detail = waits ? later : payments.length ? text(c.problems.map((p): ShownProblem => (p.code === 'unbooked' ? { code: 'unbookedLinked', count: p.count } : p))) : text(c.problems);
+    return { id: c.id, state, label, detail, go, ...(payments.length && { payments }) };
   });
 
   const toBook = d.revaluations.filter((r) => r.status === 'to-book');
