@@ -16,7 +16,7 @@ import { join, sep } from 'node:path';
 import { parse } from 'yaml';
 import { hasBooks, loadBooks } from '../books/store.js';
 import {
-  identify, claims, merchantOf, signalsOfReceipt, uidsIn, TIERS, type Counterparty,
+  identify, claims, merchantOf, signalsOfReceipt, signalsOfTransaction, uidsIn, TIERS, type Counterparty,
 } from '../knowledge/counterparties.js';
 import {
   loadKnowledge, companySpecific, homeOf, RULES_DIR,
@@ -338,7 +338,7 @@ if (hasBooks(ws) && counterparties.length) {
   }
   for (const tx of index.transactions) {
     const merchant = merchantOf(tx.description);
-    const route = identify({ uids: [], domains: [], merchant, filenames: [] }, counterparties);
+    const route = identify(signalsOfTransaction(tx, []), counterparties);
     if (route.kind === 'ambiguous') clash(route, `${tx.ref} "${merchant}"`);
     if (route.kind === 'unknown' && tx.type !== 'wise-fee') {
       const key = merchant.toLowerCase().replace(/[\d*#]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);

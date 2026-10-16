@@ -60,6 +60,7 @@ test('a single TxDtls lends its remittance text and QR reference to the entry', 
     currency: 'CHF',
     direction: 'DBIT',
     description: 'Zahlung Beispiel Medien AG',
+    counterparty: 'Beispiel Medien AG',
     reference: '210000000003139471430009017',
   });
   assert.deepEqual(txs.find((t) => t.ref === '90000000001')?.direction, 'CRDT');
@@ -177,4 +178,11 @@ test('a single payment keeps the other party\'s IBAN: the debtor\'s on a credit,
   <RmtInf><Ustrd>Natel</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`));
   assert.equal(credit.counterpartyIban, 'LI00088100002324013AA');
   assert.equal(debit.counterpartyIban, 'CH0000762011623852957');
+});
+
+test('a single payment without remittance text keeps its counterparty even when the bank\'s text repeats the name (wishes3-17)', () => {
+  const [debit] = parse(ntry(`
+<Ntry><Amt Ccy="CHF">5200.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-25</Dt></BookgDt>
+  <NtryDtls><TxDtls><Refs><AcctSvcrRef>MR-1</AcctSvcrRef></Refs><RltdPties><Cdtr><Nm>Marco Rossi</Nm></Cdtr></RltdPties></TxDtls></NtryDtls><AddtlNtryInf>Belastung Marco Rossi</AddtlNtryInf></Ntry>`));
+  assert.deepEqual([debit.description, debit.counterparty], ['Belastung Marco Rossi', 'Marco Rossi']);
 });

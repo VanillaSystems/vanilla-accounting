@@ -110,7 +110,7 @@ test('what each bank shape reads as: QR batch parts, Ustrd lines, SCOR reference
   assert.equal(byRef('PF-NREF-0003')?.reference, 'RF19539007547034');
   assert.equal(byRef('KB-TX-0001')?.description, 'Lohn Juli 2026');
   assert.deepEqual(byRef('KB-STMT-0042#3'), {
-    ref: 'KB-STMT-0042#3', bank: 'BEKB', date: '2026-07-30', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Beispiel Telecom AG',
+    ref: 'KB-STMT-0042#3', bank: 'BEKB', date: '2026-07-30', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Beispiel Telecom AG', counterparty: 'Beispiel Telecom AG',
   });
   rmSync(ws.paths.root, { recursive: true, force: true });
 });

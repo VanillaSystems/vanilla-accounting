@@ -13,7 +13,7 @@
 import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
 
 /** Strongest first. The order is the routing precedence. */
-export const TIERS = ['uid', 'domain', 'tx', 'file'] as const;
+export const TIERS = ['uid', 'iban', 'domain', 'tx', 'file'] as const;
 export type Tier = (typeof TIERS)[number];
 
 /** What a business is to the company. Its main role is the folder of its file; `roles:` lists the others. */
@@ -23,9 +23,11 @@ export type Role = (typeof ROLES)[number];
 export interface Matchers {
   /** Swiss UID. Only list one that this counterparty alone prints (the lint proves it on the index). */
   uid: string[];
+  /** The IBAN it pays from or is paid to, as the bank statement names the other party (no spaces, any case). */
+  iban: string[];
   /** Sender email domain, at collection. */
   domain: string[];
-  /** Case-insensitive substring of the MERCHANT part of a bank description (see merchantOf). */
+  /** Case-insensitive substring of the bank's counterparty name or of the MERCHANT part of its description (see merchantOf). */
   tx: string[];
   /** Regex over the archived filename; weakest, because the name was suggested by a model. */
   file: RegExp[];
@@ -72,13 +74,20 @@ export type Routing =
   | { kind: 'ambiguous'; candidates: string[]; tier: Tier }
   | { kind: 'unknown' };
 
-/** What an item offers for routing. A transaction contributes its merchant; its linked receipts add uid and filename. */
+/**
+ * What an item offers for routing. A transaction contributes its names (the bank's counterparty
+ * field and the merchant of its text: a bank puts the name in either) and the other party's IBAN;
+ * its linked receipts add uid and filename.
+ */
 export interface Signals {
   uids: string[];
+  ibans: string[];
   domains: string[];
-  merchant?: string;
+  names: string[];
   filenames: string[];
 }
+
+const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 
 // Extraction wraps a UID across lines after "CHE-" on some invoices, or spaces its groups out.
 const UID_RE = /CHE[-\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})/g;
@@ -108,14 +117,15 @@ export function uidsIn(receipt: Pick<Receipt, 'vatId' | 'extractedText'>): strin
 }
 
 export function signalsOfReceipt(r: Receipt): Signals {
-  return { uids: uidsIn(r), domains: [], filenames: [r.filename] };
+  return { uids: uidsIn(r), ibans: [], domains: [], names: [], filenames: [r.filename] };
 }
 
 export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Signals {
   return {
     uids: linked.flatMap(uidsIn),
+    ibans: tx.counterpartyIban ? [ibanOf(tx.counterpartyIban)] : [],
     domains: [],
-    merchant: merchantOf(tx.description),
+    names: [tx.counterparty, merchantOf(tx.description)].filter((n): n is string => !!n?.trim()),
     filenames: linked.map((r) => r.filename),
   };
 }
@@ -124,8 +134,9 @@ export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Si
 export function claims(cp: Counterparty, tier: Tier, s: Signals): string | undefined {
   switch (tier) {
     case 'uid': return cp.match.uid.find((u) => s.uids.includes(u));
+    case 'iban': return cp.match.iban.find((i) => s.ibans.includes(ibanOf(i)));
     case 'domain': return cp.match.domain.find((d) => s.domains.some((x) => x === d || x.endsWith(`.${d}`)));
-    case 'tx': return s.merchant ? cp.match.tx.find((t) => s.merchant!.toLowerCase().includes(t.toLowerCase())) : undefined;
+    case 'tx': return cp.match.tx.find((t) => s.names.some((n) => n.toLowerCase().includes(t.toLowerCase())));
     case 'file': return cp.match.file.find((re) => s.filenames.some((f) => re.test(f)))?.source;
   }
 }
@@ -162,7 +173,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   const m = raw.match ?? {};
   for (const k of Object.keys(m)) if (!(TIERS as readonly string[]).includes(k)) fail(`match.${k} is not a signal — use ${TIERS.join(', ')}`);
   const match: Matchers = {
-    uid: m.uid ?? [], domain: m.domain ?? [], tx: m.tx ?? [],
+    uid: m.uid ?? [], iban: m.iban ?? [], domain: m.domain ?? [], tx: m.tx ?? [],
     file: (m.file ?? []).map((p) => new RegExp(p, 'i')),
   };
   if (TIERS.every((t) => match[t].length === 0)) fail('match needs at least one signal');

@@ -128,10 +128,10 @@ export function secretsOf(src: SecretSources): Secret[] {
 
   for (const cp of src.counterparties.filter((c) => !c.origin.vendor)) {
     for (const n of namesOf(cp)) add('private-counterparty', 'phrase', n);
-    for (const s of [...cp.match.uid, ...cp.match.domain]) add('private-counterparty', 'phrase', s);
+    for (const s of [...cp.match.uid, ...cp.match.iban, ...cp.match.domain]) add('private-counterparty', 'phrase', s);
   }
   for (const b of src.bindings) {
-    for (const s of [...(b.match?.tx ?? []), ...(b.match?.uid ?? []), ...(b.match?.domain ?? [])]) {
+    for (const s of [...(b.match?.tx ?? []), ...(b.match?.uid ?? []), ...(b.match?.iban ?? []), ...(b.match?.domain ?? [])]) {
       add('binding-signal', 'phrase', s);
     }
   }

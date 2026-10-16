@@ -37,7 +37,9 @@ it requires an API key, so it is not used.
    never seen?*
 2. **Code routes every item, deterministically**
    (`src/knowledge/counterparties.ts`: `merchantOf`, `identify`). Signal tiers
-   are uid > domain > tx > file, and the strongest tier that matches decides.
+   are uid > iban > domain > tx > file (tx: the bank's counterparty name or the
+   merchant of its text; iban: the other party's account), and the strongest
+   tier that matches decides.
    Exactly one match means known. Two or more means ambiguous, and the item goes
    to `new_case`. No match means unknown, and the item gets generic rules only.
    No model routes items, and an item never gets a guessed vendor context.

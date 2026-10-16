@@ -147,7 +147,8 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const named = single ? counterpartyOf(single).trim() : '';
     const sideAccount = single && (direction === 'DBIT' ? single.RltdPties?.CdtrAcct : single.RltdPties?.DbtrAcct);
     const counterpartyIban = String(sideAccount?.Id?.IBAN ?? '').replace(/\s+/g, '').toUpperCase();
-    const counterparty = named && !description.includes(named) ? named : '';
+    // Kept even when the text repeats it («Belastung Marco Rossi»): routing and rules read this field.
+    const counterparty = named;
 
     return {
       ref,

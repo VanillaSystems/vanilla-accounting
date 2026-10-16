@@ -189,3 +189,41 @@ test('an ask rule turns the next matching payment into a task «Frag: …», not
   assert.deepEqual(booked('REF-CASH-800').map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode, e.rule]), [['2451', '1021', 800, undefined, 'cash-ask']]);
   assert.equal(engine.run(asks[0].id)!.state.status, 'done');
 });
+
+/** The demo with a customer file whose rule books every payment of that customer (wishes3-1). */
+function withCustomer(match: string): Workspace {
+  const ws = company();
+  mkdirSync(join(ws.paths.root, 'knowledge', 'customers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'bauer-michael.yaml'), `id: bauer-michael
+name: Michael Bauer
+match: ${match}
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: bauer-export
+        then: { account: "3400", vat: V0 }
+        source: wish 2026-10-16
+`);
+  return ws;
+}
+
+test('a business\'s rule fires when the bank names the business only in the counterparty field, not in the text (wishes3-1)', async () => {
+  const ws = withCustomer('{ tx: ["bauer michael"] }');
+  const books = booksOf([tx({ ref: 'BAUER-1', direction: 'CRDT', amount: 6800, description: 'Rechnung 2026-033 Malerarbeiten Konstanz', counterparty: 'Bauer Michael' })]);
+  const m = model();
+  await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(m.asked, [], 'the rule decides, not the model');
+  assert.deepEqual(books.journalEntries.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode, e.rule]), [['1021', '3400', 6800, 'V0', 'bauer-export']]);
+});
+
+test('a business\'s rule fires on the payer\'s IBAN alone, when neither the text nor a name says who paid', async () => {
+  const ws = withCustomer('{ iban: ["DE00 3704 0044 0532 0130 00"] }');
+  const books = booksOf([
+    tx({ ref: 'BAUER-2', direction: 'CRDT', amount: 3200, description: 'Gutschrift', counterpartyIban: 'DE00370400440532013000' }),
+    tx({ ref: 'OTHER-1', direction: 'CRDT', amount: 3200, description: 'Gutschrift', counterpartyIban: 'DE00120300000000202051' }),
+  ]);
+  const m = model();
+  await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(books.journalEntries.filter((e) => e.rule).map((e) => [e.transactionRef, e.accountCredit, e.vatCode]), [['BAUER-2', '3400', 'V0']]);
+  assert.deepEqual(m.asked, ['OTHER-1'], 'another IBAN is not that customer');
+});

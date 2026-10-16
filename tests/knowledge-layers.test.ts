@@ -103,7 +103,7 @@ test('the app layer refuses one company’s items', () => {
 test('a payment to an authority routes to its app file, and each tells its facts', () => {
   const { counterparties } = loadKnowledge(APP_ROOT, DEMO_ROOT);
   const route = (merchant: string) => {
-    const r = identify({ uids: [], domains: [], merchant, filenames: [] }, counterparties);
+    const r = identify({ uids: [], ibans: [], domains: [], names: [merchant], filenames: [] }, counterparties);
     return r.kind === 'known' ? r.counterparty : r.kind;
   };
   assert.equal(route('Eidg. Steuerverwaltung ESTV, Hauptabteilung MWST'), 'estv');
