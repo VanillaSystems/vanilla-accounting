@@ -104,13 +104,41 @@ bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search onl
      conversation only.
 - **«Mit KI ändern…»** on any object opens the sidebar with that object as context.
 
-**What it changes.** A change to the books (a receipt's date, amount, currency, description or
-VAT; a link between a receipt and a payment; a booking's accounts, VAT code, amount, date or
-text; a new booking on a payment; a booking deleted) is made at once and shows in the answer as a
-card with **Rückgängig**. The AI never writes the books' files: it names the changes at the end
-of its answer, and the app checks them and makes them all in one write, or none and says why in
-the person's language (src/assistant/changes.ts, `applyAnswer` in src/server/edits.ts). It
-refuses an answer that
+**What it knows.** The prompt carries a map of the app (src/server/app-map.ts, given to the prompt by the route): every area,
+every section of Firma and the export dialog, by the names on screen in the person's language,
+with its path, what a person does there and which changes the sidebar makes there. The map is
+keyed by the app's own lists (the areas, `COMPANY_SECTIONS`, the export presets), so a new area or
+section does not compile without its line, and tests/assistant-app-map.test.ts checks every area
+folder is one of them (wishes test 2026-10-15: the sidebar said the app writes no invoices, has no
+payment term and no export package, while Rechnungen, Firma › Rechnungslayout and Exportieren
+exist). It never points to a place outside the map.
+
+**What it changes.** The AI never writes these files: it names the changes at the end of its
+answer, and the app checks them and makes them all, or none and says why in the person's language
+(src/assistant/changes.ts; `applyAnswer` in src/server/edits.ts for the books,
+src/server/workspace-edits.ts for the rest, src/server/routes/assistant.ts in between). Each shows
+in the answer as a card with **Zeigen** (it opens what changed) and **Rückgängig**:
+
+- **The books:** a receipt's date, amount, currency, description or VAT; a link between a receipt
+  and a payment; a receipt's kind (a duplicate or no receipt at all: its links go and its
+  payments are booked again, as «ist dasselbe» does; Rückgängig links it again); a booking's
+  accounts, VAT code, amount, date or text; a new booking on a payment; a booking deleted.
+- **The chart:** an account added or renamed (Firma › Kontenplan). It is made before the bookings
+  of the same answer, so a booking may go on it; Rückgängig of an account the answer added takes
+  the answer's bookings on it back too. The chart is never drafted (wishes test w12: bookings
+  pointed at an account that existed only in a draft).
+- **The invoicing settings** (Firma › Rechnungslayout): the payment term, which also goes to every
+  customer who had the old one (as the field there does by hand), and per language the texts above
+  and below the table and of the e-mail. Made at once, no detour through Änderungen: the owner
+  wants one click, and the card says plainly what is set now.
+- **An invoice draft** (Rechnungen): for a customer, or for a new one added with it. The person
+  issues and sends it; the AI never does. Rückgängig deletes the draft and a customer added with it.
+- **An export** (a preset of the export dialog, e.g. the Treuhänder-Paket of a quarter): packed
+  into data/exports/, the card downloads it and names where it lies. Nothing to undo.
+- **Booking again** («buch alles neu»): the inbox run books every open payment without a booking,
+  as it does on its own; the AI never relinks by hand for that. Nothing to undo.
+
+It refuses an answer that
 
 - touches a filed quarter, as any edit does;
 - dates a payment's booking off the payment's date: the VAT is reported on payments received, so
@@ -120,18 +148,24 @@ refuses an answer that
 - changes what a payment's bookings move on its bank account and leaves them not adding up to
   what the bank paid. A private share is a split: the business part changed and the private part
   added on the owner's account (the Kontokorrent of a GmbH or AG, the Privatkonto of an
-  Einzelfirma), without a VAT code, in one answer.
+  Einzelfirma), without a VAT code, in one answer;
+- books on an account the chart does not have (unless the same answer adds it);
+- takes back a change an earlier answer of the conversation made: that change's own Rückgängig
+  does it (wishes test w06 relinked a photo the person had asked to remove);
+- links a receipt a person set aside as a duplicate or no receipt.
+
+A purchase code follows the account a booking lands on (`codeOnAccount` in
+src/accounting/vat-codes.ts, rule pv-prefix-from-account): moved to material or goods it takes M,
+to operating costs or an investment I, with its rate and sign; the card says «MWST-Code folgt dem
+Konto: I81 → M81» (wishes test w02 put M81 on 6100 Unterhalt).
 
 A person's own edits in Buchungen keep their freedom: a split by hand is two edits with a gap
 between them, and a correction may hang on a payment with a date of its own. **Rückgängig** on
 one booking of a payment takes back the answer's other changes on that payment with it, so its
 bookings add up again. A vague wish («mach alles richtig») gets a short question back with what
-the AI would do; it never takes back an earlier change of its own without saying so, and never
-points to a button it has not seen. A change to how the app works (rules, workflows, knowledge,
-settings) lands under Änderungen, unsaved ([saving.md](saving.md)).
-
-The app window does not scroll as a page: the list, the detail and the sidebar each scroll on
-their own, so the composer and the dock stay in place.
+the AI would do; it never takes back an earlier change or a person's own correction without
+naming it. A change to how the app works (rules, workflows, knowledge) lands under Änderungen,
+unsaved ([saving.md](saving.md)).
 
 ## Status, top right
 

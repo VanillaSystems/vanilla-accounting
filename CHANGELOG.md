@@ -14,7 +14,14 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- The KI sidebar knows the whole app and does what its areas do. It carries a map of every area, every Firma section and the export dialog, by the names you see, and no longer says the app writes no invoices or has no payment term. From the sidebar it now writes an invoice draft (for a customer, or a new one), sets the payment term and the invoice texts per language (Firma › Rechnungslayout, at once; the term also for every customer who had the old one), adds or renames an account of the chart (before the bookings that need it, in the same answer), sets a receipt aside as a duplicate or no receipt (its links go, its payment is booked again), packs an export preset such as the Treuhänder-Paket for download, and books again what is open through the inbox run. Each shows as a card with «Zeigen» and, where it can be taken back, «Rückgängig». Wishes test w07, w12, w13, w15, w16, w18.
+- Firma › Rechnungslayout has «Zahlungsfrist in Tagen» after setup too; a new term also goes to every customer who had the old one.
+
 ### Fixed
+- The KI sidebar's VAT code follows the account: a booking moved to material or goods takes M, to operating costs or an investment I, with its rate, and the card says so. Wishes test w02.
+- The KI sidebar never takes back a change an earlier answer of the conversation made (that change's «Rückgängig» does), never links a receipt you set aside as a duplicate, and never books on an account the chart lacks. «buch alles neu» books through the inbox run instead of relinking by hand. Wishes test w03, w06, w12.
 
 - A bank payment can be booked by hand, without the AI, right where it shows: Kontoauszüge (the chosen payment), the task «Bewegung von Hand buchen» and a receipt's payment section carry a form with Soll, Haben (the bank already on its side), MWST (a code, or a rate such as «8.1» that becomes the code of the accounts), amount and text, on the payment's date. It opens with what rules decide: the account of the same vendor's last booking and the receipt's VAT rate. A payment splits into several lines (a Skonto, a second rate, a private share) and books only when they add up to it; ↵ books, Tab goes from field to field. The entries are a person's (`origin: manual`) with the receipts linked now, so later runs keep them. The task's «Gebucht» completes only once the payment holds a booking; without one it leads to the form, and the workflow puts the task back. API: `POST /api/transactions/:ref/entries` with `lines`. Account fields keep Tab in order (their list was a tab stop). Persona findings treuhaender-8, -9.
 - Rechnungen: every choice on the invoice sheet is saved: unit, MWST rate, customer and the reason for 0 %. Before, the select showed the new value and nothing was stored, so an invoice could be issued with a rate the screen did not show. Persona findings invoices-6, invoices-17.
