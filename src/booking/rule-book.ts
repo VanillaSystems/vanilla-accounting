@@ -81,7 +81,7 @@ export function chartNames(chartText: string): Map<string, string> {
 export function factsOf(accounts: ReadonlyMap<string, string>, businesses: ReadonlySet<string>): RuleFacts {
   return {
     account: (n) => accounts.has(n),
-    vat: (code) => !!lookupVatCode(code) && formTakes(code),
+    vat: (code) => (!lookupVatCode(code) ? 'unknown' : formTakes(code) ? 'taken' : 'notTaken'),
     counterparty: (id) => businesses.has(id),
   };
 }

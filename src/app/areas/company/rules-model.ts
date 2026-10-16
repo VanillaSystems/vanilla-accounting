@@ -50,6 +50,7 @@ export function ruleLines(view: RulesView, w: RuleWords, money: (n: number) => s
 }
 
 /** The dictionary key and values that say why a rule cannot be carried out. */
-export function refusalKey(r: RuleRefusal): { key: `rules.refuse.${RuleRefusal['code']}`; vars: Record<string, string> } {
+export function refusalKey(r: RuleRefusal): { key: `rules.refuse.${Exclude<RuleRefusal['code'], 'codeNotTaken'>}` | 'rules.refuse.codeNotTaken.none' | 'rules.refuse.codeNotTaken.netRate'; vars: Record<string, string> } {
+  if (r.code === 'codeNotTaken') return { key: r.params.method === 'none' ? 'rules.refuse.codeNotTaken.none' : 'rules.refuse.codeNotTaken.netRate', vars: { vat: r.params.vat } };
   return { key: `rules.refuse.${r.code}`, vars: 'params' in r ? r.params as Record<string, string> : {} };
 }

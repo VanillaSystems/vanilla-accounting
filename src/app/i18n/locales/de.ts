@@ -2901,6 +2901,8 @@ export const messages = {
   'rules.refuse.account': 'das Konto «{account}» gibt es im Kontenplan nicht',
   'rules.refuse.unplaced': "das Konto {account} zeigen weder Bilanz noch Erfolgsrechnung: eine Nummer der Klassen {classes} nehmen",
   'rules.refuse.vat': 'MWST-Code «{vat}» fehlt oder gibt es nicht (none für ohne MWST)',
+  'rules.refuse.codeNotTaken.none': 'den MWST-Code «{vat}» gibt es in dieser Firma nicht: sie ist nicht im MWST-Register eingetragen und bucht brutto, ohne Codes (none)',
+  'rules.refuse.codeNotTaken.netRate': 'den MWST-Code «{vat}» nimmt das Formular der Saldosteuersatzmethode nicht: Einkäufe ohne Code (none), Verkäufe mit dem Saldosteuersatz-Code der Firma (F1, F2)',
   'rules.refuse.pattern': 'der Text «{text}» ist kein gültiges Muster',
   'rules.refuse.amount': 'der Betrag braucht über und/oder unter, über kleiner als unter',
   'rules.refuse.share': 'der private Anteil «{share}» ist kein Prozent zwischen 0 und 100, oder es fehlen Konto und MWST für den Rest',

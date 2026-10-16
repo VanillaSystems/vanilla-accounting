@@ -2904,6 +2904,8 @@ export default {
     'rules.refuse.account': 'le compte «{account}» n’existe pas dans le plan comptable',
     'rules.refuse.unplaced': "ni le bilan ni le compte de résultat n’affichent le compte {account} : prendre un numéro des classes {classes}",
     'rules.refuse.vat': 'code TVA «{vat}» manquant ou inconnu (none pour sans TVA)',
+    'rules.refuse.codeNotTaken.none': 'le code TVA «{vat}» n’existe pas dans cette entreprise: elle n’est pas inscrite au registre TVA et comptabilise brut, sans codes (none)',
+    'rules.refuse.codeNotTaken.netRate': 'le formulaire de la méthode des taux de la dette fiscale nette ne prend pas le code TVA «{vat}»: achats sans code (none), ventes avec le code du taux de l’entreprise (F1, F2)',
     'rules.refuse.pattern': 'le texte «{text}» n’est pas un motif valable',
     'rules.refuse.amount': 'le montant demande plus de et/ou moins de, le premier plus petit',
     'rules.refuse.share': 'la part privée «{share}» n’est pas un pourcentage entre 0 et 100, ou le compte et la TVA du reste manquent',

@@ -26,6 +26,10 @@ import { assistantSystem } from '../src/assistant/claude.js';
 import { appMap } from '../src/server/app-map.js';
 import type { AssistantEvent, Conversation, Turn } from '../src/types/assistant.js';
 import './support/jurisdiction.js';
+import { loadJurisdiction } from '../src/core/modules/load.js';
+import { setJurisdiction } from '../src/engines/index.js';
+import { APP_ROOT } from '../src/workspace/workspace.js';
+import { NOT_REGISTERED } from '../src/workspace/vat-setup.js';
 
 const REPO = process.cwd();
 const log = mkdtempSync(join(tmpdir(), 'assistant-honesty-'));
@@ -152,6 +156,25 @@ test('a payer rule reads with the payer\'s name, not its key (3, r4w-8)', () => 
   const said = ruleWords({ rule: { id: 'sale-x', when: { payer: 'familiekeller', direction: 'in' }, then: { kind: 'book', booking: { account: '3400', vat: 'V81' } } } as never },
     { account: () => undefined, business: () => undefined, payer: (k) => names[k], money: String }, (k, v) => `${k}:${JSON.stringify(v)}`);
   assert.match(said.when, /"payer":"Familie Keller"/);
+});
+
+test('the prompt tells the model which codes the firm takes: none when not registered (no code in a booking, a rule or an invoice text; refuse, draft nothing), the form\'s own on the net tax rate method (r7f-32, r7f-37)', () => {
+  const { jurisdiction } = loadJurisdiction(APP_ROOT, 'ch');
+  try {
+    setJurisdiction(jurisdiction, NOT_REGISTERED);
+    const none = assistantSystem('de', '2850 Privat', '', 10);
+    assert.match(none, /not registered for VAT[^\n]*no VAT code/i);
+    assert.match(none, /never (draft|write) a rule[^\n]*(VAT )?code/i, 'a rule wish with a code is refused, not drafted');
+    assert.match(none, /invoice[^\n]*(no VAT|without VAT)/i, 'no «mit MWST» invoice texts for this firm');
+    setJurisdiction(jurisdiction, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] });
+    const net = assistantSystem('de', '2451 Kontokorrent', '', 10);
+    assert.match(net, /net tax rate method[^\n]*F1/, 'names the firm\'s codes');
+    assert.match(net, /no input tax/i);
+  } finally {
+    setJurisdiction(jurisdiction);
+  }
+  const effective = assistantSystem('de', '2451 Kontokorrent', '', 10);
+  assert.doesNotMatch(effective, /not registered for VAT:|net tax rate method:/, 'the effective firm hears neither');
 });
 
 test('the invoice texts are quoted as they read, with the company\'s term, never with an unfilled {days} (3, w16)', () => {

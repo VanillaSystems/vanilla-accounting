@@ -83,7 +83,7 @@ const lines = (books: Books, ref: string) => books.journalEntries.filter((e) => 
   .map((e: JournalEntry) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
 
 test('a payout rule parses, says itself in plain words, and is refused with a private share, as a question or without the fees\' code', () => {
-  const facts: RuleFacts = { account: () => true, vat: (c) => ['V81', 'I0'].includes(c), counterparty: () => true };
+  const facts: RuleFacts = { account: () => true, vat: (c) => (['V81', 'I0'].includes(c) ? 'taken' : 'unknown'), counterparty: () => true };
   const r = parseRule({ id: 's', when: { text: 'SumUp' }, then: { account: '3400', vat: 'V81', fees: { account: '6840', vat: 'I0' } } }, facts);
   assert.ok(r.ok);
   assert.deepEqual(r.rule.then, { kind: 'book', booking: { account: '3400', vat: 'V81', fees: { account: '6840', vat: 'I0' } } });

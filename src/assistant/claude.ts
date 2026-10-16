@@ -22,6 +22,8 @@ import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { claudeCommand, NoClaudeError, record, type Model } from '../llm/ask.js';
 import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
+import { firmCodes } from '../accounting/vat-codes.js';
+import { withoutInputTax } from '../engines/index.js';
 import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
 import { wordsIn } from '../export/texts.js';
 import { FEW_PAYMENTS } from './held.js';
@@ -45,6 +47,24 @@ const DEFAULT_TERM = 30;
  * `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount); `map`: the app's places in the person's language;
  * `term`: the company's payment term in days, which the app's own invoice texts are quoted with, as the person reads them.
  */
+/**
+ * Which VAT codes this firm books with, when not every code: none for a firm not registered, the
+ * form's own on the net tax rate method. The app refuses a booking, a rule or an invoice with
+ * another code; the model hears it first, so it refuses such a wish itself and drafts nothing
+ * (r7f-32, r7f-37). Empty on the effective method.
+ */
+function firmCodesNote(): string {
+  const method = withoutInputTax();
+  if (method === 'none') {
+    return 'This firm is not registered for VAT: no VAT code exists in its books, whatever a receipt shows. Never write a VAT code into a booking ("vatCode" stays empty), never draft a rule with a code (its "vat" is none), and never offer or write invoice texts that mention VAT: its invoices carry no VAT. A wish for a code, also as a rule, is answered with this reason and nothing drafted.';
+  }
+  if (method === 'net-rate') {
+    const codes = firmCodes().map((c) => c.code).join(', ');
+    return `This firm is on the net tax rate method: its form takes only ${codes}. A sale is booked gross with the firm's rate code (F1, F2), a purchase without a code (a rule's "vat" is none): there is no input tax to deduct, so never set an input-tax code (I, M) on a booking or in a rule. A wish for one is answered with this reason and nothing drafted.`;
+  }
+  return '';
+}
+
 export function assistantSystem(language: string, owner: string, map: string, term = DEFAULT_TERM): string {
   const { t } = wordsIn(language);
   return [
@@ -75,6 +95,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
     `The VAT is reported on payments received (cash basis): a booking of a payment carries the payment's date, also when the invoice is older, and its VAT belongs to the quarter of the payment. Never move such a booking to another date, and never offer to; the app refuses it. Only bookings on the payout clearing account ${SHOPIFY_ACCOUNT} take the order's date.`,
     'The bookings of a payment add up to what the bank paid. To split one (e.g. half private), change the first and add the other part with "newEntry" on the same payment and date, in the same block; the app refuses a block that leaves a payment\'s bookings not adding up.',
     'A filed period (dated on or before config.closedThrough; a quarter, or a half year on the net tax rate method) never changes: say so, and that a correction is booked in the open period.',
+    firmCodesNote(),
     'The VAT setup (registered or not, method, period, rate; the company\'s VAT section) holds for whole years: the app refuses a change while the open year has bookings, and allows it from 1 January after the year close. A firm that passed the registration threshold registers with the tax authority and is usually liable from the following 1 January (the authority\'s ruling names the date): say so instead of sending the person to change the setup now.',
     'A firm the tax authority registered from a date inside the year (its ruling names the date: a new firm, a voluntary registration) charges VAT on every invoice and owes it from that date on, whatever the setup here says: never tell such a person that they show no VAT or owe none after their registration date. The app cannot keep a year split at that date yet: say that the registration date rules, that the books of this year belong to the accountant (Treuhänder) or are set up anew from that date, and that the setup here changes on 1 January after the year close.',
     `Invoices: "invoiceDraft" writes a draft for a customer of invoices.json ("customer": its id), or for a new one ("newCustomer": {"name","address":{"street","number","postcode","town","country"},"language"} instead of "customer"); unit is one of h, day, pcs, flat, km; prices are net. The person issues and sends it in Rechnungen; you never do. "invoicing" changes the settings of every invoice: "paymentTermsDays" (also for each customer who had the old term) and per language the texts "salutation", "intro", "closing", "mailSubject", "mailBody" (null: the app's own text again; {days} is the customer's payment term). "salutation" is the greeting line above the intro, none unless set: a greeting («Grüezi», «Sehr geehrte Damen und Herren») goes there and never replaces the intro. Change a text only as far as asked: Read the current one first (belege.workspace.yaml invoicing.texts, where {days} stands for the term; else the app's own, as they read with the company's term of ${term} days: ${JSON.stringify(Object.fromEntries((['de', 'fr', 'it', 'en'] as const).map((l) => [l, { intro: TEXTS[l].intro, closing: TEXTS[l].closing(term) }])))}) and keep the rest of it word for word, with {days} where the term goes; never claim it said what it does not say.`,

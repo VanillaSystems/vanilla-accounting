@@ -118,7 +118,7 @@ test('a rule switched off decides nothing; a rule written as sentences loads as 
 });
 
 test('a business\'s own rule holds only for a payment that routes to that business', () => {
-  const facts: RuleFacts = { account: () => true, vat: () => true, counterparty: () => true };
+  const facts: RuleFacts = { account: () => true, vat: () => 'taken', counterparty: () => true };
   const parsed = parseRule({ id: 'post', then: { account: '6513', vat: 'I81' } }, facts, true);
   assert.ok(parsed.ok);
   const rules: PlacedRule[] = [{ rule: parsed.rule, business: 'swiss-post' }];
@@ -129,7 +129,7 @@ test('a business\'s own rule holds only for a payment that routes to that busine
 });
 
 test('what a rule cannot carry out is refused, each with its reason', () => {
-  const facts: RuleFacts = { account: (n) => ['6200', '2451'].includes(n), vat: (c) => ['I81'].includes(c), counterparty: (id) => id === 'swisscom' };
+  const facts: RuleFacts = { account: (n) => ['6200', '2451'].includes(n), vat: (c) => (c === 'I81' ? 'taken' : c === 'M81' ? 'notTaken' : 'unknown'), counterparty: (id) => id === 'swisscom' };
   const why = (raw: Record<string, unknown>, inBusiness = false) => { const r = parseRule(raw, facts, inBusiness); return r.ok ? 'ok' : r.refusal.code; };
   assert.equal(why({ id: 'a', when: 'cash over 500', then: 'ask the owner first' }), 'prose');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { schedule: 'weekly' } }), 'field');
@@ -137,6 +137,8 @@ test('what a rule cannot carry out is refused, each with its reason', () => {
   assert.equal(why({ id: 'a', then: { account: '6200', vat: 'I81' } }, true), 'ok', 'a business\'s rule has its business');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '9999', vat: 'I81' } }), 'account');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'Q7' } }), 'vat');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '4000', vat: 'M81' } }), 'codeNotTaken', 'a code the firm\'s form does not take is the reason, before an account the chart lacks (r7f-32)');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'none' } }), 'ok', 'without a code is always the firm\'s');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200' } }), 'vat', 'a booking names its VAT code, or none');
   assert.equal(why({ id: 'a', when: { text: '(' }, then: { account: '6200', vat: 'I81' } }), 'pattern');
   assert.equal(why({ id: 'a', when: { amount: { over: 500, under: 100 } }, then: { ask: 'Wofür?' } }), 'amount');
@@ -149,7 +151,7 @@ test('what a rule cannot carry out is refused, each with its reason', () => {
 });
 
 test('a rule reads in one plain line', () => {
-  const facts: RuleFacts = { account: () => true, vat: () => true, counterparty: () => true };
+  const facts: RuleFacts = { account: () => true, vat: () => 'taken', counterparty: () => true };
   const r = parseRule({ id: 'a', when: { text: 'Bargeldbezug|Bancomat', direction: 'out', amount: { over: 500 } }, then: { ask: 'Wofür?', account: '2451', vat: 'none' } }, facts);
   assert.ok(r.ok);
   const words = (k: string, v: Record<string, string>) => `${k.split('.').pop()}(${Object.values(v).join(';')})`;
@@ -254,7 +256,7 @@ test('a rule with a private share books two lines that add up to the payment: th
 });
 
 test('a private share that is no percent is refused', () => {
-  const facts: RuleFacts = { account: () => true, vat: () => true, counterparty: () => true };
+  const facts: RuleFacts = { account: () => true, vat: () => 'taken', counterparty: () => true };
   const why = (then: Record<string, unknown>) => { const r = parseRule({ id: 'a', when: { text: 'x' }, then }, facts); return r.ok ? r.rule.then : r.refusal.code; };
   assert.deepEqual(why({ account: '6570', vat: 'I81', private: '50 %' }), { kind: 'book', booking: { account: '6570', vat: 'I81', private: 50 } });
   assert.equal(why({ account: '6570', vat: 'I81', private: 100 }), 'share');

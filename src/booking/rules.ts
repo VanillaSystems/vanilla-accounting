@@ -28,7 +28,7 @@
  */
 import type { BankTransaction } from '../types/index.js';
 import { ibanKey, isGenericText, isPayer } from '../knowledge/payer.js';
-import { chart } from '../engines/index.js';
+import { chart, withoutInputTax } from '../engines/index.js';
 
 export const RULE_STEP = 'booking.guide.yaml#classify';
 /** The step's id inside knowledge/rules/booking.guide.yaml. */
@@ -77,6 +77,8 @@ export type RuleRefusal =
   /** An account the Bilanz and the Erfolgsrechnung do not show (a closing class such as 9xxx). */
   | { code: 'unplaced'; params: { account: string; classes: string } }
   | { code: 'vat'; params: { vat: string } }
+  /** A code the firm's form does not take (formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
+  | { code: 'codeNotTaken'; params: { vat: string; method: 'none' | 'net-rate' } }
   | { code: 'pattern'; params: { text: string } }
   | { code: 'amount' }
   | { code: 'share'; params: { share: string } }
@@ -87,10 +89,13 @@ export type RuleRefusal =
 
 export type RefusalCode = RuleRefusal['code'];
 
+/** Whether a VAT code is one the firm books with: unknown to the app, or known but not taken by this firm's form. */
+export type VatTaken = 'taken' | 'unknown' | 'notTaken';
+
 /** What the rule's `then` and `when` may name: the chart, the VAT codes, the businesses. */
 export interface RuleFacts {
   account(number: string): boolean;
-  vat(code: string): boolean;
+  vat(code: string): VatTaken;
   counterparty(id: string): boolean;
 }
 
@@ -152,15 +157,23 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
   }
   if (!inBusiness && !Object.keys(when).length) return no({ code: 'noCondition' });
 
+  // The code before the account: a code this firm cannot book with is the reason the person must hear, whatever the account (r7f-32).
+  const code = (v: string | undefined): RuleRefusal | undefined => {
+    if (!v) return { code: 'vat', params: { vat: '' } };
+    const taken = facts.vat(v);
+    if (taken === 'unknown') return { code: 'vat', params: { vat: v } };
+    if (taken === 'notTaken') return { code: 'codeNotTaken', params: { vat: v, method: withoutInputTax() ?? 'none' } };
+    return undefined;
+  };
   let booking: RuleBooking | undefined;
   if (t.account !== undefined || t.vat !== undefined) {
+    const v = text(t.vat);
+    const refused = v?.toLowerCase() === 'none' ? undefined : code(v);
+    if (refused) return no(refused);
     const account = text(t.account);
     if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.account ?? '') } });
     if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
-    const v = text(t.vat);
-    if (!v) return no({ code: 'vat', params: { vat: '' } });
-    if (v.toLowerCase() !== 'none' && !facts.vat(v)) return no({ code: 'vat', params: { vat: v } });
-    booking = { account, vat: v.toLowerCase() === 'none' ? null : v };
+    booking = { account, vat: v!.toLowerCase() === 'none' ? null : v! };
   }
   if (t.private !== undefined) {
     const share = typeof t.private === 'number' ? t.private : Number(String(t.private).replace(/\s*%$/, ''));
@@ -170,12 +183,13 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
   if (t.fees !== undefined) {
     // A payout's split: the sales and the fees of one payout, never with a private share, never only proposed.
     if (!booking || booking.private || t.ask !== undefined || !isMap(t.fees)) return no({ code: 'fees' });
+    const v = text(t.fees.vat);
+    const refused = code(v);
+    if (refused) return no(refused);
     const account = text(t.fees.account);
     if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.fees.account ?? '') } });
     if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
-    const v = text(t.fees.vat);
-    if (!v || !facts.vat(v)) return no({ code: 'vat', params: { vat: v ?? '' } });
-    booking.fees = { account, vat: v };
+    booking.fees = { account, vat: v! };
   }
   let then: RuleThen;
   if (t.ask !== undefined) {

@@ -2904,6 +2904,8 @@ export default {
     'rules.refuse.account': 'il conto «{account}» non esiste nel piano dei conti',
     'rules.refuse.unplaced': "né il bilancio né il conto economico mostrano il conto {account}: usare un numero delle classi {classes}",
     'rules.refuse.vat': 'codice IVA «{vat}» mancante o sconosciuto (none per senza IVA)',
+    'rules.refuse.codeNotTaken.none': 'il codice IVA «{vat}» non esiste in questa ditta: non è iscritta al registro IVA e registra al lordo, senza codici (none)',
+    'rules.refuse.codeNotTaken.netRate': 'il modulo del metodo delle aliquote saldo non prende il codice IVA «{vat}»: acquisti senza codice (none), vendite con il codice dell’aliquota saldo della ditta (F1, F2)',
     'rules.refuse.pattern': 'il testo «{text}» non è un modello valido',
     'rules.refuse.amount': 'l’importo richiede oltre e/o sotto, oltre minore di sotto',
     'rules.refuse.share': 'la quota privata «{share}» non è una percentuale tra 0 e 100, oppure mancano conto e IVA per il resto',

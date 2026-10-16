@@ -2904,6 +2904,8 @@ export default {
     'rules.refuse.account': 'there is no account «{account}» in the chart',
     'rules.refuse.unplaced': "neither the balance sheet nor the income statement shows account {account}: use a number of classes {classes}",
     'rules.refuse.vat': 'VAT code «{vat}» is missing or unknown (none for no VAT)',
+    'rules.refuse.codeNotTaken.none': 'this firm has no VAT code «{vat}»: it is not registered for VAT and books gross, without codes (none)',
+    'rules.refuse.codeNotTaken.netRate': 'the net tax rate method\'s form does not take the VAT code «{vat}»: purchases without a code (none), sales with the firm\'s net rate code (F1, F2)',
     'rules.refuse.pattern': 'the text «{text}» is not a valid pattern',
     'rules.refuse.amount': 'the amount needs over and/or under, over below under',
     'rules.refuse.share': 'the private share «{share}» is not a percent between 0 and 100, or the account and VAT for the rest are missing',
