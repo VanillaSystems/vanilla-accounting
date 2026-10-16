@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { camt053Xml, type CamtEntry } from '../tools/demo/camt053.js';
-import { confirmPayment, matchPayments, paymentProposals, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
+import { confirmPayment, matchPayments, paymentProposals, releasePayment, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
 import { cancel, creditNoteDraft, issue, openAmount, openOn, paymentsNamingOpen, refundDue, status, totals } from '../src/invoices/rules.js';
 import { vat } from '../src/engines/index.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
@@ -128,6 +128,32 @@ test('a payment without a reference is proposed (amount, customer, date), and bo
   assert.equal((book.invoices[0] as Issued).payments[0].by, 'confirmed');
   assert.deepEqual(paymentProposals(b, book), []);
   assert.throws(() => confirmPayment(b, book, inv.id, 'B1', ctx), PaymentError);
+});
+
+test('r10c-3: «Lösen» undoes the link: the invoice is open again, the entries the link booked and the link to its PDF go, and the booking that stood before the link is back', () => {
+  const inv = invoice('in_a', []);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
+  const b = books(fromCamt([credit('B1', '2026-08-04', 963.72, undefined, 'Beispiel Bistro AG, Bern')]));
+  const guess = { id: 'cl', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3000', amount: 963.72, vatCode: 'V81', origin: 'classify' as const };
+  b.journalEntries.push({ ...guess });
+  const linked = confirmPayment(b, book, inv.id, 'B1', ctx);
+  assert.deepEqual(linked.replaced, [guess], 'the link says what it replaced, so that «Lösen» can put it back');
+  assert.equal(b.mappings.length, 1);
+
+  const released = releasePayment(b, book, inv.id, 'B1', ctx, linked.replaced);
+  assert.deepEqual([released.allocation.transactionRef, released.allocation.by, released.removed.length, released.restored.map((e) => e.id)], ['B1', 'confirmed', 2, ['cl']]);
+  assert.equal(status(book.invoices[0], book.invoices), 'open', 'the invoice is open again');
+  assert.deepEqual(b.journalEntries, [guess], 'the revenue booking is what stood before the link');
+  assert.deepEqual(b.mappings, [], 'the link to the invoice PDF is gone');
+  assert.deepEqual(paymentProposals(b, book).map((p) => p.transactionRef), ['B1'], 'the payment is offered again');
+  assert.throws(() => releasePayment(b, book, inv.id, 'B1', ctx), PaymentError, 'nothing to release twice');
+
+  // A payment a person booked by hand keeps her booking through link and release.
+  const hand = { id: 'm', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3000', amount: 963.72, origin: 'manual' as const };
+  b.journalEntries = [hand];
+  confirmPayment(b, book, inv.id, 'B1', ctx);
+  const kept = releasePayment(b, book, inv.id, 'B1', ctx);
+  assert.deepEqual([kept.removed, kept.restored, b.journalEntries], [[], [], [hand]]);
 });
 
 test('a hand-booked payment is not replaced by a confirmation: linked, its booking stays as the revenue (r9c-3)', () => {

@@ -75,6 +75,23 @@ test('Verlauf says whose a save was; a save lists the files it changed', async (
   assert.ok(first!.files.length > 5, 'the first save lists every file it added');
 });
 
+test('r10c-3: a payment linked to an invoice since the save is listed in Änderungen with «Rückgängig» (it releases the payment), and a link taken back with its relink', async () => {
+  const ws = await company();
+  let linked = { id: '', number: '' }, released = { id: '', ref: '' };
+  updateInvoices(ws, (book) => {
+    const [a, b] = book.invoices.filter((i): i is Issued => i.status === 'issued' && !i.cancelled && i.kind === 'invoice' && i.payments.length > 0);
+    linked = { id: a.id, number: a.number };
+    a.payments.push({ transactionRef: 'NEW1', date: '2026-10-16', amount: 10, by: 'confirmed' });
+    released = { id: b.id, ref: b.payments.pop()!.transactionRef };
+  });
+  const view = await changesView(ws);
+  const rows = view.books.records.filter((r) => r.kind === 'invoice').map((r) => [r.state, r.text.includes(linked.number) || r.id === released.id, 'undo' in r ? r.undo : r.blocked]);
+  assert.deepEqual(rows, [
+    ['paymentLinked', true, { kind: 'releasePayment', id: linked.id, transactionRef: 'NEW1' }],
+    ['paymentReleased', true, { kind: 'relinkPayment', id: released.id, transactionRef: released.ref }],
+  ]);
+});
+
 test('Änderungen lists invoices, customers, statement imports, year-close marks and bookings and account additions, each with its undo or why there is none, and the save names them by kind (r9c-6)', async () => {
   const ws = await company();
   const customer: Customer = { id: 'cu_new', createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, name: 'Beispiel Treuhand AG', address: { postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de', paymentTermsDays: 30 };

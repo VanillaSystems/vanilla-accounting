@@ -88,6 +88,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/year-close/2025/templates/receivables/rebook', body: { description: 'Debitoren 2025' }, status: 403 },
   { method: 'POST', path: '/api/statements/bookings', body: { entries: [{ id: 'back', transactionRef: 'C1', date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zurück' }], mappings: [] }, status: 403 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
+  { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
 ];
 
 test('status: not in audit mode', async () => {
