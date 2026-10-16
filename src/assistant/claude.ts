@@ -97,9 +97,10 @@ export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: st
   ];
 }
 
-/** The message: what the person refers to, as the server read it now, then their words. */
-export function assistantPrompt(text: string, context: string[]): string {
+/** The message: what the app tells the model first (`notes`), what the person refers to, as the server read it now, then their words. */
+export function assistantPrompt(text: string, context: string[], notes: string[] = []): string {
   return [
+    ...notes,
     context.length ? ['The person refers to:', ...context.map((c) => `- ${c}`)].join('\n') : '',
     text.trim(),
   ].filter(Boolean).join('\n\n');

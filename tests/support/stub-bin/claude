@@ -50,7 +50,9 @@ if (process.argv.includes('stream-json')) {
   // $CLAUDE_STUB_CHANGES: a file with the changes to the books the answer asks for (the sidebar's block), when it exists.
   const file = process.env.CLAUDE_STUB_CHANGES;
   const changes = file && existsSync(file) ? `\n\n\`\`\`vanilla-changes\n${readFileSync(file, 'utf8')}\n\`\`\`` : '';
-  const answer = `Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}`;
+  // The app's call after it refused an answer's changes (src/assistant/conversations.ts saidAgain): what was not done, no block.
+  const answer = prompt.includes('Write what they read in its place') ? 'Stub: Das ist nicht gemacht, die App hat es abgelehnt.'
+    : `Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}`;
   // $CLAUDE_STUB_TOOLS: a file with the tools the answer uses first, a JSON list of { name, input }.
   const tools = process.env.CLAUDE_STUB_TOOLS && existsSync(process.env.CLAUDE_STUB_TOOLS) ? JSON.parse(readFileSync(process.env.CLAUDE_STUB_TOOLS, 'utf8')) : [];
   tools.forEach((t, i) => line({ type: 'assistant', message: { content: [{ type: 'tool_use', id: `stub-tool-${i}`, name: t.name, input: t.input }] } }));

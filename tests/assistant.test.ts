@@ -16,7 +16,7 @@ import { assistantArgs, assistantSystem, draftPatterns, streamParser } from '../
 import { ownerAccount } from '../src/accounting/bank-accounts.js';
 import { loadBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
-import type { AssistantEvent, MadeChange } from '../src/types/assistant.js';
+import type { AssistantEvent, MadeChange, Turn } from '../src/types/assistant.js';
 import type { Index } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
@@ -158,6 +158,44 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     assert.equal(untouched.receipts.find((r) => r.id === filed.id)!.amount, filed.amount);
   } finally {
     await rest().catch(() => {});
+    await api.stop();
+    rmSync(log, { recursive: true, force: true });
+  }
+});
+
+test('a refused answer never keeps its «done»: its text is said again by the model, the stored turn records what it said and why, the next message tells the model (wishes3-5)', async () => {
+  const demo = loadBooks(workspaceAt(DEMO_ROOT));
+  const filed = demo.receipts.find((r) => demo.mappings.some((m) => m.receiptId === r.id && demo.transactions.find((x) => x.ref === m.transactionRef)!.date <= demo.config.closedThrough!))!;
+  const log = mkdtempSync(join(tmpdir(), 'assistant-refused-'));
+  const changes = join(log, 'changes.json');
+  const api = await startApi('demo/vanilla-accounting', {
+    PATH: `${join(REPO, 'tests/support/stub-bin')}:${process.env.PATH}`,
+    CLAUDE_STUB_CHANGES: changes, CLAUDE_STUB_PROMPTS: join(log, 'prompts.txt'), CLAUDE_STUB_ARGS: join(log, 'args.txt'),
+  });
+  try {
+    const post = async (body: unknown) => {
+      const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      return (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
+    };
+    writeFileSync(changes, JSON.stringify([{ kind: 'receipt', id: filed.id, set: { amount: 1, currency: 'CHF' } }]));
+    const events = await post({ text: 'Betrag auf 1 Franken', language: 'de', context: [] });
+    assert.deepEqual(events.slice(-3).map((e) => e.type), ['refused', 'replace', 'done'], 'the text is replaced before the answer ends');
+    const said = 'Stub: Das ist nicht gemacht, die App hat es abgelehnt.';
+    assert.equal((events.at(-2) as Extract<AssistantEvent, { type: 'replace' }>).text, said);
+    const id = (events[0] as { id: string }).id;
+    const turn = ((await api.send('GET', `/api/assistant/${id}`)).json.turns as Turn[]).at(-1) as Extract<Turn, { role: 'ai' }>;
+    assert.equal(turn.text, said, 'the stored answer holds no claim of a change');
+    assert.match(turn.withdrawn ?? '', /Stub-Antwort auf «Betrag auf 1 Franken»/, 'what it said first is kept, as withdrawn');
+    assert.match(turn.refused ?? '', /geschlossen/);
+    const args = readFileSync(join(log, 'args.txt'), 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]);
+    assert.equal(args.length, 2, 'one short call says it again');
+    assert.ok(args[1].includes('--resume'), 'in the answer\'s own session');
+
+    rmSync(changes);
+    await post({ conversation: id, text: 'Und jetzt?', language: 'de', context: [] });
+    const last = readFileSync(join(log, 'prompts.txt'), 'utf8').split('\n\0\n').filter((p) => p.trim()).at(-1)!;
+    assert.match(last, /did not apply the changes of your previous answer[\s\S]*geschlossen/, 'the next message knows nothing was changed');
+  } finally {
     await api.stop();
     rmSync(log, { recursive: true, force: true });
   }

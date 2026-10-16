@@ -93,7 +93,8 @@ function apply(e: AssistantEvent): void {
     case 'tool': withAi((t) => ({ ...t, tools: [...t.tools, { name: e.name, detail: e.detail, ...(e.denied ? { denied: true } : {}) }] })); break;
     case 'error': withAi((t) => ({ ...t, error: e.message, done: true })); break;
     case 'changes': withAi((t) => ({ ...t, changes: e.changes })); booksChanged(); break;
-    case 'refused': withAi((t) => ({ ...t, refused: e.message, ...(e.refusal ? { refusal: e.refusal } : {}) })); break;
+    case 'refused': withAi((t) => ({ ...t, text: '', withdrawn: t.text, refused: e.message, ...(e.refusal ? { refusal: e.refusal } : {}) })); break;
+    case 'replace': withAi((t) => ({ ...t, text: e.text })); break;
     case 'done': withAi((t) => ({ ...t, done: true })); break;
     case 'session': break;
   }

@@ -26,6 +26,8 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .aitool { font: 400 11px/1.5 "Geist Mono"; color: var(--muted); }
 .aitool.denied { color: var(--neg); }
 .aitext { margin-top: 2px; }
+/* Until the app has applied what an answer asks for, its words are not yet true. */
+.aitext.pending { color: var(--muted); }
 .aidraft { align-self: flex-start; margin-left: 4px; border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
 .aicompose { position: relative; padding: 10px 14px 14px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .aichips { display: flex; flex-wrap: wrap; gap: 6px; }

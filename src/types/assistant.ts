@@ -126,7 +126,11 @@ export interface ToolUse { name: string; detail: string; denied?: boolean }
 
 export type Turn =
   | { role: 'me'; text: string; at: string; context: ContextRef[] }
-  | { role: 'ai'; text: string; at: string; tools: ToolUse[]; changes?: MadeChange[]; refused?: string; refusal?: ApiRefusal; error?: string; done: boolean };
+  | {
+    role: 'ai'; text: string; at: string; tools: ToolUse[]; changes?: MadeChange[]; refused?: string; refusal?: ApiRefusal; error?: string; done: boolean;
+    /** What the answer said before the app refused its changes; `text` is then what it says now that nothing was changed. */
+    withdrawn?: string;
+  };
 
 /** data/assistant/<id>.json: one conversation, its Claude session continued by every message. */
 export interface Conversation {
@@ -151,5 +155,7 @@ export type AssistantEvent =
   | { type: 'changes'; changes: MadeChange[] }
   /** `refusal`: its code, so the UI says why in the person's language. */
   | { type: 'refused'; message: string; refusal?: ApiRefusal }
+  /** The answer's text, whole, in place of what streamed: after a refusal, what was not done and why. */
+  | { type: 'replace'; text: string }
   | { type: 'done'; session?: string; isError: boolean }
   | { type: 'error'; message: string };

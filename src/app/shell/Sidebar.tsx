@@ -207,7 +207,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                       {turn.tools.map((u, j) => <div key={j} className={`aitool${u.denied ? ' denied' : ''}`}>{u.name}{u.detail ? ` · ${u.detail}` : ''}{u.denied ? ` · ${t('assistant.denied')}` : ''}</div>)}
                     </details>
                   ) : null}
-                  {withoutChanges(turn.text) ? <div className="aitext">{withoutChanges(turn.text)}</div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
+                  {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}>{withoutChanges(turn.text)}</div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
                   {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
                   {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
                   {turn.error ? <div className="warnline">{turn.error}</div> : null}

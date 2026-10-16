@@ -59,13 +59,14 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   const at = now().toISOString();
   const c: Conversation = (send.conversation && readConversation(ws, send.conversation))
     || { id: randomUUID(), title: send.text.trim().replace(/\s+/g, ' ').slice(0, 60), at, turns: [] };
+  const last = c.turns.at(-1);
   const me: Turn = { role: 'me', text: send.text, at, context: send.context };
   const ai: Extract<Turn, { role: 'ai' }> = { role: 'ai', text: '', at, tools: [], done: false };
   c.turns.push(me, ai);
   c.at = at;
   store(ws, c);
   onEvent({ type: 'conversation', id: c.id });
-  const prompt = assistantPrompt(send.text, contextText(ws, send.context));
+  const prompt = assistantPrompt(send.text, contextText(ws, send.context), last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []);
   let done: AssistantEvent | undefined;
   await callClaude({
     ws, send, map, session: c.session, prompt, signal,
@@ -93,11 +94,42 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       ai.refused = (e as Error).message;
       if (e instanceof RefusedChanges && e.refusal) ai.refusal = e.refusal;
       onEvent({ type: 'refused', message: ai.refused, ...(ai.refusal ? { refusal: ai.refusal } : {}) });
+      ai.withdrawn = ai.text;
+      ai.text = await saidAgain(ws, send, map, c, ai.refused, signal);
+      onEvent({ type: 'replace', text: ai.text });
     }
   }
   if (done) onEvent(done);
   ai.done = true;
   store(ws, c);
+}
+
+/** What the next message tells the model when the app refused the changes of its last answer, so it never builds on them. */
+export const refusedNote = (why: string): string =>
+  `The app did not apply the changes of your previous answer: it refused them all, nothing of them was changed. Why: ${why}`;
+
+/**
+ * An answer whose changes the app refused said they were made. Its text goes, and the model, in
+ * its session, says in its place what was not done and why: one short call, so the person never
+ * reads «done» for what was not done, and the session knows it too. Without a model answer
+ * (an error, a stop) the text stays empty and the app's own line under it says why.
+ */
+async function saidAgain(ws: Workspace, send: AssistantSend, map: string, c: Conversation, why: string, signal: AbortSignal): Promise<string> {
+  let text = '';
+  let ok = false;
+  await callClaude({
+    ws, send, map, session: c.session, signal,
+    prompt: [
+      refusedNote(why),
+      'The person will not see your answer: it said things were done that were not. Write what they read in its place: one or two short sentences, saying plainly what is not done and why, in their words (no field names, no codes), and what they can do (give what is missing, or where in the app they do it). No vanilla-changes block, no tools.',
+    ].join('\n\n'),
+    onEvent: (e) => {
+      if (e.type === 'text') text += e.text;
+      if (e.type === 'session') c.session = e.session;
+      if (e.type === 'done') { ok = !e.isError; if (e.session) c.session = e.session; }
+    },
+  });
+  return ok ? withoutChanges(text).trim() : '';
 }
 
 /** The accounts a change books on. */
