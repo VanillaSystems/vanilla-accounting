@@ -40,6 +40,7 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   'invoice-layout': { does: 'how invoices look and read: font, colour, logo, envelope window, shown elements, the payment term in days, and per language (de, fr, it, en) the text above and below the table and the e-mail', kinds: ['invoicing'] },
   mail: { does: 'the mailbox the invoices are sent from' },
   sources: { does: 'where receipts come from: mailboxes and web logins; once one is set up, Automatisierung fetches it' },
+  phone: { does: 'receipts from the phone: switch on, scan the QR code with the iPhone app to pair; a new code locks out old phones' },
   accounts: { does: 'the chart of accounts: an account renamed or added', kinds: ['account'] },
   periods: { does: 'the filed quarters and their seals' },
   opening: { does: 'the opening balances of the year' },
