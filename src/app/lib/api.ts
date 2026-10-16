@@ -120,6 +120,7 @@ export function errorText(e: unknown): string {
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
+    case 'openingYearClosed': return t('company.openingClosed', { year: b.params.year });
     case 'vatMethodHeld': return t('error.vatMethodHeld', { year: b.params.year, n: b.params.entries, next: String(Number(b.params.year) + 1) });
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });

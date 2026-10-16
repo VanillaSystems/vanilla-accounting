@@ -32,8 +32,8 @@ export interface StatementStart {
 
 /**
  * The statement's opening balance as the account's opening of the books, when the books have
- * none and nothing on the account came before the statement. Not for a year with a closed
- * period, nor one an earlier year of these books opens; not for a foreign account, whose opening
+ * none and nothing on the account came before the statement. Not for a year closed through its
+ * last day, nor one an earlier year of these books opens; not for a foreign account, whose opening
  * also needs its value in the base currency.
  */
 export function openingOffer(books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, s: StatementStart): OpeningOffer | undefined {
@@ -41,7 +41,7 @@ export function openingOffer(books: Pick<Index, 'config' | 'transactions' | 'jou
   if (!o || s.currency !== baseCurrency() || toRappen(o.amount) === 0) return undefined;
   const year = addDays(o.date, 1).slice(0, 4);
   const config = books.config;
-  if (config?.closedThrough && config.closedThrough >= `${year}-01-01`) return undefined;
+  if (config?.closedThrough && config.closedThrough >= `${year}-12-31`) return undefined;
   if (Object.keys(config?.openingBalances ?? {}).some((y) => y < year)) return undefined;
   if (config?.openingBalances?.[year]?.[s.account] !== undefined || config?.openingBalancesNative?.[year]?.[s.account]) return undefined;
   const first = [s.from, addDays(o.date, 1)].filter((d): d is string => !!d).sort()[0];
@@ -54,14 +54,17 @@ export function openingOffer(books: Pick<Index, 'config' | 'transactions' | 'jou
 type Openings = AccountingConfig['openingBalances'];
 
 /**
- * Why `year`'s opening balances cannot be typed by hand: a closed period in it (its openings stay
- * as filed), or it is not the first year of these books (an earlier year's close opens it).
+ * Why `year`'s opening balances cannot be typed by hand: the year is closed through its last day
+ * (its balance sheet is final, the next year opens from it), or it is not the first year of these
+ * books (an earlier year's close opens it). A filed quarter does not lock them (r5h-30): an opening
+ * balance is balance-sheet only, in no VAT return, and no seal covers it (src/books/seal.ts hashes
+ * entries, payments and links), so typing it changes nothing that was filed.
  */
 export type OpeningLock = 'closed' | 'notFirstYear';
 
 export function openingLock(books: Pick<Index, 'config' | 'journalEntries'>, year: string): OpeningLock | undefined {
   const config = books.config;
-  if (config?.closedThrough && config.closedThrough >= `${year}-01-01`) return 'closed';
+  if (config?.closedThrough && config.closedThrough >= `${year}-12-31`) return 'closed';
   const earlier = Object.keys(config?.openingBalances ?? {}).some((y) => y < year) || (books.journalEntries ?? []).some((e) => e.date < `${year}-01-01`);
   return earlier ? 'notFirstYear' : undefined;
 }
@@ -93,6 +96,8 @@ export interface MissingOpening {
   year: string;
   /** The bank's balance before the year's first payment, as its statements imply it. */
   amount: number;
+  /** Whether Firma › Eröffnung takes it: not once the year is closed through 31.12., so no link leads into a refusal. */
+  canType: boolean;
 }
 
 /**
@@ -106,7 +111,8 @@ export function missingOpenings(
   accounts: ReadonlyArray<{ bank: string; currency: string; account: string; label: string }>,
   year: string,
 ): MissingOpening[] {
-  if (openingLock({ config: books.config, journalEntries: books.journalEntries }, year) === 'notFirstYear') return [];
+  const lock = openingLock({ config: books.config, journalEntries: books.journalEntries }, year);
+  if (lock === 'notFirstYear') return [];
   return accounts.flatMap((a): MissingOpening[] => {
     if (a.bank === 'manual' || a.currency !== baseCurrency() || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
     const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
@@ -114,7 +120,7 @@ export function missingOpenings(
     const moved = books.transactions.filter((t) => t.bank === a.bank && t.currency === a.currency && t.date >= `${year}-01-01` && t.date <= first.date)
       .reduce((sum, t) => sum + (t.direction === 'DBIT' ? -1 : 1) * toRappen(Math.abs(t.amount)), 0);
     const held = toRappen(first.amount) - moved;
-    return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held) }];
+    return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held), canType: !lock }];
   });
 }
 

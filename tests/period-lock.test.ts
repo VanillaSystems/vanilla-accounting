@@ -84,7 +84,6 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/transactions/C1/entries', body: { lines: [{ accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'von Hand' }] }, status: 403 },
   { method: 'POST', path: '/api/transactions/C1/attach', body: { ref: 'M2026-002' }, status: 403 },
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
-  { method: 'PUT', path: '/api/opening-balances/2026/1021', body: { amount: 5000 }, status: 403 },
   { method: 'POST', path: '/api/year-close/2026/entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1520', amount: 100, description: 'rückdatiert' }, status: 403 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
 ];
@@ -112,6 +111,9 @@ for (const call of refused) {
 }
 
 const allowed: Array<Call & { check: (index: Index) => boolean }> = [
+  // An opening balance is in no VAT return and no seal: a filed quarter does not lock the year's opening (r5h-30).
+  { method: 'PUT', path: '/api/opening-balances/2026/1021', body: { amount: 5000 },
+    check: (i) => i.config?.openingBalances?.['2026']?.['1021'] === 5000 },
   { method: 'PATCH', path: '/api/transactions/O1', body: { description: 'neu' },
     check: (i) => i.transactions.find((t) => t.ref === 'O1')?.description === 'neu' },
   { method: 'PATCH', path: '/api/transactions/O1', body: { remarks: 'Notiz' },
@@ -237,7 +239,7 @@ test('the closed period is still exactly as in the fixture', () => {
     entries: i.journalEntries!.filter((j) => j.date <= '2026-06-30').sort((a, b) => a.id.localeCompare(b.id)),
     receipt: i.receipts.find((r) => r.id === 'rc'),
     mappings: i.mappings.filter((m) => m.transactionRef === 'C1'),
-    config: i.config,
+    closedThrough: i.config?.closedThrough,
   });
   assert.deepEqual(closed(now), closed(fixture));
 });

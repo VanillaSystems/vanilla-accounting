@@ -194,7 +194,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
  * An account's opening balance of a year: a bank account's as its first statement offers it
  * (src/accounting/opening-balance.ts), any balance-sheet account's as Firma › Eröffnung types it
  * for the books' first year. `amount` sets it, null takes it back; the difference goes to retained
- * earnings. A year with a closed period keeps its openings; a later year is opened by the close of
+ * earnings. A year closed through 31.12. keeps its openings (a filed quarter does not: an opening is
+ * in no VAT return and no seal); a later year is opened by the close of
  * the one before; a foreign-currency account also needs its native balance (npm run import-opening).
  */
 router.put('/api/opening-balances/:year/:account', (req, res) => {
@@ -209,8 +210,9 @@ router.put('/api/opening-balances/:year/:account', (req, res) => {
   if (account === equity) throw refuse('equity', `Konto ${account} nimmt die Differenz der Eröffnung auf.`);
   if (WS.bankAccounts.some((a) => a.account === account && a.currency !== baseCurrency())) throw refuse('foreign', `Konto ${account} führt eine Fremdwährung: npm run import-opening.`);
   withBooks(res, (books) => {
-    assertOpen(books, [`${year}-01-01`], 'openingBalance');
-    if (openingLock(books, year)) throw new RequestError(400, `${year} ist nicht das erste Jahr dieser Bücher: der Abschluss des Vorjahres eröffnet es.`, { code: 'openingNotFirstYear', params: { year } });
+    const lock = openingLock(books, year);
+    if (lock === 'closed') throw new RequestError(403, `${year} ist bis zum 31.12. abgeschlossen: seine Eröffnung bleibt, wie sie ist.`, { code: 'openingYearClosed', params: { year } });
+    if (lock) throw new RequestError(400, `${year} ist nicht das erste Jahr dieser Bücher: der Abschluss des Vorjahres eröffnet es.`, { code: 'openingNotFirstYear', params: { year } });
     const next = withOpening(books.config.openingBalances, year, account, amount, equity, side === 'liabilities');
     if (next) books.config.openingBalances = next;
     else delete books.config.openingBalances;

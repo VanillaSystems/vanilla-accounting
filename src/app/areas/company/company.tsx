@@ -548,7 +548,8 @@ const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '')
  * The year's opening balances. For the books' first year a person types them per account (a firm
  * whose earlier books were kept elsewhere): each balance-sheet account's balance on 1.1. as its
  * last balance sheet shows it, retained earnings taking the difference. A later year is opened by
- * the close of the one before, a year with a filed quarter keeps its openings.
+ * the close of the one before, a year closed through 31.12. keeps its openings (a filed quarter
+ * does not lock them: an opening is in no VAT return and no seal).
  */
 function Opening({ books, nav, canEdit }: Props) {
   const ws = useWorkspace();

@@ -63,7 +63,7 @@ function BookDiff({ books, nav, diff, s }: Props & { diff: number; s: Statement 
       {missing ? (
         <span className="notice warn" style={{ margin: 0 }} data-testid="opening-missing">{I.dot}
           {t('reports.openingMissing', { account: `${missing.account} ${missing.label}`, year: missing.year, amount: fmt(missing.amount) })}{' '}
-          <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>
+          {missing.canType && <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}
         </span>
       ) : null}
       {rest ? <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.bookDiff', { diff: fmt(rest) })}</span> : null}

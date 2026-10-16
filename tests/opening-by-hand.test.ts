@@ -2,7 +2,9 @@
  * Opening balances typed by hand (persona test «treuhaender», findings 10, 23, 30): a firm whose
  * earlier books were kept elsewhere opens its first year in Firma › Eröffnung, account by
  * account, retained earnings taking the difference, so the Bilanz balances. Only balance-sheet
- * accounts in the base currency, only the books' first year, never a year with a closed period.
+ * accounts in the base currency, only the books' first year, and only until the year is closed
+ * through its last day: a filed quarter does not stop it (r5h-30), since an opening balance is in
+ * no VAT return and no seal.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,6 +12,7 @@ import './support/jurisdiction.js';
 import { loadBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { openingLock } from '../src/accounting/opening-balance.js';
+import { checkSeals, closedPart, writeSeal } from '../src/books/seal.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { reportView } from '../src/app/areas/reports/model.js';
 import { booksOnDisk } from './support/workspace.js';
@@ -58,11 +61,29 @@ test('refused: a year an earlier year of the books opens', async () => {
   assert.equal((await api.send('DELETE', `/api/journal-entries/${id}`)).status, 200);
 });
 
-test('which years take openings by hand: the first one of the books, without a closed period', () => {
+test('which years take openings by hand: the first one of the books, until it is closed through its last day', () => {
   const at = (config: object, dates: string[] = []) => ({ config, journalEntries: dates.map((date) => ({ id: date, transactionRef: date, date, accountDebit: '6000', accountCredit: '1021', amount: 1 })) });
   assert.equal(openingLock(at({}), '2026'), undefined);
   assert.equal(openingLock(at({ openingBalances: { 2026: { 1021: 5 } } }), '2026'), undefined, 'its own openings stay editable');
-  assert.equal(openingLock(at({ closedThrough: '2026-03-31' }), '2026'), 'closed');
+  assert.equal(openingLock(at({ closedThrough: '2026-09-30' }), '2026'), undefined, 'a filed quarter changes no figure when the year opens (r5h-30)');
+  assert.equal(openingLock(at({ closedThrough: '2026-12-31' }), '2026'), 'closed', 'a year closed through 31.12. keeps its openings: the next one opens from them');
   assert.equal(openingLock(at({ openingBalances: { 2025: { 1021: 5 } } }), '2026'), 'notFirstYear');
   assert.equal(openingLock(at({}, ['2025-11-03']), '2026'), 'notFirstYear');
+});
+
+test('after a quarter is filed and sealed, the year still takes its opening: the seal stays intact and no filed record changes (r5h-30)', async () => {
+  const filed = await startApi('tests/fixtures/period-lock-index.json');
+  try {
+    const ws = workspaceAt(filed.ws.paths.root);
+    writeSeal(ws, loadBooks(ws), '2026-Q2', '2026-07-11');
+    const sealedPart = JSON.stringify(closedPart(loadBooks(ws), '2026-06-30'), (_k, v) => (v instanceof Map ? [...v] : v));
+    const r = await filed.send('PUT', '/api/opening-balances/2026/1021', { amount: 18420.15 });
+    assert.equal(r.status, 200, String(r.json.error));
+    const after = loadBooks(ws);
+    assert.equal(after.config.openingBalances?.['2026']?.['1021'], 18420.15);
+    assert.deepEqual(checkSeals(ws, after).checks.map((c) => c.status), ['intact']);
+    assert.equal(JSON.stringify(closedPart(after, '2026-06-30'), (_k, v) => (v instanceof Map ? [...v] : v)), sealedPart, 'no entry, payment or link of the filed quarter changed');
+  } finally {
+    await filed.stop();
+  }
 });

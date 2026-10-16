@@ -153,7 +153,7 @@ function List(props: Props) {
           <span className="dot" aria-hidden="true" />
           <span>
             {t('reports.openingMissing', { account: `${m.account} ${m.label}`, year: m.year, amount: fmt(m.amount) })}{' '}
-            <button type="button" onClick={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })}>{t('reports.openingSet')}</button>
+            {m.canType && <button type="button" onClick={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })}>{t('reports.openingSet')}</button>}
           </span>
         </div>
       ))}

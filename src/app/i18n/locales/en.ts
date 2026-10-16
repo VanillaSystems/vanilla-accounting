@@ -1526,7 +1526,7 @@ export default {
     'company.openingSet': 'Opening {account}: CHF {amount}',
     'company.openingRemoved': 'Opening of {account} removed',
     'company.openingNone': 'No opening balances for {year} yet: type the account and its balance above.',
-    'company.openingClosed': '{year} has filed periods: its opening stays as it is.',
+    'company.openingClosed': '{year} is closed through 31.12.: its opening stays as it is, the next year opens from it.',
     'invoice.refusal.incomplete': 'Something is still missing for a VAT-compliant invoice (Art. 26 VAT Act).',
     'invoice.refusal.incompleteList': 'A VAT-compliant invoice still needs: {list}.',
     'invoice.refusal.customerWhere': 'Fill it in on the customer under Invoices › Customers.',

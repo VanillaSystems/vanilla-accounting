@@ -1523,7 +1523,7 @@ export const messages = {
   'company.openingSet': 'Eröffnung {account}: CHF {amount}',
   'company.openingRemoved': 'Eröffnung von {account} entfernt',
   'company.openingNone': 'Noch keine Eröffnungssaldi für {year}: Konto und Saldo oben eingeben.',
-  'company.openingClosed': '{year} hat eingereichte Perioden: seine Eröffnung bleibt, wie sie ist.',
+  'company.openingClosed': '{year} ist bis zum 31.12. abgeschlossen: seine Eröffnung bleibt, wie sie ist, das Folgejahr eröffnet aus ihr.',
   'invoice.refusal.incomplete': 'Für eine MWST-konforme Rechnung fehlt noch etwas (Art. 26 MWSTG).',
   'invoice.refusal.incompleteList': 'Für eine MWST-konforme Rechnung fehlt: {list}.',
   'invoice.refusal.customerWhere': 'Beim Kunden unter Rechnungen › Kunden ergänzen.',

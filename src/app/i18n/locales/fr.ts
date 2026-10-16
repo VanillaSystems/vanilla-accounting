@@ -1526,7 +1526,7 @@ export default {
     'company.openingSet': 'Ouverture {account} : CHF {amount}',
     'company.openingRemoved': 'Ouverture de {account} retirée',
     'company.openingNone': 'Pas encore de soldes d’ouverture pour {year} : saisir le compte et le solde ci-dessus.',
-    'company.openingClosed': '{year} a des périodes déposées : son ouverture reste telle quelle.',
+    'company.openingClosed': '{year} est clôturé jusqu’au 31.12 : son ouverture reste telle quelle, l’année suivante s’ouvre à partir d’elle.',
     'invoice.refusal.incomplete': 'Il manque encore un élément pour une facture conforme à la TVA (art. 26 LTVA).',
     'invoice.refusal.incompleteList': 'Il manque pour une facture conforme à la TVA : {list}.',
     'invoice.refusal.customerWhere': 'Le compléter dans le client sous Factures › Clients.',

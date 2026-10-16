@@ -55,6 +55,7 @@ export type ApiRefusal =
   | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' } }
   /** Opening balances typed for a year an earlier year of the books opens. */
   | { code: 'openingNotFirstYear'; params: { year: string } }
+  | { code: 'openingYearClosed'; params: { year: string } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
   | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' } }
   /** An invoicing refusal met through the AI sidebar (src/server/workspace-edits.ts): which rule, and what is missing. */
