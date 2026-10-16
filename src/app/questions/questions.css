@@ -26,3 +26,4 @@
 .qacts .btn:hover { background: var(--hover); }
 .qacts .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .qacts .btn:disabled { opacity: .45; }
+.qacts .btn { height: auto; min-height: 32px; padding-block: 5px; max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }
