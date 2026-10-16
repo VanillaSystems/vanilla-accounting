@@ -261,14 +261,14 @@ export interface BankTransaction {
   /**
    * The individual payments inside one bank booking (a Sammelzahlung / batch), from the
    * camt053 TxDtls. The booking stays ONE transaction (the balance moved once); its parts
-   * are what receipts are matched against and what entries are split by. Only kept for
-   * open periods: a closed transaction stays exactly as filed.
+   * are what receipts are matched against and what entries are split by. A filed transaction
+   * keeps exactly what it was filed with, parts or none.
    */
   parts?: BankTransactionPart[];
   /**
    * The payment reference the payer gave (QR / creditor reference, invoice number, remittance
    * text), from camt053 or, for Wise transfers, the monthly statement PDF. Matched against
-   * receipt text by the evidence step. Only kept for open periods, like parts.
+   * receipt text by the evidence step. A filed transaction keeps what it was filed with.
    */
   reference?: string;
   /**
@@ -280,7 +280,7 @@ export interface BankTransaction {
   /**
    * The other party's IBAN as the bank names it (camt053 DbtrAcct or CdtrAcct): its country tells
    * a domestic customer from one abroad (src/accounting/sales-without-vat.ts), and it names one
-   * payer for certain. Only kept for open periods, like parts.
+   * payer for certain. A filed transaction keeps what it was filed with.
    */
   counterpartyIban?: string;
 }

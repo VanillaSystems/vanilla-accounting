@@ -160,9 +160,12 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
 
   const previousByRef = new Map(previous.transactions.map((t) => [t.ref, t]));
   const freshRefs = new Set(scan.bankTransactions.map((t) => t.ref));
+  // A filed transaction is what the books hold, whatever the camt053 says now: the counterparty,
+  // reference and parts it was filed with stay, and a later export's wording changes nothing.
   const fromBank = scan.bankTransactions.map((t) => {
     const before = previousByRef.get(t.ref);
-    return before ? { ...t, ...keptFields(before) } : t;
+    if (!before) return t;
+    return isClosed(before) ? before : { ...t, ...keptFields(before) };
   });
   const vanishedClosedTransactions = previous.transactions.filter(
     (t) => t.source !== 'manual' && !freshRefs.has(t.ref) && isClosed(t),
@@ -170,14 +173,12 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   const manual = previous.transactions.filter((t) => t.source === 'manual');
 
   const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual].map((t) => {
+    if (isClosed(t)) return t;
     const out = { ...t };
     // Wise drops transfer references from camt053; its monthly PDFs keep them. The map holds
     // Wise transaction ids only (CARD-…, TRANSFER-…), read from the folders of `wise` accounts.
     const fromPdf = scan.wiseRefs.get(t.ref.split('~')[0]);
     if (fromPdf && !out.reference) out.reference = fromPdf;
-    // A closed transaction stays exactly as filed, so batch parts and references are only
-    // attached in open periods.
-    if (isClosed(out)) { delete out.parts; delete out.reference; delete out.counterparty; delete out.counterpartyIban; }
     return out;
   });
 
