@@ -274,8 +274,19 @@ function undo(row: DropRow): string[] {
   return again;
 }
 
-router.delete('/api/drop/:id', (req, res) => {
-  load(req.params.id);
+/**
+ * Closing the dialog loses no file (r6h-23). A possible duplicate nobody answered goes in like any
+ * receipt: the run's matching step holds it back from its payment and Belege asks the same
+ * question. A ZIP still waiting for its password, and a file nobody said what it is, wait in
+ * quarantine, where Belege lists them with «Ist ein Beleg». A copy by its bytes is there already.
+ */
+router.delete('/api/drop/:id', async (req, res) => {
+  const s = load(req.params.id);
+  for (const row of s.rows) {
+    if (row.state === 'duplicate' && row.reason === 'possible-duplicate') Object.assign(row, { state: 'take', reason: undefined });
+    else if (row.state === 'locked' || row.state === 'unclear') Object.assign(row, { state: 'quarantine', reason: 'held' });
+  }
+  await takeWaiting(s);
   rmSync(dir(req.params.id), { recursive: true, force: true });
   res.json({ ok: true });
 });

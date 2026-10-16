@@ -2782,6 +2782,7 @@ export default {
     'drop.d.none': 'none yet',
     'drop.d.file': 'Filed as',
     'drop.waitsHint': 'What waits for you is under Receipts.',
+    'drop.closeHint': 'On closing, an unanswered «already there?» goes in and Tasks asks; a ZIP without its password waits in quarantine.',
     'drop.background': 'Continue in the background',
     'automation.by.manual': 'by hand',
     'automation.by.event': 'by the event {name}',

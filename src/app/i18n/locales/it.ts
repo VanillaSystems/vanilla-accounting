@@ -2782,6 +2782,7 @@ export default {
     'drop.d.none': 'non ancora',
     'drop.d.file': 'Archiviato come',
     'drop.waitsHint': 'Ciò che ti aspetta è sotto Documenti.',
+    'drop.closeHint': 'Alla chiusura un «già presente?» senza risposta entra, e Compiti chiede; uno ZIP senza password aspetta in quarantena.',
     'drop.background': 'Continua in background',
     'automation.by.manual': 'a mano',
     'automation.by.event': 'dall’evento {name}',

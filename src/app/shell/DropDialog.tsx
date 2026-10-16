@@ -248,6 +248,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(route: Route): void;
         </div>
         {s.error ? <p className="warnline">{s.error}</p> : null}
         {waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
+        {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
         <div className="dfoot">
           <span className="m">{taken.length ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'runs' })}>{t('drop.toRuns')}</button> : t('drop.moreHint')}</span>
           <button type="button" className="btn primary" onClick={closeDrop}>{working ? t('drop.background') : t('common.close')}</button>

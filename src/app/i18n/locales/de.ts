@@ -2779,6 +2779,7 @@ export const messages = {
   'drop.d.none': 'noch keine',
   'drop.d.file': 'Abgelegt als',
   'drop.waitsHint': 'Was auf dich wartet, findest du unter Belege.',
+  'drop.closeHint': 'Beim Schliessen geht ein offener «schon da?» hinein, und Aufgaben fragt nach; ein ZIP ohne Passwort wartet in der Quarantäne.',
   'drop.background': 'Im Hintergrund weiter',
   'automation.by.manual': 'von Hand',
   'automation.by.event': 'durch das Ereignis {name}',
