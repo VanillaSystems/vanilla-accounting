@@ -14,7 +14,7 @@ import type { VatSetup } from '../src/workspace/vat-setup.js';
 import type { Index, JournalEntry } from '../src/types/index.js';
 import type { Books } from '../src/books/store.js';
 import { vatCheck, vatPostings } from '../src/accounting/year-close.js';
-import { vatInFigures, vatParts } from '../src/app/areas/reports/model.js';
+import { vatInFigures, vatParts } from '../src/accounting/vat-in-figures.js';
 
 const { jurisdiction } = loadJurisdiction(APP_ROOT, 'ch');
 const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] };

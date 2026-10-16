@@ -26,7 +26,7 @@ import { postDownload } from '../areas/export/state.js';
 import { ReportView } from '../areas/reports/custom/ReportView.js';
 import { spanOf } from '../../reports/words.js';
 import { specData } from '../../reports/spec.js';
-import type { ReportResult } from '../../reports/run.js';
+import type { ReportResult } from '../../reports/result.js';
 import type { SavedWrite } from '../../reports/saved.js';
 import { reloadSaved, undoWrite } from '../areas/reports/custom/store.js';
 import { builtInTexts } from '../../invoices/texts.js';

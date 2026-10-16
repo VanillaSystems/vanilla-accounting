@@ -4,7 +4,7 @@
  * produce is the model's own, and the app withdraws the answer's words. Dates, years, quarters and
  * the accounts of the chart are no figures.
  */
-import type { ReportResult } from './run.js';
+import type { ReportResult } from './result.js';
 import { accountRangeText } from './spec.js';
 
 const cents = (n: number) => Math.round(Math.abs(n) * 100);

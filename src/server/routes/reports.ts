@@ -16,7 +16,8 @@ import { loadInvoices } from '../../invoices/store.js';
 import { wordsIn } from '../../export/texts.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { checkSpec, parseSpec, type ReportRefusal, type ReportSpec } from '../../reports/spec.js';
-import { runReport, type ReportResult } from '../../reports/run.js';
+import { runReport } from '../../reports/run.js';
+import type { ReportResult } from '../../reports/result.js';
 import { reportCsv, reportFileName, reportHtml } from '../../reports/files.js';
 import { refusalText } from '../../reports/words.js';
 import { deleteReport, isSlug, listSaved, restoreReport, saveReport } from '../../reports/saved.js';
@@ -88,7 +89,7 @@ const text = (v: unknown): v is string | null => v === null || typeof v === 'str
 
 router.post('/api/reports/saved', (req, res) => {
   const b = (req.body ?? {}) as { kind?: unknown; spec?: unknown; slug?: unknown; text?: unknown; now?: unknown };
-  if (b.slug !== undefined && !isSlug(b.slug)) throw new RequestError(400, 'slug: Kleinbuchstaben, Ziffern und Bindestriche.');
+  if (b.slug !== undefined && !isSlug(b.slug)) throw new RequestError(400, 'slug: Kleinbuchstaben, Zahlen und Bindestriche.');
   if (b.kind === 'save') { res.json(saveReport(WS, specOf(b.spec), b.slug as string | undefined)); return; }
   if (!isSlug(b.slug)) throw new RequestError(400, 'slug fehlt.');
   if (b.kind === 'delete') {

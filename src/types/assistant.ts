@@ -7,7 +7,7 @@ import type { ApiRefusal } from './api-error.js';
 import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
 import type { Choice, Question, QuestionTarget } from '../questions/model.js';
 import type { ReportSpec } from '../reports/spec.js';
-import type { ReportResult } from '../reports/run.js';
+import type { ReportResult } from '../reports/result.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';

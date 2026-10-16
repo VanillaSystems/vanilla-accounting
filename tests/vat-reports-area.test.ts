@@ -11,7 +11,8 @@ import { computeIncomeStatement, statementPostings } from '../src/accounting/ind
 import { parsePeriod } from '../src/accounting/periods.js';
 import { filedDiff, formAmount, shownZiffern, vatKeyOf, vatReturn } from '../src/app/areas/vat/model.js';
 import { headline } from '../src/app/areas/vat/model.js';
-import { NO_ACCOUNT, accountsOf, filterBlocks, ledgerOf, reportView, searchReport, vatInFigures } from '../src/app/areas/reports/model.js';
+import { NO_ACCOUNT, accountsOf, filterBlocks, ledgerOf, reportView, searchReport } from '../src/app/areas/reports/model.js';
+import { vatInFigures } from '../src/accounting/vat-in-figures.js';
 import { tableOf } from '../src/export/tables.js';
 
 const p = (token: string) => parsePeriod(token, '2026-10-11')!;

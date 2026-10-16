@@ -1,72 +1,24 @@
 /**
  * A report spec run against the books (src/reports/spec.ts): every row, group total and overall
  * total comes from here, never from the model. Pure: the books, the invoices and the chart's names
- * in, the result out. Amounts are summed in Rappen per currency, so a payment in EUR is never
- * added to one in CHF.
+ * in, the result out. Amounts are summed in cents per currency, so a payment in a foreign currency
+ * is never added to one in the books' currency.
  *
  * Bookings are read as an account's ledger reads them: with an account filter, each side of a
  * booking that lies on a filtered account is one row, positive on the account's normal side (an
  * expense on debit, a sale on credit), so a refund counts against it. Without one, each booking is
  * one row with its amount.
  */
-import type { Index, JournalEntry } from '../types/index.js';
+import type { Index, JournalEntry, Receipt } from '../types/index.js';
 import type { Invoice, Issued } from '../invoices/model.js';
 import { chfAmount } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Period } from '../accounting/periods.js';
 import { baseCurrency, chart, vat } from '../engines/index.js';
 import { totals as invoiceTotals } from '../invoices/rules.js';
-import { ledgerOf as receiptLedger } from '../app/areas/receipts/model.js';
-import { vatInFigures, type VatInFigures } from '../app/areas/reports/model.js';
+import { vatInFigures } from '../accounting/vat-in-figures.js';
+import type { ReportGroup, ReportResult, ReportRow, SectionResult, Totals } from './result.js';
 import { inRange, type Grouping, type ReportFilter, type ReportSection, type ReportSpec } from './spec.js';
-
-export interface ReportRow {
-  date: string;
-  text: string;
-  account: string;
-  counterAccount: string;
-  vatCode: string;
-  amount: number;
-  net: number;
-  tax: number;
-  /** The currency of `amount`: a booking's is the books' currency, whatever the payment was paid in. */
-  currency: string;
-  /** The receipts' file names, ` | ` between them. */
-  receipt: string;
-  counterparty: string;
-  /** What the row is, for a link to it. */
-  link: { kind: 'entry' | 'payment' | 'receipt' | 'invoice'; id: string };
-}
-
-/** The sums of rows in one currency. */
-export interface Totals { currency: string; count: number; amount: number; net: number; tax: number }
-
-export interface ReportGroup {
-  /** The month (2026-07), the quarter (2026-Q3), the account, the other party or the VAT code; '' for none of them. */
-  key: string;
-  /** The account's or the other party's name; '' where the key says it. */
-  label: string;
-  rows: ReportRow[];
-  totals: Totals[];
-}
-
-export interface SectionResult {
-  section: ReportSection;
-  groups: ReportGroup[];
-  totals: Totals[];
-  count: number;
-}
-
-export interface ReportResult {
-  spec: ReportSpec;
-  period: Period;
-  currency: string;
-  sections: SectionResult[];
-  totals: Totals[];
-  count: number;
-  /** The VAT the shown bookings hold in their gross amounts, not yet settled (as Bilanz and ER say it); absent when none carries a code. */
-  vat?: VatInFigures;
-}
 
 export interface ReportInput {
   books: Index;
@@ -159,19 +111,28 @@ function paymentRows(s: ReportSection, books: Index, period: Period, files: Map<
   });
 }
 
+/** Documents that are no receipt of their own (src/app/areas/receipts/model.ts: a copy, a statement, a supporting paper, noise). */
+const NOT_RECEIPTS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
+const FILE_DATE = /^(20\d\d)(\d\d)(\d\d)-/;
+
+/** The receipts of the period: dated in it (the date the file name starts with when it shows none), a document that is no receipt left out. */
 function receiptRows(s: ReportSection, books: Index, period: Period): ReportRow[] {
   const f = s.filter;
   const base = baseCurrency();
-  return receiptLedger(books, period.from).views.flatMap((v): ReportRow[] => {
-    if (v.none || !inside(period, v.day)) return [];
-    const currency = v.r.currency || base;
+  return books.receipts.flatMap((r): ReportRow[] => {
+    const file = FILE_DATE.exec(r.filename);
+    const day = r.date || (file ? `${file[1]}-${file[2]}-${file[3]}` : r.indexedAt?.slice(0, 10));
+    if (NOT_RECEIPTS.includes(r.kind) || !inside(period, day)) return [];
+    const currency = r.currency || base;
     if (f.currencies && !f.currencies.includes(currency)) return [];
-    if (!textMatches(f, v.vendor, v.desc, v.r.description)) return [];
-    const amount = v.r.amount ?? 0;
-    const tax = fromRappen((v.r.vatSummary ?? []).reduce((n, g) => n + toRappen(g.vat), 0));
+    const vendor = r.title?.vendor ?? r.description ?? r.filename;
+    const text = r.title ? [r.title.vendor, r.title.what].filter(Boolean).join(' · ') : r.description || r.filename;
+    if (!textMatches(f, text, r.description)) return [];
+    const amount = r.amount ?? 0;
+    const tax = fromRappen((r.vatSummary ?? []).reduce((n, g) => n + toRappen(g.vat), 0));
     return [{
-      date: v.day!, text: [v.vendor, v.desc].filter(Boolean).join(' · '), account: '', counterAccount: '', vatCode: '',
-      amount, net: fromRappen(toRappen(amount) - toRappen(tax)), tax, currency, receipt: v.r.filename, counterparty: v.vendor, link: { kind: 'receipt', id: v.r.id },
+      date: day!, text, account: '', counterAccount: '', vatCode: '',
+      amount, net: fromRappen(toRappen(amount) - toRappen(tax)), tax, currency, receipt: r.filename, counterparty: vendor, link: { kind: 'receipt', id: r.id },
     }];
   });
 }

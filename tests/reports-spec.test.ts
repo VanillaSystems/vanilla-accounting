@@ -18,7 +18,8 @@ import type { Postings } from '../src/accounting/index.js';
 import { chart, vat } from '../src/engines/index.js';
 import type { Index, JournalEntry } from '../src/types/index.js';
 import { checkSpec, inRange, parseSpec, specData, type ReportSpec } from '../src/reports/spec.js';
-import { fillComment, previewOf, runReport, type ReportResult } from '../src/reports/run.js';
+import { fillComment, previewOf, runReport } from '../src/reports/run.js';
+import type { ReportResult } from '../src/reports/result.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 const ws = workspaceAt(DEMO_ROOT);

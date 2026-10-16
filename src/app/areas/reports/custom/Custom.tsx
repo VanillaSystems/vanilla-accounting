@@ -17,7 +17,7 @@ import { ICONS } from '../../icons.js';
 import { Tabs } from '../Tabs.js';
 import { postDownload } from '../../export/state.js';
 import { specData } from '../../../../reports/spec.js';
-import type { ReportResult } from '../../../../reports/run.js';
+import type { ReportResult } from '../../../../reports/result.js';
 import { filtersInWords, refusalText } from '../../../../reports/words.js';
 import { ReportView, uiWords } from './ReportView.js';
 import { editing, reloadSaved, startEditing, undoWrite, useEditing, useSaved } from './store.js';

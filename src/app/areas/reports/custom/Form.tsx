@@ -13,7 +13,7 @@ import type { RouteOf } from '../../../shell/route.js';
 import type { AreaProps } from '../../index.js';
 import { ORIGINS, SOURCES, SOURCE_TAKES, placeholderNames, type Column, type Origin, type Source } from '../../../../reports/spec.js';
 import { draftOf, newDraft, newSection, rawOf, withSource, type FormDraft, type SectionDraft } from '../../../../reports/form.js';
-import type { ReportResult } from '../../../../reports/run.js';
+import type { ReportResult } from '../../../../reports/result.js';
 import { ReportView, uiWords } from './ReportView.js';
 import { editing, reloadSaved, undoWrite, useEditing } from './store.js';
 

@@ -14,9 +14,10 @@ import { hrefOf } from '../../../shell/history.js';
 import type { Location, Route } from '../../../shell/route.js';
 import type { Words } from '../../../../export/tables.js';
 import type { Column } from '../../../../reports/spec.js';
-import { fillComment, type ReportResult, type ReportRow, type Totals } from '../../../../reports/run.js';
+import { fillComment } from '../../../../reports/run.js';
+import type { ReportResult, ReportRow, Totals } from '../../../../reports/result.js';
 import { filtersInWords, groupName, spanOf } from '../../../../reports/words.js';
-import { vatParts } from '../model.js';
+import { vatParts } from '../../../../accounting/vat-in-figures.js';
 
 /** The UI's words for the code that names a report's parts (src/reports/files.ts). */
 export const uiWords: Words = { t: (k, v) => t(k as Key, v as never), accountingName };

@@ -3,10 +3,12 @@
  * its period, a section's filters, a group's heading, a refusal (src/reports/spec.ts ReportRefusal).
  * Without node modules, so the browser takes it too.
  */
-import type { Key } from '../app/i18n/types.js';
 import type { Words } from '../export/tables.js';
+
+/** A key of the UI's dictionaries, as the words take it. */
+type Key = Parameters<Words['t']>[0];
 import { COLUMNS, FILTERS, GROUPINGS, accountRangeText, type ReportRefusal, type ReportSection } from './spec.js';
-import type { ReportGroup, ReportResult } from './run.js';
+import type { ReportGroup, ReportResult } from './result.js';
 
 type T = (key: Key, vars?: Record<string, string | number>) => string;
 

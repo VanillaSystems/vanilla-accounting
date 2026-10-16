@@ -19,9 +19,10 @@ import type { Area, AreaProps, LegendItem } from '../index.js';
 import { entryAt } from '../vat/links.js';
 import {
   NO_ACCOUNT, NO_ACCOUNT_SLUG, accountsOf, filterBlocks, ledgerOf, reportOfAccount, reportView, searchReport,
-  vatParts, type AccountRow, type Block, type ReportView,
+  type AccountRow, type Block, type ReportView,
 } from './model.js';
 import { Detail } from './Detail.js';
+import { vatParts } from '../../../accounting/vat-in-figures.js';
 import { causeText } from '../close/steps.js';
 import type { DifferenceCause } from '../../../accounting/year-close.js';
 import { accountName, accountOfRoute, routeAccount } from './view.js';

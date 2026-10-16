@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 49 | 22 |
+| core | 51 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 68 | 26 |
+| split | 75 | 26 |
 | infrastructure | 34 | 4 |
 | workflow | 19 | 0 |
-| view | 231 | 59 |
+| view | 237 | 59 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -35,6 +35,9 @@ Layers are assigned by path prefix, most specific first:
 - `src/parsers/receipt-text.ts` → split
 - `src/parsers/` → infrastructure
 - `src/export/` → provider
+- `src/reports/spec.ts` → core
+- `src/reports/result.ts` → core
+- `src/reports/` → split
 - `src/booking/` → split
 - `src/intake/` → split
 - `src/invoices/` → split
@@ -180,10 +183,10 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 41, MWST 217, ESTV 34, Ziffer 51, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/en.ts` | CHF 41, MWST 4, ESTV 21, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
-| `src/app/i18n/locales/fr.ts` | CHF 41, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/it.ts` | CHF 41, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 42, MWST 224, ESTV 34, Ziffer 51, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/en.ts` | CHF 42, MWST 4, ESTV 21, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
+| `src/app/i18n/locales/fr.ts` | CHF 42, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/it.ts` | CHF 42, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 1 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |

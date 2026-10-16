@@ -5,13 +5,15 @@
  * the filters in words, each section's table with its group and section totals, the overall
  * totals, the comment with its figures filled in, and the note on the VAT the amounts still hold.
  */
-import type { Key } from '../app/i18n/types.js';
 import { csvOf, date, esc, fileStem, money, pageHtml } from '../export/bundle.js';
 import type { Table, Words } from '../export/tables.js';
-import { vatParts } from '../app/areas/reports/model.js';
+
+type Key = Parameters<Words['t']>[0];
+import { vatParts } from '../accounting/vat-in-figures.js';
 import { COLUMNS, type Column } from './spec.js';
 import { filtersInWords, groupName, sectionName, spanOf } from './words.js';
-import { fillComment, type ReportResult, type ReportRow, type Totals } from './run.js';
+import { fillComment } from './run.js';
+import type { ReportResult, ReportRow, Totals } from './result.js';
 
 const MONEY: readonly Column[] = ['amount', 'net', 'tax'];
 

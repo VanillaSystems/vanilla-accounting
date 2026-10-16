@@ -39,7 +39,7 @@ import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
 import { refusalText } from '../../reports/words.js';
-import type { ReportResult } from '../../reports/run.js';
+import type { ReportResult } from '../../reports/result.js';
 import type { SavedReport, SavedWrite } from '../../reports/saved.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
