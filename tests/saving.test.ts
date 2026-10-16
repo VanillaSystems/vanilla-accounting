@@ -88,7 +88,7 @@ test('a held save stays unsaved; the books are a save of their own, with the run
   saveBooks(ws, books);
   const run = { run: 'booking-w1', workflow: 'booking', label: 'Buchen', at: '2026-10-15T10:00:00.000Z', entries: 1, links: 0, receipts: 0 };
   const saving = openSaving(ws, { ...fakeModel(), runs: () => [run] });
-  assert.deepEqual((await saving.view()).books, { files: 1, runs: [run] });
+  assert.deepEqual((await saving.view()).books, { files: 1, runs: [run], hand: [] });
   await saving.command({ kind: 'prepare' });
   assert.deepEqual(await saving.command({ kind: 'talk', text: 'workflows noch nicht' }), { ok: true, reply: 'Gut.' });
   const result = await saving.command({ kind: 'save' });

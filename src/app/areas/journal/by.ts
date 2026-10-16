@@ -28,7 +28,7 @@ export function reasonText(e: JournalEntry, reason: string, say: Say): string {
   return say('journal.why.ai', { text: reason });
 }
 
-/** What a person changed: «MWST V0 → V81». */
+/** What a person changed, field by field: the code V0 → V81. */
 export function changesText(e: JournalEntry, was: BookingFields, say: Say): string {
   const shown = (k: keyof BookingFields, v: string | number | undefined) => (k === 'amount' && typeof v === 'number' ? fmt(v) : String(v || '–'));
   return (Object.keys(was) as Array<keyof BookingFields>)

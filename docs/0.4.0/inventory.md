@@ -14,7 +14,7 @@ and the providers.
 | split | 61 | 26 |
 | infrastructure | 31 | 4 |
 | workflow | 18 | 0 |
-| view | 213 | 60 |
+| view | 213 | 59 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -163,7 +163,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/invoices/model.ts` | CHF 3 |
 | `src/app/areas/journal/Detail.tsx` | CHF 1 |
 | `src/app/areas/journal/NewEntry.tsx` | CHF 1, form 0535 1 |
-| `src/app/areas/journal/by.ts` | MWST 1 |
 | `src/app/areas/journal/journal.tsx` | MWST 1 |
 | `src/app/areas/journal/model.ts` | CHF 1 |
 | `src/app/areas/receipts/Detail.tsx` | CHF 1 |
