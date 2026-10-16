@@ -118,8 +118,8 @@ function InvoiceList(props: Props & { d: Records }) {
           <Views on="list" props={props} />
         </div>
       </ListHead>
-      <div className="vresult static"><span>{t('invoices.open')}</span><b className="mono"><small>CHF</small>{fmt(sums.open)}</b></div>
-      {sums.overdue > 0 && <div className="notice warn rgap">{I.dot}<span>{t('invoices.overdueSum', { amount: fmt(sums.overdue) })}</span></div>}
+      <div className="vresult static"><span>{t('invoices.open')}</span><b className="mono" data-testid="open-sum"><small>CHF</small>{fmt(sums.open)}{sums.foreign.map((f) => <span key={f.currency} className="also"> + <small>{f.currency}</small>{fmt(f.open)}</span>)}</b></div>
+      {(sums.overdue > 0 || sums.foreign.some((f) => f.overdue > 0)) && <div className="notice warn rgap">{I.dot}<span>{t('invoices.overdueSum', { amount: [sums.overdue > 0 ? `CHF ${fmt(sums.overdue)}` : '', ...sums.foreign.filter((f) => f.overdue > 0).map((f) => `${f.currency} ${fmt(f.overdue)}`)].filter(Boolean).join(' + ') })}</span></div>}
       {groups.length === 0 ? (
         <div className="empty">
           <h2>{query.q ? t('invoices.nothingFound') : t('invoices.none')}</h2>
@@ -150,7 +150,7 @@ function Row({ r, sel, onSelect }: { r: InvoiceRow; sel: boolean; onSelect(): vo
     <div className={`row inv st-${r.state}${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={routeId(inv)} onClick={onSelect}>
       <span className="d mono">{inv.status === 'issued' ? inv.number : <span className="draftno">{t('invoices.draft')}</span>}</span>
       <span className="t">{r.state === 'overdue' && I.dot}{r.customer} {inv.subject && <small>{inv.subject}</small>}</span>
-      <span className="a mono">{inv.currency !== baseCurrency() && <span className="c">{inv.currency}</span>}{fmt(r.gross)}</span>
+      <span className="a mono">{inv.currency !== baseCurrency() && <span className="c">{inv.currency}</span>}{(r.state === 'open' || r.state === 'overdue') && r.open !== r.gross ? <>{fmt(r.open)}<small className="m"> {t('invoices.ofGross', { gross: fmt(r.gross) })}</small></> : fmt(r.gross)}</span>
     </div>
   );
 }

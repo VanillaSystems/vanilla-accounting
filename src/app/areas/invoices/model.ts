@@ -50,7 +50,8 @@ export function customerOf(d: InvoiceList, inv: Invoice): Pick<Customer, 'name' 
   return inv.status === 'issued' ? inv.customer : d.customers.find((c) => c.id === inv.customerId);
 }
 
-export interface InvoiceRow { inv: Invoice; state: RowState; gross: number; customer: string }
+/** `open`: what the customer still owes on it (0 for a draft, a credit note, a paid or cancelled one). */
+export interface InvoiceRow { inv: Invoice; state: RowState; gross: number; open: number; customer: string }
 
 /**
  * The invoices of a period (by invoice date), every draft, and every invoice of an earlier period
@@ -61,7 +62,7 @@ export function rowsOf(d: InvoiceList, period: Period, q: string | undefined, to
   const needle = q?.trim().toLowerCase();
   return d.invoices
     .filter((inv) => inv.status === 'draft' || (inv.date >= period.from && inv.date <= period.to) || (inv.date < period.from && openAmount(inv, d.invoices) > 0))
-    .map((inv) => ({ inv, state: rowState(inv, d.invoices, today), gross: totals(inv.lines).gross, customer: customerOf(d, inv)?.name ?? '' }))
+    .map((inv) => ({ inv, state: rowState(inv, d.invoices, today), gross: totals(inv.lines).gross, open: openAmount(inv, d.invoices), customer: customerOf(d, inv)?.name ?? '' }))
     .filter((r) => !needle || [r.inv.status === 'issued' ? r.inv.number : '', r.inv.subject ?? '', r.customer, r.gross.toFixed(2)].join(' ').toLowerCase().includes(needle));
 }
 
@@ -80,10 +81,14 @@ export function groupsOf(rows: readonly InvoiceRow[], status: InvoiceStatus | un
   })).filter((g) => g.rows.length);
 }
 
-/** What customers still owe in CHF, and how much of it is overdue (EUR invoices are shown in their rows). */
-export function openSums(rows: readonly InvoiceRow[], invoices: readonly Invoice[]): { open: number; overdue: number } {
-  const sum = (states: RowState[]) => Math.round(rows.filter((r) => states.includes(r.state) && r.inv.currency === baseCurrency()).reduce((s, r) => s + openAmount(r.inv, invoices), 0) * 100) / 100;
-  return { open: sum(['open', 'overdue']), overdue: sum(['overdue']) };
+export interface OpenSums { open: number; overdue: number; foreign: Array<{ currency: string; open: number; overdue: number }> }
+
+/** What customers still owe in CHF and how much of it is overdue; an invoice in another currency counts in its own, beside it (r8c-9). */
+export function openSums(rows: readonly InvoiceRow[], invoices: readonly Invoice[]): OpenSums {
+  const sum = (currency: string, states: RowState[]) => Math.round(rows.filter((r) => states.includes(r.state) && r.inv.currency === currency).reduce((s, r) => s + openAmount(r.inv, invoices), 0) * 100) / 100;
+  const of = (currency: string) => ({ open: sum(currency, ['open', 'overdue']), overdue: sum(currency, ['overdue']) });
+  const currencies = [...new Set(rows.filter((r) => (r.state === 'open' || r.state === 'overdue') && r.inv.currency !== baseCurrency()).map((r) => r.inv.currency))].sort();
+  return { ...of(baseCurrency()), foreign: currencies.map((currency) => ({ currency, ...of(currency) })) };
 }
 
 /** A customer's open invoices in CHF, for the customer list. */

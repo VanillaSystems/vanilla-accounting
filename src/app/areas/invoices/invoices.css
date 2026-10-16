@@ -136,3 +136,7 @@
 .invsetup input { width: 90px; }
 .invsetup .btn { justify-self: start; }
 .invsetup input.wide { width: 100%; }
+
+/* Offen: a second currency beside the CHF sum (r8c-9). */
+.vresult b .also { font-size: 16px; color: var(--muted); margin-left: 6px; }
+.row.inv .a small.m { font-size: 11px; }

@@ -28,6 +28,8 @@ test('each invoice\'s state: paid, overdue past its due date, open, a credit not
   assert.deepEqual(groupsOf(rows, 'open').map((g) => g.state), ['overdue', 'open']);
   assert.deepEqual(groupsOf(rows, undefined).map((g) => g.state), ['overdue', 'open', 'draft', 'paid', 'credit', 'cancelled']);
   assert.deepEqual(openSums(rows, d.invoices).overdue, 861.84, 'what 2026-003 still owes');
+  assert.deepEqual(openSums(rows, d.invoices), { open: 1827.03, overdue: 861.84, foreign: [{ currency: 'EUR', open: 865, overdue: 0 }] }, 'the EUR invoice counts in its own currency (r8c-9)');
+  assert.deepEqual(rows.filter((r) => r.state === 'open' || r.state === 'overdue').map((r) => [r.inv.status === 'issued' ? r.inv.number : '', r.open]), [['2026-003', 861.84], ['2026-005', 865], ['2026-006', 965.19]], 'each row knows what is still open');
 });
 
 test('a period shows the invoices dated in it and every draft; the search finds number, customer and subject', () => {
