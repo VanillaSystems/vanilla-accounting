@@ -30,7 +30,8 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/receipts/<receipt-id>` | one receipt (id: the first 16 hex characters of its SHA-256) |
 | `/bank` | Kontoauszüge |
 | `/bank/<account>-<yyyy-mm>` | one statement, e.g. `/bank/1021-2026-09` |
-| `/bank/<account>-<yyyy-mm>/<bank-ref>` | one payment in that statement |
+| `/bank/<account>-<yyyy-mm-dd>` | a statement of some days, by its first day, when a month has several, e.g. `/bank/1020-2026-10-15` (`_<last day>` added when two start the same day) |
+| `/bank/<statement>/<bank-ref>` | one payment in that statement |
 | `/payments/<bank-ref>` | resolves to the statement of that payment, or to its entry if it was paid privately |
 | `/journal` | Buchungen; `?vat=<code>` filters by VAT code |
 | `/journal/<entry-id>` | one journal entry |
