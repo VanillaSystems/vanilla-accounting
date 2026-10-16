@@ -158,7 +158,7 @@ test('the open quarter leads with the figure the return will carry (tax on each 
     journalEntries: [je('a', '2026-08-03', '1020', '3200', 10.05, { vatCode: 'V81' }), je('b', '2026-08-04', '1020', '3200', 10.05, { vatCode: 'V81' })],
   };
   const q3 = vatReturn(two, '2026-Q3', '2026-10-11');
-  assert.equal(q3.report.toPay, 1.5, 'per entry: 0.75 + 0.75');
-  assert.deepEqual(headline(q3, undefined, two), { kind: 'toPay', amount: 1.51, filed: false, rounding: { ziffern: 1.5 } }, 'the return: 8.1 % of 20.10 = 1.51, as the approval card and the XML say');
+  assert.equal(q3.report.toPay, 1.51, 'the page of a filing period shows the return (r9n-28): tax on the rate total, not 0.75 + 0.75');
+  assert.deepEqual(headline(q3, undefined, two), { kind: 'toPay', amount: 1.51, filed: false }, 'the return: 8.1 % of 20.10 = 1.51, as the approval card and the XML say; the page shows the same Ziffern, so no rounding note');
   assert.deepEqual(headline(vatReturn(books, '2026-Q3', '2026-10-11'), undefined, books), { kind: 'toPay', amount: 81 - 8.1, filed: false }, 'no note when the figures agree');
 });

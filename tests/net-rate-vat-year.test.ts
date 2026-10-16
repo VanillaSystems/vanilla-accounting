@@ -64,7 +64,7 @@ test('net-rate year close: the tax of the year holds the Bezugsteuer as its own 
   try {
     setJurisdiction(jurisdiction, NET_RATE);
     const index: Index = { config: {}, receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: netRateEntries };
-    const check = vatCheck(index as unknown as Books, '2026', [], { vatSettlement: '2200', vatAccounts: ['2200'], retainedEarnings: '2970', fxDifference: '6960' });
+    const check = vatCheck(index as unknown as Books, '2026', [], { vatSettlement: '2200', vatAccounts: ['2200'], retainedEarnings: '2970', fxDifference: '6960', receivables: { account: '1100', inChart: true } });
     assert.equal(check.booked, 44.1, 'sales tax 45 − 9, Bezugsteuer 8.10');
     assert.equal(check.acquisition, 8.1);
     assert.equal(check.rounding, 0, 'the returns declare the same tax: nothing to call rounding');
