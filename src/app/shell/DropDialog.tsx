@@ -16,6 +16,9 @@ import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import type { Route } from './route.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
+import { chfOf, suggestion } from '../areas/receipts/model.js';
+import { ledgerFor } from '../areas/receipts/view.js';
+import { useFx } from '../hooks/use-fx.js';
 
 interface State { open: boolean; session?: DropSession; adding: number; error?: string }
 let state: State = { open: false, adding: 0 };
@@ -166,6 +169,7 @@ function ReceiptDetails({ id, books, go }: { id: string; books: Index; go(route:
 /** A taken file: where it is, its quick details, the way to its page, and «Rückgängig». */
 function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSession; books: Index; go(route: Route): void; refresh(): void }) {
   const { view } = useAutomation();
+  const { rates } = useFx();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const x = fileState(r, books, view);
@@ -174,7 +178,10 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
     ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
   const lacks = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
-  const missing = x.kind !== 'waits' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : t('drop.p.payment');
+  // «Zahlung bestätigen» only when Belege has a payment to propose for it (r8k-5).
+  const ledger = ledgerFor(books);
+  const proposed = x.kind === 'waits' && receipt && ledger.byId.has(receipt.id) ? !!suggestion(ledger.byId.get(receipt.id)!, ledger, chfOf(rates)) : false;
+  const missing = x.kind !== 'waits' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };

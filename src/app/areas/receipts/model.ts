@@ -3,7 +3,7 @@
  * receipts a period holds, the groups ("Braucht dich" first), what is locked, and the payments a
  * receipt could belong to, ranked. Pure, so the list, the keys and the tests read the same order.
  */
-import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptPatch } from '../../../types/index.js';
+import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt, ReceiptPatch } from '../../../types/index.js';
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
 import type { Period } from '../../../accounting/periods.js';
 import type { ReceiptFilter } from '../../shell/route.js';
@@ -201,7 +201,7 @@ export const chfOf = (rates: EstvRates | null): ToChf => (amount, currency, date
 export interface Candidate {
   tx: BankTransaction;
   score: number;
-  /** Same amount in the same currency. */
+  /** Same amount in the same currency: the payment's, or one part's of a collective payment (`part`). */
   sameAmount: boolean;
   /** The payment moved in another currency than the receipt's. */
   otherCurrency: boolean;
@@ -211,50 +211,71 @@ export interface Candidate {
   taken: number;
   /** How its amount fits the receipt's, when it would hold only this receipt. */
   fit?: AmountFit;
+  /** The part of a collective payment (Sammelauftrag) of exactly the receipt's amount: the row names it (r8k-5). */
+  part?: BankTransactionPart;
+  /** Money the wrong way: in for a supplier invoice, out for a credit note or a sale. Never a best fit (r8k-5). */
+  wrongWay?: true;
   /** It lies in a filed quarter: choosing it leads to a correction in the open one, never to a link (corner-33). */
   filed?: true;
 }
 
 const DAY = 864e5;
-/** The score under which a payment is among the best fits. */
-const BEST = 25;
+const CENT = 0.005;
+
+/** The way the receipt's money went: `in` for a credit note (its amount below zero) or a sale, `out` for an invoice; undefined without an amount. */
+function moneyWay(r: Pick<Receipt, 'amount' | 'kind'>): 'in' | 'out' | undefined {
+  if (r.amount == null || r.amount === 0) return undefined;
+  return r.amount < 0 || r.kind === 'sales-record' ? 'in' : 'out';
+}
 
 /**
  * The payments a receipt could belong to, best first: close in amount (in CHF), close in date,
  * the same currency. A payment that already has a receipt ranks lower but stays findable
- * (AliExpress, FedEx and Amazon put several receipts on one payment). Fees never need a receipt.
- * A payment of a filed quarter without a receipt is listed, marked `filed`, when it fits as well as
- * a best one or a query finds it: a late receipt is led to its correction (corner-33). With a
- * query, every payment it finds; else up to 3 best and 12 more.
+ * (AliExpress, FedEx and Amazon put several receipts on one payment); a search reaches it by its
+ * description, the bank's counterparty and the parts of a collective payment. Fees never need a
+ * receipt. A best fit is a payment whose amount fits (the same, a Skonto, or a collective
+ * payment's part of exactly the amount) with the money going the receipt's way; nothing close
+ * means no best fit (r8h-21). A payment of a filed quarter without a receipt is listed, marked
+ * `filed`, when it is a best fit or a query finds it: a late receipt is led to its correction
+ * (corner-33). With a query, every payment it finds; else up to 3 best and 12 more.
  */
 export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''): { best: Candidate[]; more: Candidate[] } {
   const { r } = v;
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = r.currency || baseCurrency();
+  const way = moneyWay(r);
   const all: Candidate[] = [];
   for (const tx of l.txByRef.values()) {
     if (tx.amount === 0 || tx.type === 'wise-fee' || v.links.includes(tx.ref)) continue;
     const filed = !!l.closedThrough && tx.date <= l.closedThrough;
     if (words.length) {
-      const h = [tx.description, tx.bank, tx.date, tx.date.split('-').reverse().join('.'), Math.abs(tx.amount).toFixed(2), tx.remarks].join(' ').toLowerCase();
+      const parts = (tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference, Math.abs(p.amount).toFixed(2)]);
+      const h = [tx.description, tx.counterparty, tx.reference, tx.bank, tx.date, tx.date.split('-').reverse().join('.'), Math.abs(tx.amount).toFixed(2), tx.remarks, ...parts].join(' ').toLowerCase();
       if (!words.every((w) => h.includes(w))) continue;
     }
     const otherCurrency = tx.currency !== cur;
-    const sameAmount = r.amount != null && !otherCurrency && Math.abs(Math.abs(tx.amount) - Math.abs(r.amount)) < 0.005;
+    const part = r.amount == null || otherCurrency ? undefined : (tx.parts ?? []).find((p) => p.currency === cur && Math.abs(Math.abs(p.amount) - Math.abs(r.amount!)) < CENT);
+    const sameAmount = !!part || (r.amount != null && !otherCurrency && Math.abs(Math.abs(tx.amount) - Math.abs(r.amount)) < CENT);
     const days = v.date ? Math.round((Date.parse(tx.date) - Date.parse(v.date)) / DAY) : undefined;
     const want = r.amount == null ? undefined : Math.abs(toChf(r.amount, cur, tx.date));
-    const dAmt = want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
+    const dAmt = part ? 0 : want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
     const taken = (l.receiptsByRef.get(tx.ref) ?? []).length;
-    const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken ? 30 : 0);
-    if (filed && (taken || (!words.length && score >= BEST))) continue;
-    const fit = taken ? undefined : amountFit(r, tx, toChf);
-    all.push({ tx, score: score + (filed ? 0.5 : 0), sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}), ...(filed ? { filed: true as const } : {}) });
+    const wrongWay = !!way && (tx.direction === 'CRDT') !== (way === 'in');
+    // A collective payment holds one receipt per part: another receipt on it does not make it taken for this one.
+    const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken && !part ? 30 : 0) + (wrongWay ? 30 : 0);
+    const fit = part ? { kind: 'same' as const } : taken ? undefined : amountFit(r, tx, toChf);
+    const c: Candidate = { tx, score: score + (filed ? 0.5 : 0), sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}), ...(part ? { part } : {}), ...(wrongWay ? { wrongWay: true as const } : {}), ...(filed ? { filed: true as const } : {}) };
+    if (filed && (taken || (!words.length && !isBest(c)))) continue;
+    all.push(c);
   }
   all.sort((a, b) => a.score - b.score || b.tx.date.localeCompare(a.tx.date));
   if (words.length) return { best: [], more: all.slice(0, 40) };
-  const best = all.filter((c) => c.score < BEST).slice(0, 3);
+  const best = all.filter(isBest).slice(0, 3);
   return { best, more: all.filter((c) => !best.includes(c)).slice(0, 12) };
 }
+
+/** A best fit: the amount fits (the same, a Skonto, an exact part) and the money goes the receipt's way. */
+const isBest = (c: Candidate) => !!c.fit && c.fit.kind !== 'off' && !c.wrongWay;
 
 /**
  * The payment to offer with one key: the only open payment of exactly this amount, in this

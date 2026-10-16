@@ -3159,5 +3159,8 @@ export default {
     'journal.warn.cashNegative': 'La cassa {account} sarebbe in negativo il {date}: CHF {balance}. Il contante non può scendere sotto zero: Dare e Avere invertiti, o manca un incasso in contanti.',
     'journal.warn.swappedSale': 'Ricavi {accountDebit} in Dare, {accountCredit} in Avere: così si registra solo un rimborso al cliente. Una vendita si registra {accountCredit} / {accountDebit}.',
     'yearClose.check.bookingsPlausible': 'Nessuna cassa in negativo, nessuna vendita con i lati invertiti',
+    // r8k-5/9/10 r8h-21
+    'receipts.whyPart': 'parte {amount} a {who}',
+    'drop.p.noPayment': 'ancora nessun pagamento adatto: collegarlo sotto Giustificativi',
   },
 } satisfies Locale;

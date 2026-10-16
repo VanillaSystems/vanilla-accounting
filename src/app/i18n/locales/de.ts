@@ -3156,6 +3156,9 @@ export const messages = {
   'journal.warn.cashNegative': 'Kasse {account} wäre am {date} im Minus: CHF {balance}. Bargeld kann nicht unter null fallen: Soll und Haben vertauscht, oder eine Bareinnahme fehlt.',
   'journal.warn.swappedSale': 'Umsatz {accountDebit} im Soll, {accountCredit} im Haben: so steht nur eine Rückerstattung an den Kunden. Ein Verkauf wird {accountCredit} / {accountDebit} gebucht.',
   'yearClose.check.bookingsPlausible': 'Keine Kasse im Minus, kein Verkauf mit vertauschten Seiten',
+  // r8k-5/9/10 r8h-21
+  'receipts.whyPart': 'Teil {amount} an {who}',
+  'drop.p.noPayment': 'noch keine passende Zahlung: unter Belege verknüpfen',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

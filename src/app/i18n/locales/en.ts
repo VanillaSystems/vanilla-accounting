@@ -3159,5 +3159,8 @@ export default {
     'journal.warn.cashNegative': 'Cash account {account} would be below zero on {date}: CHF {balance}. Cash cannot fall under nothing: debit and credit swapped, or a cash receipt is missing.',
     'journal.warn.swappedSale': 'Revenue {accountDebit} in the debit, {accountCredit} in the credit: only a refund to the customer is booked so. A sale is booked {accountCredit} / {accountDebit}.',
     'yearClose.check.bookingsPlausible': 'No cash account below zero, no sale with its sides swapped',
+    // r8k-5/9/10 r8h-21
+    'receipts.whyPart': 'part {amount} to {who}',
+    'drop.p.noPayment': 'no fitting payment yet: link it under Receipts',
   },
 } satisfies Locale;

@@ -1,7 +1,8 @@
 /**
  * Zahlung verknüpfen: the payments ranked for this receipt (best first), a search over all of
  * them, and "paid privately or in cash" last. ↑↓ choose, ↵ links, Esc closes. The chosen payment
- * says when its amount is off the receipt's, before it is linked. A payment of a filed quarter is
+ * says when its amount is off the receipt's, before it is linked; a collective payment's row names
+ * the part that pays the receipt (r8k-5). A payment of a filed quarter is
  * marked: ↵ on it opens its correction in the open quarter and links nothing (corner-33).
  */
 import { useMemo, useState } from 'react';
@@ -21,7 +22,8 @@ type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClo
 
 function why(c: Candidate): string {
   return [
-    c.sameAmount ? t('receipts.whySameAmount') : c.otherCurrency ? t('receipts.whyAccount', { currency: c.tx.currency }) : '',
+    c.part ? t('receipts.whyPart', { amount: `${c.part.currency} ${fmt(Math.abs(c.part.amount))}`, who: c.part.counterparty })
+      : c.sameAmount ? t('receipts.whySameAmount') : c.otherCurrency ? t('receipts.whyAccount', { currency: c.tx.currency }) : '',
     c.fit?.kind === 'skonto' ? fitText(c.fit) : '',
     c.days !== undefined ? dayText(c.days) : '',
     c.taken ? t('receipts.whyTaken', { n: c.taken }) : '',

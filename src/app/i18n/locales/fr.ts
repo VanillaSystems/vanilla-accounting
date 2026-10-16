@@ -3159,5 +3159,8 @@ export default {
     'journal.warn.cashNegative': 'La caisse {account} serait négative le {date} : CHF {balance}. L’argent liquide ne peut pas passer sous zéro : débit et crédit inversés, ou une recette en espèces manque.',
     'journal.warn.swappedSale': 'Chiffre d’affaires {accountDebit} au débit, {accountCredit} au crédit : ainsi ne s’écrit qu’un remboursement au client. Une vente se comptabilise {accountCredit} / {accountDebit}.',
     'yearClose.check.bookingsPlausible': 'Aucune caisse négative, aucune vente aux côtés inversés',
+    // r8k-5/9/10 r8h-21
+    'receipts.whyPart': 'part {amount} à {who}',
+    'drop.p.noPayment': 'pas encore de paiement correspondant : à lier sous Justificatifs',
   },
 } satisfies Locale;
