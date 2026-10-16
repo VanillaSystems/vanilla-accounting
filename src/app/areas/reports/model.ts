@@ -42,7 +42,7 @@ export interface VatInFigures {
   owed: number;
   /** Input tax the codes deduct. */
   input: number;
-  /** owed − input: what the figures hold that the ESTV gets. */
+  /** owed − input: what the figures hold that the tax office gets. */
   net: number;
 }
 

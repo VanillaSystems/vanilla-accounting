@@ -11,10 +11,10 @@ and the providers.
 | core | 45 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 63 | 27 |
+| split | 63 | 26 |
 | infrastructure | 32 | 4 |
 | workflow | 19 | 0 |
-| view | 226 | 61 |
+| view | 226 | 59 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -109,7 +109,6 @@ Layers are assigned by path prefix, most specific first:
 |---|---|
 | `src/accounting/classify-force.ts` | form 0535 1 |
 | `src/accounting/correction-cases.ts` | Ziffer 8, form 0535 2 |
-| `src/accounting/correction.ts` | MWST 2, form 0535 1 |
 | `src/accounting/filed-return.ts` | Ziffer 3, eCH-0217 2 |
 | `src/accounting/fx-conversion.ts` | CHF 4, ESTV 8 |
 | `src/accounting/fx-rates.ts` | CHF 2, ESTV 5 |
@@ -170,7 +169,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/receipts/model.ts` | CHF 3, MWST 1, ESTV 2 |
 | `src/app/areas/receipts/view.ts` | CHF 2 |
 | `src/app/areas/reports/Detail.tsx` | CHF 1 |
-| `src/app/areas/reports/model.ts` | ESTV 1 |
 | `src/app/areas/reports/reports.tsx` | CHF 1 |
 | `src/app/areas/vat/Detail.tsx` | CHF 4, Ziffer 5, form 0535 3 |
 | `src/app/areas/vat/filed.ts` | ESTV 1 |
@@ -205,7 +203,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-close.ts` | CHF 4, ESTV 3, form 0535 1 |
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
-| `src/server/routes/journal.ts` | form 0535 1 |
 | `src/server/routes/receipts.ts` | CHF 1 |
 | `src/server/routes/statements.ts` | camt.053 7 |
 | `src/server/routes/transactions.ts` | camt.053 1 |

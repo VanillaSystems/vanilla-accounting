@@ -59,7 +59,7 @@ router.post('/api/journal-entries', (req, res) => {
   if (!exchangeCurrency !== (exchangeRate === undefined)) throw new RequestError(400, 'exchangeCurrency und exchangeRate gehören zusammen.');
   if (exchangeRate !== undefined && !(exchangeRate > 0)) throw new RequestError(400, 'exchangeRate muss grösser als 0 sein.');
   const corrects = optional('corrects');
-  // A correction of a filed entry names it and what was wrong: its case explains the 0535 (r8c-6).
+  // A correction of a filed entry names it and what was wrong: its case explains the correction return (r8c-6).
   const correctsEntry = optional('correctsEntry');
   const correction = optional('correction');
   if (correction && !(['vat', 'account', 'storno'] as const).includes(correction as CorrectionKind)) throw new RequestError(400, 'correction: vat, account oder storno.');

@@ -110,12 +110,12 @@ export const banksMoved = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit
 const line = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'vatCode'>) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} ${e.amount.toFixed(2)}`;
 const day = (iso: string) => iso.split('-').reverse().join('.');
 
-const KIND_TITLE: Record<CorrectionKind, string> = { vat: 'MWST-Code korrigiert', account: 'Konto korrigiert', storno: 'Buchung storniert' };
-const KIND_WRONG: Record<CorrectionKind, string> = { vat: 'der MWST-Code war falsch', account: 'das Konto war falsch', storno: 'die Buchung gehörte nicht in die Bücher' };
+const KIND_TITLE: Record<CorrectionKind, string> = { vat: 'Steuercode korrigiert', account: 'Konto korrigiert', storno: 'Buchung storniert' };
+const KIND_WRONG: Record<CorrectionKind, string> = { vat: 'der Steuercode war falsch', account: 'das Konto war falsch', storno: 'die Buchung gehörte nicht in die Bücher' };
 
 /**
  * The case a correction booked by hand writes into config.correctionCases (r8c-6): what was filed,
- * what fixes it, both entries by id. The 0535 then explains the correction instead of listing an
+ * what fixes it, both entries by id. The correction return then explains the correction instead of listing an
  * orphan. Written in the books' language, as the cases of the demo books are.
  */
 export function correctionCaseFor(original: JournalEntry, correction: JournalEntry, kind: CorrectionKind, period: string): CorrectionCase {

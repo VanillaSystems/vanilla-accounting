@@ -41,7 +41,7 @@ test('«Ausstellen» with something missing: each item says it in words and lead
   ]);
   const words = Object.entries(deLocale.messages).filter(([k]) => k.startsWith('invoice.missing.')).map(([, v]) => String(v));
   assert.deepEqual(words.filter((w) => /[a-z]+\.[a-z]+[A-Z]/.test(w)), [], 'no config key (invoicing.payTo) in what a person reads');
-  assert.match(String(deLocale.messages['invoice.missing.payTo']), /Firma › Rechnungslayout › Rechnungen einrichten/);
+  assert.match(String(deLocale.messages['invoice.missing.payTo']), /Firma › Rechnungslayout › Zahlungskonten/);
 });
 
 test('the date or period of the supply: typed on the sheet, stored, printed', () => {

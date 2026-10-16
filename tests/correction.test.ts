@@ -151,7 +151,7 @@ test('a correction booked by hand gets its case (r8c-6): the 0535 explains it, n
     const c = cases.find((x) => x.correctionEntryIds.includes(entry.id))!;
     assert.ok(c, 'the correction has a case');
     assert.deepEqual([c.period, c.originalEntryIds], ['2026-Q2', ['jc']]);
-    assert.match(c.title, /MWST/);
+    assert.match(c.title, /Steuercode/);
     assert.match(c.wrong, /jc/);
     assert.match(c.fix, /-I81/);
     const filed = { period: '2026-Q2' as const, ziffern: {} };
