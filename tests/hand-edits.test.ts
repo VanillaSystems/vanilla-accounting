@@ -142,3 +142,23 @@ test('a filed booking is never put back: the write door refuses a restore into a
   const closed = books.journalEntries.find((e) => e.date <= (books.config.closedThrough ?? ''))!;
   assert.throws(() => update(books, PERSON, (b) => restoreSaved(b, closed.id, { ...closed, amount: closed.amount + 1 })));
 });
+
+test('r10k-2: a rule booking a person changed before any save holds it is listed as a change, and «Rückgängig» puts the rule\'s booking back instead of deleting it', async () => {
+  const ws = await company();
+  const books = loadBooks(ws);
+  const closed = books.config.closedThrough ?? '';
+  const ref = books.transactions.find((t) => t.date > closed)!.ref;
+  let id = '';
+  update(books, moduleActor('intake'), (b) => {
+    id = addEntry(b, { date: b.transactions.find((t) => t.ref === ref)!.date, transactionRef: ref, accountDebit: '1020', accountCredit: '3400', amount: 412.8, description: 'TWINT Sammelgutschrift', origin: 'classify', by: { kind: 'rule', rule: 'twint-umsatz' }, rule: 'twint-umsatz', reason: 'Regel: Text enthält «TWINT» → Konto 3400' }).id;
+  });
+  update(books, PERSON, (b) => { setEntry(b, id, { accountCredit: '3200' }); });
+  saveBooks(ws, books);
+  const row = (await handEdits(ws)).find((h) => h.id === id);
+  assert.ok(row?.saved, 'the row is a change of the rule\'s booking, not a booking by hand');
+  assert.deepEqual([row.saved.accountCredit, row.saved.origin, row.saved.by, row.saved.rule], ['3400', 'classify', { kind: 'rule', rule: 'twint-umsatz' }, 'twint-umsatz'], 'the booking as the rule made it');
+  const after = loadBooks(ws);
+  update(after, PERSON, (b) => restoreSaved(b, id, row.saved, row.kept));
+  const back = after.journalEntries.find((e) => e.id === id)!;
+  assert.deepEqual([back.accountCredit, back.by, back.amount], ['3400', { kind: 'rule', rule: 'twint-umsatz' }, 412.8], 'the rule\'s booking is back, the payment stays booked');
+});

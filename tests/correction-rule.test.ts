@@ -77,3 +77,29 @@ test('a person\'s correction of a rule booking offers the rule\'s change; kept, 
   assert.deepEqual([next.accountDebit, next.by], ['6513', { kind: 'rule', rule: ruleId }], 'the next payment is booked the corrected way');
   assert.equal((await api.send('GET', '/api/rules/correction?ref=CORR-1')).json.offer, null, 'nothing more to teach from that correction');
 });
+
+test('r10f-35: a filed sale corrected to «kein Verkauf» in the open period offers the payer rule\'s change: to the account the correction credits, without a code', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { tempWorkspace, writeIndex } = await import('./support/workspace.js');
+  const { workspaceAt } = await import('../src/workspace/workspace.js');
+  const { filingKeyOf } = await import('../src/accounting/periods.js');
+  const iban = 'CH0000762011623852958';
+  const closed = '2026-06-30';
+  const filed: BankTransaction = { ref: 'SALE-F', bank: 'Raiffeisen', date: '2026-05-10', amount: 4380, currency: 'CHF', direction: 'CRDT', description: 'Peter Beispiel', counterparty: 'Peter Beispiel', counterpartyIban: iban };
+  const w0 = tempWorkspace('correction-filed-');
+  mkdirSync(join(w0.paths.root, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(w0.paths.root, GUIDE), `process: booking\nsteps:\n  classify:\n    rules:\n      - id: sale-q-1\n        when: { payer: ${iban}, direction: in }\n        then: { account: "3400", vat: V81 }\n        source: correction 2026-05-02\n`);
+  mkdirSync(w0.paths.masterData, { recursive: true });
+  writeFileSync(w0.paths.accounts, JSON.stringify([['1020', 'Bank'], ['2451', 'Kontokorrent'], ['3400', 'Dienstleistungsertrag']].map(([number, name]) => ({ number, name }))));
+  writeIndex(w0, {
+    transactions: [filed], receipts: [], mappings: [], bankStatements: [], config: { closedThrough: closed },
+    journalEntries: [
+      { id: 'sale-f', transactionRef: 'SALE-F', date: filed.date, accountDebit: '1020', accountCredit: '3400', amount: 4380, vatCode: 'V81', description: 'Peter Beispiel', origin: 'classify', by: { kind: 'rule', rule: 'sale-q-1' }, rule: 'sale-q-1' },
+      { id: 'corr-f', transactionRef: 'SALE-F', date: '2026-08-01', accountDebit: '3400', accountCredit: '2451', amount: 4380, vatCode: '-V81', description: 'Korrektur sale-f: kein Verkauf', origin: 'manual', corrects: filingKeyOf(filed.date, w0.filingLength), by: { kind: 'person', at: '2026-08-01T10:00:00Z' } },
+    ],
+  });
+  const ws = workspaceAt(w0.paths.root);
+  const offer = correctionOffer(ws, loadBooks(ws), 'SALE-F');
+  assert.ok(offer, 'the correction of a filed sale teaches the payer rule');
+  assert.deepEqual([offer.rule, offer.entry, offer.from, offer.to], ['sale-q-1', 'corr-f', { account: '3400', vat: 'V81' }, { account: '2451', vat: null }]);
+});
