@@ -53,7 +53,13 @@ test('the origin filter lists what Claude booked, what a person did, within the 
   const j = journalOf(b);
   const r = rowsOf(j, q3, undefined, undefined, undefined, name, 'classify');
   assert.deepEqual(r.rows.map((v) => v.e.id), ['open-a', 'ok'], 'the filed quarter\'s entry is outside the period');
-  assert.deepEqual(r.origins, { classify: 2, manual: 1, invoice: 1, 'year-close': 0 });
+  assert.deepEqual(r.origins, { classify: 2, manual: 1, assistant: 0, invoice: 1, 'year-close': 0 });
+  // A change the AI sidebar made on a wish is origin manual with by.kind assistant: counted as KI, not as by hand (r6h-29).
+  const ai = journalOf(by({ ok: 'classify', 'open-a': 'classify', 'open-b': 'manual', none: 'manual', filed: 'classify' }));
+  ai.views.find((v) => v.e.id === 'none')!.e.by = { kind: 'assistant', at: '2026-10-16T08:00:00Z', conversation: 'c1' };
+  assert.deepEqual(rowsOf(ai, q3, undefined, undefined, undefined, name).origins, { classify: 2, manual: 1, assistant: 1, invoice: 0, 'year-close': 0 });
+  assert.deepEqual(rowsOf(ai, q3, undefined, undefined, undefined, name, 'assistant').rows.map((v) => v.e.id), ['none']);
+  assert.deepEqual(rowsOf(ai, q3, undefined, undefined, undefined, name, 'manual').rows.map((v) => v.e.id), ['open-b']);
   assert.deepEqual(rowsOf(j, q3, 'ohneBeleg', undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'with «Ohne Beleg»');
   const sept = parsePeriod('2026-09-11..2026-09-30', '2026-10-11')!;
   assert.deepEqual(rowsOf(j, sept, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'a date range is the period');

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mailFailure, MailLoginError } from '../src/platform/sources/mail-channel.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import type { MailCheck, SourcesView } from '../src/platform/sources/model.js';
 
@@ -74,6 +75,14 @@ test('a mailbox connected in Firma › Quellen: a source waiting to be switched 
 
   const second = await api.send('POST', '/api/sources/mail', { address: 'sandra@malerei.example', host: 'imap.malerei.example' });
   assert.equal(second.json.id, 'sandra-malerei-example-2', 'the same address twice: a second source, not an overwrite');
+});
+
+test('what a failed connection means, in the check\'s words: a name that does not resolve is unreachable, a certificate this Mac does not trust is the server reached (r6h-26)', () => {
+  const code = (c: string) => Object.assign(new Error(c), { code: c });
+  assert.deepEqual(mailFailure(code('ENOTFOUND')), { ok: false, reason: 'connect', detail: 'ENOTFOUND' });
+  assert.deepEqual(mailFailure(code('ECONNREFUSED')), { ok: false, reason: 'connect', detail: 'ECONNREFUSED' });
+  for (const c of ['UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID']) assert.deepEqual(mailFailure(code(c)), { ok: false, reason: 'certificate', detail: c }, c);
+  assert.deepEqual(mailFailure(new MailLoginError('Authentication failed')), { ok: false, reason: 'login' });
 });
 
 test('an unknown source or one that is no mailbox is refused', async () => {

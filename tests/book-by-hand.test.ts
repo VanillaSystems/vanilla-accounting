@@ -161,6 +161,23 @@ test('the draft: the bank on its side, the payment\'s amount and date, the recei
   assert.deepEqual(alone.lines[0], { accountDebit: '', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe' }, 'no precedent: the rate waits for the account');
 });
 
+test('the vendor\'s last payment split into an asset and an expense leg: the draft takes the expense leg, not the ladder (r6h-27)', () => {
+  const books = {
+    transactions: [
+      { ref: 'T1', bank: 'Bank', date: '2026-09-09', amount: 158.6, currency: 'CHF', direction: 'DBIT' as const, description: 'Karte 5412 Einkauf', counterparty: 'Baucenter Gossau' },
+      { ref: 'T0', bank: 'Bank', date: '2026-07-08', amount: 312.9, currency: 'CHF', direction: 'DBIT' as const, description: 'Karte 5412 Einkauf', counterparty: 'Baucenter Gossau' },
+    ],
+    receipts: [],
+    mappings: [],
+    journalEntries: [
+      { id: 'ladder', transactionRef: 'T0', date: '2026-07-08', accountDebit: '1510', accountCredit: '1020', amount: 250, vatCode: 'I81' },
+      { id: 'material', transactionRef: 'T0', date: '2026-07-08', accountDebit: '4400', accountCredit: '1020', amount: 62.9, vatCode: 'M81' },
+    ],
+  };
+  const draft = bookingDraft(books, 'T1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }])!;
+  assert.deepEqual([draft.lines[0].accountDebit, draft.precedent?.id], ['4400', 'material']);
+});
+
 test('the hand form warns when a code would deduct input tax no receipt shows, and names the zero code (corner-8)', () => {
   assert.equal(inputTaxWithoutReceipt('I81'), 'I0');
   assert.equal(inputTaxWithoutReceipt('M81'), 'M0');
