@@ -180,10 +180,10 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 31, MWST 196, ESTV 28, Ziffer 47, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/en.ts` | CHF 31, MWST 4, ESTV 17, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
-| `src/app/i18n/locales/fr.ts` | CHF 31, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/it.ts` | CHF 31, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 32, MWST 197, ESTV 28, Ziffer 47, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/en.ts` | CHF 32, MWST 4, ESTV 17, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
+| `src/app/i18n/locales/fr.ts` | CHF 32, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/it.ts` | CHF 32, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 1 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |

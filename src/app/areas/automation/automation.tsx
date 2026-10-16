@@ -627,7 +627,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
   const p = parsePeriod(ret.period, localToday());
   return (
     <>
-      {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, 'CHF'), now: money(ret.payable, 'CHF') })}</p> : null}
+      {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, baseCurrency()), now: money(ret.payable, baseCurrency()) })}</p> : null}
       {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null}
     </>
   );
