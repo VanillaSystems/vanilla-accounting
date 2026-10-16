@@ -243,7 +243,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
             {ruleDrafts.length ? (
               <>
                 <div className="group"><span>{t('changes.ruleDrafts')}</span></div>
-                {ruleDrafts.map((f) => <RuleDraft key={f.path} path={f.path} nav={nav} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} />)}
+                {ruleDrafts.map((f) => <RuleDraft key={f.path} path={f.path} nav={nav} title={t('rules.draft.titleRule')} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} />)}
               </>
             ) : null}
             {others.length ? (

@@ -39,7 +39,7 @@ import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
 import { isCamt } from '../bank/model.js';
-import { baseCurrency, filing, vat } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -137,7 +137,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         ? <div className="notice">{ICONS.lock}<span>{t('journal.correctsNotice', { filed: filedName(e.corrects), declared: quarterName(e.date), correction: correctionName() })}</span></div>
         : v.locked && (
           <div className="notice">
-            {ICONS.lock}<span>{t('journal.lockedNotice', { period: quarterName(e.date) })}</span>
+            {ICONS.lock}<span>{t(chargesVat() ? 'journal.lockedNotice' : 'journal.lockedNoticeClosed', { period: quarterName(e.date) })}</span>
             {canEdit && open && <a href="#" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: correctionPeriodName(props.books) })}</a>}
           </div>
         )}

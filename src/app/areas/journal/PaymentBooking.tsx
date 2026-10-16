@@ -8,7 +8,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { Index, JournalEntry } from '../../../types/index.js';
 import { bookingDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
-import { formTakes, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
+import { firmCodes, formTakes, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
 import { withoutInputTax } from '../../../engines/index.js';
 import { codeText } from '../codes/vat-card.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
@@ -163,12 +163,14 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
           <div key={key} className="pbl">
             <AccountField name={`accountDebit-${key}`} label={t('journal.field.accountDebit')} defaultValue={init.accountDebit} onPick={() => redraw((n) => n + 1)} />
             <AccountField name={`accountCredit-${key}`} label={t('journal.field.accountCredit')} defaultValue={init.accountCredit} onPick={() => redraw((n) => n + 1)} />
-            <label className="pbv">{t('journal.byHand.vatLabel')}
-              <input className="mono" name={`vatCode-${key}`} defaultValue={init.vat} list="vat-codes" placeholder={t('journal.vatPlaceholder')} />
-              <span className="acn" data-testid="vat-name" title={vat?.code ? codeText(vat.code) : undefined}>
-                {vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null ? '' : t('journal.byHand.noVat')}
-              </span>
-            </label>
+            {firmCodes().length ? (
+              <label className="pbv">{t('journal.byHand.vatLabel')}
+                <input className="mono" name={`vatCode-${key}`} defaultValue={init.vat} list="vat-codes" placeholder={t('journal.vatPlaceholder')} />
+                <span className="acn" data-testid="vat-name" title={vat?.code ? codeText(vat.code) : undefined}>
+                  {vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null ? '' : t('journal.byHand.noVat')}
+                </span>
+              </label>
+            ) : <span className="pbv" />}
             {zero ? <p className="pbw" data-testid="vat-no-receipt">{t('journal.byHand.noReceiptVat', { code: vat!.code, zero })}</p> : null}
             <label className="pba">{t('journal.amountIn', { currency: draft.currency })}<input className="mono" name={`amount-${key}`} defaultValue={fmt(init.amount)} style={{ textAlign: 'right' }} /></label>
             <label className="pbt">{t('journal.field.description')}<input name={`description-${key}`} defaultValue={init.description} /></label>

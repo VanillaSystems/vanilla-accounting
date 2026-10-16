@@ -29,7 +29,7 @@ import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { Paper } from './Paper.js';
 import { I } from './icons.js';
-import { baseCurrency, filing, withoutInputTax } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -145,7 +145,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       )}
       {v.locked && (
         <div className="notice">
-          {ICONS.lock}<span>{t('receipts.lockedNotice', { period: lockedPeriod(v, l) })}</span>
+          {ICONS.lock}<span>{t(chargesVat() ? 'receipts.lockedNotice' : 'receipts.lockedNoticeClosed', { period: lockedPeriod(v, l) })}</span>
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: correctionPeriodName(props.books) })}</a>
         </div>
       )}

@@ -147,6 +147,8 @@ function Detail({ route, nav, books, canEdit }: Props) {
     case 'workflow': {
       if (!route.workflow) return <div className="detail-empty"><div>{t('automation.pick')}</div></div>;
       const w = view.workflows.find((x) => x.id === route.workflow);
+      // «/automation/rules» is where a person looks for the rules: they live under Firma › Regeln.
+      if (!w && route.workflow === 'rules') return <div className="detail-empty"><div><button type="button" className="golink" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('automation.toRules')}</button></div></div>;
       return w ? <WorkflowPage w={w} view={view} route={route} nav={nav} /> : <div className="detail-empty"><div>{t('automation.unknown', { id: route.workflow })}</div></div>;
     }
     case 'run': return <RunPage id={route.run} view={view} nav={nav} books={books} />;

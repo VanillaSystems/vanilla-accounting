@@ -24,7 +24,7 @@ import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
 import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
 import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
-import { baseCurrency, chart, vat, withoutInputTax } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, chart, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -116,7 +116,7 @@ export function NewEntry(props: Props) {
     const amount = parseAmount(f.amount);
     const [dr, cr, vat, text] = [f.accountDebit.trim(), f.accountCredit.trim(), (f.vatCode ?? '').trim(), f.description.trim()];
     const problem = !date && !tx ? t('journal.errDate')
-      : !tx && closed && date! <= closed ? t('journal.errFiledDate', { date: formatDate(closed) })
+      : !tx && closed && date! <= closed ? t(chargesVat() ? 'journal.errFiledDate' : 'journal.errClosedDate', { date: formatDate(closed) })
       : [dr, cr].find((n) => n && !accounts[n]) ? t('journal.errAccount', { account: [dr, cr].find((n) => n && !accounts[n])! })
       : [dr, cr].find((n) => n && !chart().isPlaced(n)) ? t('error.accountOutsideStatements', { account: [dr, cr].find((n) => n && !chart().isPlaced(n))!, classes: chart().placedClasses })
       : !dr && !cr ? t('journal.errNoAccount')
