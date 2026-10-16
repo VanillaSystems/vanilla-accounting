@@ -102,8 +102,10 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
         } else {
           ai.changes = applied.made;
           onEvent({ type: 'changes', changes: ai.changes });
-          // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer.
-          ai.text = `${ai.text.trimEnd()}\n\n${wordsIn(send.language).t('assistant.applied', { n: applied.made.length })}`;
+          // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer, and says so where the model still named «Übernehmen» (r10f-11).
+          const { t } = wordsIn(send.language);
+          const take = ai.text.includes(t('assistant.held.take'));
+          ai.text = `${ai.text.trimEnd()}\n\n${t('assistant.applied', { n: applied.made.length })}${take ? ` ${t('assistant.appliedNoTake', { take: t('assistant.held.take') })}` : ''}`;
           onEvent({ type: 'replace', text: ai.text });
         }
       }
