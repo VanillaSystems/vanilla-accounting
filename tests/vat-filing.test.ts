@@ -329,4 +329,6 @@ test('a filing run discarded while the period was held frees it (r7h-24)', async
   await engine.command({ kind: 'discard', run: r.ok ? r.run! : '' });
   await engine.idle();
   assert.equal(loadBooks(ws).config.approvedReturn, undefined);
+  const state = engine.run(r.ok ? r.run! : '')!.state;
+  assert.deepEqual([state.status, state.status === 'discarded' ? state.reason : ''], ['discarded', 'von einer Person verworfen'], 'the run page shows the reason as it is: in the books\' language, not English (r8f-44)');
 });
