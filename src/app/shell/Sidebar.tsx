@@ -97,7 +97,7 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     case 'export': {
       const preset = PRESETS.some((p) => p.id === c.preset) ? t(`export.preset.${c.preset}` as 'export.preset.treuhand') : c.preset;
       if (failed || !note?.file) return { text: [t('assistant.c.exportNot', { preset }), failed].filter(Boolean).join(' · ') };
-      return { text: t('assistant.c.export', { preset, file: note.file.path }), href: api.assistantExportUrl(note.file.name) };
+      return { text: t('assistant.c.export', { preset, file: note.file.name }), href: api.assistantExportUrl(note.file.name) };
     }
     case 'bookAgain': return { text: failed ? `${t('assistant.c.bookAgainNot')} · ${failed}` : t('assistant.c.bookAgain'), go: { area: 'automation', view: 'runs' } };
   }

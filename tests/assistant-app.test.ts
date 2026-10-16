@@ -82,7 +82,7 @@ test('the prompt carries the map of the app in the person\'s language', async (t
   const s = await sidebar(t);
   await s.answer([]);
   assert.ok(s.prompts()[0].includes(appMap('de')), 'the route gives the map to the prompt');
-  assert.match(s.prompts()[0], /Firma › Rechnungslayout \(\/company\/invoice-layout\)/);
+  assert.match(s.prompts()[0], /Firma › Rechnungslayout: /);
 });
 
 test('an account and the bookings on it come in one answer: without it they are refused, the account goes back with them', async (t) => {

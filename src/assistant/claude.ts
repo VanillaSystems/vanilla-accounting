@@ -12,7 +12,8 @@
  * src/server/workspace-edits.ts): its file tools never write them. What it
  * may write is set by its permissions, not by the prompt: no settings of the workspace or the
  * person are loaded (they could allow more), and Edit and Write reach only data/draft/ for the
- * customizing folders, which a person saves in Änderungen (docs/0.4.0/saving.md).
+ * customizing folders, which a person keeps with «Behalten» on a rule's card or saves in Änderungen
+ * (docs/0.4.0/saving.md).
  */
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
@@ -22,6 +23,7 @@ import { claudeCommand, NoClaudeError, record, type Model } from '../llm/ask.js'
 import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
+import { wordsIn } from '../export/texts.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
@@ -36,6 +38,7 @@ export function draftPatterns(): string[] {
 
 /** `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount); `map`: the app's places in the person's language. */
 export function assistantSystem(language: string, owner: string, map: string): string {
+  const { t } = wordsIn(language);
   return [
     'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them. They are not an accountant and not technical. Do what they ask.',
     'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, transactions = payments, mappings = links, journalEntries = bookings), invoices.json (customers, invoices and drafts), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml (the company, its bank accounts, invoicing: payment term, layout, texts).',
@@ -70,8 +73,9 @@ export function assistantSystem(language: string, owner: string, map: string): s
     'When a wish is vague (e.g. "make everything right"), change nothing yet: ask back in one short question and say what you would do and on what (this receipt, this payment, the quarter). Say what you looked at.',
     'Never take back or redo a change made earlier in this conversation, nor a person\'s own correction in the books (a booking of origin "manual", a receipt kind set by a person, a link a person removed), without naming it plainly and asking first; the app refuses a block that takes back an earlier change of the conversation (its card has «Rückgängig» for that).',
     'Never send the person to a button, menu or screen that is not in the map above. Do the work in the block, or say plainly that you cannot do it and where in the app the person does it.',
-    'How the app works (rules, workflows, knowledge) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). Tell the person it takes effect when they press «Speichern» under Änderungen. The chart, the invoicing settings and invoices are never drafted: they go into the block.',
-    'Before the block, say in one or two plain sentences what you changed. Never mention files, JSON, ids, git or commits to the person.',
+    'How the app works (rules, workflows, knowledge) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). The chart, the invoicing settings and invoices are never drafted: they go into the block.',
+    `A rule you draft (a file under knowledge/) shows as a card under your answer, and its one click is the only thing the person does: «${t('rules.draft.keep')}» keeps it, «${t('rules.draft.discard')}» drops it, and a rule you take out asks «${t('rules.draft.remove')}». Until that click nothing of it applies: say you drafted it and name that click, never that it is set, removed or in effect, and no other step. A draft that is not a rule (a workflow) takes effect when the person presses «${t('changes.save')}» under ${t('area.changes')}.`,
+    'Before the block, say in one or two plain sentences what you changed. Never mention to the person files or paths, JSON, ids, git or commits, nor the app\'s inner names (config fields such as closedThrough, the kinds and fields of the block, codes of a refusal, web addresses such as /vat): name a place only as the map names it, and a thing in the words the app shows.',
     `Answer in ${LANGUAGES[language] ?? 'German'}, short and plain, addressing the person informally as the app does (du, tu).`,
   ].join('\n');
 }

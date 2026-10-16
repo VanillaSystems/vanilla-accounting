@@ -31,8 +31,8 @@ test('every area folder is a registered area and a line of the map, every Firma 
   for (const lang of ['de', 'fr', 'it', 'en']) {
     const { t } = wordsIn(lang);
     const map = appMap(lang);
-    for (const id of Object.keys(AREAS)) assert.ok(map.includes(`- ${t(`area.${id}` as 'export.title')} (`), `${lang}: ${id}`);
-    for (const s of COMPANY_SECTIONS) assert.ok(map.includes(`(/company/${s})`) && map.includes(t(`company.${s}` as 'export.title')), `${lang}: ${s}`);
+    for (const id of Object.keys(AREAS)) assert.ok(map.includes(`- ${t(`area.${id}` as 'export.title')}: `), `${lang}: ${id}`);
+    for (const s of COMPANY_SECTIONS) assert.ok(map.includes(`  - ${t('area.company')} › ${t(`company.${s}` as 'export.title')}: `), `${lang}: ${s}`);
     for (const p of PRESETS) assert.ok(map.includes(`«${t(`export.preset.${p.id}` as 'export.title')}» (preset "${p.id}"`), `${lang}: ${p.id}`);
     assert.doesNotMatch(map, /\{[\w.-]+\}/, `${lang}: every UI text in the map is filled in`);
   }
@@ -41,10 +41,10 @@ test('every area folder is a registered area and a line of the map, every Firma 
 test('the places the sidebar denied in the wishes test are in its prompt, with what it can do there (w07, w13, w15, w16, w18)', () => {
   const prompt = assistantSystem('de', '2451 Kontokorrent', appMap('de'));
   assert.ok(prompt.includes(appMap('de')));
-  assert.match(prompt, /- Rechnungen \(\/invoices\): .*N writes a new draft.* You: invoiceDraft\./);
-  assert.match(prompt, /Firma › Rechnungslayout \(\/company\/invoice-layout\): .*payment term in days.*text above and below the table.* You: invoicing\./);
+  assert.match(prompt, /- Rechnungen: .*N writes a new draft.* You: invoiceDraft\./);
+  assert.match(prompt, /Firma › Rechnungslayout: .*payment term in days.*text above and below the table.* You: invoicing\./);
   assert.match(prompt, /Exportieren \(⇧E.*«Treuhänder-Paket» \(preset "treuhand".* You: export\./);
-  assert.match(prompt, /Firma › Quellen \(\/company\/sources\): .*mailboxes/);
+  assert.match(prompt, /Firma › Quellen: .*mailboxes/);
 });
 
 test('every change the block takes is in the prompt\'s example, and parses; an undo\'s own kinds are refused from an answer', () => {
@@ -70,4 +70,16 @@ test('the chart is never drafted: an account goes into the block (w12)', () => {
   const denied = args.slice(args.indexOf('--disallowedTools') + 1);
   for (const p of NEVER_DRAFTED) assert.ok(denied.includes(`Write(${p})`) && denied.includes(`Edit(${p})`), p);
   assert.deepEqual(NEVER_DRAFTED, ['data/draft/master-data/accounts.json']);
+});
+
+test('a drafted rule is kept with «Behalten» on its card, and the prompt never sends the person to «Speichern» for a rule; no web address, no closedThrough for the person (wishes3-8, wishes3-13)', () => {
+  for (const lang of ['de', 'fr', 'it', 'en']) {
+    const { t } = wordsIn(lang);
+    const prompt = assistantSystem(lang, '2451 Kontokorrent', appMap(lang));
+    const sentences = prompt.split(/(?<=[.;:])\s+|\n/);
+    assert.ok(sentences.some((x) => /\brule\b/.test(x) && x.includes(`«${t('rules.draft.keep')}»`)), `${lang}: a rule is kept with its card's click`);
+    assert.deepEqual(sentences.filter((x) => x.includes(`«${t('changes.save')}»`) && !/not a rule/.test(x)), [], `${lang}: «${t('changes.save')}» only for what is not a rule`);
+    assert.doesNotMatch(appMap(lang), /\(\/[a-z]/, `${lang}: the map names no web address`);
+    assert.match(appMap(lang), new RegExp(`«${t('period.filedShort')}»`), `${lang}: a filed quarter in the app's word`);
+  }
 });
