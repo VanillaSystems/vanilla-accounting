@@ -21,6 +21,7 @@ import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
+import type { JournalEntryInput } from '../../books/entry-input.js';
 import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '../../questions/model.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
@@ -190,8 +191,7 @@ type Linked = Ok & { again: string[]; kept?: string[] };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };
-/** A new entry by hand; `id` and `transactionRef` put a deleted one back (undo). */
-import type { JournalEntryInput } from '../../books/entry-input.js';
+/** A new entry by hand; `id`, `transactionRef` and the provenance put a deleted one back (undo): src/books/entry-input.ts. */
 export type { JournalEntryInput };
 export type ManualTransactionInput ={ date: string; description: string; amount: number; currency: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };

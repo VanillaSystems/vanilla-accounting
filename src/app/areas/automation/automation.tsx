@@ -511,6 +511,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
   const { data, error } = useRun(id, view.rev);
   // «Verwerfen» asks first: the run ends with no further step, and after «Eingereicht» that is a decision (r8f-44).
   const [discarding, setDiscarding] = useState(false);
+  useEffect(() => setDiscarding(false), [id]);
   if (error) return <div className="detail-empty"><div>{error}</div></div>;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
