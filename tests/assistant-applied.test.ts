@@ -46,7 +46,8 @@ test('r8f-47: changes made at once end the answer with the app\'s own line, stre
   assert.equal(turn.held, undefined, 'an account and one booking\'s text are no rebooking: made at once');
   assert.equal(turn.changes?.length, 2);
   const last = turn.text.trim().split('\n\n').at(-1);
-  assert.equal(last, 'Gemacht: 2 Änderungen, je mit «Rückgängig».', 'the app says what it did, after the model\'s words');
+  // The model named «Übernehmen» for changes made at once: the app's line says so too (r10f-11).
+  assert.equal(last, 'Gemacht: 2 Änderungen, je mit «Rückgängig». Es gibt nichts zu «Übernehmen»: was die KI darüber schreibt, gilt nicht.', 'the app says what it did, after the model\'s words');
   assert.ok(turn.text.includes(claim), 'the model\'s own words stay (the app does not rewrite them)');
   const replaced = events.filter((e): e is Extract<AssistantEvent, { type: 'replace' }> => e.type === 'replace').at(-1);
   assert.equal(replaced?.text, turn.text, 'the sidebar gets the whole text with the line');
@@ -61,7 +62,8 @@ test('r8f-47, r8f-48: the prompt leaves made-or-held to the app and makes a gene
   const prompt = assistantSystem('de', '2850', '');
   assert.doesNotMatch(prompt, /Write such an answer as a proposal/, 'the model no longer guesses whether the app will hold its block');
   assert.match(prompt, /the app's decision[^.]*says which under your answer/);
-  assert.match(prompt, /never that it is done, and never that nothing changes before «Übernehmen»/);
+  assert.match(prompt, /never that it is done, never that nothing changes before «Übernehmen», and never name «Übernehmen» or a confirmation at all/);
+  assert.match(prompt, /never an English sentence such as «Let me look at …»/, 'the answer is in the person\'s language from the first word (r10f-36)');
   assert.match(prompt, /every booking of the open period the wish holds for/);
   assert.match(prompt, /Say that a payment is not booked only after you read its bookings/);
 });
