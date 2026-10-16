@@ -7,7 +7,7 @@
  * twice. Events a finished run emits start the workflows that listen; schedules start theirs.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { emptyBooks, hasBooks, loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import { emptyBooks, hasBooks, loadBooks, periodLock, saveBooks, update, type Actor, type Books } from '../books/store.js';
 import type { BooksPort } from '../intake/pipeline.js';
 import type { AskOptions } from '../llm/ask.js';
 import type { BankTransaction, JournalEntry, Mapping } from '../types/index.js';
@@ -290,13 +290,18 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       if (before) { record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {} }); return; }
       const books = loadBooks(ws);
       const ref = run.item.kind === 'transaction' ? run.item.id : undefined;
+      // A person's answer books what they accepted: bookings the app made meanwhile (a later run, wishes3-7)
+      // give way to it, a person's own booking never does.
+      const had = ref ? books.journalEntries.filter((e) => e.transactionRef === ref) : [];
+      const replaced = had.length && had.every((e) => e.origin !== 'manual' && !periodLock(books).isClosed(e.date)) ? had.map((e) => e.id) : [];
       const applied = update(books, actor, (b) => {
-        if (ref && b.journalEntries.some((e) => e.transactionRef === ref)) return false;
+        if (had.length && !replaced.length) return false;
+        b.journalEntries = b.journalEntries.filter((e) => !replaced.includes(e.id));
         b.journalEntries.push(...stamped);
         return true;
       });
       if (applied) saveBooks(ws, books);
-      const rec: EffectRecord = { effect: 'ledger.book', key, applied, wrote: applied ? { entries: stamped.map((e) => e.id) } : {} };
+      const rec: EffectRecord = { effect: 'ledger.book', key, applied, wrote: applied ? { entries: stamped.map((e) => e.id) } : {}, ...(applied && replaced.length ? { replaced } : {}) };
       record.effects.push(rec);
     };
     return effects;

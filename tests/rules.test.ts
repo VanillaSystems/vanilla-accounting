@@ -13,7 +13,8 @@ import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '..
 import { parseRule, ruleFor, ruleWords, type PlacedRule, type RuleFacts } from '../src/booking/rules.js';
 import { companyRules, factsOf, chartNames } from '../src/booking/rule-book.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import { loadBooks, type Books } from '../src/books/store.js';
+import { loadBooks, saveBooks, type Books } from '../src/books/store.js';
+import { askedBy, closeAsksWithoutRule, CLOSED_REASON } from '../src/workflows/held.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { openEngine } from '../src/workflows/engine.js';
 import { taskOf, fillTask } from '../src/workflows/model.js';
@@ -255,4 +256,49 @@ test('a private share that is no percent is refused', () => {
   assert.equal(why({ account: '6570', vat: 'I81', private: 100 }), 'share');
   assert.equal(why({ account: '6570', vat: 'I81', private: 'half' }), 'share');
   assert.equal(why({ ask: 'Wofür?', private: 50 }), 'share', 'a share needs the booking it splits');
+});
+
+/** The demo with the statement in the inbox, after one inbox run: the 800 waits as «Frag: …». */
+async function heldWithdrawal() {
+  const ws = company();
+  writeFileSync(join(ws.paths.root, 'transactional-data/2026/bank-statements/Raiffeisen/oktober.xml'), STATEMENT);
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
+  await engine.idle();
+  const [ask] = engine.runs().filter((r) => r.workflow === 'ask');
+  assert.equal(ask.state.status, 'waiting');
+  return { ws, engine, ask };
+}
+
+test('a removed ask rule closes its open question; the question records which rule asked (wishes3-7, wishes3-12)', async () => {
+  const { ws, engine, ask } = await heldWithdrawal();
+  assert.equal(askedBy(ask), 'cash-ask');
+  assert.deepEqual(await closeAsksWithoutRule(engine, ws), [], 'the rule still asks: the question stays');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'rules', 'booking.guide.yaml'), RULES.replace(/      - id: cash-ask[\s\S]*?(?=      - id: fuel)/, ''));
+  assert.deepEqual(await closeAsksWithoutRule(engine, ws), [ask.id]);
+  const state = engine.run(ask.id)!.state as { status: string; reason?: string };
+  assert.deepEqual([state.status, state.reason], ['discarded', CLOSED_REASON]);
+});
+
+test('«Übernehmen» books the accepted proposal even when the app booked the payment meanwhile, replacing the app\'s booking and recording it (wishes3-7)', async () => {
+  const { ws, engine, ask } = await heldWithdrawal();
+  const books = loadBooks(ws);
+  books.journalEntries.push({ id: 'auto-800', transactionRef: 'REF-CASH-800', date: '2026-10-15', accountDebit: '1000', accountCredit: '1021', amount: 800, vatCode: 'I0', origin: 'classify' });
+  saveBooks(ws, books);
+  assert.equal((await engine.command({ kind: 'answer', run: ask.id, outcome: 'accept' })).ok, true);
+  await engine.idle();
+  const booked = loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'REF-CASH-800');
+  assert.deepEqual(booked.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.rule]), [['2451', '1021', 800, 'cash-ask']]);
+  const effect = engine.run(ask.id)!.steps.flatMap((s) => s.effects).find((e) => e.effect === 'ledger.book')!;
+  assert.deepEqual([effect.applied, effect.replaced], [true, ['auto-800']]);
+});
+
+test('«Übernehmen» never replaces a booking a person made', async () => {
+  const { ws, engine, ask } = await heldWithdrawal();
+  const books = loadBooks(ws);
+  books.journalEntries.push({ id: 'mine-800', transactionRef: 'REF-CASH-800', date: '2026-10-15', accountDebit: '6570', accountCredit: '1021', amount: 800, origin: 'manual' });
+  saveBooks(ws, books);
+  await engine.command({ kind: 'answer', run: ask.id, outcome: 'accept' });
+  await engine.idle();
+  assert.deepEqual(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'REF-CASH-800').map((e) => e.id), ['mine-800']);
 });

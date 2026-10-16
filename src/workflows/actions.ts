@@ -136,8 +136,8 @@ export const ACTIONS: Record<string, Action> = {
       // The rule was removed or switched off meanwhile: the next inbox run books the payment.
       if (!held) return { outcome: 'gone' };
       return held.entries.length
-        ? { outcome: 'proposed', output: { question: held.question, entries: held.entries } }
-        : { outcome: 'open', output: { question: held.question } };
+        ? { outcome: 'proposed', output: { question: held.question, rule: held.rule, entries: held.entries } }
+        : { outcome: 'open', output: { question: held.question, rule: held.rule } };
     },
   },
 

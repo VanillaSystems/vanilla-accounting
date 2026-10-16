@@ -211,8 +211,8 @@ export function discardDraft(ws: Ws, path: string): boolean {
 
 // ─── Firma › Regeln ─────────────────────────────────────────────────────────
 
-/** A rule with how often it applied: the payments booked by it, and the day of the last. */
-export interface RuleListed extends RuleRow { applied: number; last?: string }
+/** A rule with how often it applied: the payments booked by it, the day of the last, and the payments it held to ask about. */
+export interface RuleListed extends RuleRow { applied: number; last?: string; asked: number }
 
 /** GET /api/rules. */
 export interface RulesView {
@@ -222,8 +222,8 @@ export interface RulesView {
   currency: string;
 }
 
-/** GET /api/rules/draft: the draft with the names its rules' words use. */
-export type DraftView = DraftRules & Pick<RulesView, 'names' | 'currency'>;
+/** GET /api/rules/draft: the draft with the names its rules' words use, and the payments each ask rule holds open, by rule id. */
+export type DraftView = DraftRules & Pick<RulesView, 'names' | 'currency'> & { held: Record<string, number> };
 
 /** POST /api/rules/draft. */
 export type DraftCommand = { kind: 'keep'; path: string; basis: string; confirm?: boolean } | { kind: 'discard'; path: string };

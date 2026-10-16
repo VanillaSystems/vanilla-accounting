@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
-import { lookupVatCode } from '../accounting/vat-codes.js';
+import { lookupVatCode, vatCodes } from '../accounting/vat-codes.js';
 import { bankAccountFor } from '../accounting/bank-accounts.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { paymentSides } from '../accounting/payment-entries.js';
@@ -33,19 +33,25 @@ export interface ShareOffer {
   path: string;
 }
 
-/** The rate code a rule names for a purchase booked with the zero code: the rule falls back to the zero code without a receipt with Swiss VAT (ruleVatCode). */
+/**
+ * The code a rule names for the business part: a purchase booked with the zero code (no receipt
+ * showed VAT that time) names its family's standard rate, since the rule falls back to the zero
+ * code for any payment whose receipt shows none (ruleVatCode); any other code as booked.
+ */
 function ruleCode(code: string | undefined): string | null {
   if (!code) return null;
   const found = lookupVatCode(code);
   if (!found || found.negative) return code;
   const { family, rate } = found.entry;
-  return (family === 'I' || family === 'M') && !rate ? `${family}81` : code;
+  if ((family !== 'I' && family !== 'M') || rate) return code;
+  const standard = vatCodes().filter((c) => c.family === family && c.rate && !c.superseded && /^[A-Z]+\d+$/.test(c.code)).sort((a, b) => b.rate! - a.rate!)[0];
+  return standard?.code ?? code;
 }
 
 /**
  * The share rule `ref`'s bookings show, when they are a split: two bookings against the bank, one
  * on the owner's account without VAT, adding up to what the bank paid, at a whole percent the rule
- * books again to the Rappen. None when a rule already books it that way.
+ * books again to the cent. None when a rule already books it that way.
  */
 export function shareOffer(ws: Workspace, books: Books, ref: string, context: ClassifyContext = loadClassifyContext(ws)): ShareOffer | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);

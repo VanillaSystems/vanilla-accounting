@@ -24,7 +24,8 @@ import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
-import { queueCommit } from './automation.js';
+import { engine, queueCommit } from './automation.js';
+import { askedBy, askRuns, closeAsksWithoutRule } from '../../workflows/held.js';
 
 export const router = Router();
 
@@ -49,11 +50,22 @@ export function rulesView(): RulesView {
     if (e.date > r.last) r.last = e.date;
     byRule.set(e.rule, r);
   }
+  const asked = held(false);
   const rules = companyRules(WS, ruleFactsOf(WS)).map((r) => {
     const used = r.kind === 'rule' ? byRule.get(r.id) : undefined;
-    return { ...r, applied: used?.refs.size ?? 0, ...(used?.last ? { last: used.last } : {}) };
+    return { ...r, applied: used?.refs.size ?? 0, ...(used?.last ? { last: used.last } : {}), asked: r.kind === 'rule' ? asked[r.id] ?? 0 : 0 };
   });
   return { rules, ...namesView() };
+}
+
+/** The payments each ask rule held, by rule id: all its questions, or (`waiting`) those still open. */
+function held(waiting: boolean): Record<string, number> {
+  const out: Record<string, Set<string>> = {};
+  for (const r of askRuns(engine())) {
+    const rule = askedBy(r);
+    if (rule && (!waiting || r.state.status === 'waiting')) (out[rule] ??= new Set()).add(r.item.id);
+  }
+  return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, v.size]));
 }
 
 /** Runs `change` in the commit queue; the workflows that ran as switched on before it run switched on after it. */
@@ -65,6 +77,8 @@ function keepingSwitchedOn<T>(change: () => Promise<T>): Promise<T> {
         const on = loadWorkflows(APP_ROOT, WS.paths.root).workflows.filter((w) => sw.isApproved(w)).map((w) => w.id);
         const out = await change();
         for (const w of loadWorkflows(APP_ROOT, WS.paths.root).workflows) if (on.includes(w.id) && !sw.isApproved(w)) sw.approve(w);
+        // A rule removed or switched off asks nothing more: its open questions close (wishes3-7).
+        await closeAsksWithoutRule(engine(), WS);
         resolve(out);
       } catch (e) {
         reject(e);
@@ -89,7 +103,7 @@ router.get('/api/rules/draft', (req, res) => {
   const path = String(req.query.path ?? '');
   const d = draftRules(WS, path);
   if (!d) throw new RequestError(404, `Kein Entwurf mit Regeln: ${path}`);
-  res.json({ ...d, ...namesView() } satisfies DraftView);
+  res.json({ ...d, ...namesView(), held: held(true) } satisfies DraftView);
 });
 
 router.post('/api/rules/draft', async (req, res) => {

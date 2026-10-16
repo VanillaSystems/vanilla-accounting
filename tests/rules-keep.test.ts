@@ -222,12 +222,13 @@ test('a draft that changes another rule shows it as it was and as it would be, a
 const POST = 'knowledge/suppliers/swiss-post.yaml';
 
 /** The Post CH bill of August split by a person: 74.85 on 6513 with I81, 74.85 private on 2451. */
-function splitPostBill(ws: Workspace): string {
+function splitPostBill(ws: Workspace, vatCode = 'I81'): string {
   const books = loadBooks(ws);
   const ref = books.transactions.find((t) => t.description === 'Rechnung Post CH August 2026')!.ref;
   update(books, PERSON, (b) => {
     const e = b.journalEntries.find((x) => x.transactionRef === ref)!;
     e.amount = 74.85;
+    e.vatCode = vatCode;
     e.origin = 'manual';
     b.journalEntries.push({ id: 'split-private', transactionRef: ref, date: e.date, accountDebit: '2451', accountCredit: '1021', amount: 74.85, description: 'privat', origin: 'manual' });
   });
@@ -254,6 +255,12 @@ test('a person\'s split into a business part and a private part offers «immer s
   await classifyTransactions(books, [next], { fx: loadFxResolver(), context: loadClassifyContext(ws) });
   assert.deepEqual(books.journalEntries.filter((e) => e.transactionRef === 'POST-NOV').map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']),
     [['6513', '1021', 75.65, 'I0'], ['2451', '1021', 75.65, '']]);
+});
+
+test('a split booked with the zero code (no receipt that time) offers the rate code: the rule falls back to the zero code without a receipt', async () => {
+  const { ws } = await company();
+  const ref = splitPostBill(ws, 'I0');
+  assert.deepEqual(shareOffer(ws, loadBooks(ws), ref)?.booking, { account: '6513', vat: 'I81', private: 50 });
 });
 
 test('a payment booked in one piece offers no share rule', async () => {

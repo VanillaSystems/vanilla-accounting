@@ -264,6 +264,8 @@ export interface EffectRecord {
   would?: unknown;
   /** The write door refused it (a closed period, an unbalanced entry): shown in a replay instead of written. */
   refused?: string;
+  /** ledger.book on a payment the app had booked meanwhile: the app's entries its booking replaced, by id. */
+  replaced?: string[];
 }
 
 export interface StepRecord {

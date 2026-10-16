@@ -16,6 +16,8 @@ export interface RuleLine {
   acts: boolean;
   applied: number;
   last?: string;
+  /** The payments it held to ask about first (an ask rule). */
+  asked: number;
 }
 
 /** The names a rule's words use, from the view. */
@@ -41,7 +43,7 @@ export function lineOf(row: RuleRow, names: RuleNames, w: RuleWords): string {
 export function ruleLines(view: RulesView, w: RuleWords, money: (n: number) => string): RuleLine[] {
   const names = namesOf(view, money);
   const lines = view.rules.map((r): RuleLine => ({
-    key: `${r.file}#${r.step}#${r.id}`, row: r, line: lineOf(r, names, w), acts: r.kind === 'rule', applied: r.applied, ...(r.last ? { last: r.last } : {}),
+    key: `${r.file}#${r.step}#${r.id}`, row: r, line: lineOf(r, names, w), acts: r.kind === 'rule', applied: r.applied, asked: r.asked ?? 0, ...(r.last ? { last: r.last } : {}),
   }));
   return [...lines.filter((l) => l.acts), ...lines.filter((l) => !l.acts)];
 }

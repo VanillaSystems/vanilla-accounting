@@ -1,5 +1,5 @@
 label: {"de": "Frage und Vorschlag aus der Regel", "en": "The rule's question and proposal", "fr": "Question et proposition de la règle", "it": "Domanda e proposta della regola"}
 uses: booking.rule-question
 reads: ["transaction", "books"]
-emits: ["question", "entries"]
+emits: ["question", "rule", "entries"]
 outcomes: {"proposed": "ask", "open": "open", "gone": "done"}

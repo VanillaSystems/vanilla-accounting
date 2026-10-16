@@ -58,13 +58,16 @@ export function RulesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
       <p className="m">{t('rules.lead')}</p>
       {!lines.length ? <p className="m">{t('rules.none')}</p> : null}
       <ul className="rulelist">
-        {lines.map(({ key, row, line, acts, applied, last }) => (
+        {lines.map(({ key, row, line, acts, applied, last, asked }) => (
           <li key={key} className={`rule${row.off ? ' off' : ''}${acts ? '' : ' note'}`} data-rule={row.id}>
             <b className="ruleline">{line}</b>
             <span className="m">
               {origin(row)}
               {' · '}
-              {acts ? (applied ? t('rules.applied', { n: applied, date: formatDate(last) }) : t('rules.neverApplied')) : t('rules.noteOnly')}
+              {!acts ? t('rules.noteOnly') : [
+                applied ? t('rules.applied', { n: applied, date: formatDate(last) }) : asked ? '' : t('rules.neverApplied'),
+                asked ? t('rules.asked', { n: asked }) : '',
+              ].filter(Boolean).join(' · ')}
             </span>
             {row.kind === 'broken' ? <span className="warnline">{refusalText(row)}</span> : null}
             <span className="ruleacts">
@@ -162,7 +165,12 @@ export function RuleDraft({ path, nav, onRules }: { path: string; nav?: Nav; onR
             <br /><span className="rk">{t('rules.draft.becomes')}</span> <b>{say(r)}</b>
           </li>
         ))}
-        {d.removed.map((r) => <li key={`r${r.step}${r.id}`}><span className="rk">{t('rules.draft.removed')}</span> <b>{say(r)}</b></li>)}
+        {d.removed.map((r) => (
+          <li key={`r${r.step}${r.id}`}>
+            <span className="rk">{t('rules.draft.removed')}</span> <b>{say(r)}</b>
+            {d.held[r.id] ? <span className="m"> {t('rules.draft.held', { n: d.held[r.id] })}</span> : null}
+          </li>
+        ))}
       </ul>
       {d.preview.map((p) => <Preview key={p.key} p={p} names={names} />)}
       {d.others && business ? <span className="m">{t('rules.draft.others', { name: names.business(business) ?? business })}</span> : null}
