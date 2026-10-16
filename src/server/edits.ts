@@ -431,6 +431,8 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
     }
   }
   for (const [ref, before] of payments) {
+    // A payment left without any booking is unbooked, as a person's «Löschen» leaves it (r5h-36): a task, not a sum that is off.
+    if (!books.journalEntries.some((e) => e.transactionRef === ref)) continue;
     const sides = paymentSides(books, ref, ctx.bankAccounts);
     const off = sides.find((s) => s.booked !== s.paid);
     if (off && JSON.stringify(sides.map((s) => s.booked)) !== before) throw unbalanced(off);
