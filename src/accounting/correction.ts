@@ -1,8 +1,8 @@
 /**
  * The correction of a filed entry, by what was wrong with it (golden rule 1: booked in the open
- * period with `corrects`, declared on the 0535). The payment happened, so a correction of the VAT
- * code or of the account leaves the bank alone; only a storno takes the whole entry back, bank
- * side included. Pure: Buchungen opens its correction form with these.
+ * period with `corrects`, declared on the correction return). The payment happened, so a
+ * correction of the VAT code or of the account leaves the bank alone; only a storno takes the
+ * whole entry back, bank side included. Pure: Buchungen opens its correction form with these.
  */
 import type { JournalEntry } from '../types/index.js';
 import { reversalOf, turned, type Draft } from './reversal.js';

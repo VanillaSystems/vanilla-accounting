@@ -326,7 +326,7 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
     const shaped = change.kind === 'newEntry' ? change.entry : change.kind === 'entry' ? entryOf(books, change.id) : undefined;
     if (shaped && !shaped.accountDebit !== !shaped.accountCredit && !isVatAmountCode(shaped.vatCode)) {
       const own = shaped.accountDebit || shaped.accountCredit;
-      throw new RequestError(400, `Soll und Haben gehören beide hin. Nur die MWST korrigieren: ${own} auf beiden Seiten (${own}/${own} mit dem umgekehrten Code), die Bank bleibt.`, { code: 'oneSided', params: { account: own } });
+      throw new RequestError(400, `Soll und Haben gehören beide hin. Nur die Steuer korrigieren: ${own} auf beiden Seiten (${own}/${own} mit dem umgekehrten Code), die Bank bleibt.`, { code: 'oneSided', params: { account: own } });
     }
     if (undo?.kind === 'deleteEntry') dated.push(undo.id);
     if (change.kind === 'entry' && change.set.date) dated.push(change.id);
