@@ -2382,6 +2382,8 @@ export default {
     'error.amountZero': 'Une écriture a besoin d\'un montant différent de 0.',
     'error.noAccount': 'Il manque le compte à l\'écriture : indiquer le débit ou le crédit.',
     'error.unknownVatCode': 'Le code TVA {code} n\'existe pas : les codes sont sous TVA › Codes expliqués.',
+    'error.codeNotTaken.none': 'Le code TVA {code} n\'existe pas dans cette entreprise : elle n\'est pas inscrite au registre TVA et comptabilise brut, sans codes.',
+    'error.codeNotTaken.netRate': 'Le formulaire de la méthode des taux de la dette fiscale nette ne prend pas le code {code} : achats sans code, ventes avec le code du taux de l\'entreprise (F1, F2).',
     'error.noDescription': 'Il manque le texte à l\'écriture : dire brièvement à quoi elle sert.',
     'error.accountNumber': '«{account}» n\'est pas un numéro de compte : un compte a quatre chiffres.',
     'error.accountName': 'Le compte {account} a besoin d\'un nom.',

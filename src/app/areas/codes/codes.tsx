@@ -4,7 +4,7 @@
  * from the casebook, the rules that choose it and the period's entries that carry it.
  */
 import { Fragment, useEffect, useMemo } from 'react';
-import { vatCodes, lookupVatCode } from '../../../accounting/vat-codes.js';
+import { firmCodes, lookupVatCode } from '../../../accounting/vat-codes.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
@@ -46,7 +46,7 @@ function List(props: Props) {
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts" role="tablist" aria-label={t('codes.filters')}>
-          <button type="button" role="tab" aria-selected={!s.usedOnly} className={s.usedOnly ? '' : 'on'} onClick={() => setCodesUi({ usedOnly: false })}><span className="n">{vatCodes().length}</span>{t('codes.all')}</button>
+          <button type="button" role="tab" aria-selected={!s.usedOnly} className={s.usedOnly ? '' : 'on'} onClick={() => setCodesUi({ usedOnly: false })}><span className="n">{firmCodes().length}</span>{t('codes.all')}</button>
           <button type="button" role="tab" aria-selected={s.usedOnly} className={s.usedOnly ? 'on' : ''} onClick={() => setCodesUi({ usedOnly: true })}><span className="n">{used}</span>{t('codes.used')}</button>
           <label className="search">
             {ICONS.search}
@@ -186,7 +186,7 @@ export const codes: Area<RouteOf<'codes'>> = {
   Detail,
   legend,
   title: (r) => r.code,
-  palette: ({ nav, query }) => vatCodes().map((c) => ({
+  palette: ({ nav, query }) => firmCodes().map((c) => ({
     label: `${c.code} · ${codeText(c.code)}`,
     side: rateOf(c),
     run: () => nav.go({ route: { area: 'codes', code: c.code }, query: { period: query.period } }),

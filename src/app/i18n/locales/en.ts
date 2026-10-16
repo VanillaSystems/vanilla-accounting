@@ -2382,6 +2382,8 @@ export default {
     'error.amountZero': 'A booking needs an amount other than 0.',
     'error.noAccount': 'The booking has no account: give the debit or the credit account.',
     'error.unknownVatCode': 'There is no VAT code {code}: the codes are listed under VAT › Codes explained.',
+    'error.codeNotTaken.none': 'There is no VAT code {code} in this firm: it is not registered for VAT and books gross, without codes.',
+    'error.codeNotTaken.netRate': 'The net tax rate form does not take the code {code}: purchases without a code, sales with the firm\'s net-rate code (F1, F2).',
     'error.noDescription': 'The booking has no text: say briefly what it is for.',
     'error.accountNumber': '«{account}» is no account number: an account has four digits.',
     'error.accountName': 'Account {account} needs a name.',

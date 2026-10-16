@@ -65,6 +65,8 @@ export type ApiRefusal =
   | { code: 'amountZero' }
   | { code: 'noAccount' }
   | { code: 'unknownVatCode'; params: { code: string } }
+  /** A code the firm's form does not take (src/accounting/vat-codes.ts formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
+  | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   | { code: 'noDescription' }
   | { code: 'accountNumber'; params: { account: string } }
   | { code: 'accountName'; params: { account: string } }

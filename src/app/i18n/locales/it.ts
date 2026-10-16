@@ -2382,6 +2382,8 @@ export default {
     'error.amountZero': 'Una registrazione ha bisogno di un importo diverso da 0.',
     'error.noAccount': 'Alla registrazione manca il conto: indicare il dare o l\'avere.',
     'error.unknownVatCode': 'Il codice IVA {code} non esiste: i codici sono in IVA › Codici spiegati.',
+    'error.codeNotTaken.none': 'Il codice IVA {code} non esiste in questa azienda: non è iscritta al registro IVA e contabilizza al lordo, senza codici.',
+    'error.codeNotTaken.netRate': 'Il modulo del metodo delle aliquote saldo non prende il codice {code}: acquisti senza codice, vendite con il codice dell\'aliquota saldo dell\'azienda (F1, F2).',
     'error.noDescription': 'Alla registrazione manca il testo: dire in breve a cosa serve.',
     'error.accountNumber': '«{account}» non è un numero di conto: un conto ha quattro cifre.',
     'error.accountName': 'Il conto {account} ha bisogno di un nome.',

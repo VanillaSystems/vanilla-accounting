@@ -2379,6 +2379,8 @@ export const messages = {
   'error.amountZero': 'Eine Buchung braucht einen Betrag, der nicht 0 ist.',
   'error.noAccount': 'Der Buchung fehlt das Konto: Soll oder Haben angeben.',
   'error.unknownVatCode': 'Den Steuercode {code} gibt es nicht: die Codes stehen unter MWST › Codes erklärt.',
+  'error.codeNotTaken.none': 'Den Steuercode {code} gibt es in dieser Firma nicht: sie ist nicht im MWST-Register eingetragen und bucht brutto, ohne Codes.',
+  'error.codeNotTaken.netRate': 'Den Steuercode {code} nimmt das Formular der Saldosteuersatzmethode nicht: Einkäufe ohne Code, Verkäufe mit dem Saldosteuersatz-Code der Firma (F1, F2).',
   'error.noDescription': 'Der Buchung fehlt der Text: kurz sagen, wofür sie ist.',
   'error.accountNumber': '«{account}» ist keine Kontonummer: ein Konto hat vier Ziffern.',
   'error.accountName': 'Konto {account} braucht einen Namen.',

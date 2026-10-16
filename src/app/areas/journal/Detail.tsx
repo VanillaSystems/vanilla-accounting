@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
-import { lookupVatCode, parseRate, vatCodeOf, vatCodes } from '../../../accounting/vat-codes.js';
+import { firmCodes, lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
 import type { BankTransaction, JournalEntry } from '../../../types/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -346,9 +346,9 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
   );
 }
 
-/** The codes a VAT field offers as you type. */
+/** The codes a VAT field offers as you type: the ones the firm's form takes (none on a firm not registered, no input tax on the net tax rate method). */
 export function VatCodeList() {
-  return <datalist id="vat-codes">{vatCodes().map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
+  return <datalist id="vat-codes">{firmCodes().map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
 }
 
 /** No receipt: the strip of the payment's statement that shows it, as in Kontoauszüge. */

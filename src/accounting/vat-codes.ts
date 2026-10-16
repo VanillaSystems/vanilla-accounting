@@ -153,6 +153,9 @@ export function lookupVatCode(code: string): { entry: VatCodeEntry; negative: bo
  */
 export const formTakes = (code: string): boolean => methodOf(vatSetup()) === 'effective' || !!vat().codes.parse(code);
 
+/** The catalogue's codes this firm may book: what a VAT field offers and the codes area lists. */
+export const firmCodes = (): readonly VatCodeEntry[] => vatCodes().filter((c) => formTakes(c.code));
+
 /** A rate as a person types it: «8.1», «8,1», «8.1 %», «-8.1» (a refund). */
 export function parseRate(text: string): { rate: number; negative: boolean } | null {
   const m = /^(-)?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*%?$/.exec(text.trim());

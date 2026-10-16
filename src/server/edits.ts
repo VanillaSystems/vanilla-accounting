@@ -11,13 +11,13 @@ import { paymentDates, paymentSides, type PaymentSide } from '../accounting/paym
 import { baseCurrency, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
-import { codeOnAccount } from '../accounting/vat-codes.js';
+import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
+import { withoutInputTax } from '../engines/index.js';
 import type { BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { offSide, type BookingLine } from '../accounting/manual-booking.js';
-import { lookupVatCode } from '../accounting/vat-codes.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
@@ -130,10 +130,24 @@ export function assertPlaced(...accounts: Array<string | undefined>): void {
   }
 }
 
+/**
+ * A VAT code a person types, from the UI, the sidebar or a script, is one the firm's form takes
+ * (formTakes): a firm not registered books without codes, one on the net tax rate method claims no
+ * input tax. 400 in plain words otherwise (r5f-5, r5f-17); the UI says it in the user's language.
+ */
+export function assertCodeTaken(code: string | undefined): void {
+  if (!code || formTakes(code)) return;
+  const method = withoutInputTax()!;
+  const why = method === 'none'
+    ? `Den Steuercode ${code} gibt es in dieser Firma nicht: sie ist nicht im MWST-Register eingetragen und bucht brutto, ohne Codes.`
+    : `Den Steuercode ${code} nimmt das Formular der Saldosteuersatzmethode nicht: Einkäufe ohne Code, Verkäufe mit dem Saldosteuersatz-Code der Firma.`;
+  throw new RequestError(400, why, { code: 'codeNotTaken', params: { code, method } });
+}
+
 export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   const e = entryOf(books, id);
-  // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only.
-  if (set.origin === undefined) assertPlaced(set.accountDebit, set.accountCredit);
+  // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only, with a code the form takes.
+  if (set.origin === undefined) { assertPlaced(set.accountDebit, set.accountCredit); assertCodeTaken(set.vatCode); }
   assertOpen(books, [e.date, set.date], 'editEntry');
   if (e.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
   if (set.amount !== undefined && (!Number.isFinite(set.amount) || set.amount === 0)) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });
@@ -180,8 +194,8 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   const closed = books.config.closedThrough;
   if (corrects && !(closed && parsePeriod(corrects, date)!.to <= closed)) throw new RequestError(400, `corrects: ${corrects} ist nicht eingereicht.`);
   if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
-  // An undo (`id`) puts back what was booked; anything new goes on placed accounts only.
-  if (!id) assertPlaced(rest.accountDebit, rest.accountCredit);
+  // An undo (`id`) puts back what was booked; anything new goes on placed accounts only, with a code the form takes.
+  if (!id) { assertPlaced(rest.accountDebit, rest.accountCredit); assertCodeTaken(rest.vatCode); }
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
     if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
@@ -208,6 +222,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });
     if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.', { code: 'noDescription' });
     if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `Den Steuercode ${l.vatCode} gibt es nicht.`, { code: 'unknownVatCode', params: { code: l.vatCode } });
+    assertCodeTaken(l.vatCode);
     if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
     assertPlaced(l.accountDebit, l.accountCredit);
   }

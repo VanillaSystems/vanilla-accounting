@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { parse } from 'yaml';
 import { loadKnowledge, RULES_DIR, ROLE_DIRS, KNOWLEDGE_DIR, type Rule } from '../knowledge/layers.js';
-import { lookupVatCode } from '../accounting/vat-codes.js';
+import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { isExecutable, parseRule, RULE_STEP, type BookingRule, type PlacedRule, type RuleFacts, type RuleRefusal } from './rules.js';
 
@@ -77,11 +77,11 @@ export function chartNames(chartText: string): Map<string, string> {
   return new Map(chartText.split('\n').map((l) => l.split('\t')).filter((c) => /^\d/.test(c[0]?.trim() ?? '') && c[1]).map((c) => [c[0].trim(), c[1].trim()]));
 }
 
-/** What a rule may name in this workspace: its chart, the VAT codes the app knows, its businesses. */
+/** What a rule may name in this workspace: its chart, the VAT codes the app knows and this firm's form takes, its businesses. */
 export function factsOf(accounts: ReadonlyMap<string, string>, businesses: ReadonlySet<string>): RuleFacts {
   return {
     account: (n) => accounts.has(n),
-    vat: (code) => !!lookupVatCode(code),
+    vat: (code) => !!lookupVatCode(code) && formTakes(code),
     counterparty: (id) => businesses.has(id),
   };
 }
