@@ -12,6 +12,7 @@ import type { RuleNames, RuleWords } from '../../../booking/rules.js';
 import type { RuleLine } from '../../../booking/classify.js';
 import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
 import type { DraftView, RulesView } from '../../../saving/rules.js';
+import type { ShareOffer } from '../../../saving/share-rule.js';
 import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
 
@@ -175,4 +176,43 @@ export function RuleDraft({ path, nav, onRules }: { path: string; nav?: Nav; onR
       </span>
     </div>
   );
+}
+
+/** One «Immer so?»: the split as a rule, drafted on the click and then shown on its card. */
+function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): void }) {
+  const [path, setPath] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  if (path) return <RuleDraft path={path} onRules={onRules} />;
+  const who = offer.business?.name ?? t('rules.share.payer', { payer: offer.payer ?? '' });
+  const draft = () => {
+    setBusy(true);
+    api.draftShare(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+  };
+  return (
+    <div className="ruledraft" data-share={offer.ref}>
+      <span>{t('rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
+      {error ? <span className="warnline">{error}</span> : null}
+      <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button></span>
+    </div>
+  );
+}
+
+/**
+ * «Immer so?» under an answer's changes (wishes3-6): each payment it split into a business part
+ * and a private part offers the split as a rule; payments of one business with the same split
+ * offer it once.
+ */
+export function ShareOffers({ refs, onRules }: { refs: string[]; onRules?(): void }) {
+  const [offers, setOffers] = useState<ShareOffer[]>([]);
+  const key = refs.join(' ');
+  useEffect(() => {
+    let live = true;
+    Promise.all(refs.map((r) => api.shareOffer(r).then((x) => x.offer, () => null))).then((xs) => {
+      const one = new Map(xs.filter((o): o is ShareOffer => !!o).map((o) => [`${o.path}#${o.payer}#${o.percent}#${o.booking.account}`, o]));
+      if (live) setOffers([...one.values()]);
+    });
+    return () => { live = false; };
+  }, [key]);
+  return <>{offers.map((o) => <ShareOfferCard key={o.ref} offer={o} onRules={onRules} />)}</>;
 }

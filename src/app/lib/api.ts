@@ -27,6 +27,7 @@ import type { Conversation, ConversationSummary, MadeChange } from '../../types/
 import type { DropAction, DropSession } from '../../types/drop.js';
 import type { SourceRow } from '../../platform/sources/model.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
+import type { ShareOffer } from '../../saving/share-rule.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -203,6 +204,8 @@ export const api = {
   ruleCommand: (c: RuleCommand) => request<RuleCommandResult>('POST', '/api/rules', c),
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
+  shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
+  draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
     const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });

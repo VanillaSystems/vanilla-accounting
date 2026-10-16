@@ -4,7 +4,9 @@
  *   GET  /api/rules                   every rule of the workspace in its structure, with how often it applied
  *   POST /api/rules                   a RuleCommand: off, on, delete, restore (the undo)
  *   GET  /api/rules/draft?path=       the AI's draft of one rules file, rule by rule
- *   POST /api/rules/draft             { kind: keep, path, basis } saves exactly that draft; { kind: discard, path }
+ *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
+ *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
+ *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *
  * A rule the person keeps here takes effect at once: the click is their switching on
  * (docs/0.4.0/workflows.md "Changing a workflow"), so a workflow that ran as switched on before is
@@ -19,6 +21,7 @@ import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
+import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { queueCommit } from './automation.js';
@@ -95,4 +98,16 @@ router.post('/api/rules/draft', async (req, res) => {
   if (c.kind === 'discard') { res.json({ ok: discardDraft(WS, c.path) }); return; }
   if (typeof c.basis !== 'string') throw new RequestError(400, 'basis erwartet.');
   res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true)));
+});
+
+router.get('/api/rules/share', (req, res) => {
+  res.json({ offer: shareOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });
+});
+
+router.post('/api/rules/share', (req, res) => {
+  const ref = (req.body as { ref?: unknown })?.ref;
+  if (typeof ref !== 'string') throw new RequestError(400, 'ref erwartet.');
+  const path = draftShareRule(WS, ref);
+  if (!path) throw new RequestError(404, 'Diese Zahlung ist nicht in einen privaten und einen geschäftlichen Teil aufgeteilt.');
+  res.json({ path });
 });

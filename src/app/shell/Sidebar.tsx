@@ -22,7 +22,7 @@ import { PRESETS } from '../../export/model.js';
 import { builtInTexts } from '../../invoices/texts.js';
 import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
-import { RuleDraft } from '../areas/company/RulesSection.js';
+import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
 import {
   addContext, closeAssistant, newConversation, openConversation, removeContext, sendMessage, showConversations, stopAnswer, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
@@ -216,6 +216,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                   ) : null}
                   {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}>{withoutChanges(turn.text)}</div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
                   {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
+                  {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
                   {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
                   {turn.error ? <div className="warnline">{turn.error}</div> : null}
                 </div>

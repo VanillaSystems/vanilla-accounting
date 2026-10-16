@@ -13,7 +13,11 @@ import { dirname, join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { draftDir } from '../src/saving/changes.js';
-import { loadBooks } from '../src/books/store.js';
+import { loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
+import { draftShareRule, shareOffer } from '../src/saving/share-rule.js';
+import { classifyTransactions, loadClassifyContext } from '../src/booking/classify.js';
+import { loadFxResolver } from '../src/accounting/fx-rates.js';
+import type { BankTransaction } from '../src/types/index.js';
 import { draftRules, keepDraft, ruleCommand } from '../src/saving/rules.js';
 import { openSaving, type Ask } from '../src/saving/saving.js';
 import type { RulesView } from '../src/saving/rules.js';
@@ -213,4 +217,47 @@ test('a draft that changes another rule shows it as it was and as it would be, a
   assert.ok(n > 0);
   assert.deepEqual(coop.overlaps.map((o) => [o.row.id, o.shared, o.theirs]), [['fuel', n, n]], 'the earlier rule of the file decides those payments');
   assert.ok(coop.examples.every((x) => x.decidedBy === 'fuel'));
+});
+
+const POST = 'knowledge/suppliers/swiss-post.yaml';
+
+/** The Post CH bill of August split by a person: 74.85 on 6513 with I81, 74.85 private on 2451. */
+function splitPostBill(ws: Workspace): string {
+  const books = loadBooks(ws);
+  const ref = books.transactions.find((t) => t.description === 'Rechnung Post CH August 2026')!.ref;
+  update(books, PERSON, (b) => {
+    const e = b.journalEntries.find((x) => x.transactionRef === ref)!;
+    e.amount = 74.85;
+    e.origin = 'manual';
+    b.journalEntries.push({ id: 'split-private', transactionRef: ref, date: e.date, accountDebit: '2451', accountCredit: '1021', amount: 74.85, description: 'privat', origin: 'manual' });
+  });
+  saveBooks(ws, books);
+  return ref;
+}
+
+test('a person\'s split into a business part and a private part offers «immer so?»: the rule with the share, kept on its card, books the next bill in two lines (wishes3-6)', async () => {
+  const { ws } = await company();
+  const ref = splitPostBill(ws);
+  const offer = shareOffer(ws, loadBooks(ws), ref)!;
+  assert.deepEqual([offer.percent, offer.booking, offer.business, offer.path], [50, { account: '6513', vat: 'I81', private: 50 }, { id: 'swiss-post', name: 'Post CH' }, POST]);
+  assert.equal(draftShareRule(ws, ref, '2026-10-16'), POST);
+  const d = draftRules(ws, POST)!;
+  assert.deepEqual([d.added.map((r) => [r.id, r.rule?.then, r.source]), d.changed, d.confirm, d.keepable],
+    [[['swiss-post-privatanteil', { kind: 'book', booking: { account: '6513', vat: 'I81', private: 50 } }, 'correction 2026-10-16']], [], false, true]);
+  assert.equal(d.preview[0].examples.find((x) => x.ref === ref)?.would.lines.map((l) => [l.account, l.amount]).join(), '6513,74.85,2451,74.85');
+  assert.equal((await keepDraft(ws, POST, d.basis)).ok, true);
+  assert.equal(shareOffer(ws, loadBooks(ws), ref), undefined, 'kept: nothing more to offer');
+
+  const books = loadBooks(ws);
+  const next: BankTransaction = { ref: 'POST-NOV', bank: 'Raiffeisen', date: '2026-11-20', amount: 151.3, currency: 'CHF', direction: 'DBIT', description: 'Rechnung November', counterparty: 'Post CH AG' };
+  books.transactions.push(next);
+  await classifyTransactions(books, [next], { fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(books.journalEntries.filter((e) => e.transactionRef === 'POST-NOV').map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']),
+    [['6513', '1021', 75.65, 'I0'], ['2451', '1021', 75.65, '']]);
+});
+
+test('a payment booked in one piece offers no share rule', async () => {
+  const { ws } = await company();
+  const books = loadBooks(ws);
+  assert.equal(shareOffer(ws, books, books.transactions.find((t) => t.description === 'Rechnung Post CH August 2026')!.ref), undefined);
 });
