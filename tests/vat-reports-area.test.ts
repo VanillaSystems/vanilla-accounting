@@ -134,13 +134,13 @@ test('an account\'s ledger: opening, newest first, each entry with its counter a
 
 test('Bilanz & ER say that their figures hold the VAT not yet settled, with the period\'s VAT beside the result; the exports carry the same note (r8c-2)', () => {
   // August: a sale of 1081 gross (81 owed), paper for 108.10 gross (8.10 input tax).
-  assert.deepEqual(vatInFigures(books.journalEntries!, '2026-08-01', '2026-08-31'), { owed: 81, input: 8.1, net: 72.9 });
+  assert.deepEqual(vatInFigures(books.journalEntries!, '2026-08-01', '2026-08-31'), { owed: 81, input: 8.1, acquisition: 0, net: 72.9 });
   assert.equal(vatInFigures(books.journalEntries!, '2026-01-01', '2026-01-31'), undefined, 'no coded entry: no note');
   const income = reportView('income', books, p('2026-08'), names, false);
-  assert.deepEqual(income.vat, { owed: 81, input: 8.1, net: 72.9 });
+  assert.deepEqual(income.vat, { owed: 81, input: 8.1, acquisition: 0, net: 72.9 });
   assert.equal(income.headline.value, 1081 - 108.1, 'the figures themselves do not change');
   const balance = reportView('balance', books, p('2026-08'), names, false);
-  assert.deepEqual(balance.vat, { owed: 81, input: 12.15, net: 68.85 }, 'the Bilanz carries the whole year\'s VAT up to its day');
+  assert.deepEqual(balance.vat, { owed: 81, input: 12.15, acquisition: 0, net: 68.85 }, 'the Bilanz carries the whole year\'s VAT up to its day');
   assert.equal(reportView('trial', books, p('2026-08'), names, false).vat, undefined);
   const words = { t: (key: string, vars?: Record<string, string | number>) => `${key}${vars ? ' ' + JSON.stringify(vars) : ''}`, accountingName: (g: string) => g };
   const tb = tableOf('income', { books, period: p('2026-08'), names, words: words as never, filed: {}, filingLength: 'quarter' });

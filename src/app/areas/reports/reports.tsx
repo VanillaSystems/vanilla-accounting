@@ -17,7 +17,7 @@ import type { Area, AreaProps, LegendItem } from '../index.js';
 import { entryAt } from '../vat/links.js';
 import {
   NO_ACCOUNT, NO_ACCOUNT_SLUG, accountsOf, filterBlocks, ledgerOf, reportOfAccount, reportView, searchReport,
-  type AccountRow, type Block, type ReportView,
+  vatParts, type AccountRow, type Block, type ReportView,
 } from './model.js';
 import { Detail } from './Detail.js';
 import { causeText } from '../close/steps.js';
@@ -138,7 +138,7 @@ function List(props: Props) {
       </div>
       {view.vat && (
         <p className="m rvat" data-testid="vat-note" data-net={view.vat.net}>
-          {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.net), owed: fmt(view.vat.owed), input: fmt(view.vat.input) })}
+          {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.net), parts: vatParts(view.vat).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}
         </p>
       )}
       {view.gap && (

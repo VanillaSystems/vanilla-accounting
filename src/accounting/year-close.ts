@@ -22,6 +22,7 @@ import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
 import { formTakes } from './vat-codes.js';
 import { ownerAccountNumber } from './bank-accounts.js';
 import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
+import type { TaxCodeInfo } from '../engines/tax-codes.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -68,28 +69,38 @@ export function yearEndAccounts(chart: readonly string[]): YearEndAccounts {
 
 // ─── The closing ledger: the journal plus the tax its VAT codes split off ───
 
+/** A tax posting with the code it comes from, so a reader can tell sales tax, input tax and Bezugsteuer apart. */
+export type VatPosting = JournalEntry & { code: string };
+
+/** Bezugsteuer the firm's form owes without the deduction (the net tax rate method): tax on top of the purchase, posted. */
+export const owesAcquisition = (info: Pick<TaxCodeInfo, 'acquisitionZiffer' | 'inputTaxZiffer'>): boolean => !!info.acquisitionZiffer && !info.inputTaxZiffer;
+
 /**
  * The tax each entry's VAT code splits off, as the entry Banana books for it: the tax moves
  * from the account that carries it (revenue on a sale, expense on a purchase) to the VAT
  * account. A sale's tax sits on the credit side, a purchase's input tax on the debit side; a
- * minus code (refund, storno) on the other one. Bezugsteuer is owed and deducted on the same
- * account, so it posts nothing. A single-leg tax correction (`-2`, empty Soll) posts against
- * its empty side and so balances it.
+ * minus code (refund, storno) on the other one. Bezugsteuer owed and deducted in the same entry
+ * (the effective method) posts nothing; on the net tax rate method it is owed without a deduction,
+ * so it is tax on top of the purchase, posted from the expense to the VAT account (r9n-27). A
+ * single-leg tax correction (`-2`, empty Soll) posts against its empty side and so balances it.
  */
-export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): JournalEntry[] {
-  const out: JournalEntry[] = [];
+export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): VatPosting[] {
+  const out: VatPosting[] = [];
   for (const e of entries) {
     const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
     const line = vat().vatLine(e);
-    if (!info || !line || line.tax === 0 || info.acquisitionZiffer) continue;
-    const owed = !!(info.revenueZiffer || info.correctionZiffer);
+    if (!info || !line || line.tax === 0) continue;
+    const acquisition = owesAcquisition(info);
+    if (info.acquisitionZiffer && !acquisition) continue;
+    const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
     if (!owed && !info.inputTaxZiffer) continue;
     const amount = Math.abs(line.tax);
-    // The side that carries the tax: credit for a sale, debit for a purchase; a minus code swaps it.
-    const onCredit = owed !== info.isNegative;
+    // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
+    const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
     const carrier = onCredit ? e.accountCredit : e.accountDebit;
-    // Tax leaves the carrier: a credit carrier is debited, a debit carrier credited.
-    const [accountDebit, accountCredit] = onCredit ? [carrier, vatAccount] : [vatAccount, carrier];
+    // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
+    const toVat = acquisition ? !info.isNegative : onCredit;
+    const [accountDebit, accountCredit] = toVat ? [carrier, vatAccount] : [vatAccount, carrier];
     out.push({
       id: `vat:${e.id}`,
       transactionRef: e.transactionRef,
@@ -98,6 +109,7 @@ export function vatPostings(entries: readonly JournalEntry[], vatAccount: string
       accountCredit,
       amount,
       description: `MWST ${e.vatCode} ${e.id}`,
+      code: e.vatCode!,
     });
   }
   return out;
@@ -312,6 +324,8 @@ export interface VatCheck {
   opening: number;
   /** The tax of the year's entries, as their codes post it to the VAT account. */
   booked: number;
+  /** Of `booked`: the Bezugsteuer owed without a deduction (the net tax rate method); 0 where it nets to zero. */
+  acquisition: number;
   /** Paid to (positive) or refunded by the ESTV: the year's entries on the VAT accounts. */
   paid: number;
   /** Owed at 31.12.: opening + booked − paid. */
@@ -332,7 +346,9 @@ export function vatCheck(books: Books, year: string, filed: readonly ReturnFigur
   // Effect on the amount owed: a credit to a VAT account raises it, a debit lowers it.
   const effect = (es: readonly JournalEntry[]) => fromRappen(es.reduce((s, e) =>
     s + (group.has(e.accountCredit) ? toRappen(e.amount) : 0) - (group.has(e.accountDebit) ? toRappen(e.amount) : 0), 0));
-  const booked = effect(vatPostings(entries, accounts.vatSettlement));
+  const postings = vatPostings(entries, accounts.vatSettlement);
+  const booked = effect(postings);
+  const acquisition = effect(postings.filter((p) => owesAcquisition(vat().codes.parse(p.code)!)));
   const paid = -effect(entries);
   const owed = roundCHF(opening + booked - paid);
   const adjustments = books.config.vatAdjustments ?? [];
@@ -345,7 +361,7 @@ export function vatCheck(books: Books, year: string, filed: readonly ReturnFigur
   // Every return filed in the year is paid in the year; the last period, and any period not filed yet, is still owed.
   const expected = roundCHF(quarters.reduce((s, q, i) => s + (i === quarters.length - 1 || q.filed === undefined ? q.books : 0), 0));
   const rounding = roundCHF(booked - quarters.reduce((s, q) => s + q.books, 0));
-  return { quarters, opening, booked, paid, owed, expected, rounding, unexplained: roundCHF(owed - expected - rounding) };
+  return { quarters, opening, booked, acquisition, paid, owed, expected, rounding, unexplained: roundCHF(owed - expected - rounding) };
 }
 
 // ─── Guided year-end entries ─────────────────────────────────────────────────

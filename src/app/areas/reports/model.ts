@@ -10,9 +10,9 @@ import {
 } from '../../../accounting/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import { computeBalances } from '../../../accounting/ledger.js';
-import { differenceCauses, vatPostings, type DifferenceCause } from '../../../accounting/year-close.js';
+import { differenceCauses, owesAcquisition, vatPostings, type DifferenceCause } from '../../../accounting/year-close.js';
 import type { Report } from '../../shell/route.js';
-import { chart } from '../../../engines/index.js';
+import { chart, vat, withoutInputTax } from '../../../engines/index.js';
 
 /** The account of entries booked on one side only (a code that books the VAT itself, M81-2): no number. */
 export const NO_ACCOUNT = '';
@@ -38,12 +38,28 @@ export type SumTitle = 'grossProfit' | 'operatingResult' | 'netResult' | 'totalA
 
 /** The VAT the shown entries carry inside their gross amounts (docs/year-end.md: split off at the year close, not before). */
 export interface VatInFigures {
-  /** Sales tax the codes owe. */
+  /** Sales tax the codes owe, refunds and corrections taken off. */
   owed: number;
   /** Input tax the codes deduct. */
   input: number;
-  /** owed − input: what the figures hold that the tax office gets. */
+  /** Bezugsteuer owed without a deduction (the net tax rate method); 0 where it nets to zero. */
+  acquisition: number;
+  /** owed + acquisition − input: what the figures hold that the tax office gets. */
   net: number;
+}
+
+export type VatPart = 'reports.vatPart.owed' | 'reports.vatPart.input' | 'reports.vatPart.acquisition';
+
+/**
+ * The parts the VAT note names, in order: the sales tax, the input tax (always for a firm that
+ * deducts it, else only when there is one), the Bezugsteuer when there is one (r9n-27).
+ */
+export function vatParts(v: VatInFigures): Array<{ key: VatPart; amount: number }> {
+  return [
+    { key: 'reports.vatPart.owed' as const, amount: v.owed },
+    ...(v.input !== 0 || !withoutInputTax() ? [{ key: 'reports.vatPart.input' as const, amount: v.input }] : []),
+    ...(v.acquisition !== 0 ? [{ key: 'reports.vatPart.acquisition' as const, amount: v.acquisition }] : []),
+  ];
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -57,9 +73,14 @@ const VAT_MARK = 'vat';
 export function vatInFigures(entries: readonly JournalEntry[], from: string, to: string): VatInFigures | undefined {
   const postings = vatPostings(entries.filter((e) => e.date >= from && e.date <= to), VAT_MARK);
   if (!postings.length) return undefined;
-  const owed = r2(postings.filter((p) => p.accountCredit === VAT_MARK).reduce((s, p) => s + p.amount, 0));
-  const input = r2(postings.filter((p) => p.accountDebit === VAT_MARK).reduce((s, p) => s + p.amount, 0));
-  return { owed, input, net: r2(owed - input) };
+  // Signed as the tax office sees it: a credit to the VAT account owes, a debit deducts or takes back.
+  const signed = (p: (typeof postings)[number]) => (p.accountCredit === VAT_MARK ? p.amount : -p.amount);
+  const sum = (ps: typeof postings) => r2(ps.reduce((s, p) => s + signed(p), 0));
+  const kind = (p: (typeof postings)[number]) => { const info = vat().codes.parse(p.code)!; return owesAcquisition(info) ? 'acquisition' : info.inputTaxZiffer ? 'input' : 'owed'; };
+  const owed = sum(postings.filter((p) => kind(p) === 'owed'));
+  const input = r2(0 - sum(postings.filter((p) => kind(p) === 'input'))) || 0;
+  const acquisition = sum(postings.filter((p) => kind(p) === 'acquisition'));
+  return { owed, input, acquisition, net: r2(owed + acquisition - input) };
 }
 
 export interface ReportView {

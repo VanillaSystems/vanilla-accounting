@@ -7,7 +7,7 @@ import type { Index } from '../types/index.js';
 import type { Key } from '../app/i18n/types.js';
 import { chfAmount } from '../accounting/ledger.js';
 import { localToday, type FilingLength, type Period } from '../accounting/periods.js';
-import { NO_ACCOUNT, ledgerOf, reportView } from '../app/areas/reports/model.js';
+import { NO_ACCOUNT, ledgerOf, reportView, vatParts } from '../app/areas/reports/model.js';
 import { formAmount, rateOf, shownZiffern, vatReturn } from '../app/areas/vat/model.js';
 import { accountsWithActivity, entriesIn, paymentsIn, quartersIn, receiptsIn, type ItemId } from './model.js';
 import type { ReturnFigures } from '../engines/return.js';
@@ -79,7 +79,7 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
         if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total]); out.styles.push('total'); }
       }
       if (view.vat) {
-        const vars = { net: fmt2(view.vat.net), owed: fmt2(view.vat.owed), input: fmt2(view.vat.input) };
+        const vars = { net: fmt2(view.vat.net), parts: vatParts(view.vat).map((x) => t(x.key, { amount: fmt2(x.amount) })).join(', ') };
         out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', view.vat.net]);
         out.styles.push('open');
         out.note = t(id === 'income' ? 'reports.vatMetaIncome' : 'reports.vatMetaBalance', vars);

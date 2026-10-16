@@ -158,7 +158,7 @@ function VatReconciliation({ d }: { d: YearCloseView }) {
         ))}
       </div>
       <div className="ftab sums">
-        {([['yearClose.vatOpening', v.opening], ['yearClose.vatBooked', v.booked], ['yearClose.vatPaid', v.paid], ['yearClose.vatOwed', v.owed], ['yearClose.vatExpected', v.expected], ['yearClose.vatRounding', v.rounding]] as const).map(([key, value]) => (
+        {([['yearClose.vatOpening', v.opening], ['yearClose.vatBooked', v.booked], ...(v.acquisition ? [['yearClose.vatAcquisition', v.acquisition] as const] : []), ['yearClose.vatPaid', v.paid], ['yearClose.vatOwed', v.owed], ['yearClose.vatExpected', v.expected], ['yearClose.vatRounding', v.rounding]] as const).map(([key, value]) => (
           <div key={key} className="fr"><span className="m">{t(key)}</span><span className="r mono">{fmt(value)}</span></div>
         ))}
       </div>
