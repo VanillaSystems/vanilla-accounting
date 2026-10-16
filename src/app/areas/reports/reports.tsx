@@ -20,6 +20,8 @@ import {
   type AccountRow, type Block, type ReportView,
 } from './model.js';
 import { Detail } from './Detail.js';
+import { causeText } from '../close/steps.js';
+import type { DifferenceCause } from '../../../accounting/year-close.js';
 import { accountName, accountOfRoute, routeAccount } from './view.js';
 
 type Props = AreaProps<RouteOf<'reports'>>;
@@ -89,10 +91,14 @@ function List(props: Props) {
     setShut(next);
     write(SHUT_KEY, [...next]);
   };
-  const showOneSided = () => nav.go({
-    route: { area: 'reports', report: 'trial', account: NO_ACCOUNT_SLUG },
+  const inTrial = (account: string) => nav.go({
+    route: { area: 'reports', report: 'trial', account },
     query: { period: parsePeriod(`${period.to.slice(0, 4)}-01-01..${period.to}`, localToday()) ?? undefined },
   });
+  /** Where a cause of the gap is looked at: the one-sided entries, the account, or the year's opening. */
+  const goCause = (c: DifferenceCause) => (c.code === 'oneLeg' ? inTrial(NO_ACCOUNT_SLUG)
+    : c.code === 'openingUnbalanced' ? nav.go({ route: { area: 'company', section: 'opening' }, query: {} })
+      : inTrial(c.account));
   const sb = route.report === 'trial';
 
   return (
@@ -129,8 +135,11 @@ function List(props: Props) {
         <div className="notice warn rgap">
           <span className="dot" aria-hidden="true" />
           <span>
-            {t('reports.gap', { liabilities: fmt(view.gap.liabilities), gap: fmt(view.gap.value), n: view.gap.oneSided })}{' '}
-            <button type="button" onClick={showOneSided}>{t('reports.show')}</button>
+            {t('reports.gap', { liabilities: fmt(view.gap.liabilities), gap: fmt(view.gap.value) })}
+            {view.gap.causes.map((c, i) => (
+              <span key={i} className="cause" data-cause={c.code}>{' '}{causeText(c)}{' '}<button type="button" onClick={() => goCause(c)}>{t('reports.show')}</button></span>
+            ))}
+            {!view.gap.causes.length && <span>{' '}{t('reports.gapUnknown')}</span>}
           </span>
         </div>
       )}

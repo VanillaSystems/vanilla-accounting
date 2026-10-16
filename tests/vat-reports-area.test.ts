@@ -77,10 +77,20 @@ test('the Erfolgsrechnung shows the app\'s figures, accounts with an amount only
   assert.deepEqual(accountsOf(reportView('income', books, p('2026-Q4'), names, false)), []);
 });
 
-test('the Bilanz counts the entries booked on one side when assets and liabilities differ', () => {
+test('the Bilanz names why assets and liabilities differ: the entries booked on one side, an account missing from the chart', () => {
   const view = reportView('balance', books, p('2026-Q3'), names, false);
   assert.equal(view.asOf, '2026-09-30');
-  assert.equal(view.gap?.oneSided, 1);
+  assert.deepEqual(view.gap?.causes, [
+    { code: 'oneLeg', entryIds: ['fix'], amount: -8.1 },
+    { code: 'notInChart', account: '2800', amount: 1000 },
+  ]);
+});
+
+test('an opening booked against 9100 (treuhaender-30): the Bilanz names the account, not entries without a counter account', () => {
+  const fresh: Index = { ...books, config: {}, journalEntries: [je('open', '2026-07-01', '1020', '9100', 18420.15)] };
+  const view = reportView('balance', fresh, p('2026'), { ...names, 9100: 'Eröffnungsbilanz' }, false);
+  assert.equal(view.gap?.value, 18420.15);
+  assert.deepEqual(view.gap?.causes, [{ code: 'outsideStatements', account: '9100', amount: -18420.15 }]);
 });
 
 test('the Saldobilanz starts from the balance when the period begins and lists one-sided entries apart', () => {

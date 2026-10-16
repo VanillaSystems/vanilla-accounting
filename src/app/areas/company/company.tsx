@@ -30,7 +30,10 @@ import { SourcesSection } from './SourcesSection.js';
 import { PhoneSection } from './PhoneSection.js';
 import { desktop } from '../../desktop/bridge.js';
 import { RulesSection } from './RulesSection.js';
-import { baseCurrency, filing } from '../../../engines/index.js';
+import { baseCurrency, chart, filing } from '../../../engines/index.js';
+import { openingLock } from '../../../accounting/opening-balance.js';
+import { yearEndAccounts } from '../../../accounting/year-close.js';
+import { AccountField } from '../journal/AccountField.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
@@ -434,33 +437,97 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
   );
 }
 
-function Opening({ books, nav }: Props) {
+const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return s.trim() && Number.isFinite(n) ? n : null; };
+
+/**
+ * The year's opening balances. For the books' first year a person types them per account (a firm
+ * whose earlier books were kept elsewhere): each balance-sheet account's balance on 1.1. as its
+ * last balance sheet shows it, retained earnings taking the difference. A later year is opened by
+ * the close of the one before, a year with a filed quarter keeps its openings.
+ */
+function Opening({ books, nav, canEdit }: Props) {
+  const ws = useWorkspace();
   const year = bookYear(books);
   const names = getAccountMap();
-  const rows = Object.entries(books.config?.openingBalances?.[year] ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const openings = books.config?.openingBalances?.[year] ?? {};
+  const rows = Object.entries(openings).sort(([a], [b]) => a.localeCompare(b));
   const sum = (d: string) => Math.round(rows.filter(([a]) => a[0] === d).reduce((s, [, v]) => s + v * 100, 0)) / 100;
   const [assets, liabilities] = [sum('1'), sum('2')];
-  if (!rows.length) return <p className="m">{t('company.noOpening', { year })}</p>;
+  const lock = openingLock(books, year);
+  const equity = yearEndAccounts(Object.keys(names)).retainedEarnings;
+  const foreign = new Set((ws?.bankAccounts ?? []).filter((b) => b.currency !== baseCurrency()).map((b) => b.account));
+  const [n, setN] = useState(0);
+  const [err, setErr] = useState('');
+  const typing = canEdit && !lock;
   const open = (a: string) => nav.go({ route: { area: 'reports', report: 'balance', account: a }, query: { period: parsePeriod(year, localToday())! } });
+
+  async function put(account: string, amount: number | null, before: number | undefined): Promise<boolean> {
+    try {
+      await api.setOpeningBalance(year, account, amount);
+    } catch (e) {
+      setErr(errorText(e));
+      return false;
+    }
+    setErr('');
+    nav.refresh();
+    const text = amount === null ? t('company.openingRemoved', { account }) : t('company.openingSet', { account, amount: fmt(amount) });
+    nav.toast(text, () => { api.setOpeningBalance(year, account, before ?? null).then(nav.refresh, (e) => nav.toast(errorText(e))); });
+    return true;
+  }
+
+  function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const account = String(f.get('account') ?? '').trim();
+    const amount = parseAmount(String(f.get('amount') ?? ''));
+    const problem = !names[account] ? t('journal.errAccount', { account: account || '–' })
+      : !isBalanceSheet(account) ? t('error.openingAccount.notBalanceSheet', { account })
+        : account === equity ? t('error.openingAccount.equity', { account })
+          : foreign.has(account) ? t('error.openingAccount.foreign', { account })
+            : amount === null ? t('journal.errAmount') : '';
+    if (problem) { setErr(problem); return; }
+    void put(account, amount === 0 ? null : amount, openings[account]).then((ok) => { if (ok) setN(n + 1); });
+  }
+
+  if (!rows.length && !typing) return <p className="m">{lock === 'closed' ? t('company.openingClosed', { year }) : t('company.noOpening', { year })}</p>;
   return (
     <>
-      <div className="ftab">
-        <div className="fh"><span>{t('yearClose.colAccount')}</span><span>{t('company.accountName')}</span><span /><span className="r">{t('close.openingOn', { date: `1.1.${year}` })}</span></div>
-        {rows.map(([a, v]) => (
-          <button key={a} type="button" className="fr" onClick={() => open(a)}>
-            <span className="mono">{a}</span><span>{names[a] ?? a}</span><span /><span className="r mono">{fmt(v)}</span>
-          </button>
-        ))}
-        <div className="fr tot"><span /><span>{t('yearClose.totalAssets')}</span><span /><span className="r mono">{fmt(assets)}</span></div>
-        <div className="fr tot"><span /><span>{t('yearClose.totalLiabilities')}</span><span /><span className="r mono">{fmt(liabilities)}</span></div>
-      </div>
-      {assets === liabilities
-        ? <p className="okline">{I.check}{t('company.openingBalanced')}</p>
-        : <p className="warnline">{I.dot}{t('company.openingDiffers', { amount: fmt(assets - liabilities) })}</p>}
-      <p className="m src-note">{t('company.openingSource')}</p>
+      {typing && (
+        <form key={n} className="form inline" autoComplete="off" onSubmit={save} data-testid="opening-form">
+          <AccountField name="account" label={t('yearClose.colAccount')} defaultValue="" />
+          <label>{t('close.openingOn', { date: `1.1.${year}` })}<input className="mono" name="amount" inputMode="decimal" style={{ textAlign: 'right' }} /></label>
+          <div className="acts">
+            <button type="submit" className="btn">{t('company.openingSetButton')} <span className="k">↵</span></button>
+            <span className="m">{t('company.openingHint', { equity })}</span>
+          </div>
+          <div className="err" role="alert">{err}</div>
+        </form>
+      )}
+      {rows.length ? (
+        <>
+          <div className="ftab">
+            <div className="fh"><span>{t('yearClose.colAccount')}</span><span>{t('company.accountName')}</span><span /><span className="r">{t('close.openingOn', { date: `1.1.${year}` })}</span></div>
+            {rows.map(([a, v]) => (
+              <div key={a} className="fr" data-account={a}>
+                <button type="button" className="mono clink" onClick={() => open(a)}>{a}</button><span>{names[a] ?? a}{a === equity ? <span className="m"> · {t('company.openingPlug')}</span> : null}</span>
+                <span>{typing && a !== equity ? <button type="button" className="quiet2" title={t('company.openingRemove', { account: a })} aria-label={t('company.openingRemove', { account: a })} onClick={() => void put(a, null, v)}>×</button> : null}</span>
+                <span className="r mono">{fmt(v)}</span>
+              </div>
+            ))}
+            <div className="fr tot"><span /><span>{t('yearClose.totalAssets')}</span><span /><span className="r mono">{fmt(assets)}</span></div>
+            <div className="fr tot"><span /><span>{t('yearClose.totalLiabilities')}</span><span /><span className="r mono">{fmt(liabilities)}</span></div>
+          </div>
+          {assets === liabilities
+            ? <p className="okline">{I.check}{t('company.openingBalanced')}</p>
+            : <p className="warnline">{I.dot}{t('company.openingDiffers', { amount: fmt(assets - liabilities) })}</p>}
+        </>
+      ) : <p className="m">{t('company.openingNone', { year })}</p>}
+      <p className="m src-note">{typing ? t('company.openingByHand') : t('company.openingSource')}</p>
     </>
   );
 }
+
+const isBalanceSheet = (a: string) => { const side = chart().sideOf(a); return side === 'assets' || side === 'liabilities'; };
 
 /** The pin of a bar, the same state the bar's own pin edits (src/app/shell/bars.ts). */
 function BarSetting({ id }: { id: BarId }) {

@@ -9,6 +9,8 @@ import {
   type AccountLedgerRow, type IncomeStatementSection,
 } from '../../../accounting/index.js';
 import type { Period } from '../../../accounting/periods.js';
+import { computeBalances } from '../../../accounting/ledger.js';
+import { differenceCauses, type DifferenceCause } from '../../../accounting/year-close.js';
 import type { Report } from '../../shell/route.js';
 import { chart } from '../../../engines/index.js';
 
@@ -39,7 +41,7 @@ export interface ReportView {
   headline: { label: 'result' | 'balanceTotal' | 'balanced' | 'difference'; value: number };
   /** Bilanz: the day it shows, and the gap when assets and liabilities differ. */
   asOf?: string;
-  gap?: { value: number; liabilities: number; oneSided: number };
+  gap?: { value: number; liabilities: number; causes: DifferenceCause[] };
   balanced?: boolean;
 }
 
@@ -74,7 +76,9 @@ export function reportView(report: Report, books: Index, period: Period, names: 
         ...(result && { plain: { name: result.name, value: result.balance } }),
       };
     });
-    const oneSided = entries.filter((e) => e.date >= `${year}-01-01` && e.date <= period.to && (!e.accountDebit || !e.accountCredit)).length;
+    const opening = books.config?.openingBalances?.[year] ?? {};
+    const booked = entries.filter((e) => e.date >= `${year}-01-01` && e.date <= period.to);
+    const balances = Object.fromEntries(computeBalances(booked, `${year}-01-01`, period.to, opening, chart().isDebitNormal).map((r) => [r.account, r.balance]));
     return {
       blocks: [
         { kind: 'head', title: 'assets' }, ...groups(b.assets), { kind: 'sum', title: 'totalAssets', value: b.totalAssets, strong: true },
@@ -82,7 +86,7 @@ export function reportView(report: Report, books: Index, period: Period, names: 
       ],
       headline: { label: 'balanceTotal', value: b.totalAssets },
       asOf: period.to,
-      gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, oneSided },
+      gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, causes: differenceCauses(opening, booked, balances, Object.keys(names)) },
     };
   }
   const opening = openingOf(books, entries, period.from);

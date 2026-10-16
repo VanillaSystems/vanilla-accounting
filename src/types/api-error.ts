@@ -45,7 +45,11 @@ export type ApiRefusal =
   | { code: 'noClaude' }
   | { code: 'noWorkspace' }
   | { code: 'notWorkspace' }
-  | { code: 'setup'; params: SetupRefusal };
+  | { code: 'setup'; params: SetupRefusal }
+  /** An opening balance typed for an account that takes none by hand (Firma › Eröffnung). */
+  | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' } }
+  /** Opening balances typed for a year an earlier year of the books opens. */
+  | { code: 'openingNotFirstYear'; params: { year: string } };
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):

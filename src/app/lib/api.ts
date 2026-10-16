@@ -96,6 +96,8 @@ export function errorText(e: unknown): string {
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'setup': return setupText(b.params);
+    case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account });
+    case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;

@@ -142,6 +142,25 @@ export function closingLedger(books: Books, year: string, chart: readonly string
   }
   const residual = assets - liabilities - result;
 
+  const causes = differenceCauses(opening, [...entries, ...vat], balances, chart);
+  return {
+    year,
+    balances,
+    result: fromRappen(result),
+    totalAssets: fromRappen(assets),
+    totalLiabilities: fromRappen(liabilities),
+    residual: fromRappen(residual),
+    causes,
+  };
+}
+
+/**
+ * Why Aktiven and Passiven differ, from the opening, the postings and each account's balance: an
+ * opening that does not balance, lines booked on one side only that do not balance under their
+ * ref, an account outside both statements (9100 Eröffnungsbilanz), one missing from the chart. The
+ * close reads its ledger (with the VAT postings), the Bilanz its entries as booked.
+ */
+export function differenceCauses(opening: Record<string, number>, postings: readonly JournalEntry[], balances: Record<string, number>, chart: readonly string[]): DifferenceCause[] {
   const causes: DifferenceCause[] = [];
   let openAssets = 0, openLiabilities = 0;
   for (const [account, value] of Object.entries(opening)) {
@@ -151,7 +170,7 @@ export function closingLedger(books: Books, year: string, chart: readonly string
   if (openAssets !== openLiabilities) causes.push({ code: 'openingUnbalanced', amount: fromRappen(openAssets - openLiabilities) });
   // A booking of several lines (Banana's split entry) has one-leg lines that balance under its ref.
   const oneLeg = new Map<string, { effect: number; ids: string[] }>();
-  for (const p of [...entries, ...vat]) {
+  for (const p of postings) {
     const chf = toRappen(chfAmount(p));
     const effect = (p.accountDebit === '' ? chf : 0) - (p.accountCredit === '' ? chf : 0);
     if (!effect) continue;
@@ -165,19 +184,11 @@ export function closingLedger(books: Books, year: string, chart: readonly string
   if (unbalanced.reduce((s, r) => s + r.effect, 0) !== 0) causes.push({ code: 'oneLeg', entryIds: [...new Set(unbalanced.flatMap((r) => r.ids))], amount: fromRappen(-unbalanced.reduce((s, r) => s + r.effect, 0)) });
   const inChart = new Set(chart);
   for (const [account, balance] of Object.entries(balances)) {
-    if (account === '') continue;
+    if (account === '' || toRappen(balance) === 0) continue;
     if (!isBalanceSheet(account) && !isProfitAndLoss(account)) causes.push({ code: 'outsideStatements', account, amount: balance });
     else if (chart.length && !inChart.has(account)) causes.push({ code: 'notInChart', account, amount: balance });
   }
-  return {
-    year,
-    balances,
-    result: fromRappen(result),
-    totalAssets: fromRappen(assets),
-    totalLiabilities: fromRappen(liabilities),
-    residual: fromRappen(residual),
-    causes,
-  };
+  return causes;
 }
 
 // ─── Exchange difference (Kursdifferenz) ─────────────────────────────────────

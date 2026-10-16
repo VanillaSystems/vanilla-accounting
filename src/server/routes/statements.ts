@@ -23,10 +23,10 @@ import type { StatementClosingBalance, StatementImport } from '../../types/index
 import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, readBooks, updateBooks, withBooks } from '../books.js';
-import { withOpening } from '../../accounting/opening-balance.js';
+import { openingLock, withOpening } from '../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../accounting/year-close.js';
 import { chartOf } from '../../books/year-close.js';
-import { baseCurrency } from '../../engines/index.js';
+import { baseCurrency, chart } from '../../engines/index.js';
 
 export const router = Router();
 
@@ -191,20 +191,27 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
 }
 
 /**
- * A bank account's opening balance of a year, as its first statement offers it
- * (src/accounting/opening-balance.ts): `amount` sets it, null takes it back; the difference goes
- * to retained earnings. A year with a closed period keeps its openings.
+ * An account's opening balance of a year: a bank account's as its first statement offers it
+ * (src/accounting/opening-balance.ts), any balance-sheet account's as Firma › Eröffnung types it
+ * for the books' first year. `amount` sets it, null takes it back; the difference goes to retained
+ * earnings. A year with a closed period keeps its openings; a later year is opened by the close of
+ * the one before; a foreign-currency account also needs its native balance (npm run import-opening).
  */
 router.put('/api/opening-balances/:year/:account', (req, res) => {
   const { year, account } = req.params;
   const amount: unknown = req.body?.amount;
   if (!/^\d{4}$/.test(year)) throw new RequestError(400, 'Kein Jahr.');
-  if (!imported().some((a) => a.account === account && a.currency === baseCurrency())) throw new RequestError(400, `Konto ${account} ist kein Bankkonto in ${baseCurrency()}.`);
   if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount))) throw new RequestError(400, 'Betrag fehlt.');
   const equity = yearEndAccounts(chartOf(WS)).retainedEarnings;
+  const side = chart().sideOf(account);
+  const refuse = (reason: 'notBalanceSheet' | 'equity' | 'foreign', text: string) => new RequestError(400, text, { code: 'openingAccount', params: { account, reason } });
+  if (side !== 'assets' && side !== 'liabilities') throw refuse('notBalanceSheet', `Konto ${account} ist kein Bilanzkonto.`);
+  if (account === equity) throw refuse('equity', `Konto ${account} nimmt die Differenz der Eröffnung auf.`);
+  if (WS.bankAccounts.some((a) => a.account === account && a.currency !== baseCurrency())) throw refuse('foreign', `Konto ${account} führt eine Fremdwährung: npm run import-opening.`);
   withBooks(res, (books) => {
     assertOpen(books, [`${year}-01-01`], 'openingBalance');
-    const next = withOpening(books.config.openingBalances, year, account, amount, equity);
+    if (openingLock(books, year)) throw new RequestError(400, `${year} ist nicht das erste Jahr dieser Bücher: der Abschluss des Vorjahres eröffnet es.`, { code: 'openingNotFirstYear', params: { year } });
+    const next = withOpening(books.config.openingBalances, year, account, amount, equity, side === 'liabilities');
     if (next) books.config.openingBalances = next;
     else delete books.config.openingBalances;
     return { ok: true };

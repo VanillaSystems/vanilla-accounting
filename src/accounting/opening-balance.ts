@@ -54,16 +54,30 @@ export function openingOffer(books: Pick<Index, 'config' | 'transactions' | 'jou
 type Openings = AccountingConfig['openingBalances'];
 
 /**
- * The opening balances with `account` opening `year` at `amount` (null: without it), the
- * difference carried to `equity` so the year stays balanced. A year left empty is dropped, so
- * taking an opening back leaves the books as they were.
+ * Why `year`'s opening balances cannot be typed by hand: a closed period in it (its openings stay
+ * as filed), or it is not the first year of these books (an earlier year's close opens it).
  */
-export function withOpening(openings: Openings, year: string, account: string, amount: number | null, equity: string): Openings {
+export type OpeningLock = 'closed' | 'notFirstYear';
+
+export function openingLock(books: Pick<Index, 'config' | 'journalEntries'>, year: string): OpeningLock | undefined {
+  const config = books.config;
+  if (config?.closedThrough && config.closedThrough >= `${year}-01-01`) return 'closed';
+  const earlier = Object.keys(config?.openingBalances ?? {}).some((y) => y < year) || (books.journalEntries ?? []).some((e) => e.date < `${year}-01-01`);
+  return earlier ? 'notFirstYear' : undefined;
+}
+
+/**
+ * The opening balances with `account` opening `year` at `amount` (null: without it), the
+ * difference carried to `equity` so the year stays balanced: an asset's on the same side, a
+ * liability's (`liability`) against it. A year left empty is dropped, so taking an opening back
+ * leaves the books as they were.
+ */
+export function withOpening(openings: Openings, year: string, account: string, amount: number | null, equity: string, liability = false): Openings {
   const balances = { ...openings?.[year] };
   const delta = toRappen(amount ?? 0) - toRappen(balances[account] ?? 0);
   if (amount === null) delete balances[account];
   else balances[account] = amount;
-  const plug = toRappen(balances[equity] ?? 0) + delta;
+  const plug = toRappen(balances[equity] ?? 0) + (liability ? -delta : delta);
   if (plug === 0) delete balances[equity];
   else balances[equity] = fromRappen(plug);
   const out = { ...openings };
