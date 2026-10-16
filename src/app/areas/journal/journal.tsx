@@ -204,12 +204,14 @@ export const journal: Area<RouteOf<'journal'>> = {
       if (next) p.nav.select({ area: 'journal', id: next });
       return true;
     }
+    // Deleting takes ⌘⌫ or the Delete key: a bare Backspace meant for a field that lost focus must not delete the booking (r7f-31).
+    if (e.key === 'Backspace') return e.metaKey && !e.ctrlKey && !e.altKey ? runAct(p, 'del') : false;
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     switch (e.key) {
       case 'Enter': return runAct(p, e.shiftKey ? 'payment' : 'receipt');
       case 'e': case 'E': return runAct(p, 'edit');
       case 'd': case 'D': return runAct(p, 'download');
-      case 'Backspace': case 'Delete': return runAct(p, 'del');
+      case 'Delete': return runAct(p, 'del');
       case 'Escape':
         if (p.query.q) { p.nav.setQuery({ q: undefined }); return true; }
         if (p.query.vat) { p.nav.setQuery({ vat: undefined }); return true; }

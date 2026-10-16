@@ -29,7 +29,7 @@ const say: Say = (key, vars) => t(key, vars as never);
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
-import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
+import { journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
 import { createEntry, inputOf, reclassify, saveEntry, type Field } from './actions.js';
 import { RunLink } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -49,14 +49,15 @@ export function Detail(props: Props) {
   const j = journalFor(books);
   const v = route.id ? j.byId.get(route.id) : undefined;
   const { deleted } = useUi();
-  if (!v && deleted && route.id === deleted.id) return <Deleted e={deleted} nav={props.nav} />;
+  const gone = !v && route.id ? (deleted?.id === route.id ? deleted : recentlyDeleted.get(route.id)) : undefined;
+  if (gone) return <Deleted e={gone} nav={props.nav} />;
   if (!v) return <div className="detail-empty"><div>{route.id ? t('journal.gone') : t('journal.noneSelected')}</div></div>;
   return <EntryDetail key={v.e.id} {...props} v={v} j={j} />;
 }
 
-/** The place of an entry just deleted: nothing moves under the pointer, and the undo lasts until the person goes elsewhere (r6h-28). */
+/** The place of an entry just deleted: nothing moves under the pointer, and the undo stays while its place is shown, also after leaving and coming back (r6h-28, r7h-31). */
 function Deleted({ e, nav }: { e: JournalEntry; nav: AreaProps<RouteOf<'journal'>>['nav'] }) {
-  const back = () => { createEntry(nav, inputOf(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); selectNew(nav, entry.id); } }); };
+  const back = () => { createEntry(nav, inputOf(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); selectNew(nav, entry.id); } }); };
   return (
     <div className="detail-empty" data-testid="deleted">
       <div>

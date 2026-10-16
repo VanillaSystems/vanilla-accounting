@@ -759,7 +759,7 @@ export default {
     'receipts.dateCaptured': "La pièce ne montre aucune date : c'est le jour où le téléphone l'a prise. Si ce n'est pas le bon, changer la date ici.",
     'receipts.daysAfter': { one: '{n} jour après', other: '{n} jours après' },
     'receipts.daysBefore': { one: '{n} jour avant', other: '{n} jours avant' },
-    'receipts.deleteKey': 'Supprimer (⌫)',
+    'receipts.deleteKey': 'Supprimer (⌘⌫)',
     'receipts.deleteText': 'Le justificatif quitte les livres avec toutes ses attributions ; son paiement est recomptabilisé sans lui. Le fichier reste 30 jours dans la corbeille de l’espace de travail (data/trash) : « Annuler » dans le message qui suit le récupère.',
     'receipts.deleteTextKept': 'Le justificatif quitte les livres avec toutes ses attributions. L’écriture de son paiement est manuelle et reste telle quelle ; si son code TVA exige un justificatif, elle est signalée. Le fichier reste 30 jours dans la corbeille de l’espace de travail (data/trash) : « Annuler » dans le message qui suit le récupère.',
     'receipts.deleteTextAlone': 'Le justificatif quitte les livres ; il n’a pas de paiement, aucune écriture ne change. Le fichier reste 30 jours dans la corbeille de l’espace de travail (data/trash) : « Annuler » dans le message qui suit le récupère.',

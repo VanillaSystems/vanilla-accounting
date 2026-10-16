@@ -340,12 +340,15 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
  * A booking a person changed or made by hand put back as the last save holds it (`saved`), or
  * taken out when it was booked since (Änderungen › «Rückgängig», src/saving/changes.ts handEdits).
  */
-export function restoreSaved(books: Books, id: string, saved: JournalEntry | undefined): void {
+export function restoreSaved(books: Books, id: string, saved: JournalEntry | undefined, kept?: readonly string[]): void {
   if (!saved) { deleteEntry(books, id); return; }
   const e = books.journalEntries.find((x) => x.id === id);
   assertOpen(books, [...(e ? [e.date] : []), saved.date], 'editEntry');
-  // A booking deleted by hand comes back as saved, with its id (r6h-28).
-  books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries, saved];
+  // A booking deleted by hand comes back as saved, with its id (r6h-28). What the app booked on its payment
+  // since the deletion (`kept` names what was there then) goes, so the payment is not booked twice (r7h-31).
+  const since = kept && !e ? books.journalEntries.filter((x) => x.transactionRef === saved.transactionRef && !kept.includes(x.id) && x.origin !== 'manual') : [];
+  assertOpen(books, since.map((x) => x.date), 'deleteEntry');
+  books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries.filter((x) => !since.includes(x)), saved];
 }
 
 export function deleteEntry(books: Books, id: string): JournalEntry {

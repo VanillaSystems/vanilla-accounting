@@ -107,6 +107,9 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
   if (a === 'edit') setUi({ open: { ...ui().open, buchung: true }, focus: 'accountDebit' });
   // Deleted: the detail keeps the entry's place with «Rückgängig» instead of showing the next entry under the same
   // button (r6h-28). Marked before the call: the books reload as it answers, and the list must not hand the selection on.
-  if (a === 'del') { setUi({ deleted: e }); deleteEntry(p.nav, e).then((ok) => { if (!ok) setUi({ deleted: undefined }); }); }
+  if (a === 'del') { setUi({ deleted: e }); recentlyDeleted.set(e.id, e); deleteEntry(p.nav, e).then((ok) => { if (!ok) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); } }); }
   return true;
 }
+
+/** The bookings deleted in this session, by id: the place of one keeps its «Rückgängig» also after the area was left and the books moved on (r7h-31, r7f-31). */
+export const recentlyDeleted = new Map<string, JournalEntry>();

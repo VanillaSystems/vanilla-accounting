@@ -17,6 +17,8 @@ import { openEngine } from '../src/workflows/engine.js';
 import { loadWorkflows } from '../src/workflows/load.js';
 import { taskOf } from '../src/workflows/model.js';
 import { filingXml, type PeriodReturn } from '../src/workflows/filing.js';
+import { ClosedPeriodError, loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
+import { addEntry } from '../src/server/edits.js';
 import { approvalWithheld } from '../src/app/areas/automation/filing-summary.js';
 
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'net-rate-filing-runs-'));
@@ -64,4 +66,41 @@ test('without the activity code: the review names it and withholds the approval;
   assert.ok(xml && existsSync(xml));
   assert.match(readFileSync(xml!, 'utf8'), /<eCH-0217:activityId>41050<\/eCH-0217:activityId>/);
   assert.equal(approvalWithheld(taskOf(w, run())!), undefined, 'the filing task withholds nothing');
+});
+
+test('a half year on the net tax rate method is held from «Freigegeben» too: a booking into it is refused with the approval named, and «Eingereicht» never seals books that differ from the filed XML (r7f-29)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'net-rate-hold-'));
+  cpSync(SOURCE, dir, { recursive: true });
+  patchManifest(join(dir, 'belege.workspace.yaml'), { vat: { ...SETUP, rates: [{ ...RATE, activityId: '41050' }] } });
+  const ws = workspaceAt(dir);
+  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
+  const r = await engine.start('vat-filing', { kind: 'period', id: '2026-H2' }, { kind: 'manual' });
+  assert.ok(r.ok, JSON.stringify(r));
+  await engine.idle();
+  const run = () => engine.run(r.run!)!;
+  await engine.command({ kind: 'answer', run: r.run!, outcome: 'approved' });
+  await engine.idle();
+  const waiting = run().state;
+  assert.deepEqual([waiting.status, 'at' in waiting ? waiting.at : ''], ['waiting', 'submit']);
+  assert.deepEqual(loadBooks(ws).config.approvedReturn, { period: '2026-H2', through: '2026-12-31' });
+
+  // The hand form's booking into the approved half year (r7f-29: 15.06. into H1): refused through the write door every route uses.
+  const held = loadBooks(ws);
+  const sale = { date: '2026-11-15', accountDebit: '1000', accountCredit: '3000', amount: 200, vatCode: 'F1', description: 'Barverkauf Restholz', origin: 'manual' as const, by: { kind: 'person' as const, at: '2027-01-10T08:00:00.000Z' } };
+  assert.throws(() => update(held, PERSON, (b) => addEntry(b, sale)), (e: unknown) => e instanceof ClosedPeriodError && e.approved === '2026-H2');
+
+  // One that got past it: «Eingereicht» stops with both figures, nothing filed.
+  const approved = (run().steps[0].output!.return as PeriodReturn).payable;
+  const books = loadBooks(ws);
+  books.journalEntries.push({ id: 'late-h2', transactionRef: 'M2026-900', ...sale });
+  saveBooks(ws, books);
+  await engine.command({ kind: 'answer', run: r.run!, outcome: 'filed' });
+  await engine.idle();
+  const state = run().state;
+  assert.equal(state.status, 'stuck');
+  const why = state.status === 'stuck' ? state.why : undefined;
+  assert.equal(why?.code, 'figuresChanged');
+  assert.equal(why?.params.filed, approved.toFixed(2));
+  assert.notEqual(why?.params.now, approved.toFixed(2), 'the sale changed what is to pay');
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-06-30', 'H2 not closed');
 });

@@ -23,7 +23,8 @@ export interface RunWrote { run: string; workflow: string; label: string; at: st
  */
 /** A booking changed since the last save by hand, or by the AI sidebar on the person's wish (`ai`). */
 /** A booking changed, made or deleted by hand since the last save; `saved`: as the save holds it (none for one made since); `deleted`: gone now, `saved` puts it back. */
-export interface HandEdit { id: string; ref: string; date: string; text: string; at: string; ai?: true; deleted?: true; saved?: JournalEntry }
+/** `kept`: for a deletion the app recorded (data/trash/entries), the payment's other bookings at that moment; the restore takes out what the app booked on the payment since. */
+export interface HandEdit { id: string; ref: string; date: string; text: string; at: string; ai?: true; deleted?: true; saved?: JournalEntry; kept?: string[] }
 
 /** The books' changes since the last save. */
 export interface BooksChange {

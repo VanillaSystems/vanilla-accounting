@@ -5,7 +5,7 @@ import { patchBody, stringField, updateBooks, withBooks, RequestError, WS } from
 import { learnFromCorrection } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, deleteEntry, restoreSaved, setEntry } from '../edits.js';
-import { handEdits } from '../../saving/changes.js';
+import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 
 export const router = Router();
@@ -87,10 +87,12 @@ router.post('/api/journal-entries', (req, res) => {
 router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   const edit = (await handEdits(WS)).find((h) => h.id === req.params.id);
   if (!edit) throw new RequestError(404, 'Diese Buchung hat seit dem letzten Speichern keine Änderung von Hand.', { code: 'gone', params: { what: 'handEdit' } });
-  withBooks(res, (books) => { restoreSaved(books, edit.id, edit.saved); return { ok: true }; });
+  withBooks(res, (books) => { restoreSaved(books, edit.id, edit.saved, edit.kept); return { ok: true }; });
 });
 
+/** A deletion by hand: the booking goes, and is recorded for Änderungen's «Rückgängig» also when no save held it (r7h-31). */
 router.delete('/api/journal-entries/:id', (req, res) => withBooks(res, (books) => {
-  deleteEntry(books, req.params.id);
+  const gone = deleteEntry(books, req.params.id);
+  recordDeletion(WS, gone, books.journalEntries.filter((e) => e.transactionRef === gone.transactionRef).map((e) => e.id));
   return { ok: true };
 }));

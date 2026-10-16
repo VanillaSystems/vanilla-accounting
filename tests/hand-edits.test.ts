@@ -9,8 +9,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
-import { changesView, handEdits } from '../src/saving/changes.js';
-import { loadBooks, saveBooks, update, PERSON } from '../src/books/store.js';
+import { changesView, handEdits, recordDeletion } from '../src/saving/changes.js';
+import { loadBooks, moduleActor, saveBooks, update, PERSON } from '../src/books/store.js';
+import type { JournalEntry } from '../src/types/index.js';
 import { addEntry, deleteEntry, restoreSaved, setEntry } from '../src/server/edits.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
@@ -76,6 +77,37 @@ test('a booking deleted by hand waits in Änderungen too, and «Rückgängig» p
   saveBooks(ws, again);
   assert.deepEqual(loadBooks(ws).journalEntries.find((e) => e.id === gone.id), saved, 'back as saved');
   assert.equal((await handEdits(ws)).some((h) => h.id === gone.id), false);
+});
+
+test('a booking a run made since the last save and a person deleted waits in Änderungen too, and its restore takes out what the app booked on the payment meanwhile (r7h-31, r7h-3)', async () => {
+  const ws = await company();
+  const books = loadBooks(ws);
+  const closed = books.config.closedThrough ?? '';
+  const tx = { ref: 'OPEN-1', bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT' as const, description: 'Swisscom Natel Sep' };
+  assert.ok(tx.date > closed);
+  const run: JournalEntry = { id: 'run-made', transactionRef: tx.ref, date: tx.date, accountDebit: '6513', accountCredit: '1021', amount: tx.amount, vatCode: 'I0', description: 'vom Lauf gebucht', origin: 'classify', run: 'run-1' };
+  update(books, moduleActor('intake'), (b) => { b.transactions.push(tx); b.journalEntries.push(run); });
+  saveBooks(ws, books);
+  assert.deepEqual(await handEdits(ws), [], 'a run\'s booking is no hand edit');
+
+  const del = loadBooks(ws);
+  update(del, PERSON, (b) => { const gone = deleteEntry(b, run.id); recordDeletion(ws, gone, b.journalEntries.filter((e) => e.transactionRef === gone.transactionRef).map((e) => e.id)); });
+  saveBooks(ws, del);
+  const listed = await handEdits(ws);
+  assert.deepEqual(listed.map((h) => [h.id, h.deleted, h.saved, h.kept]), [[run.id, true, run, []]], 'the deletion is listed, with the booking as it was');
+
+  // The next run books the payment differently meanwhile.
+  const again = loadBooks(ws);
+  update(again, moduleActor('intake'), (b) => { b.journalEntries.push({ ...run, id: 'run-again', accountDebit: '4000', vatCode: 'M81', run: 'run-2' }); });
+  saveBooks(ws, again);
+  const still = await handEdits(ws);
+  assert.deepEqual(still.map((h) => [h.id, h.deleted]), [[run.id, true]], 'still listed');
+
+  const back = loadBooks(ws);
+  update(back, PERSON, (b) => restoreSaved(b, run.id, still[0].saved, still[0].kept));
+  saveBooks(ws, back);
+  assert.deepEqual(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === tx.ref), [run], 'back as it was, the later booking of the payment gone');
+  assert.deepEqual(await handEdits(ws), [], 'nothing waits once it is back');
 });
 
 test('a filed booking is never put back: the write door refuses a restore into a closed period', async () => {

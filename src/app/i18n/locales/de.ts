@@ -756,7 +756,7 @@ export const messages = {
   'receipts.dateCaptured': "Auf dem Beleg steht kein Datum: es ist der Tag, an dem das Handy ihn aufgenommen hat. Stimmt er nicht, das Datum hier ändern.",
   'receipts.daysAfter': { one: '{n} Tag nachher', other: '{n} Tage nachher' },
   'receipts.daysBefore': { one: '{n} Tag vorher', other: '{n} Tage vorher' },
-  'receipts.deleteKey': 'Löschen (⌫)',
+  'receipts.deleteKey': 'Löschen (⌘⌫)',
   'receipts.deleteText': 'Der Beleg verlässt die Bücher mit allen Zuordnungen; seine Zahlung wird ohne ihn neu gebucht. Die Datei bleibt 30 Tage im Papierkorb des Arbeitsbereichs (data/trash): «Rückgängig» im Hinweis danach holt ihn zurück.',
   'receipts.deleteTextKept': 'Der Beleg verlässt die Bücher mit allen Zuordnungen. Die Buchung seiner Zahlung ist von Hand und bleibt, wie sie ist; braucht ihr MWST-Code einen Beleg, wird sie markiert. Die Datei bleibt 30 Tage im Papierkorb des Arbeitsbereichs (data/trash): «Rückgängig» im Hinweis danach holt ihn zurück.',
   'receipts.deleteTextAlone': 'Der Beleg verlässt die Bücher; er hat keine Zahlung, keine Buchung ändert sich. Die Datei bleibt 30 Tage im Papierkorb des Arbeitsbereichs (data/trash): «Rückgängig» im Hinweis danach holt ihn zurück.',

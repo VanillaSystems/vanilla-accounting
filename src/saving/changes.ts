@@ -88,18 +88,48 @@ export async function booksChange(ws: Ws): Promise<BooksChange> {
 
 const entriesIn = (text: string, file: string) => new Map((fromJsonl(text, file) as JournalEntry[]).map((e) => [e.id, e]));
 
+/** A booking a person deleted, kept beside the books so that Änderungen can put it back also when no save ever held it (r7h-31). */
+interface TrashedEntry { deletedAt: string; entry: JournalEntry; kept: string[] }
+
+const entryTrash = (ws: Ws): string => join(ws.paths.data, 'trash', 'entries');
+
+/**
+ * Records a booking a person deleted (the API's DELETE), with the payment's other bookings at that
+ * moment, so a booking a run made since the last save has its «Rückgängig» under Änderungen too.
+ */
+export function recordDeletion(ws: Ws, entry: JournalEntry, kept: string[], deletedAt = new Date().toISOString()): void {
+  const dir = entryTrash(ws);
+  fs.mkdirSync(dir, { recursive: true });
+  const record: TrashedEntry = { deletedAt, entry, kept };
+  fs.writeFileSync(join(dir, `${entry.id}.json`), JSON.stringify(record, null, 2));
+}
+
+/** The deletions recorded since `after` (the last save); records from before it are dropped, the save holds their story. */
+function trashedSince(ws: Ws, after: string | undefined): TrashedEntry[] {
+  const dir = entryTrash(ws);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => f.endsWith('.json')).flatMap((f) => {
+    const path = join(dir, f);
+    const record = JSON.parse(readFileSync(path, 'utf8')) as TrashedEntry;
+    if (after && record.deletedAt <= after) { fs.rmSync(path, { force: true }); return []; }
+    return [record];
+  });
+}
+
 /**
  * The bookings a person changed, booked or deleted by hand, or the AI sidebar on her wish, since
  * the last save: those whose `by` names a person or the AI sidebar and that differ from the last
- * save, each with the booking as that save holds it; and the saved bookings that are gone while
- * their payment got no booking since (r6h-28). One replaced by a re-booking is listed through the
- * bookings that replaced it: putting it back beside them would book the payment twice. A deletion
- * leaves no record of its moment: it is dated by the file's last write.
+ * save, each with the booking as that save holds it; the saved bookings that are gone while
+ * their payment got no booking since (r6h-28), dated by the file's last write; and the deletions
+ * the app recorded since the last save (recordDeletion), also of a booking a run made meanwhile
+ * and of one whose payment got booked again since: its restore takes that booking out (r7h-31).
+ * A saved booking replaced by a re-booking is listed through the bookings that replaced it.
  */
 export async function handEdits(ws: Ws): Promise<HandEdit[]> {
   const repo = await repositoryAt(ws.paths.repository);
   if (!repo) return [];
   const out: HandEdit[] = [];
+  const trashed = trashedSince(ws, await lastSaveAt(ws));
   for (const year of yearsOf(ws.paths)) {
     const path = join(yearPaths(ws.paths, year).books, BOOK_FILES.journalEntries);
     const now = entriesIn(read(path), path);
@@ -115,6 +145,10 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
     for (const was of saved.values()) {
       if (now.has(was.id) || bookedSince.has(was.transactionRef)) continue;
       out.push({ id: was.id, ref: was.transactionRef, date: was.date, text: was.description ?? was.transactionRef, at: wrote, deleted: true, saved: was });
+    }
+    for (const { deletedAt, entry, kept } of trashed) {
+      if (entry.date.slice(0, 4) !== year || now.has(entry.id) || out.some((h) => h.id === entry.id)) continue;
+      out.push({ id: entry.id, ref: entry.transactionRef, date: entry.date, text: entry.description ?? entry.transactionRef, at: deletedAt, deleted: true, saved: entry, kept });
     }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));

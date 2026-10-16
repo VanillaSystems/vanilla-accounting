@@ -348,6 +348,8 @@ export const receipts: Area<RouteOf<'receipts'>> = {
       if (next) p.nav.select({ area: 'receipts', id: next });
       return true;
     }
+    // Deleting takes ⌘⌫ or the Delete key, as in Buchungen: a bare Backspace never deletes a receipt (r7f-31).
+    if (e.key === 'Backspace') { if (e.metaKey && !e.ctrlKey && !e.altKey) runAct(p, 'del'); return e.metaKey; }
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     const v = p.route.id ? ledgerFor(p.books).byId.get(p.route.id) : undefined;
     switch (e.key) {
@@ -365,7 +367,7 @@ export const receipts: Area<RouteOf<'receipts'>> = {
       }
       case 'e': case 'E': runAct(p, 'edit'); return true;
       case 'l': case 'L': runAct(p, 'link'); return true;
-      case 'Backspace': case 'Delete': runAct(p, 'del'); return true;
+      case 'Delete': runAct(p, 'del'); return true;
       case 'Escape': if (!p.query.q) return false; p.nav.setQuery({ q: undefined }); return true;
     }
     return false;

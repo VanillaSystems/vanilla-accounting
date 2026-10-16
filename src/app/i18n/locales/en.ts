@@ -759,7 +759,7 @@ export default {
     'receipts.dateCaptured': "The receipt shows no date: this is the day the phone took it. If that is wrong, change the date here.",
     'receipts.daysAfter': { one: '{n} day after', other: '{n} days after' },
     'receipts.daysBefore': { one: '{n} day before', other: '{n} days before' },
-    'receipts.deleteKey': 'Delete (⌫)',
+    'receipts.deleteKey': 'Delete (⌘⌫)',
     'receipts.deleteText': 'The receipt leaves the books with all its links; its payment is booked again without it. The file stays in the workspace’s trash (data/trash) for 30 days: «Undo» in the message that follows brings it back.',
     'receipts.deleteTextKept': 'The receipt leaves the books with all its links. Its payment\'s booking was made by hand and stays as it is; if its VAT code needs a receipt, it is flagged. The file stays in the workspace’s trash (data/trash) for 30 days: «Undo» in the message that follows brings it back.',
     'receipts.deleteTextAlone': 'The receipt leaves the books; it has no payment, no booking changes. The file stays in the workspace’s trash (data/trash) for 30 days: «Undo» in the message that follows brings it back.',

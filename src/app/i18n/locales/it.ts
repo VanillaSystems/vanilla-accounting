@@ -759,7 +759,7 @@ export default {
     'receipts.dateCaptured': "Il giustificativo non mostra una data: è il giorno in cui il telefono l'ha ripreso. Se non è giusto, cambiare la data qui.",
     'receipts.daysAfter': { one: '{n} giorno dopo', other: '{n} giorni dopo' },
     'receipts.daysBefore': { one: '{n} giorno prima', other: '{n} giorni prima' },
-    'receipts.deleteKey': 'Elimina (⌫)',
+    'receipts.deleteKey': 'Elimina (⌘⌫)',
     'receipts.deleteText': 'Il giustificativo lascia i libri con tutte le assegnazioni; il suo pagamento viene registrato di nuovo senza di esso. Il file resta 30 giorni nel cestino dello spazio di lavoro (data/trash): «Annulla» nel messaggio che segue lo recupera.',
     'receipts.deleteTextKept': 'Il giustificativo lascia i libri con tutte le assegnazioni. La registrazione del suo pagamento è manuale e resta com’è; se il suo codice IVA richiede un giustificativo, viene segnalata. Il file resta 30 giorni nel cestino dello spazio di lavoro (data/trash): «Annulla» nel messaggio che segue lo recupera.',
     'receipts.deleteTextAlone': 'Il giustificativo lascia i libri; non ha un pagamento, nessuna registrazione cambia. Il file resta 30 giorni nel cestino dello spazio di lavoro (data/trash): «Annulla» nel messaggio che segue lo recupera.',
