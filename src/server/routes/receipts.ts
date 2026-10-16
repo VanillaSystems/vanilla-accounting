@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { renameSync, existsSync, createReadStream, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { RECEIPT_KINDS, type Mapping, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
+import { RECEIPT_KINDS, type JournalEntry, type Mapping, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { setReceipt, unbookedPayments } from '../edits.js';
@@ -93,7 +93,7 @@ router.get('/api/receipts/:id', (req, res) => {
  * what the books held of it, so a restore («Rückgängig» in the toast) puts both back. The same
  * file dropped and deleted again is another deletion; only the latest one can come back.
  */
-interface Trashed { deletedAt: string; receipt: Receipt; mappings: Mapping[]; file: string }
+interface Trashed { deletedAt: string; receipt: Receipt; mappings: Mapping[]; file: string; /** The entries the deletion took with it (a record from before this field has none). */ entries?: JournalEntry[] }
 const TRASH_DAYS = 30;
 const TRASH = () => join(WS.paths.data, 'trash');
 const ID = /^[\w-]+$/;
@@ -124,8 +124,11 @@ router.delete('/api/receipts/:id', async (req, res) => {
     if (!receipt) throw new RequestError(404, 'Receipt not found');
     assertOpen(books, receiptDates(books, id), 'deleteReceipt');
     const pdfPath = receiptPath(books, receipt);
-    const trashed: Trashed = { deletedAt: new Date().toISOString(), receipt, mappings: books.mappings.filter((m) => m.receiptId === id), file: relative(WS.paths.root, pdfPath) };
-    return { trashed, pdfPath, again: removeReceipt(books, id) };
+    const mappings = books.mappings.filter((m) => m.receiptId === id);
+    const had = books.journalEntries;
+    const again = removeReceipt(books, id);
+    const trashed: Trashed = { deletedAt: new Date().toISOString(), receipt, mappings, file: relative(WS.paths.root, pdfPath), entries: had.filter((e) => !books.journalEntries.includes(e)) };
+    return { trashed, pdfPath, again };
   });
   emptyOldTrash();
   const deletion = `${trashed.deletedAt.replace(/[:.]/g, '-')}-${randomUUID().slice(0, 4)}`;
@@ -140,8 +143,9 @@ router.delete('/api/receipts/:id', async (req, res) => {
 /**
  * A deleted receipt back from the trash (its latest deletion, or the one named, which must be the
  * latest), with its links to payments that are still there. Those payments lose the entries booked
- * without it and are booked again with it, as a delete does the other way round. Once back, the
- * trash holds nothing of it any more.
+ * without it and get back the entries the deletion took, as they were; a payment a person booked
+ * meanwhile keeps that booking. One left without an entry is booked again. Once back, the trash
+ * holds nothing of it any more.
  */
 router.post('/api/receipts/:id/restore', async (req, res) => {
   const { id } = req.params;
@@ -167,6 +171,8 @@ router.post('/api/receipts/:id/restore', async (req, res) => {
     const linked = new Set(links.map((m) => m.transactionRef));
     const stale = new Set(entriesWithoutTheirReceipts(books.journalEntries, books.mappings, linked, books.config.closedThrough));
     books.journalEntries = books.journalEntries.filter((e) => !stale.has(e));
+    const bare = new Set([...linked].filter((ref) => !books.journalEntries.some((e) => e.transactionRef === ref)));
+    books.journalEntries.push(...(t.entries ?? []).filter((e) => bare.has(e.transactionRef)));
     return [...linked].some((ref) => !books.journalEntries.some((e) => e.transactionRef === ref));
   });
   if (existsSync(from)) { mkdirSync(dirname(to), { recursive: true }); renameSync(from, to); }
