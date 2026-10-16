@@ -73,7 +73,7 @@ export async function outsideChanges(ws: Ws): Promise<FileChange[]> {
 }
 
 /** The books' own files: hashing every receipt and statement (hundreds of MB) would make the page slow. */
-const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog])];
+const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog, yearPaths(ws.paths, y).questions])];
 
 /** How many of the books' own files differ from the last save. The runs that wrote them are the engine's to name. */
 export async function booksChange(ws: Ws): Promise<BooksChange> {

@@ -19,6 +19,7 @@ import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
+import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '../../questions/model.js';
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
@@ -87,6 +88,7 @@ export function errorText(e: unknown): string {
       if (reason === 'account') return unknown ? t('error.statement.unknownAccount', unknown) : detail ? b.error : t('error.statement.account');
       return t(`error.statement.${reason}`);
     }
+    case 'questionAnswered': return t('error.questionAnswered');
     case 'takesBack': return t('error.takesBack');
     case 'setAside': return t('error.setAside', b.params);
     case 'unknownAccount': return t('error.unknownAccount', b.params);
@@ -182,6 +184,11 @@ export const api = {
   yearClose: (year: string) => request<YearCloseView>('GET', `/api/year-close/${year}`),
   automation: (since?: string) => request<AutomationView | { unchanged: true }>('GET', `/api/automation${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   automationRun: (id: string) => request<RunDetail>('GET', `/api/automation/runs/${encodeURIComponent(id)}`),
+  questions: () => request<QuestionsView>('GET', '/api/questions'),
+  ask: (q: { on: QuestionTarget; by: string; text: string; choices: Choice[]; to?: string }) => request<Question>('POST', '/api/questions', q),
+  answerQuestion: (id: string, by: string, answer: Answer) => request<Question>('POST', `/api/questions/${id}/answer`, { by, ...answer }),
+  undoAnswer: (id: string, by: string) => request<Question>('POST', `/api/questions/${id}/undo`, { by }),
+  closeQuestion: (id: string, by: string, how: 'done' | 'withdrawn') => request<Question>('POST', `/api/questions/${id}/close`, { by, how }),
   automationCommand: (cmd: AutomationCommand) => request<CommandResult>('POST', '/api/automation', cmd),
   automationSchedule: (workflow: string, schedule: string | null) => request<{ ok: true }>('PATCH', `/api/automation/workflows/${encodeURIComponent(workflow)}`, { schedule }),
   changes: (since?: string) => request<ChangesView | { unchanged: true }>('GET', `/api/changes${since ? `?since=${encodeURIComponent(since)}` : ''}`),

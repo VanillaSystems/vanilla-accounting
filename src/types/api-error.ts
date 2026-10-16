@@ -29,6 +29,8 @@ export type ApiRefusal =
   | { code: 'paymentBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | ClassifyRefusal
   /** An AI sidebar answer (src/server/edits.ts applyAnswer, src/server/workspace-edits.ts): it would take back an earlier answer's change, link a receipt set aside, book on an account the chart lacks, or take back an account bookings use. */
+  /** Someone answered the question first (the books folder is shared). */
+  | { code: 'questionAnswered' }
   | { code: 'takesBack' }
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }

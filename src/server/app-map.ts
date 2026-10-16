@@ -29,7 +29,7 @@ export const AREA_PLACES: { readonly [A in AreaId]: Place } = {
   reports: { does: 'income statement, balance sheet and trial balance, each account\'s ledger' },
   close: { does: 'the year-end close step by step: exchange differences, the closing, the opening of the next year' },
   company: { does: 'the company\'s settings, one section each (below)' },
-  automation: { does: 'the workflows (the inbox run that reads, matches and books receipts and payments; collecting receipts from the sources; the VAT filing), their runs, the queue, and the tasks that wait for the person (a payment a rule asks about waits here as «Frag: …»); «{automation.toRules}» leads to the company\'s rules', kinds: ['bookAgain'] },
+  automation: { does: 'the workflows (the inbox run that reads, matches and books receipts and payments; collecting receipts from the sources; the VAT filing), their runs, the queue, and the tasks that wait for the person (a payment a rule asks about waits here as «Frag: …»); under «{automation.tasks}» also the questions between the people who keep the books («{questions.forMe}», «{questions.mine}»), each answered there or on its payment, receipt or booking; «{automation.toRules}» leads to the company\'s rules', kinds: ['bookAgain', 'question'] },
   changes: { does: 'changes to how the app works (rules, workflows, knowledge) wait here as a draft until the person presses «{changes.save}»; «{changes.history}» lists every save with «{changes.undo}»' },
 };
 

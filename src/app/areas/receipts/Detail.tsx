@@ -20,6 +20,7 @@ import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView } from './mode
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
+import { QuestionsOn } from '../../questions/Questions.js';
 import { deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { ByHand, VatFields } from './VatFields.js';
@@ -121,6 +122,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
 
       <div className="body">
         <div className="desk">
+          <QuestionsOn key={`q-${r.id}`} on={{ kind: 'receipt', id: r.id }} also={props.books.mappings.filter((m) => m.receiptId === r.id).map((m) => ({ kind: 'payment' as const, id: m.transactionRef }))} nav={nav} canEdit={props.canEdit} books={props.books} />
           <div className="paper real" role="button" tabIndex={0} aria-label={t('receipts.previewLarge')} onClick={() => setUi({ overlay: 'quick' })}>
             <Paper key={src} src={src} />
             <a className="dl float" href={src} download={r.filename} title={t('receipts.downloadTitle', { file: r.filename })} onClick={(e) => e.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>

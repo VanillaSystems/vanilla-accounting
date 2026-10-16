@@ -89,6 +89,11 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
       return { text, ...(note?.draft ? { go: { area: 'invoices', view: 'list', id: `draft-${note.draft.id}` } as Route } : {}) };
     }
     case 'dropInvoiceDraft': return { text: t('assistant.c.dropInvoiceDraft') };
+    case 'question': {
+      const go: Route = c.on.kind === 'payment' ? { area: 'bank', payment: c.on.id } : c.on.kind === 'receipt' ? { area: 'receipts', id: c.on.id } : { area: 'journal', id: c.on.id };
+      return { text: note?.question?.answered ? t('assistant.c.questionAnswered', { text: c.text, by: note.question.answered }) : t('assistant.c.question', { to: note?.question?.to ?? c.to ?? '', text: c.text }), go };
+    }
+    case 'withdrawQuestion': return { text: t('assistant.c.withdrawQuestion') };
     case 'export': {
       const preset = PRESETS.some((p) => p.id === c.preset) ? t(`export.preset.${c.preset}` as 'export.preset.treuhand') : c.preset;
       if (failed || !note?.file) return { text: [t('assistant.c.exportNot', { preset }), failed].filter(Boolean).join(' · ') };

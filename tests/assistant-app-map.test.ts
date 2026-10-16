@@ -52,7 +52,7 @@ test('every change the block takes is in the prompt\'s example, and parses; an u
   const example = /```vanilla-changes\n([\s\S]*?)\n```/.exec(prompt)![1]
     .replace('<ISO code>', 'CHF').replace(/<[^>]+>/g, 'x').replace(/"date":"[^"]*"/g, '"date":"2026-07-03"').replace(/"amount":[\d.]+/g, '"amount":1').replace(/…/g, 'x');
   const kinds = changesIn('```vanilla-changes\n' + example + '\n```').map((c) => c.kind);
-  const taken = ['receipt', 'link', 'unlink', 'receiptKind', 'entry', 'newEntry', 'deleteEntry', 'account', 'invoicing', 'invoiceDraft', 'export', 'bookAgain'];
+  const taken = ['receipt', 'link', 'unlink', 'receiptKind', 'entry', 'newEntry', 'deleteEntry', 'account', 'invoicing', 'invoiceDraft', 'export', 'bookAgain', 'question'];
   assert.deepEqual([...new Set(kinds)].sort(), [...taken].sort());
   const placeKinds = new Set([...Object.values(AREA_PLACES), ...Object.values(COMPANY_PLACES)].flatMap((p) => p.kinds ?? []));
   assert.deepEqual(taken.filter((k) => !placeKinds.has(k as never) && k !== 'export'), [], 'every change is named at the place where a person does it');
@@ -61,6 +61,7 @@ test('every change the block takes is in the prompt\'s example, and parses; an u
     '[{"kind":"invoicing","set":{"paymentTermsDays":0}}]', '[{"kind":"invoicing","set":{"texts":{"es":{"intro":"x"}}}}]',
     '[{"kind":"invoiceDraft","draft":{"lines":[]}}]', '[{"kind":"invoiceDraft","customer":"cu_1","newCustomer":{"name":"x"},"draft":{"lines":[{}]}}]',
     '[{"kind":"receiptKind","id":"r1","as":"rubbish"}]', '[{"kind":"export","preset":"everything"}]',
+    '[{"kind":"withdrawQuestion","id":"q-1"}]', '[{"kind":"question","on":{"kind":"invoice","id":"x"},"text":"?"}]', '[{"kind":"question","on":{"kind":"payment","id":"P"},"text":"?","choices":["maybe"]}]',
   ]) assert.throws(() => changesIn('```vanilla-changes\n' + bad + '\n```'), ChangesError, bad);
 });
 

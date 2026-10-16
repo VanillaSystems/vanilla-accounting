@@ -26,6 +26,9 @@ import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { fileName, returnSummary } from './filing-summary.js';
 import type { PeriodReturn, PreparedXml } from '../../../workflows/filing.js';
 import { baseCurrency, vat } from '../../../engines/index.js';
+import { QuestionTasks } from '../../questions/Questions.js';
+import { questionsNow, useQuestions } from '../../questions/store.js';
+import { forMe } from '../../../questions/model.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -73,6 +76,8 @@ function List({ route, nav, books }: Props) {
   if (route.view === 'runs') return view ? <RunsHome view={view} books={books} nav={nav} /> : <><h1>{t('area.automation')}</h1>{error ? <p className="warnline">{error}</p> : <p className="m">{t('automation.empty')}</p>}</>;
   const sel = selectedRow(route, view);
   const waiting = view?.tasks ?? [];
+  const q = useQuestions();
+  const asked = forMe(q.questions, q.me).length;
   const row = (r: R, content: ReactNode) => {
     const on = !!sel && sameRow(r, sel);
     return (
@@ -90,7 +95,7 @@ function List({ route, nav, books }: Props) {
         {row({ area: 'automation', view: 'runs' }, <span className="t">{t('runs.latest')}</span>)}
         {row({ area: 'automation', view: 'map', map: 'phases' }, <span className="t">{t('automation.map')}</span>)}
         {row({ area: 'automation', view: 'queue' }, <span className="t">{t('automation.queue')}</span>)}
-        {row({ area: 'automation', view: 'tasks' }, <><span className="t">{t('automation.tasks')}</span>{waiting.length ? <span className="a"><span className="wfpill warn">{waiting.length}</span></span> : null}</>)}
+        {row({ area: 'automation', view: 'tasks' }, <><span className="t">{t('automation.tasks')}</span>{waiting.length + asked ? <span className="a"><span className="wfpill warn">{waiting.length + asked}</span></span> : null}</>)}
         <div className="row" role="option" aria-selected={false} tabIndex={-1} data-to="rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}><span className="t">{t('automation.toRules')}</span><span className="a">→</span></div>
         {PHASES.map((p) => {
           const ws = view?.workflows.filter((w) => w.phase === p) ?? [];
@@ -597,6 +602,8 @@ function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'ev
 }
 
 function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; nav: Nav; run?: string; books: Index; canEdit: boolean }) {
+  const q = useQuestions();
+  const asked = forMe(q.questions, q.me).length;
   const send = (task: Task, outcome: string) => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); }); };
   const forms = useRef(new Map<string, HTMLFormElement | null>());
   /** A payment still without an entry: the task carries its booking form, and «Gebucht» leads there instead of claiming it. */
@@ -633,7 +640,8 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             );
           })}
         </div>
-      ) : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      ) : asked ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      <QuestionTasks nav={nav} canEdit={canEdit} books={books} />
     </div>
   );
 }
@@ -656,7 +664,7 @@ const legend = (): LegendItem[] => [
 export const automation: Area<RouteOf<'automation'>> = {
   id: 'automation',
   label: () => t('area.automation'),
-  dock: { key: 'w', icon: ICONS.automation, tip: () => t('area.automation.tip'), badge: () => { const v = automationNow(); return v ? openCount(v) : 0; } },
+  dock: { key: 'w', icon: ICONS.automation, tip: () => t('area.automation.tip'), badge: () => { const v = automationNow(); const q = questionsNow(); return (v ? openCount(v) : 0) + forMe(q.questions, q.me).length; } },
   List,
   Detail,
   legend,

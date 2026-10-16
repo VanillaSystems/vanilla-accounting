@@ -89,7 +89,7 @@ export const LAYOUT = {
     VERSION: 'app', collected: 'app', 'ledger.json': 'app', 'invoices.json': 'app', logos: 'app', data: 'app', 'master-data': 'app', 'transactional-data': 'app',
   },
   masterData: { 'accounts.json': 'company' },
-  year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', 'runs.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },
+  year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', 'runs.jsonl': 'app', 'questions.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },
 } as const satisfies Record<string, Record<string, Owner>>;
 
 /** The names a company repository's root holds besides the apps' folders: git and agent files, the shared master-data/, own/. */
@@ -145,6 +145,8 @@ export interface YearPaths {
   expected: string;
   /** The run log: one line per event of a run that wrote, waited for a person, got stuck or was discarded (src/workflows/runlog.ts). */
   runLog: string;
+  /** The questions between the people who keep the books and their answers, one event per line (src/questions/model.ts QuestionLine). */
+  questions: string;
 }
 
 export interface Workspace {
@@ -193,6 +195,7 @@ export function yearPaths(paths: Pick<WorkspacePaths, 'transactional'>, year: st
     invoices: join(root, 'invoices'),
     expected: join(root, 'expected'),
     runLog: join(root, 'runs.jsonl'),
+    questions: join(root, 'questions.jsonl'),
   };
 }
 

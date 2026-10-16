@@ -3,6 +3,7 @@ import { AREAS, DOCK } from '../areas/index.js';
 import type { AreaId } from './route.js';
 import { t } from '../i18n/index.js';
 import { useAutomation } from '../automation/store.js';
+import { useQuestions } from '../questions/store.js';
 
 /** The area that is the app's promise: a big round button at the top, wider than the dock. */
 const HERO: AreaId = 'automation';
@@ -15,6 +16,8 @@ const HERO: AreaId = 'automation';
  */
 export function Dock({ current, books, keys, href, onGo }: { current: AreaId; books: Index; keys: boolean; href(area: AreaId): string; onGo(area: AreaId): void }) {
   const { view } = useAutomation();
+  // The hero's badge counts the questions waiting for the viewer too: a new one shows at once.
+  useQuestions();
   const marked = AREAS[current].dockAs ?? current;
   const hero = AREAS[HERO];
   const running = !!view?.runs.some((r) => r.status === 'running' || r.status === 'queued');

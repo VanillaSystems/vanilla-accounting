@@ -1,0 +1,18 @@
+{
+  "config": { "closedThrough": "2026-06-30" },
+  "receipts": [
+    { "id": "r1", "filename": "coop.pdf", "originalFilename": "coop.pdf", "extractedText": "Coop Pronto Bern", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-09-10T00:00:00Z", "location": "archived", "date": "2026-09-09", "amount": 158.6, "currency": "CHF" }
+  ],
+  "transactions": [
+    { "ref": "C1", "bank": "Raiffeisen", "date": "2026-05-10", "amount": 10, "currency": "CHF", "direction": "DBIT", "description": "Baeckerei Ruch" },
+    { "ref": "P1", "bank": "Raiffeisen", "date": "2026-09-09", "amount": 158.6, "currency": "CHF", "direction": "DBIT", "description": "Coop Pronto Bern" },
+    { "ref": "P2", "bank": "Raiffeisen", "date": "2026-09-20", "amount": 42.3, "currency": "CHF", "direction": "DBIT", "description": "Coop Pronto Bern" },
+    { "ref": "P3", "bank": "Raiffeisen", "date": "2026-09-21", "amount": 99, "currency": "CHF", "direction": "DBIT", "description": "Digitec Galaxus" }
+  ],
+  "mappings": [{ "transactionRef": "P1", "receiptId": "r1" }],
+  "bankStatements": [],
+  "journalEntries": [
+    { "id": "c1", "transactionRef": "C1", "date": "2026-05-10", "accountDebit": "6700", "accountCredit": "1021", "amount": 10, "vatCode": "I81" },
+    { "id": "e1", "transactionRef": "P1", "date": "2026-09-09", "accountDebit": "6700", "accountCredit": "1021", "amount": 158.6, "vatCode": "I81", "origin": "classify" }
+  ]
+}

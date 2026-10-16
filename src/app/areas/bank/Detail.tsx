@@ -28,6 +28,7 @@ import { AskAi } from '../../assistant/AskAi.js';
 import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
 import { intakeAdd } from '../receipts/intake.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
+import { QuestionsOn } from '../../questions/Questions.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -112,6 +113,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             </div>
           )}
           {tx && canEdit && !closed && tx.amount && !b.entriesOf(tx.ref).length ? <PaymentBooking key={tx.ref} books={props.books} nav={nav} payment={tx.ref} /> : null}
+          {tx ? <QuestionsOn key={`q-${tx.ref}`} on={{ kind: 'payment', id: tx.ref }} also={[...b.receiptsOf(tx.ref).map((id) => ({ kind: 'receipt' as const, id })), ...b.entriesOf(tx.ref).map((e) => ({ kind: 'entry' as const, id: e.id }))]} nav={nav} canEdit={canEdit} books={props.books} /> : null}
           {src ? (
             <div className="paper real stmt" role="button" tabIndex={0} aria-label={t('bank.openLarge')} onClick={() => setUi({ overlay: 'quick' })}>
               <StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.detail')} />

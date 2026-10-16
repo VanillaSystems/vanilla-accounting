@@ -21,6 +21,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/version.ts', 'core'],
   ['src/types/', 'core'],
   ['src/workspace/', 'core'],
+  ['src/questions/', 'core'],
   ['src/engines/', 'engine'],
   ['src/providers/', 'provider'],
   ['src/parsers/receipt-text.ts', 'split'],

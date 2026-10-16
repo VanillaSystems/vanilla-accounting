@@ -15,6 +15,7 @@ import { InvoiceRuleError, liveCustomers, liveInvoices } from '../invoices/rules
 import type { Customer, CustomerFields } from '../invoices/model.js';
 import type { ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
+import { askQuestion, closeQuestion } from './questions.js';
 
 export interface Applied { undo?: WorkspaceChange; note?: ChangeNote }
 
@@ -102,6 +103,15 @@ function dropInvoiceDraft(ws: Workspace, id: string, customer: string | undefine
   return {};
 }
 
+/** Who the AI's questions are by: the UI says «KI» in the person's language (origin assistant). */
+const AI = 'KI';
+
+/** The AI's question goes to the owner unless it names someone; a precedent may answer it at once. */
+function question(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'question' }>): Applied {
+  const q = askQuestion({ on: c.on, by: AI, text: c.text, choices: c.choices ?? [], to: c.to ?? ws.company.owner, origin: 'assistant' });
+  return { undo: { kind: 'withdrawQuestion', id: q.id }, note: { question: { id: q.id, ...(q.to ? { to: q.to } : {}), ...(q.answer ? { answered: q.answer.by } : {}) } } };
+}
+
 /** One change; the manifest is read again by the caller (reopenWorkspace) after an invoicing change. */
 export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceChange): Applied {
   switch (c.kind) {
@@ -109,5 +119,7 @@ export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceCh
     case 'invoicing': return invoicing(ws, c.set, c.customers);
     case 'invoiceDraft': return invoiceDraft(ws, c);
     case 'dropInvoiceDraft': return dropInvoiceDraft(ws, c.id, c.customer);
+    case 'question': return question(ws, c);
+    case 'withdrawQuestion': closeQuestion(c.id, AI, 'withdrawn'); return {};
   }
 }

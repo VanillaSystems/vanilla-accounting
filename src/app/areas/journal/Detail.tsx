@@ -29,6 +29,7 @@ import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
 import { RunLink } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
+import { QuestionsOn } from '../../questions/Questions.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
@@ -113,6 +114,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
 
       <div className="body">
         <div className="desk">
+          <QuestionsOn key={`q-${e.id}`} on={{ kind: 'entry', id: e.id }} also={[...(tx ? [{ kind: 'payment' as const, id: tx.ref }] : []), ...v.receipts.map((r) => ({ kind: 'receipt' as const, id: r.id }))]} nav={nav} canEdit={canEdit} books={props.books} />
           {receipt ? (
             <div className="paper real" role="button" tabIndex={0} aria-label={t('journal.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipt.id }, receipt.date))}>
               <Paper key={receipt.id} src={sources.receipt(receipt.id)} />

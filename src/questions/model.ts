@@ -1,0 +1,133 @@
+/**
+ * Questions between the people who keep the books (docs/0.4.0/views.md, "Questions"): one person
+ * asks about a payment, a receipt or a booking, another answers on the same item. They travel with
+ * the books: transactional-data/<year>/questions.jsonl (LAYOUT), append-only, one event per line,
+ * so two people who share the folder at different times (git, a shared folder) never rewrite each
+ * other's lines. A question is the fold of its events. Browser-safe: the UI folds the same lines.
+ */
+import type { BookChange } from '../types/assistant.js';
+
+/** The version of a line's shape; a reader skips a line of a version it does not know. */
+export const QUESTION_LINE_VERSION = 1;
+
+/** What a question is about; `payment` is a transaction ref, as the AI sidebar's context names it. */
+export interface QuestionTarget { kind: 'payment' | 'receipt' | 'entry'; id: string }
+export const TARGET_KINDS: ReadonlyArray<QuestionTarget['kind']> = ['payment', 'receipt', 'entry'];
+
+/** The answers the app can act on; any other answer is a short text the asker reads. */
+export const CHOICES = ['private', 'business'] as const;
+export type Choice = (typeof CHOICES)[number];
+
+export type Answer = { choice: Choice } | { text: string };
+
+/** Who put the question: a person, the AI sidebar, or the booking when it needs the person's knowledge. */
+export type QuestionOrigin = 'person' | 'assistant' | 'booking';
+
+/** Why the app did not act on an answer: then the asker decides. */
+export const NOT_ACTED = ['closed', 'noPayment', 'severalPayments', 'paidPrivately', 'notBankExpense', 'refused'] as const;
+export type NotActed = (typeof NOT_ACTED)[number];
+
+/**
+ * What the app did with an answer: the bookings it wrote or changed, with the changes that take
+ * them back, and the precedent it kept; or why it did nothing (a filed quarter, a payment it
+ * cannot read; `detail`: the refusal's own words).
+ */
+export type Acted =
+  | { booked: string[]; undo: BookChange[]; precedent?: string }
+  | { precedent: string }
+  | { refused: NotActed; detail?: string };
+
+interface LineBase { v: typeof QUESTION_LINE_VERSION; id: string; at: string; by: string }
+
+export type QuestionLine =
+  | LineBase & { event: 'asked'; on: QuestionTarget; text: string; choices: Choice[]; to?: string; origin: QuestionOrigin }
+  /** `from`: the precedent that answered it, without anyone asked. */
+  | LineBase & { event: 'answered'; answer: Answer; acted?: Acted; from?: string }
+  /** The answer's bookings taken back: the question is open again. */
+  | LineBase & { event: 'undone' }
+  | LineBase & { event: 'closed'; how: 'done' | 'withdrawn' };
+
+export type QuestionStatus = 'open' | 'answered' | 'closed';
+
+export interface Question {
+  id: string;
+  on: QuestionTarget;
+  text: string;
+  choices: Choice[];
+  by: string;
+  to?: string;
+  origin: QuestionOrigin;
+  askedAt: string;
+  status: QuestionStatus;
+  answer?: { by: string; at: string; answer: Answer; acted?: Acted; from?: string };
+  closed?: { by: string; at: string; how: 'done' | 'withdrawn' };
+}
+
+/** GET /api/questions: every question, the names to pick from, the owner's account («2451 Kontokorrent …»), which «privat» books on. */
+export interface QuestionsView { questions: Question[]; people: string[]; owner: string }
+
+/** The questions the lines tell, oldest first. A line about an unknown question is skipped. */
+export function fold(lines: readonly QuestionLine[]): Question[] {
+  const byId = new Map<string, Question>();
+  for (const l of [...lines].sort((a, b) => a.at.localeCompare(b.at))) {
+    if (l.event === 'asked') {
+      if (!byId.has(l.id)) byId.set(l.id, { id: l.id, on: l.on, text: l.text, choices: l.choices, by: l.by, ...(l.to ? { to: l.to } : {}), origin: l.origin, askedAt: l.at, status: 'open' });
+      continue;
+    }
+    const q = byId.get(l.id);
+    if (!q || q.status === 'closed') continue;
+    switch (l.event) {
+      case 'answered': q.status = 'answered'; q.answer = { by: l.by, at: l.at, answer: l.answer, ...(l.acted ? { acted: l.acted } : {}), ...(l.from ? { from: l.from } : {}) }; break;
+      case 'undone': q.status = 'open'; delete q.answer; break;
+      case 'closed': q.status = 'closed'; q.closed = { by: l.by, at: l.at, how: l.how }; break;
+    }
+  }
+  return [...byId.values()];
+}
+
+const same = (a: string | undefined, b: string | undefined) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** Open questions `me` is to answer: those put to them, or, put to nobody, asked by someone else. */
+export const forMe = (qs: readonly Question[], me: string): Question[] =>
+  qs.filter((q) => q.status === 'open' && (q.to ? same(q.to, me) : !same(q.by, me)));
+
+/** The questions `me` asked that are not closed: open ones, and answered ones until they mark them done. */
+export const askedByMe = (qs: readonly Question[], me: string): Question[] =>
+  qs.filter((q) => q.status !== 'closed' && same(q.by, me));
+
+export const onTarget = (qs: readonly Question[], on: QuestionTarget): Question[] =>
+  qs.filter((q) => q.on.kind === on.kind && q.on.id === on.id && q.status !== 'closed');
+
+/** The names the asker and the addressee are picked from: the owner first, then everyone who asked or answered. */
+export function peopleOf(owner: string, qs: readonly Question[]): string[] {
+  const out: string[] = [];
+  for (const n of [owner, ...qs.flatMap((q) => [q.by, q.to, q.answer?.by])]) {
+    if (n && !out.some((x) => same(x, n))) out.push(n.trim());
+  }
+  return out;
+}
+
+/** Parses one stored line; undefined for a line of another version or shape, which the reader skips. */
+export function parseLine(raw: unknown): QuestionLine | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const l = raw as Record<string, unknown>;
+  if (l.v !== QUESTION_LINE_VERSION || typeof l.id !== 'string' || typeof l.at !== 'string' || typeof l.by !== 'string') return undefined;
+  switch (l.event) {
+    case 'asked': {
+      const on = l.on as QuestionTarget | undefined;
+      if (!on || !TARGET_KINDS.includes(on.kind) || typeof on.id !== 'string' || typeof l.text !== 'string') return undefined;
+      const choices = Array.isArray(l.choices) ? l.choices.filter((c): c is Choice => CHOICES.includes(c as Choice)) : [];
+      const origin = (['person', 'assistant', 'booking'] as const).find((o) => o === l.origin) ?? 'person';
+      return { v: 1, event: 'asked', id: l.id, at: l.at, by: l.by, on: { kind: on.kind, id: on.id }, text: l.text, choices, ...(typeof l.to === 'string' && l.to ? { to: l.to } : {}), origin };
+    }
+    case 'answered': {
+      const a = l.answer as Record<string, unknown> | undefined;
+      const answer: Answer | undefined = a && CHOICES.includes(a.choice as Choice) ? { choice: a.choice as Choice } : a && typeof a.text === 'string' ? { text: a.text } : undefined;
+      if (!answer) return undefined;
+      return { v: 1, event: 'answered', id: l.id, at: l.at, by: l.by, answer, ...(l.acted ? { acted: l.acted as Acted } : {}), ...(typeof l.from === 'string' ? { from: l.from } : {}) };
+    }
+    case 'undone': return { v: 1, event: 'undone', id: l.id, at: l.at, by: l.by };
+    case 'closed': return l.how === 'done' || l.how === 'withdrawn' ? { v: 1, event: 'closed', id: l.id, at: l.at, by: l.by, how: l.how } : undefined;
+    default: return undefined;
+  }
+}

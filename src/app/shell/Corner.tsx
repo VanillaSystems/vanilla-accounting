@@ -10,9 +10,13 @@ import { useAutomation } from '../automation/store.js';
 import { corner, fillTask, textIn } from '../../workflows/model.js';
 import { language } from '../i18n/index.js';
 import type { Route } from './route.js';
+import { useQuestions } from '../questions/store.js';
+import { forMe } from '../../questions/model.js';
 
 export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssistant(): void }) {
   const { view } = useAutomation();
+  const q = useQuestions();
+  const asked = forMe(q.questions, q.me);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -26,7 +30,9 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
   // The AI's button is always there, at the top right as in the mockup; the status beside it only when something runs or waits.
   const ai = <button type="button" className="cornerbtn aibtn" title={`${t('assistant.title')} · ⌘J`} aria-label={t('assistant.title')} onClick={onAssistant}><BotIcon /></button>;
   if (!view) return <div className="corner">{ai}</div>;
-  const c = corner(view);
+  const tasks = corner(view);
+  // A question waiting for the viewer counts as a task: the corner shows it while nothing runs.
+  const c = tasks.kind === 'running' || !asked.length ? tasks : { kind: 'needs-you' as const, count: (tasks.kind === 'needs-you' ? tasks.count : 0) + asked.length };
   if (c.kind === 'quiet' && !open) return <div className="corner">{ai}</div>;
   const go = (route: Route) => { setOpen(false); onGo(route); };
   const label = (id: string) => textIn(view.workflows.find((w) => w.id === id)?.label ?? { en: id }, language());
@@ -50,7 +56,12 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
               <span className="amber" aria-hidden="true" /><b>{fillTask(textIn(task.title, language()), task.item, task.reads)}</b>
             </button>
           ))}
-          {!running.length && !view.tasks.length ? <p className="m">{t('corner.nothing')}</p> : null}
+          {asked.map((x) => (
+            <button key={x.id} type="button" className="cprow" onClick={() => go({ area: 'automation', view: 'tasks' })}>
+              <span className="amber" aria-hidden="true" /><b>{t('questions.cornerRow', { by: x.origin === 'assistant' ? t('questions.ai') : x.by, text: x.text })}</b>
+            </button>
+          ))}
+          {!running.length && !view.tasks.length && !asked.length ? <p className="m">{t('corner.nothing')}</p> : null}
           <span className="cplinks">
             <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'queue' })}>{t('corner.toQueue')}</button>
             <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'tasks' })}>{t('corner.toTasks')}</button>
