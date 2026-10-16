@@ -12,9 +12,9 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
-import { automationNow } from '../automation/store.js';
-import { language } from '../i18n/index.js';
-import { textIn } from '../../workflows/model.js';
+import { ICONS } from '../areas/icons.js';
+import { search } from '../assistant/attach.js';
+import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange } from '../../types/assistant.js';
 import { ApiError, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
@@ -28,7 +28,7 @@ import { api } from '../lib/api.js';
 import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
 import { questionText } from '../questions/Questions.js';
 import {
-  addContext, closeAssistant, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
+  addContext, closeAssistant, hideConversations, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
 
 interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void }
@@ -205,19 +205,6 @@ function draftsOf(turn: Extract<Parameters<typeof wroteDraft>[0], { role: 'ai' }
   return { rules, other: paths.length > rules.length };
 }
 
-/** What @ offers: the workflows, then the latest runs, matching the typed word. */
-function mentions(q: string): ContextRef[] {
-  const view = automationNow();
-  if (!view) return [];
-  const lang = language();
-  const all: ContextRef[] = [
-    ...view.workflows.map((w): ContextRef => ({ kind: 'workflow', id: w.id, label: textIn(w.label, lang) })),
-    ...view.runs.slice(0, 20).map((r): ContextRef => ({ kind: 'run', id: r.id, label: t('automation.run', { id: r.id }) })),
-  ];
-  const w = q.toLowerCase();
-  return all.filter((r) => `${r.label} ${r.id}`.toLowerCase().includes(w)).slice(0, 8);
-}
-
 const Spans = ({ line }: { line: Span[] }) => <>{line.map((x, i) => (x.bold ? <strong key={i}>{x.text}</strong> : <Fragment key={i}>{x.text}</Fragment>))}</>;
 
 /** An answer's text with its bold, lists and paragraphs (src/app/assistant/markdown.ts), as elements, never as markup. */
@@ -245,6 +232,8 @@ export function Sidebar({ page, books, onGo }: Props) {
   const s = useAssistant();
   const [text, setText] = useState('');
   const [pick, setPick] = useState(0);
+  const [picking, setPicking] = useState(false);
+  const plus = useRef<HTMLButtonElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { if (s.open) area.current?.focus(); }, [s.open, s.conversation]);
@@ -252,23 +241,28 @@ export function Sidebar({ page, books, onGo }: Props) {
   if (!s.open) return null;
 
   const at = /(?:^|\s)@(\S*)$/.exec(text);
-  const offered = at ? mentions(at[1]) : [];
+  const offered = at ? search(automationCandidates(), at[1], 8).map((c) => c.ref) : [];
   const choose = (r: ContextRef) => { addContext(r); setText(text.replace(/@(\S*)$/, '')); setPick(0); area.current?.focus(); };
   const send = () => { if (!s.sending && text.trim()) { void sendMessage(text, page); setText(''); } };
+  const empty = !text.trim();
 
   return (
     <aside className="aside" aria-label={t('assistant.title')}>
       <header className="aihead">
         <b><BotIcon /> {t('assistant.title')}</b>
         <span className="aiacts">
-          <button type="button" className="chip" onClick={() => void showConversations()} aria-pressed={s.listing}>{t('assistant.conversations')}</button>
-          <button type="button" className="chip" disabled={s.sending} onClick={newConversation}>{t('assistant.new')}</button>
-          <button type="button" className="chip" aria-label={t('assistant.close')} title={`${t('assistant.close')} · ⌘J`} onClick={closeAssistant}>×</button>
+          <button
+            type="button" className="aiact" aria-pressed={s.listing} title={t(s.listing ? 'assistant.backToConversation' : 'assistant.pastConversations')}
+            onClick={() => (s.listing ? hideConversations() : void showConversations())}
+          >{ICONS.clock}{t('assistant.conversations')}</button>
+          <button type="button" className="aiact" disabled={s.sending} onClick={newConversation}>{ICONS.plus}{t('assistant.new')}</button>
+          <button type="button" className="aiact icon" aria-label={t('assistant.close')} title={`${t('assistant.close')} · ⌘J`} onClick={closeAssistant}>×</button>
         </span>
       </header>
 
       {s.listing ? (
         <div className="ailist">
+          <h2>{t('assistant.pastConversations')}</h2>
           {(s.conversations ?? []).length === 0 ? <p className="m">{t('assistant.noConversations')}</p> : null}
           {(s.conversations ?? []).map((c) => (
             <button key={c.id} type="button" className="aiconv" onClick={() => void openConversation(c.id)}>
@@ -322,10 +316,6 @@ export function Sidebar({ page, books, onGo }: Props) {
 
       {!s.listing ? (
         <div className="aicompose">
-          <div className="aichips">
-            {page && !s.pageOff ? <Chip r={page} onRemove={() => removeContext('page')} /> : null}
-            {s.extra.map((r) => <Chip key={r.kind + r.id} r={r} onRemove={() => removeContext(r)} />)}
-          </div>
           {offered.length ? (
             <div className="aimention" role="listbox" aria-label={t('assistant.mention')}>
               {offered.map((r, i) => (
@@ -335,20 +325,30 @@ export function Sidebar({ page, books, onGo }: Props) {
               ))}
             </div>
           ) : null}
-          <textarea
-            ref={area} rows={3} value={text} placeholder={t('assistant.placeholder')} aria-label={t('assistant.message')}
-            onChange={(e) => { setText(e.target.value); setPick(0); }}
-            onKeyDown={(e) => {
-              if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }
-              if (offered.length && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); choose(offered[pick]); return; }
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-            }}
-          />
-          <div className="aibar">
-            <span />
-            {s.sending
-              ? <button type="button" className="btn" onClick={stopAnswer}>{t('assistant.stop')}</button>
-              : <button type="button" className="btn primary" disabled={!text.trim()} onClick={send}><BotIcon />{t('assistant.send')}</button>}
+          {picking ? <Picker page={page} pageOn={!s.pageOff} attached={s.extra} books={books} toggle={plus} onClose={() => { setPicking(false); area.current?.focus(); }} /> : null}
+          <div className="aibox">
+            <div className="aichips">
+              {page && !s.pageOff ? <Chip r={page} onRemove={() => removeContext('page')} /> : null}
+              {s.extra.map((r) => <Chip key={r.kind + r.id} r={r} onRemove={() => removeContext(r)} />)}
+            </div>
+            <textarea
+              ref={area} rows={3} value={text} placeholder={t('assistant.placeholder')} aria-label={t('assistant.message')}
+              onChange={(e) => { setText(e.target.value); setPick(0); }}
+              onKeyDown={(e) => {
+                if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }
+                if (offered.length && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); choose(offered[pick]); return; }
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+              }}
+            />
+            <div className="aibar">
+              <button
+                type="button" className="aiplus" aria-label={t('assistant.mention')} title={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
+                ref={plus} onClick={() => setPicking(!picking)}
+              >{ICONS.plus}</button>
+              {s.sending
+                ? <button type="button" className="aisend" aria-label={t('assistant.stop')} title={t('assistant.stop')} onClick={stopAnswer}>{ICONS.stop}</button>
+                : <button type="button" className="aisend" aria-label={t('assistant.send')} title={t('assistant.send')} aria-disabled={empty} onClick={send}>{ICONS.arrowUp}</button>}
+            </div>
           </div>
         </div>
       ) : null}

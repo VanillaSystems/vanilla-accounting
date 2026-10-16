@@ -68,6 +68,8 @@ export function onBooksChanged(f: () => void): () => void { changed.add(f); retu
 /** An answer may change the chart, the invoicing settings or the invoices too: they are read again with the books. */
 const booksChanged = () => { reloadWorkspace(); void reloadInvoices(); for (const f of changed) f(); };
 export function addContext(ref: ContextRef): void { if (!state.extra.some((r) => r.kind === ref.kind && r.id === ref.id)) set({ extra: [...state.extra, ref] }); }
+/** The page's reference goes with the next message again, after it was taken off. */
+export function keepPage(): void { set({ pageOff: false }); }
 export function removeContext(ref: ContextRef | 'page'): void { set(ref === 'page' ? { pageOff: true } : { extra: state.extra.filter((r) => !(r.kind === ref.kind && r.id === ref.id)) }); }
 export function newConversation(): void { if (!state.sending) set({ listing: false, error: undefined, ...newThread() }); }
 
@@ -75,6 +77,9 @@ export async function showConversations(): Promise<void> {
   set({ listing: true });
   try { set({ conversations: await api.assistantList() }); } catch (e) { set({ error: errorText(e) }); }
 }
+
+/** Back from the list to the conversation open before it. */
+export function hideConversations(): void { set({ listing: false }); }
 
 export async function openConversation(id: string): Promise<void> {
   try {

@@ -12,11 +12,14 @@ import { language } from '../i18n/index.js';
 import type { Route } from './route.js';
 import { useQuestions } from '../questions/store.js';
 import { forMe } from '../../questions/model.js';
+import { useAssistant } from '../assistant/store.js';
+import { ICONS } from '../areas/icons.js';
 
 export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssistant(): void }) {
   const { view } = useAutomation();
   const q = useQuestions();
   const asked = forMe(q.questions, q.me);
+  const aiOpen = useAssistant().open;
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,7 +31,9 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
     return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
   }, [open]);
   // The AI's button is always there, at the top right as in the mockup; the status beside it only when something runs or waits.
-  const ai = <button type="button" className="cornerbtn aibtn" title={`${t('assistant.title')} · ⌘J`} aria-label={t('assistant.title')} onClick={onAssistant}><BotIcon /></button>;
+  // Open, the sidebar's title carries the robot, so the button shows the arrow that closes the column.
+  const toggle = t(aiOpen ? 'assistant.closePanel' : 'assistant.openPanel');
+  const ai = <button type="button" className="cornerbtn aibtn" title={`${toggle} · ⌘J`} aria-label={toggle} aria-expanded={aiOpen} onClick={onAssistant}>{aiOpen ? ICONS.panelClose : <BotIcon />}</button>;
   if (!view) return <div className="corner">{ai}</div>;
   const tasks = corner(view);
   // A question waiting for the viewer counts as a task: the corner shows it while nothing runs.

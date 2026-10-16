@@ -75,14 +75,19 @@ now and then. A person may pin one and not the other.
 ## The AI, as a sidebar
 
 The AI lives in a sidebar on the right, docked: the page gets narrower, nothing is covered. The
-bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search only.
+bot button at the top right, or ⌘J, opens and closes it; while the sidebar is open that button
+shows an arrow to the right («KI-Spalte schliessen»), since the sidebar's own title carries the
+bot. ⌘K stays search only.
 
-- **Header:** "KI", a new conversation (+), more (⋯), close.
+- **Header:** "KI", «Verlauf» (a clock), «Neu» (+), close.
 - **A status line** under the header: "2 laufen · 4 in der Schlange · 3 warten auf dich"; a click
   opens the status panel.
-- **Gespräche:** past conversations with their title, time and context; a click continues one.
-- **The composer**, at the bottom: a tip ("mit @ erwähnst du eine Buchung, einen Beleg oder einen
-  Ablauf"), the context as chips, the text, the model (**Auto**), send. No mode to choose: the
+- **Verlauf:** the list «Vergangene Gespräche», each with its title, time and context; a click
+  continues one, «Verlauf» again goes back to the open conversation.
+- **The composer**, at the bottom, one bordered field as VS Code's chat input: the context as
+  chips, the text, and a bar with «+» and the round send arrow. «+» opens a search over what can
+  go with the message: this page's item (on or off), a receipt, a booking or a payment of the
+  books, a workflow or a run (what @ offers too); arrows, Enter and Escape work in it. No mode to choose: the
   AI does what the person asks (usability test 2026-10-15: an owner asked it to fix a receipt and
   was told to switch modes and save drafts). No dictation in 0.4.0: speech to text would need a
   large local library. Underneath: where it runs ("Lokal · Claude").
