@@ -116,8 +116,13 @@ from its structure (src/booking/rules.ts), so a rule needs no AI to prepare its 
   sentences before this (in business files, by Claude Code) still load: they show as notes for
   the AI and decide nothing.
 - **Firma › Regeln** lists every rule of the company in plain words (notes as written), where it
-  came from (`source: wish …`, `correction …`, the app, or its source as written), how many
-  payments it booked, and how many it held to ask about. **Ausschalten** (`off: true`) and **Löschen** change the file in place,
+  came from (`source: wish …`, `correction …`, `hand …`, the app, or its source as written), how many
+  payments it booked, and how many it held to ask about. **Neue Regel** makes a rule without the
+  AI (src/saving/hand-rule.ts): whose payments (a business, a payer's IBAN or name, a text,
+  optionally the direction and amount) and the account and VAT code (only the codes the firm's
+  form takes; none for a firm not registered). **Vorschau** drafts it into its file and shows the
+  same card as the AI's draft, with its payments and «Trotzdem behalten»; a task «Von Hand
+  buchen» links to the form, started from its payment. **Ausschalten** (`off: true`) and **Löschen** change the file in place,
   its comments kept, and save at once; the toast's **Rückgängig** puts the file back as it was,
   unless it changed since.
 

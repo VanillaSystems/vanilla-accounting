@@ -74,6 +74,8 @@ export interface Query {
   vat?: string;
   /** /invoices/new?customer=<id>: the customer of the draft to write. */
   customer?: string;
+  /** /company/rules?payment=<ref>: the form of a new rule, started from that payment. */
+  payment?: string;
 }
 
 export interface Location { route: Route; query: Query }
@@ -99,6 +101,7 @@ export function formatLocation({ route, query }: Location): string {
   if (query.status) qs.set('status', query.status);
   if (query.vat) qs.set('vat', query.vat);
   if (query.customer) qs.set('customer', query.customer);
+  if (query.payment) qs.set('payment', query.payment);
   if (query.q) qs.set('q', query.q);
   const s = qs.toString();
   return s ? `${path}?${s}` : path;
@@ -174,6 +177,7 @@ function queryOf(params: URLSearchParams, today: IsoDate): Query {
     status: isOneOf(INVOICE_STATUSES, status) ? status : undefined,
     vat: get('vat'),
     customer: get('customer'),
+    payment: get('payment'),
   });
 }
 

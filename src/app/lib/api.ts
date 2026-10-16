@@ -30,6 +30,8 @@ import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.
 import type { MailCheck, SourcesView } from '../../platform/sources/model.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
+import type { HandRule, HandStart } from '../../saving/hand-rule.js';
+import { refusalKey } from '../areas/company/rules-model.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -130,6 +132,7 @@ export function errorText(e: unknown): string {
     case 'noAccount': return t('error.noAccount');
     case 'unknownVatCode': return t('error.unknownVatCode', b.params);
     case 'codeNotTaken': return t(b.params.method === 'none' ? 'error.codeNotTaken.none' : 'error.codeNotTaken.netRate', { code: b.params.code });
+    case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
     case 'noDescription': return t('error.noDescription');
     case 'accountNumber': return t('error.accountNumber', b.params);
     case 'accountName': return t('error.accountName', b.params);
@@ -269,6 +272,8 @@ export const api = {
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
+  handStart: (payment: string) => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}`),
+  draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
     const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });

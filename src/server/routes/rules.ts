@@ -7,6 +7,8 @@
  *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
  *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
+ *   GET  /api/rules/hand?payment=     the form of a rule made by hand, started from that payment
+ *   POST /api/rules/hand              a HandRule: drafted into its file for the same card; refused when the app cannot carry it out
  *
  * A rule the person keeps here takes effect at once: the click is their switching on
  * (docs/0.4.0/workflows.md "Changing a workflow"), so a workflow that ran as switched on before is
@@ -22,6 +24,7 @@ import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.js';
 import { keepSwitchedOn, openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { engine, queueCommit } from './automation.js';
@@ -127,4 +130,20 @@ router.post('/api/rules/share', (req, res) => {
   const path = draftShareRule(WS, ref);
   if (!path) throw new RequestError(404, 'Diese Zahlung ist nicht in einen privaten und einen geschäftlichen Teil aufgeteilt.');
   res.json({ path });
+});
+
+router.get('/api/rules/hand', (req, res) => {
+  res.json({ start: handStart(WS, String(req.query.payment ?? '')) ?? null });
+});
+
+const MATCHES = new Set(['business', 'payer', 'text']);
+
+router.post('/api/rules/hand', (req, res) => {
+  const h = req.body as HandRule;
+  if (!h || !h.match || !MATCHES.has(h.match.kind) || typeof h.account !== 'string' || (h.vat !== null && typeof h.vat !== 'string')) throw new RequestError(400, 'Regel erwartet.');
+  const out = draftHandRule(WS, h);
+  if (out.ok) { res.json({ path: out.path }); return; }
+  const r = out.refusal;
+  if (r.code === 'codeNotTaken') throw new RequestError(400, `Den Steuercode ${r.params.vat} nimmt das Formular dieser Firma nicht.`, { code: 'codeNotTaken', params: { code: r.params.vat, method: r.params.method } });
+  throw new RequestError(400, `Diese Regel kann die App nicht ausführen (${r.code}).`, { code: 'rule', params: { refusal: r } });
 });

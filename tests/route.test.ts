@@ -47,6 +47,7 @@ const CANONICAL = [
   '/invoices/sent',
   '/invoices/sent/d-42',
   '/invoices/new?customer=cu_17',
+  '/company/rules?payment=2026-08-12-a1',
   '/journal?period=2026-07-01_2026-09-30',
   '/journal?period=2026-09',
   '/journal?period=ytd',

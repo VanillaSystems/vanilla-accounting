@@ -4,6 +4,7 @@ import type { MailRefusal } from '../invoices/mail.js';
 import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
 import type { SaleGone } from '../questions/model.js';
+import type { RuleRefusal } from './rule-refusal.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -90,6 +91,8 @@ export type ApiRefusal =
   | { code: 'unknownVatCode'; params: { code: string } }
   /** A code the firm's form does not take (src/accounting/vat-codes.ts formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
+  /** A rule made by hand in Firma › Regeln that the app cannot carry out (src/booking/rules.ts parseRule). */
+  | { code: 'rule'; params: { refusal: RuleRefusal } }
   | { code: 'noDescription' }
   | { code: 'accountNumber'; params: { account: string } }
   | { code: 'accountName'; params: { account: string } }

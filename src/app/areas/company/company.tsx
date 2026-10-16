@@ -151,7 +151,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'mail': return <MailSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'sources': return <SourcesSection nav={p.nav} canEdit={p.canEdit} />;
     case 'phone': return <PhoneSection nav={p.nav} />;
-    case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} />;
+    case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} payment={p.query.payment} />;
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;

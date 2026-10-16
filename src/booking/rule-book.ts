@@ -14,8 +14,8 @@ import { isExecutable, parseRule, RULE_STEP, type BookingRule, type PlacedRule, 
 
 type Ws = Pick<Workspace, 'paths'>;
 
-/** Where a rule came from: a wish in the sidebar, a person's correction, the app, or something else (its `source` says what). */
-export type RuleOrigin = 'wish' | 'correction' | 'app' | 'other';
+/** Where a rule came from: a wish in the sidebar, a person's correction, the form of Firma › Regeln, the app, or something else (its `source` says what). */
+export type RuleOrigin = 'wish' | 'correction' | 'hand' | 'app' | 'other';
 
 /** One rule of the workspace as the rules page and a draft card show it. */
 export interface RuleRow {
@@ -37,7 +37,7 @@ export interface RuleRow {
 }
 
 export const originOf = (source: string | undefined): RuleOrigin =>
-  /^wish\b/i.test(source ?? '') ? 'wish' : /^correction\b/i.test(source ?? '') ? 'correction' : /^app\b/i.test(source ?? '') ? 'app' : 'other';
+  /^wish\b/i.test(source ?? '') ? 'wish' : /^correction\b/i.test(source ?? '') ? 'correction' : /^hand\b/i.test(source ?? '') ? 'hand' : /^app\b/i.test(source ?? '') ? 'app' : 'other';
 
 /** Whether a path of the app's folder is a file that holds rules: a company guide or a business's file. */
 export function holdsRules(path: string): boolean {

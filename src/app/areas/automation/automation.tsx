@@ -10,6 +10,7 @@ import { AskAi } from '../../assistant/AskAi.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { isKey, language, t, tData } from '../../i18n/index.js';
+import { Go } from '../vat/links.js';
 import { automationCommand, automationNow, setSchedule, useAutomation, useRun } from '../../automation/store.js';
 import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunDetail, type RunSummary, type StepDecl, type StepRecord, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
@@ -692,6 +693,12 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 ) : null}
                 {withheld?.questions ? <p className="warnline" data-testid="approval-withheld-questions">{t('automation.questionsOpen', { n: withheld.questions })}</p> : null}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
+                {pay ? (
+                  <p className="m" data-testid="task-make-rule">
+                    {t('rules.hand.fromTask')}{' '}
+                    <Go to={{ route: { area: 'company', section: 'rules' }, query: { payment: pay } }} nav={nav} className="golink">{t('area.company')} › {t('company.rules')}</Go>
+                  </p>
+                ) : null}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
                   {task.outcomes.filter((o) => o !== withheld?.outcome).map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}
