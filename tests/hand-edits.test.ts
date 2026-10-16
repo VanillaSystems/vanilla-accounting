@@ -13,6 +13,7 @@ import { changesView, handEdits, recordDeletion } from '../src/saving/changes.js
 import { loadBooks, moduleActor, saveBooks, update, PERSON } from '../src/books/store.js';
 import type { JournalEntry } from '../src/types/index.js';
 import { addEntry, deleteEntry, restoreSaved, setEntry } from '../src/server/edits.js';
+import { RequestError } from '../src/server/books.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
 
@@ -79,13 +80,13 @@ test('a booking deleted by hand waits in Änderungen too, and «Rückgängig» p
   assert.equal((await handEdits(ws)).some((h) => h.id === gone.id), false);
 });
 
-test('a booking a run made since the last save and a person deleted waits in Änderungen too, and its restore takes out what the app booked on the payment meanwhile (r7h-31, r7h-3)', async () => {
+test('a booking a run made since the last save and a person deleted waits in Änderungen too (r7h-31, r7h-3); its «Rückgängig» never books the payment twice: refused, naming what stands, while the payment has bookings it did not have at the deletion (a run\'s rebooking, a rule\'s split, a hand booking), back as it was once the payment is free again (r8h-23)', async () => {
   const ws = await company();
   const books = loadBooks(ws);
   const closed = books.config.closedThrough ?? '';
-  const tx = { ref: 'OPEN-1', bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT' as const, description: 'Swisscom Natel Sep' };
+  const tx = { ref: 'OPEN-1', bank: 'Raiffeisen', date: '2026-10-15', amount: 1412.35, currency: 'CHF', direction: 'CRDT' as const, description: 'SumUp Auszahlung PO-88213' };
   assert.ok(tx.date > closed);
-  const run: JournalEntry = { id: 'run-made', transactionRef: tx.ref, date: tx.date, accountDebit: '6513', accountCredit: '1021', amount: tx.amount, vatCode: 'I0', description: 'vom Lauf gebucht', origin: 'classify', run: 'run-1' };
+  const run: JournalEntry = { id: 'run-made', transactionRef: tx.ref, date: tx.date, accountDebit: '1021', accountCredit: '3400', amount: tx.amount, vatCode: 'V81', description: 'vom Lauf gebucht', origin: 'classify', run: 'run-1' };
   update(books, moduleActor('intake'), (b) => { b.transactions.push(tx); b.journalEntries.push(run); });
   saveBooks(ws, books);
   assert.deepEqual(await handEdits(ws), [], 'a run\'s booking is no hand edit');
@@ -96,17 +97,42 @@ test('a booking a run made since the last save and a person deleted waits in Än
   const listed = await handEdits(ws);
   assert.deepEqual(listed.map((h) => [h.id, h.deleted, h.saved, h.kept]), [[run.id, true, run, []]], 'the deletion is listed, with the booking as it was');
 
-  // The next run books the payment differently meanwhile.
-  const again = loadBooks(ws);
-  update(again, moduleActor('intake'), (b) => { b.journalEntries.push({ ...run, id: 'run-again', accountDebit: '4000', vatCode: 'M81', run: 'run-2' }); });
-  saveBooks(ws, again);
-  const still = await handEdits(ws);
-  assert.deepEqual(still.map((h) => [h.id, h.deleted]), [[run.id, true]], 'still listed');
+  const onPayment = () => loadBooks(ws).journalEntries.filter((e) => e.transactionRef === tx.ref).map((e) => e.id).sort();
+  /** «Rückgängig» as the route does it: the listed edit, the restore inside the write door; the refusal, or undefined once it went through. */
+  const tryRestore = async () => {
+    const edit = (await handEdits(ws)).find((h) => h.id === run.id)!;
+    assert.ok(edit?.deleted, 'the deletion stays listed while the payment is booked otherwise');
+    const b = loadBooks(ws);
+    try { update(b, PERSON, (x) => restoreSaved(x, run.id, edit.saved, edit.kept)); } catch (e) { return e; }
+    saveBooks(ws, b);
+    return undefined;
+  };
+  const line = (id: string, accountDebit: string, accountCredit: string, amount: number, vatCode: string): JournalEntry => ({ id, transactionRef: tx.ref, date: tx.date, accountDebit, accountCredit, amount, vatCode, description: 'SumUp', origin: 'classify', rule: 'sumup-umsatz', by: { kind: 'rule', rule: 'sumup-umsatz' } });
 
-  const back = loadBooks(ws);
-  update(back, PERSON, (b) => restoreSaved(b, run.id, still[0].saved, still[0].kept));
-  saveBooks(ws, back);
-  assert.deepEqual(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === tx.ref), [run], 'back as it was, the later booking of the payment gone');
+  // (a) The next run books the payment again meanwhile, this time by a rule as a split of three.
+  const again = loadBooks(ws);
+  update(again, moduleActor('intake'), (b) => { b.journalEntries.push(line('s-1', '1021', '3400', 1480, 'V81'), line('s-2', '3400', '1021', 40, '-V81'), line('s-3', '6840', '1021', 27.65, 'I0')); });
+  saveBooks(ws, again);
+  const refusedSplit = await tryRestore();
+  assert.ok(refusedSplit instanceof RequestError && refusedSplit.status === 409, `refused: ${String(refusedSplit)}`);
+  assert.deepEqual(refusedSplit.refusal, { code: 'bookedSince', params: { payment: tx.ref, entries: 3, by: 'app' } });
+  assert.deepEqual(onPayment(), ['s-1', 's-2', 's-3'], 'the rule\'s split stands; the old booking is not put back over it');
+
+  // (b) A person books the payment by hand instead.
+  const hand = loadBooks(ws);
+  update(hand, PERSON, (b) => { for (const id of ['s-1', 's-2', 's-3']) deleteEntry(b, id); addEntry(b, { transactionRef: tx.ref, date: tx.date, accountDebit: '1021', accountCredit: '3400', amount: tx.amount, vatCode: 'V81', description: 'von Hand', origin: 'manual', by: { kind: 'person', at: new Date().toISOString() } }); });
+  saveBooks(ws, hand);
+  const refusedHand = await tryRestore();
+  assert.ok(refusedHand instanceof RequestError && refusedHand.status === 409, `refused: ${String(refusedHand)}`);
+  assert.deepEqual(refusedHand.refusal, { code: 'bookedSince', params: { payment: tx.ref, entries: 1, by: 'person' } });
+  assert.equal(onPayment().length, 1, 'the hand booking stands alone: the payment is not booked twice');
+
+  // (c) The payment has no booking again: the restore puts the deleted one back as it was.
+  const free = loadBooks(ws);
+  update(free, PERSON, (b) => { for (const e of b.journalEntries.filter((x) => x.transactionRef === tx.ref)) deleteEntry(b, e.id); });
+  saveBooks(ws, free);
+  assert.equal(await tryRestore(), undefined, 'restored');
+  assert.deepEqual(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === tx.ref), [run], 'back as it was');
   assert.deepEqual(await handEdits(ws), [], 'nothing waits once it is back');
 });
 
