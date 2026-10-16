@@ -2462,6 +2462,8 @@ export default {
     'changes.handUndo': 'Annulla',
     'changes.handUndoTip': 'La registrazione com\'era all\'ultimo salvataggio',
     'changes.handRemoveTip': 'Togliere la registrazione fatta a mano dall\'ultimo salvataggio',
+    'changes.answerBooked': 'ricontabilizzata da una risposta {when}',
+    'changes.answerUndoTip': 'Ritira la risposta: la registrazione com’era prima della risposta, la regola del pagatore tolta, la domanda di nuovo aperta',
     'changes.handDeleted': 'eliminata a mano',
     'changes.handRestoreTip': 'Rimettere la registrazione eliminata com’era all’ultimo salvataggio',
     'changes.entries': { one: '{n} voce', other: '{n} voci' },

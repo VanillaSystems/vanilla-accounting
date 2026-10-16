@@ -277,6 +277,7 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A «kein Umsatz» answer is one decision with one undo. Änderungen › «Rückgängig» on the booking the answer changed now takes the answer back as the question's «Zurücknehmen» does (the row says «durch eine Antwort umgebucht»): the booking stands as before the answer instead of being deleted, the payer rule goes, the payment's mark goes, the question is open again. Taking the answer back also puts the bookings that rule made meanwhile in the open period back to the app's proposal (a sale at the proposed code, on the revenue account the money came from) and asks the owner about each of them; no booking keeps a reason naming the rule that is gone. Answering «kein Umsatz» again works also on a payment whose booking was deleted meanwhile: it is booked bank against the owner's account and the rule is keyed by the statement's IBAN. Persona findings r9n-20, r9n-21, r9n-22.
 - The AI sidebar keeps a payment's bookings right. It no longer moves a payment's booking to
   another date (VAT on payments received: the booking carries the payment's date and quarter),
   and it no longer cuts a booking to the business half and stops: it can add the private half

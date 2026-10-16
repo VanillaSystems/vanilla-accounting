@@ -2462,6 +2462,8 @@ export default {
     'changes.handUndo': 'Undo',
     'changes.handUndoTip': 'The booking back as it was at the last save',
     'changes.handRemoveTip': 'Remove the booking made by hand since the last save',
+    'changes.answerBooked': 'rebooked by an answer {when}',
+    'changes.answerUndoTip': 'Takes the answer back: the booking as before the answer, the payer rule gone, the question open again',
     'changes.handDeleted': 'deleted by hand',
     'changes.handRestoreTip': 'Put the deleted entry back as it was at the last save',
     'changes.entries': { one: '{n} entry', other: '{n} entries' },

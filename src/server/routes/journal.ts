@@ -3,7 +3,7 @@ import { correctionCaseFor, type CorrectionKind } from '../../accounting/correct
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
 import { isIsoDate } from '../../accounting/periods.js';
 import { patchBody, stringField, updateBooks, withBooks, RequestError, WS } from '../books.js';
-import { learnFromCorrection } from '../questions.js';
+import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, deleteEntry, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
@@ -128,11 +128,14 @@ const withWarnings = (books: Books, entry: JournalEntry) => ({ entry, warnings: 
 /**
  * Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as
  * saved, or gone. A bank payment the undo leaves without a booking gets its booking run again, so
- * the question the person had answered by booking it is back under Aufgaben (r8k-6).
+ * the question the person had answered by booking it is back under Aufgaben (r8k-6). A booking an
+ * answer changed is taken back with the answer: the booking as before it, its payer rule and that
+ * rule's bookings, the question open again (r9n-20, src/server/questions.ts undoAnswer).
  */
 router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   const edit = (await handEdits(WS)).find((h) => h.id === req.params.id);
   if (!edit) throw new RequestError(404, 'Diese Buchung hat seit dem letzten Speichern keine Änderung von Hand.', { code: 'gone', params: { what: 'handEdit' } });
+  if (edit.answer) { undoAnswer(edit.answer, WS.company.owner); res.json({ ok: true, answer: edit.answer }); return; }
   const unbooked = updateBooks((books) => {
     restoreSaved(books, edit.id, edit.saved, edit.kept);
     return books.transactions.some((t) => t.ref === edit.ref && t.source !== 'manual') && !books.journalEntries.some((e) => e.transactionRef === edit.ref);

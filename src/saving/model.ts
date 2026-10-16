@@ -25,7 +25,8 @@ export interface RunWrote { run: string; workflow: string; label: string; at: st
 /** A booking changed since the last save by hand, or by the AI sidebar on the person's wish (`ai`). */
 /** A booking changed, made or deleted by hand since the last save; `saved`: as the save holds it (none for one made since); `deleted`: gone now, `saved` puts it back. */
 /** `kept`: for a deletion the app recorded (data/trash/entries), the payment's other bookings at that moment; the restore is refused while the payment has bookings not among them (r8h-23). */
-export interface HandEdit { id: string; ref: string; date: string; text: string; at: string; ai?: true; deleted?: true; saved?: JournalEntry; kept?: string[] }
+/** `answer`: the booking is what a person's answer to a question made of it; its «Rückgängig» takes the whole answer back, as the question's «Zurücknehmen» does (r9n-20). */
+export interface HandEdit { id: string; ref: string; date: string; text: string; at: string; ai?: true; deleted?: true; saved?: JournalEntry; kept?: string[]; answer?: string }
 
 /**
  * What a person did to a receipt since the last save, each with its «Rückgängig» (r8k-7): a

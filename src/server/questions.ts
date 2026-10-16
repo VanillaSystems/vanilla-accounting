@@ -16,11 +16,11 @@ import { bankAccountFor, ownerAccount, ownerAccountNumber } from '../accounting/
 import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, periodLock, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
-import { APP_ASKER, saleQuestionLine } from '../intake/sale-questions.js';
+import { APP_ASKER, askSalesWithoutVat, saleQuestionLine } from '../intake/sale-questions.js';
 import { chart } from '../engines/index.js';
 import { dropPrecedent, dropRule, keepPrecedent, keepRule, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
 import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget, type SaleGone } from '../questions/model.js';
-import { saleChoiceOf, saleProposal, saleQuestionGone, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
+import { saleChoiceOf, saleCodeReason, saleProposal, saleQuestionGone, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
 import { payerKey } from '../knowledge/payer.js';
 import { parseRule } from '../booking/rules.js';
 import { ruleFactsOf } from '../saving/rules.js';
@@ -153,7 +153,9 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
  * says so. The entries are the classifier's; a payment whose revenue a person booked by hand (her
  * correction, asked back, r4c-35) takes hers. A payment with a receipt or an invoice is the
  * document's to decide, never changed; one with no revenue entry to set is refused, not answered
- * with nothing booked (r4c-28).
+ * with nothing booked (r4c-28). «Kein Umsatz» on a payment without any booking (deleted since the
+ * question was asked) books it bank against the owner's account, so the answer acts and its payer
+ * rule is kept (r9n-21).
  */
 function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string } {
   if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
@@ -168,6 +170,11 @@ function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { book
   if (!entries.length && choice !== 'notSale') throw new Unclear('noSaleEntry', tx.description);
   if (choice === 'notSale') {
     const owner = ownerAccountNumber(WS);
+    if (!own.length) {
+      const [e] = bookPayment(books, tx.ref, [{ accountDebit: bankAccountFor(tx, WS.bankAccounts), accountCredit: owner, amount: Math.abs(tx.amount), description: tx.description }], WS.bankAccounts, loadFxResolver());
+      tx.noReceiptNeeded = true;
+      return { booked: [e.id], undo: [{ kind: 'deleteEntry', id: e.id }], vatCode: '', marked: true, account: owner };
+    }
     const undo = entries.map((e) => setEntry(books, e.id, { accountCredit: owner, vatCode: '' }));
     tx.noReceiptNeeded = true;
     return { booked: entries.map((e) => e.id), undo, vatCode: '', marked: true, ...(entries.length ? { account: owner } : {}) };
@@ -296,27 +303,58 @@ export function answerQuestion(id: string, { by, answer }: { by: string; answer:
   return find(id);
 }
 
-/** Takes back what the answer did (its bookings, its precedent); the question is open again. */
+/**
+ * The bookings the withdrawn payer rule `rule` made in the open period go back to being the app's
+ * guess (r9n-22): a sale at the proposal (saleCodeOf's reasoning), on the revenue account the
+ * answer had moved the money from (`revenue`), or the rule's own account when that is revenue;
+ * each payment is then asked about, as the intake would. A booking a person changed since is
+ * hers and keeps its accounts; nothing keeps a reason naming the rule that is gone.
+ */
+function revertRuleBookings(b: Books, rule: string, revenue: string | undefined): void {
+  const lock = periodLock(b);
+  for (const e of b.journalEntries) {
+    if (e.rule !== rule || lock.isClosed(e.date)) continue;
+    delete e.rule;
+    const tx = b.transactions.find((t) => t.ref === e.transactionRef);
+    const bank = tx && tx.bank !== 'manual' ? bankAccountFor(tx, WS.bankAccounts) : undefined;
+    const account = chart().typeOf(e.accountCredit) === 'revenue' ? e.accountCredit : revenue;
+    if (!tx || e.origin === 'manual' || e.accountDebit !== bank || !account || isVatAmountCode(e.vatCode)) { if (e.reason?.startsWith('Regel:')) delete e.reason; continue; }
+    const proposal = saleProposal(tx);
+    const decided = { code: saleVatCode(proposal.choice) ?? undefined, why: proposal.why };
+    e.accountCredit = account;
+    if (decided.code) e.vatCode = decided.code; else delete e.vatCode;
+    e.origin = 'classify';
+    e.reason = `Die Antwort zum Zahler wurde zurückgenommen. ${saleCodeReason(decided, tx.currency)}`;
+    e.by = { kind: 'code', check: 'saleCode' };
+  }
+}
+
+/**
+ * Takes back what the answer did, as one whole: its bookings as before the answer, its precedent,
+ * its payer rule and that rule's later bookings (revertRuleBookings), the payment's mark; the
+ * question is open again. Änderungen › «Rückgängig» on the answer's booking comes here too (r9n-20).
+ */
 export function undoAnswer(id: string, by: string): Question {
   const q = find(id);
   const acted = q.answer?.acted;
   if (q.status !== 'answered') throw new RequestError(409, 'Diese Frage hat keine Antwort, die sich zurücknehmen liesse.');
   // A booking the answer changed that was booked anew since (Neu klassifizieren) is no longer there to put back: the rest is.
-  const there = (b: Books, c: BookChange) => c.kind !== 'entry' || b.journalEntries.some((e) => e.id === c.id);
+  const there = (b: Books, c: BookChange) => (c.kind !== 'entry' && c.kind !== 'deleteEntry') || b.journalEntries.some((e) => e.id === c.id);
   if (acted && 'undo' in acted && acted.undo.length) updateBooks((b) => { for (const c of [...acted.undo].reverse()) if (there(b, c)) applyChange(b, c); });
   asSwitchedOn(() => {
     if (acted && 'precedent' in acted && acted.precedent) dropPrecedent(WS, acted.precedent);
     if (acted && 'rule' in acted && acted.rule) dropRule(WS, acted.rule);
   });
-  // A booking the withdrawn rule made is the app's guess again, so the next answer books it (r4c-28).
   if (acted && 'rule' in acted && acted.rule) {
     const rule = acted.rule;
-    updateBooks((b) => { const lock = periodLock(b); for (const e of b.journalEntries) if (e.rule === rule && !lock.isClosed(e.date)) delete e.rule; });
+    const revenue = acted.undo.map((c) => (c.kind === 'entry' ? c.set.accountCredit : undefined)).find((a) => a && chart().typeOf(a) === 'revenue') ?? WS.invoicing?.revenueAccount;
+    updateBooks((b) => revertRuleBookings(b, rule, revenue));
   }
   if (acted && 'marked' in acted && acted.marked && q.on.kind === 'payment') {
     updateBooks((b) => { const tx = b.transactions.find((t) => t.ref === q.on.id); if (tx) { assertOpen(b, [tx.date], 'editTransaction'); delete tx.noReceiptNeeded; } });
   }
   append({ v: 1, event: 'undone', id, at: now(), by });
+  if (acted && 'rule' in acted && acted.rule) askSalesWithoutVat(WS, readBooks());
   return find(id);
 }
 

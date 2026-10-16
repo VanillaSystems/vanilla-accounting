@@ -14,6 +14,7 @@ import { BOOK_FILES, fromJsonl } from '../books/years.js';
 import { hasBooks, loadBooks, periodLock, type Books } from '../books/store.js';
 import type { BankStatement, BankTransaction, JournalEntry, Mapping, Receipt, ReceiptPatch } from '../types/index.js';
 import { latestDeletions } from '../books/receipt-trash.js';
+import { readQuestions } from '../questions/store.js';
 import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type ReceiptChange, type RecordChange, type SaveDetail, type SaveSummary } from './model.js';
 import type { Customer, Invoice, InvoiceBook } from '../invoices/model.js';
 import type { YearCloseState } from '../accounting/year-close.js';
@@ -298,6 +299,9 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
   if (!repo) return [];
   const out: HandEdit[] = [];
   const trashed = trashedSince(ws, await lastSaveAt(ws));
+  // A booking an answer changed is listed as the answer's: its undo is the answer's undo, not the booking's alone (r9n-20).
+  const answered = new Map<string, string>();
+  for (const q of readQuestions(ws)) if (q.status === 'answered' && q.answer?.acted && 'booked' in q.answer.acted) for (const id of q.answer.acted.booked) answered.set(id, q.id);
   // A booking in a filed period is as filed: no «Rückgängig» on it (r7h-36).
   const closedThrough = (JSON.parse(read(ws.paths.ledger) || '{}') as { config?: { closedThrough?: string } }).config?.closedThrough ?? '';
   for (const year of yearsOf(ws.paths)) {
@@ -308,7 +312,8 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
       if ((e.by?.kind !== 'person' && e.by?.kind !== 'assistant') || e.date <= closedThrough) continue;
       const was = saved.get(e.id);
       if (was && JSON.stringify(was) === JSON.stringify(e)) continue;
-      out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(e.by.kind === 'assistant' ? { ai: true } : {}), ...(was ? { saved: was } : {}) });
+      const answer = answered.get(e.id);
+      out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(e.by.kind === 'assistant' ? { ai: true } : {}), ...(was ? { saved: was } : {}), ...(answer ? { answer } : {}) });
     }
     const bookedSince = new Set([...now.values()].filter((e) => !saved.has(e.id)).map((e) => e.transactionRef));
     const wrote = existsSync(path) ? statSync(path).mtime.toISOString() : '';

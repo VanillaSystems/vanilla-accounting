@@ -2459,6 +2459,8 @@ export const messages = {
   'changes.handUndo': 'Rückgängig',
   'changes.handUndoTip': 'Die Buchung wieder so, wie sie beim letzten Speichern war',
   'changes.handRemoveTip': 'Die seit dem letzten Speichern von Hand gemachte Buchung wieder entfernen',
+  'changes.answerBooked': 'durch eine Antwort umgebucht {when}',
+  'changes.answerUndoTip': 'Nimmt die Antwort zurück: die Buchung wie vor der Antwort, die Regel für den Zahler weg, die Frage wieder offen',
   'changes.handDeleted': 'von Hand gelöscht',
   'changes.handRestoreTip': 'Die gelöschte Buchung wieder einsetzen, wie sie beim letzten Speichern war',
   'changes.entries': { one: '{n} Eintrag', other: '{n} Einträge' },

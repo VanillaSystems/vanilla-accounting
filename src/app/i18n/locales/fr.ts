@@ -2462,6 +2462,8 @@ export default {
     'changes.handUndo': 'Annuler',
     'changes.handUndoTip': 'L\'écriture telle qu\'elle était à la dernière sauvegarde',
     'changes.handRemoveTip': 'Retirer l\'écriture faite à la main depuis la dernière sauvegarde',
+    'changes.answerBooked': 'recomptabilisée par une réponse {when}',
+    'changes.answerUndoTip': 'Reprend la réponse: l’écriture comme avant la réponse, la règle du payeur retirée, la question de nouveau ouverte',
     'changes.handDeleted': 'supprimée à la main',
     'changes.handRestoreTip': 'Remettre l’écriture supprimée telle qu’elle était au dernier enregistrement',
     'changes.entries': { one: '{n} entrée', other: '{n} entrées' },
