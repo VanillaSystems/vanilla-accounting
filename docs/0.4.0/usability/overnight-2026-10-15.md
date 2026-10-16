@@ -156,3 +156,14 @@ file records every decision a person might have made differently, newest last.
     - AI prompt: a registration dated inside the year rules from that date. The threshold texts are hedged («in der Regel ab 1.1.; die Verfügung der ESTV nennt das Datum»).
     - Perioden und Siegel shows one card for the year of a firm without returns; H1 leads with the filed figure, today's figure beside it.
     - Open for Ken: the 0535 for net rate; the threshold wording; no portal-by-hand path; a net-rate firm still sees the receipt's Swiss-VAT fields.
+34. Icons (Ken, 16.10.): the receipt icon kept coming back because `0.4.0` and `main` still carry it (the wave was only on the 0.4.0-ui line), the phone app's set was still the receipt, and the Dock caches old icons. Commit d80051b pins every icon by hash (desktop/brand-icons.json, tools/brand/icons.mjs); a test and desktop:build refuse any non-brand or retired icon. `0.4.0`/`main` get it when 0.4.0-drop is merged (Ken's call).
+35. Merged huber6; tests 1018 pass, real-books golden master 18/18.
+    - r6h-24: one `keepSwitchedOn` seam. A rule kept by answering, correcting or undoing is switched on; a waiting workflow refuses in words with a link; Regeln marks waiting rules.
+    - r5h-22: the real race was a GET served before the PATCH applied and arriving after it settled. local-edits now keeps the page's copy when a save settled after the read began. 50 of 50 runs pass.
+    - r6h-28: «Löschen» leaves a placeholder with «Rückgängig» in place, and Änderungen lists deletions. No confirm dialog (reversible over asked).
+    - r6h-23: closing the drop dialog takes a held duplicate in, so Aufgaben asks; unclear files go to quarantine.
+    - r6h-25: mailbox connect stores the password first, writes nothing on failure, and updates an existing source for the same address.
+    - r5h-36: the AI may delete what a person may; several deletions go through the held card.
+    - Harness: `vm.sh app` starts the app in the VM's GUI session through a LaunchAgent, so the keychain works; the token is on no command line.
+    - Started fix/composer (KI sidebar toggle, history button, VS Code-style composer with «+» context picker), as Ken asked.
+    - Open for Ken: mailbox connect updates vs refuses a second time; partial deletions by the AI; r6h-33 credit note without PDF (M0 vs -M81); refresh the huber-q3 snapshot (it has rc.174); the token is still readable with `ps -E` by the same user.
