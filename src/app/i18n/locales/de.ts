@@ -3349,6 +3349,16 @@ export const messages = {
   'custom.refusal.placeholder': 'Den Platzhalter {{name}} kennt der Bericht nicht.',
   'custom.refusal.figureInComment': 'Im Kommentar steht eine Zahl («{text}»). Zahlen setzt die App aus den Büchern ein, über Platzhalter wie Total oder Anzahl.',
   'error.report': 'Bericht nicht erstellt: {why}',
+  'assistant.reportMade': { one: 'Der Bericht steht unten: jede Zahl darin hat die App aus den Büchern gerechnet.', other: 'Die {n} Berichte stehen unten: jede Zahl darin hat die App aus den Büchern gerechnet.' },
+  'assistant.reportFigures': 'Die Antwort nannte Zahlen, die nicht aus dem Bericht stammen; die App hat sie zurückgezogen. Was gilt, steht im Bericht unten.',
+  'assistant.report.csv': 'CSV',
+  'assistant.report.pdf': 'PDF',
+  'assistant.report.more': { one: '… und {n} weitere Zeile', other: '… und {n} weitere Zeilen' },
+  'assistant.report.not': 'Bericht nicht erstellt',
+  'assistant.report.empty': 'Keine Zeilen in diesem Zeitraum.',
+  'assistant.report.fileFailed': 'Datei nicht erstellt: {why}',
+  'custom.save': 'Bericht speichern',
+  'custom.tab': 'Eigene Berichte',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

@@ -1,8 +1,19 @@
-/** A report's refusal in the person's words (src/reports/spec.ts ReportRefusal), for the UI and the API's German text alike. */
+/**
+ * A report's parts in the person's words, for the UI, the files and the API's German text alike:
+ * its period, a section's filters, a group's heading, a refusal (src/reports/spec.ts ReportRefusal).
+ * Without node modules, so the browser takes it too.
+ */
 import type { Key } from '../app/i18n/types.js';
-import { COLUMNS, FILTERS, GROUPINGS, type ReportRefusal } from './spec.js';
+import type { Words } from '../export/tables.js';
+import { COLUMNS, FILTERS, GROUPINGS, accountRangeText, type ReportRefusal, type ReportSection } from './spec.js';
+import type { ReportGroup, ReportResult } from './run.js';
 
 type T = (key: Key, vars?: Record<string, string | number>) => string;
+
+const date = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+
+export const sectionName = (s: ReportSection, i: number, w: Words): string => s.title || `${i + 1}. ${w.t(`custom.source.${s.source}` as Key)}`;
+
 
 /** A filter's, grouping's or column's name. */
 export function fieldName(what: string, t: T): string {
@@ -23,3 +34,26 @@ export function refusalText(r: ReportRefusal, t: T): string {
     case 'figureInComment': return t('custom.refusal.figureInComment', r.params);
   }
 }
+
+/** The period in words: 01.07.2026 – 30.09.2026. */
+export const spanOf = (r: ReportResult): string => (r.period.kind === 'all' ? '' : `${date(r.period.from)} – ${date(r.period.to)}`);
+
+/** A section's filters and grouping in words: «Buchungen · Konten 6000-6999 · mit Beleg · nach Konto». */
+export function filtersInWords(s: ReportSection, w: Words): string {
+  const { t } = w;
+  const f = s.filter;
+  return [
+    t(`custom.source.${s.source}` as Key),
+    f.accounts && t('custom.f.accounts', { list: f.accounts.map(accountRangeText).join(', ') }),
+    f.vatCodes && t('custom.f.vatCodes', { list: f.vatCodes.join(', ') }),
+    f.text && t('custom.f.text', { text: f.text }),
+    f.origins && t('custom.f.origins', { list: f.origins.map((o) => t(`custom.origin.${o}` as Key)).join(', ') }),
+    f.receipt && t(f.receipt === 'with' ? 'custom.f.receiptWith' : 'custom.f.receiptWithout'),
+    f.currencies && t('custom.f.currencies', { list: f.currencies.join(', ') }),
+    s.group !== 'none' && t(`custom.group.${s.group}` as Key),
+  ].filter(Boolean).join(' · ');
+}
+
+/** A group's heading: the key and the account's name, or «ohne» for rows without one. */
+export const groupName = (g: ReportGroup, w: Words): string => (g.key ? [g.key, g.label].filter(Boolean).join(' ') : w.t('custom.none'));
+

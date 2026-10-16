@@ -9,7 +9,7 @@
  * Änderungen.
  */
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { t } from '../i18n/index.js';
+import { language, t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
@@ -22,6 +22,11 @@ import { withoutChanges } from '../../assistant/changes.js';
 import { markdownBlocks, type Span } from '../assistant/markdown.js';
 import type { Route } from './route.js';
 import { PRESETS } from '../../export/model.js';
+import { postDownload } from '../areas/export/state.js';
+import { ReportView } from '../areas/reports/custom/ReportView.js';
+import { spanOf } from '../../reports/words.js';
+import { specData } from '../../reports/spec.js';
+import type { ReportResult } from '../../reports/run.js';
 import { builtInTexts } from '../../invoices/texts.js';
 import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
@@ -113,6 +118,7 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
       return { text: t('assistant.c.export', { preset, file: note.file.name }), href: api.assistantExportUrl(note.file.name) };
     }
     case 'bookAgain': return { text: failed ? `${t('assistant.c.bookAgainNot')} · ${failed}` : t('assistant.c.bookAgain'), go: { area: 'automation', view: 'runs' } };
+    case 'report': return { text: failed ? `${t('assistant.report.not')} · ${failed}` : `${c.spec.title} · ${note?.report ? spanOf(note.report) : c.period ?? c.spec.period}` };
   }
 }
 
@@ -120,6 +126,7 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
   return (
     <ul className="aichanges">
       {changes.map((c) => {
+        if (c.change.kind === 'report' && c.note?.report) return <li key={c.id} className="aireport"><ReportCard result={c.note.report} period={c.change.period} onGo={onGo} /></li>;
         const d = describe(c, books);
         return (
           <li key={c.id} className={c.undone ? 'undone' : ''}>
@@ -133,6 +140,31 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * A report the AI wrote as a spec, run by the app (src/reports/): its title and period, its first
+ * rows and every total, «PDF» and «CSV» of the whole report.
+ */
+function ReportCard({ result, period, onGo }: { result: ReportResult; period?: string; onGo(route: Route): void }) {
+  const [error, setError] = useState('');
+  const file = (format: 'pdf' | 'csv') => {
+    setError('');
+    postDownload('/api/reports/file', { spec: specData(result.spec), period: period ?? result.spec.period, format, language: language() }, `report.${format}`)
+      .catch((e: unknown) => setError(t('assistant.report.fileFailed', { why: errorText(e) })));
+  };
+  return (
+    <div className="ruledraft aireportcard" data-testid="report-card">
+      <b>{result.spec.title}</b>
+      <span className="m">{spanOf(result)}</span>
+      <ReportView result={result} preview go={(loc) => onGo(loc.route)} />
+      <span className="ruleacts">
+        <button type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</button>
+        <button type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</button>
+      </span>
+      {error ? <span className="warnline">{error}</span> : null}
+    </div>
   );
 }
 

@@ -241,19 +241,20 @@ export function runReport(spec: ReportSpec, input: ReportInput, period: Period):
   return { spec, period, currency: first, sections, totals: totalsOf(all, first), count: all.length, ...(vatIn ? { vat: vatIn } : {}) };
 }
 
-/** The result with only the first `n` rows of each section, for a card; the totals stay those of every row. */
+/** The result with only the first `n` rows of each section, for a card; every group and total stays that of all the rows. */
 export function previewOf(r: ReportResult, n = 5): ReportResult {
   return {
     ...r,
     sections: r.sections.map((s) => {
       let left = n;
-      const groups = s.groups.flatMap((g) => {
-        if (left <= 0) return [];
-        const rows = g.rows.slice(0, left);
-        left -= rows.length;
-        return [{ ...g, rows }];
-      });
-      return { ...s, groups };
+      return {
+        ...s,
+        groups: s.groups.map((g) => {
+          const rows = g.rows.slice(0, Math.max(0, left));
+          left -= rows.length;
+          return { ...g, rows };
+        }),
+      };
     }),
   };
 }

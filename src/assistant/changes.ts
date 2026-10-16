@@ -11,6 +11,7 @@ import { RECEIPT_KINDS, type ReceiptKind } from '../types/index.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import { parseVatFacts } from '../accounting/vat-facts.js';
 import { PRESETS } from '../export/model.js';
+import { parseSpec } from '../reports/spec.js';
 import { questionChoices, TARGET_KINDS, type QuestionTarget } from '../questions/model.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
@@ -160,6 +161,11 @@ function change(v: unknown): Change {
       return { kind: 'export', preset, ...(typeof c.period === 'string' && c.period.trim() ? { period: c.period.trim() } : {}) };
     }
     case 'bookAgain': return { kind: 'bookAgain' };
+    case 'report': {
+      const p = parseSpec(c.spec);
+      if (!p.ok) throw new ChangesError(`report: ${p.refusal.code} ${JSON.stringify(p.refusal.params)}`, { code: 'report', params: { refusal: p.refusal } });
+      return { kind: 'report', spec: p.value, ...(typeof c.period === 'string' && c.period.trim() ? { period: c.period.trim() } : {}) };
+    }
     case 'question': {
       const on = obj(c.on, 'on');
       if (!TARGET_KINDS.includes(on.kind as QuestionTarget['kind'])) throw new ChangesError(`on.kind: eines von ${TARGET_KINDS.join(', ')}`);

@@ -6,6 +6,8 @@
 import type { ApiRefusal } from './api-error.js';
 import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
 import type { Choice, Question, QuestionTarget } from '../questions/model.js';
+import type { ReportSpec } from '../reports/spec.js';
+import type { ReportResult } from '../reports/run.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
@@ -82,15 +84,20 @@ export type WorkspaceChange =
   | { kind: 'question'; on: QuestionTarget; text: string; choices?: Choice[]; to?: string }
   | { kind: 'withdrawQuestion'; id: string };
 
-/** What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's booking of every open payment. */
+/**
+ * What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's
+ * booking of every open payment, a report the AI wrote as a spec (src/reports/spec.ts), which the
+ * app runs on the books for its card (`period`: another than the spec's own).
+ */
 export type ActionChange =
   | { kind: 'export'; preset: string; period?: string }
-  | { kind: 'bookAgain' };
+  | { kind: 'bookAgain' }
+  | { kind: 'report'; spec: ReportSpec; period?: string };
 
 export type Change = BookChange | WorkspaceChange | ActionChange;
 
 const BOOK_KINDS = new Set<string>(['receipt', 'link', 'unlink', 'entry', 'newEntry', 'deleteEntry', 'receiptKind'] satisfies Array<BookChange['kind']>);
-const ACTION_KINDS = new Set<string>(['export', 'bookAgain'] satisfies Array<ActionChange['kind']>);
+const ACTION_KINDS = new Set<string>(['export', 'bookAgain', 'report'] satisfies Array<ActionChange['kind']>);
 export const isBookChange = (c: Change): c is BookChange => BOOK_KINDS.has(c.kind);
 export const isActionChange = (c: Change): c is ActionChange => ACTION_KINDS.has(c.kind);
 export const isWorkspaceChange = (c: Change): c is WorkspaceChange => !isBookChange(c) && !isActionChange(c);
@@ -107,6 +114,8 @@ export interface ChangeNote {
   failed?: string;
   /** The booking now claims input tax at a rate that no receipt of its payment shows. */
   noReceipt?: boolean;
+  /** A report's run for its card: its first rows, and the totals of all of them (src/reports/run.ts previewOf). */
+  report?: ReportResult;
 }
 
 /** Why the app holds an answer's changes for the person's «Übernehmen» (src/assistant/held.ts). */

@@ -58,13 +58,16 @@ export function saveOwnPresets(list: OwnPreset[]): void {
 export const periodOf = (token: string): Period => parsePeriod(token, localToday())!;
 
 /** Sends the request and hands what comes back to the browser under the name the server gives it; returns that name. The browser (or its Save dialog) finishes the file later, unseen by the page. */
-export async function download(req: Omit<ExportRequest, 'language'>): Promise<string> {
-  const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, language: language() }) });
+export const download = (req: Omit<ExportRequest, 'language'>): Promise<string> => postDownload('/api/export', { ...req, language: language() }, 'export.zip');
+
+/** A POST whose answer is a file: saved by the browser under the server's name, which it returns. */
+export async function postDownload(path: string, body: unknown, fallback: string): Promise<string> {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) {
-    const body = await res.json().catch(() => null) as ConstructorParameters<typeof ApiError>[0] | null;
-    throw new ApiError(body?.error ? body : { error: `HTTP ${res.status}` });
+    const err = await res.json().catch(() => null) as ConstructorParameters<typeof ApiError>[0] | null;
+    throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
-  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'export.zip');
+  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? fallback);
   const url = URL.createObjectURL(await res.blob());
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
   document.body.append(a);

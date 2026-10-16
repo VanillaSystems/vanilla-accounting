@@ -9,36 +9,13 @@ import type { Key } from '../app/i18n/types.js';
 import { csvOf, date, esc, fileStem, money, pageHtml } from '../export/bundle.js';
 import type { Table, Words } from '../export/tables.js';
 import { vatParts } from '../app/areas/reports/model.js';
-import { COLUMNS, accountRangeText, type Column, type ReportSection } from './spec.js';
-import { fillComment, type ReportGroup, type ReportResult, type ReportRow, type Totals } from './run.js';
+import { COLUMNS, type Column } from './spec.js';
+import { filtersInWords, groupName, sectionName, spanOf } from './words.js';
+import { fillComment, type ReportResult, type ReportRow, type Totals } from './run.js';
 
 const MONEY: readonly Column[] = ['amount', 'net', 'tax'];
 
 const cell = (r: ReportRow, c: Column): string | number => r[c];
-
-/** The period in words: 01.07.2026 – 30.09.2026. */
-export const spanOf = (r: ReportResult): string => (r.period.kind === 'all' ? '' : `${date(r.period.from)} – ${date(r.period.to)}`);
-
-const sectionName = (s: ReportSection, i: number, w: Words) => s.title || `${i + 1}. ${w.t(`custom.source.${s.source}` as Key)}`;
-
-/** A section's filters and grouping in words: «Buchungen · Konten 6000-6999 · mit Beleg · nach Konto». */
-export function filtersInWords(s: ReportSection, w: Words): string {
-  const { t } = w;
-  const f = s.filter;
-  return [
-    t(`custom.source.${s.source}` as Key),
-    f.accounts && t('custom.f.accounts', { list: f.accounts.map(accountRangeText).join(', ') }),
-    f.vatCodes && t('custom.f.vatCodes', { list: f.vatCodes.join(', ') }),
-    f.text && t('custom.f.text', { text: f.text }),
-    f.origins && t('custom.f.origins', { list: f.origins.map((o) => t(`custom.origin.${o}` as Key)).join(', ') }),
-    f.receipt && t(f.receipt === 'with' ? 'custom.f.receiptWith' : 'custom.f.receiptWithout'),
-    f.currencies && t('custom.f.currencies', { list: f.currencies.join(', ') }),
-    s.group !== 'none' && t(`custom.group.${s.group}` as Key),
-  ].filter(Boolean).join(' · ');
-}
-
-/** A group's heading: the key and the account's name, or «ohne» for rows without one. */
-export const groupName = (g: ReportGroup, w: Words): string => (g.key ? [g.key, g.label].filter(Boolean).join(' ') : w.t('custom.none'));
 
 /** Every row of the report as one table: the section and group first when there is more than one of either. */
 export function reportTable(r: ReportResult, w: Words): Table {

@@ -35,3 +35,25 @@
 
 /* Under the result: the figures hold the VAT not yet settled, and how much (r8c-2). */
 .rvat { margin: -8px 0 18px; font-size: 12.5px; line-height: 1.45; }
+
+/* A report the owner asked for (src/app/areas/reports/custom/ReportView.tsx): on the sidebar's card and in Eigene Berichte. */
+.rpt { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rpts h3 { font: 600 14px "Hanken Grotesk"; margin: 0 0 2px; }
+.rptf { font-size: 12px; margin: 0 0 6px; }
+.rptt { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.rptt th { text-align: left; font-weight: 500; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); padding: 4px 6px; }
+.rptt td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-2); }
+.rptt .n { text-align: right; white-space: nowrap; }
+.rptt .d { color: var(--date); white-space: nowrap; }
+.rptt td a { color: inherit; text-decoration: none; }
+.rptt td a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.rptt tr.grp td { font-weight: 600; color: var(--muted); font-size: 11.5px; padding-top: 10px; border-bottom: none; }
+.rptt tr.gtot td { font-weight: 500; color: var(--ink); }
+.rptt tr.tot td { font-weight: 600; color: var(--ink); border-top: 1.5px solid var(--ink); }
+.rptt tr.more td { color: var(--muted); font-style: italic; }
+.rpto { margin: 0; font-size: 13px; }
+.rptc { margin: 0; font-size: 13px; color: var(--ink); }
+.rptv { margin: 0; font-size: 12px; line-height: 1.45; }
+.aichanges li.aireport { display: block; padding: 0; background: none; }
+.aireportcard { margin-left: 0; overflow-x: auto; }
+.aireportcard .rptt { font-size: 11.5px; }

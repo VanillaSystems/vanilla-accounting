@@ -27,6 +27,8 @@ import { buildBundle, downloadOf, zipBundle } from '../../export/bundle.js';
 import { NoBrowserError, printPdf } from '../../invoices/pdf.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
 import { filing } from '../../engines/index.js';
+import { factsRefusal, refused, runSpec } from './reports.js';
+import { previewOf } from '../../reports/run.js';
 
 export const router = Router();
 
@@ -120,6 +122,7 @@ async function exported(c: Extract<ActionChange, { kind: 'export' }>, language: 
 async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 'note'>> {
   try {
     if (c.kind === 'export') return await exported(c, language);
+    if (c.kind === 'report') return { note: { report: previewOf(runSpec(c.spec, c.period)) } };
     await bookAgain('assistant');
     return {};
   } catch (e) {
@@ -136,6 +139,11 @@ async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 
  * nothing and comes back as the rows of its card.
  */
 const apply: ApplyChanges = async (changes, earlier, language, { conversation, hold }) => {
+  // A report whose filter names an account the chart lacks, or a code the form does not take, refuses the answer before anything is made.
+  for (const c of changes) {
+    const r = c.kind === 'report' ? factsRefusal(c.spec) : undefined;
+    if (r) { const e = refused(r); throw new RefusedChanges(e.message, e.refusal); }
+  }
   const outside: Array<Omit<MadeChange, 'id'>> = [];
   let after = () => {};
   let books: Array<Omit<MadeChange, 'id'>> = [];

@@ -18,7 +18,8 @@ import { wordsIn } from '../src/export/texts.js';
 import { money } from '../src/export/bundle.js';
 import { parseSpec } from '../src/reports/spec.js';
 import { runReport } from '../src/reports/run.js';
-import { filtersInWords, reportCsv, reportFileName, reportHtml, reportTable } from '../src/reports/files.js';
+import { reportCsv, reportFileName, reportHtml, reportTable } from '../src/reports/files.js';
+import { filtersInWords } from '../src/reports/words.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 

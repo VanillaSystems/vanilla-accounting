@@ -28,11 +28,15 @@ export const chartNames = (): Record<string, string> =>
 export const refused = (r: ReportRefusal): RequestError =>
   new RequestError(400, wordsIn('de').t('error.report', { why: refusalText(r, wordsIn('de').t) }), { code: 'report', params: { refusal: r } });
 
+/** Why this firm's chart or VAT codes refuse a spec, if they do. */
+export const factsRefusal = (spec: ReportSpec): ReportRefusal | undefined =>
+  checkSpec(spec, { accounts: chartNames(), takesCode: (c) => !!vat().codes.parse(c) });
+
 /** The spec as sent, checked in its shape and against this firm's chart and VAT codes; throws the refusal. */
 export function specOf(raw: unknown): ReportSpec {
   const p = parseSpec(raw);
   if (!p.ok) throw refused(p.refusal);
-  const r = checkSpec(p.value, { accounts: chartNames(), takesCode: (c) => !!vat().codes.parse(c) });
+  const r = factsRefusal(p.value);
   if (r) throw refused(r);
   return p.value;
 }

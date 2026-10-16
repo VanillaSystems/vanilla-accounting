@@ -13,6 +13,8 @@ import { ChangesError, changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
 import { wordsIn } from '../export/texts.js';
+import { strayFigures } from '../reports/figures.js';
+import { accountsOf as chartOf } from '../workspace/reads.js';
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const dir = (ws: Pick<Workspace, 'paths'>) => join(ws.paths.data, 'assistant');
@@ -102,10 +104,17 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
         } else {
           ai.changes = applied.made;
           onEvent({ type: 'changes', changes: ai.changes });
-          // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer, and says so where the model still named «Übernehmen» (r10f-11).
           const { t } = wordsIn(send.language);
+          // A report's figures are the code's (src/reports/figures.ts): words that state another are withdrawn.
+          const reports = applied.made.flatMap((m) => (m.change.kind === 'report' && m.note?.report ? [m.note.report] : []));
+          if (reports.length && strayFigures(ai.text, reports, (chartOf(ws) as Array<{ number: unknown }>).map((a) => String(a.number))).length) {
+            ai.withdrawn = ai.text;
+            ai.text = t('assistant.reportFigures');
+          }
+          // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer, and says so where the model still named «Übernehmen» (r10f-11).
           const take = ai.text.includes(t('assistant.held.take'));
-          ai.text = `${ai.text.trimEnd()}\n\n${t('assistant.applied', { n: applied.made.length })}${take ? ` ${t('assistant.appliedNoTake', { take: t('assistant.held.take') })}` : ''}`;
+          const line = reports.length === applied.made.length ? t('assistant.reportMade', { n: reports.length }) : t('assistant.applied', { n: applied.made.length });
+          ai.text = `${ai.text.trimEnd()}\n\n${line}${take ? ` ${t('assistant.appliedNoTake', { take: t('assistant.held.take') })}` : ''}`;
           onEvent({ type: 'replace', text: ai.text });
         }
       }
