@@ -293,9 +293,10 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
  */
 export function restoreSaved(books: Books, id: string, saved: JournalEntry | undefined): void {
   if (!saved) { deleteEntry(books, id); return; }
-  const e = entryOf(books, id);
-  assertOpen(books, [e.date, saved.date], 'editEntry');
-  books.journalEntries = books.journalEntries.map((x) => (x.id === id ? saved : x));
+  const e = books.journalEntries.find((x) => x.id === id);
+  assertOpen(books, [...(e ? [e.date] : []), saved.date], 'editEntry');
+  // A booking deleted by hand comes back as saved, with its id (r6h-28).
+  books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries, saved];
 }
 
 export function deleteEntry(books: Books, id: string): JournalEntry {

@@ -89,9 +89,12 @@ export async function booksChange(ws: Ws): Promise<BooksChange> {
 const entriesIn = (text: string, file: string) => new Map((fromJsonl(text, file) as JournalEntry[]).map((e) => [e.id, e]));
 
 /**
- * The bookings a person changed or booked by hand, or the AI sidebar on her wish, since the last
- * save: those whose `by` names a person or the AI sidebar and that differ from the last save, each
- * with the booking as that save holds it.
+ * The bookings a person changed, booked or deleted by hand, or the AI sidebar on her wish, since
+ * the last save: those whose `by` names a person or the AI sidebar and that differ from the last
+ * save, each with the booking as that save holds it; and the saved bookings that are gone while
+ * their payment got no booking since (r6h-28). One replaced by a re-booking is listed through the
+ * bookings that replaced it: putting it back beside them would book the payment twice. A deletion
+ * leaves no record of its moment: it is dated by the file's last write.
  */
 export async function handEdits(ws: Ws): Promise<HandEdit[]> {
   const repo = await repositoryAt(ws.paths.repository);
@@ -106,6 +109,12 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
       const was = saved.get(e.id);
       if (was && JSON.stringify(was) === JSON.stringify(e)) continue;
       out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(e.by.kind === 'assistant' ? { ai: true } : {}), ...(was ? { saved: was } : {}) });
+    }
+    const bookedSince = new Set([...now.values()].filter((e) => !saved.has(e.id)).map((e) => e.transactionRef));
+    const wrote = existsSync(path) ? statSync(path).mtime.toISOString() : '';
+    for (const was of saved.values()) {
+      if (now.has(was.id) || bookedSince.has(was.transactionRef)) continue;
+      out.push({ id: was.id, ref: was.transactionRef, date: was.date, text: was.description ?? was.transactionRef, at: wrote, deleted: true, saved: was });
     }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));

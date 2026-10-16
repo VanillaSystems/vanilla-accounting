@@ -5,6 +5,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { JournalEntryInput } from '../../lib/api.js';
+import type { JournalEntry } from '../../../types/index.js';
 import { store, stored } from '../../shell/storage.js';
 import type { JournalFilter, JournalOrigin } from './model.js';
 import type { CorrectionKind } from '../../../accounting/correction.js';
@@ -21,6 +22,8 @@ interface State {
   overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
   /** A field of the entry form to focus once it shows. */
   focus?: string;
+  /** The entry just deleted: the detail keeps its place with «Rückgängig», so no row moves under the pointer (r6h-28). */
+  deleted?: JournalEntry;
 }
 
 function read<T>(key: string, fallback: T): T {

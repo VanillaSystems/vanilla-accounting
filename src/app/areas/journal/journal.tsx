@@ -48,7 +48,7 @@ function List(props: Props) {
     const v = route.id ? j.byId.get(route.id) : undefined;
     // An entry that went away (deleted, undone, booked again) hands the selection to the first row.
     // A link to an entry that never was here keeps its place, and the detail says so (urls.md rule 5).
-    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && (!route.id || seen.current === route.id)) nav.select({ area: 'journal', id: ids[0] }); return; }
+    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && route.id !== ui().deleted?.id && (!route.id || seen.current === route.id)) nav.select({ area: 'journal', id: ids[0] }); return; }
     if (route.id === listed.pending) listed.pending = undefined;
     if (seen.current === route.id) return;
     seen.current = route.id;
@@ -59,7 +59,8 @@ function List(props: Props) {
   }, [route.id, ids[0], j]);
 
   const select = (id: string) => nav.select({ area: 'journal', id });
-  useSelectionFollowsRows(route.id, ids, select, route.id === listed.pending);
+  // A pending entry (just booked) and a deleted one (its place kept with «Rückgängig», r6h-28) hold the selection.
+  useSelectionFollowsRows(route.id, ids, select, route.id === listed.pending || route.id === ui().deleted?.id);
   const setFilter = (filter?: JournalFilter) => setUi({ filter });
 
   return (

@@ -105,10 +105,8 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
   if (!p.canEdit) return false;
   if (v.locked || e.origin === 'year-close') { p.nav.toast(v.locked ? t('journal.lockedToast') : t('error.yearClose')); return true; }
   if (a === 'edit') setUi({ open: { ...ui().open, buchung: true }, focus: 'accountDebit' });
-  if (a === 'del') {
-    const i = listed.ids.indexOf(e.id);
-    const next = listed.ids[i + 1] ?? listed.ids[i - 1];
-    deleteEntry(p.nav, e).then((ok) => { if (ok && next) p.nav.select({ area: 'journal', id: next }); });
-  }
+  // Deleted: the detail keeps the entry's place with «Rückgängig» instead of showing the next entry under the same
+  // button (r6h-28). Marked before the call: the books reload as it answers, and the list must not hand the selection on.
+  if (a === 'del') { setUi({ deleted: e }); deleteEntry(p.nav, e).then((ok) => { if (!ok) setUi({ deleted: undefined }); }); }
   return true;
 }
