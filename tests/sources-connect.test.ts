@@ -6,7 +6,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mailFailure, MailLoginError } from '../src/platform/sources/mail-channel.js';
@@ -73,8 +73,29 @@ test('a mailbox connected in Firma › Quellen: a source waiting to be switched 
   assert.equal((await api.send('PUT', `/api/sources/${id}/secret`, { password: null })).status, 200);
   assert.deepEqual((await api.send('POST', `/api/sources/${id}/check`)).json, { ok: false, reason: 'no-secret' });
 
-  const second = await api.send('POST', '/api/sources/mail', { address: 'sandra@malerei.example', host: 'imap.malerei.example' });
-  assert.equal(second.json.id, 'sandra-malerei-example-2', 'the same address twice: a second source, not an overwrite');
+  // The same address again is the same mailbox: its settings and password are brought up to date, never a second source (r6h-25).
+  const second = await api.send('POST', '/api/sources/mail', { address: 'Sandra@malerei.example', host: 'imap.neu.example', password: PASSWORD });
+  assert.deepEqual([second.status, second.json.id, second.json.updated], [200, id, true]);
+  const rows = ((await api.send('GET', '/api/sources')).json as unknown as SourcesView).rows;
+  assert.deepEqual(rows.map((r) => (r.verdict.kind === 'invalid' ? r.verdict.id : r.verdict.decl.id)), [id], 'one source per address');
+  assert.match(readFileSync(join(api.root, 'sources', id, 'source.yaml'), 'utf8'), /host: imap\.neu\.example/);
+  assert.deepEqual(rows[0].secrets, [{ channel: 'mail', present: true }]);
+});
+
+test('connecting a mailbox is all or nothing: when the password store fails, no source is written, and the refusal has a code for plain words (r6h-25)', async () => {
+  const broken = await startApi('tests/fixtures/fresh-books-index.json', { VANILLA_SECRETS_FILE: join(dir, 'no-such-dir', 'secrets.json'), VANILLA_FAKE_MAILBOX: MAILBOX });
+  try {
+    const r = await broken.send('POST', '/api/sources/mail', { address: 'sandra@malerei.example', host: 'imap.malerei.example', password: 'x' });
+    assert.deepEqual([r.status, r.json.code], [503, 'secretStore'], JSON.stringify(r.json));
+    assert.equal(existsSync(join(broken.root, 'sources')), false, 'nothing written');
+    assert.deepEqual(((await broken.send('GET', '/api/sources')).json as unknown as SourcesView).rows, []);
+    const without = await broken.send('POST', '/api/sources/mail', { address: 'sandra@malerei.example', host: 'imap.malerei.example' });
+    assert.equal(without.status, 200, 'without a password the source is written: the password comes later, on its row');
+    const later = await broken.send('PUT', `/api/sources/${without.json.id}/secret`, { password: 'x' });
+    assert.deepEqual([later.status, later.json.code], [503, 'secretStore']);
+  } finally {
+    await broken.stop();
+  }
 });
 
 test('what a failed connection means, in the check\'s words: a name that does not resolve is unreachable, a certificate this Mac does not trust is the server reached (r6h-26)', () => {
