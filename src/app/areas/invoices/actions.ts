@@ -160,6 +160,16 @@ export async function confirmPayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'
   return true;
 }
 
+/** «Lösen» (r10c-3): the payment leaves the invoice, the link's bookings go; the toast's undo links it again. */
+export async function releasePayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, ref: string): Promise<boolean> {
+  const out = await run(nav, api.releasePayment(inv.id, ref));
+  if (!out) return false;
+  await reloadInvoices();
+  nav.refresh();
+  nav.toast(t(out.restored.length ? 'invoices.paymentReleasedRestored' : 'invoices.paymentReleased', { number: inv.number }), () => { void confirmPayment(nav, inv, ref); });
+  return true;
+}
+
 export async function saveCustomer(nav: Nav, id: string | undefined, fields: CustomerFields): Promise<Customer | undefined> {
   const c = await run(nav, id ? api.patchCustomer(id, fields) : api.createCustomer(fields));
   if (!c) return undefined;

@@ -142,7 +142,7 @@ test('r10c-3: «Lösen» undoes the link: the invoice is open again, the entries
 
   const released = releasePayment(b, book, inv.id, 'B1', ctx, linked.replaced);
   assert.deepEqual([released.allocation.transactionRef, released.allocation.by, released.removed.length, released.restored.map((e) => e.id)], ['B1', 'confirmed', 2, ['cl']]);
-  assert.equal(status(book.invoices[0], book.invoices), 'open', 'the invoice is open again');
+  assert.equal(status(book.invoices[0], book.invoices), 'issued', 'the invoice is open again');
   assert.deepEqual(b.journalEntries, [guess], 'the revenue booking is what stood before the link');
   assert.deepEqual(b.mappings, [], 'the link to the invoice PDF is gone');
   assert.deepEqual(paymentProposals(b, book).map((p) => p.transactionRef), ['B1'], 'the payment is offered again');

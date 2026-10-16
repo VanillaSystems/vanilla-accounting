@@ -129,6 +129,13 @@ export async function recordChanges(ws: Ws): Promise<RecordChange[]> {
     if (i.status === 'issued' && i.cancelled && !(was?.status === 'issued' && was.cancelled)) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'cancelled', text: title(i), at, blocked: 'cancelled' });
     else if (i.status === 'issued' && (!was || was.status !== 'issued')) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'issued', text: title(i), at, blocked: 'issued' });
     else if (i.status === 'draft' && !was) out.push({ kind: 'invoice', id: i.id, date: i.date, state: 'draft', text: title(i), at, undo: { kind: 'deleteDraft', id: i.id } });
+    // A payment linked to (or released from) the invoice since the save (r10c-3): the undo is the other one.
+    if (i.status === 'issued' && was?.status === 'issued') {
+      const held = new Set(was.payments.map((p) => p.transactionRef));
+      const now = new Set(i.payments.map((p) => p.transactionRef));
+      for (const p of i.payments) if (!held.has(p.transactionRef)) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'paymentLinked', payment: p.transactionRef, text: title(i), at, undo: { kind: 'releasePayment', id: i.id, transactionRef: p.transactionRef } });
+      for (const p of was.payments) if (!now.has(p.transactionRef)) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'paymentReleased', payment: p.transactionRef, text: title(i), at, undo: { kind: 'relinkPayment', id: i.id, transactionRef: p.transactionRef } });
+    }
   }
   const savedCustomers = new Map(saved.customers.map((c) => [c.id, c]));
   for (const c of now.customers) {

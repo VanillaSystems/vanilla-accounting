@@ -49,7 +49,10 @@ export type RecordUndo =
   | { kind: 'customerBack'; id: string; fields: Partial<CustomerFields> }
   | { kind: 'accountRemove'; number: string }
   | { kind: 'accountRename'; number: string; name: string }
-  | { kind: 'templateBack'; year: string; template: string; state: 'done' | 'na' | null };
+  | { kind: 'templateBack'; year: string; template: string; state: 'done' | 'na' | null }
+  /** A payment linked to an invoice since the save leaves it again, or one released since is linked again (r10c-3). */
+  | { kind: 'releasePayment'; id: string; transactionRef: string }
+  | { kind: 'relinkPayment'; id: string; transactionRef: string };
 
 /** Why a record change has no «Rückgängig»: an issued or cancelled document keeps its number, a customer is never deleted, a statement's payments belong to the books. */
 export type RecordBlock = 'issued' | 'cancelled' | 'customerNew' | 'statement';
@@ -60,7 +63,7 @@ export type RecordBlock = 'issued' | 'cancelled' | 'customerNew' | 'statement';
  * year close marked or booked, an account of the chart added or renamed. `at` is the file's last write.
  */
 export type RecordChange = { at: string; text: string } & (
-  | { kind: 'invoice'; id: string; number?: string; date: string; state: 'draft' | 'issued' | 'cancelled' }
+  | { kind: 'invoice'; id: string; number?: string; date: string; state: 'draft' | 'issued' | 'cancelled' | 'paymentLinked' | 'paymentReleased'; payment?: string }
   | { kind: 'customer'; id: string; state: 'added' | 'changed' }
   | { kind: 'statement'; bank: string; file: string; from: string; to: string }
   | { kind: 'account'; number: string; state: 'added' | 'renamed' }

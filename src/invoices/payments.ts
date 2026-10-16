@@ -20,7 +20,7 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { InvoiceBook, Issued, PaymentAllocation } from './model.js';
 import { parseReference } from '../providers/qr-bill/reference.js';
-import { allocate, liveInvoices, namesNumber, openAmount, openFees, refundDue, revenueSplit, totals, withPayment } from './rules.js';
+import { allocate, liveInvoices, namesNumber, openAmount, openFees, refundDue, revenueSplit, totals, withPayment, withoutPayment } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
 import { baseCurrency, vat } from '../engines/index.js';
@@ -52,6 +52,8 @@ export interface PaymentOutcome {
   questions: PaymentQuestion[];
   /** receipts/<filename> to write with these bytes (the invoice PDF), when not there yet. */
   files: Array<{ filename: string; pdf: Buffer }>;
+  /** The classifier's entries a confirmed link replaced: kept beside the books so that «Lösen» puts them back (r10c-3). */
+  replaced?: JournalEntry[];
 }
 
 interface Hit { inv: Issued; amount: number; by: 'reference' | 'number' }
@@ -310,11 +312,35 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   replace(book, withPayment(inv, a));
   if (keep) attachInvoice(books, tx, inv, ctx, out);
   else {
+    out.replaced = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
     books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
     bookPayment(books, tx, inv, a, ctx, out);
   }
   out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: !keep });
   return out;
+}
+
+/** What «Lösen» did: the allocation that left the document, the entries the link had booked, and what is booked in their place. */
+export interface PaymentReleased { allocation: PaymentAllocation; removed: JournalEntry[]; restored: JournalEntry[] }
+
+/**
+ * «Lösen» (r10c-3): the payment leaves the document, so it is open (or owes its refund) again; the
+ * entries the link booked from the document (origin invoice) and the link to the document's PDF
+ * go; `restore` (what the link replaced, src/server/link-history.ts) is booked again. A booking a
+ * person made stays, as the link had kept it.
+ */
+export function releasePayment(books: Books, book: InvoiceBook, invoiceId: string, transactionRef: string, ctx: Pick<PaymentContext, 'pdfOf' | 'receiptId'>, restore: readonly JournalEntry[] = []): PaymentReleased {
+  const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued');
+  const allocation = inv?.payments.find((p) => p.transactionRef === transactionRef);
+  if (!inv || !allocation) throw new PaymentError('Die Zahlung ist dieser Rechnung nicht zugeordnet.');
+  replace(book, withoutPayment(inv, transactionRef));
+  const removed = books.journalEntries.filter((e) => e.transactionRef === transactionRef && e.origin === 'invoice');
+  books.journalEntries = books.journalEntries.filter((e) => !removed.includes(e));
+  const receipt = ctx.receiptId(ctx.pdfOf(inv));
+  books.mappings = books.mappings.filter((m) => !(m.transactionRef === transactionRef && m.receiptId === receipt));
+  const restored = books.journalEntries.some((e) => e.transactionRef === transactionRef) ? [] : restore.filter((e) => !books.journalEntries.some((x) => x.id === e.id));
+  books.journalEntries.push(...restored);
+  return { allocation, removed, restored };
 }
 
 export class PaymentError extends Error {}

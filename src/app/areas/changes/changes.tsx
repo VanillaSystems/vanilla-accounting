@@ -200,6 +200,8 @@ async function undoRecordChange(c: Extract<RecordChange, { undo: unknown }>, nav
       case 'accountRemove': await api.removeAccount(u.number); break;
       case 'accountRename': await api.setAccountName(u.number, u.name); break;
       case 'templateBack': await api.markYearEndEntry(u.year, u.template, u.state); break;
+      case 'releasePayment': await api.releasePayment(u.id, u.transactionRef); break;
+      case 'relinkPayment': await api.confirmPayment(u.id, u.transactionRef); break;
     }
     nav.refresh();
     await pollChanges();
@@ -223,7 +225,7 @@ function recordRoute(c: RecordChange): Parameters<Nav['go']>[0] {
 function recordText(c: RecordChange): string {
   const when = sayWhen(c.at);
   switch (c.kind) {
-    case 'invoice': return t(`changes.record.invoice.${c.state}`, { when });
+    case 'invoice': return t(`changes.record.invoice.${c.state}`, { when, payment: c.payment ?? '' });
     case 'customer': return t(`changes.record.customer.${c.state}`, { when });
     case 'statement': return t('changes.record.statement', { when, from: formatDate(c.from), to: formatDate(c.to) });
     case 'yearClose': return t(`changes.record.yearClose.${c.state}`, { when, step: tx(`yearClose.template.${c.template}`) });

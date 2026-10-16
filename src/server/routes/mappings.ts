@@ -8,6 +8,10 @@ import { recordReplaced, takeReplaced } from '../link-history.js';
 import { periodLock, type Books } from '../../books/store.js';
 import { modelReady } from '../../llm/ask.js';
 import { archiveReceipt } from '../../books/archive.js';
+import { loadInvoices, saveInvoices } from '../../invoices/store.js';
+import { liveInvoices } from '../../invoices/rules.js';
+import { paymentContext } from '../../invoices/service.js';
+import { releasePayment } from '../../invoices/payments.js';
 
 export const router = Router();
 
@@ -60,6 +64,8 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
       if (gone.length) recordReplaced(WS, payment, receipt, gone);
       return out;
     }
+    // The invoice's PDF as the payment's receipt (invoice-reference): «Lösen» undoes the whole link, the allocation on the invoice included (r10c-3).
+    if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt && m.rule === 'invoice-reference')) releaseFromInvoice(books, payment, receipt);
     unlink(books, receipt, payment);
     const out = relinked(books, [change]);
     return restoreReplaced(books, payment, receipt) ? { ...out, payments: out.payments.filter((p) => p !== payment) } : out;
@@ -67,6 +73,17 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
   await closeAsksWithoutRule(engine(), WS);
   if (payments.length) await bookAgain(file ?? payment);
   return { ok: true, again: payments, ...(keep ? { kept: [payment] } : {}) };
+}
+
+/** The invoice whose PDF is `receipt` and that holds `payment`: the payment leaves it, with the link's bookings (src/invoices/payments.ts releasePayment). */
+function releaseFromInvoice(books: Books, payment: string, receipt: string): void {
+  const ctx = paymentContext(WS);
+  if (!ctx) return;
+  const invoices = loadInvoices(WS);
+  const inv = liveInvoices(invoices).find((i) => i.status === 'issued' && i.payments.some((p) => p.transactionRef === payment) && ctx.receiptId(ctx.pdfOf(i)) === receipt);
+  if (!inv) return;
+  releasePayment(books, invoices, inv.id, payment, ctx);
+  saveInvoices(WS, invoices);
 }
 
 router.post('/api/mapping/add', async (req, res) => {

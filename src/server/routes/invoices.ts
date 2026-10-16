@@ -6,14 +6,16 @@
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WS, assertOpen, readBooks, withBooks, RequestError } from '../books.js';
+import { WS, assertOpen, readBooks, updateBooks, withBooks, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
   addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
-import { confirmPayment, paymentProposals } from '../../invoices/payments.js';
+import { confirmPayment, paymentProposals, releasePayment, type PaymentReleased } from '../../invoices/payments.js';
+import { recordReplaced, takeReplaced } from '../link-history.js';
+import { bookAgain } from './automation.js';
 import { checkMessage, sendMail } from '../../invoices/mail.js';
 import type { Deliver } from '../../invoices/service.js';
 
@@ -189,6 +191,33 @@ router.post('/api/invoices/:id/payments', (req, res) => {
     const result = confirmPayment(books, invoices, req.params.id, transactionRef, ctx);
     fileReceipts(WS, books, result.files);
     saveInvoices(WS, invoices);
+    // What the link replaced waits beside the books for «Lösen» (r10c-3).
+    const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
+    if (result.replaced?.length && inv?.status === 'issued') recordReplaced(WS, transactionRef, ctx.receiptId(ctx.pdfOf(inv)), result.replaced);
     return { paid: result.paid };
   });
+});
+
+/**
+ * «Lösen» on the invoice (r10c-3): the payment leaves it, the link's bookings go, and what the link
+ * replaced is booked again (src/server/link-history.ts); a payment left without a booking is handed
+ * to the booking run. The undo is the link again (POST …/payments).
+ */
+router.delete('/api/invoices/:id/payments/:ref', async (req, res) => {
+  const ctx = paymentContext(WS);
+  if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
+  const ref = req.params.ref;
+  let unbooked = false;
+  const out = updateBooks((books): PaymentReleased => {
+    assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'mapping');
+    const invoices = loadInvoices(WS);
+    const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
+    const restore = inv?.status === 'issued' ? takeReplaced(WS, ref, ctx.receiptId(ctx.pdfOf(inv))) : undefined;
+    const result = releasePayment(books, invoices, req.params.id, ref, ctx, restore);
+    saveInvoices(WS, invoices);
+    unbooked = !books.journalEntries.some((e) => e.transactionRef === ref);
+    return result;
+  });
+  if (unbooked) await bookAgain(ref);
+  res.json(out);
 });

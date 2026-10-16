@@ -416,6 +416,9 @@ export function withPayment(inv: Issued, p: PaymentAllocation): Issued {
   return { ...inv, payments: [...inv.payments, p] };
 }
 
+/** The document without the payment `transactionRef` («Lösen», r10c-3). */
+export const withoutPayment = (inv: Issued, transactionRef: string): Issued => ({ ...inv, payments: inv.payments.filter((p) => p.transactionRef !== transactionRef) });
+
 /** The book without deleted records. */
 export const liveInvoices = (book: InvoiceBook): Invoice[] => live(book.invoices);
 export const liveCustomers = (book: InvoiceBook): Customer[] => live(book.customers);

@@ -10,6 +10,7 @@ import { defaultTexts, senderFor } from '../../../invoices/documents.js';
 import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
+import { at } from '../receipts/view.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -23,7 +24,7 @@ import { useInvoices } from './data.js';
 import { byRouteId, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
 import { fixFor, parseNumber, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
-import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder } from './actions.js';
+import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, releasePayment, saveDraft, send, sendReminder } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
 import { Sheet } from './Sheet.js';
 import { countryName } from './address.js';
@@ -212,6 +213,13 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
   return (
     <div className="status">
       {line}
+      {canEdit && !inv.cancelled && inv.payments.map((p) => (
+        <div key={p.transactionRef} className="notice ivpay" data-testid="linked-payment">
+          <span>{t(inv.kind === 'credit-note' ? 'invoices.linkedRefund' : 'invoices.linkedPayment', { date: formatDate(p.date), amount: `${inv.currency} ${fmt(p.amount)}` })}</span>
+          <button type="button" className="golink" onClick={() => nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date))}>{p.transactionRef}</button>
+          <button type="button" className="btn ghost" title={t('invoices.releasePaymentTip')} onClick={() => void releasePayment(nav, inv, p.transactionRef)}>{t('invoices.releasePayment')}</button>
+        </div>
+      ))}
       {proposals.map((p) => (
         <div key={p.transactionRef} className="notice ivpay">
           <span>{t(p.direction === 'DBIT' ? 'invoices.refundProposal' : 'invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}{p.booked && <> {t('invoices.proposalBooked')}</>}</span>

@@ -1,6 +1,7 @@
 import type { StatementProblem } from '../../types/api-error.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
+import type { PaymentReleased } from '../../invoices/payments.js';
 export type { StatementRemoved };
 import type { BookingLine } from '../../accounting/manual-booking.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
@@ -384,6 +385,8 @@ export const api = {
   addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
   /** Links a payment to an invoice; `booked` false when a person's booking of the payment stays as the revenue (r9c-3). */
   confirmPayment: (id: string, transactionRef: string) => request<{ paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; booked: boolean }> }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
+  /** «Lösen» (r10c-3): the payment leaves the invoice, the link's bookings go, what the link replaced is back. */
+  releasePayment: (id: string, transactionRef: string) => request<PaymentReleased>('DELETE', `/api/invoices/${id}/payments/${encodeURIComponent(transactionRef)}`),
   /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */
   documentUrl: (file: string) => `/${file.split('/').map(encodeURIComponent).join('/')}`,
   filingXmlUrl: (period: string) => `/api/filing/${encodeURIComponent(period)}`,
