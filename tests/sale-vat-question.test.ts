@@ -15,7 +15,8 @@ import { loadBooks, moduleActor, saveBooks } from '../src/books/store.js';
 import { classifyStep } from '../src/intake/classify.js';
 import { runIntake, storePort } from '../src/intake/pipeline.js';
 import { readQuestions } from '../src/questions/store.js';
-import { saleProposal, saleVatCode, salesWithoutVat } from '../src/accounting/sales-without-vat.js';
+import { saleProposal, saleVatCode, salesWithoutInvoice, salesWithoutVat } from '../src/accounting/sales-without-vat.js';
+import { ownerAccountNumber } from '../src/accounting/bank-accounts.js';
 import { yearPaths } from '../src/workspace/workspace.js';
 import type { Question } from '../src/questions/model.js';
 import type { BankTransaction } from '../src/types/index.js';
@@ -101,14 +102,23 @@ test('«ohne MWST (Ausland)» keeps the export code, booked by hand, and keeps a
   await answer('S-EU', 'saleAbroad');
 });
 
-test('«kein Umsatz» marks the payment, the booking stays; a generic payer text becomes no rule', async () => {
+test('«kein Umsatz» takes the payment out of the turnover: its revenue entry goes to the owner\'s account without a code, the payment is marked; a generic payer text becomes no rule (r7f-28)', async () => {
   const q = await answer('S-GEN', 'notSale');
   const tx = books().transactions.find((t) => t.ref === 'S-GEN')!;
   assert.equal(tx.noReceiptNeeded, true);
-  assert.deepEqual([entriesOf('S-GEN')[0].vatCode, entriesOf('S-GEN')[0].origin], ['V0', 'classify']);
+  const owner = ownerAccountNumber(api.ws);
+  const [e] = entriesOf('S-GEN');
+  assert.deepEqual([e.accountDebit, e.accountCredit, e.vatCode, e.origin], ['1021', owner, undefined, 'manual'], 'no longer revenue, no VAT code, decided by a person');
   const acted = q.answer?.acted;
   assert.ok(acted && 'marked' in acted && acted.marked && !acted.rule, '«Gutschrift» names no payer');
+  assert.deepEqual([acted.booked, acted.undo.length, acted.account], [['e-gen'], 1, owner], 'the card says what changed');
   assert.ok(!pending().includes('S-GEN'));
+  assert.equal(salesWithoutInvoice(books(), true).some((s) => s.payment.ref === 'S-GEN'), false);
+  const undone = await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER });
+  assert.equal((undone.json as unknown as Question).status, 'open');
+  const [back] = entriesOf('S-GEN');
+  assert.deepEqual([back.accountCredit, back.vatCode, back.origin, books().transactions.find((t) => t.ref === 'S-GEN')!.noReceiptNeeded], ['3400', 'V0', 'classify', undefined], 'undo puts the sale back as the classifier booked it');
+  await answer('S-GEN', 'notSale');
 });
 
 test('the payer\'s next payment is booked by the rule in code, without a question; a generic payer is asked again', async () => {

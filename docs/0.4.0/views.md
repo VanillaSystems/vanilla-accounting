@@ -313,7 +313,8 @@ the other's when they next open the books.
   code. The rate and the codes come from the jurisdiction (`saleAt`, `deductedIn` of the
   export box). The answer, through the edits and the period lock: the sale's revenue entries get
   the normal-rate or the export code and become the person's (origin `manual`); «kein Umsatz»
-  marks the payment as needing no receipt and keeps its booking. The answer is kept as a rule of
+  moves them to the owner's account without a code (the money leaves the turnover; the owner sets
+  a loan's or a repayment's account in the booking) and marks the payment as needing no receipt. The answer is kept as a rule of
   the step `classify` in `knowledge/rules/booking.guide.yaml`, `when: { payer, direction: in }`
   (the payer's IBAN, else its bank counterparty text) and `then: { account, vat }`, so the
   classifier books that payer's next payment by the rule, without a question (Firma › Regeln

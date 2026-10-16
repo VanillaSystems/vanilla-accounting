@@ -5,14 +5,14 @@
  * hand do, and «privat» or «geschäftlich» is kept as a precedent, so the next question of the
  * kind about the same counterparty is answered without anyone asked. The answer to the app's own
  * question about a customer payment without an invoice (src/intake/sale-questions.ts) books the sale
- * at the normal rate, as an export, or marks it as no sale, and is kept as a rule for the payer, so
- * the classifier books the payer's next payment by it. Any other answer, or one the app cannot act
+ * at the normal rate, as an export, or moves it off the turnover onto the owner's account, and is
+ * kept as a rule for the payer, so the classifier books the payer's next payment by it. Any other answer, or one the app cannot act
  * on (a filed quarter, a payment it cannot read, one with a receipt or an invoice), goes back to
  * the asker, who decides.
  */
 import { randomBytes } from 'node:crypto';
 import { loadFxResolver } from '../accounting/fx-rates.js';
-import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
+import { bankAccountFor, ownerAccount, ownerAccountNumber } from '../accounting/bank-accounts.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, periodLock, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
@@ -140,9 +140,12 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
 
 /**
  * The sale `tx` as the owner said: its revenue entries at the normal rate or the export code
- * (booked by hand from now on, origin manual), or the payment marked as needing no receipt, its
- * booking kept. The entries are the classifier's; a payment whose revenue a person booked by hand
- * (her correction, asked back, r4c-35) takes hers. A payment with a receipt or an invoice is the
+ * (booked by hand from now on, origin manual); or, «kein Umsatz», the revenue entries moved to the
+ * owner's account without a VAT code, so the money leaves the turnover and the return at once
+ * (r7f-28), and the payment marked as needing no receipt. Money that is no sale and has no document
+ * is the owner's until she names another account (a loan, a repayment) in the booking; the card
+ * says so. The entries are the classifier's; a payment whose revenue a person booked by hand (her
+ * correction, asked back, r4c-35) takes hers. A payment with a receipt or an invoice is the
  * document's to decide, never changed; one with no revenue entry to set is refused, not answered
  * with nothing booked (r4c-28).
  */
@@ -158,8 +161,10 @@ function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { book
   const account = entries[0]?.accountCredit;
   if (!entries.length && choice !== 'notSale') throw new Unclear('noSaleEntry', tx.description);
   if (choice === 'notSale') {
+    const owner = ownerAccountNumber(WS);
+    const undo = entries.map((e) => setEntry(books, e.id, { accountCredit: owner, vatCode: '' }));
     tx.noReceiptNeeded = true;
-    return { booked: [], undo: [], vatCode: '', marked: true, ...(account ? { account } : {}) };
+    return { booked: entries.map((e) => e.id), undo, vatCode: '', marked: true, ...(entries.length ? { account: owner } : {}) };
   }
   const code = saleVatCode(choice) ?? '';
   const undo = entries.map((e) => setEntry(books, e.id, { vatCode: code }));
@@ -193,7 +198,7 @@ function act(q: Question, answer: Answer, by: string, at: string, from: string |
       sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice));
     } catch (e) { return refusalOf(e); }
     const rule = keepSaleRule(q, choice, tx, sale.account, sale.vatCode, at);
-    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const } : {}), ...(rule ? { rule } : {}) };
+    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}), ...(rule ? { rule } : {}) };
   }
   let booked: { booked: string[]; undo: BookChange[] } | undefined;
   if (choice === 'private') {

@@ -7,12 +7,14 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { parse } from 'yaml';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { APP_FOLDER, APP_ROOT, yearPaths } from '../src/workspace/workspace.js';
-import { loadBooks } from '../src/books/store.js';
+import { loadBooks, saveBooks } from '../src/books/store.js';
+import type { Question } from '../src/questions/model.js';
 
 const FIXTURE = 'tests/fixtures/sale-vat-index.json';
 const servers: ApiServer[] = [];
@@ -93,4 +95,29 @@ test('not registered: a sidebar block that sets a receipt\'s VAT facts and then 
   const books = loadBooks(api.ws);
   assert.ok(books.journalEntries.some((e) => e.id === 'e-doc' && e.vatCode === 'V0'), 'the booking is as it was');
   assert.equal(books.receipts.find((r) => r.id === 'rk')?.hasSwissVat, undefined, 'the receipt is as it was');
+});
+
+test('net tax rate method: «kein Umsatz» on the sale question takes the payment out of the turnover (owner\'s account, no F-code), keeps a payer rule on that account, and the undo puts the sale back (r7f-28)', async () => {
+  const api = await start('demo-schreinerei');
+  // The rule's facts come from the chart: the owner's account and the revenue account must be in it.
+  appendFileSync(join(api.ws.paths.history, 'prior-year.Konten.txt'), '2451\tKontokorrent\n3400\tDienstleistungsertrag\n');
+  const b = loadBooks(api.ws);
+  b.journalEntries.find((e) => e.id === 'e-ch')!.vatCode = 'F1';
+  saveBooks(api.ws, b);
+  const id = 'q-r7f28';
+  appendFileSync(yearPaths(api.ws.paths, '2026').questions, `${JSON.stringify({ v: 1, event: 'asked', id, at: new Date().toISOString(), by: 'app', to: 'Reto Beispiel', origin: 'booking', topic: 'saleVat', on: { kind: 'payment', id: 'S-CH' }, text: '?', choices: ['saleDomestic', 'saleAbroad', 'notSale'] })}\n`);
+  const res = await api.send('POST', `/api/questions/${id}/answer`, { by: 'Reto Beispiel', choice: 'notSale' });
+  assert.equal(res.status, 200, JSON.stringify(res.json));
+  const acted = (res.json as unknown as Question).answer?.acted;
+  assert.ok(acted && 'marked' in acted && acted.marked, JSON.stringify(acted));
+  assert.deepEqual([acted.booked, acted.undo.length, acted.account, acted.vatCode], [['e-ch'], 1, '2451', ''], 'the answer card says what changed');
+  const e = loadBooks(api.ws).journalEntries.find((x) => x.id === 'e-ch')!;
+  assert.deepEqual([e.accountDebit, e.accountCredit, e.vatCode, e.origin], ['1021', '2451', undefined, 'manual'], 'off the revenue account, no F-code: the half year\'s turnover drops by the payment');
+  assert.equal(loadBooks(api.ws).transactions.find((t) => t.ref === 'S-CH')?.noReceiptNeeded, true);
+  const rules = (parse(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8')) as { steps: { classify?: { rules?: Array<{ id: string; then: unknown }> } } }).steps.classify?.rules ?? [];
+  assert.deepEqual(rules.find((r) => r.id === `sale-${id}`)?.then, { account: '2451', vat: 'none' }, 'the payer\'s next payment is booked off the turnover too, never on 3000 as «kein Umsatz»');
+  const undone = await api.send('POST', `/api/questions/${id}/undo`, { by: 'Reto Beispiel' });
+  assert.equal(undone.status, 200, JSON.stringify(undone.json));
+  const back = loadBooks(api.ws).journalEntries.find((x) => x.id === 'e-ch')!;
+  assert.deepEqual([back.accountCredit, back.vatCode, back.origin], ['3400', 'F1', 'classify']);
 });

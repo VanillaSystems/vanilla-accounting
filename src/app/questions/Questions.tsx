@@ -84,7 +84,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   if ('refused' in a) return <p className="qnote warn">{notActedText(a)}</p>;
   if ('vatCode' in a) {
     const sale = [
-      a.marked ? t('questions.sale.marked') : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
+      a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
       a.rule ? t('questions.sale.rule') : t('questions.sale.noRule'),
     ];
     return <p className="qnote" data-testid="sale-acted">{sale.join(' · ')}</p>;
