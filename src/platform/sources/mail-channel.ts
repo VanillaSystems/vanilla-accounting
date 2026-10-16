@@ -6,7 +6,7 @@
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { MailReach } from './model.js';
+import type { MailReach, MailCheck } from './model.js';
 import { senderAllowed } from './reach.js';
 
 export interface MailSummary { uid: number; from: string; to: string[]; subject: string; date: string; messageId: string }
@@ -52,6 +52,16 @@ export async function imapBackend(r: MailReach, password: string, port = 993): P
 
 /** A login the mail server refused: the password or the login name is wrong. */
 export class MailLoginError extends Error {}
+
+/** Node's codes for a TLS certificate this machine does not trust: the server was reached (r6h-26). */
+const CERTIFICATE = /^(UNABLE_TO_VERIFY_LEAF_SIGNATURE|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|CERT_|ERR_TLS_CERT_|UNABLE_TO_GET_ISSUER_CERT|HOSTNAME_MISMATCH)/;
+
+/** What a failed connection or login means for the check's words. */
+export function mailFailure(e: unknown): Extract<MailCheck, { ok: false }> {
+  if (e instanceof MailLoginError) return { ok: false, reason: 'login' };
+  const code = String((e as { code?: string }).code ?? (e as Error).message).slice(0, 200);
+  return { ok: false, reason: CERTIFICATE.test(code) ? 'certificate' : 'connect', detail: code };
+}
 
 /**
  * A stand-in mailbox for tests and the verify sandbox, never a real one: VANILLA_FAKE_MAILBOX

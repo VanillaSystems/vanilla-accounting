@@ -17,7 +17,7 @@ import { RequestError } from '../books.js';
 import { secretKey, type MailCheck, type SourceDecl, type SourceRow, type SourcesView } from '../../platform/sources/model.js';
 import { mailSecret, secrets } from '../../secrets/secrets.js';
 import { mailInputProblem, mailSourceId, previewMailbox, writeMailSource, type MailSourceInput } from '../../platform/sources/mail-setup.js';
-import { mailBackend, MailLoginError, type MailBackend } from '../../platform/sources/mail-channel.js';
+import { mailBackend, mailFailure, type MailBackend } from '../../platform/sources/mail-channel.js';
 import { sourcesRunHere } from '../../platform/sources/launcher.js';
 import { readLedger } from '../../platform/sources/ledger.js';
 import { addSkip, skipOffers } from '../../platform/sources/skip.js';
@@ -76,7 +76,7 @@ router.post('/api/sources/:id/check', async (req, res) => {
   try {
     backend = await mailBackend(decl.reach.mail!, password);
   } catch (e) {
-    return void res.json((e instanceof MailLoginError ? { ok: false, reason: 'login' } : { ok: false, reason: 'connect', detail: String((e as { code?: string }).code ?? (e as Error).message).slice(0, 200) }) satisfies MailCheck);
+    return void res.json(mailFailure(e) satisfies MailCheck);
   }
   try {
     res.json({ ok: true, ...(await previewMailbox(backend, decl)) } satisfies MailCheck);

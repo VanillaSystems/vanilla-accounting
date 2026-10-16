@@ -7,7 +7,7 @@ import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/ind
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
 import { codeForRate, formTakes, lookupVatCode } from './vat-codes.js';
-import { withoutInputTax } from '../engines/index.js';
+import { chart, withoutInputTax } from '../engines/index.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { isManualRef } from '../books/refs.js';
 
@@ -62,9 +62,11 @@ function precedentOf(books: Books, tx: BankTransaction, bank: NonNullable<Bookin
     if (!same.has(ref)) { const t = byRef.get(ref); same.set(ref, !!t && [...vendorKeys(books, t)].some((k) => mine.has(k))); }
     return same.get(ref)!;
   };
+  // The newest payment's legs: an expense or revenue leg before an asset one (a ladder beside the paint, r6h-27), the larger first.
+  const onResult = (e: JournalEntry) => { const t = chart().typeOf(e[other]!); return t === 'expense' || t === 'revenue' ? 1 : 0; };
   const hit = (books.journalEntries ?? [])
     .filter((e) => e.transactionRef !== tx.ref && e.origin !== 'year-close' && bankAccounts.has(e[bank.side]) && e[other] && !bankAccounts.has(e[other]) && isSame(e.transactionRef))
-    .sort((a, b) => b.date.localeCompare(a.date))[0];
+    .sort((a, b) => b.date.localeCompare(a.date) || onResult(b) - onResult(a) || Number(b.amount) - Number(a.amount))[0];
   return hit && { account: hit[other], vatCode: hit.vatCode, entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date } };
 }
 

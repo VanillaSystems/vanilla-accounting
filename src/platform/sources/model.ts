@@ -73,7 +73,8 @@ export interface SourcesView { rows: SourceRow[]; secretsInApp: boolean; secrets
 /** The connection check of a mailbox: what the source would read of the last weeks' mail, or why it could not look. */
 export type MailCheck =
   | { ok: true; days: number; total: number; read: number; mails: Array<{ from: string; subject: string; date: string; read: boolean }> }
-  | { ok: false; reason: 'no-secret' | 'login' | 'connect' | 'not-mail'; detail?: string };
+  /** `connect`: no server answered (a name that does not resolve, nothing on the port); `certificate`: a server answered, but this Mac does not trust its certificate. */
+  | { ok: false; reason: 'no-secret' | 'login' | 'connect' | 'certificate' | 'not-mail'; detail?: string };
 
 /** The keychain name of a channel's secret: derived, never listed. */
 export const secretKey = (source: string, channel: 'mail' | 'api') => `source:${source}:${channel}` as const;
