@@ -103,6 +103,17 @@ test('then «mit MWST» books the payment at the normal rate and keeps a rule (r
   assert.deepEqual(entriesOf('S-EU').map((e) => e.vatCode), ['V81']);
 });
 
+test('«Zurücknehmen» after the answer\'s booking was booked anew takes back what is still there: the rule goes, the question opens', async () => {
+  const [q] = questionOn('S-EU');
+  await rebookAnyway('S-EU');
+  assert.ok(entriesOf('S-EU')[0].rule, 'booked anew by the answer\'s rule');
+  const r = await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER });
+  assert.equal(r.status, 200, String(r.json.error));
+  assert.equal(questionOn('S-EU')[0].status, 'open');
+  assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false);
+  assert.deepEqual(entriesOf('S-EU').map((e) => [e.vatCode, e.rule]), [['V81', undefined]]);
+});
+
 test('a payment with no revenue booking the app may set is refused in words, not answered «0 Buchungen»', async () => {
   const b = loadBooks(api.ws);
   b.transactions.push({ ref: 'S-NONE', bank: 'Raiffeisen', date: '2026-08-20', amount: 90, currency: 'CHF', direction: 'CRDT', description: 'Rückzahlung', counterparty: 'Beispiel Kunde AG', counterpartyIban: 'CH0000762011623852957' });

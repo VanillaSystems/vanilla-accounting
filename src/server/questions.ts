@@ -278,7 +278,9 @@ export function undoAnswer(id: string, by: string): Question {
   const q = find(id);
   const acted = q.answer?.acted;
   if (q.status !== 'answered') throw new RequestError(409, 'Diese Frage hat keine Antwort, die sich zurücknehmen liesse.');
-  if (acted && 'undo' in acted && acted.undo.length) updateBooks((b) => { for (const c of [...acted.undo].reverse()) applyChange(b, c); });
+  // A booking the answer changed that was booked anew since (Neu klassifizieren) is no longer there to put back: the rest is.
+  const there = (b: Books, c: BookChange) => c.kind !== 'entry' || b.journalEntries.some((e) => e.id === c.id);
+  if (acted && 'undo' in acted && acted.undo.length) updateBooks((b) => { for (const c of [...acted.undo].reverse()) if (there(b, c)) applyChange(b, c); });
   if (acted && 'precedent' in acted && acted.precedent) dropPrecedent(WS, acted.precedent);
   if (acted && 'rule' in acted && acted.rule) dropRule(WS, acted.rule);
   // A booking the withdrawn rule made is the app's guess again, so the next answer books it (r4c-28).
