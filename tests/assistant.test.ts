@@ -259,8 +259,13 @@ test('a booking split by the AI keeps its payment whole: half alone is refused, 
     assert.deepEqual((undo.json as unknown as MadeChange[]).map((c) => c.id).sort(), made.map((c) => c.id).sort(), 'undoing one half undoes the other');
     assert.deepEqual(await entriesOf(), [entry], 'the payment is booked as before');
 
+    // A payment's only booking goes like a person's «Löschen» leaves it: unbooked, with its undo (r5h-36).
     const gone = await answer([{ kind: 'deleteEntry', id: entry.id }]);
-    assert.equal(refusal(gone.events)?.code, 'paymentBalance', 'deleting a payment\'s only booking is refused');
+    assert.equal(refusal(gone.events), undefined, 'deleting a payment\'s only booking leaves it unbooked');
+    assert.deepEqual(await entriesOf(), []);
+    const back = (gone.events.find((e) => e.type === 'changes') as Extract<AssistantEvent, { type: 'changes' }>).changes;
+    assert.equal((await api.send('POST', `/api/assistant/${gone.id}/changes/${back[0].id}/undo`)).status, 200);
+    assert.deepEqual(await entriesOf(), [entry], 'and comes back as it was');
     const replaced = await answer([
       { kind: 'deleteEntry', id: entry.id },
       { kind: 'newEntry', entry: { transactionRef: tx.ref, date: tx.date, accountDebit: '6500', accountCredit: '1021', amount: entry.amount, description: 'neu gebucht' } },
