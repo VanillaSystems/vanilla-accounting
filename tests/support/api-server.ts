@@ -31,10 +31,11 @@ export interface ApiServer {
  * `env` is added to the server's environment. The temp workspace has the demo manifest and a stub
  * prior-year history/ for classify's prompt. The server finds tests/support/no-model-bin/claude
  * first unless `env.PATH` says otherwise, and listens on 127.0.0.1 unless `env.VANILLA_API_HOST`
- * says otherwise ('' for every interface).
+ * says otherwise ('' for every interface). `manifestOf`: another workspace's manifest (a demo of
+ * another kind of firm) instead of the demo's.
  */
-export async function startApi(fixture: string, env: Record<string, string> = {}): Promise<ApiServer> {
-  const ws = tempWorkspace('belege-api-');
+export async function startApi(fixture: string, env: Record<string, string> = {}, { manifestOf }: { manifestOf?: string } = {}): Promise<ApiServer> {
+  const ws = tempWorkspace('belege-api-', manifestOf);
   const { paths } = ws;
   const root = paths.root;
   mkdirSync(paths.history);
