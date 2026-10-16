@@ -89,11 +89,11 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
     const hits = txs.filter((tx) => holds(target.placed, facts.get(tx.ref)!));
     const overlaps = new Map<string, RuleOverlap>();
     const examples: PreviewPayment[] = [];
+    const pool = rules.filter((r) => !r.placed.rule.off || ruleKey(r.row) === key);
+    // The drafted rule counts as switched on: the preview says what it would do.
+    const placed = pool.map((r) => ({ ...r.placed, rule: { ...r.placed.rule, off: false } }));
     for (const tx of hits) {
       const p = facts.get(tx.ref)!;
-      const pool = rules.filter((r) => !r.placed.rule.off || ruleKey(r.row) === key);
-      // The drafted rule counts as switched on: the preview says what it would do.
-      const placed = pool.map((r) => ({ ...r.placed, rule: { ...r.placed.rule, off: false } }));
       const decider = ruleFor(placed, p);
       const deciderRow = decider && pool[placed.indexOf(decider)].row;
       for (const other of on) {
