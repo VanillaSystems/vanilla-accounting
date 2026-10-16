@@ -32,7 +32,7 @@ import { applyChange, bookPayment, setEntry } from './edits.js';
 const now = () => new Date().toISOString();
 const append = (line: QuestionLine) => appendQuestionLine(WS, line, readBooks().config.closedThrough);
 
-export interface AskInput { on: QuestionTarget; by: string; text: string; choices?: PrivateChoice[]; to?: string; origin?: QuestionOrigin }
+export interface AskInput { on: QuestionTarget; by: string; text: string; choices?: Choice[]; to?: string; origin?: QuestionOrigin }
 
 const name = (v: unknown, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new RequestError(400, `${what} fehlt.`);
@@ -219,13 +219,28 @@ export function askQuestion(input: AskInput): Question {
   if (!exists(books, input.on)) throw new RequestError(404, 'Das, worum es geht, gibt es in den Büchern nicht.');
   const id = `q-${randomBytes(4).toString('hex')}`;
   const at = now();
-  append({ v: 1, event: 'asked', id, at, by: input.by, on: input.on, text: input.text, choices: input.choices ?? [], ...(input.to ? { to: input.to } : {}), origin: input.origin ?? 'person' });
+  // A question offering the sale's choices on a payment is the app's own question about it: the app never asks it again, a correction of the sale answers it.
+  const sale = input.on.kind === 'payment' && !!input.choices?.length && input.choices.every(isSaleChoice);
+  append({ v: 1, event: 'asked', id, at, by: input.by, on: input.on, text: input.text, choices: input.choices ?? [], ...(input.to ? { to: input.to } : {}), origin: input.origin ?? 'person', ...(sale ? { topic: 'saleVat' as const } : {}) });
   const decides = PRIVATE_CHOICES.every((c) => input.choices?.includes(c));
   const tx = decides ? paymentOf(books, input.on).tx : undefined;
   const key = tx && precedentKey(books, tx);
   const p = key ? precedentFor(WS, key) : undefined;
   if (p) answerQuestion(id, { by: p.by, answer: { choice: p.choice } }, p.id);
   return find(id);
+}
+
+/** The payment a target is about, by its ref: the payment itself, a booking's, a receipt's only one. */
+function paymentRef(books: Books, on: QuestionTarget): string | undefined {
+  return on.kind === 'payment' ? on.id : paymentOf(books, on).tx?.ref;
+}
+
+/** The question open already about the same item, or about the same payment, that `on` would ask about again. */
+export function openQuestionOn(on: QuestionTarget): Question | undefined {
+  const books = readBooks();
+  const ref = paymentRef(books, on);
+  return readQuestions(WS).find((q) => q.status === 'open'
+    && ((q.on.kind === on.kind && q.on.id === on.id) || (!!ref && paymentRef(books, q.on) === ref)));
 }
 
 export function answerQuestion(id: string, { by, answer }: { by: string; answer: Answer }, from?: string): Question {

@@ -2354,6 +2354,7 @@ export default {
     'error.noDescription': 'The booking has no text: say briefly what it is for.',
     'error.accountNumber': '«{account}» is no account number: an account has four digits.',
     'error.accountName': 'Account {account} needs a name.',
+    'error.questionChoices': 'A question offers «{private}» and «{business}», for a customer payment «{saleDomestic}», «{saleAbroad}» and «{notSale}», or no buttons and an answer in words.',
     'error.gone.receipt': 'This receipt is not (or no longer) in the books: look in Receipts.',
     'error.gone.entry': 'This booking does not exist (any more): look in Journal.',
     'error.gone.payment': 'This payment does not exist (any more): look in Statements.',
@@ -2814,6 +2815,7 @@ export default {
     'error.questionAnswered': 'Someone has answered this question meanwhile.',
     'assistant.c.question': 'Question to {to}: «{text}»',
     'assistant.c.questionAnswered': 'Question «{text}»: decided already, as {by} answered it before',
+    'assistant.c.questionOpen': 'Open already under Tasks: «{text}» · to {to}',
     'assistant.c.withdrawQuestion': 'Question withdrawn',
   },
 } satisfies Locale;

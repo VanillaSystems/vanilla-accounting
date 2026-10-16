@@ -10,6 +10,8 @@ import type { AreaId, CompanySection } from '../app/shell/route.js';
 import { PRESETS } from '../export/model.js';
 import { wordsIn } from '../export/texts.js';
 import type { Change } from '../types/assistant.js';
+import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type Choice } from '../questions/model.js';
+import { normalRate } from '../accounting/sales-without-vat.js';
 
 interface Place {
   /** What a person does there, in English for the model; `{key}` is a text of the UI's in the person's language. */
@@ -54,6 +56,16 @@ type T = ReturnType<typeof wordsIn>['t'];
 const line = (t: T, label: string, p: Place) =>
   `- ${label}: ${p.does.replace(/\{([\w.-]+)\}/g, (_, k: string) => t(k as Parameters<T>[0]))}.${p.kinds?.length ? ` You: ${p.kinds.join(', ')}.` : ''}`;
 
+/**
+ * The question cards' buttons as they read (w25, x08): the person answers a question only with
+ * these, so the model names no other.
+ */
+function questionCards(t: T): string {
+  const label = (c: Choice) => `«${t(`questions.choice.${c}` as 'questions.choice.private', { rate: String(normalRate()) })}»`;
+  const sale = t('questions.sale.text', { who: '…', amount: '…', date: '…' });
+  return `- A question's card (${t('automation.tasks')}, and on its item) has the buttons ${PRIVATE_CHOICES.map(label).join(' / ')} for «privat oder geschäftlich?»; the app's own question about a customer payment without an invoice («${sale}») has ${SALE_CHOICES.map(label).join(' / ')}; any question also takes «${t('questions.answerPlaceholder')}». No card has other buttons (${CHOICES.length} in all).`;
+}
+
 /** The map as the prompt gives it, the names in the person's language. */
 export function appMap(language: string): string {
   const { t } = wordsIn(language);
@@ -67,6 +79,7 @@ export function appMap(language: string): string {
         : []),
     ]),
     `- ${t('export.dialog')} ${EXPORT_DOES}: ${presets}. You: export.`,
+    questionCards(t),
     '- ⌘K searches everything; ⌘J opens and closes you.',
     `Words the person knows: a quarter whose VAT return went to the tax authority is «${t('period.filedShort')}».`,
   ].join('\n');

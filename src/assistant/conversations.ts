@@ -52,10 +52,11 @@ export class RefusedChanges extends Error {
 }
 
 /**
- * One message: stored, sent with its context read now and the app's places (`map`), its answer streamed to `onEvent` and stored
+ * One message: stored, sent with its context read now, the app's places (`map`) and what waits for
+ * the person now (`waiting`, src/server/open-work.ts), its answer streamed to `onEvent` and stored
  * at the end. The changes to the books the answer asks for are applied before its `done`.
  */
-export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, map: string, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
+export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, { map, waiting }: { map: string; waiting: string }, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
   const at = now().toISOString();
   const c: Conversation = (send.conversation && readConversation(ws, send.conversation))
     || { id: randomUUID(), title: send.text.trim().replace(/\s+/g, ' ').slice(0, 60), at, turns: [] };
@@ -66,7 +67,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   c.at = at;
   store(ws, c);
   onEvent({ type: 'conversation', id: c.id });
-  const prompt = assistantPrompt(send.text, contextText(ws, send.context), last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []);
+  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), waiting]);
   let done: AssistantEvent | undefined;
   await callClaude({
     ws, send, map, session: c.session, prompt, signal,
@@ -95,7 +96,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       if ((e instanceof RefusedChanges || e instanceof ChangesError) && e.refusal) ai.refusal = e.refusal;
       onEvent({ type: 'refused', message: ai.refused, ...(ai.refusal ? { refusal: ai.refusal } : {}) });
       ai.withdrawn = ai.text;
-      ai.text = await saidAgain(ws, send, map, c, ai.refused, signal);
+      ai.text = await saidAgain(ws, send, map, c, ai.withdrawn, ai.refused, signal);
       onEvent({ type: 'replace', text: ai.text });
     }
   }
@@ -104,24 +105,31 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   store(ws, c);
 }
 
+/** Around the answer the app refused, in the call that says it again. */
+export const ANSWER_START = 'Your answer as it was:\n<<<';
+const ANSWER_END = '>>>';
+
 /** What the next message tells the model when the app refused the changes of its last answer, so it never builds on them. */
 export const refusedNote = (why: string): string =>
   `The app did not apply the changes of your previous answer: it refused them all, nothing of them was changed. Why: ${why}`;
 
 /**
- * An answer whose changes the app refused said they were made. Its text goes, and the model, in
- * its session, says in its place what was not done and why: one short call, so the person never
- * reads «done» for what was not done, and the session knows it too. Without a model answer
- * (an error, a stop) the text stays empty and the app's own line under it says why.
+ * An answer whose changes the app refused said they were made. The model, in its session, writes
+ * it again with only what it said about those changes corrected (not done, why, what the person
+ * can do), and everything else kept as it was: a readiness check, an explanation, an answer to a
+ * question never depended on them (w08). One short call, so the person never reads «done» for what
+ * was not done, and the session knows it too. Without a model answer (an error, a stop) the text
+ * stays empty and the app's own line under it says why.
  */
-async function saidAgain(ws: Workspace, send: AssistantSend, map: string, c: Conversation, why: string, signal: AbortSignal): Promise<string> {
+async function saidAgain(ws: Workspace, send: AssistantSend, map: string, c: Conversation, said: string, why: string, signal: AbortSignal): Promise<string> {
   let text = '';
   let ok = false;
   await callClaude({
     ws, send, map, session: c.session, signal,
     prompt: [
       refusedNote(why),
-      'The person will not see your answer: it said things were done that were not. Write what they read in its place: one or two short sentences, saying plainly what is not done and why, in their words (no field names, no codes), and what they can do (give what is missing, or where in the app they do it). No vanilla-changes block, no tools.',
+      'The person will not see your answer as it was: it said things were done that were not. Write the answer they read in its place: the same answer, with only what it said about those changes corrected, plainly: that they are not done and why, in their words (no field names, no codes), and what they can do (give what is missing, or where in the app they do it). Keep every other part as it was, word for word: what you checked, found, explained or answered does not depend on them. No vanilla-changes block, no tools.',
+      ANSWER_START, said, ANSWER_END,
     ].join('\n\n'),
     onEvent: (e) => {
       if (e.type === 'text') text += e.text;

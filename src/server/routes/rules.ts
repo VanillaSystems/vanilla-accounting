@@ -26,6 +26,7 @@ import { openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { engine, queueCommit } from './automation.js';
 import { askedBy, askRuns, closeAsksWithoutRule } from '../../workflows/held.js';
+import { payerNames } from '../../knowledge/payer.js';
 
 export const router = Router();
 
@@ -35,6 +36,7 @@ function namesView(): Pick<RulesView, 'names' | 'currency'> {
     names: {
       accounts: Object.fromEntries(chartNames(chartOf(WS))),
       businesses: Object.fromEntries(loadKnowledge(APP_ROOT, WS.paths.root).counterparties.map((c) => [c.id, c.name])),
+      payers: payerNames(loadBooks(WS).transactions),
     },
     currency: baseCurrency(),
   };

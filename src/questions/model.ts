@@ -30,6 +30,17 @@ export interface SaleProposal { choice: SaleChoice; why: SaleWhy }
 export const CHOICES = [...PRIVATE_CHOICES, ...SALE_CHOICES] as const;
 export type Choice = PrivateChoice | SaleChoice;
 
+/**
+ * The choices a question can offer: those of one kind the app acts on («privat oder geschäftlich?»,
+ * or a customer payment's VAT), each once; none for an answer in words. Undefined for any other
+ * mix, which no question card shows.
+ */
+export function questionChoices(raw: readonly unknown[]): Choice[] | undefined {
+  const set = [...new Set(raw)];
+  const within = (kind: readonly string[]) => set.every((c) => typeof c === 'string' && kind.includes(c));
+  return within(PRIVATE_CHOICES) || within(SALE_CHOICES) ? set as Choice[] : undefined;
+}
+
 /** What a question the app asks by itself is about: `saleVat`, a customer payment without an invoice (src/intake/sale-questions.ts). */
 export type QuestionTopic = 'saleVat';
 

@@ -67,7 +67,9 @@ export type ApiRefusal =
   | { code: 'accountNumber'; params: { account: string } }
   | { code: 'accountName'; params: { account: string } }
   /** The VAT setup (registration, method, period, a rate) holds for whole years: the open year already has entries. */
-  | { code: 'vatMethodHeld'; params: { year: string; entries: number } };
+  | { code: 'vatMethodHeld'; params: { year: string; entries: number } }
+  /** A question of the AI sidebar offering answers no question card has (src/questions/model.ts questionChoices). */
+  | { code: 'questionChoices' };
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):

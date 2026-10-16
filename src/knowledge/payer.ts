@@ -44,6 +44,20 @@ export const ibanKey = (iban: string | undefined): string | undefined => {
 export const payerKey = (tx: Pick<BankTransaction, 'description' | 'counterparty' | 'counterpartyIban'>): string | undefined =>
   ibanKey(tx.counterpartyIban) ?? textKey(tx);
 
+/**
+ * The payers' names as a person knows them, by every key a rule's `when.payer` may hold (IBAN and
+ * counterparty text): the bank's counterparty, else the merchant of its text. Firma › Regeln says
+ * «Zahler Familie Keller», not the key «familiekeller» (r4w-8).
+ */
+export function payerNames(txs: ReadonlyArray<Pick<BankTransaction, 'description' | 'counterparty' | 'counterpartyIban'>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const tx of txs) {
+    const name = (tx.counterparty || merchantOf(tx.description)).trim();
+    for (const key of [ibanKey(tx.counterpartyIban), textKey(tx)]) if (key && name && !out[key]) out[key] = name;
+  }
+  return out;
+}
+
 /** Whether a rule's `when.payer` names this payment's payer: its IBAN or its counterparty text. */
 export const isPayer = (key: string, tx: Pick<BankTransaction, 'description' | 'counterparty' | 'counterpartyIban'>): boolean => {
   const k = key.replace(/\s+/g, '');

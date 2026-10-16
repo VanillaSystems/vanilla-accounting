@@ -25,7 +25,7 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 const asker = (q: Question) => (q.origin === 'assistant' ? t('questions.ai') : q.origin === 'booking' ? t('questions.app') : q.by);
 
 /** The question in the viewer's language: the app's own question is said from its payment, a person's as written. */
-function questionText(q: Question, books: Index): string {
+export function questionText(q: Pick<Question, 'topic' | 'on' | 'text'>, books: Index): string {
   const tx = q.topic === 'saleVat' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
   return tx ? t('questions.sale.text', { who: tx.counterparty || tx.description, amount: `${tx.currency} ${fmt(tx.amount)}`, date: formatDate(tx.date) }) : q.text;
 }

@@ -17,7 +17,9 @@ import { applyAnswer, applyChange, relinked, unbookedPayments } from '../edits.j
 import { applyWorkspaceChange } from '../workspace-edits.js';
 import { learnFromCorrection } from '../questions.js';
 import { appMap } from '../app-map.js';
-import { bookAgain } from './automation.js';
+import { automationView, bookAgain, engine } from './automation.js';
+import { openWork } from '../open-work.js';
+import { askedBy } from '../../workflows/held.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { PRESETS, parseRequest, presetPeriod } from '../../export/model.js';
 import { buildBundle, downloadOf, zipBundle } from '../../export/bundle.js';
@@ -61,12 +63,19 @@ router.get('/api/assistant/:id', (req, res) => {
   res.json(c);
 });
 
+/** What waits under Aufgaben now: the questions, the workflows' tasks with the rule that held each, the payments without a booking. */
+function waitingNow(language: string): string {
+  const runs = new Map(engine().runs().map((r) => [r.id, r]));
+  const tasks = automationView().tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
+  return openWork(WS, readBooks(), tasks, language);
+}
+
 router.post('/api/assistant', async (req, res) => {
   const send = sendOf(req.body);
   const emit = ndjson(res);
   const stop = new AbortController();
   res.on('close', () => { if (!res.writableFinished) stop.abort(); });
-  await sendMessage(WS, send, apply, appMap(send.language), emit, stop.signal);
+  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: waitingNow(send.language) }, emit, stop.signal);
   res.end();
 });
 

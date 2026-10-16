@@ -4,7 +4,7 @@
 // carries Swiss VAT facts, or the answer $CLAUDE_STUB_CLASSIFY (JSON keyed by ref) gives its ref. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
 // reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
 // answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
-// $CLAUDE_STUB_PROMPTS: each prompt is appended there; $CLAUDE_STUB_ARGS: each call's arguments.
+// $CLAUDE_STUB_TEXT: what an answer says first. $CLAUDE_STUB_PROMPTS: each prompt is appended there; $CLAUDE_STUB_ARGS: each call's arguments.
 // A message of the AI sidebar (--output-format stream-json) streams a stub answer to its last line as
 // Claude Code does: the session, the text in pieces and the result; --resume keeps its session.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
@@ -50,9 +50,14 @@ if (process.argv.includes('stream-json')) {
   // $CLAUDE_STUB_CHANGES: a file with the changes to the books the answer asks for (the sidebar's block), when it exists.
   const file = process.env.CLAUDE_STUB_CHANGES;
   const changes = file && existsSync(file) ? `\n\n\`\`\`vanilla-changes\n${readFileSync(file, 'utf8')}\n\`\`\`` : '';
-  // The app's call after it refused an answer's changes (src/assistant/conversations.ts saidAgain): what was not done, no block.
-  const answer = prompt.includes('Write what they read in its place') ? 'Stub: Das ist nicht gemacht, die App hat es abgelehnt.'
-    : `Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}`;
+  // $CLAUDE_STUB_TEXT: a file with what the answer says before its own line, when it exists (a long answer).
+  const said = process.env.CLAUDE_STUB_TEXT && existsSync(process.env.CLAUDE_STUB_TEXT) ? `${readFileSync(process.env.CLAUDE_STUB_TEXT, 'utf8').trim()}\n\n` : '';
+  // The app's call after it refused an answer's changes (src/assistant/conversations.ts saidAgain), answered as the prompt
+  // asks: the answer as it was, its claim of a change (the stub's own line) said again as not done, every other paragraph kept; no block.
+  const START = 'Your answer as it was:\n<<<';
+  const was = prompt.includes(START) ? prompt.slice(prompt.indexOf(START) + START.length, prompt.lastIndexOf('>>>')).trim() : undefined;
+  const answer = was !== undefined ? [...was.split(/\n\n+/).filter((p) => p && !p.startsWith('Stub-Antwort')), 'Stub: Das ist nicht gemacht, die App hat es abgelehnt.'].join('\n\n')
+    : `${said}Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}`;
   // $CLAUDE_STUB_TOOLS: a file with the tools the answer uses first, a JSON list of { name, input }.
   const tools = process.env.CLAUDE_STUB_TOOLS && existsSync(process.env.CLAUDE_STUB_TOOLS) ? JSON.parse(readFileSync(process.env.CLAUDE_STUB_TOOLS, 'utf8')) : [];
   tools.forEach((t, i) => line({ type: 'assistant', message: { content: [{ type: 'tool_use', id: `stub-tool-${i}`, name: t.name, input: t.input }] } }));

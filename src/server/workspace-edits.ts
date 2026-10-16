@@ -15,7 +15,7 @@ import { InvoiceRuleError, liveCustomers, liveInvoices } from '../invoices/rules
 import type { Customer, CustomerFields } from '../invoices/model.js';
 import type { ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
-import { askQuestion, closeQuestion } from './questions.js';
+import { askQuestion, closeQuestion, openQuestionOn } from './questions.js';
 
 export interface Applied { undo?: WorkspaceChange; note?: ChangeNote }
 
@@ -107,8 +107,14 @@ function dropInvoiceDraft(ws: Workspace, id: string, customer: string | undefine
 /** Who the AI's questions are by: the UI says «KI» in the person's language (origin assistant). */
 const AI = 'KI';
 
-/** The AI's question goes to the owner unless it names someone; a precedent may answer it at once. */
+/**
+ * The AI's question goes to the owner unless it names someone; a precedent may answer it at once.
+ * A question open already about the same payment stands instead: nothing is asked twice, and the
+ * card shows the open one.
+ */
 function question(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'question' }>): Applied {
+  const open = openQuestionOn(c.on);
+  if (open) return { note: { question: { id: open.id, ...(open.to ? { to: open.to } : {}), open: { on: open.on, text: open.text, by: open.by, ...(open.topic ? { topic: open.topic } : {}) } } } };
   const q = askQuestion({ on: c.on, by: AI, text: c.text, choices: c.choices ?? [], to: c.to ?? ws.company.owner, origin: 'assistant' });
   return { undo: { kind: 'withdrawQuestion', id: q.id }, note: { question: { id: q.id, ...(q.to ? { to: q.to } : {}), ...(q.answer ? { answered: q.answer.by } : {}) } } };
 }

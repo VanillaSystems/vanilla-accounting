@@ -5,7 +5,7 @@
  */
 import type { ApiRefusal } from './api-error.js';
 import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
-import type { PrivateChoice, QuestionTarget } from '../questions/model.js';
+import type { Choice, Question, QuestionTarget } from '../questions/model.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
@@ -79,7 +79,7 @@ export type WorkspaceChange =
   | { kind: 'invoiceDraft'; customer?: string; newCustomer?: { name: string } & Record<string, unknown>; draft: { lines: DraftLine[] } & Record<string, unknown> }
   | { kind: 'dropInvoiceDraft'; id: string; customer?: string }
   /** A question to the owner the AI cannot decide (src/server/questions.ts); its undo withdraws it. */
-  | { kind: 'question'; on: QuestionTarget; text: string; choices?: PrivateChoice[]; to?: string }
+  | { kind: 'question'; on: QuestionTarget; text: string; choices?: Choice[]; to?: string }
   | { kind: 'withdrawQuestion'; id: string };
 
 /** What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's booking of every open payment. */
@@ -101,8 +101,8 @@ export interface ChangeNote {
   file?: { name: string; path: string };
   draft?: { id: string; customer: string };
   customers?: number;
-  /** The question asked, and its answer when a precedent gave one at once. */
-  question?: { id: string; to?: string; answered?: string };
+  /** The question asked, and its answer when a precedent gave one at once; `open`: the payment's question that was open already, asked by `by`, which stands instead. */
+  question?: { id: string; to?: string; answered?: string; open?: Pick<Question, 'on' | 'text' | 'by' | 'topic'> };
   /** An action that did not run: why (`noBrowser`, or the error's text). */
   failed?: string;
 }

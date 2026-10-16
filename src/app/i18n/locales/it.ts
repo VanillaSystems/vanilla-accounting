@@ -2354,6 +2354,7 @@ export default {
     'error.noDescription': 'Alla registrazione manca il testo: dire in breve a cosa serve.',
     'error.accountNumber': '«{account}» non è un numero di conto: un conto ha quattro cifre.',
     'error.accountName': 'Il conto {account} ha bisogno di un nome.',
+    'error.questionChoices': 'Una domanda ha come risposte «{private}» e «{business}», per un pagamento di un cliente «{saleDomestic}», «{saleAbroad}» e «{notSale}», oppure nessun pulsante e una risposta a parole.',
     'error.gone.receipt': 'Questo giustificativo non è (più) nella contabilità: vedere Giustificativi.',
     'error.gone.entry': 'Questa registrazione non esiste (più): vedere Registrazioni.',
     'error.gone.payment': 'Questo pagamento non esiste (più): vedere Estratti conto.',
@@ -2814,6 +2815,7 @@ export default {
     'error.questionAnswered': 'Qualcuno ha nel frattempo risposto a questa domanda.',
     'assistant.c.question': 'Domanda a {to}: «{text}»',
     'assistant.c.questionAnswered': 'Domanda «{text}»: già decisa, come {by} ha risposto prima',
+    'assistant.c.questionOpen': 'Già aperta sotto Compiti: «{text}» · a {to}',
     'assistant.c.withdrawQuestion': 'Domanda ritirata',
   },
 } satisfies Locale;

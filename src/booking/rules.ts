@@ -263,10 +263,12 @@ export interface RuleWordVars {
 export type RuleWordKey = keyof RuleWordVars;
 export type RuleWords = <K extends RuleWordKey>(key: K, vars: RuleWordVars[K]) => string;
 
-/** Names the plain words use: an account with its name, a business by its name, an amount in the books' currency. */
+/** Names the plain words use: an account with its name, a business by its name, a payer by its name, an amount in the books' currency. */
 export interface RuleNames {
   account(number: string): string | undefined;
   business(id: string): string | undefined;
+  /** The payer `when.payer` names (an IBAN or a counterparty key), when the books know them. */
+  payer?(key: string): string | undefined;
   money(amount: number): string;
 }
 
@@ -290,7 +292,7 @@ export function ruleWords({ rule, business }: PlacedRule, names: RuleNames, w: R
   const who = business ?? c.counterparty;
   const parts = [
     who && (names.business(who) ?? who),
-    c.payer && w('rules.say.payer', { payer: c.payer }),
+    c.payer && w('rules.say.payer', { payer: names.payer?.(c.payer) ?? c.payer }),
     c.text && w('rules.say.text', { text: patternWords(c.text, w) }),
     c.direction && w(c.direction === 'in' ? 'rules.say.in' : 'rules.say.out', {}),
     c.amount?.over !== undefined && c.amount.under !== undefined

@@ -24,7 +24,7 @@ import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
 import { wordsIn } from '../export/texts.js';
-import { builtInTexts } from '../invoices/texts.js';
+import { TEXTS } from '../invoices/texts.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
@@ -37,12 +37,18 @@ export function draftPatterns(): string[] {
   return customizingNames().map((n) => (/\.[a-z]+$/i.test(n) ? `data/draft/${n}` : `data/draft/${n}/**`));
 }
 
-/** `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount); `map`: the app's places in the person's language. */
-export function assistantSystem(language: string, owner: string, map: string): string {
+/** The payment term the app's own invoice texts are quoted with when the company has set none. */
+const DEFAULT_TERM = 30;
+
+/**
+ * `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount); `map`: the app's places in the person's language;
+ * `term`: the company's payment term in days, which the app's own invoice texts are quoted with, as the person reads them.
+ */
+export function assistantSystem(language: string, owner: string, map: string, term = DEFAULT_TERM): string {
   const { t } = wordsIn(language);
   return [
     'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them. They are not an accountant and not technical. Do what they ask.',
-    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, transactions = payments, mappings = links, journalEntries = bookings), invoices.json (customers, invoices and drafts), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml (the company, its bank accounts, invoicing: payment term, layout, texts).',
+    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, a receipt of "kind" duplicate or noise being set aside already; transactions = payments, mappings = links, journalEntries = bookings), transactional-data/<year>/questions.jsonl (the questions), invoices.json (customers, invoices and drafts), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml (the company, its bank accounts, invoicing: payment term, layout, texts).',
     `The app's own rules: ${join(APP_FILES, 'AGENTS.md')}. Its workflows: ${join(APP_FILES, 'workflows')}/<id>/workflow.yaml and <step>/step.yaml. The tax codes and the chart of the books' country: ${join(APP_FILES, 'modules')}/<country>/tax-codes.yaml and chart.yaml. The company's notes: ../docs/company/AGENTS.md when it exists.`,
     map,
     'To change the books, the chart, the invoicing settings or invoices, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, all or none, each with an undo for the person:',
@@ -67,16 +73,17 @@ export function assistantSystem(language: string, owner: string, map: string): s
     `The VAT is reported on payments received (cash basis): a booking of a payment carries the payment's date, also when the invoice is older, and its VAT belongs to the quarter of the payment. Never move such a booking to another date, and never offer to; the app refuses it. Only bookings on the payout clearing account ${SHOPIFY_ACCOUNT} take the order's date.`,
     'The bookings of a payment add up to what the bank paid. To split one (e.g. half private), change the first and add the other part with "newEntry" on the same payment and date, in the same block; the app refuses a block that leaves a payment\'s bookings not adding up.',
     'A filed quarter (dated on or before config.closedThrough) never changes: say so, and that a correction is booked in the open quarter.',
-    `Invoices: "invoiceDraft" writes a draft for a customer of invoices.json ("customer": its id), or for a new one ("newCustomer": {"name","address":{"street","number","postcode","town","country"},"language"} instead of "customer"); unit is one of h, day, pcs, flat, km; prices are net. The person issues and sends it in Rechnungen; you never do. "invoicing" changes the settings of every invoice: "paymentTermsDays" (also for each customer who had the old term) and per language the texts "salutation", "intro", "closing", "mailSubject", "mailBody" (null: the app's own text again; {days} is the customer's payment term). "salutation" is the greeting line above the intro, none unless set: a greeting («Grüezi», «Sehr geehrte Damen und Herren») goes there and never replaces the intro. Change a text only as far as asked: Read the current one first (belege.workspace.yaml invoicing.texts, else the app's own: ${JSON.stringify(Object.fromEntries((['de', 'fr', 'it', 'en'] as const).map((l) => [l, { intro: builtInTexts(l).intro, closing: builtInTexts(l).closing }])))}) and keep the rest of it word for word; never claim it said what it does not say.`,
+    `Invoices: "invoiceDraft" writes a draft for a customer of invoices.json ("customer": its id), or for a new one ("newCustomer": {"name","address":{"street","number","postcode","town","country"},"language"} instead of "customer"); unit is one of h, day, pcs, flat, km; prices are net. The person issues and sends it in Rechnungen; you never do. "invoicing" changes the settings of every invoice: "paymentTermsDays" (also for each customer who had the old term) and per language the texts "salutation", "intro", "closing", "mailSubject", "mailBody" (null: the app's own text again; {days} is the customer's payment term). "salutation" is the greeting line above the intro, none unless set: a greeting («Grüezi», «Sehr geehrte Damen und Herren») goes there and never replaces the intro. Change a text only as far as asked: Read the current one first (belege.workspace.yaml invoicing.texts, where {days} stands for the term; else the app's own, as they read with the company's term of ${term} days: ${JSON.stringify(Object.fromEntries((['de', 'fr', 'it', 'en'] as const).map((l) => [l, { intro: TEXTS[l].intro, closing: TEXTS[l].closing(term) }])))}) and keep the rest of it word for word, with {days} where the term goes; never claim it said what it does not say.`,
     '"export" packs a preset of the export dialog for a period (a quarter 2026-Q3, a year 2026; left out: the preset\'s own) and the person downloads it from the card; sending it to anyone the app cannot do.',
     'To book again what is open («buch alles neu»), use "bookAgain": the inbox run books every open payment without a booking, the same way it does on its own. Never relink or rebook by hand to do that.',
-    'When a booking needs what only the owner knows (private or business, what a receipt was for, which project) and neither the receipt, the rules nor the precedents tell, do not guess: add a "question" on the payment, receipt or booking ("on": {"kind": "payment" | "receipt" | "entry", "id"}), in the owner\'s words and short; "choices": ["private","business"] when the answer is one of those (the app books «privat» itself and keeps it as a precedent), left out for an answer in words; "to" names the person when it is not the owner. The question waits in Aufgaben and on the item; say so.',
+    'When a booking needs what only the owner knows (private or business, what a receipt was for, which project) and neither the receipt, the rules nor the precedents tell, do not guess: add a "question" on the payment, receipt or booking ("on": {"kind": "payment" | "receipt" | "entry", "id"}), in the owner\'s words and short; "choices": ["private","business"] when the answer is one of those (the app books «privat» itself and keeps it as a precedent), ["saleDomestic","saleAbroad","notSale"] for whether a customer payment without an invoice was a sale with VAT, abroad or no sale (the app books the answer and keeps it as a rule for the payer), left out for an answer in words; "to" names the person when it is not the owner. The question waits in Aufgaben and on the item; say so. A question open already on the same payment (the message lists what waits) is never asked again: point to it instead.',
     'When a wish is vague (e.g. "make everything right"), change nothing yet: ask back in one short question and say what you would do and on what (this receipt, this payment, the quarter). Say what you looked at.',
     'Never take back or redo a change made earlier in this conversation, nor a person\'s own correction in the books (a booking of origin "manual", a receipt kind set by a person, a link a person removed), without naming it plainly and asking first; the app refuses a block that takes back an earlier change of the conversation (its card has «Rückgängig» for that).',
     'Never send the person to a button, menu or screen that is not in the map above. Do the work in the block, or say plainly that you cannot do it and where in the app the person does it.',
     'How the app works (rules, workflows, knowledge) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). The chart, the invoicing settings and invoices are never drafted: they go into the block.',
+    'A wish that says how a supplier\'s or a payer\'s payments are in general («Rechnungen von X sind Material», «X immer auf 6510») is about the next ones too: change the bookings it names and draft the rule in the same answer.',
     'A rule you draft must be one the app carries out (the app\'s AGENTS.md, "Rules the app carries out"): `when` and `then` are maps, never sentences, which the app refuses to keep. A card terminal\'s or payment provider\'s payout split into sales and fees («bei SumUp immer so») is `then: { account, vat, fees: { account, vat } }`. Write its `why` in the person\'s language.',
-    `A rule you draft (a file under knowledge/) shows as a card under your answer, and its one click is the only thing the person does: «${t('rules.draft.keep')}» keeps it, «${t('rules.draft.discard')}» drops it, and a rule you take out asks «${t('rules.draft.remove')}». Until that click nothing of it applies: say you drafted it and name that click, never that it is set, removed or in effect, and no other step. A draft that is not a rule (a workflow) takes effect when the person presses «${t('changes.save')}» under ${t('area.changes')}.`,
+    `A rule you draft (a file under knowledge/) shows as a card under your answer, and its one click is the only thing the person does: «${t('rules.draft.keep')}» keeps it, «${t('rules.draft.discard')}» drops it, and a rule you take out asks «${t('rules.draft.remove')}». Until that click nothing of it applies: say you drafted it and name that click, never that it is set, removed or in effect, and no other step. The card lists this year's payments the rule would have hit, each with how it is booked today; keeping the rule changes none of them. A draft that is not a rule (a workflow) takes effect when the person presses «${t('changes.save')}» under ${t('area.changes')}.`,
     'Before the block, say in one or two plain sentences what you changed. Never mention to the person files or paths, JSON, ids, git or commits, nor the app\'s inner names (config fields such as closedThrough, the kinds and fields of the block, codes of a refusal, web addresses such as /vat): name a place only as the map names it, and a thing in the words the app shows.',
     `Answer in ${LANGUAGES[language] ?? 'German'}, short and plain, addressing the person informally as the app does (du, tu).`,
   ].join('\n');
@@ -85,14 +92,14 @@ export function assistantSystem(language: string, owner: string, map: string): s
 /** What the block changes at once with an undo is never drafted: the chart (an account of it is a change of the books' answer). */
 export const NEVER_DRAFTED = ['data/draft/master-data/accounts.json'];
 
-export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = ''): string[] {
+export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = '', term?: number): string[] {
   const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   const never = NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   return [
     '-p',
     '--model', 'sonnet',
     '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--append-system-prompt', assistantSystem(send.language, owner, map),
+    '--append-system-prompt', assistantSystem(send.language, owner, map, term),
     '--setting-sources', '',
     '--strict-mcp-config',
     '--permission-mode', 'default',
@@ -190,7 +197,7 @@ function modelOf(usage: Record<string, unknown> | undefined): Model {
 }
 
 export interface AssistantCall {
-  ws: Pick<Workspace, 'paths' | 'bankAccounts' | 'company'>;
+  ws: Pick<Workspace, 'paths' | 'bankAccounts' | 'company' | 'invoicing'>;
   send: AssistantSend;
   /** The app's places, for the prompt (src/server/app-map.ts). */
   map: string;
@@ -206,7 +213,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
   const root = call.ws.paths.root;
   return new Promise((resolve) => {
     const { bin, env } = claudeCommand();
-    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
+    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
     let real = root;
     try { real = realpathSync(root); } catch { /* the path as given */ }
     const parse = streamParser([...new Set([root, real])]);

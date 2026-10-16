@@ -2351,6 +2351,7 @@ export const messages = {
   'error.noDescription': 'Der Buchung fehlt der Text: kurz sagen, wofür sie ist.',
   'error.accountNumber': '«{account}» ist keine Kontonummer: ein Konto hat vier Ziffern.',
   'error.accountName': 'Konto {account} braucht einen Namen.',
+  'error.questionChoices': 'Eine Frage hat als Antworten «{private}» und «{business}», bei einer Kundenzahlung «{saleDomestic}», «{saleAbroad}» und «{notSale}», oder keine Knöpfe und eine Antwort in Worten.',
   'error.gone.receipt': 'Diesen Beleg gibt es in den Büchern nicht (mehr): unter Belege nachsehen.',
   'error.gone.entry': 'Diese Buchung gibt es nicht (mehr): unter Buchungen nachsehen.',
   'error.gone.payment': 'Diese Zahlung gibt es nicht (mehr): unter Kontoauszüge nachsehen.',
@@ -2811,6 +2812,7 @@ export const messages = {
   'error.questionAnswered': 'Diese Frage hat inzwischen jemand beantwortet.',
   'assistant.c.question': 'Frage an {to}: «{text}»',
   'assistant.c.questionAnswered': 'Frage «{text}»: schon entschieden, wie {by} es früher beantwortet hat',
+  'assistant.c.questionOpen': 'Schon offen unter Aufgaben: «{text}» · an {to}',
   'assistant.c.withdrawQuestion': 'Frage zurückgezogen',
 } as const;
 

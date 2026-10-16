@@ -217,8 +217,8 @@ export interface RuleListed extends RuleRow { applied: number; last?: string; as
 /** GET /api/rules. */
 export interface RulesView {
   rules: RuleListed[];
-  /** What a rule's plain words name: accounts and businesses by their names. */
-  names: { accounts: Record<string, string>; businesses: Record<string, string> };
+  /** What a rule's plain words name: accounts, businesses and payers (by the key `when.payer` holds) by their names. */
+  names: { accounts: Record<string, string>; businesses: Record<string, string>; payers: Record<string, string> };
   currency: string;
 }
 

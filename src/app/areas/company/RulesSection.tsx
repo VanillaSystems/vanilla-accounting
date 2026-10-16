@@ -192,7 +192,7 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   if (path) return <RuleDraft path={path} onRules={onRules} />;
-  const who = offer.business?.name ?? t('rules.share.payer', { payer: offer.payer ?? '' });
+  const who = offer.business?.name ?? t('rules.share.payer', { payer: offer.payerName ?? offer.payer ?? '' });
   const draft = () => {
     setBusy(true);
     api.draftShare(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));

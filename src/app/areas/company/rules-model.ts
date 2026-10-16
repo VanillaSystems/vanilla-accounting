@@ -25,6 +25,7 @@ export function namesOf(view: Pick<RulesView, 'names' | 'currency'>, money: (n: 
   return {
     account: (n) => view.names.accounts[n],
     business: (id) => view.names.businesses[id],
+    payer: (key) => view.names.payers?.[key],
     money: (n) => `${view.currency} ${money(n)}`,
   };
 }

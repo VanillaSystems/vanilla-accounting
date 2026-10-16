@@ -2354,6 +2354,7 @@ export default {
     'error.noDescription': 'Il manque le texte à l\'écriture : dire brièvement à quoi elle sert.',
     'error.accountNumber': '«{account}» n\'est pas un numéro de compte : un compte a quatre chiffres.',
     'error.accountName': 'Le compte {account} a besoin d\'un nom.',
+    'error.questionChoices': 'Une question a pour réponses «{private}» et «{business}», pour un paiement de client «{saleDomestic}», «{saleAbroad}» et «{notSale}», ou aucun bouton et une réponse en mots.',
     'error.gone.receipt': 'Ce justificatif n\'est pas (ou plus) dans la comptabilité : voir Justificatifs.',
     'error.gone.entry': 'Cette écriture n\'existe pas (ou plus) : voir Écritures.',
     'error.gone.payment': 'Ce paiement n\'existe pas (ou plus) : voir Relevés.',
@@ -2814,6 +2815,7 @@ export default {
     'error.questionAnswered': 'Quelqu’un a entre-temps répondu à cette question.',
     'assistant.c.question': 'Question à {to} : «{text}»',
     'assistant.c.questionAnswered': 'Question «{text}» : déjà décidée, comme {by} y a répondu avant',
+    'assistant.c.questionOpen': 'Déjà ouverte sous Tâches : «{text}» · à {to}',
     'assistant.c.withdrawQuestion': 'Question retirée',
   },
 } satisfies Locale;

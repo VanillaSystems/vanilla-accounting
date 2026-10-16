@@ -11,6 +11,7 @@ import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
+import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
 import type { PaymentProposal } from '../../invoices/payments.js';
@@ -107,6 +108,10 @@ export function errorText(e: unknown): string {
     case 'noDescription': return t('error.noDescription');
     case 'accountNumber': return t('error.accountNumber', b.params);
     case 'accountName': return t('error.accountName', b.params);
+    case 'questionChoices': return t('error.questionChoices', {
+      private: t('questions.choice.private'), business: t('questions.choice.business'), saleDomestic: t('questions.choice.saleDomestic', { rate: String(normalRate()) }),
+      saleAbroad: t('questions.choice.saleAbroad'), notSale: t('questions.choice.notSale'),
+    });
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'setup': return setupText(b.params);

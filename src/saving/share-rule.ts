@@ -16,7 +16,7 @@ import { loadBooks, periodLock, type Books } from '../books/store.js';
 import { loadClassifyContext, paymentFacts, ruleBookingLines, ruleOfPayment, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { RULE_SECTION, RULE_STEP, type RuleBooking } from '../booking/rules.js';
 import { homeOf, RULES_DIR } from '../knowledge/layers.js';
-import { payerKey } from '../knowledge/payer.js';
+import { payerKey, payerNames } from '../knowledge/payer.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
 
@@ -26,9 +26,10 @@ export interface ShareOffer {
   /** The private share in percent. */
   percent: number;
   booking: RuleBooking;
-  /** Whose rule: a business (its id and name), else the payer's key. */
+  /** Whose rule: a business (its id and name), else the payer's key and name. */
   business?: { id: string; name: string };
   payer?: string;
+  payerName?: string;
   /** The file the rule would stand in. */
   path: string;
 }
@@ -78,7 +79,7 @@ export function shareOffer(ws: Workspace, books: Books, ref: string, context: Cl
   const cp = id ? context.counterparties?.find((c) => c.id === id) : undefined;
   if (cp) return { ref, percent, booking, business: { id: cp.id, name: cp.name }, path: homeOf('workspace', cp.role, cp.id) };
   const payer = payerKey(tx);
-  return payer ? { ref, percent, booking, payer, path: `${RULES_DIR}/booking.guide.yaml` } : undefined;
+  return payer ? { ref, percent, booking, payer, payerName: payerNames([tx])[payer] ?? payer, path: `${RULES_DIR}/booking.guide.yaml` } : undefined;
 }
 
 /** The text of `path` with the offer's rule in it: a business's own rule takes the share, else a new rule is added. */

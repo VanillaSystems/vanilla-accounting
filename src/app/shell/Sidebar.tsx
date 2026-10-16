@@ -17,12 +17,14 @@ import type { ContextRef, EntrySet, InvoicingSet, MadeChange } from '../../types
 import { ApiError, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
+import { markdownBlocks, type Span } from '../assistant/markdown.js';
 import type { Route } from './route.js';
 import { PRESETS } from '../../export/model.js';
 import { builtInTexts } from '../../invoices/texts.js';
 import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
 import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
+import { questionText } from '../questions/Questions.js';
 import {
   addContext, closeAssistant, newConversation, openConversation, removeContext, sendMessage, showConversations, stopAnswer, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
@@ -97,6 +99,8 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     }
     case 'dropInvoiceDraft': return { text: t('assistant.c.dropInvoiceDraft') };
     case 'question': {
+      const open = note?.question?.open;
+      if (open) return { text: t('assistant.c.questionOpen', { text: questionText(open, books), to: note.question?.to ?? '' }), go: { area: 'automation', view: 'tasks' } };
       const go: Route = c.on.kind === 'payment' ? { area: 'bank', payment: c.on.id } : c.on.kind === 'receipt' ? { area: 'receipts', id: c.on.id } : { area: 'journal', id: c.on.id };
       return { text: note?.question?.answered ? t('assistant.c.questionAnswered', { text: c.text, by: note.question.answered }) : t('assistant.c.question', { to: note?.question?.to ?? c.to ?? '', text: c.text }), go };
     }
@@ -148,6 +152,20 @@ function mentions(q: string): ContextRef[] {
   ];
   const w = q.toLowerCase();
   return all.filter((r) => `${r.label} ${r.id}`.toLowerCase().includes(w)).slice(0, 8);
+}
+
+const Spans = ({ line }: { line: Span[] }) => <>{line.map((x, i) => (x.bold ? <strong key={i}>{x.text}</strong> : <Fragment key={i}>{x.text}</Fragment>))}</>;
+
+/** An answer's text with its bold, lists and paragraphs (src/app/assistant/markdown.ts), as elements, never as markup. */
+function AnswerText({ text }: { text: string }) {
+  return (
+    <>
+      {markdownBlocks(text).map((b, i) => (b.kind === 'p'
+        ? <p key={i}>{b.lines.map((l, j) => <Fragment key={j}>{j ? <br /> : null}<Spans line={l} /></Fragment>)}</p>
+        : b.kind === 'ul' ? <ul key={i}>{b.items.map((l, j) => <li key={j}><Spans line={l} /></li>)}</ul>
+          : <ol key={i}>{b.items.map((l, j) => <li key={j}><Spans line={l} /></li>)}</ol>))}
+    </>
+  );
 }
 
 function Chip({ r, onRemove }: { r: ContextRef; onRemove(): void }) {
@@ -214,7 +232,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                       {turn.tools.map((u, j) => <div key={j} className={`aitool${u.denied ? ' denied' : ''}`}>{u.name}{u.detail ? ` · ${u.detail}` : ''}{u.denied ? ` · ${t('assistant.denied')}` : ''}</div>)}
                     </details>
                   ) : null}
-                  {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}>{withoutChanges(turn.text)}</div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
+                  {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
                   {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
                   {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
                   {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}

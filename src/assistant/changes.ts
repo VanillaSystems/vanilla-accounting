@@ -11,7 +11,7 @@ import { RECEIPT_KINDS, type ReceiptKind } from '../types/index.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import { parseVatFacts } from '../accounting/vat-facts.js';
 import { PRESETS } from '../export/model.js';
-import { PRIVATE_CHOICES, TARGET_KINDS, type PrivateChoice, type QuestionTarget } from '../questions/model.js';
+import { questionChoices, TARGET_KINDS, type QuestionTarget } from '../questions/model.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 
@@ -163,10 +163,10 @@ function change(v: unknown): Change {
     case 'question': {
       const on = obj(c.on, 'on');
       if (!TARGET_KINDS.includes(on.kind as QuestionTarget['kind'])) throw new ChangesError(`on.kind: eines von ${TARGET_KINDS.join(', ')}`);
-      const choices = c.choices === undefined ? [] : Array.isArray(c.choices) ? c.choices : [c.choices];
-      if (!choices.every((x) => PRIVATE_CHOICES.includes(x as PrivateChoice))) throw new ChangesError(`choices: ${PRIVATE_CHOICES.join(', ')}`);
+      const choices = questionChoices(c.choices === undefined ? [] : Array.isArray(c.choices) ? c.choices : [c.choices]);
+      if (!choices) throw new ChangesError(`choices: ${JSON.stringify(c.choices)}`, { code: 'questionChoices' });
       const to = typeof c.to === 'string' && c.to.trim() ? c.to.trim() : undefined;
-      return { kind: 'question', on: { kind: on.kind as QuestionTarget['kind'], id: str(on.id, 'on.id') }, text: str(c.text, 'text'), ...(choices.length ? { choices: choices as PrivateChoice[] } : {}), ...(to ? { to } : {}) };
+      return { kind: 'question', on: { kind: on.kind as QuestionTarget['kind'], id: str(on.id, 'on.id') }, text: str(c.text, 'text'), ...(choices.length ? { choices } : {}), ...(to ? { to } : {}) };
     }
     default: throw new ChangesError(`unbekannte Änderung ${String(c.kind)}`);
   }
