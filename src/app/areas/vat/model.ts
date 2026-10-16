@@ -7,7 +7,7 @@ import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../ty
 import { entriesForReturn } from '../../../accounting/index.js';
 import { chfAmount } from '../../../accounting/ledger.js';
 import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
-import { chart, vat, filing } from '../../../engines/index.js';
+import { chart, vat, filing, registration } from '../../../engines/index.js';
 import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
 import type { BoxId, Formula } from '../../../core/modules/schema.js';
 
@@ -42,6 +42,51 @@ export function yearTurnover(entries: readonly JournalEntry[], year: string): nu
     if (chart().typeOf(e.accountDebit) === 'revenue') rappen -= Math.round(chfAmount(e) * 100);
   }
   return rappen / 100;
+}
+
+export type ThresholdLevel = 'ok' | 'near' | 'passed';
+
+/** A calendar year's turnover of a firm not registered for VAT against the registration threshold. */
+export interface ThresholdWatch {
+  year: string;
+  threshold: number;
+  turnover: number;
+  /** Of the threshold, rounded. */
+  percent: number;
+  /** The year's turnover at the pace so far: the turnover scaled to the whole year; the turnover itself while the year is young or over. */
+  projected: number;
+  level: ThresholdLevel;
+}
+
+/** The warning starts at this share of the threshold, reached or projected. */
+export const NEAR_SHARE = 0.9;
+/** A projection needs a quarter of the year behind it: January's pace says nothing about the year. */
+const PROJECT_FROM_DAY = 91;
+
+const dayOfYear = (date: string): number => Math.round((Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10)) - Date.UTC(+date.slice(0, 4), 0, 1)) / 86400000) + 1;
+const daysOfYear = (year: string): number => dayOfYear(`${year}-12-31`);
+
+/**
+ * Where `year`'s turnover stands against the threshold as of `today`: passed from the threshold
+ * on; near from NEAR_SHARE of it reached, or projected at the year's pace once PROJECT_FROM_DAY
+ * days have passed (r5f-9: 86 % reached in October passes the limit by December). Undefined when
+ * the jurisdiction names no threshold.
+ */
+export function thresholdWatch(entries: readonly JournalEntry[], year: string, today: IsoDate): ThresholdWatch | undefined {
+  const threshold = registration()?.turnoverThreshold;
+  if (threshold === undefined) return undefined;
+  const turnover = yearTurnover(entries, year);
+  const elapsed = today < `${year}-01-01` ? 0 : today > `${year}-12-31` ? daysOfYear(year) : dayOfYear(today);
+  const projected = elapsed >= PROJECT_FROM_DAY ? Math.round((turnover * daysOfYear(year)) / elapsed * 100) / 100 : turnover;
+  const level: ThresholdLevel = turnover >= threshold ? 'passed' : Math.max(turnover, projected) >= threshold * NEAR_SHARE ? 'near' : 'ok';
+  return { year, threshold, turnover, percent: Math.round((turnover / threshold) * 100), projected, level };
+}
+
+/** The years whose threshold still matters as of `today`: this year, and the one before until its year close (`closedThrough` at its 31.12.). */
+export function thresholdYears(today: IsoDate, closedThrough: IsoDate | undefined): string[] {
+  const year = today.slice(0, 4);
+  const before = String(Number(year) - 1);
+  return closedThrough && closedThrough >= `${before}-12-31` ? [year] : [before, year];
 }
 
 /** The pseudo-Ziffer of a filed quarter's Korrekturabrechnung (form 0535) in the list and the link. */

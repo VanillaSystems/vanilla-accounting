@@ -20,7 +20,7 @@ import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import {
-  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, vatKeyOf, vatReturn, yearTurnover,
+  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
@@ -28,7 +28,7 @@ import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
 import type { ReturnFigures } from '../../../engines/return.js';
-import { baseCurrency, chargesVat, filing, registration } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -46,28 +46,32 @@ function List(props: Props) {
   return setup && !setup.registered ? <NotRegistered {...props} /> : <Return {...props} />;
 }
 
+/** The turnover against the threshold: «passed» from the limit on, a warning from 90 % reached or projected (r5f-9), else the figure alone. */
 function NotRegistered({ period, books, canEdit }: Props) {
-  const threshold = registration()?.turnoverThreshold;
-  const year = period.kind === 'all' ? localToday().slice(0, 4) : period.from.slice(0, 4);
-  const turnover = yearTurnover(books.journalEntries ?? [], year);
-  const passed = threshold !== undefined && turnover >= threshold;
+  const today = localToday();
+  const year = period.kind === 'all' ? today.slice(0, 4) : period.from.slice(0, 4);
+  const w = thresholdWatch(books.journalEntries ?? [], year, today);
+  const turnover = w?.turnover ?? yearTurnover(books.journalEntries ?? [], year);
   const money = (n: number) => `${baseCurrency()} ${fmt(n)}`;
+  const level = w?.level ?? 'ok';
   return (
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit} />
       <div className="counts vst"><span>{t('vat.stateNone')}</span></div>
       <div className="notice vnovat" data-testid="not-registered">
         <span className="dot" aria-hidden="true" />
-        <span>{t('vat.notRegisteredText', { threshold: threshold === undefined ? '' : money(threshold) })}</span>
+        <span>{t('vat.notRegisteredText', { threshold: w ? money(w.threshold) : '' })}</span>
       </div>
-      <div className={`vresult${passed ? ' bad' : ''}`} data-testid="year-turnover">
+      <div className={`vresult${level === 'passed' ? ' bad' : ''}`} data-testid="year-turnover">
         <span>{t('vat.turnoverYear', { year })}</span>
         <b className="mono"><small>{baseCurrency()}</small>{fmt(turnover)}</b>
       </div>
-      {threshold !== undefined && (
-        <p className={passed ? 'notice warn' : 'm'} data-testid="threshold">
-          {passed && <span className="dot" aria-hidden="true" />}
-          <span>{t(passed ? 'vat.thresholdPassed' : 'vat.thresholdOk', { threshold: money(threshold), next: String(Number(year) + 1) })}</span>
+      {w && (
+        <p className={level === 'ok' ? 'm' : 'notice warn'} data-testid="threshold" data-level={level}>
+          {level !== 'ok' && <span className="dot" aria-hidden="true" />}
+          <span>{level === 'passed' ? t('vat.thresholdPassed', { threshold: money(w.threshold), next: String(Number(year) + 1) })
+            : level === 'near' ? t('vat.thresholdNear', { turnover: money(w.turnover), percent: String(w.percent), threshold: money(w.threshold), projected: money(w.projected) })
+              : t('vat.thresholdOk', { threshold: money(w.threshold) })}</span>
         </p>
       )}
     </div>

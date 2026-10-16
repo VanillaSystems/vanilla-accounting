@@ -12,7 +12,8 @@ import { answerTwin } from '../receipts/actions.js';
 import { evidenceText, patchOf } from '../journal/Detail.js';
 import { saveEntry } from '../journal/actions.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
-import { filing } from '../../../engines/index.js';
+import { thresholdWatch, thresholdYears } from '../vat/model.js';
+import { baseCurrency, filing } from '../../../engines/index.js';
 import { localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
 import { periodName } from '../../lib/period-label.js';
 import { periodIssues, type PeriodIssue } from './period-issues.js';
@@ -94,6 +95,32 @@ export function EvidenceTasks({ books, nav, canEdit }: { books: Index; nav: Nav;
         ))}
       </ul>
     </section>
+  );
+}
+
+/** The years whose turnover passed the registration threshold, for a firm not registered (r5f-9): the task's data, none for a registered firm. */
+export function thresholdPassed(books: Index, registered: boolean | undefined, today = localToday()): Array<NonNullable<ReturnType<typeof thresholdWatch>>> {
+  if (registered !== false) return [];
+  return thresholdYears(today, books.config?.closedThrough).flatMap((year) => { const w = thresholdWatch(books.journalEntries ?? [], year, today); return w?.level === 'passed' ? [w] : []; });
+}
+
+/** A firm not registered whose year's turnover reached the threshold: what follows, and the VAT page it is read off (r5f-9). */
+export function ThresholdTasks({ nav, passed }: { nav: Nav; passed: ReturnType<typeof thresholdPassed> }) {
+  const money = (n: number) => `${baseCurrency()} ${fmt(n)}`;
+  if (!passed.length) return null;
+  return (
+    <div className="wftasks" data-testid="threshold-tasks">
+      {passed.map((w) => (
+        <div key={w.year} className="wftask">
+          <b>{t('automation.thresholdTitle', { year: w.year, threshold: money(w.threshold) })}</b>
+          <span className="m">{t('vat.turnoverYear', { year: w.year })} · {money(w.turnover)}</span>
+          <p>{t('vat.thresholdPassed', { threshold: money(w.threshold), next: String(Number(w.year) + 1) })}</p>
+          <span className="wfactions">
+            <button type="button" className="btn ghost" onClick={() => nav.go({ route: { area: 'vat' }, query: { period: parsePeriod(w.year, localToday()) ?? undefined } })}>{t('automation.thresholdOpen')}</button>
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
