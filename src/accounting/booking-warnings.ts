@@ -77,3 +77,14 @@ export function plausibility(books: Books, year: string): Plausibility[] {
   const rank = (p: Plausibility) => order.indexOf(p.entry) * 2 + (p.code === 'swappedSale' ? 0 : 1);
   return out.sort((a, b) => rank(a) - rank(b));
 }
+
+/** A hint as `npm run doctor` prints it: what is wrong, and what to look at. */
+export interface PlausibilityHint { label: string; fix: string }
+
+/** The year's implausible bookings worded for the doctor and the year-close checklist's detail. */
+export function plausibilityHints(books: Books): PlausibilityHint[] {
+  const years = [...new Set((books.journalEntries ?? []).map((e) => e.date.slice(0, 4)))].sort();
+  return years.flatMap((year) => plausibility(books, year)).map((p) => p.code === 'cashNegative'
+    ? { label: `Cash account ${p.account} is below zero on ${p.date}: ${p.balance.toFixed(2)} (entry ${p.entry})`, fix: 'cash cannot fall under nothing: a booking has debit and credit swapped, or a receipt of cash is not booked' }
+    : { label: `Entry ${p.entry} of ${p.date} books ${p.accountDebit} / ${p.accountCredit}`, fix: 'revenue in the debit against cash or bank is a sale with its sides swapped, unless it is a refund to the customer (minus code)' });
+}

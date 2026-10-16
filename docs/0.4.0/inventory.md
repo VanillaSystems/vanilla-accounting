@@ -14,7 +14,7 @@ and the providers.
 | split | 64 | 26 |
 | infrastructure | 33 | 4 |
 | workflow | 19 | 0 |
-| view | 227 | 60 |
+| view | 227 | 59 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -187,7 +187,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/lib/api.ts` | camt.053 1 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |
-| `src/cli/doctor.ts` | CHF 1 |
 | `src/cli/evidence.ts` | camt.053 1, QR-bill 1 |
 | `src/cli/extract-shopify-orders.ts` | CHF 8 |
 | `src/cli/fetch-estv-rates.ts` | CHF 3, MWST 2, ESTV 6 |

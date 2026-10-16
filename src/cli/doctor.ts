@@ -23,8 +23,7 @@ import { useKeychain } from '../secrets/keychain-store.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { fail, ok, warn, workspaceChecks, type Result } from '../workspace/checks.js';
-import { plausibility } from '../accounting/booking-warnings.js';
-import type { Books } from '../books/store.js';
+import { plausibilityHints } from '../accounting/booking-warnings.js';
 import { APP_ROOT, openWorkspace, workspaceAt, type Workspace } from '../workspace/workspace.js';
 import { appTime, appVersion } from '../version.js';
 
@@ -117,7 +116,7 @@ async function main(): Promise<number> {
   } catch (e) {
     results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set VANILLA_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
   }
-  if (ws) results.push(...workspaceChecks(ws), ...(hasBooks(ws) ? plausibilityChecks(loadBooks(ws)) : []), ...knowledgeCheck(ws), ...await mailChecks(ws, values.mail === true));
+  if (ws) results.push(...workspaceChecks(ws), ...(hasBooks(ws) ? plausibilityHints(loadBooks(ws)).map((h) => warn(h.label, h.fix)) : []), ...knowledgeCheck(ws), ...await mailChecks(ws, values.mail === true));
 
   for (const r of results) {
     if (r.status === 'ok') console.log(`✓ ${r.label}`);
@@ -130,11 +129,3 @@ async function main(): Promise<number> {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await main();
-
-/** Bookings that look wrong (r8k-8): a cash account below zero, a sale with its sides swapped. Hints, never failures. */
-function plausibilityChecks(books: Books): Result[] {
-  const years = [...new Set(books.journalEntries.map((e) => e.date.slice(0, 4)))].sort();
-  return years.flatMap((year) => plausibility(books, year)).map((p) => p.code === 'cashNegative'
-    ? warn(`Cash account ${p.account} is below zero on ${p.date}: CHF ${p.balance.toFixed(2)} (entry ${p.entry})`, 'cash cannot fall under nothing: a booking has Soll and Haben swapped, or a receipt of cash is not booked')
-    : warn(`Entry ${p.entry} of ${p.date} books ${p.accountDebit} / ${p.accountCredit}`, 'revenue in the debit against cash or bank is a sale with its sides swapped, unless it is a refund to the customer (minus code)'));
-}

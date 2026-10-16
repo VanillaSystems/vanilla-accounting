@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookingWarnings, plausibility } from '../src/accounting/booking-warnings.js';
 import { loadBooks, saveBooks, update, PERSON } from '../src/books/store.js';
-import { workspaceChecks } from '../src/workspace/checks.js';
+import { plausibilityHints } from '../src/accounting/booking-warnings.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import type { JournalEntry } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -70,7 +70,7 @@ test('npm run doctor names a cash account below zero and a swapped-looking sale'
   const date = books.config.closedThrough ? `${books.config.closedThrough.slice(0, 4)}-12-20` : '2026-12-20';
   update(books, PERSON, (b) => { b.journalEntries.push(e('swap', date, '3400', '1000', 520, { origin: 'manual' })); });
   saveBooks(ws, books);
-  const warned = workspaceChecks(ws).filter((r) => r.status === 'warn').map((r) => r.label);
+  const warned = plausibilityHints(loadBooks(ws)).map((r) => r.label);
   assert.ok(warned.some((l) => /1000/.test(l) && /below zero|-520/.test(l)), `cash: ${warned.join(' | ')}`);
   assert.ok(warned.some((l) => /3400 \/ 1000/.test(l)), `swapped: ${warned.join(' | ')}`);
 });
