@@ -14,13 +14,16 @@
  *     then: { ask: "Wofür war der Barbezug?", account: "1000", vat: none }   # ask the person first
  *     source: wish 2026-10-15
  *
- * `when` takes counterparty (a business's file id), text (a pattern over the payment's text),
- * direction (in, out), amount ({ over, under }, in the books' currency) and account (the bank
- * account that paid); all must hold. A rule whose `when` and `then` are sentences is a note for
+ * `when` takes counterparty (a business's file id), payer (the other party's IBAN or its
+ * counterparty text as a key, src/knowledge/payer.ts: what an answered question keeps), text (a
+ * pattern over the payment's text), direction (in, out), amount ({ over, under }, in the books'
+ * currency) and account (the bank account that paid); all must hold. A rule whose `when` and
+ * `then` are sentences is a note for
  * the AI and people: it loads and shows, but nothing carries it out, so a new one is refused when
  * it is kept (src/saving/rules.ts).
  */
 import type { BankTransaction } from '../types/index.js';
+import { ibanKey, isGenericText, isPayer } from '../knowledge/payer.js';
 
 export const RULE_STEP = 'booking.guide.yaml#classify';
 /** The step's id inside knowledge/rules/booking.guide.yaml. */
@@ -28,6 +31,7 @@ export const RULE_SECTION = 'classify';
 
 export interface RuleWhen {
   counterparty?: string;
+  payer?: string;
   text?: string;
   direction?: 'in' | 'out';
   amount?: { over?: number; under?: number };
@@ -63,7 +67,8 @@ export type RuleRefusal =
   | { code: 'pattern'; params: { text: string } }
   | { code: 'amount' }
   | { code: 'direction'; params: { direction: string } }
-  | { code: 'counterparty'; params: { counterparty: string } };
+  | { code: 'counterparty'; params: { counterparty: string } }
+  | { code: 'payer'; params: { payer: string } };
 
 export type RefusalCode = RuleRefusal['code'];
 
@@ -74,7 +79,7 @@ export interface RuleFacts {
   counterparty(id: string): boolean;
 }
 
-const WHEN_KEYS = new Set(['counterparty', 'text', 'direction', 'amount', 'account']);
+const WHEN_KEYS = new Set(['counterparty', 'payer', 'text', 'direction', 'amount', 'account']);
 const THEN_KEYS = new Set(['account', 'vat', 'ask']);
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
@@ -102,6 +107,11 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     const c = text(w.counterparty);
     if (!c || !facts.counterparty(c)) return no({ code: 'counterparty', params: { counterparty: String(w.counterparty) } });
     when.counterparty = c;
+  }
+  if (w.payer !== undefined) {
+    const p = text(w.payer);
+    if (!p || (!ibanKey(p) && isGenericText(p))) return no({ code: 'payer', params: { payer: String(w.payer) } });
+    when.payer = p;
   }
   if (w.text !== undefined) {
     const p = text(w.text);
@@ -156,7 +166,7 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
 
 /** What a payment offers a rule: its text, the business it routes to, the bank account that paid, its amount in the books' currency. */
 export interface PaymentFacts {
-  tx: Pick<BankTransaction, 'description' | 'counterparty' | 'direction'>;
+  tx: Pick<BankTransaction, 'description' | 'counterparty' | 'counterpartyIban' | 'direction'>;
   counterparty?: string;
   bankAccount: string;
   amount: number;
@@ -170,6 +180,7 @@ export function holds({ rule, business }: PlacedRule, p: PaymentFacts): boolean 
   const w = rule.when;
   if (business && p.counterparty !== business) return false;
   if (w.counterparty && p.counterparty !== w.counterparty) return false;
+  if (w.payer && !isPayer(w.payer, p.tx)) return false;
   if (w.text && !new RegExp(w.text, 'i').test(`${p.tx.description} ${p.tx.counterparty ?? ''}`)) return false;
   if (w.direction && w.direction !== (p.tx.direction === 'CRDT' ? 'in' : 'out')) return false;
   const amount = Math.abs(p.amount);
@@ -195,6 +206,7 @@ export function ruleFor(rules: readonly PlacedRule[], p: PaymentFacts): PlacedRu
 /** The dictionary keys a rule is said with (src/app/i18n/locales/*.ts), and what each fills in. */
 export interface RuleWordVars {
   'rules.say.text': { text: string };
+  'rules.say.payer': { payer: string };
   'rules.say.in': Record<string, never>;
   'rules.say.out': Record<string, never>;
   'rules.say.over': { amount: string };
@@ -236,6 +248,7 @@ export function ruleWords({ rule, business }: PlacedRule, names: RuleNames, w: R
   const who = business ?? c.counterparty;
   const parts = [
     who && (names.business(who) ?? who),
+    c.payer && w('rules.say.payer', { payer: c.payer }),
     c.text && w('rules.say.text', { text: patternWords(c.text, w) }),
     c.direction && w(c.direction === 'in' ? 'rules.say.in' : 'rules.say.out', {}),
     c.amount?.over !== undefined && c.amount.under !== undefined

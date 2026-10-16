@@ -277,6 +277,12 @@ export interface BankTransaction {
    * periods, like parts.
    */
   counterparty?: string;
+  /**
+   * The other party's IBAN as the bank names it (camt053 DbtrAcct or CdtrAcct): its country tells
+   * a domestic customer from one abroad (src/accounting/sales-without-vat.ts), and it names one
+   * payer for certain. Only kept for open periods, like parts.
+   */
+  counterpartyIban?: string;
 }
 
 /** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */

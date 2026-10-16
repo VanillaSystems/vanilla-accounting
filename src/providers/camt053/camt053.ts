@@ -145,6 +145,8 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     if (single) description = String(ustrd(single.RmtInf) ?? single.AddtlTxInf ?? description);
     if (!description.trim() && single) description = counterpartyOf(single);
     const named = single ? counterpartyOf(single).trim() : '';
+    const sideAccount = single && (direction === 'DBIT' ? single.RltdPties?.CdtrAcct : single.RltdPties?.DbtrAcct);
+    const counterpartyIban = String(sideAccount?.Id?.IBAN ?? '').replace(/\s+/g, '').toUpperCase();
     const counterparty = named && !description.includes(named) ? named : '';
 
     return {
@@ -158,6 +160,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       ...(parts ? { parts } : {}),
       ...(reference !== undefined && String(reference).trim() ? { reference: String(reference).trim() } : {}),
       ...(counterparty ? { counterparty } : {}),
+      ...(counterpartyIban ? { counterpartyIban } : {}),
       ...(account.statements === 'wise' && description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
     };
   });

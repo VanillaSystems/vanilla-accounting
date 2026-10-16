@@ -14,9 +14,24 @@ export const QUESTION_LINE_VERSION = 1;
 export interface QuestionTarget { kind: 'payment' | 'receipt' | 'entry'; id: string }
 export const TARGET_KINDS: ReadonlyArray<QuestionTarget['kind']> = ['payment', 'receipt', 'entry'];
 
+/** «privat oder geschäftlich?»: a person's question about a payment, kept as a precedent of its counterparty. */
+export const PRIVATE_CHOICES = ['private', 'business'] as const;
+export type PrivateChoice = (typeof PRIVATE_CHOICES)[number];
+
+/** The owner's three answers: a domestic sale at the normal rate, an export, or no sale at all (a loan, a refund). */
+export const SALE_CHOICES = ['saleDomestic', 'saleAbroad', 'notSale'] as const;
+export type SaleChoice = (typeof SALE_CHOICES)[number];
+
+/** Why the app proposes what it does: the money's currency, or the payer's IBAN country. */
+export type SaleWhy = 'domesticIban' | 'domesticCurrency' | 'foreignCurrency' | 'foreignIban';
+export interface SaleProposal { choice: SaleChoice; why: SaleWhy }
+
 /** The answers the app can act on; any other answer is a short text the asker reads. */
-export const CHOICES = ['private', 'business'] as const;
-export type Choice = (typeof CHOICES)[number];
+export const CHOICES = [...PRIVATE_CHOICES, ...SALE_CHOICES] as const;
+export type Choice = PrivateChoice | SaleChoice;
+
+/** What a question the app asks by itself is about: `saleVat`, a customer payment without an invoice (src/intake/sale-questions.ts). */
+export type QuestionTopic = 'saleVat';
 
 export type Answer = { choice: Choice } | { text: string };
 
@@ -24,23 +39,25 @@ export type Answer = { choice: Choice } | { text: string };
 export type QuestionOrigin = 'person' | 'assistant' | 'booking';
 
 /** Why the app did not act on an answer: then the asker decides. */
-export const NOT_ACTED = ['closed', 'noPayment', 'severalPayments', 'paidPrivately', 'notBankExpense', 'refused'] as const;
+export const NOT_ACTED = ['closed', 'noPayment', 'severalPayments', 'paidPrivately', 'notBankExpense', 'hasReceipt', 'hasInvoice', 'refused'] as const;
 export type NotActed = (typeof NOT_ACTED)[number];
 
 /**
  * What the app did with an answer: the bookings it wrote or changed, with the changes that take
- * them back, and the precedent it kept; or why it did nothing (a filed quarter, a payment it
- * cannot read; `detail`: the refusal's own words).
+ * them back, and the precedent or the rule it kept; or why it did nothing (a filed quarter, a
+ * payment it cannot read; `detail`: the refusal's own words). A sale's answer says the VAT code it
+ * booked (`vatCode`, empty: none) and, «kein Umsatz», that it marked the payment as needing no receipt.
  */
 export type Acted =
-  | { booked: string[]; undo: BookChange[]; precedent?: string }
+  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true }
   | { precedent: string }
   | { refused: NotActed; detail?: string };
 
 interface LineBase { v: typeof QUESTION_LINE_VERSION; id: string; at: string; by: string }
 
 export type QuestionLine =
-  | LineBase & { event: 'asked'; on: QuestionTarget; text: string; choices: Choice[]; to?: string; origin: QuestionOrigin }
+  /** `topic` and `proposal`: a question the app asks by itself, and the choice it would make. */
+  | LineBase & { event: 'asked'; on: QuestionTarget; text: string; choices: Choice[]; to?: string; origin: QuestionOrigin; topic?: QuestionTopic; proposal?: SaleProposal }
   /** `from`: the precedent that answered it, without anyone asked. */
   | LineBase & { event: 'answered'; answer: Answer; acted?: Acted; from?: string }
   /** The answer's bookings taken back: the question is open again. */
@@ -57,6 +74,8 @@ export interface Question {
   by: string;
   to?: string;
   origin: QuestionOrigin;
+  topic?: QuestionTopic;
+  proposal?: SaleProposal;
   askedAt: string;
   status: QuestionStatus;
   answer?: { by: string; at: string; answer: Answer; acted?: Acted; from?: string };
@@ -71,7 +90,7 @@ export function fold(lines: readonly QuestionLine[]): Question[] {
   const byId = new Map<string, Question>();
   for (const l of [...lines].sort((a, b) => a.at.localeCompare(b.at))) {
     if (l.event === 'asked') {
-      if (!byId.has(l.id)) byId.set(l.id, { id: l.id, on: l.on, text: l.text, choices: l.choices, by: l.by, ...(l.to ? { to: l.to } : {}), origin: l.origin, askedAt: l.at, status: 'open' });
+      if (!byId.has(l.id)) byId.set(l.id, { id: l.id, on: l.on, text: l.text, choices: l.choices, by: l.by, ...(l.to ? { to: l.to } : {}), origin: l.origin, ...(l.topic ? { topic: l.topic } : {}), ...(l.proposal ? { proposal: l.proposal } : {}), askedAt: l.at, status: 'open' });
       continue;
     }
     const q = byId.get(l.id);
@@ -101,7 +120,7 @@ export const onTarget = (qs: readonly Question[], on: QuestionTarget): Question[
 /** The names the asker and the addressee are picked from: the owner first, then everyone who asked or answered. */
 export function peopleOf(owner: string, qs: readonly Question[]): string[] {
   const out: string[] = [];
-  for (const n of [owner, ...qs.flatMap((q) => [q.by, q.to, q.answer?.by])]) {
+  for (const n of [owner, ...qs.flatMap((q) => [q.origin === 'booking' ? undefined : q.by, q.to, q.answer?.by])]) {
     if (n && !out.some((x) => same(x, n))) out.push(n.trim());
   }
   return out;
@@ -118,7 +137,12 @@ export function parseLine(raw: unknown): QuestionLine | undefined {
       if (!on || !TARGET_KINDS.includes(on.kind) || typeof on.id !== 'string' || typeof l.text !== 'string') return undefined;
       const choices = Array.isArray(l.choices) ? l.choices.filter((c): c is Choice => CHOICES.includes(c as Choice)) : [];
       const origin = (['person', 'assistant', 'booking'] as const).find((o) => o === l.origin) ?? 'person';
-      return { v: 1, event: 'asked', id: l.id, at: l.at, by: l.by, on: { kind: on.kind, id: on.id }, text: l.text, choices, ...(typeof l.to === 'string' && l.to ? { to: l.to } : {}), origin };
+      const p = l.proposal as Partial<SaleProposal> | undefined;
+      const proposal = p && (SALE_CHOICES as readonly string[]).includes(p.choice as string) && typeof p.why === 'string' ? { choice: p.choice as SaleChoice, why: p.why as SaleProposal['why'] } : undefined;
+      return {
+        v: 1, event: 'asked', id: l.id, at: l.at, by: l.by, on: { kind: on.kind, id: on.id }, text: l.text, choices, ...(typeof l.to === 'string' && l.to ? { to: l.to } : {}), origin,
+        ...(l.topic === 'saleVat' ? { topic: 'saleVat' as const } : {}), ...(proposal ? { proposal } : {}),
+      };
     }
     case 'answered': {
       const a = l.answer as Record<string, unknown> | undefined;

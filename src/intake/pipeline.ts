@@ -30,6 +30,8 @@ export type IntakeNote =
   | { code: 'sameBytes'; files: Array<{ file: string; of: string }> }
   /** Payments a company rule holds for the person (src/booking/rules.ts): not booked, each a question in Automatisierung. */
   | { code: 'asked'; count: number }
+  /** Customer payments without an invoice booked without VAT: each a question to the owner (src/intake/sale-questions.ts). */
+  | { code: 'saleAsked'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -185,6 +187,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
       case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;
+      case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

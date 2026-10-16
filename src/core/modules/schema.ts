@@ -170,6 +170,8 @@ export interface YearEndData {
 export interface InvoicingData {
   rates: number[];
   exemptions: Record<'abroad' | 'export', BoxId>;
+  /** The country codes of the VAT territory, as an IBAN starts: a payer there is domestic. */
+  territory: string[];
 }
 
 /** setup.yaml: the accounts a new workspace gets from the setup's answers. */

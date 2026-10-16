@@ -6,17 +6,20 @@
  * counterparty as one key (precedentKey), and `choice`. The next question of that kind on a
  * payment with the same key is answered and booked by it without anyone asked
  * (src/server/questions.ts). A wrong auto-answer is worse than a question, so the key must name
- * one counterparty for certain; a bank text such as «Karte 5412 Einkauf» gives none.
+ * one counterparty for certain; a bank text such as «Karte 5412 Einkauf» gives none
+ * (src/knowledge/payer.ts). The answer to a sale without an invoice is kept here too, as a rule of
+ * the step `classify` (keepRule), which the classifier carries out.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { isMap, isSeq, parseDocument, type YAMLMap, type YAMLSeq } from 'yaml';
-import { merchantOf } from './counterparties.js';
+import { textKey } from './payer.js';
 import { RULES_DIR } from './layers.js';
+import { RULE_SECTION } from '../booking/rules.js';
 import type { BankTransaction, Index } from '../types/index.js';
 import { receiptKeys } from '../accounting/manual-booking.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { CHOICES, type Choice } from '../questions/model.js';
+import { PRIVATE_CHOICES, type PrivateChoice } from '../questions/model.js';
 
 export const PRECEDENT_STEP = 'private';
 export const guideFile = (ws: Pick<Workspace, 'paths'>): string => join(ws.paths.root, RULES_DIR, 'booking.guide.yaml');
@@ -24,26 +27,7 @@ export const guideFile = (ws: Pick<Workspace, 'paths'>): string => join(ws.paths
 /** What names a payment's other party, strongest first: its receipts' VAT number, their vendor, the bank's counterparty text. */
 export type PrecedentMatch = { uid: string } | { vendor: string } | { tx: string };
 
-export interface ChoicePrecedent { id: string; date: string; item: string; decision: string; by: string; match: PrecedentMatch; choice: Choice; question?: string }
-
-/**
- * Words of a bank text that name a way to pay or the bank's wrapper, never a counterparty: a text
- * of these alone («Karte 5412 Einkauf», «Kartenzahlung», «TWINT», «Card transaction of …») is
- * generic. Lower case, in the app's four languages.
- */
-const GENERIC = new Set([
-  'karte', 'kartenzahlung', 'einkauf', 'zahlung', 'zahlungen', 'belastung', 'gutschrift', 'lastschrift', 'dauerauftrag', 'überweisung', 'bezug', 'barbezug', 'bargeld',
-  'twint', 'maestro', 'visa', 'mastercard', 'debit', 'debitkarte', 'kreditkarte', 'pos', 'ec', 'bancomat', 'postomat', 'atm', 'e-banking', 'ebanking', 'online',
-  'card', 'transaction', 'payment', 'purchase', 'issued', 'by', 'of', 'sent', 'money', 'to', 'from', 'received', 'paid', 'transfer', 'withdrawal', 'cash',
-  'carte', 'achat', 'paiement', 'retrait', 'virement', 'carta', 'acquisto', 'pagamento', 'prelievo', 'bonifico',
-  'chf', 'eur', 'usd', 'gbp', 'nr', 'no', 'ref', 'referenz', 'am', 'vom', 'bei', 'in', 'und', 'mit',
-]);
-
-const words = (s: string) => s.toLowerCase().replace(/\d+([.,]\d+)*/g, ' ').replace(/[^\p{L}&\s-]/gu, ' ').split(/\s+/).filter(Boolean);
-const normalized = (s: string | undefined) => s?.toLowerCase().replace(/[^a-z0-9äöü]/g, '') || undefined;
-
-/** A bank text that names no counterparty: nothing but generic words and numbers. */
-export const isGenericText = (text: string): boolean => !words(text).some((w) => w.length >= 3 && !GENERIC.has(w));
+export interface ChoicePrecedent { id: string; date: string; item: string; decision: string; by: string; match: PrecedentMatch; choice: PrivateChoice; question?: string }
 
 /**
  * The payment's counterparty as a precedent's key, or none when it is not certain: the one VAT
@@ -55,10 +39,8 @@ export function precedentKey(books: Pick<Index, 'mappings' | 'receipts'>, tx: Pi
   if (uids.size === 1) return { uid: [...uids][0] };
   if (uids.size > 1 || vendors.size > 1) return undefined;
   if (vendors.size === 1) return { vendor: [...vendors][0] };
-  const text = tx.counterparty || merchantOf(tx.description);
-  if (isGenericText(text)) return undefined;
-  const key = normalized(words(text).join(' '));
-  return key && key.length >= 3 ? { tx: key } : undefined;
+  const key = textKey(tx);
+  return key ? { tx: key } : undefined;
 }
 
 const sameMatch = (a: PrecedentMatch, b: PrecedentMatch) => JSON.stringify(a) === JSON.stringify(b);
@@ -74,7 +56,7 @@ const asPrecedent = (v: unknown): ChoicePrecedent | undefined => {
   const p = v as Partial<ChoicePrecedent> | null;
   const m = p?.match as Record<string, unknown> | undefined;
   const one = m && Object.keys(m).length === 1 && ['uid', 'vendor', 'tx'].some((k) => typeof m[k] === 'string');
-  return p && typeof p.id === 'string' && one && CHOICES.includes(p.choice as Choice) ? p as ChoicePrecedent : undefined;
+  return p && typeof p.id === 'string' && one && PRIVATE_CHOICES.includes(p.choice as PrivateChoice) ? p as ChoicePrecedent : undefined;
 };
 
 /** The precedents with a choice, newest last. */
@@ -86,14 +68,17 @@ export function choicePrecedents(ws: Pick<Workspace, 'paths'>): ChoicePrecedent[
 export const precedentFor = (ws: Pick<Workspace, 'paths'>, key: PrecedentMatch): ChoicePrecedent | undefined =>
   choicePrecedents(ws).filter((p) => sameMatch(p.match, key)).at(-1);
 
-function precedentsSeq(doc: ReturnType<typeof load>): YAMLSeq {
+/** The list `key` of the step `section`, made when missing. */
+function stepSeq(doc: ReturnType<typeof load>, section: string, key: 'precedents' | 'rules'): YAMLSeq {
   if (!isMap(doc.get('steps'))) doc.set('steps', doc.createNode({}));
   const steps = doc.get('steps') as YAMLMap;
-  if (!isMap(steps.get(PRECEDENT_STEP))) steps.set(PRECEDENT_STEP, doc.createNode({}));
-  const step = steps.get(PRECEDENT_STEP) as YAMLMap;
-  if (!isSeq(step.get('precedents'))) step.set('precedents', doc.createNode([]));
-  return step.get('precedents') as YAMLSeq;
+  if (!isMap(steps.get(section))) steps.set(section, doc.createNode({}));
+  const step = steps.get(section) as YAMLMap;
+  if (!isSeq(step.get(key))) step.set(key, doc.createNode([]));
+  return step.get(key) as YAMLSeq;
 }
+const precedentsSeq = (doc: ReturnType<typeof load>) => stepSeq(doc, PRECEDENT_STEP, 'precedents');
+const json = (node: unknown) => (node as { toJSON?: () => unknown }).toJSON?.() as Record<string, unknown> | undefined;
 
 function save(ws: Pick<Workspace, 'paths'>, doc: ReturnType<typeof load>): void {
   const file = guideFile(ws);
@@ -105,7 +90,7 @@ function save(ws: Pick<Workspace, 'paths'>, doc: ReturnType<typeof load>): void 
 export function keepPrecedent(ws: Pick<Workspace, 'paths'>, p: ChoicePrecedent): void {
   const doc = load(ws);
   const seq = precedentsSeq(doc);
-  seq.items = seq.items.filter((node) => { const q = asPrecedent((node as { toJSON?: () => unknown }).toJSON?.()); return !q || !sameMatch(q.match, p.match); });
+  seq.items = seq.items.filter((node) => { const q = asPrecedent(json(node)); return !q || !sameMatch(q.match, p.match); });
   const node = doc.createNode(p);
   (node as { flow?: boolean }).flow = true;
   seq.items.push(node);
@@ -118,6 +103,31 @@ export function dropPrecedent(ws: Pick<Workspace, 'paths'>, id: string): void {
   const doc = load(ws);
   const seq = precedentsSeq(doc);
   const before = seq.items.length;
-  seq.items = seq.items.filter((node) => asPrecedent((node as { toJSON?: () => unknown }).toJSON?.())?.id !== id);
+  seq.items = seq.items.filter((node) => asPrecedent(json(node))?.id !== id);
+  if (seq.items.length !== before) save(ws, doc);
+}
+
+/**
+ * A rule an answer keeps (src/server/questions.ts): written to the booking step `classify` of the
+ * company's guide, where the classifier carries it out (src/booking/rule-book.ts). An older rule of
+ * the same `replaces` key goes, so the newer answer wins.
+ */
+export function keepRule(ws: Pick<Workspace, 'paths'>, rule: Record<string, unknown> & { id: string }, replaces: (old: Record<string, unknown>) => boolean): void {
+  const doc = load(ws);
+  const seq = stepSeq(doc, RULE_SECTION, 'rules');
+  seq.items = seq.items.filter((node) => { const r = json(node); return !r || !replaces(r); });
+  const node = doc.createNode(rule);
+  (node as { flow?: boolean }).flow = true;
+  seq.items.push(node);
+  save(ws, doc);
+}
+
+/** Takes the rule `id` back (the answer it came from was undone). */
+export function dropRule(ws: Pick<Workspace, 'paths'>, id: string): void {
+  if (!existsSync(guideFile(ws))) return;
+  const doc = load(ws);
+  const seq = stepSeq(doc, RULE_SECTION, 'rules');
+  const before = seq.items.length;
+  seq.items = seq.items.filter((node) => json(node)?.id !== id);
   if (seq.items.length !== before) save(ws, doc);
 }

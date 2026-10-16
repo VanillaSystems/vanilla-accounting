@@ -5,7 +5,7 @@
  */
 import type { ApiRefusal } from './api-error.js';
 import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
-import type { Choice, QuestionTarget } from '../questions/model.js';
+import type { PrivateChoice, QuestionTarget } from '../questions/model.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
@@ -79,7 +79,7 @@ export type WorkspaceChange =
   | { kind: 'invoiceDraft'; customer?: string; newCustomer?: { name: string } & Record<string, unknown>; draft: { lines: DraftLine[] } & Record<string, unknown> }
   | { kind: 'dropInvoiceDraft'; id: string; customer?: string }
   /** A question to the owner the AI cannot decide (src/server/questions.ts); its undo withdraws it. */
-  | { kind: 'question'; on: QuestionTarget; text: string; choices?: Choice[]; to?: string }
+  | { kind: 'question'; on: QuestionTarget; text: string; choices?: PrivateChoice[]; to?: string }
   | { kind: 'withdrawQuestion'; id: string };
 
 /** What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's booking of every open payment. */

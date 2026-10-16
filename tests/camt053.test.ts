@@ -166,3 +166,15 @@ test('a single payment keeps its counterparty beside the remittance text, which 
   const prompt = buildBatchClassifyPrompt([{ tx: credit, receipts: [] }], { companyName: 'Malerei', chartOfAccounts: '', historicEntries: '', vatCodes: '' });
   assert.match(prompt, /Bank description: Rechnung 2026-028 Malerarbeiten Wohnzimmer\n {2}Counterparty: Familie Keller/, 'the model is told who paid');
 });
+
+test('a single payment keeps the other party\'s IBAN: the debtor\'s on a credit, the creditor\'s on a debit', () => {
+  const [credit, debit] = parse(ntry(`
+<Ntry><Amt Ccy="CHF">500.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-08-02</Dt></BookgDt>
+  <NtryDtls><TxDtls><Refs><AcctSvcrRef>IB-1</AcctSvcrRef></Refs><RltdPties><Dbtr><Nm>Beispiel Kunde AG</Nm></Dbtr><DbtrAcct><Id><IBAN>LI00 0881 0000 2324 013A A</IBAN></Id></DbtrAcct></RltdPties>
+  <RmtInf><Ustrd>Beratung</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>
+<Ntry><Amt Ccy="CHF">89.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-15</Dt></BookgDt>
+  <NtryDtls><TxDtls><Refs><AcctSvcrRef>IB-2</AcctSvcrRef></Refs><RltdPties><Cdtr><Nm>Beispiel Telefon AG</Nm></Cdtr><CdtrAcct><Id><IBAN>CH0000762011623852957</IBAN></Id></CdtrAcct></RltdPties>
+  <RmtInf><Ustrd>Natel</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`));
+  assert.equal(credit.counterpartyIban, 'LI00088100002324013AA');
+  assert.equal(debit.counterpartyIban, 'CH0000762011623852957');
+});

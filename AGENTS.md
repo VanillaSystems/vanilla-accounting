@@ -43,7 +43,7 @@ Rules the app carries out (src/booking/rules.ts, docs/0.4.0/saving.md "One click
     then: { ask: "Wofür war der Barbezug?", account: "2451", vat: none }   # ask first; account and vat: the proposal
     source: wish 2026-10-15
   ```
-  `when` takes `counterparty` (a business's file id), `text` (a pattern over the payment's text), `direction` (`in`, `out`), `amount` (`over`, `under`, in the books' currency), `account` (the bank account that paid). `vat: none` books without a VAT code. `off: true` switches a rule off. `source:` starts with `wish <date>` for a wish, `correction <date>` for a person's correction.
+  `when` takes `counterparty` (a business's file id), `payer` (the payer's IBAN or bank counterparty text: what an answered «Verkauf ohne Rechnung» question keeps), `text` (a pattern over the payment's text), `direction` (`in`, `out`), `amount` (`over`, `under`, in the books' currency), `account` (the bank account that paid). `vat: none` books without a VAT code. `off: true` switches a rule off. `source:` starts with `wish <date>` for a wish, `correction <date>` for a person's correction.
 - The person keeps a rule with «Behalten» on its card; a rule the app cannot carry out is refused there. Firma › Regeln lists every rule. To remove one, draft the file without it: the card asks «Ja, entfernen».
 
 Special cases:

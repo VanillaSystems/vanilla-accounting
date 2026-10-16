@@ -3,8 +3,12 @@
  * the AI sidebar alike. An answer that decides something acts at once, code first: «privat» on a
  * payment books it on the owner's account without a VAT code, as the sidebar and the booking by
  * hand do, and «privat» or «geschäftlich» is kept as a precedent, so the next question of the
- * kind about the same counterparty is answered without anyone asked. Any other answer, or one the
- * app cannot act on (a filed quarter, a payment it cannot read), goes back to the asker, who decides.
+ * kind about the same counterparty is answered without anyone asked. The answer to the app's own
+ * question about a customer payment without an invoice (src/intake/sale-questions.ts) books the sale
+ * at the normal rate, as an export, or marks it as no sale, and is kept as a rule for the payer, so
+ * the classifier books the payer's next payment by it. Any other answer, or one the app cannot act
+ * on (a filed quarter, a payment it cannot read, one with a receipt or an invoice), goes back to
+ * the asker, who decides.
  */
 import { randomBytes } from 'node:crypto';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -12,17 +16,21 @@ import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
-import { dropPrecedent, keepPrecedent, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
-import { CHOICES, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget } from '../questions/model.js';
+import { dropPrecedent, dropRule, keepPrecedent, keepRule, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
+import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget } from '../questions/model.js';
+import { saleVatCode, salesWithoutVat } from '../accounting/sales-without-vat.js';
+import { payerKey } from '../knowledge/payer.js';
+import { parseRule } from '../booking/rules.js';
+import { ruleFactsOf } from '../saving/rules.js';
 import type { BankTransaction } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
-import { WS, RequestError, readBooks, updateBooks } from './books.js';
+import { WS, RequestError, assertOpen, readBooks, updateBooks } from './books.js';
 import { applyChange, bookPayment, setEntry } from './edits.js';
 
 const now = () => new Date().toISOString();
 const append = (line: QuestionLine) => appendQuestionLine(WS, line, readBooks().config.closedThrough);
 
-export interface AskInput { on: QuestionTarget; by: string; text: string; choices?: Choice[]; to?: string; origin?: QuestionOrigin }
+export interface AskInput { on: QuestionTarget; by: string; text: string; choices?: PrivateChoice[]; to?: string; origin?: QuestionOrigin }
 
 const name = (v: unknown, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new RequestError(400, `${what} fehlt.`);
@@ -39,9 +47,9 @@ export function parseAsk(body: unknown, origin: QuestionOrigin = 'person'): AskI
   if (!text) throw new RequestError(400, 'Die Frage fehlt.');
   if (text.length > 2000) throw new RequestError(400, 'Die Frage: höchstens 2000 Zeichen.');
   const choices = Array.isArray(b.choices) ? b.choices : [];
-  if (!choices.every((c) => CHOICES.includes(c as Choice))) throw new RequestError(400, `choices: ${CHOICES.join(', ')}.`);
+  if (!choices.every((c) => PRIVATE_CHOICES.includes(c as PrivateChoice))) throw new RequestError(400, `choices: ${PRIVATE_CHOICES.join(', ')}.`);
   return {
-    on: { kind: on.kind as QuestionTarget['kind'], id: on.id }, by: name(b.by, 'by'), text, choices: [...new Set(choices as Choice[])],
+    on: { kind: on.kind as QuestionTarget['kind'], id: on.id }, by: name(b.by, 'by'), text, choices: [...new Set(choices as PrivateChoice[])],
     ...(typeof b.to === 'string' && b.to.trim() ? { to: name(b.to, 'to') } : {}), origin,
   };
 }
@@ -107,35 +115,84 @@ function bookPrivate(books: Books, tx: BankTransaction, only: string | undefined
   return { booked: undo.map((u) => (u as { id: string }).id), undo };
 }
 
+/** A refusal of the books as the answer's words: a filed quarter, a payment it cannot book, an edit refused. */
+function refusalOf(e: unknown): Acted {
+  if (e instanceof Unclear) return { refused: e.why, detail: e.message };
+  if (e instanceof ClosedPeriodError) return { refused: 'closed', ...(e.closedThrough ? { detail: e.closedThrough } : {}) };
+  if (e instanceof RequestError) return { refused: 'refused', detail: e.message };
+  throw e;
+}
+
+const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly string[]).includes(c);
+
+/**
+ * The sale `tx` as the owner said: its revenue entries at the normal rate or the export code
+ * (booked by hand from now on, origin manual), or the payment marked as needing no receipt, its
+ * booking kept. A payment with a receipt or an invoice is the document's to decide, never changed.
+ */
+function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string } {
+  if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
+  const own = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+  if (own.some((e) => e.origin === 'invoice')) throw new Unclear('hasInvoice', tx.description);
+  assertOpen(books, [tx.date, ...own.map((e) => e.date)], 'editEntry');
+  const entries = salesWithoutVat({ ...books, transactions: [tx] }, true)[0]?.entries ?? [];
+  const account = entries[0]?.accountCredit;
+  if (choice === 'notSale') {
+    tx.noReceiptNeeded = true;
+    return { booked: [], undo: [], vatCode: '', marked: true, ...(account ? { account } : {}) };
+  }
+  const code = saleVatCode(choice) ?? '';
+  const undo = entries.map((e) => setEntry(books, e.id, { vatCode: code }));
+  return { booked: entries.map((e) => e.id), undo, vatCode: code, ...(account ? { account } : {}) };
+}
+
+/**
+ * The answer kept as a rule for the payer: the payer's next payment in is booked on `account`
+ * with the answer's VAT code, in code, without a question. A payer the bank names only by a
+ * generic text gets no rule (src/knowledge/payer.ts): its next payment is asked again.
+ */
+function keepSaleRule(q: Question, choice: SaleChoice, tx: BankTransaction, account: string | undefined, vatCode: string, at: string): string | undefined {
+  const payer = payerKey(tx);
+  if (!payer || !account) return undefined;
+  const raw = { id: `sale-${q.id}`, when: { payer, direction: 'in' }, then: { account, vat: vatCode || 'none' }, source: `correction ${at.slice(0, 10)}`, why: `${choice}: ${tx.counterparty || tx.description}` };
+  if (!parseRule(raw, ruleFactsOf(WS)).ok) return undefined;
+  keepRule(WS, raw, (old) => typeof old.id === 'string' && old.id.startsWith('sale-') && (old.when as { payer?: unknown } | undefined)?.payer === payer);
+  return raw.id;
+}
+
 /** What the answer does in the books and the knowledge, or why it does nothing. `from`: the precedent that answers, kept already. */
 function act(q: Question, answer: Answer, by: string, at: string, from: string | undefined): Acted | undefined {
   if (!('choice' in answer)) return undefined;
   const books = readBooks();
   const { tx, entry, why } = paymentOf(books, q.on);
   if (!tx) return { refused: why ?? 'noPayment' };
+  const choice = answer.choice;
+  if (isSaleChoice(choice)) {
+    let sale: ReturnType<typeof bookSale>;
+    try {
+      sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice));
+    } catch (e) { return refusalOf(e); }
+    const rule = keepSaleRule(q, choice, tx, sale.account, sale.vatCode, at);
+    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const } : {}), ...(rule ? { rule } : {}) };
+  }
   let booked: { booked: string[]; undo: BookChange[] } | undefined;
-  if (answer.choice === 'private') {
+  if (choice === 'private') {
     try {
       booked = updateBooks((b) => bookPrivate(b, b.transactions.find((t) => t.ref === tx.ref)!, entry));
-    } catch (e) {
-      if (e instanceof Unclear) return { refused: e.why, detail: e.message };
-      if (e instanceof ClosedPeriodError) return { refused: 'closed', ...(e.closedThrough ? { detail: e.closedThrough } : {}) };
-      if (e instanceof RequestError) return { refused: 'refused', detail: e.message };
-      throw e;
-    }
+    } catch (e) { return refusalOf(e); }
   }
   const key = precedentKey(books, tx);
-  const precedent = key && !from ? keep(q, answer.choice, by, at, tx, key) : undefined;
+  const precedent = key && !from ? keep(q, choice, by, at, tx, key) : undefined;
   if (booked) return { ...booked, ...(precedent ? { precedent } : {}) };
   return precedent ? { precedent } : undefined;
 }
 
-const DECISION: Record<Choice, (owner: string) => string> = {
+const DECISION: Record<PrivateChoice, (owner: string) => string> = {
   private: (owner) => `private: D ${owner}, no VAT code`,
   business: () => 'business: booked as the company\'s expense',
 };
 
-function keep(q: Question, choice: Choice, by: string, at: string, tx: BankTransaction, key: PrecedentMatch): string {
+function keep(q: Question, choice: PrivateChoice, by: string, at: string, tx: BankTransaction, key: PrecedentMatch): string {
   const day = tx.date.split('-').reverse().join('.');
   const p: ChoicePrecedent = {
     id: `prec-${q.id}`, date: at.slice(0, 10), item: `${tx.counterparty || tx.description} (${day}, ${tx.currency} ${Math.abs(tx.amount).toFixed(2)})`,
@@ -161,7 +218,7 @@ export function askQuestion(input: AskInput): Question {
   const id = `q-${randomBytes(4).toString('hex')}`;
   const at = now();
   append({ v: 1, event: 'asked', id, at, by: input.by, on: input.on, text: input.text, choices: input.choices ?? [], ...(input.to ? { to: input.to } : {}), origin: input.origin ?? 'person' });
-  const decides = CHOICES.every((c) => input.choices?.includes(c));
+  const decides = PRIVATE_CHOICES.every((c) => input.choices?.includes(c));
   const tx = decides ? paymentOf(books, input.on).tx : undefined;
   const key = tx && precedentKey(books, tx);
   const p = key ? precedentFor(WS, key) : undefined;
@@ -186,6 +243,10 @@ export function undoAnswer(id: string, by: string): Question {
   if (q.status !== 'answered') throw new RequestError(409, 'Diese Frage hat keine Antwort, die sich zurücknehmen liesse.');
   if (acted && 'undo' in acted && acted.undo.length) updateBooks((b) => { for (const c of [...acted.undo].reverse()) applyChange(b, c); });
   if (acted && 'precedent' in acted && acted.precedent) dropPrecedent(WS, acted.precedent);
+  if (acted && 'rule' in acted && acted.rule) dropRule(WS, acted.rule);
+  if (acted && 'marked' in acted && acted.marked && q.on.kind === 'payment') {
+    updateBooks((b) => { const tx = b.transactions.find((t) => t.ref === q.on.id); if (tx) { assertOpen(b, [tx.date], 'editTransaction'); delete tx.noReceiptNeeded; } });
+  }
   append({ v: 1, event: 'undone', id, at: now(), by });
   return find(id);
 }

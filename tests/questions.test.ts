@@ -17,7 +17,7 @@ import { loadBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { readQuestions } from '../src/questions/store.js';
 import { askedByMe, fold, forMe, type Question, type QuestionLine } from '../src/questions/model.js';
-import { isGenericText } from '../src/knowledge/precedents.js';
+import { isGenericText } from '../src/knowledge/payer.js';
 import { GITATTRIBUTES } from '../src/workspace/scaffold.js';
 
 let api: ApiServer;

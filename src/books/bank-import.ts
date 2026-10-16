@@ -135,7 +135,7 @@ export interface Scan {
  */
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
-  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank',
+  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank', counterpartyIban: 'bank',
   source: 'kept', remarks: 'kept', noReceiptNeeded: 'kept',
 } as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
 
@@ -177,7 +177,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
     if (fromPdf && !out.reference) out.reference = fromPdf;
     // A closed transaction stays exactly as filed, so batch parts and references are only
     // attached in open periods.
-    if (isClosed(out)) { delete out.parts; delete out.reference; delete out.counterparty; }
+    if (isClosed(out)) { delete out.parts; delete out.reference; delete out.counterparty; delete out.counterpartyIban; }
     return out;
   });
 

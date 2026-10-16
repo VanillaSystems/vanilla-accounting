@@ -2,7 +2,8 @@
  * Questions in the UI (src/questions/model.ts): the block on a payment, a receipt or a booking
  * (its questions, «Frage stellen»), one question as a card (answer with one click or a few words,
  * «beantwortet» for the asker, «Zurücknehmen», «Erledigt»), and Aufgaben's two lists, «Fragen an
- * dich» and «Deine offenen Fragen».
+ * dich» and «Deine offenen Fragen». The app's own question about a sale without an invoice shows
+ * its proposal first and why.
  */
 import { useState } from 'react';
 import './questions.css';
@@ -13,13 +14,21 @@ import { at } from '../areas/receipts/view.js';
 import type { Nav } from '../areas/index.js';
 import type { Location } from '../shell/route.js';
 import type { Index } from '../../types/index.js';
-import { askedByMe, CHOICES, forMe, onTarget, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
+import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
+import { normalRate } from '../../accounting/sales-without-vat.js';
+import { baseCurrency, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
 
-const choiceText = (c: Choice) => t(`questions.choice.${c}` as 'questions.choice.private');
+const choiceText = (c: Choice) => (c === 'saleDomestic' ? t('questions.choice.saleDomestic', { rate: String(normalRate()) }) : t(`questions.choice.${c}` as 'questions.choice.private'));
 const when = (iso: string) => formatDate(iso.slice(0, 10));
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const asker = (q: Question) => (q.origin === 'assistant' ? t('questions.ai') : q.by);
+const asker = (q: Question) => (q.origin === 'assistant' ? t('questions.ai') : q.origin === 'booking' ? t('questions.app') : q.by);
+
+/** The question in the viewer's language: the app's own question is said from its payment, a person's as written. */
+function questionText(q: Question, books: Index): string {
+  const tx = q.topic === 'saleVat' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
+  return tx ? t('questions.sale.text', { who: tx.counterparty || tx.description, amount: `${tx.currency} ${fmt(tx.amount)}`, date: formatDate(tx.date) }) : q.text;
+}
 
 /** Runs a command; a refusal is said in the toast. */
 async function run(nav: Nav, p: Promise<unknown>, done?: string): Promise<boolean> {
@@ -47,6 +56,13 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   const a = q.answer?.acted;
   if (!a) return null;
   if ('refused' in a) return <p className="qnote warn">{t(`questions.notActed.${a.refused}` as 'questions.notActed.refused', { detail: a.detail ?? '' })}</p>;
+  if ('vatCode' in a) {
+    const sale = [
+      a.marked ? t('questions.sale.marked') : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
+      a.rule ? t('questions.sale.rule') : t('questions.sale.noRule'),
+    ];
+    return <p className="qnote" data-testid="sale-acted">{sale.join(' · ')}</p>;
+  }
   const parts = [
     'booked' in a && a.booked.length ? t('questions.booked', { n: a.booked.length, account: owner }) : '',
     ('precedent' in a && a.precedent) || q.answer?.from ? t('questions.kept') : '',
@@ -68,14 +84,15 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
         <span className="m">{q.to ? t('questions.askedTo', { by: asker(q), to: q.to, date: when(q.askedAt) }) : t('questions.askedBy', { by: asker(q), date: when(q.askedAt) })}</span>
         {item ? <button type="button" className="linkbtn" onClick={() => nav.go(item.go)}>{item.label}</button> : null}
       </div>
-      <p className="qtext">{q.text}</p>
+      <p className="qtext">{questionText(q, books)}</p>
       {q.status === 'open' ? (
         <>
           {q.choices.includes('private') && !mine ? <p className="qnote">{t('questions.privateDoes', { account: owner })}</p> : null}
+          {q.proposal ? <p className="qnote" data-testid="sale-proposal">{t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {t('questions.sale.does')}</p> : null}
           {canEdit ? (
             <div className="qacts">
               {mine ? null : <>
-                {q.choices.map((c) => <button key={c} type="button" className="btn" onClick={() => void answer({ choice: c })}>{choiceText(c)}</button>)}
+                {q.choices.map((c) => <button key={c} type="button" className={c === q.proposal?.choice ? 'btn primary' : 'btn'} data-choice={c} onClick={() => void answer({ choice: c })}>{choiceText(c)}{c === q.proposal?.choice ? ` · ${t('questions.proposed')}` : ''}</button>)}
                 <input className="qinput" value={text} placeholder={t('questions.answerPlaceholder')} aria-label={t('questions.answerPlaceholder')} onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) void answer({ text: text.trim() }).then((ok) => ok && setText('')); }} />
                 <button type="button" className="btn ghost" disabled={!text.trim()} onClick={() => void answer({ text: text.trim() }).then((ok) => ok && setText(''))}>{t('questions.reply')}</button>
@@ -113,7 +130,7 @@ function AskForm({ on, nav, onDone }: { on: QuestionTarget; nav: Nav; onDone(): 
     if (!text.trim()) return;
     if (!me) { nav.toast(t('questions.needName')); return; }
     try {
-      const q = await askQuestion(on, text.trim(), choices ? [...CHOICES] : [], to.trim() || undefined);
+      const q = await askQuestion(on, text.trim(), choices ? [...PRIVATE_CHOICES] : [], to.trim() || undefined);
       nav.refresh();
       nav.toast(q.status === 'answered' && q.answer && 'choice' in q.answer.answer ? t('questions.answeredByPrecedent', { answer: choiceText(q.answer.answer.choice) }) : t('questions.asked'));
       onDone();

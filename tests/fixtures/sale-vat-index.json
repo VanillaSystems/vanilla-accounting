@@ -1,0 +1,138 @@
+{
+  "config": {
+    "closedThrough": "2026-06-30"
+  },
+  "receipts": [
+    {
+      "id": "rk",
+      "filename": "rk.pdf",
+      "originalFilename": "rk.pdf",
+      "extractedText": "Rechnung",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1,
+      "indexedAt": "2026-09-01T00:00:00Z",
+      "location": "archived"
+    }
+  ],
+  "transactions": [
+    {
+      "ref": "S-CH",
+      "bank": "Raiffeisen",
+      "date": "2026-08-10",
+      "amount": 1081,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Beratung August",
+      "counterparty": "Beispiel Kunde AG",
+      "counterpartyIban": "CH0000762011623852957"
+    },
+    {
+      "ref": "S-EU",
+      "bank": "Wise",
+      "date": "2026-08-11",
+      "amount": 500,
+      "currency": "EUR",
+      "direction": "CRDT",
+      "description": "Received money from Exemple SARL with reference 42",
+      "counterparty": "Exemple SARL",
+      "counterpartyIban": "FR0030006000011234567890189"
+    },
+    {
+      "ref": "S-GEN",
+      "bank": "Raiffeisen",
+      "date": "2026-08-12",
+      "amount": 200,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Gutschrift"
+    },
+    {
+      "ref": "S-OLD",
+      "bank": "Raiffeisen",
+      "date": "2026-05-10",
+      "amount": 300,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Beratung Mai",
+      "counterparty": "Beispiel Kunde AG",
+      "counterpartyIban": "CH0000762011623852957"
+    },
+    {
+      "ref": "S-DOC",
+      "bank": "Raiffeisen",
+      "date": "2026-08-14",
+      "amount": 400,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "description": "Zahlung Rechnung",
+      "counterparty": "Beispiel Kunde AG",
+      "counterpartyIban": "CH0000762011623852957"
+    }
+  ],
+  "journalEntries": [
+    {
+      "id": "e-ch",
+      "transactionRef": "S-CH",
+      "date": "2026-08-10",
+      "accountDebit": "1021",
+      "accountCredit": "3400",
+      "amount": 1081,
+      "vatCode": "V0",
+      "description": "Kundenzahlung",
+      "origin": "classify"
+    },
+    {
+      "id": "e-eu",
+      "transactionRef": "S-EU",
+      "date": "2026-08-11",
+      "accountDebit": "1023",
+      "accountCredit": "3400",
+      "amount": 500,
+      "vatCode": "V0",
+      "description": "Kundenzahlung",
+      "origin": "classify",
+      "exchangeCurrency": "EUR",
+      "exchangeRate": 0.94
+    },
+    {
+      "id": "e-gen",
+      "transactionRef": "S-GEN",
+      "date": "2026-08-12",
+      "accountDebit": "1021",
+      "accountCredit": "3400",
+      "amount": 200,
+      "vatCode": "V0",
+      "description": "Kundenzahlung",
+      "origin": "classify"
+    },
+    {
+      "id": "e-old",
+      "transactionRef": "S-OLD",
+      "date": "2026-05-10",
+      "accountDebit": "1021",
+      "accountCredit": "3400",
+      "amount": 300,
+      "vatCode": "V0",
+      "description": "Kundenzahlung",
+      "origin": "classify"
+    },
+    {
+      "id": "e-doc",
+      "transactionRef": "S-DOC",
+      "date": "2026-08-14",
+      "accountDebit": "1021",
+      "accountCredit": "3400",
+      "amount": 400,
+      "vatCode": "V0",
+      "description": "Kundenzahlung",
+      "origin": "classify"
+    }
+  ],
+  "mappings": [
+    {
+      "receiptId": "rk",
+      "transactionRef": "S-DOC"
+    }
+  ],
+  "bankStatements": []
+}

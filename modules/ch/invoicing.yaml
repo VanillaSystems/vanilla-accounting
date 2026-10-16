@@ -8,3 +8,8 @@ rates: [8.1, 2.6, 3.8, 0]
 exemptions:
   abroad: "221"   # a service whose place of supply is abroad (Art. 8 MWSTG)
   export: "220"   # an export of goods (Art. 23 MWSTG)
+
+# The countries of the VAT territory (Art. 3 MWSTG: Switzerland and Liechtenstein), by the first
+# two letters of an IBAN: a customer payment in CHF from such an IBAN is proposed as a domestic
+# sale at the normal rate, any other as an export (src/accounting/sales-without-vat.ts).
+territory: [CH, LI]

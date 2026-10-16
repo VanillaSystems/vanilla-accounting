@@ -4,14 +4,24 @@
  * scratch copy; after each wave of model calls its entries go into books loaded then, for the
  * transactions that are still there, still open and still without an entry.
  * `force` first removes the entries classify itself booked in the open period (see
- * entriesForceMayRemove) and books those transactions again.
+ * entriesForceMayRemove) and books those transactions again. Last, every customer payment booked
+ * without VAT and without an invoice becomes a question to the owner (src/intake/sale-questions.ts).
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { BATCH_SIZE, CONCURRENCY, classifyTransactions, loadClassifyContext } from '../booking/classify.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { JournalEntry } from '../types/index.js';
-import type { IntakeNote, StepRun } from './pipeline.js';
+import { askSalesWithoutVat } from './sale-questions.js';
+import type { Workspace } from '../workspace/workspace.js';
+import type { BooksPort, IntakeNote, StepRun } from './pipeline.js';
+
+/** The note for the sales without VAT asked about now; a payment asked about before is not asked again. */
+function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void): IntakeNote[] {
+  const asked = askSalesWithoutVat(ws, books.read());
+  if (asked.length) log(`  Asked     : ${asked.length} customer payment(s) without an invoice: with VAT, abroad, or no sale?`);
+  return asked.length ? [{ code: 'saleAsked', count: asked.length }] : [];
+}
 
 const unbooked = (books: Books) => {
   const lock = periodLock(books);
@@ -50,7 +60,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     const todo = unbooked(scratch);
     if (todo.length === 0) {
       log('All transactions are already classified.');
-      return { notes: [] };
+      return { notes: askSales(ws, books, log) };
     }
     progress(0, todo.length);
     log(`Classifying ${todo.length} transactions in ${Math.ceil(todo.length / BATCH_SIZE)} batches of ${BATCH_SIZE} (${CONCURRENCY} concurrent)...\n`);
@@ -88,6 +98,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
       ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),
       ...(asked.length ? [{ code: 'asked' as const, count: asked.length }] : []),
+      ...askSales(ws, books, log),
     ];
     return { notes };
   };
