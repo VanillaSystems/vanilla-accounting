@@ -159,6 +159,14 @@ test('Firma › Regeln over the API: every rule of the workspace in plain words,
     assert.deepEqual(((await api.send('GET', '/api/rules')).json as unknown as RulesView).rules.map((r) => r.id).includes('cash-prose'), false);
     assert.equal((await api.send('POST', '/api/rules', { kind: 'restore', ...(del.json.undo as object) })).json.ok, true);
     assert.equal(((await api.send('GET', '/api/rules')).json as unknown as RulesView).rules.filter((r) => r.id === 'cash-prose').length, 1);
+    // A rules file the AI (or a hand) changed waits to be switched on, and Firma › Regeln says so instead of showing its rules as live (r6h-24).
+    assert.deepEqual(((await api.send('GET', '/api/rules')).json as unknown as RulesView).waiting, [], 'the baseline runs as switched on');
+    writeFileSync(join(api.root, GUIDE), readFileSync(join(api.root, GUIDE), 'utf8') + '      - id: ai-edit\n        when: { text: "Garage" }\n        then: { account: "6200", vat: I81 }\n        source: wish 2026-10-16\n');
+    const waiting = ((await api.send('GET', '/api/rules')).json as unknown as RulesView).waiting;
+    assert.deepEqual(waiting.map((w) => [w.workflow, w.files]), [['booking', [GUIDE]]]);
+    const off = await api.send('POST', '/api/rules', { kind: 'off', file: GUIDE, step: 'booking.guide.yaml#classify', id: 'fuel' });
+    assert.equal(off.json.ok, true);
+    assert.deepEqual(((await api.send('GET', '/api/rules')).json as unknown as RulesView).waiting.map((w) => w.workflow), ['booking'], 'a click on another rule is no review of the AI\'s edit: it keeps waiting');
   } finally {
     await api.stop();
   }

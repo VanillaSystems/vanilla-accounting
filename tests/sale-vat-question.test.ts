@@ -25,6 +25,8 @@ let api: ApiServer;
 before(async () => {
   api = await startApi('tests/fixtures/sale-vat-index.json');
   appendFileSync(join(api.ws.paths.history, 'prior-year.Konten.txt'), '1023\tWise EUR\n3400\tDienstleistungsertrag\n');
+  // The first look at the automation takes what the workspace runs today as switched on (the baseline).
+  await api.send('GET', '/api/automation');
 });
 after(() => api?.stop());
 
@@ -42,6 +44,8 @@ const answer = async (ref: string, choice: string) => {
 };
 const classifyRules = () => (parse(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8')) as { steps: { classify?: { rules?: Array<Record<string, unknown>> } } }).steps.classify?.rules ?? [];
 const pending = () => salesWithoutVat(books(), true).map((s) => s.payment.ref);
+/** The workflows waiting to be switched on, by id (GET /api/automation). */
+const waiting = async () => ((await api.send('GET', '/api/automation')).json as unknown as { pending: Array<{ workflow: string; files: string[] }> }).pending.map((p) => p.workflow);
 
 test('the proposal: CHF from a domestic IBAN is a sale at the normal rate; a foreign currency or IBAN an export', () => {
   const p = (currency: string, iban?: string) => saleProposal({ currency, ...(iban ? { counterpartyIban: iban } : {}) });
@@ -76,6 +80,10 @@ test('«mit MWST» books the sale at the normal rate and keeps a rule for the pa
   const rule = classifyRules().find((r) => r.id === `sale-${q.id}`);
   assert.deepEqual([rule?.when, rule?.then], [{ payer: CH_IBAN, direction: 'in' }, { account: '3400', vat: 'V81' }]);
   assert.ok(!pending().includes('S-CH'), 'answered: no longer a sale without VAT');
+  // Her answer is her switching on: the rule it wrote into the guide leaves no workflow waiting (r6h-24).
+  assert.deepEqual(await waiting(), [], 'the rule the answer kept is live');
+  const start = await api.send('POST', '/api/automation', { kind: 'start', workflow: 'booking', item: { kind: 'transaction', id: 'S-CH' } });
+  assert.equal(start.json.ok, true, `«Automatisch buchen» after an answer: ${JSON.stringify(start.json)}`);
 });
 
 test('«ohne MWST (Ausland)» keeps the export code, booked by hand, and keeps a rule; undo takes both back', async () => {
@@ -89,6 +97,7 @@ test('«ohne MWST (Ausland)» keeps the export code, booked by hand, and keeps a
   assert.deepEqual([entriesOf('S-EU')[0].vatCode, entriesOf('S-EU')[0].origin], ['V0', 'classify']);
   assert.equal(classifyRules().some((r) => r.id === `sale-${q.id}`), false, 'the rule went with the undo');
   assert.ok(pending().includes('S-EU'), 'open again: the warning is back');
+  assert.deepEqual(await waiting(), [], 'the undo changed the guide as the person: nothing waits');
   await answer('S-EU', 'saleAbroad');
 });
 

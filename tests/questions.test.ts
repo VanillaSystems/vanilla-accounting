@@ -21,7 +21,11 @@ import { isGenericText } from '../src/knowledge/payer.js';
 import { GITATTRIBUTES } from '../src/workspace/scaffold.js';
 
 let api: ApiServer;
-before(async () => { api = await startApi('tests/fixtures/questions-index.json'); });
+before(async () => {
+  api = await startApi('tests/fixtures/questions-index.json');
+  // The first look at the automation takes what the workspace runs today as switched on (the baseline).
+  await api.send('GET', '/api/automation');
+});
 after(() => api?.stop());
 
 const MONIKA = 'Monika Frei';
@@ -60,6 +64,8 @@ test('«privat» books the payment on the owner\'s account without VAT code and 
   const guide = parse(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8')) as { steps: { private: { precedents: Array<Record<string, unknown>> } } };
   const [p] = guide.steps.private.precedents;
   assert.deepEqual([p.choice, p.match, p.by, p.question], ['private', { tx: 'coopprontobern' }, OWNER, q.id]);
+  const automation = (await api.send('GET', '/api/automation')).json as unknown as { pending: Array<{ workflow: string }> };
+  assert.deepEqual(automation.pending, [], 'the precedent the answer kept leaves no workflow waiting to be switched on (r6h-24)');
   assert.deepEqual(forMe((await list()).questions, OWNER), [], 'answered: no longer waiting for the owner');
   assert.equal(askedByMe((await list()).questions, MONIKA)[0].status, 'answered', 'shown to the asker as answered');
   const again = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'business' });
