@@ -36,6 +36,13 @@ test('a rate code without a receipt that shows Swiss VAT: the zero code of the s
   assert.deepEqual(evidenceCheck(entry({ vatCode: 'I81', accountDebit: '6500' }), [noVat], CLOSED), { kind: 'vatWithoutReceipt', code: 'I0' });
 });
 
+test('only a purchase document is evidence: the company\'s own sales record (Kassenbericht, payout report) shows output tax, never input tax', () => {
+  const sales = receipt({ id: 'r4', kind: 'sales-record', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 773.69, gross: 10325.4 }] });
+  assert.equal(evidenceCheck(entry({ vatCode: 'I0', accountDebit: '6840', amount: 152.21 }), [sales], CLOSED), undefined);
+  assert.equal(evidenceCheck(entry({ vatCode: 'I81', accountDebit: '6840', amount: 152.21 }), [sales], CLOSED), undefined, 'a sales record says nothing about the fee either way');
+  assert.equal(evidenceCheck(entry({ vatCode: 'M0' }), [receipt({ id: 'r5', kind: 'supporting', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 1, gross: 10 }] })], CLOSED), undefined);
+});
+
 test('a booking that fits its receipt is not flagged', () => {
   assert.equal(evidenceCheck(entry({ vatCode: 'M81' }), [withVat], CLOSED), undefined);
   assert.equal(evidenceCheck(entry({ vatCode: 'M0' }), [noVat], CLOSED), undefined);

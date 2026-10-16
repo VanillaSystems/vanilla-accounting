@@ -18,12 +18,18 @@ export type EvidenceCheck =
 const swissRate = (r: Receipt): number | undefined =>
   r.hasSwissVat ? r.vatSummary?.find((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent))?.ratePercent : undefined;
 
+/** A purchase document: what a vendor charged, with its tax. The company's own sales record shows output tax; a copy or a delivery note proves nothing. */
+const isPurchaseDocument = (r: Receipt): boolean => r.kind === undefined || r.kind === 'invoice';
+
 /**
- * `receipts` are those linked to the entry's payment; `closedThrough` the period lock. Undefined when
- * the booking fits its evidence or is out of scope.
+ * `linked` are the receipts of the entry's payment; `closedThrough` the period lock. Undefined when
+ * the booking fits its evidence, when only a sales record or a supporting document is linked (the
+ * payment's purchase side has no evidence either way), or when the entry is out of scope.
  */
-export function evidenceCheck(e: JournalEntry, receipts: readonly Receipt[], closedThrough: string | undefined): EvidenceCheck | undefined {
+export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], closedThrough: string | undefined): EvidenceCheck | undefined {
   if ((closedThrough && e.date <= closedThrough) || e.corrects) return undefined;
+  const receipts = linked.filter(isPurchaseDocument);
+  if (linked.length && !receipts.length) return undefined;
   const m = /^(-?)([MI])(\d+)$/.exec(e.vatCode ?? '');
   const info = m && vat().codes.parse(e.vatCode!);
   if (!m || !info) return undefined;
