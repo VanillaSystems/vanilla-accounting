@@ -121,7 +121,7 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
     return (
       <tr className="rline"><td /><td />
         <td className="what"><span className="rk">{t('runs.kind.file')}</span>{l.a.file}</td>
-        <td className="res"><span className="warn-t">{t('runs.line.refused', { reason: l.a.reason })}</span></td>
+        <td className="res"><span className="warn-t">{t('runs.line.refused', { reason: l.a.reason === 'unreadable' ? t('drop.reason.unreadable') : l.a.reason })}</span></td>
         <td className="st"><span className="rpill check">{t('runs.st.check')}</span></td></tr>
     );
   }

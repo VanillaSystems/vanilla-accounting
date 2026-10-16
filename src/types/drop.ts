@@ -68,6 +68,8 @@ export interface StatementFacts { iban?: string; from?: string; to?: string; ent
 export type DropReason =
   | 'duplicate' | 'possible-duplicate' | 'same' | 'not-receipt' | 'held' | 'pdf-password'
   | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported'
+  /** A PDF header on bytes no PDF reader opens (damaged, cut short): quarantine, nothing will ever read it (r8k-9). */
+  | 'unreadable'
   /** A statement of an account the owner said is private: set aside, not read into the books. */
   | 'private';
 
@@ -89,8 +91,8 @@ export type DropAction =
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' };
 
-/** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), or a person set it aside. */
-export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' };
+/** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
+export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };
 
 /** A file in data/quarantine/ as Belege lists it (src/intake/quarantine.ts). */
 export interface QuarantinedFile { file: string; reason: QuarantineReason; at: string }

@@ -250,7 +250,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }
     try {
-      const result = await action.run(inputs, effects, { ws, ask, now, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run) });
+      const result = await action.run(inputs, effects, { ws, ask, now, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run), arrivals: (change) => annotate(run.id, { arrived: change(runs.get(run.id)?.arrived ?? []) }) });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));

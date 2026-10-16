@@ -1,6 +1,6 @@
 /**
  * data/quarantine/: files that came in (by a drop or from a mailbox source) and are no receipt by
- * their words, or that a person set aside in the drop dialog. They never enter the books; each
+ * their words, that a person set aside in the drop dialog, or that no PDF reader opens (r8k-9). They never enter the books; each
  * keeps its reason beside it (`<file>.reason.txt`), so Belege can say why it is there, and a
  * person can take it back into the inbox («Ist ein Beleg»).
  */
@@ -23,15 +23,16 @@ export function freeName(folder: string, name: string): string {
 
 const OTHER: readonly OtherWhy[] = ['newsletter', 'terms', 'price-list', 'tracking', 'no-receipt'];
 
-/** `not-receipt <why>[ from <sender>]` or `held`, as written beside the file. */
+/** `not-receipt <why>[ from <sender>]`, `unreadable` or `held`, as written beside the file. */
 export function parseReason(line: string): QuarantineReason {
+  if (/^unreadable\b/.test(line.trim())) return { kind: 'unreadable' };
   const m = /^not-receipt(?:\s+(\S+))?(?:\s+from\s+(\S+))?/.exec(line.trim());
   if (!m) return { kind: 'held' };
   const why = OTHER.find((w) => w === m[1]);
   return { kind: 'not-receipt', ...(why ? { why } : {}), ...(m[2] ? { from: m[2] } : {}) };
 }
 
-const formatReason = (r: QuarantineReason) => r.kind === 'held' ? 'held' : `not-receipt${r.why ? ` ${r.why}` : ''}${r.from ? ` from ${r.from}` : ''}`;
+const formatReason = (r: QuarantineReason) => r.kind === 'held' || r.kind === 'unreadable' ? r.kind : `not-receipt${r.why ? ` ${r.why}` : ''}${r.from ? ` from ${r.from}` : ''}`;
 
 /** Puts `bytes` into quarantine under a free name for `name`; returns that name. */
 export function putInQuarantine(data: string, name: string, bytes: Buffer, reason: QuarantineReason): string {

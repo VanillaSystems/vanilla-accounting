@@ -26,6 +26,7 @@ import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
+import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
 import { documents } from '../engines/index.js';
 
@@ -88,10 +89,13 @@ interface FoundFile {
   location: 'staged' | 'archived';
 }
 
-// Wraps any PNG/JPG/HEIC images in a directory into PDFs, then removes the originals so they
-// aren't picked up as duplicates by scanPdfs.
-async function convertImagesToPdf(dir: string, log: (line: string) => void): Promise<void> {
-  if (!existsSync(dir)) return;
+/**
+ * Wraps any PNG/JPG/HEIC images in a directory into PDFs, then removes the originals so they aren't
+ * picked up as duplicates by scanPdfs. Returns each conversion by the names before and after.
+ */
+async function convertImagesToPdf(dir: string, log: (line: string) => void): Promise<Array<{ from: string; to: string }>> {
+  const done: Array<{ from: string; to: string }> = [];
+  if (!existsSync(dir)) return done;
   for (const f of readdirSync(dir).filter(isImageFile)) {
     const imgPath = join(dir, f);
     const pdfPath = imgPath.replace(/\.[^.]+$/, '.pdf');
@@ -103,11 +107,23 @@ async function convertImagesToPdf(dir: string, log: (line: string) => void): Pro
       // A photo is an own capture: made smaller before it gets its id.
       writeFileSync(pdfPath, await smallerPdf(await imageToPdf(readFileSync(imgPath), f)));
       unlinkSync(imgPath);
+      done.push({ from: f, to: basename(pdfPath) });
       log(`  converted ${f} -> ${basename(pdfPath)}`);
     } catch (e: any) {
       log(`  convert failed for ${f}: ${e.message?.substring(0, 100)}`);
     }
   }
+  return done;
+}
+
+/**
+ * The .pdf files of the inbox that are no PDF inside (a download cut short, a file named .pdf by
+ * hand): no step will ever read them, so they go to quarantine with the reason (r8k-9). An empty
+ * file may still be being written and stays; an iCloud placeholder is no file yet.
+ */
+function unreadablePdfs(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.pdf') && !f.endsWith('.icloud') && statSync(join(dir, f)).size > 0 && !isPdf(join(dir, f))).sort();
 }
 
 function isPdf(path: string): boolean {
@@ -161,7 +177,7 @@ function kindOfText(fresh: Extracted): Pick<Receipt, 'kind' | 'kindBy' | 'kindRu
 
 // ─── The step ────────────────────────────────────────────────────────────────
 
-export const readStep: StepRun = async ({ ws, books, ask, progress, log, later }) => {
+export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, arrived }) => {
   // First: a statement that belongs to no bank account stops the step before receipts are read.
   const bank = readTransactions(ws);
   for (const f of bank.files) {
@@ -170,7 +186,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later }
   }
   const unmatched = unmatchedOf(bank);
   if (unmatched.length) return { notes: [{ code: 'unmatched', files: unmatched }], stop: true };
-  await convertImagesToPdf(ws.paths.inbox, log);
+  // A photo's row in the drop dialog follows the PDF it became: the file has a new name and the id of its new bytes (r8k-9).
+  for (const c of await convertImagesToPdf(ws.paths.inbox, log)) arrived?.renamed(c.from, { inbox: c.to, id: idOf(join(ws.paths.inbox, c.to)) });
 
   // Archived receipts first, then staged (for cross-folder duplicate detection)
   const archivedFiles = archivedPdfs(ws);
@@ -178,6 +195,13 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later }
   if (twice.length) return { notes: [{ code: 'error', detail: `${twice.map((f) => f.filename).join(', ')}: in two year folders' receipts/, keep one` }], stop: true };
   // Asked at the scan, not at the step's start: a file that came in meanwhile with a run waiting behind this one is that run's (r4c-7).
   const theirs = later?.();
+  for (const f of unreadablePdfs(ws.paths.inbox).filter((f) => !theirs?.has(stemOf(f)))) {
+    const path = join(ws.paths.inbox, f);
+    const held = putInQuarantine(ws.paths.data, f, readFileSync(path), { kind: 'unreadable' });
+    unlinkSync(path);
+    arrived?.refused(f, 'unreadable');
+    log(`  ${f} is no PDF inside: moved to quarantine as ${held}`);
+  }
   const stagedFiles = scanPdfs(ws.paths.inbox, 'staged').filter((f) => !theirs?.has(stemOf(f.filename)));
   log(`Found ${archivedFiles.length} PDFs in receipts/, ${stagedFiles.length} PDFs in beleg-import/\n`);
 

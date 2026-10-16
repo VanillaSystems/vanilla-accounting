@@ -3167,5 +3167,8 @@ export default {
     'receipts.confirmVerb': 'confirmer',
     'error.secondPayment': 'Le justificatif a déjà le paiement {payment}. Un deuxième paiement à un autre destinataire le paierait deux fois : ne le lier que s’il a vraiment été payé en deux fois.',
     'drop.p.noPayment': 'pas encore de paiement correspondant : à lier sous Justificatifs',
+    'drop.reason.unreadable': 'illisible comme PDF : fichier endommagé ou tronqué',
+    'drop.p.refused': 'non repris',
+    'receipts.quarantineUnreadable': 'pas de PDF lisible',
   },
 } satisfies Locale;

@@ -237,7 +237,10 @@ function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean 
   const load = () => { api.quarantine().then(setFiles, () => setFiles([])); };
   useEffect(load, []);
   if (!files.length) return null;
-  const why = (q: QuarantinedFile) => [q.reason.kind === 'held' ? t('receipts.quarantineHeld') : t(`receipts.why.${q.reason.why ?? 'no-receipt'}`), q.reason.kind === 'not-receipt' && q.reason.from ? t('receipts.quarantineFrom', { from: q.reason.from }) : ''].filter(Boolean).join(' · ');
+  const why = (q: QuarantinedFile) => [
+    q.reason.kind === 'held' ? t('receipts.quarantineHeld') : q.reason.kind === 'unreadable' ? t('receipts.quarantineUnreadable') : t(`receipts.why.${q.reason.why ?? 'no-receipt'}`),
+    q.reason.kind === 'not-receipt' && q.reason.from ? t('receipts.quarantineFrom', { from: q.reason.from }) : '',
+  ].filter(Boolean).join(' · ');
   async function take(file: string) {
     try {
       await api.takeFromQuarantine(file);

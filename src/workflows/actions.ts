@@ -9,7 +9,7 @@ import { periodLock, type Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
-import { noteLines, stemOf, type BooksPort, type IntakeNote, type StepRun } from '../intake/pipeline.js';
+import { noteLines, stemOf, type BooksPort, type IntakeNote, type StepContext, type StepRun } from '../intake/pipeline.js';
 import { readStep } from '../intake/read.js';
 import { vatCandidates, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
@@ -19,7 +19,7 @@ import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
 import { madeBetween, madeEntry, type Took } from './summary.js';
-import type { ItemRef } from './model.js';
+import type { Arrival, ItemRef } from './model.js';
 import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
 import { closeSaleQuestionsHeld } from '../intake/sale-questions.js';
 import { refuse, type Refused } from '../types/refusal.js';
@@ -36,6 +36,8 @@ export interface ActionContext {
   now: () => string;
   /** Inbox files that came in with a run of the same workflow still waiting behind this one: that run reads them, not this one (r4c-7). */
   later?: () => ReadonlySet<string>;
+  /** Changes the run's arrivals (the files that came in with it): a photo converted to PDF, a file set aside (r8k-9). */
+  arrivals?: (change: (arrived: Arrival[]) => Arrival[]) => void;
 }
 
 export interface Effects {
@@ -72,7 +74,7 @@ const declared = (outcomes: string[], o: { effects?: string[]; ai?: boolean } = 
  * run stuck with its reason, nothing written.
  */
 function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => ReadonlySet<string>) => Took[]): NonNullable<Action['run']> {
-  return async (_input, effects, { ws, ask, later }) => {
+  return async (_input, effects, { ws, ask, later, arrivals }) => {
     const port = effects['books.write']!;
     const before = structuredClone(port.read());
     const todo = took(before, ws, later);
@@ -81,7 +83,12 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
     // A payment a company rule holds for the person becomes a question of its own (workflows/ask); one booked now closes its question (r7h-21).
     const hold = start && ((refs: string[]) => refs.forEach((id) => start(ASK_WORKFLOW, { kind: 'transaction', id })));
     const release = close && ((refs: string[]) => refs.forEach((id) => close(ASK_WORKFLOW, { kind: 'transaction', id }, CLOSED_REASON)));
-    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}) });
+    // The row of a dropped file follows what the read step made of it: the PDF a photo became, or quarantine (r8k-9).
+    const arrived: StepContext['arrived'] = arrivals && {
+      renamed: (inbox, next) => arrivals((all) => all.map((a) => (a.kind === 'receipt' && a.inbox === inbox ? { ...a, ...next } : a))),
+      refused: (inbox, reason) => arrivals((all) => all.map((a) => (a.kind === 'receipt' && a.inbox === inbox ? { kind: 'refused', file: a.file, reason } : a))),
+    };
+    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) });
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };

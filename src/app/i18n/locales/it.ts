@@ -3167,5 +3167,8 @@ export default {
     'receipts.confirmVerb': 'confermare',
     'error.secondPayment': 'Il giustificativo ha già il pagamento {payment}. Un secondo pagamento a un’altra controparte lo pagherebbe due volte: collegarlo solo se è stato davvero pagato in due pagamenti.',
     'drop.p.noPayment': 'ancora nessun pagamento adatto: collegarlo sotto Giustificativi',
+    'drop.reason.unreadable': 'non leggibile come PDF: file danneggiato o troncato',
+    'drop.p.refused': 'non ripreso',
+    'receipts.quarantineUnreadable': 'nessun PDF leggibile',
   },
 } satisfies Locale;

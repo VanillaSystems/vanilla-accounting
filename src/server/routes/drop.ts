@@ -31,7 +31,7 @@ import { twinFinder, type Comparable } from '../../intake/duplicates.js';
 import { textFacts } from '../../parsers/receipt-text.js';
 import { documents } from '../../engines/index.js';
 import { periodLock } from '../../books/store.js';
-import type { DropAction, DropRow, DropSession } from '../../types/drop.js';
+import type { DropAction, DropRow, DropSession, QuarantineReason } from '../../types/drop.js';
 
 export const router = Router();
 
@@ -197,7 +197,8 @@ async function takeWaiting(s: DropSession): Promise<void> {
   for (const row of s.rows) {
     if (row.state === 'quarantine' && !row.quarantined && existsSync(fileOf(s.id, row.key))) {
       const why = OTHER_WHY.find((w) => w === row.document);
-      row.quarantined = putInQuarantine(WS.paths.data, row.name, readFileSync(fileOf(s.id, row.key)), row.reason === 'not-receipt' ? { kind: 'not-receipt', ...(why ? { why } : {}) } : { kind: 'held' });
+      const reason: QuarantineReason = row.reason === 'not-receipt' ? { kind: 'not-receipt', ...(why ? { why } : {}) } : row.reason === 'unreadable' ? { kind: 'unreadable' } : { kind: 'held' };
+      row.quarantined = putInQuarantine(WS.paths.data, row.name, readFileSync(fileOf(s.id, row.key)), reason);
       continue;
     }
     if (row.state !== 'take') continue;
@@ -273,15 +274,19 @@ function undo(row: DropRow): string[] {
       throw e;
     }
   } else {
+    // A photo became a PDF under another name and id: the run's arrival says which (r8k-9).
+    const arrival = run?.arrived?.find((a) => a.kind === 'receipt' && a.file === row.name);
+    const id = arrival?.kind === 'receipt' ? arrival.id : row.id;
+    const inbox = arrival?.kind === 'receipt' ? arrival.inbox ?? row.inbox : row.inbox;
     const books = readBooks();
-    const receipt = books.receipts.find((r) => r.id === row.id);
+    const receipt = books.receipts.find((r) => r.id === id);
     if (receipt) {
-      assertOpen(books, receiptDates(books, row.id), 'deleteReceipt');
+      assertOpen(books, receiptDates(books, id), 'deleteReceipt');
       const pdf = receiptPath(books, receipt);
-      again = updateBooks((b) => removeReceipt(b, row.id));
+      again = updateBooks((b) => removeReceipt(b, id));
       rmSync(pdf, { force: true });
     }
-    if (row.inbox) rmSync(join(WS.paths.inbox, row.inbox), { force: true });
+    if (inbox) rmSync(join(WS.paths.inbox, inbox), { force: true });
   }
   if (row.run) engine().withdraw(row.run, row.inbox ? row.name : row.statement?.file ?? row.name);
   row.state = 'undone';

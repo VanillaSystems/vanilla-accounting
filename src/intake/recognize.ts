@@ -21,13 +21,13 @@ const head = (b: Buffer, n = 4096) => b.subarray(0, n).toString('latin1');
 /**
  * The text of a PDF's first two pages, read in Node (src/parsers/pdf-text.ts) as the run reads it:
  * the packed app has no poppler, so a program outside Node would leave every drop unjudged
- * (r5h-28). '' for a PDF pdf.js cannot open.
+ * (r5h-28). '' for a PDF without text (a scan); undefined for one pdf.js cannot open (r8k-9).
  */
-export async function firstPages(bytes: Buffer): Promise<string> {
+export async function firstPages(bytes: Buffer): Promise<string | undefined> {
   try {
     return textOf(await pdfRuns(bytes, 2), 'reading');
   } catch {
-    return '';
+    return undefined;
   }
 }
 
@@ -45,6 +45,8 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
       return { kind: 'receipt', how: 'structure', state: 'take', reason: 'pdf-password' };
     }
     const text = await firstPages(bytes);
+    // A PDF header on bytes no reader opens (cut short, damaged): no step would ever read it, so it waits in quarantine, not in the inbox.
+    if (text === undefined) return { kind: 'receipt', how: 'structure', state: 'quarantine', reason: 'unreadable' };
     const iban = IBAN.exec(text)?.[0];
     if (/kontoauszug|account statement|relevé de compte|estratto conto/i.test(text) && iban) {
       return { kind: 'statement-pdf', how: 'hint', state: 'take', facts: { iban: iban.replace(/\s/g, '') } };
@@ -73,7 +75,7 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
 export async function notReceipt(bytes: Buffer, words?: DocumentsData): Promise<OtherWhy | undefined> {
   if (!starts(bytes, 0x25, 0x50, 0x44, 0x46)) return undefined;
   const text = await firstPages(bytes);
-  if (!text.trim()) return undefined;
+  if (!text?.trim()) return undefined;
   const v = documentKind(text, words ?? documents());
   return v.is === 'other' ? v.why : undefined;
 }

@@ -3167,5 +3167,8 @@ export default {
     'receipts.confirmVerb': 'confirm',
     'error.secondPayment': 'The receipt already has the payment {payment}. A second payment to another payee would pay it twice: link it only if it really was paid in two payments.',
     'drop.p.noPayment': 'no fitting payment yet: link it under Receipts',
+    'drop.reason.unreadable': 'cannot be read as a PDF: file damaged or cut short',
+    'drop.p.refused': 'not taken',
+    'receipts.quarantineUnreadable': 'no readable PDF',
   },
 } satisfies Locale;

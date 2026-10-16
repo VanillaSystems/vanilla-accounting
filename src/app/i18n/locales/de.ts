@@ -3164,6 +3164,9 @@ export const messages = {
   'receipts.confirmVerb': 'bestätigen',
   'error.secondPayment': 'Der Beleg hat schon die Zahlung {payment}. Eine zweite Zahlung an eine andere Stelle würde ihn doppelt bezahlen: nur verknüpfen, wenn er wirklich in zwei Zahlungen bezahlt wurde.',
   'drop.p.noPayment': 'noch keine passende Zahlung: unter Belege verknüpfen',
+  'drop.reason.unreadable': 'lässt sich nicht als PDF lesen: Datei beschädigt oder abgeschnitten',
+  'drop.p.refused': 'nicht übernommen',
+  'receipts.quarantineUnreadable': 'kein lesbares PDF',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

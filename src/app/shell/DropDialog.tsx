@@ -100,7 +100,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
             <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
             <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
           </span>
-        ) : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf'
+        ) : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && r.reason !== 'unreadable'
           ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
         {r.state === 'locked' ? (
           <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
@@ -114,12 +114,20 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   );
 }
 
-/** Where one taken file is, read from the books and its run: still in its step, read, matched, or waiting for a person. */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' };
+/** Where one taken file is, read from the books and its run: still in its step, read, matched, waiting for a person, or set aside by the run with the reason. */
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' } | { kind: 'refused'; reason: string };
 
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
-function fileState(r: DropRow, books: Index, view: ReturnType<typeof useAutomation>['view']): FileState {
+type View = ReturnType<typeof useAutomation>['view'];
+
+/** The id a taken receipt has in the books: the run's arrival names the PDF a photo became (r8k-9), else the dropped bytes'. */
+function receiptIdOf(r: DropRow, view: View): string {
+  const a = view?.runs.find((x) => x.id === r.run)?.arrived?.find((x) => x.file === r.name);
+  return a?.kind === 'receipt' ? a.id : r.id;
+}
+
+function fileState(r: DropRow, books: Index, view: View): FileState {
   const run = r.run ? view?.runs.find((x) => x.id === r.run) : undefined;
   const steps = view?.workflows.find((w) => w.id === run?.workflow)?.steps ?? [];
   const step = run?.at ? steps.find((x) => x.id === run.at) : undefined;
@@ -127,13 +135,19 @@ function fileState(r: DropRow, books: Index, view: ReturnType<typeof useAutomati
   // Its run is not in the last poll yet: it has only just started.
   if (r.run && !run) return working;
   if (r.statement) return isWorking(run) ? working : { kind: 'statement' };
-  if (books.mappings.some((m) => m.receiptId === r.id)) return { kind: 'matched' };
+  const arrival = run?.arrived?.find((x) => x.file === r.name);
+  if (arrival?.kind === 'refused') return { kind: 'refused', reason: arrival.reason };
+  const id = receiptIdOf(r, view);
+  if (books.mappings.some((m) => m.receiptId === id)) return { kind: 'matched' };
   if (isWorking(run)) return working;
-  const receipt = books.receipts.find((x) => x.id === r.id);
+  const receipt = books.receipts.find((x) => x.id === id);
   // At rest but not in the books the page holds: they are being loaded again, unless the run stopped.
   if (!receipt) return run?.status === 'stuck' ? { kind: 'waits' } : working;
   return receipt.location === 'archived' ? { kind: 'read' } : { kind: 'waits' };
 }
+
+/** A reason the run gives as a code has words of its own; any other is shown as the run said it. */
+const reasonText = (reason: string) => (reason === 'unreadable' ? t('drop.reason.unreadable') : reason);
 
 /** A taken receipt's quick details: what was read off it, the payment it was linked to and the entries booked on that payment, each a link. */
 function ReceiptDetails({ id, books, go }: { id: string; books: Index; go(route: Route): void }) {
@@ -173,7 +187,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const x = fileState(r, books, view);
-  const receipt = books.receipts.find((y) => y.id === r.id);
+  const receipt = books.receipts.find((y) => y.id === receiptIdOf(r, view));
   const facts = receipt && (receipt.date || receipt.amount !== undefined)
     ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
@@ -191,7 +205,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
         <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
-          {missing ? <small className="dwhy">{missing}</small> : null}
+          {missing ? <small className="dwhy">{missing}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
           <span className="dacts">
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id })}>{t('drop.openReceipt')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} title={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>

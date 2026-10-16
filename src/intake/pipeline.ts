@@ -86,6 +86,12 @@ export interface StepContext {
   release?(refs: string[]): void;
   /** Stems of inbox files a run waiting behind this one came in with: left for it (src/workflows/actions.ts). */
   later?: () => ReadonlySet<string>;
+  /**
+   * The files that came in with the run (the drop dialog's rows, src/workflows/model.ts Arrival),
+   * told by their inbox name when the read step turns a photo into a PDF (`renamed`: the name and
+   * id it has now) or sets a file aside (`refused`), so a row ends as what its file became (r8k-9).
+   */
+  arrived?: { renamed(inbox: string, next: { inbox: string; id: string }): void; refused(inbox: string, reason: string): void };
 }
 
 /** A file's name without its extension: a photo converted to PDF in the inbox keeps it. */
