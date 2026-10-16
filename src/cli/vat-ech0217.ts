@@ -39,6 +39,10 @@ if (!isQuarterKey(key)) {
 }
 // Golden rule 1 (AGENTS.md): a filed return is set in stone and is never regenerated.
 const lock = periodLock(index);
+if (lock.heldBy(derivePeriod(key)!.to)) {
+  console.error(`${key} is approved and waits to be filed (Automatisierung › Aufgaben); its XML lies in data/filing/. «Zurück» on the filing task frees the period.`);
+  process.exit(1);
+}
 if (lock.isClosed(derivePeriod(key)!.to)) {
   console.error(`${key} is filed (closed through ${lock.closedThrough}); its return is transactional-data/${key.slice(0, 4)}/filings/mwst-ech0217-${key}.xml and is never regenerated.`);
   console.error(`A correction is an entry dated in the open period with corrects: "${key}"; it is declared in ${key}'s Korrekturabrechnung (form 0535, MWST tab).`);

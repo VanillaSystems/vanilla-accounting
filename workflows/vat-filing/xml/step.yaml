@@ -2,4 +2,4 @@ label: {"de": "XML erzeugen", "en": "Write the XML", "fr": "Produire le XML", "i
 uses: providers.ech-0217
 reads: ["return"]
 emits: ["xml"]
-outcomes: {"ok": "submit"}
+outcomes: {"ok": "submit", "changed": "compute"}

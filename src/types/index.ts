@@ -194,8 +194,17 @@ export type BookedBy =
 /** A filing period: a quarter ("2026-Q2") for a firm filing quarterly, a half year ("2026-H1") for one filing half-yearly. */
 export type QuarterKey = `${number}-Q${1 | 2 | 3 | 4}` | `${number}-H${1 | 2}`;
 
+/** A return approved for filing: its period and the period's last day, through which the books are held. */
+export interface ApprovedReturn { period: QuarterKey; through: string }
+
 export interface AccountingConfig {
   closedThrough?: string;
+  /**
+   * The VAT return a person approved («Freigegeben») and has not filed yet. Until «Eingereicht»
+   * closes the period or «Zurück» frees it, its records are held as a filed period's are
+   * (src/books/store.ts periodLock), so the XML the person uploads is the books' (r7h-24).
+   */
+  approvedReturn?: ApprovedReturn;
   openingBalances?: Record<string, Record<string, number>>;
   // Opening balances in the account's own currency (foreign-currency accounts only),
   // keyed by year then account. Used by bank-balance reconciliation, which compares

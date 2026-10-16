@@ -6,11 +6,17 @@
  * once it has ended (r6f-33); the year's last period is archived but sealed by the year close,
  * after the year-end entries of 31.12. Every refusal is a code the screens have words for
  * (src/types/refusal.ts).
+ *
+ * The figures a person approves are the figures that are filed (r7h-24): the XML step writes the
+ * XML from the books of that moment only when they still give the reviewed figures, else the
+ * review comes again with today's; from the XML on, the period is held (`config.approvedReturn`,
+ * src/books/store.ts periodLock) until «Eingereicht» closes it or «Zurück» frees it; and the seal
+ * step refuses to seal books whose figures differ from the filed XML.
  */
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
-import { loadBooks, periodLock, saveBooks } from '../books/store.js';
+import { loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
@@ -18,9 +24,14 @@ import type { QuarterKey } from '../types/index.js';
 import { refuse } from '../types/refusal.js';
 import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import type { Action } from './actions.js';
+import type { Run } from './model.js';
 
-/** What the compute step hands on: the period, its figures by box and what is to pay (negative: a credit). */
-export interface PeriodReturn { period: string; from: string; to: string; figures: Record<string, number>; payable: number }
+/**
+ * What the compute step hands on: the period, its figures by box and what is to pay (negative: a
+ * credit). `reviewedBefore`: the books changed after a review, so these are today's figures and
+ * that is what the earlier review showed.
+ */
+export interface PeriodReturn { period: string; from: string; to: string; figures: Record<string, number>; payable: number; reviewedBefore?: { payable: number } }
 
 const periodOf = (input: Record<string, unknown>): QuarterKey => {
   const key = String(input.period ?? (input.return as PeriodReturn | undefined)?.period ?? '');
@@ -44,28 +55,71 @@ export function filingXml(ws: Workspace, key: string): string | undefined {
   return [filedXml(ws, key), preparedXml(ws, key)].find((p) => existsSync(p));
 }
 
+const returnOf = (books: Books, key: QuarterKey): PeriodReturn => {
+  const { from, to } = derivePeriod(key)!;
+  const { ziffern, payable } = vat().figures(books.journalEntries, key, books.config.vatAdjustments ?? []);
+  return { period: key, from, to, figures: ziffern as Record<string, number>, payable };
+};
+
+const sameFigures = (a: PeriodReturn, b: PeriodReturn): boolean => {
+  const boxes = new Set([...Object.keys(a.figures), ...Object.keys(b.figures)]);
+  return a.payable === b.payable && [...boxes].every((z) => (a.figures[z] ?? 0) === (b.figures[z] ?? 0));
+};
+
+/**
+ * The hold of `key` set or lifted. The hold and closedThrough are the lines the write door never
+ * moves (src/books/store.ts update), so the filing writes them as `npm run seal -- <q> --close`
+ * does: outside it, after the person decided.
+ */
+function hold(ws: Workspace, books: Books, key: QuarterKey, on: boolean): void {
+  const held = books.config.approvedReturn;
+  if (on ? held?.period === key : !held || held.period !== key) return;
+  if (on) books.config.approvedReturn = { period: key, through: derivePeriod(key)!.to };
+  else delete books.config.approvedReturn;
+  saveBooks(ws, books);
+}
+
+/**
+ * A filing run that came to rest without filing (discarded, by a person or when its workflow went)
+ * frees the period it held; the engine's `onRest` calls it (src/server/routes/automation.ts).
+ */
+export function releaseApproval(ws: Workspace, run: Pick<Run, 'workflow' | 'item' | 'state'>): void {
+  if (run.workflow !== 'vat-filing' || run.state.status !== 'discarded') return;
+  const key = run.item.id;
+  if (!isFilingKey(key, filing().length)) return;
+  const books = loadBooks(ws);
+  if (books.config.approvedReturn?.period === key) { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key as QuarterKey, false); }
+}
+
 export const FILING_ACTIONS: Record<string, Action> = {
   'accounting.tax.vat-return': {
     outcomes: ['ok'],
     effects: [],
-    run(input, _fx, { ws, now }) {
+    run(input, _fx, { ws, now, run }) {
       const key = periodOf(input);
       const books = loadBooks(ws);
-      const { from, to } = derivePeriod(key)!;
+      const to = derivePeriod(key)!.to;
       const closed = books.config.closedThrough ?? '';
-      if (periodLock(books).isClosed(to)) throw refuse('periodFiled', { period: key, through: closed }, `${key} is filed already (closed through ${closed}); a correction is declared on its own form`);
+      if (closed && to <= closed) throw refuse('periodFiled', { period: key, through: closed }, `${key} is filed already (closed through ${closed}); a correction is declared on its own form`);
       const today = localToday(new Date(now()));
       if (to >= today) throw refuse('periodRunning', { period: key, ends: to, from: addDays(to, 1) }, `${key} runs until ${to}: it can be filed from ${addDays(to, 1)}`);
-      const { ziffern, payable } = vat().figures(books.journalEntries, key, books.config.vatAdjustments ?? []);
-      const ret: PeriodReturn = { period: key, from, to, figures: ziffern as Record<string, number>, payable };
+      // «Zurück» from the filing task, or a review the books outgrew: the approval is taken back and the period is free again.
+      if (run?.mode === 'live') { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key, false); }
+      const ret = returnOf(books, key);
+      const earlier = input.return as PeriodReturn | undefined;
+      if (earlier && !sameFigures(earlier, ret)) ret.reviewedBefore = { payable: earlier.payable };
       return { outcome: 'ok', output: { return: ret } };
     },
   },
   'providers.ech-0217': {
-    outcomes: ['ok'],
+    outcomes: ['ok', 'changed'],
     effects: [],
-    run(input, _fx, { ws }) {
+    run(input, _fx, { ws, run }) {
       const ret = input.return as PeriodReturn;
+      const key = periodOf(input);
+      const books = loadBooks(ws);
+      // The books changed since the review: no XML of stale figures; the person reviews today's.
+      if (!sameFigures(ret, returnOf(books, key))) return { outcome: 'changed' };
       const missing = ratesWithoutActivityId(ret.figures);
       if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (the company's VAT section), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({
@@ -76,6 +130,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const path = preparedXml(ws, ret.period);
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, xml);
+      // From here the person uploads this file: the period is held until it is filed or the approval taken back.
+      if (run?.mode === 'live') hold(ws, books, key, true);
       const prepared: PreparedXml = { path, period: ret.period, warnings };
       return { outcome: 'ok', output: { xml: prepared } };
     },
@@ -89,16 +145,22 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const end = derivePeriod(key)!.to;
       const closed = books.config.closedThrough;
       const lastOfYear = closesTheYear(key);
+      // The books sealed are the books filed: a change that got past the hold stops here, with the figures.
+      const filedReturn = input.return as PeriodReturn;
+      const today = returnOf(books, key);
+      if (!sameFigures(filedReturn, today)) {
+        throw refuse('figuresChanged', { period: key, filed: filedReturn.payable.toFixed(2), now: today.payable.toFixed(2) }, `${key}: the books (payable ${today.payable.toFixed(2)}) differ from the return filed (payable ${filedReturn.payable.toFixed(2)}); nothing closed or sealed until they are restored`);
+      }
       if (!closed || closed < end) {
         const next = closed ? periodKeyOf(addDays(closed, 1), ws.filingLength) : key;
         if (next !== key) throw refuse('nextToClose', { through: closed ?? '', next, period: key }, `the books are closed through ${closed}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${key}`);
         // Closing moves closedThrough, which the write door never allows: as `npm run seal -- <q> --close` does, after the person filed.
         // The year's last period is left open: the year close books the year-end entries on 31.12., then closes and seals it.
-        if (!lastOfYear) {
-          books.config.closedThrough = end;
-          saveBooks(ws, books);
-        }
+        if (!lastOfYear) books.config.closedThrough = end;
       }
+      // Filed: the hold gave way to the close (or, for the year's last period, to the year close).
+      if (books.config.approvedReturn?.period === key) delete books.config.approvedReturn;
+      saveBooks(ws, books);
       const prepared = preparedXml(ws, key);
       const filed = filedXml(ws, key);
       if (existsSync(prepared) && !existsSync(filed)) { mkdirSync(dirname(filed), { recursive: true }); copyFileSync(prepared, filed); }

@@ -9,7 +9,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
-import type { AccountingConfig, Index, JournalEntry, Receipt } from '../types/index.js';
+import type { AccountingConfig, ApprovedReturn, Index, JournalEntry, Receipt } from '../types/index.js';
 import { APP_FOLDER, findFile, yearPaths, yearsOf, type Workspace, type WorkspacePaths } from '../workspace/workspace.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { ClosedReason } from '../types/api-error.js';
@@ -20,8 +20,11 @@ import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYe
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
 
 export class ClosedPeriodError extends Error {
-  /** `reason` names which refusal (src/types/api-error.ts) when the API's assertOpen threw it. */
-  constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason) { super(message); }
+  /**
+   * `reason` names which refusal (src/types/api-error.ts) when the API's assertOpen threw it;
+   * `approved` the period whose approved return holds the date, when it is held and not filed.
+   */
+  constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason, readonly approved?: string) { super(message); }
 }
 /** A filed quarter's seal no longer matches the books: they read, but are never written. */
 export class SealBrokenError extends ClosedPeriodError {}
@@ -207,19 +210,39 @@ export function placeFiles(ws: Workspace, books: Books): void {
 }
 
 export interface PeriodLock {
+  /** The filed line: golden rule 1. */
   closedThrough: string | undefined;
+  /** The return approved and not yet filed, whose period is held like a filed one (r7h-24). */
+  approved: ApprovedReturn | undefined;
+  /** The last day the books are locked through: the filed line, or the held period's end when it lies after. */
+  lockedThrough: string | undefined;
   isClosed(date: string | undefined): boolean;
+  /** The period's approval when `date` is held by it and not filed; undefined when filed or open. */
+  heldBy(date: string | undefined): ApprovedReturn | undefined;
+  /** «Periode geschlossen bis …» or «… ist freigegeben …»: the words a refusal of `date` begins with. */
+  closedText(date: string | undefined): string;
   assertOpen(date: string | undefined, what: string): void;
 }
 
 export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
   const closedThrough = books.config?.closedThrough;
-  const isClosed = (date: string | undefined) => !!closedThrough && !!date && date <= closedThrough;
+  const approved = books.config?.approvedReturn;
+  const lockedThrough = approved && (!closedThrough || approved.through > closedThrough) ? approved.through : closedThrough;
+  const isClosed = (date: string | undefined) => !!lockedThrough && !!date && date <= lockedThrough;
+  const heldBy = (date: string | undefined) => (isClosed(date) && !(closedThrough && date! <= closedThrough) ? approved : undefined);
+  const closedText = (date: string | undefined) => {
+    const held = heldBy(date);
+    return held ? `${held.period} ist freigegeben und wartet auf die Einreichung: bis ${held.through} ändert sich nichts.` : `Periode geschlossen bis ${closedThrough}.`;
+  };
   return {
     closedThrough,
+    approved,
+    lockedThrough,
     isClosed,
+    heldBy,
+    closedText,
     assertOpen(date, what) {
-      if (isClosed(date)) throw new ClosedPeriodError(`Periode geschlossen bis ${closedThrough}. ${what}`, closedThrough);
+      if (isClosed(date)) throw new ClosedPeriodError(`${closedText(date)} ${what}`, closedThrough, undefined, heldBy(date)?.period);
     },
   };
 }
@@ -261,17 +284,18 @@ const guards = new WeakMap<Books, () => void>();
 export function update<T>(books: Books, actor: Actor, fn: (books: Books) => Promise<T>): Promise<T>;
 export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T): T;
 export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | Promise<T>): T | Promise<T> {
-  const before = { closedThrough: periodLock(books).closedThrough, ...closedPart(books, periodLock(books).closedThrough) };
+  const was = periodLock(books);
+  const before = { lockedThrough: was.lockedThrough, ...closedPart(books, was.lockedThrough) };
   const persons = actor.kind === 'person' ? undefined : personsEntries(books);
   const check = () => {
     const lock = periodLock(books);
-    if (lock.closedThrough !== before.closedThrough) {
-      throw new ClosedPeriodError(`config.closedThrough changed from ${before.closedThrough} to ${lock.closedThrough}.`, before.closedThrough);
+    if (lock.lockedThrough !== before.lockedThrough) {
+      throw new ClosedPeriodError(`the period lock moved from ${before.lockedThrough} to ${lock.lockedThrough} (closedThrough, approvedReturn).`, lock.closedThrough);
     }
-    const after = closedPart(books, lock.closedThrough);
+    const after = closedPart(books, lock.lockedThrough);
     const changed = (['entries', 'transactions', 'mappings'] as const).flatMap((k) => diff(k, before[k], after[k]));
     if (changed.length) {
-      throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}: ${changed.join('; ')}`, lock.closedThrough);
+      throw new ClosedPeriodError(`${lock.closedText(lock.lockedThrough)} ${changed.join('; ')}`, lock.closedThrough, undefined, lock.heldBy(lock.lockedThrough)?.period);
     }
     if (persons) {
       const touched = diff('entry', persons, personsEntries(books)).filter((d) => !d.endsWith(' added'));

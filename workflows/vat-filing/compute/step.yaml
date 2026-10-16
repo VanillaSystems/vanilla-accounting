@@ -1,5 +1,5 @@
 label: {"de": "Ziffern berechnen", "en": "Compute the boxes", "fr": "Calculer les chiffres", "it": "Calcolare le cifre"}
 uses: accounting.tax.vat-return
-reads: ["period"]
+reads: ["period", "return"]
 emits: ["return"]
 outcomes: {"ok": "review"}

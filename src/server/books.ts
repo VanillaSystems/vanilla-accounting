@@ -61,9 +61,8 @@ export const CLOSED: Record<ClosedReason, string> = {
 
 export function assertOpen(books: Pick<Index, 'config'>, dates: Array<string | undefined>, reason: ClosedReason): void {
   const lock = periodLock(books);
-  if (dates.some(lock.isClosed)) {
-    throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}. ${CLOSED[reason]}`, lock.closedThrough, reason);
-  }
+  const date = dates.find(lock.isClosed);
+  if (date) throw new ClosedPeriodError(`${lock.closedText(date)} ${CLOSED[reason]}`, lock.closedThrough, reason, lock.heldBy(date)?.period);
 }
 
 /** The dates a transaction ref stands for: the transaction's, and its entries' (an Eigenverbrauch ref has only entries). */
@@ -81,7 +80,7 @@ export function receiptDates(books: Pick<Index, 'transactions' | 'journalEntries
 
 /** The code of a refusal (src/types/api-error.ts) the UI says in the person's language; none for one without. */
 export function refusalOf(err: unknown): ApiRefusal | undefined {
-  if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}) } };
+  if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}), ...(err.approved ? { approved: err.approved } : {}) } };
   return err instanceof RequestError ? err.refusal : undefined;
 }
 

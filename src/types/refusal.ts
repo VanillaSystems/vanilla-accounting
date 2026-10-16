@@ -8,7 +8,7 @@
  */
 export const REFUSAL_CODES = [
   // The VAT filing (src/workflows/filing.ts).
-  'periodRunning', 'periodFiled', 'notFilingKey', 'nextToClose', 'activityIdMissing',
+  'periodRunning', 'periodFiled', 'notFilingKey', 'nextToClose', 'activityIdMissing', 'figuresChanged',
   // The year close (src/books/year-close.ts, src/workflows/year-end.ts).
   'notYear', 'yearClosedAlready', 'rateNotPublished', 'yearEndEntryUnknown', 'yearChecklistClosed', 'receivablesBooked', 'yearItemsOpen', 'yearNotClosed', 'openingUnbalanced',
   // The inbox (src/workflows/actions.ts): a statement of no bank account, a receipt in two years, an error.

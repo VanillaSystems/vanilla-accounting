@@ -20,7 +20,8 @@ export type ApiRefusal =
   | { code: 'readonly' }
   | { code: 'localOnly' }
   | { code: 'phoneToken' }
-  | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason } }
+  /** `approved`: the date is not filed but held by that period's approved return (r7h-24). */
+  | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason; approved?: string } }
   | { code: 'manualOnly' }
   | { code: 'hasEntries' }
   | { code: 'yearClose' }

@@ -125,7 +125,7 @@ export function errorText(e: unknown): string {
     case 'mailSourceField': return t(`sources.field.${b.params.field}.invalid` as 'sources.field.address.invalid');
     case 'vatMethodHeld': return t('error.vatMethodHeld', { year: b.params.year, n: b.params.entries, next: String(Number(b.params.year) + 1) });
     case 'periodClosed': {
-      const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
+      const closed = b.params.approved ? t('error.periodApproved', { period: b.params.approved }) : t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;
     }
     case undefined: return b.error;

@@ -625,7 +625,12 @@ function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'ev
 /** Under the return to review: what is still open in its period, each a link; it does not block (r4c-38). */
 function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: Index; nav: Nav; canEdit: boolean }) {
   const p = parsePeriod(ret.period, localToday());
-  return p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null;
+  return (
+    <>
+      {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, 'CHF'), now: money(ret.payable, 'CHF') })}</p> : null}
+      {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null}
+    </>
+  );
 }
 
 function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; nav: Nav; run?: string; books: Index; canEdit: boolean }) {

@@ -2,4 +2,4 @@ label: {"de": "Bei der Steuerverwaltung einreichen", "en": "Submit to the tax au
 by: person
 task: {"title": {"de": "Abrechnung {period} einreichen", "en": "Submit the {period} return", "fr": "Déposer le décompte {period}", "it": "Inoltrare il rendiconto {period}"}, "do": "open-item"}
 reads: ["xml"]
-outcomes: {"filed": "seal"}
+outcomes: {"filed": "seal", "back": "compute"}

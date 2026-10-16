@@ -10,13 +10,13 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadBooks, sealsOf } from '../src/books/store.js';
+import { ClosedPeriodError, loadBooks, PERSON, periodLock, saveBooks, sealsOf, update, type Books } from '../src/books/store.js';
 import { derivePeriod } from '../src/accounting/periods.js';
 import { vat } from '../src/engines/index.js';
 import { ech0217Xml } from '../src/providers/ech0217/xml.js';
 import { APP_ROOT, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
 import { openEngine, SKIPPED } from '../src/workflows/engine.js';
-import { filedXml, filingXml, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
+import { filedXml, filingXml, releaseApproval, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
 import { loadWorkflows } from '../src/workflows/load.js';
 import { summaryOf, taskOf } from '../src/workflows/model.js';
 import { filedReturnsOf } from '../src/workspace/reads.js';
@@ -174,4 +174,121 @@ test('the year\'s last period is filed like any other, but the year close seals 
   assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30', 'the year close moves the line to 31.12., after the year-end entries');
   assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q4.json')), false, 'no seal before the year-end entries');
   assert.equal(q4.steps.at(-1)!.outcome, 'ok');
+});
+
+/** The first Q2 entry with the normal input-tax code, its code flipped to I0: the figures of Q2 change. */
+const inQ2 = (e: { date: string }) => e.date >= '2026-04-01' && e.date <= '2026-06-30';
+function flipOne(books: Books): string {
+  const e = books.journalEntries.find((x) => inQ2(x) && x.vatCode === 'I81')!;
+  e.vatCode = 'I0';
+  return e.id;
+}
+const payableNow = (ws: Workspace) => { const b = loadBooks(ws); return vat().figures(b.journalEntries, Q, b.config.vatAdjustments ?? []).payable; };
+const at = (run: { state: { status: string } & { at?: string } }) => [run.state.status, run.state.at ?? ''];
+
+test('the books change between the review and «Freigegeben»: no XML of stale figures, the person reviews the figures of today instead (r7h-24)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  const run = () => engine.run(r.ok ? r.run! : '')!;
+  const reviewed = (run().steps[0].output!.return as PeriodReturn).payable;
+  const books = loadBooks(ws);
+  update(books, PERSON, flipOne);
+  saveBooks(ws, books);
+  assert.notEqual(payableNow(ws), reviewed, 'the flip changes what is to pay');
+
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
+  await engine.idle();
+  assert.deepEqual(at(run()), ['waiting', 'review'], 'back to the review');
+  assert.equal(run().steps.find((s) => s.step === 'xml')!.outcome, 'changed');
+  assert.equal(filingXml(ws, Q), undefined, 'no XML of the stale figures');
+  const again = run().steps.at(-2)!.output!.return as PeriodReturn;
+  assert.equal(again.payable, payableNow(ws), 'the review shows the figures of today');
+  assert.deepEqual(again.reviewedBefore, { payable: reviewed }, 'and says what the first review showed');
+
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
+  await engine.idle();
+  assert.deepEqual(at(run()), ['waiting', 'submit']);
+  assert.match(readFileSync(filingXml(ws, Q)!, 'utf8'), new RegExp(`payableTax>${payableNow(ws).toFixed(2)}<`), 'the XML carries the figures the person approved');
+});
+
+test('«Freigegeben» holds the period until «Eingereicht» or «Zurück»: nothing dated in it changes, and the refusal names the approval (r7h-24)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  const answer = async (outcome: string) => { await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome }); await engine.idle(); };
+  const run = () => engine.run(r.ok ? r.run! : '')!;
+  await answer('approved');
+  assert.deepEqual(loadBooks(ws).config.approvedReturn, { period: Q, through: '2026-06-30' });
+  const lock = periodLock(loadBooks(ws));
+  assert.equal(lock.closedThrough, '2026-03-31', 'not filed yet');
+  assert.deepEqual([lock.isClosed('2026-06-30'), lock.isClosed('2026-07-01')], [true, false], 'held through the period\'s end');
+  const held = loadBooks(ws);
+  assert.throws(() => update(held, PERSON, flipOne), (e: unknown) => e instanceof ClosedPeriodError && e.approved === Q && /freigegeben/.test(e.message));
+  const before = payableNow(ws);
+
+  await answer('back');
+  assert.deepEqual(at(run()), ['waiting', 'review'], '«Zurück» from the filing task reopens the review');
+  assert.equal(loadBooks(ws).config.approvedReturn, undefined, 'and frees the period');
+  const free = loadBooks(ws);
+  update(free, PERSON, flipOne);
+  saveBooks(ws, free);
+  assert.notEqual(payableNow(ws), before);
+
+  await answer('approved');
+  assert.deepEqual(at(run()), ['waiting', 'review'], 'the review of the figures the books now give');
+  await answer('approved');
+  assert.deepEqual(at(run()), ['waiting', 'submit']);
+  await answer('filed');
+  assert.equal(run().state.status, 'done');
+  const after = loadBooks(ws);
+  assert.equal(after.config.closedThrough, '2026-06-30');
+  assert.equal(after.config.approvedReturn, undefined, 'filed: the hold gave way to the close');
+});
+
+test('«Eingereicht» never seals books that differ from the filed XML: a change that got past the hold stops the run with the figures, nothing closed (r7h-24)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
+  await engine.idle();
+  const run = () => engine.run(r.ok ? r.run! : '')!;
+  const approved = (run().steps[0].output!.return as PeriodReturn).payable;
+  const books = loadBooks(ws);
+  const flipped = flipOne(books);
+  saveBooks(ws, books);
+  const now = payableNow(ws);
+
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'filed' });
+  await engine.idle();
+  const state = run().state;
+  assert.equal(state.status, 'stuck');
+  assert.deepEqual(state.status === 'stuck' ? state.why : undefined, { code: 'figuresChanged', params: { period: Q, filed: approved.toFixed(2), now: now.toFixed(2) } });
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31', 'nothing closed');
+  assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json')), false, 'nothing sealed');
+  assert.deepEqual(loadBooks(ws).config.approvedReturn, { period: Q, through: '2026-06-30' }, 'the hold stays until the books are as filed');
+
+  const back = loadBooks(ws);
+  back.journalEntries.find((x) => x.id === flipped)!.vatCode = 'I81';
+  saveBooks(ws, back);
+  await engine.command({ kind: 'resume', run: r.ok ? r.run! : '' });
+  await engine.idle();
+  assert.equal(run().state.status, 'done', 'restored: «Weiter» seals');
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-06-30');
+});
+
+test('a filing run discarded while the period was held frees it (r7h-24)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT, onRest: (run) => releaseApproval(ws, run) });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
+  await engine.idle();
+  assert.ok(loadBooks(ws).config.approvedReturn);
+  await engine.command({ kind: 'discard', run: r.ok ? r.run! : '' });
+  await engine.idle();
+  assert.equal(loadBooks(ws).config.approvedReturn, undefined);
 });
