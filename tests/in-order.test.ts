@@ -38,7 +38,6 @@ test('a read of the records that answers while a draft is being saved keeps the 
   const merge = edits.read();
   let release!: () => void;
   const saved = edits.saving('d1', new Promise<void>((r) => { release = r; }));
-  edits.touch('d1');
   const local = [{ id: 'd1', unit: 'flat', vat: 2.6 }, server0[1]];
   assert.deepEqual(merge(server0, local), local, 'the older answer does not undo the edits on the screen');
   release();
@@ -46,4 +45,21 @@ test('a read of the records that answers while a draft is being saved keeps the 
   const after = edits.read();
   const server1 = [{ id: 'd1', unit: 'flat', vat: 2.6 }, { id: 'd2', unit: 'day', vat: 8.1 }];
   assert.deepEqual(after(server1, local), server1, 'once saved, a read started later is the truth again');
+});
+
+test('a read begun while a draft is being saved keeps the draft on the screen even when the save settled before the answer (r6h-9: the unit and the VAT rate, saved, were back at – / 8.1 %)', async () => {
+  const { localEdits } = await import('../src/app/lib/local-edits.js');
+  const edits = localEdits();
+  const creation = [{ id: 'd1', unit: '', vat: 8.1 }];
+  // The unit is picked: its save goes out. A read of the records begins while that save is on the
+  // way, and the server answers it from before the save. The save settles first, the read answers last.
+  let release!: () => void;
+  const saved = edits.saving('d1', new Promise<void>((r) => { release = r; }));
+  const merge = edits.read();
+  release();
+  await saved;
+  const screen = [{ id: 'd1', unit: 'h', vat: 8.1 }];
+  assert.deepEqual(merge(creation, screen), screen, 'the answer is older than the save that settled: the screen keeps the unit');
+  // A read begun after the save settled is the truth again.
+  assert.deepEqual(edits.read()(creation, screen), creation);
 });
