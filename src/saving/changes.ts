@@ -11,6 +11,7 @@ import git from 'isomorphic-git';
 import { repositoryAt } from '../workspace/git.js';
 import { LAYOUT, yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 import { BOOK_FILES, fromJsonl } from '../books/years.js';
+import { hasBooks, loadBooks, periodLock, type Books } from '../books/store.js';
 import type { JournalEntry } from '../types/index.js';
 import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type SaveDetail, type SaveSummary } from './model.js';
 
@@ -199,7 +200,7 @@ export async function changesView(ws: Ws): Promise<ChangesView> {
 }
 
 /** One save: its message and the files it changed against its parent. */
-export async function saveDetail(ws: Ws, oid: string): Promise<SaveDetail | undefined> {
+export async function saveDetail(ws: Workspace, oid: string): Promise<SaveDetail | undefined> {
   const repo = await repositoryAt(ws.paths.repository);
   if (!repo) return undefined;
   const [c] = await git.log({ fs, dir: repo, ref: oid, depth: 2 }).catch(() => []);
@@ -220,8 +221,23 @@ export async function saveDetail(ws: Ws, oid: string): Promise<SaveDetail | unde
     },
   });
   const s = summary(c);
-  const undo = s.kind === 'customizing' ? 'draft' as const : s.kind === 'books' && s.run && !s.locked ? 'reverse' as const : undefined;
-  return { ...s, body: c.commit.message, files: changed, ...(undo ? { undo } : {}) };
+  const blocked = s.kind === 'books' && s.run && !s.locked && hasBooks(ws) ? undoBlockedBy(loadBooks(ws), s.run) : undefined;
+  const undo = s.kind === 'customizing' ? 'draft' as const : s.kind === 'books' && s.run && !s.locked && !blocked ? 'reverse' as const : undefined;
+  return { ...s, body: c.commit.message, files: changed, ...(undo ? { undo } : {}), ...(blocked ? { undoBlocked: blocked } : {}) };
+}
+
+/** The bookings of a run that are not reversed yet, whatever their period. */
+export function unreversedOf(books: Books, runId: string): JournalEntry[] {
+  const reversedIds = new Set(books.journalEntries.flatMap((e) => (e.id.startsWith('storno-') ? [e.id.slice('storno-'.length)] : [])));
+  return books.journalEntries.filter((e) => e.run === runId && !reversedIds.has(e.id));
+}
+
+/** Why a run's save offers no Rückgängig: nothing of it is left to reverse, or what is left lies in a filed period (r7f-36). */
+export function undoBlockedBy(books: Books, runId: string): 'closed' | 'reversed' | undefined {
+  const own = unreversedOf(books, runId);
+  if (!own.length) return 'reversed';
+  const lock = periodLock(books);
+  return own.every((e) => lock.isClosed(e.date)) ? 'closed' : undefined;
 }
 
 /** Before and after of one file: in the draft, outside the app, or in a save. */

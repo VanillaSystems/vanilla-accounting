@@ -2420,6 +2420,8 @@ export const messages = {
   'changes.undo': 'Rückgängig',
   'changes.undoDraft': 'Die Dateien von vorher kommen in den Entwurf; du speicherst sie wie jede Änderung.',
   'changes.undoReverse': 'Bucht für jede Buchung dieses Laufs die Gegenbuchung. In einer geschlossenen Periode geht das nicht.',
+  'changes.undoBlocked.closed': 'Kein Rückgängig: die Buchungen dieses Laufs liegen in einer eingereichten Periode. Eine Korrektur bucht der Ablauf «Korrektur» in der offenen Periode.',
+  'changes.undoBlocked.reversed': 'Kein Rückgängig: die Buchungen dieses Laufs sind schon storniert.',
   'changes.locked': 'gesperrt',
   'changes.savedToast': { one: '{n} Speicherstand gespeichert', other: '{n} Speicherstände gespeichert' },
   'changes.reversedToast': { one: '{n} Buchung storniert', other: '{n} Buchungen storniert' },

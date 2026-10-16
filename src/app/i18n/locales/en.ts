@@ -2423,6 +2423,8 @@ export default {
     'changes.undo': 'Undo',
     'changes.undoDraft': 'The files as they were go into the draft; you save them like any change.',
     'changes.undoReverse': 'Books the reversal of each entry of this run. Not possible in a closed period.',
+    'changes.undoBlocked.closed': 'No undo: this run\'s bookings lie in a filed period. A correction is booked by the «Correction» workflow in the open period.',
+    'changes.undoBlocked.reversed': 'No undo: this run\'s bookings are reversed already.',
     'changes.locked': 'locked',
     'changes.savedToast': { one: '{n} save made', other: '{n} saves made' },
     'changes.reversedToast': { one: '{n} entry reversed', other: '{n} entries reversed' },

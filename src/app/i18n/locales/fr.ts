@@ -2423,6 +2423,8 @@ export default {
     'changes.undo': 'Annuler',
     'changes.undoDraft': 'Les fichiers d’avant vont dans le brouillon ; tu les enregistres comme toute modification.',
     'changes.undoReverse': 'Passe l’écriture inverse de chaque écriture de ce traitement. Impossible dans une période clôturée.',
+    'changes.undoBlocked.closed': 'Pas d’annulation: les écritures de ce passage sont dans une période déposée. Une correction est comptabilisée par le processus «Correction» dans la période ouverte.',
+    'changes.undoBlocked.reversed': 'Pas d’annulation: les écritures de ce passage sont déjà extournées.',
     'changes.locked': 'verrouillé',
     'changes.savedToast': { one: '{n} enregistrement fait', other: '{n} enregistrements faits' },
     'changes.reversedToast': { one: '{n} écriture extournée', other: '{n} écritures extournées' },

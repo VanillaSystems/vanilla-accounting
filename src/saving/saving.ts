@@ -19,7 +19,7 @@ import { commitExactly, repositoryAt } from '../workspace/git.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { holdsRules } from '../booking/rule-book.js';
 import { ruleDiff, rulesRefusal, withPreview } from './rules.js';
-import { booksBasis, changesView, customizingNames, draftDir, fileDiff, lastSaveAt, recordsPaths, saveDetail } from './changes.js';
+import { booksBasis, changesView, customizingNames, draftDir, fileDiff, lastSaveAt, recordsPaths, saveDetail, unreversedOf } from './changes.js';
 import { BOOKS, diffLines, hunks, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type RunWrote, type SavingCommand, type SavingResult, type SyncState } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
@@ -195,6 +195,10 @@ export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; ru
 
   async function undo(oid: string): Promise<SavingResult> {
     const detail = await saveDetail(ws, oid);
+    if (detail?.undoBlocked === 'closed') {
+      const closed = loadBooks(ws as Workspace).config.closedThrough;
+      return refuse('closed', `Die Buchungen dieses Laufs liegen in einer eingereichten Periode (bis ${closed}). Eine Korrektur bucht der Ablauf «Korrektur» in der offenen Periode.`);
+    }
     if (!detail?.undo) return refuse('cannot-undo', 'Dieser Speicherstand lässt sich nicht rückgängig machen.');
     if (detail.undo === 'draft') {
       // The files as they were before the save go into the draft, and are saved like any change.
@@ -253,8 +257,7 @@ export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; ru
  * a closed period is refused by the write door. Returns how many it reversed.
  */
 export function reverseRun(books: Books, runId: string): number {
-  const reversedIds = new Set(books.journalEntries.flatMap((e) => (e.id.startsWith('storno-') ? [e.id.slice('storno-'.length)] : [])));
-  const own = books.journalEntries.filter((e) => e.run === runId && !reversedIds.has(e.id));
+  const own = unreversedOf(books, runId);
   for (const e of own) {
     const r: JournalEntry = {
       id: `storno-${e.id}`, transactionRef: e.transactionRef, date: e.date,

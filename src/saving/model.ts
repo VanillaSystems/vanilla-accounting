@@ -126,6 +126,8 @@ export interface SaveDetail extends SaveSummary {
   files: FileChange[];
   /** What Rückgängig would do: a customizing save goes back to the draft; a run's bookings are reversed. */
   undo?: 'draft' | 'reverse';
+  /** Why a run's save offers no Rückgängig: its bookings lie in a filed period (a correction goes into the open one), or are reversed already. */
+  undoBlocked?: 'closed' | 'reversed';
 }
 
 export interface FileDiff { path: string; before: string; after: string }

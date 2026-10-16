@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
-import { draftDir } from '../src/saving/changes.js';
+import { draftDir, saveDetail } from '../src/saving/changes.js';
 import { recordsPaths } from '../src/saving/changes.js';
 import { commitExactly } from '../src/workspace/git.js';
 import { relative } from 'node:path';
@@ -137,11 +137,14 @@ test('Rückgängig of a run reverses its bookings in an open period and refuses 
   assert.match(git('status', '--porcelain'), /entries\.jsonl/, 'it waits in Änderungen');
   const again = await saving.command({ kind: 'undo', oid: open });
   assert.equal(again.ok ? '' : again.refusal, 'cannot-undo', 'reversed once only');
+  assert.deepEqual([(await saveDetail(ws, open))?.undo, (await saveDetail(ws, open))?.undoBlocked], [undefined, 'reversed'], 'the row offers no second Rückgängig');
 
   const old = await book('r-old', '2026-05-10');
   const books = loadBooks(ws);
   books.config.closedThrough = '2026-06-30';
   saveBooks(ws, books);
+  // A sealed run's row offers no «Rückgängig» and says why (r7f-36); the command refuses with the seal.
+  assert.deepEqual([(await saveDetail(ws, old))?.undo, (await saveDetail(ws, old))?.undoBlocked], [undefined, 'closed']);
   const closed = await saving.command({ kind: 'undo', oid: old });
   assert.match(closed.ok ? '' : closed.message, /2026-06-30/);
   assert.equal(closed.ok ? '' : closed.refusal, 'closed');

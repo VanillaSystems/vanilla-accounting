@@ -91,7 +91,7 @@ function SaveView({ oid, nav }: { oid: string; nav: Nav }) {
       <div className="head"><h2 className="who">{data.subject}<small>{formatDate(dayOf(data.at))} {when(data.at)} · {t('changes.by', { author: data.author })} · <span className="mono">{data.short}</span></small></h2></div>
       <p className="lead"><span className={`chkind k-${data.kind}`}>{kindLabel(data.kind)}</span>{data.run ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: data.run! }, query: {} })}>{t('automation.run', { id: data.run })}</button> : null}</p>
       {body ? <pre className="chbody">{body}</pre> : null}
-      {data.undo ? <UndoButton oid={oid} kind={data.undo} nav={nav} /> : null}
+      {data.undo ? <UndoButton oid={oid} kind={data.undo} nav={nav} /> : data.undoBlocked ? <p className="chundo"><span className="m">{t(`changes.undoBlocked.${data.undoBlocked}`)}</span></p> : null}
       <h3 className="chh3">{t('changes.files')}</h3>
       <div className="chfiles">
         {data.files.map((f) => (

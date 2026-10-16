@@ -2423,6 +2423,8 @@ export default {
     'changes.undo': 'Annulla',
     'changes.undoDraft': 'I file di prima vanno nella bozza; li salvi come ogni modifica.',
     'changes.undoReverse': 'Registra lo storno di ogni registrazione di questa esecuzione. Non possibile in un periodo chiuso.',
+    'changes.undoBlocked.closed': 'Nessun annullamento: le registrazioni di questa esecuzione sono in un periodo inoltrato. Una correzione viene registrata dal processo «Correzione» nel periodo aperto.',
+    'changes.undoBlocked.reversed': 'Nessun annullamento: le registrazioni di questa esecuzione sono già stornate.',
     'changes.locked': 'bloccato',
     'changes.savedToast': { one: '{n} salvataggio fatto', other: '{n} salvataggi fatti' },
     'changes.reversedToast': { one: '{n} registrazione stornata', other: '{n} registrazioni stornate' },
