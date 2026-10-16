@@ -427,6 +427,18 @@ export interface YearCloseState {
 
 export const emptyState = (year: string): YearCloseState => ({ year, templates: {} });
 
+/**
+ * The entries of the year's 31.12. that book a template (treuhaender-29): on its given accounts,
+ * each on its side, wherever they were booked (Buchungen, the step's own form). A template with no
+ * account given is the person's to mark.
+ */
+export function bookedFor(entries: readonly JournalEntry[], year: string, t: Pick<EntryTemplate, 'accountDebit' | 'accountCredit'>): Array<Pick<JournalEntry, 'id' | 'transactionRef'>> {
+  if (!t.accountDebit && !t.accountCredit) return [];
+  return entries
+    .filter((e) => e.date === yearEnd(year) && (!t.accountDebit || e.accountDebit === t.accountDebit) && (!t.accountCredit || e.accountCredit === t.accountCredit))
+    .map((e) => ({ id: e.id, transactionRef: e.transactionRef }));
+}
+
 // ─── The checklist ───────────────────────────────────────────────────────────
 
 /** One reason an item is not done, with what to show: the UI says it in the user's language, the CLI in English. */
@@ -484,7 +496,8 @@ export interface YearClose {
   checks: Check[];
   revaluations: Revaluation[];
   vat: VatCheck;
-  templates: Array<EntryTemplate & { state?: TemplateState }>;
+  /** `state` as marked, or 'done' when an entry of the year's 31.12. books on the template's accounts (`booked`: those entries). */
+  templates: Array<EntryTemplate & { state?: TemplateState; booked?: Array<Pick<JournalEntry, 'id' | 'transactionRef'>> }>;
   receivables: Receivables;
   ledger: ClosingLedger;
   /** Why "Jahr abschliessen" refuses; empty when it may run. */
@@ -590,7 +603,10 @@ export function yearClose(input: YearCloseInput): YearClose {
   const proposed = receivables.invoices.length
     ? [{ ...receivablesTemplate(), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
-  const templates = [...yearEndTemplates(), ...proposed].map((t) => ({ ...t, state: state.templates[t.id] }));
+  const templates = [...yearEndTemplates(), ...proposed].map((t) => {
+    const booked = bookedFor(books.journalEntries, year, t);
+    return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }) };
+  });
 
   const blockers: Problem[] = checks.flatMap((c) => c.problems);
   for (const r of reval) {

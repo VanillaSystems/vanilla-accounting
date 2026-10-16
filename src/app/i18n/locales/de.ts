@@ -1270,6 +1270,7 @@ export const messages = {
   'close.checksLead': 'Jeder Punkt wird aus den Büchern berechnet. Das Jahr lässt sich abschliessen, wenn alle erledigt sind.',
   'close.entriesLead': 'Welche nötig sind, sagt die Treuhand. Jede wird erfasst oder als «nicht nötig» markiert. Die Kursdifferenz bucht der Abschluss selbst.',
   'close.booked': 'erfasst',
+  'close.bookedAs': 'in Buchungen:',
   'close.undoMark': 'zurück',
   'close.markedNa': '{label}: nicht nötig',
   'close.markedDone': '{label}: erledigt',

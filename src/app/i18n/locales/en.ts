@@ -1273,6 +1273,7 @@ export default {
     'close.checksLead': 'Each item is computed from the books. The year can be closed once all are done.',
     'close.entriesLead': 'Your accountant tells you which ones are needed. Book each one or mark it "not needed". The close books the exchange difference itself.',
     'close.booked': 'booked',
+    'close.bookedAs': 'in Journal:',
     'close.undoMark': 'undo',
     'close.markedNa': '{label}: not needed',
     'close.markedDone': '{label}: done',

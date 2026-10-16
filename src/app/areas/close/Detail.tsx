@@ -3,7 +3,7 @@
  * there. Every write goes through the year-close API and then reloads the books; what can be
  * taken back says so in the toast.
  */
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import type { EntryTemplate, TemplateState } from '../../../accounting/year-close.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
 import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
@@ -172,7 +172,9 @@ function Entries({ d, nav, canEdit }: StepProps) {
               {tp.state ? (
                 <>
                   <span className={`st${tp.state === 'na' ? ' na' : ''}`}>{tp.state === 'na' ? t('yearClose.stateNa') : <>{I.check}{t('close.booked')}</>}</span>
-                  {editable && <button type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</button>}
+                  {tp.booked && !d.state.templates[tp.id]
+                    ? <span className="m" data-testid="booked-by">{t('close.bookedAs')} {tp.booked.map((b, i) => <Fragment key={b.id}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go({ route: { area: 'journal', id: b.id }, query: { period: parsePeriod(d.year, localToday())! } })}>{b.transactionRef}</button></Fragment>)}</span>
+                    : editable && <button type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</button>}
                 </>
               ) : editable && (
                 <>

@@ -132,6 +132,24 @@ test('open invoices on 31.12.: proposed as a receivables entry (1100 / the reven
   assert.deepEqual(decided.blockers, []);
 });
 
+test('year-end entries booked in Buchungen on 31.12. tick their steps (treuhaender-29): depreciation, TA, TP, provision; another date or account does not', () => {
+  const b = books();
+  b.journalEntries.push(
+    e('M2026-006', '2026-12-31', '6800', '1530', 4000),
+    e('M2026-007', '2026-12-31', '1300', '6300', 653.35),
+    e('M2026-008', '2026-12-31', '5000', '2300', 2600),
+    e('M2026-009', '2026-12-31', '6100', '2330', 3000),
+    e('M2026-010', '2026-12-30', '8900', '2208', 900),
+    e('M2026-011', '2026-12-31', '2208', '8900', 100),
+  );
+  const close = yearClose(input(b, { state: emptyState('2026') }));
+  const done = close.templates.filter((t) => t.state === 'done').map((t) => [t.id, t.booked?.map((x) => x.transactionRef)]);
+  assert.deepEqual(done, [['depreciation', ['M2026-006']], ['accruedExpense', ['M2026-008']], ['prepaidExpense', ['M2026-007']], ['provision', ['M2026-009']]]);
+  assert.equal(close.templates.find((t) => t.id === 'taxProvision')?.state, undefined, 'the 30.12. and the reversed sides do not count');
+  const marked = yearClose(input(b, { state: { ...emptyState('2026'), templates: { depreciation: 'na' } } }));
+  assert.equal(marked.templates.find((t) => t.id === 'depreciation')?.state, 'na', 'what the person marked wins');
+});
+
 test('refusals: each precondition names what is missing', () => {
   const b = books();
   b.transactions.push({ ref: 'open', bank: 'Raiffeisen', date: '2026-11-11', amount: 5, currency: 'CHF', direction: 'DBIT', description: 'unbooked' });

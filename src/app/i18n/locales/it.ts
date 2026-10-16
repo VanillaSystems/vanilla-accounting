@@ -1273,6 +1273,7 @@ export default {
     'close.checksLead': 'Ogni punto è calcolato dai libri. L\'anno si può chiudere quando tutti sono fatti.',
     'close.entriesLead': 'Quali servono lo dice la fiduciaria. Ognuna si registra o si segna «non necessaria». La differenza di cambio la registra la chiusura stessa.',
     'close.booked': 'registrata',
+    'close.bookedAs': 'nelle registrazioni:',
     'close.undoMark': 'annulla',
     'close.markedNa': '{label}: non necessaria',
     'close.markedDone': '{label}: fatta',

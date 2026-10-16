@@ -1273,6 +1273,7 @@ export default {
     'close.checksLead': 'Chaque point est calculé à partir des livres. L\'année peut être clôturée quand tous sont faits.',
     'close.entriesLead': 'La fiduciaire dit lesquelles sont nécessaires. Chacune est saisie ou marquée « pas nécessaire ». La clôture comptabilise elle-même la différence de change.',
     'close.booked': 'saisie',
+    'close.bookedAs': 'dans les écritures :',
     'close.undoMark': 'annuler',
     'close.markedNa': '{label} : pas nécessaire',
     'close.markedDone': '{label} : faite',
