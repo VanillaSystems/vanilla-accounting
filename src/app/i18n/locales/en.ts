@@ -1117,6 +1117,8 @@ export default {
     'reports.vatPart.acquisition': 'acquisition tax {amount}',
     'reports.vatMetaIncome': 'figures incl. VAT, VAT of the period CHF {net}',
     'reports.vatMetaBalance': 'accounts incl. VAT, not yet settled CHF {net}',
+    'reports.vatNet': 'The figures are net of VAT: the entries’ tax is on the VAT account {account}.',
+    'reports.vatMetaNet': 'figures net of VAT, tax on account {account}',
     'reports.balanced': 'Debit = credit',
     'reports.difference': 'Difference',
     'reports.allAccounts': 'All accounts',

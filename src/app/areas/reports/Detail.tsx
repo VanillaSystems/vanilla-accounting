@@ -15,10 +15,10 @@ type Props = AreaProps<RouteOf<'reports'>>;
 
 export function Detail({ route, books, period, nav }: Props) {
   const account = accountOfRoute(route);
-  const l = useMemo(() => (account === undefined ? undefined : ledgerOf(books, account, period)), [books, account, period]);
+  const names = getAccountMap();
+  const l = useMemo(() => (account === undefined ? undefined : ledgerOf(books, account, period, names)), [books, account, period, names]);
   if (account === undefined || !l) return <div className="detail-empty"><div>{t('reports.noAccounts', { period: periodName(period) })}</div></div>;
   const none = account === NO_ACCOUNT;
-  const names = getAccountMap();
   const of = reportOfAccount(account);
   return (
     <div className="detail-in" key={account}>

@@ -18,3 +18,9 @@ income:
   otherIncome: { title: Nebenbetrieblicher Ertrag, accounts: ["7000", "8100", "8510"] }
   otherExpenses: { title: Nebenbetrieblicher Aufwand, accounts: ["7010", "8000", "8500", "8900"] }
   extraordinaryItems: { title: Ausserordentliches, accounts: [] }
+
+# The VAT during the year: net, as Banana shows it. The tax each code splits off sits on the VAT
+# account (year-end.yaml vatSettlement) from the day it is booked, the way the year close posts it,
+# so revenue and expense are net and the Bilanz balances within the year (decision 16.10.2026).
+# `gross` leaves the tax in revenue and expense until the year close.
+vat: net

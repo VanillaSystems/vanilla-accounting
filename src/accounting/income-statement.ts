@@ -1,4 +1,4 @@
-import type { JournalEntry } from '../types/index.js';
+import type { Postings } from './ledger.js';
 import { computeBalances } from './ledger.js';
 import { chart, statements } from '../engines/index.js';
 import { inGroup } from '../engines/chart.js';
@@ -23,12 +23,12 @@ export interface IncomeStatement {
 }
 
 export function computeIncomeStatement(
-  entries: JournalEntry[],
+  postings: Postings,
   from: string,
   to: string,
   accountNames: Record<string, string>,
 ): IncomeStatement {
-  const balances = computeBalances(entries, from, to, {}, chart().isDebitNormal);
+  const balances = computeBalances(postings, from, to, {}, chart().isDebitNormal);
   const balanceMap = new Map(balances.map(b => [b.account, b.balance]));
 
   const allAccounts = Object.keys(accountNames).sort();

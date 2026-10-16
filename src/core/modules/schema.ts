@@ -183,7 +183,16 @@ export interface StatementsData {
     liabilities: (AccountGroup & { openResult?: string })[];
   };
   income: Record<(typeof INCOME_SECTIONS)[number], AccountGroup>;
+  /**
+   * How the statements show the VAT during the year. `net`: the tax the codes split off sits on
+   * the VAT account from the day it is booked, as the year close posts it (src/accounting/statement-postings.ts);
+   * `gross`: revenue and expense hold it until the year close.
+   */
+  vat: StatementsVat;
 }
+
+export const STATEMENTS_VAT = ['net', 'gross'] as const;
+export type StatementsVat = (typeof STATEMENTS_VAT)[number];
 
 /** A guided year-end entry; a blank account is the user's pick. */
 export interface YearEndTemplate { id: string; accountDebit: string; accountCredit: string; vatCode?: string; /** Only for these legal forms (a GmbH's tax provision; an Einzelfirma's owner pays the income tax). */ legalForms?: string[] }

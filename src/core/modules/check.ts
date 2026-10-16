@@ -3,7 +3,7 @@
  * formula that names a missing box or depends on itself, a rate row the form never shows. Each
  * problem names its file and path, so the person (or the AI) editing the overlay can fix it.
  */
-import { INCOME_SECTIONS, type BoxId, type Formula, type Jurisdiction, type ReturnData } from './schema.js';
+import { INCOME_SECTIONS, STATEMENTS_VAT, type BoxId, type Formula, type Jurisdiction, type ReturnData } from './schema.js';
 import { FILING_LENGTHS } from '../../accounting/periods.js';
 
 export interface ModuleProblem {
@@ -85,6 +85,7 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   if (!Array.isArray(j.invoicing.territory) || !j.invoicing.territory.length || !j.invoicing.territory.every((c) => /^[A-Z]{2}$/.test(String(c)))) add('invoicing.yaml', 'territory', 'a list of two-letter country codes');
   if (!Array.isArray(j.invoicing.placeAbroad) || !j.invoicing.placeAbroad.every((w) => typeof w === 'string' && w.trim())) add('invoicing.yaml', 'placeAbroad', 'a list of words');
   for (const s of INCOME_SECTIONS) if (!j.statements.income[s]) add('statements.yaml', `income.${s}`, 'missing');
+  if (!STATEMENTS_VAT.includes(j.statements.vat)) add('statements.yaml', 'vat', `"${j.statements.vat}" is not one of ${STATEMENTS_VAT.join(', ')}`);
   if (!FILING_LENGTHS.includes(j.periods.vat.length)) add('periods.yaml', 'vat.length', `"${j.periods.vat.length}" is not one of ${FILING_LENGTHS.join(', ')}`);
   if (!(j.periods.vat.dueDays >= 0)) add('periods.yaml', 'vat.dueDays', 'must be a number of days');
   return problems;

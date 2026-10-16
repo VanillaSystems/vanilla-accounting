@@ -22,7 +22,7 @@ export interface Table {
   styles: RowStyle[];
   /** The columns that hold amounts: right-aligned, two decimals. */
   money: number[];
-  /** A line under the title: the Bilanz and Erfolgsrechnung say that their figures hold the VAT not yet settled (r8c-2). */
+  /** A line under the title: the Bilanz and Erfolgsrechnung say whether their figures are net of VAT or hold the VAT not yet settled (r8c-2). */
   note?: string;
 }
 
@@ -78,9 +78,11 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
         if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value]); out.styles.push(undefined); }
         if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total]); out.styles.push('total'); }
       }
-      if (view.vat) {
-        const vars = { net: fmt2(view.vat.net), parts: vatParts(view.vat).map((x) => t(x.key, { amount: fmt2(x.amount) })).join(', ') };
-        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', view.vat.net]);
+      if (view.vat?.shown === 'net') out.note = t('reports.vatMetaNet', { account: view.vat.account });
+      if (view.vat?.shown === 'gross') {
+        const { figures } = view.vat;
+        const vars = { net: fmt2(figures.net), parts: vatParts(figures).map((x) => t(x.key, { amount: fmt2(x.amount) })).join(', ') };
+        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', figures.net]);
         out.styles.push('open');
         out.note = t(id === 'income' ? 'reports.vatMetaIncome' : 'reports.vatMetaBalance', vars);
       }
@@ -111,9 +113,9 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
     case 'ledger': case 'ledgers': {
       const out = table([t('col.account'), t('export.colAccountName'), t('col.date'), t('vat.colEntry'), t('reports.counter'), t('export.colVat'), t('reports.debit'), t('reports.credit'), t('reports.balance'), t('export.colReceipt')], [6, 7, 8]);
       const files = receiptFiles(c.books);
-      const accounts = id === 'ledger' ? (c.account === undefined ? [] : [c.account]) : accountsWithActivity(c.books, c.period);
+      const accounts = id === 'ledger' ? (c.account === undefined ? [] : [c.account]) : accountsWithActivity(c.books, c.period, c.names);
       for (const a of accounts) {
-        const l = ledgerOf(c.books, a, c.period);
+        const l = ledgerOf(c.books, a, c.period, c.names);
         out.rows.push([a, accName(a), c.period.from, t('reports.openingBalance'), '', '', '', '', l.opening, '']);
         out.styles.push('open');
         for (const r of [...l.rows].reverse()) {

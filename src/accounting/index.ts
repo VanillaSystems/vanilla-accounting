@@ -6,6 +6,7 @@ export { computeIncomeStatement, type IncomeStatement, type IncomeStatementSecti
 export { entriesForReturn, reportRange } from './declarations.js';
 export { caseEffect, reconcileCases, type CaseEffect, type CaseReconciliation, type ZifferEffect } from './correction-cases.js';
 export { computeAccountLedger, type AccountLedgerRow } from './account-ledger.js';
+export { statementPostings, statementVatAccount, sourceEntryId, isDerived, type Postings } from './statement-postings.js';
 export { validateJournalEntries, type ValidationIssue, type Severity } from './validate.js';
 export {
   reconcileMonthly,

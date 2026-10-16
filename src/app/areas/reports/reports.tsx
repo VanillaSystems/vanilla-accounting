@@ -136,9 +136,12 @@ function List(props: Props) {
         <span>{t(HEADLINE[view.headline.label])}</span>
         <b className="mono"><small>CHF</small>{fmt(view.headline.value)}</b>
       </div>
-      {view.vat && (
-        <p className="m rvat" data-testid="vat-note" data-net={view.vat.net}>
-          {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.net), parts: vatParts(view.vat).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}
+      {view.vat?.shown === 'net' && (
+        <p className="m rvat" data-testid="vat-note" data-shown="net">{t('reports.vatNet', { account: view.vat.account })}</p>
+      )}
+      {view.vat?.shown === 'gross' && (
+        <p className="m rvat" data-testid="vat-note" data-shown="gross" data-net={view.vat.figures.net}>
+          {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.figures.net), parts: vatParts(view.vat.figures).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}
         </p>
       )}
       {view.gap && (
@@ -233,7 +236,7 @@ export const reports: Area<RouteOf<'reports'>> = {
     if (e.key === 'd') { document.querySelector<HTMLElement>('[data-dlpop]')?.click(); return true; }
     if (e.key !== 'Enter') return false;
     const a = accountOfRoute(p.route);
-    const first = a === undefined ? undefined : ledgerOf(p.books, a, p.period).rows[0]?.entry;
+    const first = a === undefined ? undefined : ledgerOf(p.books, a, p.period, getAccountMap()).rows[0]?.entry;
     if (!first) return false;
     p.nav.go(entryAt(first, p.period));
     return true;

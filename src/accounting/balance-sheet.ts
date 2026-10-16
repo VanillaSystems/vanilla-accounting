@@ -1,4 +1,4 @@
-import type { JournalEntry } from '../types/index.js';
+import type { Postings } from './ledger.js';
 import { computeBalances } from './ledger.js';
 import { chart, statements } from '../engines/index.js';
 import { inGroup } from '../engines/chart.js';
@@ -20,14 +20,14 @@ export interface BalanceSheet {
 }
 
 export function computeBalanceSheet(
-  entries: JournalEntry[],
+  postings: Postings,
   asOfDate: string,
   openingBalances: Record<string, number>,
   accountNames: Record<string, string>,
 ): BalanceSheet {
   const year = asOfDate.slice(0, 4);
   const from = `${year}-01-01`;
-  const balances = computeBalances(entries, from, asOfDate, openingBalances, chart().isDebitNormal);
+  const balances = computeBalances(postings, from, asOfDate, openingBalances, chart().isDebitNormal);
   const balanceMap = new Map(balances.map(b => [b.account, b.balance]));
 
   // Compute P&L result (3xxx-8xxx) to show as "Jahresergebnis" on the balance sheet

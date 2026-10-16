@@ -1114,6 +1114,8 @@ export const messages = {
   'reports.vatPart.acquisition': 'Bezugsteuer {amount}',
   'reports.vatMetaIncome': 'Beträge inkl. MWST, MWST der Periode CHF {net}',
   'reports.vatMetaBalance': 'Konten inkl. MWST, noch nicht abgegrenzt CHF {net}',
+  'reports.vatNet': 'Die Beträge sind ohne MWST: die Steuer der Buchungen steht auf dem MWST-Konto {account}.',
+  'reports.vatMetaNet': 'Beträge ohne MWST, Steuer auf Konto {account}',
   'reports.balanced': 'Soll = Haben',
   'reports.difference': 'Differenz',
   'reports.allAccounts': 'Alle Konten',

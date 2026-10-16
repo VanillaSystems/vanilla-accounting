@@ -1117,6 +1117,8 @@ export default {
     'reports.vatPart.acquisition': 'impôt sur les acquisitions {amount}',
     'reports.vatMetaIncome': 'montants TVA incluse, TVA de la période CHF {net}',
     'reports.vatMetaBalance': 'comptes TVA incluse, pas encore régularisée CHF {net}',
+    'reports.vatNet': 'Les montants sont hors TVA : la taxe des écritures figure sur le compte TVA {account}.',
+    'reports.vatMetaNet': 'montants hors TVA, taxe sur le compte {account}',
     'reports.balanced': 'Débit = crédit',
     'reports.difference': 'Différence',
     'reports.allAccounts': 'Tous les comptes',

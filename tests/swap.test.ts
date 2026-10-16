@@ -10,11 +10,14 @@ import { join } from 'node:path';
 import { loadJurisdiction } from '../src/core/modules/load.js';
 import { baseCurrency, chart, filing, setJurisdiction, vat } from '../src/engines/index.js';
 import { computeIncomeStatement } from '../src/accounting/income-statement.js';
+import { statementPostings } from '../src/accounting/statement-postings.js';
 import { computeBalanceSheet } from '../src/accounting/balance-sheet.js';
 import { entriesForReturn } from '../src/accounting/declarations.js';
 import { openFilingPeriod } from '../src/accounting/periods.js';
 import { revenueVatCode } from '../src/invoices/rules.js';
-import type { JournalEntry } from '../src/types/index.js';
+import { parsePeriod } from '../src/accounting/periods.js';
+import { reportView } from '../src/app/areas/reports/model.js';
+import type { Index, JournalEntry } from '../src/types/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 
 const xx = loadJurisdiction(join(APP_ROOT, 'tests', 'fixtures'), 'xx');
@@ -56,13 +59,21 @@ test('xx\'s chart: revenue in class 4 is credit-normal, the statements follow it
   assert.equal(chart().isDebitNormal('4000'), false);
   assert.equal(chart().isDebitNormal('1800'), true);
   assert.equal(chart().sideOf('3800'), 'liabilities');
-  const year = entries.filter((x) => x.date.startsWith('2026'));
+  const year = statementPostings(entries.filter((x) => x.date.startsWith('2026')), Object.keys(names));
+  assert.equal(year.length, entries.filter((x) => x.date.startsWith('2026')).length, 'xx shows its statements gross within the year: no tax posting is derived');
   const is = computeIncomeStatement(year, '2026-01-01', '2026-12-31', names);
   assert.deepEqual([is.revenue.title, is.revenue.total, is.operatingExpenses.total, is.netResult], ['Sales', 1805, 240, 1565]);
   const bs = computeBalanceSheet(year, '2026-12-31', {}, names);
   assert.deepEqual(bs.assets.map((g) => [g.title, g.total]), [['Fixed assets', 0], ['Current assets', 1565]]);
   assert.deepEqual(bs.liabilities[0].rows.at(-1), { account: '', name: 'Result of the year', balance: 1565 });
   assert.ok(bs.isBalanced);
+});
+
+test('xx shows its statements gross within the year: the Erfolgsrechnung keeps the tax and says how much it holds (r8c-2)', () => {
+  const books: Index = { receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: entries };
+  const view = reportView('income', books, parsePeriod('2026', '2026-12-31')!, names, false);
+  assert.equal(view.headline.value, 1565, 'sales and rent as booked, the tax inside');
+  assert.deepEqual(view.vat, { shown: 'gross', figures: { owed: 205, input: 40, acquisition: 0, net: 165 } });
 });
 
 test('an invoice asks xx for its codes by meaning', () => {

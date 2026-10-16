@@ -1,18 +1,20 @@
 /**
  * Bilanz & ER: the three reports as lists of accounts in blocks, and one account's ledger. Every
  * figure comes from src/accounting (computeIncomeStatement, computeBalanceSheet, computeTrialBalance,
- * computeAccountLedger, openingBalancesAt); this file arranges them and filters what is shown.
+ * computeAccountLedger, openingBalancesAt) over the books' `statementPostings`: net of VAT where the
+ * jurisdiction says so; this file arranges them and filters what is shown.
  */
 import type { Index, JournalEntry } from '../../../types/index.js';
 import {
   computeAccountLedger, computeBalanceSheet, computeIncomeStatement, computeTrialBalance, openingBalancesAt,
-  type AccountLedgerRow, type IncomeStatementSection,
+  isDerived, sourceEntryId, statementPostings, statementVatAccount,
+  type AccountLedgerRow, type IncomeStatementSection, type Postings,
 } from '../../../accounting/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import { computeBalances } from '../../../accounting/ledger.js';
 import { differenceCauses, owesAcquisition, vatPostings, type DifferenceCause } from '../../../accounting/year-close.js';
 import type { Report } from '../../shell/route.js';
-import { chart, vat, withoutInputTax } from '../../../engines/index.js';
+import { chart, statements, vat, withoutInputTax } from '../../../engines/index.js';
 
 /** The account of entries booked on one side only (a code that books the VAT itself, M81-2): no number. */
 export const NO_ACCOUNT = '';
@@ -36,7 +38,7 @@ export type Block =
 
 export type SumTitle = 'grossProfit' | 'operatingResult' | 'netResult' | 'totalAssets' | 'totalLiabilities';
 
-/** The VAT the shown entries carry inside their gross amounts (docs/year-end.md: split off at the year close, not before). */
+/** The VAT the shown entries carry inside their gross amounts, on a jurisdiction whose statements are gross within the year (docs/year-end.md). */
 export interface VatInFigures {
   /** Sales tax the codes owe, refunds and corrections taken off. */
   owed: number;
@@ -68,7 +70,7 @@ const VAT_MARK = 'vat';
 /**
  * What the entries of `from`..`to` hold as VAT, by their codes, as the year close posts it
  * (vatPostings): undefined when no entry carries a code (a firm not registered, a period without
- * VAT). The Erfolgsrechnung's result and the Bilanz's accounts are gross by this amount (r8c-2).
+ * VAT). On a gross jurisdiction the Erfolgsrechnung's result and the Bilanz's accounts hold this amount (r8c-2).
  */
 export function vatInFigures(entries: readonly JournalEntry[], from: string, to: string): VatInFigures | undefined {
   const postings = vatPostings(entries.filter((e) => e.date >= from && e.date <= to), VAT_MARK);
@@ -83,11 +85,24 @@ export function vatInFigures(entries: readonly JournalEntry[], from: string, to:
   return { owed, input, acquisition, net: r2(owed + acquisition - input) };
 }
 
+/**
+ * What Bilanz & ER say about the VAT. `net`: the figures are net, the tax sits on `account` (the
+ * jurisdiction's statements are net within the year); `gross`: the figures hold `figures`, settled
+ * at the year close (r8c-2). Absent when the entries carry no code (a firm not registered).
+ */
+export type VatNote = { shown: 'net'; account: string } | { shown: 'gross'; figures: VatInFigures };
+
+function vatNote(entries: readonly JournalEntry[], from: string, to: string, chartAccounts: readonly string[]): VatNote | undefined {
+  const figures = vatInFigures(entries, from, to);
+  if (!figures) return undefined;
+  return statements().vat === 'net' ? { shown: 'net', account: statementVatAccount(chartAccounts) } : { shown: 'gross', figures };
+}
+
 export interface ReportView {
   blocks: Block[];
   headline: { label: 'result' | 'balanceTotal' | 'balanced' | 'difference'; value: number };
-  /** Erfolgsrechnung: the period's VAT inside the figures; Bilanz: the year's up to its day. Absent when the entries carry no code. */
-  vat?: VatInFigures;
+  /** Erfolgsrechnung: the period's VAT; Bilanz: the year's up to its day. */
+  vat?: VatNote;
   /** Bilanz: the day it shows, and the gap when assets and liabilities differ. */
   asOf?: string;
   gap?: { value: number; liabilities: number; causes: DifferenceCause[] };
@@ -98,12 +113,16 @@ export interface ReportView {
 export const reportOfAccount = (a: string): Report => (a >= '1' && a < '3' ? 'balance' : a >= '3' && a < '9' ? 'income' : 'trial');
 
 const entriesOf = (books: Index) => books.journalEntries ?? [];
+/** What the reports read: the journal, net of VAT where the jurisdiction says so; `names` is the chart. */
+export const reportPostings = (books: Index, names: Record<string, string>): Postings => statementPostings(entriesOf(books), Object.keys(names));
 
 export function reportView(report: Report, books: Index, period: Period, names: Record<string, string>, all: boolean): ReportView {
   const entries = entriesOf(books);
+  const postings = reportPostings(books, names);
+  const chartAccounts = Object.keys(names);
   const keep = (r: AccountRow) => all || r.value !== 0 || !!r.open || !!r.debit || !!r.credit;
   if (report === 'income') {
-    const s = computeIncomeStatement(entries, period.from, period.to, names);
+    const s = computeIncomeStatement(postings, period.from, period.to, names);
     const group = (sec: IncomeStatementSection): Block => ({ kind: 'group', title: sec.title, rows: sec.rows.map((r) => ({ account: r.account, value: r.amount })).filter(keep), total: sec.total });
     return {
       blocks: [
@@ -112,12 +131,12 @@ export function reportView(report: Report, books: Index, period: Period, names: 
         group(s.otherIncome), group(s.otherExpenses), { kind: 'sum', title: 'netResult', value: s.netResult, strong: true },
       ],
       headline: { label: 'result', value: s.netResult },
-      vat: vatInFigures(entries, period.from, period.to),
+      vat: vatNote(entries, period.from, period.to, chartAccounts),
     };
   }
   if (report === 'balance') {
     const year = period.to.slice(0, 4);
-    const b = computeBalanceSheet(entries, period.to, books.config?.openingBalances?.[year] ?? {}, names);
+    const b = computeBalanceSheet(postings, period.to, books.config?.openingBalances?.[year] ?? {}, names);
     const groups = (secs: typeof b.assets): Block[] => secs.map((sec) => {
       const result = sec.rows.find((r) => r.account === '');
       return {
@@ -127,7 +146,7 @@ export function reportView(report: Report, books: Index, period: Period, names: 
       };
     });
     const opening = books.config?.openingBalances?.[year] ?? {};
-    const booked = entries.filter((e) => e.date >= `${year}-01-01` && e.date <= period.to);
+    const booked = postings.filter((e) => e.date >= `${year}-01-01` && e.date <= period.to);
     const balances = Object.fromEntries(computeBalances(booked, `${year}-01-01`, period.to, opening, chart().isDebitNormal).map((r) => [r.account, r.balance]));
     return {
       blocks: [
@@ -135,13 +154,13 @@ export function reportView(report: Report, books: Index, period: Period, names: 
         { kind: 'head', title: 'liabilities' }, ...groups(b.liabilities), { kind: 'sum', title: 'totalLiabilities', value: b.totalLiabilities, strong: true },
       ],
       headline: { label: 'balanceTotal', value: b.totalAssets },
-      vat: vatInFigures(entries, `${year}-01-01`, period.to),
+      vat: vatNote(entries, `${year}-01-01`, period.to, chartAccounts),
       asOf: period.to,
-      gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, causes: differenceCauses(opening, booked, balances, Object.keys(names)) },
+      gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, causes: differenceCauses(opening, booked, balances, chartAccounts) },
     };
   }
-  const opening = openingOf(books, entries, period.from);
-  const tb = computeTrialBalance(entries, period.from, period.to, opening, names);
+  const opening = openingOf(books, postings, period.from);
+  const tb = computeTrialBalance(postings, period.from, period.to, opening, names);
   const rows: AccountRow[] = tb.rows.map((r) => ({ account: r.account, value: r.balance, open: opening[r.account] ?? 0, debit: r.debitTotal, credit: r.creditTotal }));
   if (all) for (const a of Object.keys(names)) if (!rows.some((r) => r.account === a)) rows.push({ account: a, value: 0, open: 0, debit: 0, credit: 0 });
   rows.sort((x, y) => Number(x.account === NO_ACCOUNT) - Number(y.account === NO_ACCOUNT) || x.account.localeCompare(y.account));
@@ -190,25 +209,36 @@ export const accountsOf = (view: ReportView) => view.blocks.flatMap((b) => (b.ki
 
 export interface Ledger {
   opening: number;
-  /** Newest first, each with its counter account. */
-  rows: Array<AccountLedgerRow & { other: string; entry?: JournalEntry }>;
+  /** Newest first, each with its counter account; `derived`: the tax a code split off (statementPostings), `entry` then the entry it comes from. */
+  rows: Array<AccountLedgerRow & { other: string; entry?: JournalEntry; derived: boolean }>;
   debit: number;
   credit: number;
   closing: number;
 }
 
 /** Each account's balance when `from` begins, its normal side from the workspace's chart. */
-export const openingOf = (books: Index, entries: JournalEntry[], from: string) =>
-  openingBalancesAt(entries, from, books.config?.openingBalances, chart().isDebitNormal);
+export const openingOf = (books: Index, postings: Postings, from: string) =>
+  openingBalancesAt(postings, from, books.config?.openingBalances, chart().isDebitNormal);
 
-export function ledgerOf(books: Index, account: string, period: Period): Ledger {
-  const entries = entriesOf(books);
-  const opening = openingOf(books, entries, period.from)[account] ?? 0;
-  const { rows } = computeAccountLedger(entries, account, period.from, period.to, opening);
-  const byId = new Map(entries.map((e) => [e.id, e]));
+/**
+ * One account's ledger over the reports' postings (`names` is the chart): its balances are the
+ * statements'. A tax posting derived from a code names the VAT account or the carrier as its
+ * counter account and links to the entry whose code it splits.
+ */
+export function ledgerOf(books: Index, account: string, period: Period, names: Record<string, string>): Ledger {
+  const postings = reportPostings(books, names);
+  const opening = openingOf(books, postings, period.from)[account] ?? 0;
+  const { rows } = computeAccountLedger(postings, account, period.from, period.to, opening);
+  const byId = new Map(postings.map((e) => [e.id, e]));
+  const entries = new Map(entriesOf(books).map((e) => [e.id, e]));
   const out = rows.map((r) => {
-    const entry = byId.get(r.entryId);
-    return { ...r, entry, other: (r.debit != null ? entry?.accountCredit : entry?.accountDebit) ?? '' };
+    const posting = byId.get(r.entryId);
+    return {
+      ...r,
+      entry: entries.get(sourceEntryId({ id: r.entryId })),
+      derived: isDerived({ id: r.entryId }),
+      other: (r.debit != null ? posting?.accountCredit : posting?.accountDebit) ?? '',
+    };
   });
   return {
     opening,

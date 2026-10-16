@@ -1,4 +1,4 @@
-import type { JournalEntry } from '../types/index.js';
+import type { Postings } from './ledger.js';
 import { computeBalances, type AccountBalance } from './ledger.js';
 import { roundCHF } from './rappen.js';
 import { chart } from '../engines/index.js';
@@ -15,13 +15,13 @@ export interface TrialBalance {
 }
 
 export function computeTrialBalance(
-  entries: JournalEntry[],
+  postings: Postings,
   from: string,
   to: string,
   openingBalances: Record<string, number>,
   accountNames: Record<string, string>,
 ): TrialBalance {
-  const balances = computeBalances(entries, from, to, openingBalances, chart().isDebitNormal);
+  const balances = computeBalances(postings, from, to, openingBalances, chart().isDebitNormal);
 
   const rows: TrialBalanceRow[] = balances
     .filter(b => b.debitTotal !== 0 || b.creditTotal !== 0 || b.balance !== 0)

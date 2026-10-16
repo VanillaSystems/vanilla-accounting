@@ -6,7 +6,7 @@
 import type { Index } from '../types/index.js';
 import { filingKeyOf, localToday, parsePeriod, type FilingLength, type IsoDate, type Period } from '../accounting/periods.js';
 import { ledgerOf as receiptLedger } from '../app/areas/receipts/model.js';
-import { NO_ACCOUNT, openingOf } from '../app/areas/reports/model.js';
+import { NO_ACCOUNT, openingOf, reportPostings } from '../app/areas/reports/model.js';
 
 export const FORMATS = ['pdf', 'csv', 'xlsx', 'json', 'banana', 'orig'] as const;
 export type Format = typeof FORMATS[number];
@@ -127,12 +127,12 @@ export const statementsIn = (books: Index, period: Period) =>
 export const entriesIn = (books: Index, period: Period) =>
   (books.journalEntries ?? []).filter((e) => e.date >= period.from && e.date <= period.to);
 
-/** Every account with an opening balance or an entry in the period, the one-sided entries' last. */
-export function accountsWithActivity(books: Index, period: Period): string[] {
-  const entries = books.journalEntries ?? [];
-  const opening = openingOf(books, entries, period.from);
+/** Every account with an opening balance or a posting in the period (the reports' postings, `names` the chart), the one-sided entries' last. */
+export function accountsWithActivity(books: Index, period: Period, names: Record<string, string>): string[] {
+  const postings = reportPostings(books, names);
+  const opening = openingOf(books, postings, period.from);
   const seen = new Set(Object.keys(opening).filter((a) => opening[a]));
-  for (const e of entriesIn(books, period)) { seen.add(e.accountDebit || NO_ACCOUNT); seen.add(e.accountCredit || NO_ACCOUNT); }
+  for (const e of postings.filter((p) => p.date >= period.from && p.date <= period.to)) { seen.add(e.accountDebit || NO_ACCOUNT); seen.add(e.accountCredit || NO_ACCOUNT); }
   return [...seen].sort((a, b) => Number(a === NO_ACCOUNT) - Number(b === NO_ACCOUNT) || a.localeCompare(b));
 }
 
@@ -149,7 +149,7 @@ export function countOf(id: ItemId, books: Index, period: Period, names: Record<
     case 'income': case 'balance': case 'trial': return 1;
     case 'vat': return quartersIn(period, localToday(), length).length;
     case 'ledger': return account === undefined ? 0 : 1;
-    case 'ledgers': return accountsWithActivity(books, period).length;
+    case 'ledgers': return accountsWithActivity(books, period, names).length;
     case 'journal': return entriesIn(books, period).length;
     case 'payments': return paymentsIn(books, period).length;
     case 'receiptList': case 'receipts': return receiptsIn(books, period).length;

@@ -8,11 +8,12 @@ import './support/jurisdiction.js';
 import { computeIncomeStatement } from '../src/accounting/income-statement.js';
 import { computeBalanceSheet } from '../src/accounting/balance-sheet.js';
 import type { JournalEntry } from '../src/types/index.js';
+import { statementPostings } from '../src/accounting/statement-postings.js';
 
 const e = (id: string, debit: string, credit: string, amount: number): JournalEntry =>
   ({ id, transactionRef: id, date: '2026-05-01', accountDebit: debit, accountCredit: credit, amount });
-const entries = [e('a', '1020', '8510', 300), e('b', '8900', '1020', 120), e('c', '1020', '3200', 1000), e('d', '7010', '1020', 50)];
 const names = { '1020': 'Bank', '3200': 'Ertrag', '7010': 'Aufwand Nebenbetrieb', '8510': 'Ertrag ausserordentlich', '8900': 'Steuern', '2970': 'Gewinnvortrag' };
+const entries = statementPostings([e('a', '1020', '8510', 300), e('b', '8900', '1020', 120), e('c', '1020', '3200', 1000), e('d', '7010', '1020', 50)], Object.keys(names));
 
 test('accounts listed one by one land in their section, and the net result sums them', () => {
   const is = computeIncomeStatement(entries, '2026-01-01', '2026-12-31', names);

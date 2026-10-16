@@ -12,3 +12,4 @@ income:
   otherIncome: { title: Other income, accounts: [] }
   otherExpenses: { title: Other expenses, from: "7000", to: "8000" }
   extraordinaryItems: { title: Extraordinary, accounts: [] }
+vat: gross

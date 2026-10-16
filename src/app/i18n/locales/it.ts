@@ -1117,6 +1117,8 @@ export default {
     'reports.vatPart.acquisition': 'imposta sull’acquisto {amount}',
     'reports.vatMetaIncome': 'importi IVA inclusa, IVA del periodo CHF {net}',
     'reports.vatMetaBalance': 'conti IVA inclusa, non ancora regolata CHF {net}',
+    'reports.vatNet': 'Gli importi sono al netto dell’IVA: l’imposta delle registrazioni è sul conto IVA {account}.',
+    'reports.vatMetaNet': 'importi al netto dell’IVA, imposta sul conto {account}',
     'reports.balanced': 'Dare = avere',
     'reports.difference': 'Differenza',
     'reports.allAccounts': 'Tutti i conti',

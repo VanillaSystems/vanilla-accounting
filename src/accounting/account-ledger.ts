@@ -1,4 +1,4 @@
-import type { JournalEntry } from '../types/index.js';
+import type { Postings } from './ledger.js';
 import { toRappen, fromRappen } from './rappen.js';
 import { chfAmount } from './ledger.js';
 import { chart } from '../engines/index.js';
@@ -13,13 +13,13 @@ export interface AccountLedgerRow {
 }
 
 export function computeAccountLedger(
-  entries: JournalEntry[],
+  postings: Postings,
   account: string,
   from: string,
   to: string,
   openingBalance: number = 0,
 ): { openingBalance: number; rows: AccountLedgerRow[] } {
-  const relevant = entries
+  const relevant = postings
     .filter(e => {
       if (!e.date) return false;
       if (e.date < from || e.date > to) return false;

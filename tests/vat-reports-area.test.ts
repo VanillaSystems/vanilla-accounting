@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import type { Index, JournalEntry } from '../src/types/index.js';
-import { computeIncomeStatement } from '../src/accounting/index.js';
+import { computeIncomeStatement, statementPostings } from '../src/accounting/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { filedDiff, formAmount, shownZiffern, vatKeyOf, vatReturn } from '../src/app/areas/vat/model.js';
 import { headline } from '../src/app/areas/vat/model.js';
@@ -84,20 +84,19 @@ test('a rate row compares with the filed form as its turnover: with tax for supp
 
 test('the Erfolgsrechnung shows the app\'s figures, accounts with an amount only unless all', () => {
   const view = reportView('income', books, p('2026-Q3'), names, false);
-  const app = computeIncomeStatement(books.journalEntries!, '2026-07-01', '2026-09-30', names);
+  const app = computeIncomeStatement(statementPostings(books.journalEntries!, Object.keys(names)), '2026-07-01', '2026-09-30', names);
   assert.equal(view.headline.value, app.netResult);
   assert.deepEqual(accountsOf(view), ['3200', '4000', '6500']);
   assert.ok(accountsOf(reportView('income', books, p('2026-Q4'), names, true)).includes('3200'), 'all accounts in an empty quarter');
   assert.deepEqual(accountsOf(reportView('income', books, p('2026-Q4'), names, false)), []);
 });
 
-test('the Bilanz names why assets and liabilities differ: the entries booked on one side, an account missing from the chart', () => {
+test('the Bilanz names why assets and liabilities differ: an account missing from the chart; a tax correction booked on one side is balanced by its tax posting', () => {
   const view = reportView('balance', books, p('2026-Q3'), names, false);
   assert.equal(view.asOf, '2026-09-30');
-  assert.deepEqual(view.gap?.causes, [
-    { code: 'oneLeg', entryIds: ['fix'], amount: -8.1 },
-    { code: 'notInChart', account: '2800', amount: 1000 },
-  ]);
+  assert.deepEqual(view.gap?.causes, [{ code: 'notInChart', account: '2800', amount: 1000 }]);
+  const oneSided: Index = { ...books, journalEntries: [je('half', '2026-09-30', '', '4000', 8.1)] };
+  assert.deepEqual(reportView('balance', oneSided, p('2026-Q3'), names, false).gap?.causes[0], { code: 'oneLeg', entryIds: ['half'], amount: -8.1 }, 'without a code nothing balances it');
 });
 
 test('an opening booked against 9100 (treuhaender-30): the Bilanz names the account, not entries without a counter account', () => {
@@ -125,29 +124,33 @@ test('a search finds an account in the report that holds it and narrows the list
 });
 
 test('an account\'s ledger: opening, newest first, each entry with its counter account', () => {
-  const l = ledgerOf(books, '1020', p('2026-Q3'));
+  const l = ledgerOf(books, '1020', p('2026-Q3'), names);
   assert.equal(l.opening, 1000 - 54.05);
   assert.deepEqual(l.rows.map((r) => [r.entryId, r.other]), [['paper', '6500'], ['sale', '3200']]);
+  const revenue = ledgerOf(books, '3200', p('2026-Q3'), names);
+  assert.deepEqual(revenue.rows.map((r) => [r.entryId, r.other, r.debit, r.credit, r.derived, r.entry?.id]), [['vat:sale', '2200', 81, null, true, 'sale'], ['sale', '1020', null, 1081, false, 'sale']], 'the sale\'s tax leaves revenue for the VAT account, linked to the sale');
+  assert.equal(revenue.closing, 1000);
   assert.equal(l.closing, Math.round((1000 - 54.05 + 1081 - 108.1) * 100) / 100);
   assert.deepEqual([l.debit, l.credit], [1081, 108.1]);
 });
 
-test('Bilanz & ER say that their figures hold the VAT not yet settled, with the period\'s VAT beside the result; the exports carry the same note (r8c-2)', () => {
+test('Bilanz & ER are net of VAT: revenue and expense without the tax, the tax on the VAT account, a line that says so; the exports carry it as their note (decision 16.10.2026)', () => {
   // August: a sale of 1081 gross (81 owed), paper for 108.10 gross (8.10 input tax).
   assert.deepEqual(vatInFigures(books.journalEntries!, '2026-08-01', '2026-08-31'), { owed: 81, input: 8.1, acquisition: 0, net: 72.9 });
-  assert.equal(vatInFigures(books.journalEntries!, '2026-01-01', '2026-01-31'), undefined, 'no coded entry: no note');
+  assert.equal(vatInFigures(books.journalEntries!, '2026-01-01', '2026-01-31'), undefined, 'no coded entry');
   const income = reportView('income', books, p('2026-08'), names, false);
-  assert.deepEqual(income.vat, { owed: 81, input: 8.1, acquisition: 0, net: 72.9 });
-  assert.equal(income.headline.value, 1081 - 108.1, 'the figures themselves do not change');
+  assert.deepEqual(income.vat, { shown: 'net', account: '2200' });
+  assert.equal(income.headline.value, 1000 - 100, 'sale and paper net of their tax');
+  assert.equal(reportView('income', books, p('2026-01'), names, false).vat, undefined, 'no coded entry: no line');
   const balance = reportView('balance', books, p('2026-08'), names, false);
-  assert.deepEqual(balance.vat, { owed: 81, input: 12.15, acquisition: 0, net: 68.85 }, 'the Bilanz carries the whole year\'s VAT up to its day');
+  assert.deepEqual(balance.vat, { shown: 'net', account: '2200' });
+  const owed = balance.blocks.flatMap((b) => (b.kind === 'group' ? b.rows : [])).find((r) => r.account === '2200');
+  assert.equal(owed?.value, 68.85, 'the year\'s tax up to its day sits on 2200: 81 owed, 8.10 and 4.05 deducted');
   assert.equal(reportView('trial', books, p('2026-08'), names, false).vat, undefined);
   const words = { t: (key: string, vars?: Record<string, string | number>) => `${key}${vars ? ' ' + JSON.stringify(vars) : ''}`, accountingName: (g: string) => g };
   const tb = tableOf('income', { books, period: p('2026-08'), names, words: words as never, filed: {}, filingLength: 'quarter' });
-  const note = tb.rows.find((r) => String(r[0]).startsWith('reports.vatRow'));
-  assert.ok(note, 'the exported Erfolgsrechnung has the VAT row');
-  assert.equal(note![3], 72.9);
-  assert.match(tb.note ?? '', /reports\.vatMeta/);
+  assert.ok(!tb.rows.some((r) => String(r[0]).startsWith('reports.vatRow')), 'no «VAT held in these figures» row');
+  assert.equal(tb.note, 'reports.vatMetaNet {"account":"2200"}');
   const trial = tableOf('trial', { books, period: p('2026-08'), names, words: words as never, filed: {}, filingLength: 'quarter' });
   assert.equal(trial.note, undefined);
 });

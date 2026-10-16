@@ -57,6 +57,10 @@ same list. Every item is computed from the books:
   Run `npm run fetch-rates -- --year 2026` once it is out.
 - **The VAT check.** Your entries hold VAT gross, with a VAT code. The check posts the tax of
   each code to the VAT account, as Banana does, and compares it with the returns you filed.
+  Bilanz & ER show the same postings during the year: their figures are net, and the tax is on
+  the VAT account from the day of its entry. The postings are worked out when the reports are
+  read and never written to the journal, so the close counts them once, and the result it
+  carries into the next year is the one Bilanz & ER show on 31.12.
   What is still owed on 31.12. should be the fourth quarter. A difference means a payment to
   the ESTV is missing or was booked twice, or a correction (form 0535) was not paid in the year.
 - **The year-end entries** (step 3).
