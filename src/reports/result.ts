@@ -51,4 +51,6 @@ export interface ReportResult {
   count: number;
   /** The VAT the shown bookings hold in their gross amounts, not yet settled (as Bilanz and ER say it); absent when none carries a code. */
   vat?: { owed: number; input: number; acquisition: number; net: number };
+  /** Where Bilanz and ER put that VAT within the year, on a jurisdiction whose statements are net: the rows' net is what they show. */
+  vatAccount?: string;
 }

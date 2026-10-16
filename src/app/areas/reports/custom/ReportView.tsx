@@ -16,8 +16,7 @@ import type { Words } from '../../../../export/tables.js';
 import type { Column } from '../../../../reports/spec.js';
 import { fillComment } from '../../../../reports/run.js';
 import type { ReportResult, ReportRow, Totals } from '../../../../reports/result.js';
-import { filtersInWords, groupName, spanOf } from '../../../../reports/words.js';
-import { vatParts } from '../../../../accounting/vat-in-figures.js';
+import { filtersInWords, groupName, spanOf, vatNoteOf } from '../../../../reports/words.js';
 
 /** The UI's words for the code that names a report's parts (src/reports/files.ts). */
 export const uiWords: Words = { t: (k, v) => t(k as Key, v as never), accountingName };
@@ -102,7 +101,7 @@ export function ReportView({ result, preview, go }: { result: ReportResult; prev
         </p>
       ) : null}
       {comment ? <p className="rptc" data-testid="report-comment">{comment}</p> : null}
-      {result.vat ? <p className="m rptv">{t('custom.vatNote', { net: fmt(result.vat.net), parts: vatParts(result.vat).filter((x) => x.amount !== 0).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}</p> : null}
+      {result.vat ? <p className="m rptv">{vatNoteOf(result, uiWords, fmt)}</p> : null}
     </div>
   );
 }

@@ -14,9 +14,11 @@ import type { Invoice, Issued } from '../invoices/model.js';
 import { chfAmount } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Period } from '../accounting/periods.js';
-import { baseCurrency, chart, vat } from '../engines/index.js';
+import { baseCurrency, chart, statements } from '../engines/index.js';
 import { totals as invoiceTotals } from '../invoices/rules.js';
 import { vatInFigures } from '../accounting/vat-in-figures.js';
+import { vatPostings } from '../accounting/year-close.js';
+import { statementVatAccount } from '../accounting/statement-postings.js';
 import type { ReportGroup, ReportResult, ReportRow, SectionResult, Totals } from './result.js';
 import { inRange, type Grouping, type ReportFilter, type ReportSection, type ReportSpec } from './spec.js';
 
@@ -40,15 +42,24 @@ function receiptsByRef(books: Index): Map<string, string[]> {
   return out;
 }
 
-/** The tax and the net of a booking's amount (signed as the row is), as its VAT code declares them. */
-function vatOf(e: JournalEntry, amount: number): { net: number; tax: number } {
-  const line = vat().vatLine(e);
-  const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
-  if (!line || !info) return { net: amount, tax: 0 };
-  const sign = amount < 0 ? -1 : 1;
-  if (info.amountIs === 'tax') return { net: 0, tax: amount };
-  const tax = sign * Math.abs(line.tax);
-  return { net: info.amountIs === 'net' ? amount : fromRappen(toRappen(amount) - toRappen(tax)), tax };
+const VAT = 'vat';
+
+/**
+ * The tax and the net of a row's amount, as the year close (and, on a jurisdiction whose
+ * statements are net, Bilanz and ER within the year) splits the booking's VAT off (vatPostings):
+ * on a side of the booking (`leg`), only the account that carries the tax loses it, so a bank's
+ * side stays gross and an expense's net is what the Erfolgsrechnung shows; on a whole booking,
+ * the tax it holds. A code that declares nothing, or Bezugsteuer that nets to zero, holds none.
+ */
+function vatOf(e: JournalEntry, amount: number, leg?: string): { net: number; tax: number } {
+  const p = vatPostings([e], VAT)[0];
+  if (!p) return { net: amount, tax: 0 };
+  const cents = (n: number) => fromRappen(toRappen(n));
+  if (leg === undefined) { const tax = (amount < 0 ? -1 : 1) * p.amount; return { net: cents(amount - tax), tax }; }
+  const carrier = p.accountDebit === VAT ? p.accountCredit : p.accountDebit;
+  if (carrier !== leg) return { net: amount, tax: 0 };
+  const delta = (p.accountDebit === carrier ? p.amount : -p.amount) * (chart().isDebitNormal(carrier) ? 1 : -1);
+  return { net: cents(amount + delta), tax: cents(-delta) };
 }
 
 function textMatches(f: ReportFilter, ...texts: Array<string | undefined>): boolean {
@@ -77,13 +88,13 @@ function entryRows(s: ReportSection, books: Index, period: Period, files: Map<st
         ...(e.accountDebit && onAccounts(f, e.accountDebit) ? [{ account: e.accountDebit, counter: e.accountCredit, sign: chart().isDebitNormal(e.accountDebit) ? 1 : -1 }] : []),
         ...(e.accountCredit && onAccounts(f, e.accountCredit) ? [{ account: e.accountCredit, counter: e.accountDebit, sign: chart().isDebitNormal(e.accountCredit) ? -1 : 1 }] : []),
       ]
-      : [{ account: e.accountDebit || e.accountCredit, counter: e.accountDebit ? e.accountCredit : '', sign: 1 }];
+      : [{ account: e.accountDebit || e.accountCredit, counter: e.accountDebit ? e.accountCredit : '', sign: 1, whole: true }];
     if (legs.length) matched.add(e);
     for (const l of legs) {
       const amount = l.sign * chfAmount(e);
       out.push({
         date: e.date, text: e.description || e.id, account: l.account, counterAccount: l.counter, vatCode: e.vatCode ?? '',
-        amount, ...vatOf(e, amount), currency: base, receipt: receipts.join(' | '), counterparty, link: { kind: 'entry', id: e.id },
+        amount, ...vatOf(e, amount, 'whole' in l ? undefined : l.account), currency: base, receipt: receipts.join(' | '), counterparty, link: { kind: 'entry', id: e.id },
       });
     }
   }
@@ -199,7 +210,10 @@ export function runReport(spec: ReportSpec, input: ReportInput, period: Period):
   });
   const all = sections.flatMap((s) => s.groups.flatMap((g) => g.rows));
   const vatIn = matched.size ? vatInFigures([...matched], period.from, period.to) : undefined;
-  return { spec, period, currency: first, sections, totals: totalsOf(all, first), count: all.length, ...(vatIn ? { vat: vatIn } : {}) };
+  return {
+    spec, period, currency: first, sections, totals: totalsOf(all, first), count: all.length,
+    ...(vatIn ? { vat: vatIn, ...(statements().vat === 'net' ? { vatAccount: statementVatAccount(Object.keys(names)) } : {}) } : {}),
+  };
 }
 
 /** The result with only the first `n` rows of each section, for a card; every group and total stays that of all the rows. */

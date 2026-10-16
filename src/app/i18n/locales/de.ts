@@ -3396,6 +3396,7 @@ export const messages = {
   'custom.form.commentHint': 'Keine Zahlen schreiben: ein Platzhalter setzt die Zahl der App ein. Klick fügt ihn ein.',
   'custom.form.preview': 'Vorschau',
   'custom.form.cancel': 'Abbrechen',
+  'custom.vatNoteNet': 'Betrag: wie gebucht, mit MWST. Netto: ohne sie, wie Bilanz und Erfolgsrechnung die Konten zeigen; dort steht die MWST auf Konto {account}. MWST in diesen Buchungen: CHF {net} ({parts}).',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

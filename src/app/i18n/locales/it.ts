@@ -3399,5 +3399,6 @@ export default {
     'custom.form.commentHint': 'Non scrivere cifre: un segnaposto inserisce la cifra dell\'app. Un clic lo aggiunge.',
     'custom.form.preview': 'Anteprima',
     'custom.form.cancel': 'Annulla',
+    'custom.vatNoteNet': 'Importo: come registrato, IVA inclusa. Netto: senza, come bilancio e conto economico mostrano i conti; lì l\'IVA è sul conto {account}. IVA in queste registrazioni: CHF {net} ({parts}).',
   },
 } satisfies Locale;

@@ -9,9 +9,8 @@ import { csvOf, date, esc, fileStem, money, pageHtml } from '../export/bundle.js
 import type { Table, Words } from '../export/tables.js';
 
 type Key = Parameters<Words['t']>[0];
-import { vatParts } from '../accounting/vat-in-figures.js';
 import { COLUMNS, type Column } from './spec.js';
-import { filtersInWords, groupName, sectionName, spanOf } from './words.js';
+import { filtersInWords, groupName, sectionName, spanOf, vatNoteOf } from './words.js';
 import { fillComment } from './run.js';
 import type { ReportResult, ReportRow, Totals } from './result.js';
 
@@ -45,12 +44,6 @@ const amounts = (t: Totals[], k: 'amount' | 'net' | 'tax') => t.map((x) => (t.le
 export const commentOf = (r: ReportResult): string | undefined =>
   fillComment(r, (n, c) => `${c} ${money(n)}`, { period: spanOf(r), date });
 
-/** The VAT the amounts still hold, as Bilanz and ER say it. */
-export function vatNoteOf(r: ReportResult, w: Words): string | undefined {
-  if (!r.vat) return undefined;
-  return w.t('custom.vatNote', { net: money(r.vat.net), parts: vatParts(r.vat).filter((x) => x.amount !== 0).map((x) => w.t(x.key, { amount: money(x.amount) })).join(', ') });
-}
-
 function sectionHtml(r: ReportResult, i: number, w: Words): string {
   const s = r.sections[i];
   const cols = s.section.columns;
@@ -77,7 +70,7 @@ function sectionHtml(r: ReportResult, i: number, w: Words): string {
 
 /** The report as an A4 page for printPdf (src/invoices/pdf.ts). */
 export function reportHtml(r: ReportResult, w: Words, x: { company: string; fonts: string; now: string }): string {
-  const vatNote = vatNoteOf(r, w);
+  const vatNote = vatNoteOf(r, w, money);
   const comment = commentOf(r);
   const overall = r.sections.length > 1
     ? `<table><tbody><tr class="tot"><td>${esc(w.t('custom.overall'))} · ${esc(w.t('custom.rows', { n: r.count }))}</td>${(['net', 'tax', 'amount'] as const).filter((k) => r.sections.some((s) => s.section.columns.includes(k))).map((k) => `<td class="n">${esc(w.t(`custom.col.${k}` as Key))}<br>${esc(amounts(r.totals, k)).replace(/\n/g, '<br>')}</td>`).join('')}</tr></tbody></table>`

@@ -276,8 +276,9 @@ this year») is one you describe, and the app computes. There are two ways to ma
 A comment under the report holds no figure of its own. Placeholders such as `{total}`,
 `{count}`, `{period}` or `{section1.total}` are filled from the books. With an account filter, a
 booking counts on the account's normal side, so a refund counts against an expense. Amounts in
-different currencies are summed apart. Bookings carry their VAT, and the report says how much
-of it is not settled yet, as the Erfolgsrechnung does.
+different currencies are summed apart. A booking's amount is as booked, VAT included; its net
+is the amount without the VAT, which is what Bilanz and Erfolgsrechnung show for the account,
+and the report says on which account the VAT stands there.
 
 A saved report is a file, `knowledge/reports/<name>.report.yaml`, that holds what the report
 shows and never its figures. Eigene Berichte lists it and runs it each time it is opened, for

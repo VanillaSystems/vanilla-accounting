@@ -3399,5 +3399,6 @@ export default {
     'custom.form.commentHint': 'N\'écris pas de chiffres : un champ insère le chiffre de l\'app. Un clic l\'ajoute.',
     'custom.form.preview': 'Aperçu',
     'custom.form.cancel': 'Annuler',
+    'custom.vatNoteNet': 'Montant : tel que comptabilisé, TVA comprise. Net : sans elle, comme le bilan et le compte de résultat montrent les comptes ; la TVA y figure sur le compte {account}. TVA dans ces écritures : CHF {net} ({parts}).',
   },
 } satisfies Locale;

@@ -3399,5 +3399,6 @@ export default {
     'custom.form.commentHint': 'Write no figures: a placeholder puts in the app\'s figure. A click adds it.',
     'custom.form.preview': 'Preview',
     'custom.form.cancel': 'Cancel',
+    'custom.vatNoteNet': 'Amount: as booked, VAT included. Net: without it, as the balance sheet and income statement show the accounts; there the VAT is on account {account}. VAT in these bookings: CHF {net} ({parts}).',
   },
 } satisfies Locale;

@@ -59,7 +59,7 @@ test('the CSV is the plain table: a header, one line per row, the amounts adding
   assert.equal(reportFileName(result, 'csv'), 'Aufwand-und-Zahlungen_2026-07-01_2026-09-30.csv');
 });
 
-test('the PDF page names the period and the filters in words, prints each total, fills the comment and says the VAT is not yet settled', () => {
+test('the PDF page names the period and the filters in words, prints each total, fills the comment and says where Bilanz and ER put the VAT', () => {
   const html = reportHtml(result, de, { company: 'Muster Kaffee GmbH', fonts: '', now: '2026-10-16T08:00:00Z' });
   assert.match(html, /<h1>Aufwand und Zahlungen<\/h1>/);
   assert.match(html, /01\.07\.2026 – 30\.09\.2026/);
@@ -69,7 +69,8 @@ test('the PDF page names the period and the filters in words, prints each total,
   assert.ok(html.includes(`Im 01.07.2026 – 30.09.2026 kostete der Betrieb CHF ${total} in ${result.sections[0].count} Buchungen.`), 'the comment\'s figures are the runner\'s');
   for (const g of result.sections[0].groups) assert.ok(html.includes(`Total ${g.key} ${g.label}`), g.key);
   assert.ok(result.vat, 'the expenses carry VAT codes');
-  assert.ok(html.includes('Die Beträge enthalten die MWST der Buchungen'));
+  assert.ok(result.vatAccount, 'the Swiss statements are net of VAT within the year');
+  assert.ok(html.includes(`Netto: ohne sie, wie Bilanz und Erfolgsrechnung die Konten zeigen; dort steht die MWST auf Konto ${result.vatAccount}.`), 'the note says which column Bilanz and ER show');
   assert.ok(html.includes('Gesamttotal'));
 });
 

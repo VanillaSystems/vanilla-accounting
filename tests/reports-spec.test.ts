@@ -14,7 +14,7 @@ import { totals as invoiceTotals } from '../src/invoices/rules.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { chfAmount } from '../src/accounting/ledger.js';
 import { computeTrialBalance } from '../src/accounting/trial-balance.js';
-import type { Postings } from '../src/accounting/index.js';
+import { statementPostings, type Postings } from '../src/accounting/index.js';
 import { chart, vat } from '../src/engines/index.js';
 import type { Index, JournalEntry } from '../src/types/index.js';
 import { checkSpec, inRange, parseSpec, specData, type ReportSpec } from '../src/reports/spec.js';
@@ -91,6 +91,16 @@ test('Aufwand by account in Q3: each account\'s total is its trial balance movem
   }
   assert.deepEqual(r.totals, [{ currency: 'CHF', count, amount: plain / 100, net: r.totals[0].net, tax: r.totals[0].tax }]);
   assert.equal(r.sections[0].groups[0].label, names[r.sections[0].groups[0].key]);
+});
+
+test('the net column is what Bilanz and ER show: each account\'s net total is its movement in the statements\' postings, VAT split off; a bank\'s side stays gross', () => {
+  const r = run({ title: 'Aufwand und Bank', period: '2026-Q3', sections: [{ source: 'entries', filter: { accounts: ['6000-6999', '1021'] }, group: 'account', columns: ['date', 'text', 'net', 'tax', 'amount'] }] });
+  const tb = computeTrialBalance(statementPostings(books.journalEntries, Object.keys(names)), Q3.from, Q3.to, {}, names);
+  const movement = (a: string) => { const x = tb.rows.find((y) => y.account === a)!; return cents(chart().isDebitNormal(a) ? x.debitTotal - x.creditTotal : x.creditTotal - x.debitTotal); };
+  for (const g of r.sections[0].groups) assert.equal(cents(g.totals[0].net), movement(g.key), g.key);
+  const bank = r.sections[0].groups.find((g) => g.key === '1021')!;
+  assert.equal(bank.totals[0].tax, 0, 'the bank pays gross');
+  assert.ok(r.sections[0].groups.some((g) => g.totals[0].tax > 0), 'an expense holds input tax');
 });
 
 test('sales on 3xxx count on their normal side: positive, a refund against them; net and tax as the VAT engine splits each booking', () => {

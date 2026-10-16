@@ -9,6 +9,7 @@ import type { Words } from '../export/tables.js';
 type Key = Parameters<Words['t']>[0];
 import { COLUMNS, FILTERS, GROUPINGS, accountRangeText, type ReportRefusal, type ReportSection } from './spec.js';
 import type { ReportGroup, ReportResult } from './result.js';
+import { vatParts } from '../accounting/vat-in-figures.js';
 
 type T = (key: Key, vars?: Record<string, string | number>) => string;
 
@@ -59,3 +60,14 @@ export function filtersInWords(s: ReportSection, w: Words): string {
 /** A group's heading: the key and the account's name, or «ohne» for rows without one. */
 export const groupName = (g: ReportGroup, w: Words): string => (g.key ? [g.key, g.label].filter(Boolean).join(' ') : w.t('custom.none'));
 
+
+/**
+ * The VAT the rows' amounts hold, as Bilanz and ER say it: settled at the year close where the
+ * statements are gross within the year; where they are net, that the net column is what they show
+ * and on which account the VAT stands there.
+ */
+export function vatNoteOf(r: ReportResult, w: Words, money: (n: number) => string): string | undefined {
+  if (!r.vat) return undefined;
+  const vars = { net: money(r.vat.net), parts: vatParts(r.vat).filter((x) => x.amount !== 0).map((x) => w.t(x.key, { amount: money(x.amount) })).join(', ') };
+  return r.vatAccount ? w.t('custom.vatNoteNet', { ...vars, account: r.vatAccount }) : w.t('custom.vatNote', vars);
+}
