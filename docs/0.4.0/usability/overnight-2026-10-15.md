@@ -139,3 +139,8 @@ file records every decision a person might have made differently, newest last.
     - r4c-21/r5h-12: a SumUp payout without its report is held as a question («Bericht verknüpfen, oder die ganze Auszahlung als Umsatz buchen?»), not booked V81 on the net; a report linked later closes it. Reason: VAT is owed on the gross, and a provisional entry filed as it stands would need a 0535 for every late report.
     - r5f-26 did not reproduce in the sandbox; likely round 5's driver clicked «+ Buchung». The round-6 firms tester checks it in the packed app.
     - Open for Ken: should the threshold task count in the dock badge? Is holding a reportless payout right, or should the AI book it from the bank text?
+31. Round 6 other firms (rc.290, .verify/findings/r6-firms.md): of 21 round-5 rows not good, 10 fixed, 7 partly, 3 failing (r5f-4, r5f-9 fixed after the build, r5f-14); the 6 good rows still good. r5f-26 does not reproduce in the packed app (round 5 typed into the add form). Five switches between the two firms always showed the right engines. Filed H1 byte-identical through the replay.
+    - New highs: r6f-33 the 2. Semester return can be approved and exported on 16.10.; r6f-22 setup never asks for the ESTV activity code, the first net-rate filing sticks with an English message naming a field.
+    - Partly: the sidebar's advice on a 1 October registration is wrong; Perioden und Siegel lists quarter due dates for a firm without returns; H1 shows the corrected figure as filed.
+    - Fix round firmtypes3 started (also every English or internal message that reaches the person, as a class).
+    - Ken (16.10.): he tests by hand on his real books; automated tests never use them. Build rc.295-g49de54d handed to him.
