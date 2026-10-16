@@ -224,7 +224,8 @@ export const api = {
   createManualTransaction: (input: ManualTransactionInput) =>
     request<{ ref: string }>('POST', '/api/transactions/manual', input).then((r) => r.ref),
   /** «Privat oder bar bezahlt»: the owner's payment of the receipt, linked; refused when a payment pays it already. */
-  privatePayment: (receiptId: string) => request<{ ref: string }>('POST', `/api/receipts/${receiptId}/private-payment`).then((r) => r.ref),
+  /** The owner's payment made for the receipt: its ref and date, and the filed period it corrects when the receipt lies in one (r8k-10). */
+  privatePayment: (receiptId: string) => request<{ ref: string; date: string; corrects?: string }>('POST', `/api/receipts/${receiptId}/private-payment`),
 
   bookPayment: (ref: string, lines: BookingLine[]) =>
     request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines }).then((r) => r.entries),

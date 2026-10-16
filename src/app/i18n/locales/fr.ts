@@ -31,7 +31,7 @@ export default {
     'error.vatSetup.rates': 'La méthode des taux de la dette fiscale nette a besoin d’un ou deux taux autorisés. Rien n’est enregistré.',
     'error.closed.editTransaction': 'Les transactions d’une période clôturée ne peuvent pas être modifiées.',
     'error.closed.deleteTransaction': 'Les transactions d’une période clôturée ne peuvent pas être supprimées.',
-    'error.closed.newTransaction': 'Une nouvelle transaction doit tomber dans la période ouverte.',
+    'error.closed.newTransaction': 'Une nouvelle transaction doit tomber dans la période ouverte. Un justificatif de la période déclarée est comptabilisé comme correction : «Payé en privé ou en espèces» date le paiement au premier jour ouvert.',
     'error.closed.mapping': 'Les liens vers des transactions d’une période clôturée ne peuvent pas être modifiés.',
     'error.closed.editReceipt': 'Un justificatif lié à une transaction d’une période clôturée ne peut pas être modifié.',
     'error.closed.deleteReceipt': 'Un justificatif lié à une transaction d’une période clôturée ne peut pas être supprimé.',
@@ -3170,5 +3170,6 @@ export default {
     'drop.reason.unreadable': 'illisible comme PDF : fichier endommagé ou tronqué',
     'drop.p.refused': 'non repris',
     'receipts.quarantineUnreadable': 'pas de PDF lisible',
+    'receipts.privateDoneCorrection': 'Payé en privé · comme correction de {period} : paiement du {date}, frais via le compte du propriétaire',
   },
 } satisfies Locale;

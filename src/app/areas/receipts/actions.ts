@@ -11,10 +11,11 @@ import { together, type AmountFit, type Ledger, type ReceiptView, type Saves } f
 import { at } from './view.js';
 import { correct } from '../journal/commands.js';
 import { correctionKinds } from '../../../accounting/correction.js';
-import { fmt } from '../../lib/utils.js';
+import { fmt, formatDate } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
 
-async function run(nav: Nav, call: () => Promise<unknown>, message: string, undo?: () => Promise<unknown>): Promise<boolean> {
+/** `message`: the toast, or a function for one that depends on what the call made. */
+async function run(nav: Nav, call: () => Promise<unknown>, message: string | (() => string), undo?: () => Promise<unknown>): Promise<boolean> {
   try {
     await call();
   } catch (e) {
@@ -22,7 +23,7 @@ async function run(nav: Nav, call: () => Promise<unknown>, message: string, undo
     return false;
   }
   nav.refresh();
-  nav.toast(message, undo && (() => { undo().then(nav.refresh, (e) => nav.toast(errorText(e))); }));
+  nav.toast(typeof message === 'string' ? message : message(), undo && (() => { undo().then(nav.refresh, (e) => nav.toast(errorText(e))); }));
   return true;
 }
 
@@ -62,8 +63,10 @@ export async function privateOutlay(nav: Nav, v: ReceiptView): Promise<boolean> 
     nav.toast(t('receipts.privateNeeds'));
     return false;
   }
-  let ref = '';
-  return run(nav, async () => { ref = await api.privatePayment(r.id); }, t('receipts.privateDone'), () => api.deleteTransaction(ref));
+  let made = { ref: '', date: '' } as Awaited<ReturnType<typeof api.privatePayment>>;
+  // A receipt of a filed period: the toast says the payment is dated the first open day and corrects that period (r8k-10).
+  const said = () => (made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects }) : t('receipts.privateDone'));
+  return run(nav, async () => { made = await api.privatePayment(r.id); }, said, () => api.deleteTransaction(made.ref));
 }
 
 /** A private payment made by mistake goes with its booking and its link; undo pays the receipt privately again. */

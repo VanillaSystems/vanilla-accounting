@@ -31,7 +31,7 @@ export default {
     'error.vatSetup.rates': 'The net tax rate method needs one or two approved rates. Nothing saved.',
     'error.closed.editTransaction': 'Transactions in a closed period cannot be changed.',
     'error.closed.deleteTransaction': 'Transactions in a closed period cannot be deleted.',
-    'error.closed.newTransaction': 'A new transaction must be dated in the open period.',
+    'error.closed.newTransaction': 'A new transaction must be dated in the open period. A receipt of the filed period is booked as a correction: «Paid privately or in cash» dates the payment on the first open day.',
     'error.closed.mapping': 'Links to transactions in a closed period cannot be changed.',
     'error.closed.editReceipt': 'A receipt linked to a transaction in a closed period cannot be changed.',
     'error.closed.deleteReceipt': 'A receipt linked to a transaction in a closed period cannot be deleted.',
@@ -3170,5 +3170,6 @@ export default {
     'drop.reason.unreadable': 'cannot be read as a PDF: file damaged or cut short',
     'drop.p.refused': 'not taken',
     'receipts.quarantineUnreadable': 'no readable PDF',
+    'receipts.privateDoneCorrection': 'Paid privately · as a correction of {period}: payment dated {date}, expenses through the owner\'s account',
   },
 } satisfies Locale;

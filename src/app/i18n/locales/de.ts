@@ -28,7 +28,7 @@ export const messages = {
   'error.vatSetup.rates': 'Die Saldosteuersatzmethode braucht einen oder zwei bewilligte Sätze. Nichts gespeichert.',
   'error.closed.editTransaction': 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   'error.closed.deleteTransaction': 'Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
-  'error.closed.newTransaction': 'Neue Transaktionen müssen in der offenen Periode liegen.',
+  'error.closed.newTransaction': 'Neue Transaktionen müssen in der offenen Periode liegen. Ein Beleg aus der eingereichten Periode wird als Korrektur gebucht: «Privat oder bar bezahlt» datiert die Zahlung auf den ersten offenen Tag.',
   'error.closed.mapping': 'Zuordnungen zu Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   'error.closed.editReceipt': 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   'error.closed.deleteReceipt': 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
@@ -3167,6 +3167,7 @@ export const messages = {
   'drop.reason.unreadable': 'lässt sich nicht als PDF lesen: Datei beschädigt oder abgeschnitten',
   'drop.p.refused': 'nicht übernommen',
   'receipts.quarantineUnreadable': 'kein lesbares PDF',
+  'receipts.privateDoneCorrection': 'Privat bezahlt · als Korrektur von {period}: Zahlung vom {date}, Spesen über das Konto des Inhabers',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

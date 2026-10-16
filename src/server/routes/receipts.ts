@@ -179,12 +179,12 @@ router.post('/api/vision/extract', async (req, res) => {
   });
 });
 
-/** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment, linked; the inbox run books it. */
+/** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment, linked; the inbox run books it. A receipt of a filed period: dated the first open day, `corrects` names the period (r8k-10). */
 router.post('/api/receipts/:id/private-payment', async (req, res) => {
   const { id } = req.params;
-  const { ref, file } = updateBooks((books) => ({ ref: privatePayment(books, id), file: books.receipts.find((r) => r.id === id)!.filename }));
+  const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id), file: books.receipts.find((r) => r.id === id)!.filename }));
   await bookAgain(file);
-  res.json({ ok: true, ref });
+  res.json({ ok: true, ...made });
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and

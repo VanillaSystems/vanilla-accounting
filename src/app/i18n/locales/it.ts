@@ -31,7 +31,7 @@ export default {
     'error.vatSetup.rates': 'Il metodo delle aliquote saldo ha bisogno di una o due aliquote autorizzate. Niente salvato.',
     'error.closed.editTransaction': 'Le transazioni di un periodo chiuso non possono essere modificate.',
     'error.closed.deleteTransaction': 'Le transazioni di un periodo chiuso non possono essere eliminate.',
-    'error.closed.newTransaction': 'Una nuova transazione deve cadere nel periodo aperto.',
+    'error.closed.newTransaction': 'Una nuova transazione deve cadere nel periodo aperto. Un giustificativo del periodo dichiarato è registrato come correzione: «Pagato privatamente o in contanti» data il pagamento al primo giorno aperto.',
     'error.closed.mapping': 'I collegamenti a transazioni di un periodo chiuso non possono essere modificati.',
     'error.closed.editReceipt': 'Un giustificativo collegato a una transazione di un periodo chiuso non può essere modificato.',
     'error.closed.deleteReceipt': 'Un giustificativo collegato a una transazione di un periodo chiuso non può essere eliminato.',
@@ -3170,5 +3170,6 @@ export default {
     'drop.reason.unreadable': 'non leggibile come PDF: file danneggiato o troncato',
     'drop.p.refused': 'non ripreso',
     'receipts.quarantineUnreadable': 'nessun PDF leggibile',
+    'receipts.privateDoneCorrection': 'Pagato privatamente · come correzione di {period}: pagamento del {date}, spese tramite il conto del titolare',
   },
 } satisfies Locale;

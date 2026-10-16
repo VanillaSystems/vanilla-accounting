@@ -6,7 +6,8 @@
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
 import { isManualRef, nextManualRef } from '../books/refs.js';
-import { isFilingKey, parsePeriod } from '../accounting/periods.js';
+import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
+import { correctsFor } from '../accounting/correction.js';
 import { paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, chart, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
@@ -116,22 +117,32 @@ export function link(books: Books, receipt: string, payment: string): BookChange
   return { kind: 'unlink', receipt, payment };
 }
 
+/** A private outlay as made: its payment's ref and date, and the filed period it corrects when the receipt lies in one. */
+export interface PrivateOutlay { ref: string; date: string; corrects?: string }
+
 /**
  * «Privat oder bar bezahlt»: the owner's payment of the receipt, on its date and amount, linked to
  * it, in one write. A receipt a payment already pays (the bank's, or an earlier private one) is
- * refused: a second payment would book the expense and its input tax twice (r7h-23). Returns the
- * new payment's ref; deleting that payment is the whole undo.
+ * refused: a second payment would book the expense and its input tax twice (r7h-23). A receipt
+ * dated in a filed period is booked as a correction (golden rule 1, r8k-10): its payment is dated
+ * the first open day and names the receipt's day, and its bookings carry `corrects` (correctsFor).
+ * Deleting the payment is the whole undo.
  */
-export function privatePayment(books: Books, receiptId: string): string {
+export function privatePayment(books: Books, receiptId: string): PrivateOutlay {
   const r = receiptOf(books, receiptId);
   const paid = books.mappings.find((m) => m.receiptId === receiptId);
   if (paid) throw new RequestError(409, `Der Beleg ist schon bezahlt: die Zahlung ${paid.transactionRef} ist mit ihm verknüpft. Eine private Auslage dazu würde den Aufwand und die Vorsteuer doppelt buchen.`, { code: 'receiptPaid', params: { receipt: receiptId, payment: paid.transactionRef } });
   if (!r.date || r.amount == null) throw new RequestError(400, 'Für eine Auslage braucht der Beleg Datum und Betrag.');
-  assertOpen(books, [r.date], 'newTransaction');
-  const ref = nextManualRef(books, r.date.slice(0, 4));
-  books.transactions.push({ ref, bank: 'manual', source: 'manual', date: r.date, amount: Math.abs(r.amount), currency: r.currency || baseCurrency(), direction: 'DBIT', description: r.description || r.filename });
+  const lock = periodLock(books);
+  const late = lock.isClosed(r.date) && lock.closedThrough ? addDays(lock.closedThrough, 1) : undefined;
+  const date = late ?? r.date;
+  assertOpen(books, [date], 'newTransaction');
+  const ref = nextManualRef(books, date.slice(0, 4));
+  const what = r.description || r.filename;
+  books.transactions.push({ ref, bank: 'manual', source: 'manual', date, amount: Math.abs(r.amount), currency: r.currency || baseCurrency(), direction: 'DBIT', description: late ? `${what} · Beleg vom ${day(r.date)}` : what });
   books.mappings.push({ transactionRef: ref, receiptId });
-  return ref;
+  const corrects = late ? correctsFor({ source: 'manual' }, [r], lock.isClosed, filing().length) : undefined;
+  return { ref, date, ...(corrects ? { corrects } : {}) };
 }
 
 export function unlink(books: Books, receipt: string, payment: string): BookChange | undefined {
@@ -337,11 +348,13 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   if (off) throw unbalanced(off);
   const rate = tx.currency === baseCurrency() ? {} : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
+  // A private outlay for a receipt of a filed quarter is a correction of that quarter (r8k-10).
+  const corrects = correctsFor(tx, books.receipts.filter((r) => receipts.includes(r.id)), periodLock(books).isClosed, filing().length);
   const at = new Date().toISOString();
   const entries = lines.map((l): JournalEntry => ({
     id: randomBytes(8).toString('hex'), transactionRef: ref, date: tx.date,
     accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
-    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, by: { kind: 'person', at },
+    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), by: { kind: 'person', at },
   }));
   books.journalEntries.push(...entries);
   return entries;

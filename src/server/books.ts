@@ -48,7 +48,7 @@ export function withBooks<T>(res: Response, fn: (books: Books) => Sync<T>): void
 export const CLOSED: Record<ClosedReason, string> = {
   editTransaction: 'Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   deleteTransaction: 'Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
-  newTransaction: 'Neue Transaktionen müssen in der offenen Periode liegen.',
+  newTransaction: 'Neue Transaktionen müssen in der offenen Periode liegen. Ein Beleg aus der eingereichten Periode wird als Korrektur gebucht: «Privat oder bar bezahlt» datiert die Zahlung auf den ersten offenen Tag.',
   mapping: 'Zuordnungen zu Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   editReceipt: 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht geändert werden.',
   deleteReceipt: 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',

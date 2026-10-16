@@ -4,10 +4,11 @@
  * correction of the VAT code or of the account leaves the bank alone; only a storno takes the
  * whole entry back, bank side included. Pure: Buchungen opens its correction form with these.
  */
-import type { CorrectionCase, JournalEntry, Receipt } from '../types/index.js';
+import type { BankTransaction, CorrectionCase, JournalEntry, Receipt } from '../types/index.js';
 import { chart, vat, yearEnd } from '../engines/index.js';
 import { reversalOf, turned, type Draft } from './reversal.js';
 import { codeForRate } from './vat-codes.js';
+import { filingKeyOf, type FilingLength } from './periods.js';
 
 /** What was wrong: the VAT code, the account (expense or revenue), or the whole entry. */
 export type CorrectionKind = 'vat' | 'account' | 'storno';
@@ -101,6 +102,19 @@ export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, d
   return own === 'accountDebit'
     ? { date, accountDebit: '', accountCredit: account, amount: e.amount, description }
     : { date, accountDebit: account, accountCredit: '', amount: e.amount, description };
+}
+
+/**
+ * The filed period a payment's bookings correct, or undefined: a private outlay (a manual payment,
+ * «Privat oder bar bezahlt») for a receipt dated in a filed period was paid on the receipt's day,
+ * so its booking in the open period is a correction of that period, declared on its 0535 (golden
+ * rule 1, r8k-10). A bank payment never is: an invoice of March paid in July is a July booking
+ * (cash basis). The earliest filed receipt date names the period.
+ */
+export function correctsFor(tx: Pick<BankTransaction, 'source'>, receipts: ReadonlyArray<Pick<Receipt, 'date'>>, isClosed: (date: string) => boolean, length: FilingLength): string | undefined {
+  if (tx.source !== 'manual') return undefined;
+  const filed = receipts.map((r) => r.date).filter((d): d is string => !!d && isClosed(d)).sort()[0];
+  return filed ? filingKeyOf(filed, length) : undefined;
 }
 
 /** The bank accounts an entry typed without its payment would move: money no statement shows. */
