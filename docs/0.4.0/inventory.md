@@ -14,7 +14,7 @@ and the providers.
 | split | 63 | 26 |
 | infrastructure | 32 | 4 |
 | workflow | 19 | 0 |
-| view | 226 | 59 |
+| view | 226 | 60 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -203,6 +203,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-close.ts` | CHF 4, ESTV 3, form 0535 1 |
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
+| `src/server/routes/drop.ts` | camt.053 1 |
 | `src/server/routes/receipts.ts` | CHF 1 |
 | `src/server/routes/statements.ts` | camt.053 7 |
 | `src/server/routes/transactions.ts` | camt.053 1 |

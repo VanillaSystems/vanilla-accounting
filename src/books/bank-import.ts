@@ -27,7 +27,30 @@ export interface BankFiles {
 /** The transactions of every camt.053 a bank account takes; the files that belong to none are in `files` as unmatched. */
 export function readTransactions(ws: Ws): BankFiles {
   const files = readBankStatements(ws);
-  return { files, transactions: files.flatMap((f) => (f.status === 'read' ? transactionsOf(f.statement, f.account) : [])) };
+  return { files, transactions: transactionsOfFiles(files) };
+}
+
+/**
+ * What a bank booked once is one transaction, however many exports hold it: the next export
+ * begins where the last ended, a year-to-date export repeats every month. A payment read from an
+ * earlier file (same account, bank reference, date, direction, amount and currency) is not read
+ * again from a later one, so it keeps its ref and its bookings. Within one file nothing is
+ * dropped: two entries of one export are two bookings, whatever they look like.
+ */
+export function transactionsOfFiles(files: StatementFile[]): BankTransaction[] {
+  const seenIn = new Map<string, string>();
+  const out: BankTransaction[] = [];
+  for (const f of files) {
+    if (f.status !== 'read') continue;
+    for (const t of transactionsOf(f.statement, f.account)) {
+      const key = [t.bank, t.ref, t.date, t.direction, t.amount.toFixed(2), t.currency].join('\u0000');
+      const first = seenIn.get(key);
+      if (first !== undefined && first !== f.file) continue;
+      seenIn.set(key, f.file);
+      out.push(t);
+    }
+  }
+  return out;
 }
 
 /**

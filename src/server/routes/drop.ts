@@ -22,6 +22,9 @@ import { findFile } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement } from './statements.js';
+import { readStatementFiles, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
+import { readBankStatements } from '../../workspace/bank-statements.js';
+import { assignUniqueRefs } from '../../providers/camt053/camt053.js';
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
@@ -236,28 +239,42 @@ function unquarantine(row: DropRow): void {
 /**
  * «Rückgängig» for a taken file. A receipt leaves the inbox and the books, with its links and the
  * entries booked with it (removeReceipt); returns its payments, to be booked again as they would
- * be without it. A statement leaves with its file, its closing balances, the payments it added,
- * and their links and entries. Never while its run works on it, never in the closed period, never
- * an entry a person booked by hand (such a payment stays, and the refusal says so).
+ * be without it. A statement leaves with its file, its closing balances, the payments it alone
+ * brought, and their links and entries: a payment another statement on disk still holds (the
+ * bank's exports overlap) stays with its bookings, and the statement list is read again from the
+ * folder. Never while its run works on it, never in the closed period, never an entry a person
+ * booked by hand (such a payment stays, and the refusal says so).
  */
 function undo(row: DropRow): string[] {
   let again: string[] = [];
   const run = row.run ? engine().run(row.run) : undefined;
   if (run && run.state.status === 'running') throw new RequestError(409, 'Der Lauf arbeitet gerade daran. Gleich noch einmal.');
   if (row.statement) {
-    const refs = new Set(row.statement.refs);
     const books = readBooks();
+    const mine = row.statement.file;
+    const others = readBankStatements(WS).filter((f) => f.file !== mine);
+    const held = new Set(assignUniqueRefs(withinBooks(transactionsOfFiles(others), books.config).kept).map((t) => t.ref));
+    const refs = new Set(row.statement.refs.filter((ref) => !held.has(ref)));
     assertOpen(books, [...refs].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
     if ((books.journalEntries ?? []).some((e) => refs.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
-    const path = findFile(WS.paths, 'statements', row.statement.file);
-    const file = basename(row.statement.file);
-    updateBooks((b) => {
-      b.transactions = b.transactions.filter((t) => !refs.has(t.ref));
-      b.journalEntries = b.journalEntries.filter((e) => !refs.has(e.transactionRef));
-      b.mappings = b.mappings.filter((m) => !refs.has(m.transactionRef));
-      if (b.statementBalances) b.statementBalances = b.statementBalances.filter((x) => x.sourceFile !== file);
-    });
+    const path = findFile(WS.paths, 'statements', mine);
+    const bytes = path ? readFileSync(path) : undefined;
     if (path) rmSync(path, { force: true });
+    try {
+      updateBooks((b) => {
+        b.transactions = b.transactions.filter((t) => !refs.has(t.ref));
+        b.journalEntries = b.journalEntries.filter((e) => !refs.has(e.transactionRef));
+        b.mappings = b.mappings.filter((m) => !refs.has(m.transactionRef));
+        const files = readStatementFiles(WS);
+        b.bankStatements = files.statements;
+        const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(mine)), files.balances);
+        if (balances) b.statementBalances = balances;
+        else delete b.statementBalances;
+      });
+    } catch (e) {
+      if (path && bytes) writeFileSync(path, bytes);
+      throw e;
+    }
   } else {
     const books = readBooks();
     const receipt = books.receipts.find((r) => r.id === row.id);
