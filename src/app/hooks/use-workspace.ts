@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { setJurisdiction } from '../../engines/index.js';
 
 type WorkspaceInfo = Awaited<ReturnType<typeof api.workspace>>;
 
@@ -7,10 +8,14 @@ let cached: Promise<WorkspaceInfo> | undefined;
 let loaded: WorkspaceInfo | undefined;
 const listeners = new Set<() => void>();
 
-/** After a change to the manifest: every page reads it again. */
+/**
+ * After a change to the manifest: every page reads it again, and the engines take the firm's setup
+ * anew (a saved activity code reaches the review task without a reload, r7f-33).
+ */
 export function reloadWorkspace(): void {
   cached = undefined;
   for (const l of listeners) l();
+  void api.modules().then((m) => { setJurisdiction(m.effective, m.vat); for (const l of listeners) l(); }, () => {});
 }
 
 /**
