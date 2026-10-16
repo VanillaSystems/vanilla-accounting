@@ -1,5 +1,7 @@
 /** What the list, the detail and the keys of Buchungen share: the journal of the loaded books, and the commands on an entry. */
-import type { Index, Receipt } from '../../../types/index.js';
+import type { Index, JournalEntry, Receipt } from '../../../types/index.js';
+import { correctionKinds, correctionOf, type CorrectionKind } from '../../../accounting/correction.js';
+import { workspaceNow } from '../../hooks/use-workspace.js';
 import { localToday, booksOpenPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
@@ -34,6 +36,18 @@ export function newEntryDate(books: Index): string {
 
 export const splitReceipt = (r: Receipt) => splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
 
+/** The bank accounts statements come for: a correction or an entry typed by hand should not move them. */
+export const isBankAccount = (account: string): boolean =>
+  !!workspaceNow()?.bankAccounts.some((b) => b.account === account && b.bank !== 'manual');
+
+/** Opens the correction form of a filed entry for what was wrong with it. */
+export function correct(books: Index, e: JournalEntry, as: CorrectionKind): void {
+  setUi({ overlay: { kind: 'new', correcting: { entry: e.id, as }, draft: {
+    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount),
+    corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
+  } } });
+}
+
 export type Act = 'edit' | 'del' | 'correct' | 'reverse' | 'reverseNewYear' | 'copy' | 'receipt' | 'payment' | 'download';
 
 /** An action on the selected entry, from a button or a key. One that changes it refuses a filed entry with the reason. */
@@ -55,13 +69,10 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
       link?.click();
       return !!link;
     }
-    // A correction starts as the reversal of the filed entry: Soll and Haben swapped, the VAT code's sign turned.
+    // A correction starts with what is most often wrong: the VAT code taken back, the bank left alone (corner-29).
     case 'correct':
       if (!p.canEdit) return false;
-      setUi({ overlay: { kind: 'new', draft: {
-        ...reversalOf(e, newEntryDate(p.books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' })),
-        corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
-      } } });
+      correct(p.books, e, correctionKinds(e)[0]);
       return true;
     // A Gegenbuchung of an open entry, its accrual's reversal on the next 1.1., a copy (treuhaender-27).
     case 'reverse':

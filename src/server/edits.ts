@@ -128,6 +128,7 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   // The classifier's reason explains the booking it made; once its accounts, code or amount change, it no longer does.
   if (set.reason !== undefined) { if (set.reason) e.reason = set.reason; else delete e.reason; }
   else if (e.reason && (['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const).some((k) => k in set)) { before.reason = e.reason; delete e.reason; }
+  if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
   const origin = set.origin === undefined ? 'manual' : set.origin;
   if (origin) e.origin = origin;
   else delete e.origin;
@@ -320,6 +321,12 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
         change = { ...asked, set: { ...asked.set, vatCode: to } };
         if (!('vatCode' in undo.set)) undo.set.vatCode = was;
       }
+    }
+    // A side left empty is for a VAT entry alone (M81-2); a VAT-only correction keeps both sides on the same account.
+    const shaped = change.kind === 'newEntry' ? change.entry : change.kind === 'entry' ? entryOf(books, change.id) : undefined;
+    if (shaped && !shaped.accountDebit !== !shaped.accountCredit && !isVatAmountCode(shaped.vatCode)) {
+      const own = shaped.accountDebit || shaped.accountCredit;
+      throw new RequestError(400, `Soll und Haben gehören beide hin. Nur die MWST korrigieren: ${own} auf beiden Seiten (${own}/${own} mit dem umgekehrten Code), die Bank bleibt.`, { code: 'oneSided', params: { account: own } });
     }
     if (undo?.kind === 'deleteEntry') dated.push(undo.id);
     if (change.kind === 'entry' && change.set.date) dated.push(change.id);

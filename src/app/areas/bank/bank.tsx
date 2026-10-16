@@ -71,6 +71,10 @@ function List(props: Props) {
   const files = rows.filter((r) => r.s.file).length;
   const missing = rows.filter((r) => !r.s.file && !r.s.running).length;
   const bad = rows.filter((r) => r.c && troubled(b, r.s)).length;
+  const strays = useMemo(() => b.strays(period.from, period.to), [b, period.from, period.to]);
+  const open = (d: string) => !b.closedThrough || d > b.closedThrough;
+  const unbooked = useMemo(() => books.transactions.filter((x) => x.date >= period.from && x.date <= period.to && open(x.date) && b.unbooked(x) && !!b.statementOf(x))
+    .sort((x, y) => x.date.localeCompare(y.date)), [b, books, period.from, period.to]);
 
   // /payments/<ref> resolves to its statement, or its entry when paid privately; a list with nothing selected selects its
   // first row. A link to what the books do not hold (yet: they reload after an import) keeps its place with a notice.
@@ -113,7 +117,12 @@ function List(props: Props) {
           {missing > 0 && <span className="warn">{I.dot}{t('bank.nMissing', { n: missing })}</span>}
           {bad > 0
             ? <span className="warn">{I.dot}{t('bank.nDiffer', { n: bad })}</span>
-            : files > 0 && <span className="ok" title={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
+            : files > 0 && !strays.length && <span className="ok" title={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
+          {unbooked.length > 0 && (
+            <button type="button" className="warn golink" data-testid="unbooked-count" title={t('bank.unbookedTip')} onClick={() => nav.go(at({ area: 'bank', payment: unbooked[0].ref }, unbooked[0].date, query.period))}>
+              {I.dot}{t('bank.nUnbooked', { n: unbooked.length })}
+            </button>
+          )}
           <span className="seg gb" role="tablist" aria-label={t('bank.groupBy')}>
             {(['konto', 'monat'] as const).map((g) => (
               <button key={g} type="button" role="tab" aria-selected={s.groupBy === g} className={s.groupBy === g ? 'on' : ''} data-bg={g} onClick={() => setUi({ groupBy: g })}>
@@ -138,6 +147,16 @@ function List(props: Props) {
         </div>
       </ListHead>
       {notice && <div className="notice" role="status">{notice}</div>}
+      {strays.length > 0 && (
+        <div className="notice warn strays" data-testid="bank-strays">
+          <span>{t('bank.strays', { n: strays.length })}</span>
+          {strays.map((e) => (
+            <button key={e.id} type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: e.id }, e.date))}>
+              <span className="mono">{formatDate(e.date)}</span> {e.accountDebit || '–'} / {e.accountCredit || '–'} <span className="mono">{fmt(e.amount)}</span> {e.description}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!ws ? null : rows.length === 0 ? (
         <div className="empty">

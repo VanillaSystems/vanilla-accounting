@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index } from '../src/types/index.js';
-import { badgeCount, bankOf, payText, type Account } from '../src/app/areas/bank/model.js';
+import { badgeCount, bankOf, payText, unbookedPayments, type Account } from '../src/app/areas/bank/model.js';
 import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
 
@@ -149,4 +149,24 @@ test('another bank\'s payment is the dated row with its amount closest to its da
   assert.deepEqual(findLines(items, { ref: 'X', date: '2026-07-19', amount: -31 }, false), []);
   const oneText = line(200, '21.07.2026 | Zahlung Post CH AG | -217.75 | Ref. 90000000058');
   assert.equal(findLines(oneText, { ref: 'X', date: '2026-07-21', amount: -217.75 }, false).length, 1, 'a row printed as one text, with a four-digit year');
+});
+
+test('payments without an entry are listed, oldest first: the open period only, a fee folded into a booked payment counts as booked (corner-9)', () => {
+  const b = books();
+  assert.deepEqual(unbookedPayments(b).map((t) => t.ref), ['CARD-1', 'FEE-CARD-1', 'M1', 'R3']);
+  const booked = books({ journalEntries: [...b.journalEntries!, { id: 'J3', transactionRef: 'CARD-1', date: '2026-07-05', accountDebit: '6000', accountCredit: '1023', amount: 20 }] });
+  assert.deepEqual(unbookedPayments(booked).map((t) => t.ref), ['M1', 'R3'], 'the fee goes with its payment');
+  assert.deepEqual(unbookedPayments(books({ config: { closedThrough: '2026-07-31' } })).map((t) => t.ref), ['R3'], 'a filed payment is a correction, not a task');
+  assert.equal(bankOf(b, ACCOUNTS, '2026-09-15').unbooked(tx('R1', '2026-07-03', -100)), false);
+});
+
+test('an entry that moves the bank without a statement line is found; a payment\'s entry, a VAT-only correction and the year-end revaluation are not (corner-29)', () => {
+  const extra = [
+    { id: 'storno', transactionRef: 'M2026-001', date: '2026-10-16', accountDebit: '1021', accountCredit: '6000', amount: 100, vatCode: '-I81', corrects: '2026-Q3' },
+    { id: 'vatOnly', transactionRef: 'M2026-002', date: '2026-10-16', accountDebit: '6000', accountCredit: '6000', amount: 100, vatCode: '-I81', corrects: '2026-Q3' },
+    { id: 'fx', transactionRef: 'YE-1', date: '2026-12-31', accountDebit: '1023', accountCredit: '6950', amount: 3, origin: 'year-close' as const },
+  ];
+  const b = bankOf(books({ journalEntries: [...books().journalEntries!, ...extra] }), ACCOUNTS, '2026-12-31');
+  assert.deepEqual(b.strays('2026-01-01', '2026-12-31').map((e) => e.id), ['storno']);
+  assert.deepEqual(b.strays('2026-07-01', '2026-09-30'), [], 'only the period asked for');
 });

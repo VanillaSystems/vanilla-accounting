@@ -47,3 +47,10 @@
 .page > .notice { margin: 0 0 14px; }
 .paybar .addnote { color: var(--faint); border-bottom-style: dashed; }
 .paybar input.note { font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent); outline: 0; padding: 0; width: 220px; }
+.counts.stc button.warn { font-size: inherit; white-space: nowrap; }
+.counts.stc button.warn:hover { text-decoration: underline; }
+.notice.strays { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.notice.strays .golink { color: var(--ink-2); font-size: 12.5px; text-align: left; }
+.paylist .pay .nb { color: var(--warn); font-size: 11px; margin-left: 4px; }
+.zfilter { font-size: 11.5px; color: var(--muted); margin: 0 0 6px; }
+.zfilter.on { color: var(--warn); }

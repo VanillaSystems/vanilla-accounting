@@ -34,6 +34,7 @@ export type ApiRefusal =
   | { code: 'takesBack' }
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }
+  | { code: 'oneSided'; params: { account: string } }
   | { code: 'accountInUse'; params: { account: string; entries: number } }
   /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
   | { code: 'personsBooking'; params: { entries: number } }

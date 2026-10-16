@@ -6,7 +6,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
-import { codeForRate } from './vat-codes.js';
+import { codeForRate, lookupVatCode } from './vat-codes.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { isManualRef } from '../books/refs.js';
 
@@ -137,4 +137,14 @@ export function unattachedFor(books: Pick<Index, 'transactions' | 'journalEntrie
     if (near > days || !sides.length || sides.some((s) => s.booked !== s.paid)) return [];
     return [{ ref: own, entries: es, days: near }];
   }).sort((a, b) => a.days - b.days || a.ref.localeCompare(b.ref));
+}
+
+/**
+ * Whether a code deducts input tax (I81, M81, M26-2, …): only a receipt that shows the Swiss VAT
+ * allows that, so a payment without one is booked with the zero code of its family, which is returned.
+ */
+export function inputTaxWithoutReceipt(code: string | undefined): string | undefined {
+  const found = code ? lookupVatCode(code) : null;
+  if (!found || found.negative || (found.entry.kind !== 'material' && found.entry.kind !== 'investment')) return undefined;
+  return `${found.entry.family}0`;
 }

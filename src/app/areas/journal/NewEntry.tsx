@@ -22,6 +22,8 @@ import type { JournalEntryInput } from '../../lib/api.js';
 import { AccountField } from './AccountField.js';
 import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
+import { banksMoved, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
+import { correct, isBankAccount, journalFor } from './commands.js';
 import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -37,9 +39,11 @@ export function NewEntry(props: Props) {
   const [round, setRound] = useState(0);
   const [, redraw] = useState(0);
   const [reverse, setReverse] = useState<boolean | undefined>(undefined);
+  /** The person was told the entry moves a bank account without its payment, and books it anyway with a second ↵. */
+  const [sure, setSure] = useState(false);
   if (s.overlay?.kind !== 'new') return null;
   const d = s.overlay.draft;
-  const close = () => setUi({ overlay: null });
+  const close = () => { setSure(false); setUi({ overlay: null }); };
   const filed = d.corrects && parsePeriod(d.corrects, localToday());
   const tx = d.transactionRef ? books.transactions.find((x) => x.ref === d.transactionRef) : undefined;
   const now = form.current ? typed() : d;
@@ -47,6 +51,19 @@ export function NewEntry(props: Props) {
   const sides = { accountDebit: now.accountDebit ?? '', accountCredit: now.accountCredit ?? '' };
   const accrual = !tx && !d.corrects && isAccrual(sides) && !!now.date;
   const reverseIt = accrual && (reverse ?? reversedAsRule(sides));
+  const corrected = s.overlay.correcting && journalFor(books).byId.get(s.overlay.correcting.entry)?.e;
+  const as = s.overlay.correcting?.as;
+  const moved = tx ? [] : banksMoved(sides, isBankAccount);
+  const accounts = getAccountMap();
+
+  /** Another kind of correction: the form starts again from the filed entry. */
+  function correctAs(kind: CorrectionKind) {
+    if (!corrected || kind === as) return;
+    correct(books, corrected, kind);
+    setRound(round + 1);
+    setErr('');
+    setSure(false);
+  }
 
   /** What the fields hold now, so a payment picked (or dropped) keeps what was typed. */
   function typed(): Partial<JournalEntryInput> {
@@ -72,7 +89,6 @@ export function NewEntry(props: Props) {
     const f = Object.fromEntries(new FormData(form.current!)) as Record<string, string>;
     const date = parseSwissDate(f.date);
     const closed = books.config?.closedThrough;
-    const accounts = getAccountMap();
     const amount = parseAmount(f.amount);
     const [dr, cr, vat, text] = [f.accountDebit.trim(), f.accountCredit.trim(), f.vatCode.trim(), f.description.trim()];
     const problem = !date && !tx ? t('journal.errDate')
@@ -84,6 +100,7 @@ export function NewEntry(props: Props) {
       : !text ? t('journal.errText')
       : '';
     if (problem) { setErr(problem); return; }
+    if (moved.length && !sure) { setSure(true); setErr(t('journal.movesBankAgain')); return; }
     if (tx) {
       const entries = await bookPayment(nav, tx.ref, [{ accountDebit: dr, accountCredit: cr, amount: amount!, ...(vat && { vatCode: vat }), description: text }]);
       if (!entries?.length) return;
@@ -113,8 +130,19 @@ export function NewEntry(props: Props) {
       <div className="palette jnew" role="dialog" aria-label={filed ? t('journal.correctionTitle') : t('journal.addTitle')}>
         <div className="ctx">
           <div><span className="lbl">{filed ? t('journal.correctionTitle') : t('journal.addTitle')}</span>{filed ? t('journal.correctionHint', { filed: periodName(filed) }) : t('journal.addHint')}</div>
+          {corrected && as && (
+            <div className="jcorr">
+              <span className="seg" role="tablist" aria-label={t('journal.correctionLead')}>
+                <span className="m">{t('journal.correctionLead')}</span>
+                {correctionKinds(corrected).map((k) => (
+                  <button key={k} type="button" role="tab" aria-selected={k === as} className={k === as ? 'on' : ''} data-correct={k} onClick={() => correctAs(k)}>{t(`journal.correctionAs.${k}`)}</button>
+                ))}
+              </span>
+              <p className="m" data-testid="correction-how">{t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '' })}</p>
+            </div>
+          )}
         </div>
-        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => redraw((n) => n + 1)} onSubmit={(e) => { e.preventDefault(); book(); }}>
+        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => { redraw((n) => n + 1); setSure(false); if (err === t('journal.movesBankAgain')) setErr(''); }} onSubmit={(e) => { e.preventDefault(); book(); }}>
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} title={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
@@ -136,6 +164,11 @@ export function NewEntry(props: Props) {
             </label>
           )}
           <VatCodeList />
+          {moved.length > 0 && (
+            <div className="notice warn" data-testid="moves-bank">
+              {t(filed ? 'journal.movesBankCorrection' : 'journal.movesBank', { account: `${moved[0]} ${accounts[moved[0]] ?? ''}`.trim(), amount: fmt(now.amount ?? 0) })}
+            </div>
+          )}
           <div className="err" role="alert">{err}</div>
           <div className="dacts">
             <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')} <span className="k">{t('codes.escKey')}</span></button>

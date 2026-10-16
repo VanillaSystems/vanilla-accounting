@@ -98,7 +98,7 @@ test('the process map is read from the declarations: phases as columns, events a
 
 test('a manual trigger puts a button on its kind of object, marked when an AI decides in it', () => {
   const onTx = buttonsFor(app.workflows, 'transaction', ['unbooked']);
-  assert.deepEqual(onTx.map((b) => [b.workflow.id, b.label.de, b.ai, b.runnable]), [['booking', 'Buchen', true, true]]);
+  assert.deepEqual(onTx.map((b) => [b.workflow.id, b.label.de, b.ai, b.runnable]), [['booking', 'Automatisch buchen', true, true]]);
   assert.deepEqual(buttonsFor(app.workflows, 'transaction', ['booked']), [], 'a booked payment shows no «Buchen»');
   assert.deepEqual(buttonsFor(app.workflows, 'year').map((b) => b.workflow.id), ['year-close']);
 });

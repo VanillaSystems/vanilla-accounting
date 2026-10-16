@@ -68,6 +68,20 @@ export function parseStatementKey(key: string): { account: string; month: string
 /** A Wise fee is folded into its payment when that payment is there ("FEE-CARD-1" belongs to "CARD-1"). */
 const baseRef = (fee: BankTransaction) => fee.ref.replace(/^FEE-/, '');
 
+/** Whether a payment has an amount and no entry; a Wise fee folded into a booked payment counts as booked with it. */
+export function isUnbooked(books: Pick<Index, 'transactions' | 'journalEntries'>): (t: BankTransaction) => boolean {
+  const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));
+  const refs = new Set(books.transactions.map((t) => t.ref));
+  return (t) => t.amount !== 0 && !booked.has(t.ref) && !(t.type === 'wise-fee' && refs.has(baseRef(t)) && booked.has(baseRef(t)));
+}
+
+/** The payments of the open period nobody has booked yet, oldest first: Aufgaben lists them (corner-9). */
+export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>): BankTransaction[] {
+  const closed = books.config?.closedThrough;
+  const unbooked = isUnbooked(books);
+  return books.transactions.filter((t) => (!closed || t.date > closed) && unbooked(t)).sort((x, y) => x.date.localeCompare(y.date) || x.ref.localeCompare(y.ref));
+}
+
 export interface Bank {
   /** The accounts statements come for, in the manifest's order (not the private `manual` one). */
   accounts: Account[];
@@ -90,6 +104,14 @@ export interface Bank {
   txByRef: Map<string, BankTransaction>;
   /** A payment still waiting for its receipt: not a fee, not 0, not marked as needing none, nothing linked. */
   needsReceipt(t: BankTransaction): boolean;
+  /** A payment with an amount and no entry: the books do not know where its money went. */
+  unbooked(t: BankTransaction): boolean;
+  /**
+   * Entries in [from, to] that move a bank account without any payment of the statements behind
+   * them (a storno of a filed payment, a bank entry typed by hand): the bank's balance in the books
+   * moves while no statement line does (corner-29). The year-end revaluation moves no money.
+   */
+  strays(from: IsoDate, to: IsoDate): JournalEntry[];
 }
 
 export function bankOf(books: Index, accounts: readonly Account[], today: IsoDate): Bank {
@@ -205,6 +227,10 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     entriesOf: (ref) => entries.get(ref) ?? [],
     txByRef,
     needsReceipt: (t) => t.type !== 'wise-fee' && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
+    unbooked: isUnbooked(books),
+    strays: (from, to) => (books.journalEntries ?? []).filter((e) => e.date >= from && e.date <= to && e.origin !== 'year-close'
+      && e.accountDebit !== e.accountCredit && !txByRef.has(e.transactionRef)
+      && banked.some((a) => a.account === e.accountDebit || a.account === e.accountCredit)),
   };
 }
 

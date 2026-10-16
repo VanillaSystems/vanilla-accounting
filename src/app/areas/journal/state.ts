@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react';
 import type { JournalEntryInput } from '../../lib/api.js';
 import { store, stored } from '../../shell/storage.js';
 import type { JournalFilter, JournalOrigin } from './model.js';
+import type { CorrectionKind } from '../../../accounting/correction.js';
 
 export type Section = 'teile' | 'buchung' | 'herkunft';
 
@@ -17,7 +18,7 @@ interface State {
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */
-  overlay: { kind: 'new'; draft: Partial<JournalEntryInput> } | null;
+  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; correcting?: { entry: string; as: CorrectionKind } } | null;
   /** A field of the entry form to focus once it shows. */
   focus?: string;
 }

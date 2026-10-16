@@ -29,6 +29,8 @@ import { baseCurrency, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
 import { questionsNow, useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
+import { payText, signed, unbookedPayments } from '../bank/model.js';
+import { at } from '../receipts/view.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -617,6 +619,9 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     const inputs = [...form.querySelectorAll<HTMLInputElement>('input')];
     (inputs.find((i) => !i.value) ?? inputs[0])?.focus();
   };
+  // A payment nobody booked waits for the person even when no run asked about it (corner-9).
+  const inTasks = new Set(view.tasks.map(unbooked).filter(Boolean));
+  const waiting = unbookedPayments(books).filter((p) => !inTasks.has(p.ref));
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
@@ -641,7 +646,22 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             );
           })}
         </div>
-      ) : asked ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      ) : asked || waiting.length ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      {waiting.length > 0 && (
+        <section className="wfunbooked" data-testid="unbooked-payments">
+          <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>
+          <p className="m">{t('automation.unbookedLead')}</p>
+          <ul>
+            {waiting.map((p) => (
+              <li key={p.ref}>
+                <button type="button" className="linkbtn" data-pay={p.ref} onClick={() => nav.go(at({ area: 'bank', payment: p.ref }, p.date))}>
+                  <span className="mono">{formatDate(p.date)}</span> {payText(p).name} <span className="mono">{p.currency} {fmt(signed(p))}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <QuestionTasks nav={nav} canEdit={canEdit} books={books} />
     </div>
   );

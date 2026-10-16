@@ -48,10 +48,23 @@ function receiptSet(v: unknown): ReceiptSet {
   return out;
 }
 
+/**
+ * An account as the answer names it: a number (6510 or "6510"), or empty for the side a one-sided
+ * VAT entry leaves out. Debit and credit may be the same account: a correction of the VAT alone
+ * (6510/6510 -I81, corner-30). Whether a side may be empty is the books' to say (src/server/edits.ts).
+ */
+const account = (v: unknown, what: string): string => {
+  if (v === null || v === '') return '';
+  if (typeof v === 'number' && Number.isInteger(v) && v > 0) return String(v);
+  if (typeof v !== 'string') throw new ChangesError(`${what} ist keine Kontonummer`);
+  return v.trim();
+};
+
 function entrySet(v: unknown): EntrySet {
   const s = obj(v, 'set');
   const out: EntrySet = {};
-  for (const k of ['accountDebit', 'accountCredit', 'description', 'vatCode'] as const) if (k in s) out[k] = k === 'description' || k === 'vatCode' ? String(s[k] ?? '') : str(s[k], k);
+  for (const k of ['description', 'vatCode'] as const) if (k in s) out[k] = String(s[k] ?? '');
+  for (const k of ['accountDebit', 'accountCredit'] as const) if (k in s) out[k] = account(s[k], k);
   if ('date' in s) { if (!DATE.test(String(s.date))) throw new ChangesError('date muss JJJJ-MM-TT sein'); out.date = String(s.date); }
   if ('amount' in s) out.amount = num(s.amount, 'amount');
   if (!Object.keys(out).length) throw new ChangesError('set ist leer');
@@ -66,8 +79,8 @@ function newEntry(v: unknown): NewEntry {
   const amount = num(e.amount, 'amount');
   if (amount === 0) throw new ChangesError('amount ist 0');
   const text = (k: string) => (typeof e[k] === 'string' && e[k].trim() ? e[k].trim() : undefined);
-  const accountDebit = text('accountDebit') ?? '';
-  const accountCredit = text('accountCredit') ?? '';
+  const accountDebit = 'accountDebit' in e ? account(e.accountDebit, 'accountDebit') : '';
+  const accountCredit = 'accountCredit' in e ? account(e.accountCredit, 'accountCredit') : '';
   if (!accountDebit && !accountCredit) throw new ChangesError('accountDebit oder accountCredit fehlt');
   const transactionRef = text('transactionRef');
   const vatCode = text('vatCode');

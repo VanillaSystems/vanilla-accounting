@@ -54,8 +54,11 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const { b, s, route, query, nav, canEdit } = props;
   const ui = useUi();
   const [page, setPage] = useState('');
-  const pays = b.payments(s);
-  const tx = route.payment ? pays.find((p) => p.ref === route.payment) : undefined;
+  const all = b.payments(s);
+  const [onlyUnbooked, setOnlyUnbooked] = useState(false);
+  const nUnbooked = all.filter(b.unbooked).length;
+  const pays = onlyUnbooked && nUnbooked ? all.filter(b.unbooked) : all;
+  const tx = route.payment ? all.find((p) => p.ref === route.payment) : undefined;
   const c = s.file ? b.check(s) : undefined;
   const closed = !!b.closedThrough && s.to <= b.closedThrough;
   const file = s.file && sources.statement(s.file.bank, s.file.filename);
@@ -129,6 +132,11 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
         <aside className="margin" aria-label={t('receipts.details')}>
           {pays.length > 0 && (
             <Sec k="zahlungen" label={t('bank.sec.zahlungen')} val={String(pays.length)}>
+              {nUnbooked > 0 && (
+                <button type="button" className={`linkbtn zfilter${onlyUnbooked ? ' on' : ''}`} aria-pressed={onlyUnbooked} data-testid="only-unbooked" onClick={() => setOnlyUnbooked(!onlyUnbooked)}>
+                  {onlyUnbooked ? t('bank.showAllPayments', { n: all.length }) : t('bank.onlyUnbooked', { n: nUnbooked })}
+                </button>
+              )}
               <div className="paylist" role="listbox" aria-label={t('bank.paymentsOf')}>
                 {pays.map((p) => {
                   const hit = !query.q || matches(payHaystack(p, words(p.ref)), query.q);
@@ -136,7 +144,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                   return (
                     <button key={p.ref} type="button" className={`pay${on ? ' on' : ''}${hit ? '' : ' dim'}`} role="option" aria-selected={on} data-pay={p.ref} onClick={() => choose(on ? undefined : p.ref)}>
                       <span className="d">{p.date.slice(8)}.{p.date.slice(5, 7)}.</span>
-                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}</span>
+                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" title={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}</span>
                       <span className="a"><Amount tx={p} /></span>
                     </button>
                   );
@@ -144,7 +152,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
               </div>
             </Sec>
           )}
-          {s.account.currency !== baseCurrency() && <Rates b={b} pays={pays} />}
+          {s.account.currency !== baseCurrency() && <Rates b={b} pays={all} />}
           {s.file && (
             <Sec k="datei" label={t('bank.sec.datei')} val="">
               <dl className="kv">
