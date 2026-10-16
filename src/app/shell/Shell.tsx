@@ -18,7 +18,7 @@ import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { DropDialog, closeDrop, dropFiles, dropOpen } from './DropDialog.js';
-import { watchIntakeRuns } from '../automation/intake.js';
+import { INTAKE, watchRuns } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
@@ -135,14 +135,15 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     theme, setTheme, dark, zoom, language,
   };
 
-  // The inbox processing runs on the server; the books are loaded again when a job ends.
+  // The runs write the books on the server; they are loaded again when a run comes to rest.
   const reload = useRef(refresh);
   reload.current = refresh;
   useEffect(() => onBooksChanged(() => reload.current()), []);
   const noteRef = useRef(note);
   noteRef.current = note;
-  useEffect(() => (STATIC_EXPORT ? undefined : watchIntakeRuns((run) => {
+  useEffect(() => (STATIC_EXPORT ? undefined : watchRuns((run) => {
     reload.current();
+    if (run.workflow !== INTAKE) return;
     if (run.status === 'done') noteRef.current(t('intake.finished'));
     else toast(t('intake.note.error', { detail: run.error ?? run.status }));
   })), [toast]);

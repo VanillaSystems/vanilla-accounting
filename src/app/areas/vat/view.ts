@@ -22,7 +22,7 @@ export function zifferLabel(v: VatReturn, n: string): string {
 export function useReturn({ books, period }: { books: Index; period: Period }) {
   const key = vatKeyOf(period, booksOpenPeriod(books, localToday(), filing().length));
   const v = useMemo(() => vatReturn(books, key), [books, key]);
-  const filed = useFiledReturn(key);
+  const filed = useFiledReturn(key, books);
   return { v, filed, key };
 }
 
