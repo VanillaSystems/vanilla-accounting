@@ -10,6 +10,7 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import type { Nav } from '../areas/index.js';
 import { api, errorText } from '../lib/api.js';
 import { automationCommand, useAutomation } from './store.js';
+import { useState } from 'react';
 
 const OPEN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
 const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
@@ -40,22 +41,28 @@ function runResultText(w: WorkflowDecl, r: RunDetail): string {
 
 export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean }) {
   const { view } = useAutomation();
+  // What the last click came to, beside the button as well as in the toast: a toast is gone in
+  // seconds and easily missed (r4c-34, r5h-20: «Automatisch buchen» without Claude seemed to do nothing).
+  const [said, setSaid] = useState<{ item: string; text: string }>();
   if (!view) return null;
   const buttons = buttonsFor(view.workflows, kind, facts).filter((b) => b.runnable);
   if (!buttons.length) return null;
+  const say = (text: string) => { setSaid({ item: id, text }); nav.toast(text); };
   // The button says what came of it, not only that something started: a run without the AI may only wait for a person.
   async function start(workflow: WorkflowDecl) {
+    const name = textIn(workflow.label, language());
+    say(t('marks.started', { workflow: name }));
     try {
       const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
-      if (!r.ok) { nav.toast(t('marks.refused', { workflow: textIn(workflow.label, language()), why: r.detail ?? r.refusal })); return; }
+      if (!r.ok) { say(t('marks.refused', { workflow: name, why: r.detail ?? r.refusal })); return; }
       if (!r.run) return;
-      nav.toast(t('marks.started', { workflow: textIn(workflow.label, language()) }));
-      nav.toast(runResultText(workflow, await rested(r.run)));
+      say(runResultText(workflow, await rested(r.run)));
       nav.refresh();
-    } catch (e) { nav.toast(errorText(e)); }
+    } catch (e) { say(errorText(e)); }
   }
   return (
     <span className="wfbuttons">
+      {said?.item === id && <span className="wfsaid" role="status" data-testid="workflow-said">{said.text}</span>}
       {buttons.map(({ workflow, label, ai }) => {
         const open = view.runs.find((r) => r.workflow === workflow.id && r.item.id === id && OPEN.has(r.status));
         if (open) {
