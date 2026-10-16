@@ -984,6 +984,8 @@ export default {
     'reports.nothingFound': 'Aucun compte ne correspond à «{q}».',
     'reports.gap': 'Passifs {liabilities}, différence {gap} :',
     'reports.gapUnknown': 'Aucune cause trouvée : la balance montre chaque compte.',
+    'reports.openingMissing': 'Solde initial manquant : {account} n’a pas de solde d’ouverture pour {year}. Les relevés donnent CHF {amount} avant le premier paiement ; sans lui, le solde affiché ici est faux.',
+    'reports.openingSet': 'Saisir l’ouverture',
     'reports.show': 'Afficher',
     'reports.opening': 'Début',
     'reports.debit': 'Débit',

@@ -981,6 +981,8 @@ export const messages = {
   'reports.nothingFound': 'Kein Konto passt zu «{q}».',
   'reports.gap': 'Passiven {liabilities}, Differenz {gap}:',
   'reports.gapUnknown': 'Keine Ursache gefunden: die Saldobilanz zeigt jedes Konto.',
+  'reports.openingMissing': 'Anfangsbestand fehlt: {account} hat für {year} keinen Eröffnungssaldo. Die Kontoauszüge ergeben CHF {amount} vor der ersten Zahlung; ohne ihn ist der Saldo hier falsch.',
+  'reports.openingSet': 'Eröffnung erfassen',
   'reports.show': 'Zeigen',
   'reports.opening': 'Anfang',
   'reports.debit': 'Soll',

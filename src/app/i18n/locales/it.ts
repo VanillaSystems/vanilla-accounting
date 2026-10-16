@@ -984,6 +984,8 @@ export default {
     'reports.nothingFound': 'Nessun conto corrisponde a «{q}».',
     'reports.gap': 'Passivi {liabilities}, differenza {gap}:',
     'reports.gapUnknown': 'Nessuna causa trovata: il bilancio di verifica mostra ogni conto.',
+    'reports.openingMissing': 'Saldo iniziale mancante: {account} non ha un saldo d’apertura per il {year}. Gli estratti danno CHF {amount} prima del primo pagamento; senza, il saldo qui è sbagliato.',
+    'reports.openingSet': 'Inserire l’apertura',
     'reports.show': 'Mostrare',
     'reports.opening': 'Inizio',
     'reports.debit': 'Dare',

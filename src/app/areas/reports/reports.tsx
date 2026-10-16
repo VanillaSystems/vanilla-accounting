@@ -23,6 +23,8 @@ import { Detail } from './Detail.js';
 import { causeText } from '../close/steps.js';
 import type { DifferenceCause } from '../../../accounting/year-close.js';
 import { accountName, accountOfRoute, routeAccount } from './view.js';
+import { missingOpenings } from '../../../accounting/opening-balance.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 
 type Props = AreaProps<RouteOf<'reports'>>;
 
@@ -100,6 +102,9 @@ function List(props: Props) {
     : c.code === 'openingUnbalanced' ? nav.go({ route: { area: 'company', section: 'opening' }, query: {} })
       : inTrial(c.account));
   const sb = route.report === 'trial';
+  const ws = useWorkspace();
+  const year = period.to.slice(0, 4);
+  const unopened = useMemo(() => (ws && route.report !== 'income' ? missingOpenings(books, ws.bankAccounts, year) : []), [ws, books, year, route.report]);
 
   return (
     <div className="page">
@@ -143,6 +148,15 @@ function List(props: Props) {
           </span>
         </div>
       )}
+      {unopened.map((m) => (
+        <div key={m.account} className="notice warn rgap" data-testid="opening-missing" data-account={m.account}>
+          <span className="dot" aria-hidden="true" />
+          <span>
+            {t('reports.openingMissing', { account: `${m.account} ${m.label}`, year: m.year, amount: fmt(m.amount) })}{' '}
+            <button type="button" onClick={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })}>{t('reports.openingSet')}</button>
+          </span>
+        </div>
+      ))}
       <div className={`rows rep${sb ? ' sbal' : ''}`} role="listbox" aria-label={t('reports.accounts')}>
         {sb && <div className="group sbh"><span>{t('col.account')}</span><span /><span className="r">{t('reports.opening')}</span><span className="r">{t('reports.debit')}</span><span className="r">{t('reports.credit')}</span><span className="r">{t('reports.balance')}</span></div>}
         {view.blocks.map((b, i) => {

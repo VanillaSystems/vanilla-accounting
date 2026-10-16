@@ -85,3 +85,35 @@ export function withOpening(openings: Openings, year: string, account: string, a
   else delete out[year];
   return Object.keys(out).length ? out : undefined;
 }
+
+/** A bank account the books open at nothing while its statements say it held money (corner-25). */
+export interface MissingOpening {
+  account: string;
+  label: string;
+  year: string;
+  /** The bank's balance before the year's first payment, as its statements imply it. */
+  amount: number;
+}
+
+/**
+ * The first year's bank accounts without an opening balance whose statements disagree: the
+ * first closing balance of the year less the payments up to it is what the account held on
+ * 1 January. Without that opening the Bilanz shows the account wrong (often below zero). Base
+ * currency accounts only, as the opening form takes them; a later year opens from the year before.
+ */
+export function missingOpenings(
+  books: Pick<Index, 'config' | 'transactions' | 'journalEntries' | 'statementBalances'>,
+  accounts: ReadonlyArray<{ bank: string; currency: string; account: string; label: string }>,
+  year: string,
+): MissingOpening[] {
+  if (openingLock({ config: books.config, journalEntries: books.journalEntries }, year) === 'notFirstYear') return [];
+  return accounts.flatMap((a): MissingOpening[] => {
+    if (a.bank === 'manual' || a.currency !== baseCurrency() || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
+    const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
+    if (!first) return [];
+    const moved = books.transactions.filter((t) => t.bank === a.bank && t.currency === a.currency && t.date >= `${year}-01-01` && t.date <= first.date)
+      .reduce((sum, t) => sum + (t.direction === 'DBIT' ? -1 : 1) * toRappen(Math.abs(t.amount)), 0);
+    const held = toRappen(first.amount) - moved;
+    return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held) }];
+  });
+}

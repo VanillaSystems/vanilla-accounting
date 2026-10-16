@@ -984,6 +984,8 @@ export default {
     'reports.nothingFound': 'No account matches “{q}”.',
     'reports.gap': 'Liabilities {liabilities}, difference {gap}:',
     'reports.gapUnknown': 'No cause found: the trial balance shows every account.',
+    'reports.openingMissing': 'Opening balance missing: {account} has no opening balance for {year}. The statements give CHF {amount} before the first payment; without it the balance here is wrong.',
+    'reports.openingSet': 'Enter the opening',
     'reports.show': 'Show',
     'reports.opening': 'Opening',
     'reports.debit': 'Debit',
