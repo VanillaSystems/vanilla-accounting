@@ -2174,6 +2174,8 @@ export const messages = {
   'issues.evidenceTitle': { one: '{n} Buchung passt nicht zu ihrem Beleg', other: '{n} Buchungen passen nicht zu ihren Belegen' },
   'issues.filedTitle': { one: "{n} Buchung im eingereichten {period} passt nicht zu ihrem Beleg", other: "{n} Buchungen im eingereichten {period} passen nicht zu ihren Belegen" },
   'issues.filedLead': "Vor dem Einreichen nicht geklärt. Die Buchung bleibt, wie sie ist; die Korrektur gehört in {open}: die Buchung öffnen und dort korrigieren.",
+  'issues.twinsTitle': { one: '{n} möglicher Doppelbeleg', other: '{n} mögliche Doppelbelege' },
+  'issues.twin': '{file} wiederholt vielleicht {of} ({why}): bis du antwortest, bekommt er keine Zahlung',
   'automation.mapEvents': 'Ereignisse',
   'automation.mapPhases': 'Phasen',
   'automation.mapLead': 'Die Buchhaltung eines Jahres in vier Phasen, in ihrer Reihenfolge. Jede Phase sagt, wie oft sie dran ist. Ein Ablauf anklicken öffnet ihn.',

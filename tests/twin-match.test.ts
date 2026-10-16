@@ -32,3 +32,13 @@ test('the model is shown the 89.00 payment first for the 88.98 invoice', () => {
   const other = { ...PAY, ref: 'RB-9', date: '2026-10-01', amount: 412.5, description: 'Farbmix AG' };
   assert.equal(candidates(rc('orig', INVOICE, 'staged'), [other, PAY])[0].ref, 'RB-2026-3002');
 });
+
+test('Aufgaben lists the possible duplicate that waits for an answer, not its linked original, and no longer once answered (r5h-34)', async () => {
+  const { ledgerOf, openTwins } = await import('../src/app/areas/receipts/model.js');
+  const orig = { ...rc('orig', INVOICE, 'archived'), indexedAt: '2026-10-16T07:00:00Z' };
+  const copy = { ...rc('copy', FORWARD, 'archived'), indexedAt: '2026-10-16T07:01:00Z' };
+  const books = { receipts: [orig, copy], transactions: [PAY], mappings: [{ receiptId: 'orig', transactionRef: PAY.ref }], journalEntries: [], bankStatements: [], config: {} };
+  assert.deepEqual(openTwins(ledgerOf(books as never, '2026-10-01')).map((v) => v.r.id), ['copy']);
+  const answered = { ...books, receipts: [orig, { ...copy, kind: 'duplicate' as const, kindBy: 'human' as const }] };
+  assert.deepEqual(openTwins(ledgerOf(answered as never, '2026-10-01')).map((v) => v.r.id), []);
+});

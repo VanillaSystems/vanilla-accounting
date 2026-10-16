@@ -109,6 +109,10 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
 
+/** Receipts that may repeat another and wait for «Ist dasselbe» or «Verschieden» (Belege and Aufgaben, r5h-34). */
+export const openTwins = (l: Ledger): ReceiptView[] =>
+  l.views.filter((v) => v.twin?.relation === 'duplicate' && !v.links.length && v.r.kind !== 'duplicate' && !v.locked && l.byId.has(v.twin.of));
+
 /**
  * Still waiting for its payment or its date, and not in a filed quarter: what the dock's badge
  * counts. Books that never filed have no quarter to leave behind: a June invoice paid in July

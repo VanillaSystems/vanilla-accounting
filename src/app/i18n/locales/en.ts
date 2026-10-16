@@ -2177,6 +2177,8 @@ export default {
     'issues.evidenceTitle': { one: '{n} booking does not fit its receipt', other: '{n} bookings do not fit their receipts' },
     'issues.filedTitle': { one: "{n} booking of the filed {period} does not match its receipt", other: "{n} bookings of the filed {period} do not match their receipts" },
     'issues.filedLead': "Not settled before filing. The booking stays as it is; the correction goes into {open}: open the booking and correct it there.",
+    'issues.twinsTitle': { one: '{n} possible duplicate receipt', other: '{n} possible duplicate receipts' },
+    'issues.twin': '{file} may repeat {of} ({why}): until you answer, it gets no payment',
     'automation.mapEvents': 'Events',
     'automation.mapPhases': 'Phases',
     'automation.mapLead': 'A year of bookkeeping in four phases, in their order. Each phase says how often it is due. Click a workflow to open it.',

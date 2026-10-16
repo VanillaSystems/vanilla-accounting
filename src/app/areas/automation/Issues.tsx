@@ -6,7 +6,9 @@
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
-import { at } from '../receipts/view.js';
+import { at, ledgerFor } from '../receipts/view.js';
+import { openTwins } from '../receipts/model.js';
+import { answerTwin } from '../receipts/actions.js';
 import { evidenceText, patchOf } from '../journal/Detail.js';
 import { saveEntry } from '../journal/actions.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
@@ -115,6 +117,34 @@ export function FiledEvidence({ books, nav }: { books: Index; nav: Nav }) {
             <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'journal', id: v.e.id }, v.e.date))}>{`${formatDate(v.e.date)} ${v.e.description ?? ''}: ${evidenceText(v.e, check)}`}</button>
           </li>
         ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Receipts that may be the copy of another, each with its two answers (r5h-34): asked on Aufgaben too, not only on the receipt. */
+export function TwinTasks({ books, nav, canEdit }: { books: Index; nav: Nav; canEdit: boolean }) {
+  const l = ledgerFor(books);
+  const views = openTwins(l);
+  if (!views.length) return null;
+  return (
+    <section className="wfissues" data-testid="twin-tasks">
+      <h3>{t('issues.twinsTitle', { n: views.length })}</h3>
+      <ul>
+        {views.map((v) => {
+          const other = l.byId.get(v.twin!.of)!;
+          return (
+            <li key={v.r.id}>
+              <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'receipts', id: v.r.id }, v.day))}>{t('issues.twin', { file: v.r.filename, of: other.r.filename, why: t(`drop.twin.why.${v.twin!.why}`) })}</button>
+              {canEdit ? (
+                <>
+                  <button type="button" className="btn ghost" onClick={() => void answerTwin(nav, v, 'same', other.r.id, other.r.filename)}>{t('receipts.twin.same')}</button>
+                  <button type="button" className="btn ghost" onClick={() => void answerTwin(nav, v, 'distinct', other.r.id, other.r.filename)}>{t('receipts.twin.distinct')}</button>
+                </>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

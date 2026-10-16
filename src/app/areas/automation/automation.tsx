@@ -31,7 +31,9 @@ import { questionsNow, useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
-import { EvidenceTasks, FiledEvidence, PeriodIssues } from './Issues.js';
+import { EvidenceTasks, FiledEvidence, PeriodIssues, TwinTasks } from './Issues.js';
+import { openTwins } from '../receipts/model.js';
+import { ledgerFor } from '../receipts/view.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
 import { periodName } from '../../lib/period-label.js';
@@ -644,7 +646,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   // A payment nobody booked waits for the person even when no run asked about it (corner-9).
   const inTasks = new Set(tasks.map(unbooked).filter(Boolean));
   const waiting = unbookedPayments(books).filter((p) => !inTasks.has(p.ref));
-  const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length;
+  const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0;
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
@@ -673,6 +675,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
       ) : asked || waiting.length || evidence ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
       <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
       <FiledEvidence books={books} nav={nav} />
+      <TwinTasks books={books} nav={nav} canEdit={canEdit} />
       {waiting.length > 0 && (
         <section className="wfunbooked" data-testid="unbooked-payments">
           <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>
