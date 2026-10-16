@@ -7,7 +7,8 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { APP_FOLDER, APP_ROOT, yearPaths } from '../src/workspace/workspace.js';
@@ -73,4 +74,23 @@ test('not registered: the year closes without a return, and the private-use entr
   assert.deepEqual([sealed.status, sealed.problems], ['ok', []], 'a firm without returns closes its periods with the year');
   assert.ok(!close.blockers.some((b) => b.code === 'q4NotFiled' || b.code === 'notClosed'), JSON.stringify(close.blockers));
   assert.equal(close.templates.find((tp) => tp.id === 'privateUse')?.accountDebit, '2850', 'an Einzelfirma\'s private account, not the GmbH\'s 2451');
+});
+
+test('not registered: a sidebar block that sets a receipt\'s VAT facts and then a code on its booking is refused for the code, not as «entry not found» (r6f-8)', async () => {
+  const log = mkdtempSync(join(tmpdir(), 'firms-sidebar-'));
+  const file = join(log, 'changes.json');
+  const api = await startApi(FIXTURE, { PATH: `${join(process.cwd(), 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_CHANGES: file }, { manifestOf: join(APP_ROOT, 'demo-coiffeur', APP_FOLDER) });
+  servers.push(api);
+  writeFileSync(file, JSON.stringify([
+    { kind: 'receipt', id: 'rk', set: { vat: { hasSwissVat: true, vatId: 'CHE-000.000.000 MWST', vatSummary: [{ ratePercent: 8.1, net: 370.03, vat: 29.97, gross: 400 }] } } },
+    { kind: 'entry', id: 'e-doc', set: { vatCode: 'M81' } },
+  ]));
+  const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: JSON.stringify({ text: 'Bitte mit M81', language: 'de', context: [{ kind: 'entry', id: 'e-doc', label: 'Verkauf' }] }) });
+  const events = (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as { type: string; refusal?: { code: string; params?: Record<string, string> } });
+  const refused = events.find((e) => e.type === 'refused');
+  assert.ok(refused, JSON.stringify(events.map((e) => e.type)));
+  assert.deepEqual([refused!.refusal?.code, refused!.refusal?.params?.code], ['codeNotTaken', 'M81'], JSON.stringify(refused));
+  const books = loadBooks(api.ws);
+  assert.ok(books.journalEntries.some((e) => e.id === 'e-doc' && e.vatCode === 'V0'), 'the booking is as it was');
+  assert.equal(books.receipts.find((r) => r.id === 'rk')?.hasSwissVat, undefined, 'the receipt is as it was');
 });
