@@ -138,6 +138,7 @@ function useCommand(nav: Nav): [string | undefined, (cmd: SavingCommand) => Prom
       const r = await changesCommand(cmd);
       if (!r.ok) nav.toast(r.message);
       else if (r.saved !== undefined) nav.toast(t('changes.savedToast', { n: r.saved }));
+      else if (r.plain) nav.toast(t('changes.preparedPlainToast'));
       else if (cmd.kind === 'sync') nav.toast(t('changes.syncedToast'));
       return r;
     } catch (e) {
@@ -281,7 +282,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
           <button type="button" className="btn ghost" disabled={thinking} onClick={() => void go({ kind: 'refresh' })}><BotIcon />{t('changes.refresh')}</button>
         </div>
       ) : null}
-      <p className="m">{t('changes.readyLead', { n: p.saves.length })}</p>
+      <p className="m" data-testid="ready-lead">{t(p.plain ? 'changes.readyPlain' : 'changes.readyLead', { n: p.saves.length })}</p>
       <div className="chpreps">
         {p.saves.map((s) => {
           const books = s.files.some((f) => f.source === 'books');

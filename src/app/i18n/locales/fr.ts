@@ -2434,6 +2434,8 @@ export default {
     'changes.held': 'mis de côté',
     'changes.heldNote': { one: '{n} mis de côté, reste non enregistré', other: '{n} mis de côté, restent non enregistrés' },
     'changes.firstRefresh': 'Mets d’abord la proposition à jour',
+    'changes.readyPlain': { one: 'Préparé sans l’IA : {n} enregistrement, un par fichier, nommé d’après le fichier. Tu peux enregistrer ainsi ; l’IA n’améliorerait que la description.', other: 'Préparé sans l’IA : {n} enregistrements, un par fichier, nommés d’après le fichier. Tu peux enregistrer ainsi ; l’IA n’améliorerait que les descriptions.' },
+    'changes.preparedPlainToast': 'L’IA n’est pas joignable. Les enregistrements sont préparés sans elle, un par fichier.',
     'changes.ask': 'Qu’est-ce qui doit changer ?',
     'changes.send': 'Envoyer',
     'changes.save': 'Enregistrer',

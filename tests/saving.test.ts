@@ -104,6 +104,32 @@ test('a held save stays unsaved; the books are a save of their own, with the run
   assert.ok(existsSync(join(draftDir(ws), STEP)), 'the held draft stays in the draft');
 });
 
+test('without the AI (r8c-3): prepare builds one plain save per file and saves them; talking to the AI is refused and keeps the saves', async () => {
+  const { ws, git } = await company();
+  changeBoth(ws);
+  const books = loadBooks(ws);
+  update(books, moduleActor('test'), (b) => { b.journalEntries.push({ id: 'w1', transactionRef: 'w', date: '2026-09-20', accountDebit: '6500', accountCredit: '1020', amount: 1 }); });
+  saveBooks(ws, books);
+  const run = { run: 'booking-w1', workflow: 'booking', label: 'Buchen', at: '2026-10-15T10:00:00.000Z', entries: 1, links: 0, receipts: 0 };
+  const noModel: Ask = async () => { throw new Error('claude exited 1: verify sandbox: no model calls'); };
+  const saving = openSaving(ws, { ask: noModel, runs: () => [run] });
+  const prepared = await saving.command({ kind: 'prepare' });
+  assert.equal(prepared.ok, true, 'prepared without the model');
+  assert.equal(prepared.ok && prepared.plain, true, 'the result says the saves are code-built');
+  const view = await saving.view();
+  assert.equal(view.proposal!.plain, true);
+  assert.deepEqual(view.proposal!.saves.map((s) => s.files.map((f) => `${f.source}:${f.path}`)), [['books:Bücher'], [`draft:${STEP}`], [`outside:${RULES}`]], 'one save per changed file');
+  assert.deepEqual(view.proposal!.saves.map((s) => s.message), ['Bücher: 1 Buchung aus Buchen', `${STEP} neu`, `${RULES} geändert`]);
+  assert.equal(view.proposal!.ready, true);
+  const talk = await saving.command({ kind: 'talk', text: 'alles in einen' });
+  assert.equal(talk.ok ? '' : talk.refusal, 'model');
+  assert.match(talk.ok ? '' : talk.message, /KI/);
+  assert.equal((await saving.view()).proposal!.saves.length, 3, 'the saves stay');
+  assert.deepEqual(await saving.command({ kind: 'save' }), { ok: true, saved: 3 });
+  assert.equal(git('log', '--format=%s').split('\n').length, 4);
+  assert.doesNotMatch(git('status', '--porcelain'), /entries\.jsonl/, 'the books are saved');
+});
+
 test('a saved draft file moves into the books folder; Rückgängig puts the old version back into the draft', async () => {
   const { ws, git } = await company();
   changeBoth(ws);

@@ -2434,6 +2434,8 @@ export default {
     'changes.held': 'held back',
     'changes.heldNote': { one: '{n} held back, stays unsaved', other: '{n} held back, stay unsaved' },
     'changes.firstRefresh': 'Update the proposal first',
+    'changes.readyPlain': { one: 'Prepared without the AI: {n} save, one per file, named after the file. You can save like this; the AI would only improve the description.', other: 'Prepared without the AI: {n} saves, one per file, named after the file. You can save like this; the AI would only improve the descriptions.' },
+    'changes.preparedPlainToast': 'The AI cannot be reached. The saves are prepared without it, one per file.',
     'changes.ask': 'What should be different?',
     'changes.send': 'Send',
     'changes.save': 'Save',

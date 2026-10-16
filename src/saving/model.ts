@@ -89,8 +89,8 @@ export interface PreparedSave {
 
 export interface TalkTurn { me: string; ai: string }
 
-/** Stored in data/saving/proposal.json. Stale is never stored: it is derived from the files. */
-export interface Proposal { at: string; saves: PreparedSave[]; talk: TalkTurn[] }
+/** Stored in data/saving/proposal.json. Stale is never stored: it is derived from the files. `plain`: built by code because the AI was absent, one save per file. */
+export interface Proposal { at: string; saves: PreparedSave[]; talk: TalkTurn[]; plain?: true }
 
 export interface ProposalView extends Proposal {
   /** Ids of the saves whose files changed since the AI prepared them. */
@@ -119,7 +119,7 @@ export type SavingCommand =
 
 export type SavingRefusal = 'no-repository' | 'nothing' | 'no-proposal' | 'stale' | 'not-customizing' | 'no-remote' | 'two-versions' | 'cannot-undo' | 'closed' | 'model' | 'rules';
 
-export type SavingResult = { ok: true; reply?: string; saved?: number; reversed?: number } | { ok: false; refusal: SavingRefusal; message: string };
+export type SavingResult = { ok: true; reply?: string; saved?: number; reversed?: number; plain?: true } | { ok: false; refusal: SavingRefusal; message: string };
 
 export interface SaveDetail extends SaveSummary {
   body: string;

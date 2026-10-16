@@ -86,6 +86,15 @@ function shown(ws: Ws, f: FileChange & { source: ChangeSource }, before: string,
 
 interface Answer { reply?: string; saves?: Array<{ message?: string; why?: string; files?: string[]; held?: boolean }> }
 
+const STATE_WORD: Record<FileChange['state'], string> = { added: 'neu', modified: 'geändert', deleted: 'entfernt' };
+
+/** A save's message built by code: the books by their runs' bookings, a file by its path and what happened to it. */
+function plainMessage(f: FileChange & { source: ChangeSource }, runs: RunWrote[]): string {
+  if (f.source !== 'books') return `${f.path} ${STATE_WORD[f.state]}`;
+  const n = runs.reduce((s, r) => s + r.entries, 0);
+  return runs.length ? `${BOOKS}: ${n} ${n === 1 ? 'Buchung' : 'Buchungen'} aus ${[...new Set(runs.map((r) => r.label))].join(', ')}` : `${BOOKS}: von Hand geändert`;
+}
+
 function parseAnswer(text: string): Answer {
   const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
   return JSON.parse(json) as Answer;
@@ -131,10 +140,14 @@ export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; ru
       `Changed files:\n\n${files.map((f, i) => shown(ws, f, before[i], v.books.runs)).join('\n\n')}`,
     ].filter(Boolean).join('\n\n');
     let answer: Answer;
+    let plain: true | undefined;
     try {
       answer = parseAnswer(await deps.ask(prompt, { step: `saving#${said ? 'talk' : 'prepare'}`, system: SYSTEM }));
     } catch (e) {
-      return refuse('model', e instanceof Error ? e.message : String(e));
+      // MISSION: saving never needs the AI. Without it, code groups one save per file (r8c-3); only talking to it does.
+      if (said) return refuse('model', `Die KI antwortet nicht (${e instanceof Error ? e.message : String(e)}). Die Speicherstände bleiben, wie sie sind.`);
+      answer = { reply: '', saves: files.map((f) => ({ message: plainMessage(f, v.books.runs), why: '', files: [f.path] })) };
+      plain = true;
     }
     const byPath = new Map(files.map((f) => [f.path, f]));
     const taken = new Set<string>();
@@ -146,8 +159,8 @@ export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; ru
     });
     for (const f of files.filter((f) => !taken.has(f.path))) saves.push({ id: randomUUID().slice(0, 8), message: f.path, why: '', files: [cover(f)] });
     const reply = answer.reply ?? '';
-    writeProposal(ws, { at: now().toISOString(), saves: [...keep, ...saves], talk: said ? [...talk, { me: said, ai: reply }] : talk });
-    return { ok: true, reply };
+    writeProposal(ws, { at: now().toISOString(), saves: [...keep, ...saves], talk: said ? [...talk, { me: said, ai: reply }] : talk, ...(plain && { plain }) });
+    return { ok: true, reply, ...(plain && { plain }) };
   }
 
   async function save(sync: boolean): Promise<SavingResult> {

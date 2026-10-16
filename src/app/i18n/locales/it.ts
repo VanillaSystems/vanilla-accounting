@@ -2434,6 +2434,8 @@ export default {
     'changes.held': 'in sospeso',
     'changes.heldNote': { one: '{n} in sospeso, resta non salvato', other: '{n} in sospeso, restano non salvati' },
     'changes.firstRefresh': 'Prima aggiorna la proposta',
+    'changes.readyPlain': { one: 'Preparato senza IA: {n} salvataggio, uno per file, con il nome del file. Puoi salvare così; l’IA migliorerebbe solo la descrizione.', other: 'Preparato senza IA: {n} salvataggi, uno per file, con il nome del file. Puoi salvare così; l’IA migliorerebbe solo le descrizioni.' },
+    'changes.preparedPlainToast': 'L’IA non è raggiungibile. I salvataggi sono preparati senza di lei, uno per file.',
     'changes.ask': 'Cosa deve cambiare?',
     'changes.send': 'Invia',
     'changes.save': 'Salva',

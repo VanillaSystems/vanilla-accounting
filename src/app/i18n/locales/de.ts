@@ -2431,6 +2431,8 @@ export const messages = {
   'changes.held': 'zurückgestellt',
   'changes.heldNote': { one: '{n} zurückgestellt, bleibt ungespeichert', other: '{n} zurückgestellt, bleiben ungespeichert' },
   'changes.firstRefresh': 'Erst den Vorschlag aktualisieren',
+  'changes.readyPlain': { one: 'Ohne KI vorbereitet: {n} Speicherstand, einer pro Datei, mit einer Beschreibung aus dem Dateinamen. So lässt es sich speichern; die KI würde nur die Beschreibung verbessern.', other: 'Ohne KI vorbereitet: {n} Speicherstände, einer pro Datei, mit einer Beschreibung aus dem Dateinamen. So lässt es sich speichern; die KI würde nur die Beschreibungen verbessern.' },
+  'changes.preparedPlainToast': 'Die KI ist nicht erreichbar. Die Speicherstände sind ohne sie vorbereitet, einer pro Datei.',
   'changes.ask': 'Was soll anders sein?',
   'changes.send': 'Senden',
   'changes.save': 'Speichern',
