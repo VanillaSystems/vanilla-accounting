@@ -25,6 +25,8 @@ export type ApiRefusal =
   | { code: 'manualOnly' }
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
+  /** Änderungen › «Rückgängig» of a deletion while the payment has bookings it did not have then (src/server/edits.ts restoreSaved): how many stand, and whether a person or the app booked them. */
+  | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }
   /** «Privat oder bar bezahlt» on a receipt a payment already pays (src/server/edits.ts privatePayment). */
   | { code: 'receiptPaid'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }

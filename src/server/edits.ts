@@ -339,16 +339,21 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
 /**
  * A booking a person changed or made by hand put back as the last save holds it (`saved`), or
  * taken out when it was booked since (Änderungen › «Rückgängig», src/saving/changes.ts handEdits).
+ * A deleted booking comes back as saved, with its id (r6h-28), only while its payment has no
+ * booking it did not have at the deletion (`kept` names what was there then): a rule's split or a
+ * hand booking made since stands, and the restore is refused naming it, so the payment is never
+ * booked twice and no booking is replaced unseen (r8h-23).
  */
 export function restoreSaved(books: Books, id: string, saved: JournalEntry | undefined, kept?: readonly string[]): void {
   if (!saved) { deleteEntry(books, id); return; }
   const e = books.journalEntries.find((x) => x.id === id);
   assertOpen(books, [...(e ? [e.date] : []), saved.date], 'editEntry');
-  // A booking deleted by hand comes back as saved, with its id (r6h-28). What the app booked on its payment
-  // since the deletion (`kept` names what was there then) goes, so the payment is not booked twice (r7h-31).
-  const since = kept && !e ? books.journalEntries.filter((x) => x.transactionRef === saved.transactionRef && !kept.includes(x.id) && x.origin !== 'manual') : [];
-  assertOpen(books, since.map((x) => x.date), 'deleteEntry');
-  books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries.filter((x) => !since.includes(x)), saved];
+  const since = kept && !e ? books.journalEntries.filter((x) => x.transactionRef === saved.transactionRef && !kept.includes(x.id)) : [];
+  if (since.length) {
+    const by = since.some((x) => x.origin === 'manual' || x.by?.kind === 'person' || x.by?.kind === 'assistant') ? 'person' : 'app';
+    throw new RequestError(409, `Die Zahlung ${saved.transactionRef} ist seit dem Löschen wieder gebucht (${since.length} Buchungen, ${by === 'person' ? 'von Hand' : 'von der App'}): sie bleibt. Zuerst die heutige Buchung in Buchungen löschen.`, { code: 'bookedSince', params: { payment: saved.transactionRef, entries: since.length, by } });
+  }
+  books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries, saved];
 }
 
 export function deleteEntry(books: Books, id: string): JournalEntry {

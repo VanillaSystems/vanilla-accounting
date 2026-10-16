@@ -123,8 +123,9 @@ function trashedSince(ws: Ws, after: string | undefined): TrashedEntry[] {
  * save, each with the booking as that save holds it; the saved bookings that are gone while
  * their payment got no booking since (r6h-28), dated by the file's last write; and the deletions
  * the app recorded since the last save (recordDeletion), also of a booking a run made meanwhile
- * and of one whose payment got booked again since: its restore takes that booking out (r7h-31).
- * A saved booking replaced by a re-booking is listed through the bookings that replaced it.
+ * and of one whose payment got booked again since: its restore is refused until that booking is
+ * gone (r7h-31, r8h-23). A saved booking replaced by a re-booking is listed through the bookings
+ * that replaced it.
  */
 export async function handEdits(ws: Ws): Promise<HandEdit[]> {
   const repo = await repositoryAt(ws.paths.repository);

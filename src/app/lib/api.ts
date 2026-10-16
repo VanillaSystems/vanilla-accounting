@@ -68,6 +68,7 @@ export function errorText(e: unknown): string {
     case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
     case 'hasEntries': return t('error.hasEntries');
+    case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
     case 'yearClose': return t('error.yearClose');
     case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
