@@ -340,3 +340,26 @@ test('a payer rule decides the part of a collective payment it matches: that par
   assert.deepEqual(by('BATCH-2'), [['1021', '3400', 1500, 'V81', 'sale-keller'], ['1021', '3400', 400, 'V0', 'sale-weber']], 'every part decided: the whole payment booked by rules');
   assert.deepEqual([out.classified.sort(), out.partly, out.unasked], [['BATCH-1', 'BATCH-2'], ['BATCH-1'], []], 'no model was asked: the rest of BATCH-1 is the person\'s, not «no rule decided»');
 });
+
+test('a collective payment partly decided by payer rules: with a model the undecided parts are booked by it, the rule parts stay the rules\'; without one the rest waits for the person', async () => {
+  const mk = () => booksOf([batchIn('BATCH-3', [
+    { amount: 1500, currency: 'CHF', counterparty: 'Familie Keller', counterpartyIban: 'CH4431999123000889012', reference: 'Rechnung 2026-030' },
+    { amount: 800, currency: 'CHF', counterparty: 'Hans Meier', reference: 'Rechnung 2026-031' },
+    { amount: 200, currency: 'CHF', counterparty: 'Eva Frei', reference: 'Rechnung 2026-032' },
+  ])]);
+  const ws = company(PAYER_RULE);
+  const prompts: string[] = [];
+  const ask: ClassifyDeps['ask'] = async (prompt) => {
+    prompts.push(prompt);
+    return JSON.stringify({ 'BATCH-3': { entries: [{ accountDebit: '1021', accountCredit: '3400', amount: 1000, vatCode: 'V81', description: 'Meier und Frei' }] } });
+  };
+  const books = mk();
+  const out = await classifyTransactions(books, books.transactions, { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  const lines = books.journalEntries.filter((e) => e.transactionRef === 'BATCH-3');
+  assert.deepEqual(lines.map((e) => [e.amount, e.rule ?? (e.origin === 'classify' ? 'model' : e.origin)]).sort(), [[1000, 'model'], [1500, 'sale-keller']], 'the rules\' part stays, the model books the rest');
+  assert.match(prompts[0], /Amount: 1000/, 'the model is asked for the undecided parts only');
+  assert.deepEqual([out.classified, out.partly, out.failed], [['BATCH-3'], [], []]);
+  const bare = mk();
+  const none = await classifyTransactions(bare, bare.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual([bare.journalEntries.filter((e) => e.transactionRef === 'BATCH-3').length, none.partly], [1, ['BATCH-3']], 'no model: the rest stays for the person');
+});

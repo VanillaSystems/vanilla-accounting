@@ -417,7 +417,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
  * never books over a payment booked in part, src/workflows/actions.ts). A rule that asks, or books
  * a payout's fees, decides no part.
  */
-function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean } | undefined {
+function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean; rest?: BankTransaction } | undefined {
   const parts = context.rules?.length ? partsOf(tx) : undefined;
   if (!parts) return undefined;
   const sign = tx.amount < 0 ? -1 : 1;
@@ -430,7 +430,11 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
     return placed && then?.kind === 'book' && !then.booking.fees ? ruleEntries(books, part, placed, then.booking, context, fx) : undefined;
   });
   const entries = decided.flatMap((e) => e ?? []);
-  return entries.length ? { entries, whole: decided.every(Boolean) } : undefined;
+  if (!entries.length) return undefined;
+  const open = parts.filter((_, i) => !decided[i]);
+  // The parts no rule decided, as a payment of their own for the model: the same ref, what is left of the amount.
+  const rest = open.length ? { ...tx, amount: sign * open.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: open.map(partText).join('; '), parts: open.length > 1 ? open : undefined } : undefined;
+  return { entries, whole: !rest, rest };
 }
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
@@ -564,7 +568,10 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const byParts = placed ? undefined : partRuleEntries(books, tx, context, fx);
     if (byParts) {
       books.journalEntries.push(...byParts.entries);
-      log(`  ${tx.ref}  → rules by part${byParts.whole ? '' : ', the rest waits for the person'}`);
+      // The parts no rule decided go to the model when there is one; the rule-decided parts stay the rules'.
+      const model = byParts.rest && ask;
+      log(`  ${tx.ref}  → rules by part${byParts.whole ? '' : model ? ', the rest to the model' : ', the rest waits for the person'}`);
+      if (model) { toModel.push(byParts.rest!); continue; }
       outcome.classified.push(tx.ref);
       if (!byParts.whole) outcome.partly.push(tx.ref);
       continue;
