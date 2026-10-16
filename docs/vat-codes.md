@@ -130,7 +130,7 @@ worked cases are in the [casebook](casebook.md).
 
 ### Flat tax rate
 
-**When:** Only for companies that settle with flat tax rates (form 0551). Boxes 322 to 333.
+**When:** Only for companies that settle with flat tax rates (form 0553). Boxes 322 to 333.
 
 **Not when:** This app files with the effective method and does not declare F codes. Effective method: V codes.
 

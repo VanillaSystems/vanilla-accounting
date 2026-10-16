@@ -11,6 +11,7 @@ import { APP_ROOT } from '../src/workspace/workspace.js';
 import type { VatSetup } from '../src/workspace/vat-setup.js';
 import { vatChipOf } from '../src/app/areas/receipts/model.js';
 import { correctionBoxes } from '../src/app/areas/vat/model.js';
+import { codeExplanation } from '../src/app/areas/codes/model.js';
 
 const { jurisdiction } = loadJurisdiction(APP_ROOT, 'ch');
 const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] };
@@ -37,4 +38,23 @@ test('the correction form of the net tax rate method has the firm\'s rate row an
   const e = correctionBoxes(vat().form);
   assert.deepEqual(e.inputTax, ['400', '405', '410', '415', '420']);
   assert.deepEqual(e.inputTaxTotals, ['479']);
+});
+
+test('the catalogue explains F1 to a net-rate firm as its own code: named with its label and rate, declared in 200 and 323 of form 0553, as the sale it books; the effective firm keeps the catalogue\'s kind (r9n-25)', () => {
+  try {
+    setJurisdiction(jurisdiction, NET_RATE);
+    const own = codeExplanation('F1');
+    assert.deepEqual(own.own, { name: '1. Saldosteuersatz (Schreinerei)', rate: 4.5 });
+    assert.deepEqual(own.ziffern, ['200', '323']);
+    assert.equal(own.rate, 4.5);
+    assert.deepEqual(own.when, { key: 'vatCodes.netRate.when', vars: { code: 'F1', turned: '-F1', rate: '4.5', ziffer: '323', form: '0553' } });
+    assert.equal(own.notWhen.key, 'vatCodes.netRate.notWhen');
+    assert.deepEqual(codeExplanation('-F1').own, own.own, 'the minus code is the same rate');
+    assert.equal(codeExplanation('F2').own, undefined, 'the second rate the firm has not is the catalogue\'s kind');
+  } finally {
+    setJurisdiction(jurisdiction);
+  }
+  const catalogue = codeExplanation('F1');
+  assert.deepEqual([catalogue.own, catalogue.ziffern, catalogue.when.key], [undefined, null, 'vatCodes.kind.flatRate.when'], 'the effective method declares no F code');
+  assert.equal(codeExplanation('V81').ziffern?.includes('303'), true);
 });

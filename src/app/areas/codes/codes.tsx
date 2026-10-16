@@ -15,10 +15,10 @@ import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { Kbd } from '../receipts/commands.js';
-import { codeGroups, splitCodes, vatStats, type CodeRow } from './model.js';
+import { codeExplanation, codeGroups, ownNetRate, splitCodes, vatStats, type CodeRow } from './model.js';
 import { codesUi, setCodesUi, toggleFamily, useCodesUi } from './state.js';
-import { amountText, codeText, kindName, rateName, rateOf, showOnly, VatCards, zifferName } from './vat-card.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { amountText, codeText, explainedName, kindName, rateName, rateOf, showOnly, VatCards, words, zifferName } from './vat-card.js';
+import { baseCurrency, vat } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'codes'>>;
 
@@ -106,34 +106,37 @@ function Detail(props: Props) {
   const { entry: e, negative } = found;
   const code = route.code;
   const goCode = (c: string) => nav.select({ area: 'codes', code: c });
+  // The firm's own net tax rate reads as its code, not as the catalogue's flat-rate kind (r9n-25).
+  const x = codeExplanation(code);
+  const own = ownNetRate(code);
 
   return (
     <div className="detail-in doc" data-for={code}>
       <div className="head">
-        <h2 className="who">{kindName(e)}<small>{e.family} · {t(`vatCodes.family.${e.family}`)}</small></h2>
+        <h2 className="who">{explainedName(x)}<small>{e.family} · {t(`vatCodes.family.${e.family}`)}</small></h2>
         <div className="amount"><small>{e.rate ? t('journal.field.vatCode') : ''}</small>{code}</div>
       </div>
       <div className="facts">
-        <span>{e.bananaText ?? t('vatCodes.notInBanana')}</span>
-        <span>{rateOf(e)}{rateName(e) && ` ${rateName(e)}`}</span>
+        <span>{own ? t('vatCodes.ownRate', { form: vat().form.form ?? '' }) : e.bananaText ?? t('vatCodes.notInBanana')}</span>
+        <span>{rateOf(e)}{!own && rateName(e) && ` ${rateName(e)}`}</span>
         {e.superseded && <span className="nov">{t('vatCodes.superseded')}</span>}
       </div>
       {negative && <div className="notice">{t('vatCodes.negative', { code: e.code })}</div>}
       <div className="docbody">
-        <section><h3>{t('vatCodes.when')}</h3><p>{t(`vatCodes.kind.${e.kind}.when`)}</p></section>
+        <section><h3>{t('vatCodes.when')}</h3><p>{words(x.when)}</p></section>
         <section>
           <h3>{t('vatCodes.notWhen')}</h3>
-          <p>{splitCodes(t(`vatCodes.kind.${e.kind}.notWhen`)).map((part, i) => part.code
+          <p>{splitCodes(words(x.notWhen)).map((part, i) => part.code
             ? <button key={i} type="button" className="clink mono" data-vat={part.code} onClick={() => goCode(part.code!)}>{part.text}</button>
             : <Fragment key={i}>{part.text}</Fragment>)}</p>
         </section>
         {!!e.rate && <section><h3>{t('codes.amount')}</h3><p>{amountText(e)}</p></section>}
         <section>
           <h3>{t('vatCodes.ziffern')}</h3>
-          {e.ziffern?.length
-            ? <dl className="zf">{e.ziffern.map((z) => <Fragment key={z.ziffer}><dt className="mono">{z.ziffer}</dt><dd>{zifferName(z.ziffer)}</dd></Fragment>)}</dl>
-            : <p>{e.ziffern === null ? t('vatCodes.notDeclared') : t('vatCodes.noZiffer')}</p>}
-          {e.ziffern === null && e.bananaZiffern.length > 0 && <p className="m">{t('vatCodes.bananaZiffern', { ziffern: e.bananaZiffern.join(', ') })}</p>}
+          {x.ziffern?.length
+            ? <dl className="zf">{x.ziffern.map((z) => <Fragment key={z}><dt className="mono">{z}</dt><dd>{zifferName(z)}</dd></Fragment>)}</dl>
+            : <p>{x.ziffern === null ? t('vatCodes.notDeclared') : t('vatCodes.noZiffer')}</p>}
+          {x.ziffern === null && e.bananaZiffern.length > 0 && <p className="m">{t('vatCodes.bananaZiffern', { ziffern: e.bananaZiffern.join(', ') })}</p>}
         </section>
         {e.examples.length > 0 && (
           <section>

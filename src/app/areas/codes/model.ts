@@ -8,6 +8,7 @@ import type { Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
 import { firmCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, lookupVatCode, type VatCodeEntry, type VatCodeFamily } from '../../../accounting/vat-codes.js';
 import { vat } from '../../../engines/index.js';
+import type { Key } from '../../i18n/types.js';
 
 /** The `?vat=` of the entries without a code. */
 export const NO_VAT = 'none';
@@ -89,4 +90,40 @@ export function splitCodes(text: string): Array<{ text: string; code?: string }>
   }
   out.push({ text: text.slice(last) });
   return out.filter((p) => p.text);
+}
+
+/** The firm's own net tax rate row for `code` (F1, F2, or their minus), when the firm books at that rate. */
+export const ownNetRate = (code: string) => vat().rateRows.find((r) => r.kind === 'net-rate' && r.code === code.replace(/^-/, ''));
+
+/** A text of the dictionary with its variables; the UI renders it with `t`. */
+export interface Words { key: Key; vars?: Record<string, string> }
+
+export interface CodeExplanation {
+  /** The firm's own rate, named as its row names it («1. Saldosteuersatz (Schreinerei)», German, for accountingName) with its percent; absent for a catalogue code. */
+  own?: { name: string; rate: number };
+  rate: number | null;
+  name: Words;
+  when: Words;
+  notWhen: Words;
+  /** In form order; null when this firm's return never declares the code. */
+  ziffern: string[] | null;
+}
+
+/**
+ * A code explained for this firm (r9n-25): a net tax rate the firm books at is its own code, named
+ * with its label and rate, declared in the turnover box and its rate row of form 0553, explained as
+ * the sale it books; any other code reads as the catalogue explains its kind. Pure: the words are
+ * keys of the dictionary.
+ */
+export function codeExplanation(code: string): CodeExplanation {
+  const found = lookupVatCode(code);
+  const own = ownNetRate(code);
+  if (own) {
+    const form = vat().form;
+    const vars = { code: own.code, turned: `-${own.code}`, rate: String(own.rate), ziffer: own.ziffer, form: form.form ?? '' };
+    return { own: { name: own.name, rate: own.rate }, rate: own.rate, name: { key: 'vatCodes.kind.flatRate.name' }, when: { key: 'vatCodes.netRate.when', vars }, notWhen: { key: 'vatCodes.netRate.notWhen', vars }, ziffern: [form.turnoverBox, own.ziffer] };
+  }
+  if (!found) return { rate: null, name: { key: 'vatCodes.unknown' }, when: { key: 'vatCodes.unknown' }, notWhen: { key: 'vatCodes.unknown' }, ziffern: null };
+  const e = found.entry;
+  return { rate: e.rate, name: { key: `vatCodes.kind.${e.kind}.name` }, when: { key: `vatCodes.kind.${e.kind}.when` }, notWhen: { key: `vatCodes.kind.${e.kind}.notWhen` }, ziffern: e.ziffern ? e.ziffern.map((z) => z.ziffer) : null };
 }
