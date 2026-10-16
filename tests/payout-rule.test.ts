@@ -114,6 +114,38 @@ test('with its report linked, the payout is booked gross at the rule\'s rate, th
   assert.match(sale.reason!, /^Regel: .*; die Beträge hat Claude aus dem Auszahlungsbericht gelesen$/);
 });
 
+/** The model's reading of the same report as the first run of r8h-20 wrote it: every line on the revenue account with the bank on the debit side, the refund and the fees as negative sales, each line naming its role. */
+const negativeSales: NonNullable<ClassifyDeps['ask']> = async (prompt) => {
+  const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
+  return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, {
+    entries: [
+      { accountDebit: '', accountCredit: '3400', amount: 1100, vatCode: 'V81', description: 'SumUp Kartenzahlungen 12.8.', kind: 'sale' },
+      { accountDebit: '', accountCredit: '3400', amount: 380, vatCode: 'V81', description: 'SumUp Kartenzahlungen 13.8.', kind: 'sale' },
+      { accountDebit: '', accountCredit: '3400', amount: -40, vatCode: 'V81', description: 'SumUp Rückerstattung', kind: 'refund' },
+      { accountDebit: '', accountCredit: '3400', amount: -27.65, vatCode: 'V81', description: 'SumUp Gebühren', kind: 'fee' },
+    ],
+  }])));
+};
+
+/** The same reading without the roles: the sign and the model's own words for the line decide. */
+const negativeSalesUnnamed: NonNullable<ClassifyDeps['ask']> = async (prompt) => JSON.stringify(JSON.parse(await negativeSales(prompt), (k, v) => (k === 'kind' ? undefined : v)));
+
+test('r8h-20: a reading that writes the fees and the refund as negative sales is normalised in code: fees on the rule\'s fee account and code, sales and refunds on its account with the right sign, never negative revenue, the same for every reading of the report', async () => {
+  const ws = company();
+  for (const ask of [negativeSales, negativeSalesUnnamed]) {
+    const books = booksOf([payout('PO')], 'PO');
+    const out = await classifyTransactions(books, books.transactions, { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+    assert.deepEqual([out.classified, out.failed], [['PO'], []]);
+    assert.deepEqual(lines(books, 'PO').sort((a, b) => Number(b[2]) - Number(a[2])), [
+      ['1021', '3400', 1100, 'V81'],
+      ['1021', '3400', 380, 'V81'],
+      ['3400', '1021', 40, '-V81'],
+      ['6840', '1021', 27.65, 'I0'],
+    ], ask === negativeSales ? 'the roles the reading names' : 'the sign and the words');
+    assert.ok(books.journalEntries.every((e) => e.amount > 0), 'no negative amounts');
+  }
+});
+
 test('without its report the payout is held for the person, nothing booked: the question names the missing report, the proposal is the whole payout at the rule\'s rate; with the report and no model it waits', async () => {
   const ws = company();
   const alone = booksOf([payout('PO')]);
