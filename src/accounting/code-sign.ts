@@ -11,10 +11,12 @@ import { chart } from '../engines/index.js';
  * minus (-M81); a sales code (V) on a line that debits revenue is a customer refund (-V81). The
  * plain code there would claim input tax on money received, or declare turnover on money paid out.
  * Undefined when the accounts give no direction: a correction on one account, a VAT-only leg
- * (M81-2), Bezugsteuer, an export code, two balance-sheet accounts.
+ * (M81-2), Bezugsteuer, an export code, two balance-sheet accounts. A negative `amount` turns
+ * the money around (a refund line of a payout report the model writes as -40 on 1020/3400).
  */
-export function codeSignFor(code: string | undefined, accountDebit: string | undefined, accountCredit: string | undefined): string | undefined {
+export function codeSignFor(code: string | undefined, debitAccount: string | undefined, creditAccount: string | undefined, amount = 0): string | undefined {
   const m = /^(-?)([MIV])(\d+)$/.exec(code ?? '');
+  const [accountDebit, accountCredit] = amount < 0 ? [creditAccount, debitAccount] : [debitAccount, creditAccount];
   if (!m || !accountDebit || !accountCredit || accountDebit === accountCredit) return undefined;
   const side = m[2] === 'V' ? 'revenue' : 'expense';
   const debit = chart().typeOf(accountDebit) === side;

@@ -98,7 +98,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: transfer ? undefined : signed(permittedCode(e.vatCode), accountDebit, accountCredit),
+      vatCode: transfer ? undefined : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount),
       description: e.description || tx.description,
     });
   });
@@ -475,7 +475,7 @@ function withCreditNoteCodes(books: Books, tx: BankTransaction, entries: Journal
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
 /** The model's code with the sign the accounts give it (r9h-11): a credit note's M0 becomes -M0, whatever the model wrote. */
-const signed = (code: string | undefined, accountDebit: string, accountCredit: string): string | undefined => codeSignFor(code, accountDebit, accountCredit) ?? code;
+const signed = (code: string | undefined, accountDebit: string, accountCredit: string, amount: number): string | undefined => codeSignFor(code, accountDebit, accountCredit, amount) ?? code;
 
 export interface ClassifyDeps {
   /** Absent: no model; what no rule decides is left in `unasked`. */
