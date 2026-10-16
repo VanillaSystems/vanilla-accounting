@@ -33,6 +33,15 @@ test('customers: created with the workspace terms; an address without town is re
   assert.equal(bad.status, 400);
   assert.equal(bad.json.invoiceRefusal, 'incomplete');
   assert.deepEqual(bad.json.missing, [{ field: 'customer.address' }], 'the UI names what is missing, never «address braucht postcode»');
+  // A Swiss UID has a check digit (r8c-18): 333 is wrong, 338 right; a foreign VAT number is any text.
+  const wrongUid = await api.send('POST', '/api/customers', { ...customer, vatId: 'CHE-111.222.333 MWST' });
+  assert.equal(wrongUid.status, 400);
+  assert.equal(wrongUid.json.invoiceRefusal, 'uid');
+  const rightUid = await api.send('POST', '/api/customers', { ...customer, name: 'Muster UID AG', vatId: 'CHE-111.222.338 MWST' });
+  assert.equal(rightUid.status, 200, String(rightUid.json.error));
+  assert.equal(rightUid.json.vatId, 'CHE-111.222.338 MWST');
+  const foreign = await api.send('POST', '/api/customers', { ...customer, name: 'Muster DE GmbH', vatId: 'DE999999999' });
+  assert.equal(foreign.status, 200, String(foreign.json.error));
 });
 
 test('drafts: created in the customer language, changed, deleted; a draft has no number', async () => {

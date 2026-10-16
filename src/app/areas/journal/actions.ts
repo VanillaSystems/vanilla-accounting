@@ -7,6 +7,7 @@ import type { JournalEntry } from '../../../types/index.js';
 import type { BookingLine } from '../../../accounting/manual-booking.js';
 import { api, errorText, type JournalEntryInput, type JournalEntryPatch } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
+import { fmt } from '../../lib/utils.js';
 import type { Nav } from '../index.js';
 
 async function run<T>(nav: Nav, call: () => Promise<T>, message: (r: T) => string, undo?: (r: T) => Promise<unknown>): Promise<T | undefined> {
@@ -51,8 +52,12 @@ export function saveEntry(nav: Nav, e: JournalEntry, patch: JournalEntryPatch, c
 export const deleteEntry = (nav: Nav, e: JournalEntry) =>
   run(nav, () => api.deleteJournalEntry(e.id), () => t('journal.deleted', { id: e.transactionRef }), () => api.createJournalEntry(inputOf(e)));
 
+/** A booking in a toast: Soll / Haben, its code, its amount (r8c-21: not the bank's reference). */
+export const bookingLine = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount'>): string =>
+  `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} · ${fmt(e.amount)}`;
+
 export const createEntry = (nav: Nav, input: JournalEntryInput) =>
-  run(nav, () => api.createJournalEntry(input), (entry) => t('journal.created', { ref: entry.transactionRef }), (entry) => api.deleteJournalEntry(entry.id));
+  run(nav, () => api.createJournalEntry(input), (entry) => t('journal.created', { line: bookingLine(entry) }), (entry) => api.deleteJournalEntry(entry.id));
 
 /** An accrual and its reversal on the next 1.1., booked in one step; undo removes both. */
 export const createWithReversal = (nav: Nav, input: JournalEntryInput, reversal: JournalEntryInput) =>
@@ -83,7 +88,7 @@ export function reclassify(nav: Nav, ref: string, before: JournalEntry[], overwr
 
 /** A payment booked by hand in one or more lines (src/server/edits.ts bookPayment); undo deletes them again. */
 export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[]) =>
-  run(nav, () => api.bookPayment(ref, lines), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { ref })), async (entries) => {
+  run(nav, () => api.bookPayment(ref, lines), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { line: bookingLine(entries[0]) })), async (entries) => {
     for (const e of entries) await api.deleteJournalEntry(e.id);
   });
 

@@ -62,7 +62,7 @@ function NewInvoice({ customers, nav }: Props & { customers: Customer[] }) {
   const list = useMemo(() => [...customers].sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !q || `${c.name} ${c.address.town}`.toLowerCase().includes(q.toLowerCase())), [customers, q]);
   const pick = (k: number) => {
     const c = list[k];
-    if (!c) { setUi({ dialog: { kind: 'customer', then: 'invoice' } }); return; }
+    if (!c) { setUi({ dialog: { kind: 'customer', then: 'invoice', ...(q.trim() && { name: q.trim() }) } }); return; }
     close();
     void newDraftFor(nav, c);
   };
@@ -131,7 +131,9 @@ function fieldsOf(f: Form): CustomerFields {
 function CustomerDialog({ customer, nav }: Props & { customer?: Customer }) {
   const s = useUi();
   const then = s.dialog?.kind === 'customer' ? s.dialog.then : undefined;
-  const [f, setF] = useState<Form>(() => formOf(customer));
+  // N › a name nobody has yet › ↵: the name typed is the new customer's (r8c-17).
+  const typedName = s.dialog?.kind === 'customer' ? s.dialog.name : undefined;
+  const [f, setF] = useState<Form>(() => ({ ...formOf(customer), name: customer?.name ?? typedName ?? '' }));
   const [tried, setTried] = useState(false);
   const langChosen = useRef(!!customer);
   const country = countryOf(f.countryText);
@@ -264,7 +266,7 @@ function SendDialog({ inv, nav, reminder }: Props & { inv: Issued; reminder?: Om
     close();
     if (reminder) setUi({ reminder: null, preview: false });
   };
-  const label = reminder ? t('invoices.sendReminder', { level: reminder.level }) : t('invoices.sendTitle', { number: inv.number });
+  const label = reminder ? t('invoices.sendReminder', { level: reminder.level }) : t(inv.kind === 'credit-note' ? 'invoices.sendTitleCredit' : 'invoices.sendTitle', { number: inv.number });
   const foot = (
     <>
       <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>

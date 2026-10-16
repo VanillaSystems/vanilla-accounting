@@ -7,6 +7,7 @@ import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } 
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { companyInfo } from '../../books/company.js';
 import { WorkspaceError } from '../../workspace/workspace.js';
+import { parseIban } from '../../workspace/banks.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
@@ -79,7 +80,15 @@ function profilePatch(raw: unknown): ProfilePatch {
 
 function bankPatch(raw: unknown): BankPatch {
   const b = patchBody(raw, ['bank', 'currency', 'label', 'iban']);
-  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), label: optText(b, 'label') ?? undefined, iban: optText(b, 'iban') };
+  const iban = optText(b, 'iban');
+  // Refused here with a code, so the page says it in the person's words (r8c-19); the manifest's reader checks it again.
+  if (iban && !parseIban(iban)) throw new RequestError(400, `«${iban}» ist keine IBAN (Länge oder Prüfziffern).`, { code: 'iban', params: { iban } });
+  if (iban === null) {
+    const bank = WS.bankAccounts.find((a) => a.bank === stringField(b, 'bank') && a.currency === stringField(b, 'currency'));
+    const printed = bank && Object.entries(WS.invoicing?.payTo ?? {}).find(([, to]) => to?.account === bank.account);
+    if (printed) throw new RequestError(400, `Die IBAN von ${bank.account} steht auf den Rechnungen in ${printed[0]}. Zuerst unter Rechnungslayout › Zahlungskonten ein anderes Konto wählen.`, { code: 'ibanOnInvoices', params: { currency: printed[0], account: bank.account } });
+  }
+  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), label: optText(b, 'label') ?? undefined, iban };
 }
 
 function newBank(raw: unknown): NewBank {

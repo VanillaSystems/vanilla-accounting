@@ -12,7 +12,7 @@ export type Section = 'draft' | 'look' | 'customer' | 'sent' | 'comments' | 'log
 export type Dialog =
   | { kind: 'new' }
   /** The customer form; `then` names what follows a new customer: a draft for it, or the draft being written gets it. */
-  | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string } }
+  | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string }; name?: string }
   | { kind: 'cancel' }
   | { kind: 'credit' }
   | { kind: 'delete' }

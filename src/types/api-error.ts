@@ -73,6 +73,10 @@ export type ApiRefusal =
   | { code: 'invoicingNotSetUp' }
   /** Firma › Rechnungslayout › Zahlungskonten: the account named is no bank account of that currency. */
   | { code: 'payToAccount'; params: { currency: string } }
+  /** Firma › Bankkonten: a text that is no IBAN (length or check digits). */
+  | { code: 'iban'; params: { iban: string } }
+  /** Firma › Bankkonten: the IBAN cleared is printed on invoices (invoicing.payTo); pick another account under Rechnungslayout first. */
+  | { code: 'ibanOnInvoices'; params: { currency: string; account: string } }
   | { code: 'unknownCustomer' }
   | { code: 'amountZero' }
   | { code: 'noAccount' }

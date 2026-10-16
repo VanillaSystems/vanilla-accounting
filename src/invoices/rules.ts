@@ -193,7 +193,7 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
 export class InvoiceRuleError extends Error {
   constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[]) { super(message); }
 }
-export type InvoiceRefusal = 'incomplete' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed';
+export type InvoiceRefusal = 'incomplete' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid';
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment

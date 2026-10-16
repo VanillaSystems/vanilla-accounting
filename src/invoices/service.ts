@@ -5,6 +5,7 @@
  * given twice and nothing saves over another change.
  */
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { parseUid } from '../workspace/uid.js';
 import { extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
@@ -132,6 +133,11 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   const out: Partial<CustomerFields> = {};
   if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.', [{ field: 'customer.name' }]); out.name = (b.name as string).trim(); }
   for (const k of ['attn', 'vatId', 'email'] as const) if (b[k] !== undefined) { if (!isText(b[k])) bad(`${k} ist ein Text.`); out[k] = (b[k] as string).trim(); }
+  // A Swiss UID carries a check digit (r8c-18): a typo is caught here; a foreign VAT number is any text.
+  if (out.vatId && /^CHE/i.test(out.vatId)) {
+    const parsed = parseUid(out.vatId.replace(/\s*(MWST|TVA|IVA|VAT)$/i, ''));
+    if ('error' in parsed) throw new InvoiceRuleError('uid', parsed.error);
+  }
   if (b.language !== undefined || !partial) { if (!INVOICE_LANGUAGES.includes(b.language as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = b.language as CustomerFields['language']; }
   if (b.paymentTermsDays !== undefined) { if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 0) bad('paymentTermsDays ist eine ganze Zahl von Tagen.'); out.paymentTermsDays = b.paymentTermsDays as number; }
   if (b.address !== undefined || !partial) {

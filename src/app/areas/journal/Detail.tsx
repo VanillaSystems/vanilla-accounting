@@ -29,7 +29,7 @@ const say: Say = (key, vars) => t(key, vars as never);
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
-import { journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
+import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
 import { createEntry, inputOf, reclassify, saveEntry, type Field } from './actions.js';
 import { RunLink } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -138,7 +138,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         : v.locked && (
           <div className="notice">
             {ICONS.lock}<span>{t('journal.lockedNotice', { period: quarterName(e.date) })}</span>
-            {canEdit && open && <a href="#" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: periodName(open) })}</a>}
+            {canEdit && open && <a href="#" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: correctionPeriodName(props.books) })}</a>}
           </div>
         )}
 

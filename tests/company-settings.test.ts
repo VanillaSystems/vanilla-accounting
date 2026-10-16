@@ -125,6 +125,22 @@ const INVOICING = `${MANIFEST}invoicing:
     de: { closing: "Zahlbar innert {days} Tagen." }
 `;
 
+test('API: an IBAN that is none, and clearing the IBAN invoices are paid to, are refused in words the UI can say (r8c-19)', async () => {
+  const api = await startApi('tests/fixtures/period-lock-index.json');
+  try {
+    const bad = await api.send('PATCH', '/api/workspace', { banks: [{ bank: 'Raiffeisen', currency: 'CHF', iban: 'CH94 0076 2011 6238 5295 7' }] });
+    assert.equal(bad.status, 400);
+    assert.deepEqual([bad.json.code, (bad.json as { params?: { iban?: string } }).params?.iban], ['iban', 'CH94 0076 2011 6238 5295 7']);
+    const cleared = await api.send('PATCH', '/api/workspace', { banks: [{ bank: 'Raiffeisen', currency: 'CHF', iban: null }] });
+    assert.equal(cleared.status, 400);
+    assert.deepEqual([cleared.json.code, (cleared.json as { params?: { currency?: string } }).params?.currency], ['ibanOnInvoices', 'CHF']);
+    const label = await api.send('PATCH', '/api/workspace', { banks: [{ bank: 'Raiffeisen', currency: 'CHF', label: 'Raiffeisen Geschäft' }] });
+    assert.equal(label.status, 200, 'a label alone changes');
+  } finally {
+    await api.stop();
+  }
+});
+
 test('Rechnungslayout: layout fields, elements and texts land in the invoicing block; null takes the app default again', () => {
   const { text, manifest } = patchManifestText(INVOICING, {
     invoicing: {

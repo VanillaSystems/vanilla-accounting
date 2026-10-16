@@ -21,6 +21,7 @@ import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView, vatChipOf } f
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
+import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { correctFiled, deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
@@ -145,7 +146,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {v.locked && (
         <div className="notice">
           {ICONS.lock}<span>{t('receipts.lockedNotice', { period: lockedPeriod(v, l) })}</span>
-          <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: open ? periodName(open) : '' })}</a>
+          <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: correctionPeriodName(props.books) })}</a>
         </div>
       )}
       {!v.locked && !v.links.length && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} />}

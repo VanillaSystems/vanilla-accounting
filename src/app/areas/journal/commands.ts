@@ -3,7 +3,8 @@ import type { Index, JournalEntry, Receipt } from '../../../types/index.js';
 import { correctionKinds, correctionOf, correctionReceipts, receiptRate, type CorrectionKind } from '../../../accounting/correction.js';
 import { ownerAccount } from '../../../accounting/bank-accounts.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
-import { localToday, booksOpenPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, filingKeyOf, parsePeriod, type Period } from '../../../accounting/periods.js';
+import { periodName } from '../../lib/period-label.js';
 import type { RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
@@ -34,6 +35,9 @@ export function newEntryDate(books: Index): string {
   const closed = books.config?.closedThrough;
   return closed && today <= closed ? openPeriod(books).from : today;
 }
+
+/** The filing period a correction booked now lands in, by name: the one holding newEntryDate, not the first open one (r8c-27). */
+export const correctionPeriodName = (books: Index): string => periodName(parsePeriod(filingKeyOf(newEntryDate(books), filing().length), localToday())!);
 
 export const splitReceipt = (r: Receipt) => splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
 
