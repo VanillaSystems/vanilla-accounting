@@ -227,3 +227,32 @@ test('a business\'s rule fires on the payer\'s IBAN alone, when neither the text
   assert.deepEqual(books.journalEntries.filter((e) => e.rule).map((e) => [e.transactionRef, e.accountCredit, e.vatCode]), [['BAUER-2', '3400', 'V0']]);
   assert.deepEqual(m.asked, ['OTHER-1'], 'another IBAN is not that customer');
 });
+
+test('a rule with a private share books two lines that add up to the payment: the business part with its VAT code, the owner\'s part on the owner\'s account without VAT (wishes3-6)', async () => {
+  const ws = company(RULES.replace('      - id: old-note', `      - id: natel-half
+        when: { text: "Natel" }
+        then: { account: "6570", vat: I81, private: 50 }
+        source: correction 2026-10-16
+      - id: old-note`));
+  const books = booksOf([
+    tx({ ref: 'NATEL-1', description: 'Rechnung November Natel', amount: 89 }),
+    tx({ ref: 'NATEL-2', description: 'Rechnung Dezember Natel', amount: 89.05 }),
+  ], [{ id: 'r1', ref: 'NATEL-1', hasSwissVat: true }]);
+  const m = model();
+  await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(m.asked, []);
+  const by = (ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
+  assert.deepEqual(by('NATEL-1'), [['6570', '1021', 44.5, 'I81'], ['2451', '1021', 44.5, '']]);
+  assert.deepEqual(by('NATEL-2'), [['6570', '1021', 44.52, 'I0'], ['2451', '1021', 44.53, '']], 'the Rappen add up; no receipt: the zero code');
+  const reason = books.journalEntries.find((e) => e.transactionRef === 'NATEL-2')!.reason;
+  assert.equal(reason, 'Regel: Text enthält «Natel» → Konto 6570 Informatik, Hosting, Software, MWST I81, 50 % privat; gebucht mit I0: kein Beleg zeigt Schweizer MWST');
+});
+
+test('a private share that is no percent is refused', () => {
+  const facts: RuleFacts = { account: () => true, vat: () => true, counterparty: () => true };
+  const why = (then: Record<string, unknown>) => { const r = parseRule({ id: 'a', when: { text: 'x' }, then }, facts); return r.ok ? r.rule.then : r.refusal.code; };
+  assert.deepEqual(why({ account: '6570', vat: 'I81', private: '50 %' }), { kind: 'book', booking: { account: '6570', vat: 'I81', private: 50 } });
+  assert.equal(why({ account: '6570', vat: 'I81', private: 100 }), 'share');
+  assert.equal(why({ account: '6570', vat: 'I81', private: 'half' }), 'share');
+  assert.equal(why({ ask: 'Wofür?', private: 50 }), 'share', 'a share needs the booking it splits');
+});

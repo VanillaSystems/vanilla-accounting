@@ -38,8 +38,12 @@ export interface RuleWhen {
   account?: string;
 }
 
-/** A booking a rule makes or proposes; `vat` null: no VAT code (a private share, a transfer). */
-export interface RuleBooking { account: string; vat: string | null }
+/**
+ * A booking a rule makes or proposes; `vat` null: no VAT code (a private share, a transfer).
+ * `private`: this percent of the payment is the owner's, on the owner's account without VAT; the
+ * rest goes on `account` with `vat` («das Natel ist zur Hälfte privat»: private 50).
+ */
+export interface RuleBooking { account: string; vat: string | null; private?: number }
 
 export type RuleThen =
   | { kind: 'book'; booking: RuleBooking }
@@ -66,6 +70,7 @@ export type RuleRefusal =
   | { code: 'vat'; params: { vat: string } }
   | { code: 'pattern'; params: { text: string } }
   | { code: 'amount' }
+  | { code: 'share'; params: { share: string } }
   | { code: 'direction'; params: { direction: string } }
   | { code: 'counterparty'; params: { counterparty: string } }
   | { code: 'payer'; params: { payer: string } };
@@ -80,7 +85,7 @@ export interface RuleFacts {
 }
 
 const WHEN_KEYS = new Set(['counterparty', 'payer', 'text', 'direction', 'amount', 'account']);
-const THEN_KEYS = new Set(['account', 'vat', 'ask']);
+const THEN_KEYS = new Set(['account', 'vat', 'ask', 'private']);
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
 
@@ -145,6 +150,11 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     if (!v) return no({ code: 'vat', params: { vat: '' } });
     if (v.toLowerCase() !== 'none' && !facts.vat(v)) return no({ code: 'vat', params: { vat: v } });
     booking = { account, vat: v.toLowerCase() === 'none' ? null : v };
+  }
+  if (t.private !== undefined) {
+    const share = typeof t.private === 'number' ? t.private : Number(String(t.private).replace(/\s*%$/, ''));
+    if (!booking || !Number.isFinite(share) || share <= 0 || share >= 100) return no({ code: 'share', params: { share: String(t.private) } });
+    booking.private = share;
   }
   let then: RuleThen;
   if (t.ask !== undefined) {
@@ -217,6 +227,7 @@ export interface RuleWordVars {
   'rules.say.any': Record<string, never>;
   'rules.say.book': { account: string; vat: string };
   'rules.say.bookNoVat': { account: string };
+  'rules.say.private': { percent: string };
   'rules.say.ask': { question: string };
   'rules.say.askWith': { question: string; booking: string };
 }
@@ -238,8 +249,9 @@ function patternWords(p: string, w: RuleWords): string {
 
 const accountWords = (n: string, names: RuleNames) => { const name = names.account(n); return name ? `${n} ${name}` : n; };
 
-function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
-  return b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
+export function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
+  const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
+  return b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main;
 }
 
 /** The rule in one line: «Swisscom → Konto 6510 Telefon» and its VAT code. */

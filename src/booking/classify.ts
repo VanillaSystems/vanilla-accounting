@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext } from '../llm/prompts.js';
 import { NoClaudeError, type AskOptions } from '../llm/ask.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
-import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
@@ -21,7 +21,7 @@ import { lookupVatCode } from '../accounting/vat-codes.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { wordsIn } from '../export/texts.js';
-import { ruleFor, ruleWords, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
+import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 
 export const BATCH_SIZE = 10;
@@ -123,6 +123,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   rules?: readonly PlacedRule[];
   /** The businesses a payment can route to, for a rule of one business. */
   counterparties?: readonly Counterparty[];
+  /** The owner's private account (its number): where a rule's private share goes. */
+  ownerAccount?: string;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -191,6 +193,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     casebook: loadCases(),
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
+    ownerAccount: ownerAccount(ws).split(' ')[0],
   };
 }
 
@@ -209,15 +212,20 @@ export function ruleLine(placed: PlacedRule, context: Pick<ClassifyContext, 'cha
   return ruleWords(placed, names, (key, vars) => de.t(key, vars as Record<string, string>)).line;
 }
 
-/** The rule that decides `tx`, if one does: its business by routing, its amount in the books' currency at the payment day's rate. */
-export function ruleOfPayment(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): PlacedRule | undefined {
-  if (!context.rules?.length) return undefined;
+/** What a rule sees of `tx`: its business by routing, its bank account, its amount in the books' currency at the payment day's rate. */
+export function paymentFacts(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): PaymentFacts {
   const routing = identify(signalsOfTransaction(tx, mappedReceipts(books, tx)), context.counterparties ?? []);
   const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
-  return ruleFor(context.rules, {
+  return {
     tx, counterparty: routing.kind === 'known' ? routing.counterparty : undefined,
     bankAccount: bankAccountFor(tx, context.bankAccounts), amount: tx.amount * rate,
-  });
+  };
+}
+
+/** The rule that decides `tx`, if one does. */
+export function ruleOfPayment(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): PlacedRule | undefined {
+  if (!context.rules?.length) return undefined;
+  return ruleFor(context.rules, paymentFacts(books, tx, context, fx));
 }
 
 /**
@@ -236,17 +244,37 @@ export function ruleVatCode(code: string | null, tx: BankTransaction, swissVat: 
   return back ? `-${unsigned}` : unsigned;
 }
 
-/** The entry a rule's booking makes for `tx`: the whole amount on the rule's account, the bank on the other side, stamped with the rule. */
+/** A rule's booking line as it lands: account, VAT code (none: no code) and amount, the bank on the other side. */
+export interface RuleLine { account: string; vat?: string; amount: number }
+
+/**
+ * What a rule's booking books for `tx`: the whole amount on the rule's account with its VAT code
+ * (ruleVatCode), or, with a private share, that share on the owner's account without VAT and the
+ * rest on the rule's account. The lines add up to what the bank paid, to the Rappen.
+ */
+export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, swissVat: boolean, owner: string | undefined): RuleLine[] {
+  const vat = ruleVatCode(booking.vat, tx, swissVat);
+  const whole: RuleLine = { account: booking.account, ...(vat ? { vat } : {}), amount: tx.amount };
+  if (!booking.private || !owner) return [whole];
+  const total = Math.round(tx.amount * 100);
+  const own = Math.round((total * booking.private) / 100);
+  return [{ ...whole, amount: (total - own) / 100 }, { account: owner, amount: own / 100 }];
+}
+
+/** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
 export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRule, booking: RuleBooking, context: ClassifyContext, fx: FxResolver): JournalEntry[] {
   const mapped = mappedReceipts(books, tx);
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const out = tx.direction === 'DBIT';
-  const line: ClassifyEntry = {
-    accountDebit: out ? booking.account : '', accountCredit: out ? '' : booking.account, amount: tx.amount,
-    vatCode: ruleVatCode(booking.vat, tx, mapped.some((r) => r.hasSwissVat)) ?? '', description: merchantOf(tx.description),
-  };
+  const lines = ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount);
+  const entries: ClassifyEntry[] = lines.map((l) => ({
+    accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description),
+  }));
   const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
-  return entriesFor(tx, [line], { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}` })
+  const code = lines[0].vat;
+  // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
+  const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
+  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}${zero}` })
     .map((e) => ({ ...e, rule: placed.rule.id }));
 }
 
