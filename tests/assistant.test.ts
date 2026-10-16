@@ -315,3 +315,16 @@ test('cash basis: the AI never dates a payment\'s booking off the payment\'s dat
     rmSync(log, { recursive: true, force: true });
   }
 });
+
+test('a booking changed by hand or by the AI drops the classifier\'s reason, which no longer explains it; its undo puts the reason back; a new text alone keeps it (wishes3-11)', async () => {
+  const { applyChange, setEntry } = await import('../src/server/edits.js');
+  const books = loadBooks(workspaceAt(DEMO_ROOT));
+  const e = books.journalEntries.find((x) => x.date > books.config.closedThrough! && !x.origin)!;
+  e.reason = 'Gerüstmiete, auf 4400, M81';
+  const undo = setEntry(books, e.id, { accountDebit: '6105', vatCode: 'I81' });
+  assert.equal(e.reason, undefined, 'the old reason is gone with the accounts it named');
+  applyChange(books, undo);
+  assert.equal(e.reason, 'Gerüstmiete, auf 4400, M81');
+  setEntry(books, e.id, { description: 'Gerüst' });
+  assert.equal(e.reason, 'Gerüstmiete, auf 4400, M81', 'a new text says nothing against the booking');
+});

@@ -125,6 +125,9 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   if (set.vatCode !== undefined) { before.vatCode = e.vatCode ?? ''; e.vatCode = set.vatCode || undefined; }
   if (set.description !== undefined) { before.description = e.description ?? ''; e.description = set.description || undefined; }
   if (set.amount !== undefined) { before.amount = e.amount; e.amount = set.amount; }
+  // The classifier's reason explains the booking it made; once its accounts, code or amount change, it no longer does.
+  if (set.reason !== undefined) { if (set.reason) e.reason = set.reason; else delete e.reason; }
+  else if (e.reason && (['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const).some((k) => k in set)) { before.reason = e.reason; delete e.reason; }
   const origin = set.origin === undefined ? 'manual' : set.origin;
   if (origin) e.origin = origin;
   else delete e.origin;
