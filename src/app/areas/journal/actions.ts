@@ -6,6 +6,7 @@
 import type { JournalEntry } from '../../../types/index.js';
 import type { BookingLine } from '../../../accounting/manual-booking.js';
 import { api, errorText, type JournalEntryInput, type JournalEntryPatch } from '../../lib/api.js';
+import { undoInput } from '../../../books/entry-input.js';
 import { t } from '../../i18n/index.js';
 import { fmt } from '../../lib/utils.js';
 import type { Nav } from '../index.js';
@@ -23,21 +24,6 @@ async function run<T>(nav: Nav, call: () => Promise<T>, message: (r: T) => strin
   return result;
 }
 
-/** The entry as a new one would book it again: what an undo of a delete or a re-classify sends. */
-export const inputOf = (e: JournalEntry): JournalEntryInput => ({
-  id: e.id,
-  transactionRef: e.transactionRef,
-  date: e.date,
-  accountDebit: e.accountDebit,
-  accountCredit: e.accountCredit,
-  amount: e.amount,
-  description: e.description || e.transactionRef,
-  ...(e.vatCode && { vatCode: e.vatCode }),
-  ...(e.exchangeCurrency && e.exchangeRate !== undefined && { exchangeCurrency: e.exchangeCurrency, exchangeRate: e.exchangeRate }),
-  ...(e.corrects && { corrects: e.corrects }),
-  ...(e.origin && { origin: e.origin }),
-});
-
 export type Field = 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount' | 'description';
 
 /** Saves the fields that changed; undo writes back what they were. */
@@ -50,7 +36,7 @@ export function saveEntry(nav: Nav, e: JournalEntry, patch: JournalEntryPatch, c
 }
 
 export const deleteEntry = (nav: Nav, e: JournalEntry) =>
-  run(nav, () => api.deleteJournalEntry(e.id), () => t('journal.deleted', { id: e.transactionRef }), () => api.createJournalEntry(inputOf(e)));
+  run(nav, () => api.deleteJournalEntry(e.id), () => t('journal.deleted', { id: e.transactionRef }), () => api.createJournalEntry(undoInput(e)));
 
 /** A booking in a toast: Soll / Haben, its code, its amount (r8c-21: not the bank's reference). */
 export const bookingLine = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount'>): string =>
@@ -82,7 +68,7 @@ export const createWithReversal = (nav: Nav, input: JournalEntryInput, reversal:
 export function reclassify(nav: Nav, ref: string, before: JournalEntry[], overwrite = false) {
   return run(nav, () => api.classifyTransaction(ref, overwrite), (entries) => t('journal.reclassified', { n: entries.length }), async (entries) => {
     for (const e of entries) await api.deleteJournalEntry(e.id);
-    for (const e of before) await api.createJournalEntry(inputOf(e));
+    for (const e of before) await api.createJournalEntry(undoInput(e));
   });
 }
 
@@ -96,5 +82,5 @@ export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[]) =>
 export const attachEntries = (nav: Nav, ref: string, own: string) =>
   run(nav, () => api.attachEntries(ref, own), () => t('journal.attached', { own, ref }), async (before) => {
     for (const e of before) await api.deleteJournalEntry(e.id);
-    for (const e of before) await api.createJournalEntry(inputOf(e));
+    for (const e of before) await api.createJournalEntry(undoInput(e));
   });

@@ -191,10 +191,8 @@ type Linked = Ok & { again: string[]; kept?: string[] };
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };
 /** A new entry by hand; `id` and `transactionRef` put a deleted one back (undo). */
-export type JournalEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount'> & { description: string }
-  & Partial<Pick<JournalEntry, 'id' | 'transactionRef' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate' | 'corrects' | 'origin'>>
-  /** A correction of a filed entry: the entry it corrects and what was wrong, for its case (r8c-6). */
-  & { correctsEntry?: string; correction?: 'vat' | 'account' | 'storno' };
+import type { JournalEntryInput } from '../../books/entry-input.js';
+export type { JournalEntryInput };
 export type ManualTransactionInput ={ date: string; description: string; amount: number; currency: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening };

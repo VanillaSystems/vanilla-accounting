@@ -31,7 +31,8 @@ import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { bookingWarnings } from '../../../accounting/booking-warnings.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
-import { createEntry, inputOf, reclassify, saveEntry, type Field } from './actions.js';
+import { createEntry, reclassify, saveEntry, type Field } from './actions.js';
+import { undoInput } from '../../../books/entry-input.js';
 import { RunLink } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { showConversation } from '../../assistant/store.js';
@@ -58,7 +59,7 @@ export function Detail(props: Props) {
 
 /** The place of an entry just deleted: nothing moves under the pointer, and the undo stays while its place is shown, also after leaving and coming back (r6h-28, r7h-31). */
 function Deleted({ e, nav }: { e: JournalEntry; nav: AreaProps<RouteOf<'journal'>>['nav'] }) {
-  const back = () => { createEntry(nav, inputOf(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); selectNew(nav, entry.id); } }); };
+  const back = () => { createEntry(nav, undoInput(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); selectNew(nav, entry.id); } }); };
   return (
     <div className="detail-empty" data-testid="deleted">
       <div>
