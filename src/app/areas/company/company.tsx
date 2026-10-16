@@ -564,7 +564,7 @@ function Opening({ books, nav, canEdit }: Props) {
   const sum = (d: string) => Math.round(rows.filter(([a]) => a[0] === d).reduce((s, [, v]) => s + v * 100, 0)) / 100;
   const [assets, liabilities] = [sum('1'), sum('2')];
   const lock = openingLock(books, year);
-  const equity = yearEndAccounts(Object.keys(names)).retainedEarnings;
+  const equity = yearEndAccounts(Object.keys(names), ws?.company.legalForm).resultTo;
   const foreign = new Set((ws?.bankAccounts ?? []).filter((b) => b.currency !== baseCurrency()).map((b) => b.account));
   const [n, setN] = useState(0);
   const [err, setErr] = useState('');

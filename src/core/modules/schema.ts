@@ -197,12 +197,24 @@ export type StatementsVat = (typeof STATEMENTS_VAT)[number];
 /** A guided year-end entry; a blank account is the user's pick. */
 export interface YearEndTemplate { id: string; accountDebit: string; accountCredit: string; vatCode?: string; /** Only for these legal forms (a GmbH's tax provision; an Einzelfirma's owner pays the income tax). */ legalForms?: string[] }
 
-/** year-end.yaml: the accounts the year close books on, its entry forms, the dividend's withholding tax. */
+/**
+ * How one legal form closes the year's result and uses the profit (year-end.yaml `byLegalForm`).
+ * Accounts are candidates: the first the chart has wins.
+ */
+export interface ResultCloseData {
+  /** The equity account the result is carried to when the next year opens. */
+  resultTo: string[];
+  /** The owner's private account whose balance closes into `resultTo` with the year (an Einzelfirma's Privat). */
+  privateInto?: string[];
+  /** The profit allocation after the shareholders' resolution; absent where the profit is the owner's without one. */
+  allocation?: { reserve: string; dividend: string; withholdingTax: string; withholdingTaxRate: number };
+}
+
+/** year-end.yaml: the accounts the year close books on, its entry forms, and the close of the result by legal form. */
 export interface YearEndData {
-  accounts: { retainedEarnings: string[]; fxDifference: string[]; vatSettlement: string[]; vat: string[]; receivables: string[] };
+  accounts: { fxDifference: string[]; vatSettlement: string[]; vat: string[]; receivables: string[] };
   templates: YearEndTemplate[];
-  profitAllocation: { accountDebit: string; accountCredit: string };
-  withholdingTaxRate: number;
+  byLegalForm: Record<string, ResultCloseData> & { otherwise: ResultCloseData };
 }
 
 /** invoicing.yaml: the rates an invoice line offers, and a 0 % line's deduction box by exemption. */

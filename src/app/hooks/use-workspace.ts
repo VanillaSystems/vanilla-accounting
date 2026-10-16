@@ -6,6 +6,9 @@ type WorkspaceInfo = Awaited<ReturnType<typeof api.workspace>>;
 
 let cached: Promise<WorkspaceInfo> | undefined;
 let loaded: WorkspaceInfo | undefined;
+
+/** The workspace as last loaded, for code outside a component (an area's keys or palette); undefined before the first load. */
+export const loadedWorkspace = (): WorkspaceInfo | undefined => loaded;
 const listeners = new Set<() => void>();
 
 /**

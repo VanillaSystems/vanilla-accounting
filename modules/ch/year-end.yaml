@@ -1,9 +1,8 @@
 # The Swiss year close (OR Art. 957 ff.): the accounts it books on, the entries it offers as
-# prefilled forms, and the Verrechnungssteuer on a dividend (VStG Art. 13). An account role lists
-# candidates; the first one the workspace's chart has wins.
+# prefilled forms, and how the result is closed and the profit used by legal form. An account role
+# lists candidates; the first one the workspace's chart has wins.
 
 accounts:
-  retainedEarnings: ["2970"]
   fxDifference: ["6960", "6950"]
   vatSettlement: ["2201", "2200"]
   vat: ["1170", "1171", "2200", "2201"]
@@ -25,7 +24,16 @@ templates:
   - { id: socialInsurance, accountDebit: "5700", accountCredit: "2270" }
   - { id: doubtfulAccounts, accountDebit: "3805", accountCredit: "1109" }
 
-# After the shareholders' resolution, dated in the new year.
-profitAllocation: { accountDebit: "2970", accountCredit: "2950" }
-
-withholdingTaxRate: 0.35
+# How the year's result is closed and the profit used, by legal form; `otherwise` is a company
+# with share capital. `resultTo` takes the result when the next year opens; `privateInto` is the
+# owner's private account whose balance closes into it with the year; `allocation` is the profit
+# allocation after the shareholders' resolution, dated in the new year, with the Verrechnungssteuer
+# on the dividend (VStG Art. 13). An allocation account the chart lacks is not offered.
+byLegalForm:
+  # The profit is the owner's: no resolution, no dividend, no Verrechnungssteuer; she takes it as Privatbezüge.
+  Einzelfirma:
+    resultTo: ["2800", "2850"]
+    privateInto: ["2850"]
+  otherwise:
+    resultTo: ["2970"]
+    allocation: { reserve: "2950", dividend: "2451", withholdingTax: "2206", withholdingTaxRate: 0.35 }

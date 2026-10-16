@@ -1,6 +1,7 @@
 /**
- * The year-end in seven steps (docs/year-end.md), each step's state and the checks of step 2,
- * all read off the close the API computed. Texts in the user's language.
+ * The year-end in seven steps (docs/year-end.md; six for a legal form without a profit allocation,
+ * r10f-28), each step's state and the checks of step 2, all read off the close the API computed.
+ * Texts in the user's language.
  */
 import { unbookedRefs, type Problem, type YearClose } from '../../../accounting/year-close.js';
 import type { YearCloseView } from '../../lib/api.js';
@@ -10,14 +11,8 @@ import { filingKeyOf } from '../../../accounting/periods.js';
 import { chargesVat, filing } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 
-export const STEPS = ['q4', 'checks', 'entries', 'close', 'open', 'profit', 'handover'] as const;
-export type Step = (typeof STEPS)[number];
-export const DEFAULT_STEP: Step = 'checks';
-export const stepOf = (s: string | undefined): Step => (STEPS as readonly string[]).includes(s ?? '') ? s as Step : DEFAULT_STEP;
-/** A link names a step there is none of (urls.md rule 5). */
-export const stepGone = (s: string | undefined): boolean => s !== undefined && !(STEPS as readonly string[]).includes(s);
-
-export const GROUPS = [['close.groupBefore', ['q4', 'checks', 'entries']], ['close.groupClose', ['close', 'open']], ['close.groupAfter', ['profit', 'handover']]] as const;
+export { STEPS, DEFAULT_STEP, groupsFor, stepGone, stepOf, stepsFor, type Step } from './model.js';
+import { STEPS, type Step } from './model.js';
 
 /** The year's last filing period as the form names it: Q4, or H2 for a firm filing half-yearly; a firm without returns has the whole year sealed (r6f-14). */
 export const lastPeriodOf = (year: string): string => (chargesVat() ? filingKeyOf(`${year}-12-31`, filing().length).slice(5) : t('close.wholeYear'));

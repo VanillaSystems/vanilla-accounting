@@ -306,7 +306,7 @@ router.put('/api/opening-balances/:year/:account', (req, res) => {
   const amount: unknown = req.body?.amount;
   if (!/^\d{4}$/.test(year)) throw new RequestError(400, 'Kein Jahr.');
   if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount))) throw new RequestError(400, 'Betrag fehlt.');
-  const equity = yearEndAccounts(chartOf(WS)).retainedEarnings;
+  const equity = yearEndAccounts(chartOf(WS), WS.company.legalForm).resultTo;
   const side = chart().sideOf(account);
   const refuse = (reason: 'notBalanceSheet' | 'equity' | 'foreign', text: string) => new RequestError(400, text, { code: 'openingAccount', params: { account, reason } });
   if (side !== 'assets' && side !== 'liabilities') throw refuse('notBalanceSheet', `Konto ${account} ist kein Bilanzkonto.`);

@@ -32,7 +32,7 @@ function print(o: Opening): void {
     const native = o.native[account];
     console.log(`  ${account}  ${chf(value).padStart(14)}${native ? `   ${native.currency} ${chf(native.amount)}` : ''}`);
   }
-  console.log(`\n  Result ${closed}: ${o.result >= 0 ? 'profit' : 'loss'} CHF ${chf(Math.abs(o.result))}, carried to ${o.retainedEarnings} (profit allocation is a later entry of its own)`);
+  console.log(`\n  Result ${closed}: ${o.result >= 0 ? 'profit' : 'loss'} CHF ${chf(Math.abs(o.result))}, carried to ${o.resultTo}`);
   console.log(`  Aktiven ${chf(o.totalAssets)}  Passiven ${chf(o.totalLiabilities)}  ${o.residual === 0 ? '✓ balanced' : `✗ difference ${chf(o.residual)}`}`);
   for (const c of o.causes) console.log(`    ${causeText(c)}`);
 }

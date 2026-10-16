@@ -21,7 +21,7 @@ import type { AreaProps, Nav } from '../index.js';
 import { closeYear as yearOfPage, useYearClose } from './data.js';
 import { useShellUi } from '../../shell/ui.js';
 import { configOf } from '../export/state.js';
-import { STEPS, stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
+import { stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, stepsFor, tx, type CheckRow, type Step } from './steps.js';
 import { correctionName } from '../../lib/vat-words.js';
 import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
@@ -47,12 +47,13 @@ export function Detail(props: Props) {
   const { route, query, books } = props;
   const year = yearOfPage(query.period, books);
   const { data, error } = useYearClose(year, books);
-  if (stepGone(route.step)) return <div className="detail-empty"><div>{t('close.stepGone')}</div></div>;
-  const step = stepOf(route.step);
+  const steps = stepsFor(useWorkspace()?.company.legalForm);
+  if (stepGone(route.step, steps)) return <div className="detail-empty"><div>{t('close.stepGone')}</div></div>;
+  const step = stepOf(route.step, steps);
   return (
     <div className="detail-in" key={step}>
       <div className="head">
-        <h2 className="who">{stepLabel(step, year)}<small>{t('close.stepOf', { n: STEPS.indexOf(step) + 1, year })}</small></h2>
+        <h2 className="who">{stepLabel(step, year)}<small>{t('close.stepOf', { n: steps.indexOf(step) + 1, total: steps.length, year })}</small></h2>
       </div>
       <div className="docbody">
         {error ? <p className="warnline">{error}</p> : !data ? <p className="m">{t('yearClose.loading')}</p> : <Step step={step} d={data} {...props} />}
@@ -358,11 +359,14 @@ function Confirm({ title, text, ok, onOk, onCancel }: { title: string; text: str
 function Open({ d, books, nav, canEdit }: StepProps) {
   const next = String(+d.year + 1);
   const names = getAccountMap();
-  const re = d.accounts.retainedEarnings;
+  const re = d.accounts.resultTo;
+  // An owner's firm (r10f-28): the result goes to her capital and the private account closes into it; a company's to Gewinnvortrag.
+  const priv = d.accounts.privateInto;
   const o = d.opening;
-  const lead = <p className="lead">{t('close.openLead', { year: next, account: re })}</p>;
+  const lead = <p className="lead">{priv ? t('close.openLeadOwner', { year: next, account: re, private: priv }) : t('close.openLead', { year: next, account: re })}</p>;
   if (!d.closed || !o) {
     const before = books.config?.openingBalances?.[d.year]?.[re] ?? 0;
+    const closedIn = priv ? d.ledger.balances[priv] ?? 0 : 0;
     return (
       <>
         {lead}
@@ -371,8 +375,9 @@ function Open({ d, books, nav, canEdit }: StepProps) {
           <dl className="kv2">
             <dt>{t('close.balanceTotal')}</dt><dd className="mono">{fmt(d.ledger.totalAssets)}</dd>
             <dt>{t('close.resultSoFar', { year: d.year })}</dt><dd className="mono">{fmt(d.ledger.result)}</dd>
-            <dt>{t('close.retainedToday', { account: re })}</dt><dd className="mono">{fmt(before)}</dd>
-            <dt>{t('close.retainedNew', { account: re })}</dt><dd className="mono"><b>{fmt(before + d.ledger.result)}</b></dd>
+            {priv && <><dt>{t('close.privateCloses', { account: priv })}</dt><dd className="mono">{fmt(closedIn)}</dd></>}
+            <dt>{t(priv ? 'close.capitalToday' : 'close.retainedToday', { account: re })}</dt><dd className="mono">{fmt(before)}</dd>
+            <dt>{t(priv ? 'close.capitalNew' : 'close.retainedNew', { account: re })}</dt><dd className="mono"><b>{fmt(Math.round((before + d.ledger.result + closedIn) * 100) / 100)}</b></dd>
           </dl>
           {d.ledger.residual !== 0 && <p className="warnline">{I.dot}{t('close.openChecks', { amount: fmt(d.ledger.residual) })}</p>}
         </div>
@@ -406,25 +411,30 @@ function Open({ d, books, nav, canEdit }: StepProps) {
   );
 }
 
+/** The profit allocation of a company with share capital: its rows are the accounts the legal form names and the chart has (r10f-28); a missing one is named and offered. */
 function Profit({ d, nav, canEdit }: StepProps) {
   const next = String(+d.year + 1);
   const [date, setDate] = useState(`${next}-06-30`);
   const [reserve, setReserve] = useState('');
   const [dividend, setDividend] = useState('');
+  const a = d.accounts.allocation;
+  if (!a) return <p className="lead">{t('close.noAllocation')}</p>;
   const result = d.ledger.result;
-  const r = num(reserve);
-  const split = dividendSplit(num(dividend));
-  const rest = Math.round((result - r - num(dividend)) * 100) / 100;
+  const r = a.reserve ? num(reserve) : 0;
+  const gross = a.dividend ? num(dividend) : 0;
+  const split = dividendSplit(gross, a.dividend?.rate ?? 0);
+  const rest = Math.round((result - r - gross) * 100) / 100;
+  const pct = (x: number) => `${Math.round(x * 100)} %`;
   const lines = [
-    { amount: r, accountCredit: '2950', description: t('yearClose.allocation.reserveText', { year: d.year }) },
-    { amount: split.net, accountCredit: '2451', description: t('yearClose.allocation.dividendText', { year: d.year }) },
-    { amount: split.withholdingTax, accountCredit: '2206', description: t('yearClose.allocation.taxText', { year: d.year }) },
-  ].filter((l) => l.amount > 0);
+    { amount: r, accountCredit: a.reserve ?? '', description: t('yearClose.allocation.reserveText', { year: d.year }) },
+    { amount: split.net, accountCredit: a.dividend?.account ?? '', description: t('yearClose.allocation.dividendText', { year: d.year }) },
+    { amount: split.withholdingTax, accountCredit: a.dividend?.withholdingTax ?? '', description: t('yearClose.allocation.taxText', { year: d.year, rate: pct(a.dividend?.rate ?? 0) }) },
+  ].filter((l) => l.amount > 0 && l.accountCredit);
   const ready = canEdit && d.closed && lines.length > 0 && date >= `${next}-01-01`;
   async function book() {
     const ids: string[] = [];
     const ok = await act(nav, async () => {
-      for (const l of lines) ids.push((await api.bookYearEndEntry(next, { date, accountDebit: d.accounts.retainedEarnings, accountCredit: l.accountCredit, amount: l.amount, description: l.description, template: 'profitAllocation' })).entry.id);
+      for (const l of lines) ids.push((await api.bookYearEndEntry(next, { date, accountDebit: d.accounts.resultTo, accountCredit: l.accountCredit, amount: l.amount, description: l.description, template: 'profitAllocation' })).entry.id);
     }, t('close.allocationBooked', { n: lines.length }), async () => { for (const id of ids) await api.deleteJournalEntry(id); });
     if (ok) { setReserve(''); setDividend(''); }
   }
@@ -435,13 +445,20 @@ function Profit({ d, nav, canEdit }: StepProps) {
       <div className="gv">
         {row(<>{t('close.result', { year: d.year })} {!d.closed && <span className="m">{t('close.soFar')}</span>}</>, <b className="mono">{fmt(result)}</b>)}
         <label className="gvrow"><span>{t('close.resolutionDate')}</span><input type="date" value={date} min={`${next}-01-01`} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} /></label>
-        <label className="gvrow"><span>{t('close.reserve')} <span className="mono m">2950</span></span><input className="mono" inputMode="decimal" placeholder="0.00" value={reserve} onChange={(e) => setReserve(e.target.value)} disabled={!canEdit} /></label>
-        <label className="gvrow"><span>{t('close.dividend')}</span><input className="mono" inputMode="decimal" placeholder="0.00" value={dividend} onChange={(e) => setDividend(e.target.value)} disabled={!canEdit} /></label>
-        {row(<>{t('close.withholding')} <span className="mono m">2206</span></>, <span className="mono">{fmt(split.withholdingTax)}</span>, 'sub')}
-        {row(<>{t('close.toShareholder')} <span className="mono m">2451</span></>, <span className="mono">{fmt(split.net)}</span>, 'sub')}
-        {row(<>{t('close.staysRetained')} <span className="mono m">{d.accounts.retainedEarnings}</span></>, <b className={`mono${rest < 0 ? ' neg' : ''}`}>{fmt(rest)}</b>, 'tot')}
+        {a.reserve && <label className="gvrow"><span>{t('close.reserve')} <span className="mono m">{a.reserve}</span></span><input className="mono" inputMode="decimal" placeholder="0.00" value={reserve} onChange={(e) => setReserve(e.target.value)} disabled={!canEdit} /></label>}
+        {a.dividend && <>
+          <label className="gvrow"><span>{t('close.dividend')}</span><input className="mono" inputMode="decimal" placeholder="0.00" value={dividend} onChange={(e) => setDividend(e.target.value)} disabled={!canEdit} /></label>
+          {row(<>{t('close.withholding', { rate: pct(a.dividend.rate) })} <span className="mono m">{a.dividend.withholdingTax}</span></>, <span className="mono">{fmt(split.withholdingTax)}</span>, 'sub')}
+          {row(<>{t('close.toShareholder', { rate: pct(1 - a.dividend.rate) })} <span className="mono m">{a.dividend.account}</span></>, <span className="mono">{fmt(split.net)}</span>, 'sub')}
+        </>}
+        {row(<>{t('close.staysRetained')} <span className="mono m">{d.accounts.resultTo}</span></>, <b className={`mono${rest < 0 ? ' neg' : ''}`}>{fmt(rest)}</b>, 'tot')}
       </div>
-      <p className="m">{t('close.withholdingDue')}</p>
+      {a.missing.length > 0 && (
+        <p className="warnline" data-testid="allocation-accounts-missing">{I.dot}{t('close.allocationAccountsMissing', { accounts: a.missing.map((m) => m.account).join(', ') })}{' '}
+          {a.missing.map((m) => <Fragment key={m.account}><button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(m.account, tx(`close.allocationAccountName.${m.role}`)), t('close.accountAdded', { account: m.account }))}>{t('close.addAccount', { account: m.account })}</button>{' '}</Fragment>)}
+        </p>
+      )}
+      {a.dividend && <p className="m">{t('close.withholdingDue')}</p>}
       <p>
         <button type="button" className="btn" disabled={!ready} onClick={book}>{t('yearClose.allocation.book')}</button>{' '}
         {!d.closed && <span className="m">{t('close.afterResolution')}</span>}

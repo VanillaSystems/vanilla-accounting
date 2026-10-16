@@ -38,10 +38,28 @@ const quartersOf = (year: string): QuarterKey[] => [...new Set([1, 4, 7, 10].map
 
 // ─── Accounts by role ────────────────────────────────────────────────────────
 
-/** The accounts the year-end books on, each the first of its candidates the chart has. */
+/**
+ * The profit allocation a legal form offers after the shareholders' resolution (modules/ch/year-end.yaml
+ * byLegalForm), each row only when the chart has its accounts; `missing` names those it lacks, for
+ * the step to say and offer to add (r9c-2). Absent on a legal form without one (an Einzelfirma).
+ */
+export interface ProfitAllocation {
+  /** Gesetzliche Gewinnreserve. */
+  reserve?: string;
+  /** The dividend: what the shareholder is paid, and the Verrechnungssteuer the company owes on it at `rate`. */
+  dividend?: { account: string; withholdingTax: string; rate: number };
+  missing: Array<{ role: AllocationRole; account: string }>;
+}
+export type AllocationRole = 'reserve' | 'dividend' | 'withholdingTax';
+
+/** The accounts the year-end books on, each the first of its candidates the chart has; the close of the result as the legal form has it. */
 export interface YearEndAccounts {
-  /** Gewinnvortrag: the year's result is carried here when the next year opens. */
-  retainedEarnings: string;
+  /** The equity account the year's result is carried to when the next year opens: Gewinnvortrag (2970) on a company with share capital, the owner's capital on an Einzelfirma. */
+  resultTo: string;
+  /** The owner's private account whose balance closes into `resultTo` with the year (an Einzelfirma's 2850); absent on a company with share capital, or when the chart lacks it. */
+  privateInto?: string;
+  /** The profit allocation the legal form offers; absent where the profit is the owner's without a resolution. */
+  allocation?: ProfitAllocation;
   /** Kursdifferenzen: the exchange difference of the foreign-currency accounts. */
   fxDifference: string;
   /** Abrechnungskonto MWST: the tax the VAT codes split off is posted here. */
@@ -53,14 +71,26 @@ export interface YearEndAccounts {
 }
 
 
-export function yearEndAccounts(chart: readonly string[]): YearEndAccounts {
+/** How the legal form closes the result: its own entry of year-end.yaml, else the capital company's (`otherwise`), as the setup's owner account falls back. */
+export const resultCloseOf = (legalForm?: string) => (legalForm && yearEndData().byLegalForm[legalForm]) || yearEndData().byLegalForm.otherwise;
+
+export function yearEndAccounts(chart: readonly string[], legalForm?: LegalForm): YearEndAccounts {
   const has = new Set(chart);
   const pick = (candidates: readonly string[]) => candidates.find((a) => has.has(a)) ?? candidates[0];
   const roles = yearEndData().accounts;
   const vatSettlement = pick(roles.vatSettlement);
   const receivables = pick(roles.receivables);
+  const close = resultCloseOf(legalForm);
+  const privateInto = close.privateInto?.find((a) => has.has(a));
+  const allocation = close.allocation && ((a) => ({
+    ...(has.has(a.reserve) && { reserve: a.reserve }),
+    ...(has.has(a.dividend) && has.has(a.withholdingTax) && { dividend: { account: a.dividend, withholdingTax: a.withholdingTax, rate: a.withholdingTaxRate } }),
+    missing: (['reserve', 'dividend', 'withholdingTax'] as const).filter((role) => !has.has(a[role])).map((role) => ({ role, account: a[role] })),
+  }))(close.allocation);
   return {
-    retainedEarnings: pick(roles.retainedEarnings),
+    resultTo: pick(close.resultTo),
+    ...(privateInto && { privateInto }),
+    ...(allocation && { allocation }),
     fxDifference: pick(roles.fxDifference),
     vatSettlement,
     vatAccounts: [...new Set([...roles.vat.filter((a) => has.has(a)), vatSettlement])].sort(),
@@ -373,8 +403,6 @@ export interface EntryTemplate {
   accountDebit: string;
   accountCredit: string;
   vatCode?: string;
-  /** Dated in the next year (after the shareholders' resolution), not on 31.12. */
-  nextYear?: boolean;
   /** A proposed amount the books computed (open invoices); absent: the user's figure. */
   amount?: number;
 }
@@ -393,18 +421,14 @@ export const yearEndTemplates = (owner?: string, legalForm?: string): EntryTempl
     .map(({ vatCode, legalForms: _forms, ...t }) => ({ ...t, accountDebit: own(t.accountDebit), accountCredit: own(t.accountCredit), ...(vatCode && formTakes(vatCode) && { vatCode }) }));
 };
 
-/**
- * The profit allocation after the shareholders' resolution, dated in the new year: reserves,
- * and a dividend with the 35% Verrechnungssteuer the company owes on it. Guided, never automatic.
- */
+/** The template id of the profit allocation after the shareholders' resolution, dated in the new year: reserves and a dividend with its Verrechnungssteuer. Guided, never automatic. */
 export const PROFIT_ALLOCATION_ID = 'profitAllocation';
-export const profitAllocation = (): EntryTemplate => ({ id: PROFIT_ALLOCATION_ID, ...yearEndData().profitAllocation, nextYear: true });
 
 export interface DividendSplit { net: number; withholdingTax: number }
 
-/** A gross dividend split into what the shareholders are paid and the 35% Verrechnungssteuer (2206). */
-export function dividendSplit(gross: number): DividendSplit {
-  const withholdingTax = roundCHF(gross * yearEndData().withholdingTaxRate);
+/** A gross dividend split into what the shareholders are paid and the Verrechnungssteuer the company owes at `rate`. */
+export function dividendSplit(gross: number, rate: number): DividendSplit {
+  const withholdingTax = roundCHF(gross * rate);
   return { net: roundCHF(gross - withholdingTax), withholdingTax };
 }
 
@@ -669,7 +693,7 @@ const dayBefore = (date: string) => shift(date, -1);
 /** Every item of the year's close, computed from the books. */
 export function yearClose(input: YearCloseInput): YearClose {
   const { year, books, state } = input;
-  const accounts = yearEndAccounts(input.chart);
+  const accounts = yearEndAccounts(input.chart, input.legalForm);
   const closedThrough = books.config.closedThrough;
   const locked = !!closedThrough && closedThrough >= yearEnd(year);
   const checks = preconditions(input);
@@ -728,9 +752,9 @@ export interface Opening {
   balances: Record<string, number>;
   /** config.openingBalancesNative[year]: the foreign accounts' closing balance in their currency. */
   native: Record<string, { amount: number; currency: string }>;
-  /** The closed year's result, carried to retained earnings. */
+  /** The closed year's result, carried to `resultTo`. */
   result: number;
-  retainedEarnings: string;
+  resultTo: string;
   totalAssets: number;
   totalLiabilities: number;
   /** totalAssets − totalLiabilities: zero when the opening balances. */
@@ -741,17 +765,20 @@ export interface Opening {
 
 /**
  * The next year's opening from the closed year's closing ledger: the balance-sheet accounts
- * carried, profit and loss reset, the result added to retained earnings (profit allocation is a
- * later entry of its own). The closing exchange rates become the opening rates: a foreign
- * account opens with its native closing balance, and its CHF is native × the 31.12. rate once
- * the Kursdifferenz is booked.
+ * carried, profit and loss reset, the result added to the legal form's equity account (Gewinnvortrag
+ * on a company with share capital, where the profit allocation is a later entry of its own; the
+ * owner's capital on an Einzelfirma, into which her private account closes too, so it starts the
+ * year at zero). The closing exchange rates become the opening rates: a foreign account opens with
+ * its native closing balance, and its CHF is native × the 31.12. rate once the Kursdifferenz is booked.
  */
 export function openingOf(closing: ClosingLedger, books: Books, foreign: readonly ForeignAccount[], rates: EstvRates, accounts: YearEndAccounts): Opening {
   const year = String(+closing.year + 1);
   const balances: Record<string, number> = {};
   for (const [account, balance] of Object.entries(closing.balances)) if (isBalanceSheet(account)) balances[account] = balance;
-  const re = accounts.retainedEarnings;
-  const carried = roundCHF((balances[re] ?? 0) + closing.result);
+  const re = accounts.resultTo;
+  const closedIn = accounts.privateInto ? balances[accounts.privateInto] ?? 0 : 0;
+  if (accounts.privateInto) delete balances[accounts.privateInto];
+  const carried = roundCHF((balances[re] ?? 0) + closing.result + closedIn);
   if (toRappen(carried) === 0) delete balances[re]; else balances[re] = carried;
 
   const causes: Opening['causes'] = [...closing.causes];
@@ -777,7 +804,7 @@ export function openingOf(closing: ClosingLedger, books: Books, foreign: readonl
     balances: sorted,
     native,
     result: closing.result,
-    retainedEarnings: re,
+    resultTo: re,
     totalAssets: fromRappen(assets),
     totalLiabilities: fromRappen(liabilities),
     residual: fromRappen(assets - liabilities),

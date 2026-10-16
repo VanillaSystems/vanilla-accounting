@@ -220,8 +220,8 @@ test('a booking split over several one-leg lines balances under its ref; an acco
 });
 
 test('profit allocation: a dividend of 10000 owes 3500 Verrechnungssteuer, 6500 to pay out', () => {
-  assert.deepEqual(dividendSplit(10000), { net: 6500, withholdingTax: 3500 });
-  assert.deepEqual(dividendSplit(333.33), { net: 216.66, withholdingTax: 116.67 });
+  assert.deepEqual(dividendSplit(10000, 0.35), { net: 6500, withholdingTax: 3500 });
+  assert.deepEqual(dividendSplit(333.33, 0.35), { net: 216.66, withholdingTax: 116.67 });
 });
 
 // ─── On a workspace ───────────────────────────────────────────────────────────

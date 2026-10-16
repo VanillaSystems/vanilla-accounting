@@ -13,8 +13,12 @@ The examples close 2026 and open 2027. Put in your own year.
 | 3 | [Book the year-end entries](#3-book-the-year-end-entries) | Abschluss (`/close`) | with your Treuhänder |
 | 4 | [Close the year](#4-close-the-year) | `npm run year:close -- 2026` | when nothing is open |
 | 5 | [Open the new year](#5-open-the-new-year) | `npm run year:open -- 2027` | right after |
-| 6 | [Allocate the profit](#6-allocate-the-profit) | Abschluss (`/close`) | after the shareholders decide |
+| 6 | [Allocate the profit](#6-allocate-the-profit) | Abschluss (`/close`) | after the shareholders decide (GmbH, AG only) |
 | 7 | [Hand over to the auditor](#7-hand-over-to-the-auditor) | `npm run build:audit -- <folder>` | when asked |
+
+The steps and the accounts they book on follow the legal form (`byLegalForm` in
+`modules/ch/year-end.yaml`): an Einzelfirma has six steps, because its profit is the owner's and
+is never allocated.
 
 The same steps for agents: [`year-close.flow.yaml`](../processes/year-close.flow.yaml).
 
@@ -131,7 +135,10 @@ of 2027 from your closed 2026:
 
 - Every balance-sheet account (classes 1 and 2) carries its balance of 31.12.
 - The income statement starts at zero.
-- The 2026 result is added to Gewinnvortrag (2970).
+- The 2026 result is added to Gewinnvortrag (2970). An Einzelfirma has no Gewinnvortrag: its
+  result goes to the owner's capital (2800 Eigenkapital), and the private account (2850 Privat)
+  closes into it too, so the year's withdrawals lower the capital and the private account starts
+  the new year at zero.
 - A EUR or USD account opens with its EUR or USD balance, and with its CHF value at the rate of
   31.12. The closing rates become the opening rates.
 
@@ -154,7 +161,12 @@ the decision:
 - a dividend. The company owes 35% Verrechnungssteuer (withholding tax) on it (2206) and pays
   that to the ESTV within 30 days. The shareholder is credited 65% (2451).
 
-The app does not decide this for you. A loss stays in Gewinnvortrag.
+The app does not decide this for you. A loss stays in Gewinnvortrag. The rows offered are the
+accounts the chart has; a missing one is named with «Konto anlegen».
+
+An Einzelfirma has no such step: there is no Generalversammlung, no dividend and no
+Verrechnungssteuer. The profit belongs to the owner and is taxed with her income; what she takes
+out of the firm are Privatbezüge on 2850.
 
 ## 7. Hand over to the auditor
 

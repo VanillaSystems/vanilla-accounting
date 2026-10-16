@@ -129,7 +129,7 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
   const rows = yearCloseOf(ws, year, rates, books).revaluations;
   const missing = rows.filter((r) => r.status === 'no-rate').map((r) => r.currency);
   if (missing.length) throw new YearCloseRefused({ code: 'rateNotPublished', params: { year, currencies: [...new Set(missing)].join(', ') } }, `The ESTV rate of 31.12.${year} is not published yet for ${[...new Set(missing)].join(', ')}: npm run fetch-rates -- --year ${year} once it is.`);
-  const entries = revaluationEntries(year, rows, yearEndAccounts(chartOf(ws)).fxDifference);
+  const entries = revaluationEntries(year, rows, yearEndAccounts(chartOf(ws), ws.company.legalForm).fxDifference);
   assertInChart(ws, ...entries.flatMap((e) => [e.accountDebit, e.accountCredit]));
   update(books, moduleActor('year-close'), (b) => applyRevaluation(b, year, entries));
   saveBooks(ws, books);
@@ -184,6 +184,10 @@ export interface EntryInput {
  * one from a year-end template marks the template done.
  */
 export function bookEntry(ws: Workspace, input: EntryInput, template?: string): JournalEntry {
+  // An Einzelfirma's profit is the owner's without a resolution (r10f-28): the legal form offers no allocation.
+  if (template === PROFIT_ALLOCATION_ID && !yearEndAccounts(chartOf(ws), ws.company.legalForm).allocation) {
+    throw new YearCloseRefused({ code: 'noProfitAllocation', params: { legalForm: ws.company.legalForm ?? '' } }, `A ${ws.company.legalForm ?? 'firm of this legal form'} allocates no profit: the result is the owner's.`);
+  }
   assertInChart(ws, input.accountDebit, input.accountCredit);
   const books = loadBooks(ws);
   if (template === RECEIVABLES_ID) {
@@ -243,7 +247,7 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
 /** The next year's opening balances from the closed year: what `openYear` writes. */
 export function openingFor(ws: Workspace, year: string, rates: EstvRates = ratesOf(), books: Books = loadBooks(ws)): Opening {
   const chart = chartOf(ws);
-  const accounts = yearEndAccounts(chart);
+  const accounts = yearEndAccounts(chart, ws.company.legalForm);
   return openingOf(closingLedger(books, year, chart, accounts), books, foreignAccounts(ws.bankAccounts), rates, accounts);
 }
 

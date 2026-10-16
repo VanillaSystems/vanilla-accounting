@@ -1,5 +1,6 @@
-accounts: { retainedEarnings: ["2970"], fxDifference: ["6880"], vatSettlement: ["3800"], vat: ["1400", "3800"] }
+accounts: { fxDifference: ["6880"], vatSettlement: ["3800"], vat: ["1400", "3800"], receivables: ["1200"] }
 templates: []
-profitAllocation: { accountDebit: "2970", accountCredit: "2900" }
-receivables: { accountDebit: "1200" }
-withholdingTaxRate: 0
+byLegalForm:
+  otherwise:
+    resultTo: ["2970"]
+    allocation: { reserve: "2900", dividend: "2400", withholdingTax: "2410", withholdingTaxRate: 0 }
