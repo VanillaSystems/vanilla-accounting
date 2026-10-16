@@ -1160,6 +1160,7 @@ export const messages = {
   'error.statement.twoAccounts': 'Unter {bank} liegen schon Auszüge des {currency}-Kontos {first}; dieser Auszug ist vom Konto {second}, das in den Büchern noch fehlt.',
   'error.statement.filedPayments': { one: 'Der Auszug enthält eine Zahlung bis {through}, die in den Büchern fehlt ({refs}). Diese Periode ist eingereicht und bleibt, wie sie ist: nichts eingelesen. Lies einen Auszug ab {from} ein.', other: 'Der Auszug enthält {n} Zahlungen bis {through}, die in den Büchern fehlen ({refs}). Diese Periode ist eingereicht und bleibt, wie sie ist: nichts eingelesen. Lies einen Auszug ab {from} ein.' },
   'error.iban': '{bank}: «{detail}» ist keine IBAN (Länge oder Prüfziffern).',
+  'error.uid': 'Die UID «{detail}» stimmt nicht: CHE-###.###.### mit richtiger Prüfziffer, wie auf uid.admin.ch.',
   'error.payToNeedsIban': '{bank} {currency} steht auf den Rechnungen: seine IBAN bleibt.',
   'bank.add': 'Auszug',
   'bank.addTitle': 'Kontoauszug importieren: camt.053 oder PDF, auch per Ziehen auf die Seite',

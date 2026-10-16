@@ -1163,6 +1163,7 @@ export default {
     'error.statement.twoAccounts': 'Sous {bank} se trouvent déjà des relevés du compte {currency} {first} ; ce relevé est celui du compte {second}, qui manque encore dans la comptabilité.',
     'error.statement.filedPayments': { one: 'Le relevé contient un paiement jusqu’au {through} qui manque dans les livres ({refs}). Cette période est déposée et reste telle quelle : rien n’a été lu. Importez un relevé à partir du {from}.', other: 'Le relevé contient {n} paiements jusqu’au {through} qui manquent dans les livres ({refs}). Cette période est déposée et reste telle quelle : rien n’a été lu. Importez un relevé à partir du {from}.' },
     'error.iban': '{bank} : « {detail} » n’est pas un IBAN (longueur ou chiffres de contrôle).',
+    'error.uid': 'L’IDE « {detail} » n’est pas correct : CHE-###.###.### avec son chiffre de contrôle, comme sur uid.admin.ch.',
     'error.payToNeedsIban': '{bank} {currency} figure sur les factures : son IBAN reste.',
     'bank.add': 'Relevé',
     'bank.addTitle': 'Importer un relevé : camt.053 ou PDF, aussi en le déposant sur la page',

@@ -1163,6 +1163,7 @@ export default {
     'error.statement.twoAccounts': 'Under {bank} there are already statements of the {currency} account {first}; this statement is of account {second}, which the books do not have yet.',
     'error.statement.filedPayments': { one: 'The statement holds one payment up to {through} that the books lack ({refs}). That period is filed and stays as it is: nothing was read. Import a statement starting {from}.', other: 'The statement holds {n} payments up to {through} that the books lack ({refs}). That period is filed and stays as it is: nothing was read. Import a statement starting {from}.' },
     'error.iban': '{bank}: “{detail}” is not an IBAN (length or check digits).',
+    'error.uid': 'The UID “{detail}” is not right: CHE-###.###.### with its check digit, as on uid.admin.ch.',
     'error.payToNeedsIban': '{bank} {currency} is printed on the invoices: its IBAN stays.',
     'bank.add': 'Statement',
     'bank.addTitle': 'Import a bank statement: camt.053 or PDF, also by dropping it on the page',

@@ -111,6 +111,7 @@ export function errorText(e: unknown): string {
       return t(`error.statement.${reason}`);
     }
     case 'iban': return t('error.iban', b.params);
+    case 'uid': return t('error.uid', b.params);
     case 'payToNeedsIban': return t('error.payToNeedsIban', b.params);
     case 'questionAnswered': return t('error.questionAnswered');
     case 'questionGone': return t(`questions.gone.${b.params.why}`);

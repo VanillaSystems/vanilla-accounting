@@ -62,6 +62,8 @@ export type ApiRefusal =
   | { code: 'statement'; params: StatementParams }
   /** A bank account's IBAN typed in Firma › Bankkonten or the invoicing setup fails the length or check-digit test. */
   | { code: 'iban'; params: { bank: string; detail: string } }
+  /** Firma › Firma: the company UID typed has a wrong shape or check digit (r9c-5). */
+  | { code: 'uid'; params: { detail: string } }
   /** The account invoices are paid to must keep an IBAN (it is printed on them). */
   | { code: 'payToNeedsIban'; params: { bank: string; currency: string } }
   | { code: 'noBrowser' }

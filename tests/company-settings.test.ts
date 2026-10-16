@@ -211,3 +211,23 @@ test('Rechnungen einrichten: setup writes an invoicing block the reader takes, w
   assert.ok(text.startsWith('# Muster GmbH: hand-kept, keep this comment'), 'the rest of the file stays');
   assert.throws(() => patchManifestText(text, { invoicing: { setup } }, 'm.yaml'), /set up already/);
 });
+
+test('API: the company UID is checked for its check digit when a person changes it, in words the UI can say; the stored one (a demo\'s invented UID) stays allowed (r9c-5)', async () => {
+  const api = await startApi('tests/fixtures/period-lock-index.json');
+  const j = (...parts: string[]) => parts.join('');
+  try {
+    const stored = (await api.send('GET', '/api/workspace')).json as { company: { uid: string } };
+    const same = await api.send('PATCH', '/api/workspace', { company: { uid: stored.company.uid, business: 'Rösterei' } });
+    assert.equal(same.status, 200, 'the UID as stored is no change: nothing to check');
+    // A typo in the last digit: eCH-0097 gives 246.813.57 the check digit 5.
+    const typo = await api.send('PATCH', '/api/workspace', { company: { uid: j('CHE-246.', '813.578') } });
+    assert.equal(typo.status, 400);
+    assert.deepEqual([typo.json.code, (typo.json as { params?: { detail?: string } }).params?.detail], ['uid', j('CHE-246.', '813.578')]);
+    assert.equal(((await api.send('GET', '/api/workspace')).json as { company: { uid: string } }).company.uid, stored.company.uid, 'nothing written');
+    const right = await api.send('PATCH', '/api/workspace', { company: { uid: j('che 246 813 ', '575 MWST') } });
+    assert.equal(right.status, 200, 'a valid UID in any spelling');
+    assert.equal(((await api.send('GET', '/api/workspace')).json as { company: { uid: string } }).company.uid, j('CHE-246.', '813.575'), 'stored in its canonical form');
+  } finally {
+    await api.stop();
+  }
+});

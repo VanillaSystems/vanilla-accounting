@@ -14,6 +14,7 @@ import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
 import { WorkspaceError, WorkspaceRefusal } from './workspace.js';
+import { parseUid } from './uid.js';
 
 /** A text field set, or removed with null; absent: unchanged. */
 type Edit<T> = T | null | undefined;
@@ -89,6 +90,13 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
   }
   const c = patch.company;
   if (c) {
+    // A UID a person changes carries a check digit (r9c-5): a typo is refused. The stored one is no change,
+    // so a demo's invented UID (wrong on purpose, tools/demo/generate.ts assertFictionalUids) keeps its profile editable.
+    if (typeof c.uid === 'string' && c.uid.trim() !== String(doc.getIn(['company', 'uid']) ?? '')) {
+      const parsed = parseUid(c.uid);
+      if ('error' in parsed) throw new WorkspaceRefusal(`company.uid: ${parsed.error}`, { code: 'uid', params: { detail: c.uid.trim() } });
+      c.uid = parsed.uid;
+    }
     for (const key of ['name', 'uid', 'owner', 'business'] as const) set(doc, ['company', key], typeof c[key] === 'string' ? c[key]!.trim() : c[key]);
     if (c.address === null) doc.deleteIn(['company', 'address']);
     else if (c.address) {

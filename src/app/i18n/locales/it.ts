@@ -1163,6 +1163,7 @@ export default {
     'error.statement.twoAccounts': 'Sotto {bank} ci sono già estratti del conto {currency} {first}; questo estratto è del conto {second}, che manca ancora nella contabilità.',
     'error.statement.filedPayments': { one: 'L’estratto contiene un pagamento fino al {through} che manca nei libri ({refs}). Questo periodo è inoltrato e resta com’è: nulla è stato letto. Importa un estratto a partire dal {from}.', other: 'L’estratto contiene {n} pagamenti fino al {through} che mancano nei libri ({refs}). Questo periodo è inoltrato e resta com’è: nulla è stato letto. Importa un estratto a partire dal {from}.' },
     'error.iban': '{bank}: «{detail}» non è un IBAN (lunghezza o cifre di controllo).',
+    'error.uid': 'L’IDI «{detail}» non è corretto: CHE-###.###.### con la sua cifra di controllo, come su uid.admin.ch.',
     'error.payToNeedsIban': '{bank} {currency} compare sulle fatture: il suo IBAN resta.',
     'bank.add': 'Estratto',
     'bank.addTitle': 'Importa un estratto: camt.053 o PDF, anche trascinandolo sulla pagina',
