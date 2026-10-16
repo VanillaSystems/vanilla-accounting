@@ -20,6 +20,7 @@ import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
 import { filingXml, releaseApproval } from '../../workflows/filing.js';
+import { ASK_WORKFLOW, CLOSED_REASON, closeAsksWithoutRule } from '../../workflows/held.js';
 import { isFilingKey } from '../../accounting/periods.js';
 import { filing } from '../../engines/index.js';
 import { basename } from 'node:path';
@@ -125,6 +126,11 @@ router.post('/api/automation', async (req, res) => {
   if (!cmd || typeof cmd !== 'object' || !KINDS.has(cmd.kind)) throw new RequestError(400, 'Unbekannter Befehl.');
   if (cmd.kind === 'start' && (typeof cmd.workflow !== 'string' || typeof cmd.item?.id !== 'string' || typeof cmd.item?.kind !== 'string')) throw new RequestError(400, 'start braucht workflow und item.');
   if (cmd.kind === 'review' && (typeof cmd.run !== 'string' || typeof cmd.on !== 'boolean')) throw new RequestError(400, 'review braucht run und on.');
+  // An answer to a question whose reason is gone meanwhile (the report came, the rule went) closes it instead of booking a stale proposal (r7h-21).
+  if (cmd.kind === 'answer' && engine().run(cmd.run)?.workflow === ASK_WORKFLOW && (await closeAsksWithoutRule(engine(), WS)).includes(cmd.run)) {
+    res.json({ ok: false, refusal: 'not-waiting', detail: CLOSED_REASON });
+    return;
+  }
   res.json(await engine().command(cmd));
 });
 

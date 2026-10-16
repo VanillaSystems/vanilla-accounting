@@ -7,6 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -14,7 +15,7 @@ import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '..
 import { parseRule, ruleWords, type RuleFacts } from '../src/booking/rules.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadBooks, PERSON, saveBooks, update, type Books } from '../src/books/store.js';
-import { closeAsksWithoutRule } from '../src/workflows/held.js';
+import { CLOSED_REASON, closeAsksWithoutRule } from '../src/workflows/held.js';
 import { openEngine } from '../src/workflows/engine.js';
 import { loadWorkflows } from '../src/workflows/load.js';
 import { fillTask, taskOf } from '../src/workflows/model.js';
@@ -175,6 +176,52 @@ test('r5h-12: the report linked while the payout waits closes its question; the 
   assert.deepEqual(await closeAsksWithoutRule(engine, ws), [ask.id]);
   assert.equal(engine.run(ask.id)!.state.status, 'discarded');
   assert.deepEqual(booked(ws), [], 'the split needs the model to read the report: nothing booked without one');
+});
+
+/** The payout report linked to the held payout, as the drop's intake run links it: its file is there, under the id of its bytes, so a later run keeps it. */
+const REPORT = '%PDF-1.4 SumUp Auszahlungsbericht PO-88213';
+const po = createHash('sha256').update(REPORT).digest('hex').slice(0, 16);
+function linkReport(ws: Workspace): void {
+  writeFileSync(join(ws.paths.root, 'transactional-data/2026/receipts', 'po.pdf'), REPORT);
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => {
+    b.receipts.push({ id: po, filename: 'po.pdf', location: 'archived', extractedText: 'SumUp Auszahlungsbericht PO-88213: Kartenzahlungen 1480.00, Rückerstattung -40.00, Gebühren -27.65' } as Receipt);
+    b.mappings.push({ transactionRef: 'REF-PO-88213', receiptId: po });
+  });
+  saveBooks(ws, books);
+}
+const SPLIT = [['1021', '3400', 1480, 'V81', 'sumup-umsatz'], ['3400', '1021', 40, '-V81', 'sumup-umsatz'], ['6840', '1021', 27.65, 'I0', 'sumup-umsatz']];
+/** The books sort entries by id: compare the split by amount. */
+const byAmount = (rows: ReturnType<typeof booked>) => [...rows].sort((a, b) => Number(b[2]) - Number(a[2]));
+
+test('r7h-21: the inbox run that books the split from the report closes the payout\'s question itself', async () => {
+  const { ws, engine, ask } = await heldPayout();
+  linkReport(ws);
+  const withModel = openEngine(ws, { appRoot: APP_ROOT, ask: async () => reading });
+  const started = await withModel.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
+  assert.ok(started.ok, JSON.stringify(started));
+  await withModel.idle();
+  assert.deepEqual(byAmount(booked(ws)), SPLIT, 'the rule booked the split from the report');
+  const question = withModel.run(ask.id)!;
+  assert.equal(question.state.status, 'discarded', 'the question whose report is there is closed by the run that booked it');
+  assert.equal(question.state.status === 'discarded' ? question.state.reason : '', CLOSED_REASON);
+  assert.ok(engine.run(ask.id), 'the question was asked by the first run');
+});
+
+test('r7h-21: «Übernehmen» on a stale payout question never replaces the split a rule booked from the report', async () => {
+  const { ws, engine, ask } = await heldPayout();
+  linkReport(ws);
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => {
+    const e = (n: number, accountDebit: string, accountCredit: string, amount: number, vatCode: string): JournalEntry => ({ id: `s-${n}`, transactionRef: 'REF-PO-88213', date: '2026-10-15', accountDebit, accountCredit, amount, vatCode, origin: 'classify', rule: 'sumup-umsatz' });
+    b.journalEntries.push(e(1, '1021', '3400', 1480, 'V81'), e(2, '3400', '1021', 40, '-V81'), e(3, '6840', '1021', 27.65, 'I0'));
+  });
+  saveBooks(ws, books);
+  const out = await engine.command({ kind: 'answer', run: ask.id, outcome: 'accept' });
+  await engine.idle();
+  assert.deepEqual(byAmount(booked(ws)), SPLIT, 'the split stays');
+  assert.equal(out.ok, true, 'the engine takes the answer, its booking gives way to the rule\'s');
+  assert.deepEqual(engine.run(ask.id)!.steps.at(-1)!.effects.map((x) => x.applied), [false], 'nothing written');
 });
 
 test('a reading that is no payout is refused, the payment stays unbooked', async () => {

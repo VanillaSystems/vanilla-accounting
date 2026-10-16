@@ -242,7 +242,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       }
     }
     // An effect the engine holds no handle for (a seal, a filing) cannot be checked on a copy: a dry run or a replay skips the step, its outcome says `skipped`, never the action's ok (r5f-19), and the run goes on as if the first outcome had come.
-    const unchecked = step.effects.filter((e) => e !== 'ledger.book' && e !== 'books.write' && e !== 'runs.start');
+    const unchecked = step.effects.filter((e) => e !== 'ledger.book' && e !== 'books.write' && e !== 'runs.start' && e !== 'runs.close');
     if (run.mode !== 'live' && unchecked.length) {
       record.effects.push(...unchecked.map((effect) => ({ effect, key: `${w.id}:${run.item.id}:${step.id}`, applied: false, wrote: {}, would: SKIPPED })));
       const done = { ...run, steps: [...run.steps, { ...record, outcome: SKIPPED_OUTCOME, finishedAt: now() }] };
@@ -288,6 +288,17 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         void create(w, item, { kind: 'event', name: 'rule.ask', run: run.id }, 'live');
       };
     }
+    if (declared.includes('runs.close')) {
+      effects['runs.close'] = (id, item, reason) => {
+        const waiting = [...runs.values()].filter((r) => r.workflow === id && r.mode === 'live' && r.item.id === item.id && r.item.kind === item.kind && r.state.status === 'waiting');
+        const rec: EffectRecord = { effect: 'runs.close', key: `${key}:${id}:${item.id}`, applied: false, wrote: {} };
+        record.effects.push(rec);
+        if (run.mode !== 'live') { rec.would = `${id} ${item.id}`; return; }
+        if (!waiting.length) return;
+        rec.applied = true;
+        for (const r of waiting) settle(move(r, { status: 'discarded', at: now(), reason }));
+      };
+    }
     if (!declared.includes('ledger.book')) return effects;
     effects['ledger.book'] = (entries: JournalEntry[]) => {
       const stamped = entries.map((e) => ({ ...e, run: run.id }));
@@ -302,10 +313,11 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       if (before) { record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {} }); return; }
       const books = loadBooks(ws);
       const ref = run.item.kind === 'transaction' ? run.item.id : undefined;
-      // A person's answer books what they accepted: bookings the app made meanwhile (a later run, wishes3-7)
-      // give way to it, a person's own booking never does.
+      // A person's answer books what they accepted: bookings the app guessed meanwhile (a later run, wishes3-7)
+      // give way to it. A person's own booking never does, nor one of the person's rules: a rule that booked
+      // the payment since the question was asked (its report came, r7h-21) answered it better than the proposal.
       const had = ref ? books.journalEntries.filter((e) => e.transactionRef === ref) : [];
-      const replaced = had.length && had.every((e) => e.origin !== 'manual' && !periodLock(books).isClosed(e.date)) ? had.map((e) => e.id) : [];
+      const replaced = had.length && had.every((e) => e.origin !== 'manual' && !e.rule && !periodLock(books).isClosed(e.date)) ? had.map((e) => e.id) : [];
       const applied = update(books, actor, (b) => {
         if (had.length && !replaced.length) return false;
         b.journalEntries = b.journalEntries.filter((e) => !replaced.includes(e.id));

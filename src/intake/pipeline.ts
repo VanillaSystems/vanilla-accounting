@@ -82,6 +82,8 @@ export interface StepContext {
   log(line: string): void;
   /** Payments left for the person (a company rule asks, or no model to book them): a run of the engine asks each (src/workflows/actions.ts); the CLI only says so. */
   hold?(refs: string[]): void;
+  /** Payments booked now: a question that held one of them (its report was missing, a rule asked) is closed (r7h-21). */
+  release?(refs: string[]): void;
   /** Stems of inbox files a run waiting behind this one came in with: left for it (src/workflows/actions.ts). */
   later?: () => ReadonlySet<string>;
 }

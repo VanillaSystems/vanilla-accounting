@@ -30,7 +30,7 @@ const unbooked = (books: Books) => {
 };
 
 export function classifyStep({ force = false } = {}): StepRun {
-  return async ({ ws, books, ask, progress, log, hold }) => {
+  return async ({ ws, books, ask, progress, log, hold, release }) => {
     // Without a model nothing could be booked again: --force removes nothing then.
     if (force && ask) {
       const removed = books.update((index) => {
@@ -95,6 +95,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     log(`  Asked     : ${asked.length}`);
     const held = [...asked.map((a) => a.ref), ...unasked];
     if (held.length) hold?.(held);
+    if (classified.length) release?.(classified);
     const notes: IntakeNote[] = [
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
       ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),

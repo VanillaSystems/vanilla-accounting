@@ -20,6 +20,7 @@ import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
 import { madeBetween, type Took } from './summary.js';
 import type { ItemRef } from './model.js';
+import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
 import { refuse, type Refused } from '../types/refusal.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,6 +41,8 @@ export interface Effects {
   'ledger.book'?: (entries: JournalEntry[]) => void;
   /** Starts a run of another workflow for an item, unless one for it is still open; the starting run goes on (no parking). */
   'runs.start'?: (workflow: string, item: ItemRef) => void;
+  /** Closes the run of another workflow waiting for a person on an item, with the reason: its question is answered by what this run did. */
+  'runs.close'?: (workflow: string, item: ItemRef, reason: string) => void;
   /** The books through the write door as the run's actor; in a dry run or a replay, a copy that is never saved. */
   'books.write'?: BooksPort;
 }
@@ -73,9 +76,11 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
     const before = structuredClone(port.read());
     const todo = took(before, ws, later);
     const start = effects['runs.start'];
-    // A payment a company rule holds for the person becomes a question of its own (workflows/ask).
-    const hold = start && ((refs: string[]) => refs.forEach((id) => start('ask', { kind: 'transaction', id })));
-    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(later ? { later } : {}) });
+    const close = effects['runs.close'];
+    // A payment a company rule holds for the person becomes a question of its own (workflows/ask); one booked now closes its question (r7h-21).
+    const hold = start && ((refs: string[]) => refs.forEach((id) => start(ASK_WORKFLOW, { kind: 'transaction', id })));
+    const release = close && ((refs: string[]) => refs.forEach((id) => close(ASK_WORKFLOW, { kind: 'transaction', id }, CLOSED_REASON)));
+    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}) });
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
@@ -174,7 +179,7 @@ export const ACTIONS: Record<string, Action> = {
   'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
   'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b)); return receiptsWhere((r) => todo.has(r))(b); }) },
   'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(matchStep, receiptsWhere((r) => r.location === 'staged')) },
-  'intake.book': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(classifyStep(), unbooked) },
+  'intake.book': { outcomes: ['ok'], effects: ['books.write', 'runs.close'], ai: true, run: batch(classifyStep(), unbooked) },
   'parsers.statement': declared(['ok']),
   'books.merge-statement': declared(['ok'], { effects: ['books.transactions'] }),
   'books.statement-balance': declared(['matches', 'differs']),
