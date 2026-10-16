@@ -56,3 +56,4 @@ file records every decision a person might have made differently, newest last.
     guard, no pairing). Fix: the phone paths only, on the local network, switched on by the person,
     with a pairing token in a QR code; the rest of the API stays loopback-only. The iOS app learns
     to pair. The desktop app also starts processing arriving files by itself.
+14. Booking a payment by hand without AI: merged (form in Kontoauszüge, the task and the receipt; lines must add up; «Gebucht» only with a booking). Open: «N» entries are still not tied to a payment (treuhaender-22).
