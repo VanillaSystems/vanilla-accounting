@@ -11,6 +11,7 @@
  */
 import type { Index, JournalEntry, QuarterKey } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
+import type { LegalForm } from '../workspace/setup.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
 import { chfAmount, computeBalances } from './ledger.js';
@@ -18,6 +19,7 @@ import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
 import { formTakes } from './vat-codes.js';
+import { ownerAccountNumber } from './bank-accounts.js';
 import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
@@ -489,8 +491,8 @@ export interface YearCloseInput {
   bankBalances: readonly BankBalance[];
   filed: readonly ReturnFigures[];
   seals: SealReport;
-  /** The owner's account of this firm (2850 on an Einzelfirma, 2451 on a GmbH): the private-use entry debits it. */
-  owner?: string;
+  /** The firm's legal form: with its bank accounts it names the owner's account (2850 on an Einzelfirma, 2451 on a GmbH), which the private-use entry debits. */
+  legalForm?: LegalForm;
   /** The failed checks of `npm run doctor` for the workspace. */
   doctor: readonly string[];
   rates: EstvRates;
@@ -619,7 +621,8 @@ export function yearClose(input: YearCloseInput): YearClose {
   const proposed = receivables.invoices.length
     ? [{ ...receivablesTemplate(), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
-  const templates = [...yearEndTemplates(input.owner), ...proposed].map((t) => {
+  const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
+  const templates = [...yearEndTemplates(owner), ...proposed].map((t) => {
     const booked = bookedFor(books.journalEntries, year, t);
     return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }) };
   });

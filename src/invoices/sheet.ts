@@ -138,8 +138,9 @@ export function sheetBlocks(d: SheetData): Block[] {
   const draft = ed?.scope === 'draft';
   const n = (x: number) => formatAmount(x, d.language);
   const t = totals(d.lines);
-  // A firm that charges no VAT prints no rate column, no VAT line and no net total (what an invoice shows, the firm owes).
-  const vatColumn = (show.vatColumn || draft) && chargesVat();
+  // A document without VAT (a firm not registered) prints no rate column, no VAT line and no net total: what an invoice shows, the firm owes. An issued document says so by its lines, a draft by the firm's setup.
+  const withVat = draft ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const vatColumn = (show.vatColumn || draft) && withVat;
   const cols: Array<[string, string]> = [['d', L.desc], ...(show.quantity ? [['q', L.qty], ['p', L.price]] as Array<[string, string]> : []), ...(vatColumn ? [['v', L.vat]] as Array<[string, string]> : []), ['a', `${L.amount} ${d.currency}`]];
   const colgroup = `<colgroup>${cols.map(([k]) => `<col class="c${k}">`).join('')}</colgroup>`;
   const B: Block[] = [];
@@ -179,7 +180,7 @@ export function sheetBlocks(d: SheetData): Block[] {
     d.due.fee ? `<div><span>${L.fee}</span><span>${n(d.due.fee)}</span></div>` : '',
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
-  const net = chargesVat() ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';
+  const net = withVat ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';
   B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${due}</div>` });
   if (d.kind === 'credit-note' && d.credit) {
     const c = d.credit, credit = -t.gross, open = Math.round((c.gross - c.paid) * 100) / 100;
@@ -229,8 +230,9 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const n = pages.length + (qrOwnPage ? 1 : 0);
   const title = `${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}`;
   const s = d.sender;
-  const uid = chargesVat() ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
-  const uidLabel = chargesVat() ? L.vatNo : L.uidNo;
+  const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const uid = withVat ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
+  const uidLabel = withVat ? L.vatNo : L.uidNo;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
   const footer = (k: number, qrHere = false) => show.footer && !qrHere
     ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${uidLabel}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`

@@ -4,8 +4,7 @@
  * read the same lists.
  */
 import type { Index } from '../types/index.js';
-import { filingKeyOf, localToday, parsePeriod, type IsoDate, type Period } from '../accounting/periods.js';
-import { filing } from '../engines/index.js';
+import { filingKeyOf, localToday, parsePeriod, type FilingLength, type IsoDate, type Period } from '../accounting/periods.js';
 import { ledgerOf as receiptLedger } from '../app/areas/receipts/model.js';
 import { NO_ACCOUNT, openingOf } from '../app/areas/reports/model.js';
 
@@ -96,13 +95,13 @@ export function presetPeriod(p: Preset, open: Period, page: Period): string {
 }
 
 /** The quarters a period holds whole and that have ended by `today`: their returns go into the export. */
-export function quartersIn(period: Period, today: IsoDate = localToday()): string[] {
+export function quartersIn(period: Period, today: IsoDate = localToday(), length: FilingLength = 'quarter'): string[] {
   const out: string[] = [];
   const first = Number((period.kind === 'all' ? '2000' : period.from).slice(0, 4));
   const last = Number((period.kind === 'all' ? today : period.to).slice(0, 4));
   for (let y = first; y <= last; y++) {
     // The firm's filing periods of the year: quarters, or half years on a half-yearly setup.
-    for (const key of new Set([1, 4, 7, 10].map((m) => filingKeyOf(`${y}-${String(m).padStart(2, '0')}-01`, filing().length)))) {
+    for (const key of new Set([1, 4, 7, 10].map((m) => filingKeyOf(`${y}-${String(m).padStart(2, '0')}-01`, length)))) {
       const p = parsePeriod(key, today)!;
       if (p.from >= period.from && p.to <= period.to && p.to < today) out.push(p.token);
     }
@@ -145,10 +144,10 @@ export const paymentsIn = (books: Index, period: Period) =>
  * count the quarters whose return lies filed in the books (`filed`, CompanyInfo.filed): a quarter
  * before the lock that never had a return is not one (r4t-9).
  */
-export function countOf(id: ItemId, books: Index, period: Period, names: Record<string, string>, account?: string, filed?: readonly string[]): number {
+export function countOf(id: ItemId, books: Index, period: Period, names: Record<string, string>, account?: string, filed?: readonly string[], length: FilingLength = 'quarter'): number {
   switch (id) {
     case 'income': case 'balance': case 'trial': return 1;
-    case 'vat': return quartersIn(period).length;
+    case 'vat': return quartersIn(period, localToday(), length).length;
     case 'ledger': return account === undefined ? 0 : 1;
     case 'ledgers': return accountsWithActivity(books, period).length;
     case 'journal': return entriesIn(books, period).length;
@@ -156,7 +155,7 @@ export function countOf(id: ItemId, books: Index, period: Period, names: Record<
     case 'receiptList': case 'receipts': return receiptsIn(books, period).length;
     case 'chart': return Object.keys(names).length;
     case 'statements': return statementsIn(books, period).length;
-    case 'filings': return quartersIn(period).filter((q) => (filed ? filed.includes(q) : !!books.config?.closedThrough && parsePeriod(q, localToday())!.to <= books.config.closedThrough)).length;
+    case 'filings': return quartersIn(period, localToday(), length).filter((q) => (filed ? filed.includes(q) : !!books.config?.closedThrough && parsePeriod(q, localToday())!.to <= books.config.closedThrough)).length;
   }
 }
 

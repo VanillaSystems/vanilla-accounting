@@ -27,9 +27,12 @@ export function ownerAccount(ws: Pick<Workspace, 'bankAccounts' | 'company'>): s
 }
 
 /** The owner's account alone: the manual bank account's, else the legal form's default (setup.yaml). */
-export const ownerAccountNumber = (ws: Pick<Workspace, 'bankAccounts' | 'company'>): string => ownerAccountOf(ws).account;
+export const ownerAccountNumber = (ws: OwnerFacts): string => ownerAccountOf(ws).account;
 
-function ownerAccountOf(ws: Pick<Workspace, 'bankAccounts' | 'company'>): { account: string; label: string } {
+/** What names the owner's account: a manual bank account, else the legal form. */
+type OwnerFacts = { bankAccounts: readonly LedgerBankAccount[]; company: Pick<Workspace['company'], 'legalForm'> };
+
+function ownerAccountOf(ws: OwnerFacts): { account: string; label: string } {
   const manual = ws.bankAccounts.find((a) => a.bank === 'manual');
   if (manual) return { account: manual.account, label: manual.label };
   const { owner } = setup();

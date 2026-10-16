@@ -11,7 +11,7 @@ import { Zip, ZipDeflate, ZipPassThrough } from 'fflate';
 import writeXlsxFile, { type Row as XlsxRow } from 'write-excel-file/node';
 import type { Index } from '../types/index.js';
 import type { Key } from '../app/i18n/types.js';
-import { derivePeriod, type Period } from '../accounting/periods.js';
+import { derivePeriod, localToday, type Period } from '../accounting/periods.js';
 import type { ExportedFile } from '../audit/manifest.js';
 import { appVersion } from '../audit/manifest.js';
 import { invoiceFontCss } from '../invoices/fonts.js';
@@ -143,7 +143,7 @@ tr { break-inside: avoid; }
 function filingsIn(ws: Workspace, books: Index, range: Period): Array<{ path: string; src: string }> {
   const closed = books.config?.closedThrough;
   const out: Array<{ path: string; src: string }> = [];
-  for (const q of quartersIn(range)) {
+  for (const q of quartersIn(range, localToday(), ws.filingLength)) {
     const [year, n] = [q.slice(0, 4), q.slice(-1)];
     if (!closed || derivePeriod(q)!.to > closed) continue;
     const dir = yearPaths(ws.paths, year).filings;
@@ -161,8 +161,8 @@ export async function buildBundle(ws: Workspace, books: Index, names: Record<str
   const company = ws.company.name;
   const span = range.kind === 'all' ? t('app.allPeriods') : `${date(range.from)} – ${date(range.to)}`;
   const root = `${company.replace(/\s+/g, '-')}_${range.kind === 'all' ? 'all' : `${range.from}_${range.to}`}`;
-  const filed = Object.fromEntries([...new Set(quartersIn(range).map((q) => q.slice(0, 4)))].flatMap((y) => filedReturnsOf(ws, y)).map((r) => [r.period, r]));
-  const ctx = { books, period: range, names, words: w, filed, account: req.account };
+  const filed = Object.fromEntries([...new Set(quartersIn(range, localToday(), ws.filingLength).map((q) => q.slice(0, 4)))].flatMap((y) => filedReturnsOf(ws, y)).map((r) => [r.period, r]));
+  const ctx = { books, period: range, names, words: w, filed, filingLength: ws.filingLength, account: req.account };
   const dir = { reports: t('export.dirReports'), data: t('export.dirData'), documents: '' };
 
   const files: BundleFile[] = [];

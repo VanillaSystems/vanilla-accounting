@@ -50,7 +50,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
   const period = periodOf(c.period);
 
   const ws = useWorkspace();
-  const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account, ws?.filed)])) as Record<ItemId, number>, [books, period, names, account, ws]);
+  const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account, ws?.filed, filing().length)])) as Record<ItemId, number>, [books, period, names, account, ws]);
   const receiptKb = useMemo(() => receiptsIn(books, period).reduce((s, v) => s + v.r.fileSize, 0) / 1024, [books, period]);
 
   const year = open.token.slice(0, 4);
@@ -120,7 +120,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
 
   const hint = (i: ItemDef): string => {
     const n = counts[i.id];
-    if (i.id === 'vat') return n ? quartersIn(period).map((q) => periodName(periodOf(q))).join(', ') : t('export.noQuarter');
+    if (i.id === 'vat') return n ? quartersIn(period, localToday(), filing().length).map((q) => periodName(periodOf(q))).join(', ') : t('export.noQuarter');
     if (i.id === 'ledger') return account === undefined ? t('export.noAccountChosen') : account === '' ? t('reports.noAccount') : `${account} ${names[account] ?? ''}`;
     if (!n) return t('export.nothingIn');
     switch (i.id) {

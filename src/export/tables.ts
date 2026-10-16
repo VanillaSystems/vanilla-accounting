@@ -6,7 +6,7 @@
 import type { Index } from '../types/index.js';
 import type { Key } from '../app/i18n/types.js';
 import { chfAmount } from '../accounting/ledger.js';
-import type { Period } from '../accounting/periods.js';
+import { localToday, type FilingLength, type Period } from '../accounting/periods.js';
 import { NO_ACCOUNT, ledgerOf, reportView } from '../app/areas/reports/model.js';
 import { formAmount, rateOf, shownZiffern, vatReturn } from '../app/areas/vat/model.js';
 import { accountsWithActivity, entriesIn, paymentsIn, quartersIn, receiptsIn, type ItemId } from './model.js';
@@ -34,8 +34,10 @@ export interface TableContext {
   period: Period;
   names: Record<string, string>;
   words: Words;
-  /** The returns as filed, by quarter. */
+  /** The returns as filed, by filing period. */
   filed: Record<string, ReturnFigures>;
+  /** The firm's filing length: which periods the VAT table lists. */
+  filingLength: FilingLength;
   account?: string;
 }
 
@@ -85,7 +87,7 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
     }
     case 'vat': {
       const out = table([t('export.colQuarter'), t('export.colZiffer'), t('col.description'), t('col.amount'), t('export.colTax'), t('export.colFiled')], [3, 4, 5]);
-      for (const q of quartersIn(c.period)) {
+      for (const q of quartersIn(c.period, localToday(), c.filingLength)) {
         const v = vatReturn(c.books, q);
         const filed = c.filed[q];
         for (const n of shownZiffern(v, filed, false)) {

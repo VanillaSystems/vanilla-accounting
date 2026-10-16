@@ -139,8 +139,8 @@ export function assertCodeTaken(code: string | undefined): void {
   if (!code || formTakes(code)) return;
   const method = withoutInputTax()!;
   const why = method === 'none'
-    ? `Den Steuercode ${code} gibt es in dieser Firma nicht: sie ist nicht im MWST-Register eingetragen und bucht brutto, ohne Codes.`
-    : `Den Steuercode ${code} nimmt das Formular der Saldosteuersatzmethode nicht: Einkäufe ohne Code, Verkäufe mit dem Saldosteuersatz-Code der Firma.`;
+    ? `Den Steuercode ${code} gibt es in dieser Firma nicht: sie ist nicht steuerpflichtig eingetragen und bucht brutto, ohne Codes.`
+    : `Den Steuercode ${code} nimmt das Formular dieser Firma nicht: Einkäufe ohne Code, Verkäufe mit dem Code ihres bewilligten Satzes.`;
   throw new RequestError(400, why, { code: 'codeNotTaken', params: { code, method } });
 }
 
