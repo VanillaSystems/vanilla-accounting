@@ -114,3 +114,43 @@ test('answering again works, also on a payment that lost its booking meanwhile, 
   assert.equal((await api.send('POST', `/api/questions/${third.id}/undo`, { by: OWNER })).status, 200);
   assert.deepEqual(entriesOf('L-1'), [], 'the undo takes the answer\'s booking away again');
 });
+
+test('r10f-34, r10n-2: one «kein Umsatz» answer holds for the payer\'s other open question too; taking it back opens both again', async () => {
+  // After the undo above: L-1 unbooked, L-2 booked as the app's proposal with its own open question (the state r10n-2 found).
+  assert.equal(questionOn('L-2').status, 'open');
+  const q = await answer('L-1', 'notSale');
+  const owner = ownerAccountNumber(api.ws);
+  const acted = q.answer?.acted;
+  assert.ok(acted && 'also' in acted && acted.also?.length === 1 && acted.also[0] === 'L-2', `the answer names the payer's other payment it answered: ${JSON.stringify(acted)}`);
+  const sibling = questionOn('L-2');
+  assert.equal(sibling.status, 'answered', 'the same payer\'s open question is answered along');
+  assert.equal(sibling.answer?.from, acted.rule, 'by the payer rule the answer kept');
+  assert.deepEqual([entriesOf('L-2')[0].accountCredit, entriesOf('L-2')[0].vatCode], [owner, undefined], 'its booking left the turnover too');
+
+  assert.equal((await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER })).status, 200);
+  assert.equal(questionOn('L-2').status, 'open', 'the other question is open again with the answer');
+  assert.deepEqual([entriesOf('L-2')[0].accountCredit, entriesOf('L-2')[0].vatCode], ['3400', 'V81'], 'its booking is back as before');
+});
+
+test('r10f-22: a question\'s state follows its payment\'s bookings: rebooked as a sale after «kein Umsatz», the card shows the correction, the rule and the mark follow, and «Zurücknehmen» keeps the booking', async () => {
+  const first = await answer('L-1', 'notSale');
+  const [e] = entriesOf('L-1');
+  assert.equal(books().transactions.find((t) => t.ref === 'L-1')!.noReceiptNeeded, true);
+  // A person (or the KI on her wish) rebooks the payment as a sale with VAT.
+  const r = await api.send('PATCH', `/api/journal-entries/${e.id}`, { accountCredit: '3400', vatCode: 'V81' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const q = questionOn('L-1');
+  assert.equal(q.id, first.id, 'the same question, not a new one');
+  assert.equal(q.status, 'answered');
+  assert.deepEqual(q.answer?.answer, { choice: 'saleDomestic' }, 'the answer is what the booking says now');
+  const acted = q.answer?.acted;
+  assert.ok(acted && 'correction' in acted && acted.correction && acted.vatCode === 'V81', `a correction answer: ${JSON.stringify(acted)}`);
+  assert.equal(books().transactions.find((t) => t.ref === 'L-1')!.noReceiptNeeded, undefined, 'a sale may need its receipt again');
+  const rule = classifyRules().find((x) => x.id === acted.rule);
+  assert.deepEqual(rule?.then, { account: '3400', vat: 'V81' }, 'the payer rule says sale now');
+  assert.equal(classifyRules().filter((x) => (x.when as { payer?: string }).payer === PAYER_IBAN).length, 1, 'one rule per payer');
+
+  assert.equal((await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER })).status, 200);
+  assert.deepEqual([entriesOf('L-1')[0].accountCredit, entriesOf('L-1')[0].vatCode], ['3400', 'V81'], 'the person\'s booking stays; only the rule goes');
+  assert.equal(classifyRules().some((x) => x.id === acted.rule), false);
+});

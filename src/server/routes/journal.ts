@@ -42,7 +42,8 @@ router.patch('/api/journal-entries/:id', (req, res) => {
     const e = books.journalEntries.find((x) => x.id === req.params.id)!;
     return { ref: e.transactionRef, warnings: bookingWarnings(books, e) };
   });
-  if ('vatCode' in set) learnFromCorrection([ref]);
+  // The sale question follows the booking: a code or an account set by hand answers it, or answers it anew (r10f-22).
+  if ('vatCode' in set || 'accountCredit' in set || 'accountDebit' in set) learnFromCorrection([ref]);
   res.json({ ok: true, warnings });
 });
 

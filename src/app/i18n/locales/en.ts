@@ -3143,6 +3143,7 @@ export default {
     'questions.sale.marked': 'marked as «no sale»: the payment needs no receipt',
     'questions.sale.notSale': { one: 'no sale: {n} entry moved to {account}, without a VAT code. If it was a loan or a repayment, set the account in the entry', other: 'no sale: {n} entries moved to {account}, without a VAT code. If it was a loan or a repayment, set the account in the entries' },
     'questions.sale.rule': 'kept as a rule for this payer (Company › Rules)',
+    'questions.sale.also': { one: 'also holds for {n} other open payment of this payer', other: 'also holds for {n} other open payments of this payer' },
     'questions.sale.noRule': 'no rule: the bank does not name the payer for certain, the next payment is asked again',
     'questions.sale.bookedNow': 'Until you answer, it is booked with {code}.',
     'questions.sale.corrected': 'from your correction of the booking: {code}',

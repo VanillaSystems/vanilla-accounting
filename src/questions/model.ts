@@ -63,10 +63,11 @@ export type SaleGone = (typeof SALE_GONE)[number];
  * payment it cannot read; `detail`: the refusal's own words). A sale's answer says the VAT code it
  * booked (`vatCode`, empty: none) and, «kein Umsatz», that it marked the payment as needing no receipt
  * and the account its revenue entries went to (`account`, the owner's); `correction`: the answer is
- * a person's correction of the booking, which booked it already.
+ * a person's correction of the booking, which booked it already; `also`: the payer's other payments
+ * whose open questions this answer answered along (r10f-34), each answered `from` its rule.
  */
 export type Acted =
-  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true; account?: string; correction?: true }
+  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true; account?: string; correction?: true; also?: string[] }
   | { precedent: string }
   | { refused: NotActed; detail?: string };
 

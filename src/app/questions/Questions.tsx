@@ -86,6 +86,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
     const sale = [
       a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
       a.rule ? t('questions.sale.rule') : t('questions.sale.noRule'),
+      ...(a.also?.length ? [t('questions.sale.also', { n: a.also.length })] : []),
     ];
     return <p className="qnote" data-testid="sale-acted">{sale.join(' · ')}</p>;
   }

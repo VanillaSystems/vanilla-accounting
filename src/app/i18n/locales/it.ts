@@ -3143,6 +3143,7 @@ export default {
     'questions.sale.marked': 'segnato «nessuna cifra d’affari»: il pagamento non ha bisogno di un giustificativo',
     'questions.sale.notSale': { one: 'nessuna cifra d’affari: {n} registrazione spostata su {account}, senza codice IVA. Se era un prestito o un rimborso, imposta il conto nella registrazione', other: 'nessuna cifra d’affari: {n} registrazioni spostate su {account}, senza codice IVA. Se era un prestito o un rimborso, imposta il conto nelle registrazioni' },
     'questions.sale.rule': 'tenuto come regola per questo pagatore (Azienda › Regole)',
+    'questions.sale.also': { one: 'vale anche per {n} altro pagamento aperto di questo pagatore', other: 'vale anche per {n} altri pagamenti aperti di questo pagatore' },
     'questions.sale.noRule': 'nessuna regola: la banca non indica il pagatore con certezza, il prossimo pagamento verrà chiesto di nuovo',
     'questions.sale.bookedNow': 'Fino alla tua risposta è registrato con {code}.',
     'questions.sale.corrected': 'dalla tua correzione della registrazione: {code}',

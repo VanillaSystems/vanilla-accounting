@@ -3143,6 +3143,7 @@ export default {
     'questions.sale.marked': 'marqué «pas de chiffre d’affaires»: le paiement n’a pas besoin de justificatif',
     'questions.sale.notSale': { one: 'pas de chiffre d’affaires: {n} écriture déplacée sur {account}, sans code TVA. Si c’était un prêt ou un remboursement, mets le compte dans l’écriture', other: 'pas de chiffre d’affaires: {n} écritures déplacées sur {account}, sans code TVA. Si c’était un prêt ou un remboursement, mets le compte dans les écritures' },
     'questions.sale.rule': 'retenu comme règle pour ce payeur (Entreprise › Règles)',
+    'questions.sale.also': { one: 'vaut aussi pour {n} autre paiement ouvert de ce payeur', other: 'vaut aussi pour {n} autres paiements ouverts de ce payeur' },
     'questions.sale.noRule': 'pas de règle : la banque ne nomme pas le payeur avec certitude, le prochain paiement sera redemandé',
     'questions.sale.bookedNow': 'Jusqu’à votre réponse, il est comptabilisé avec {code}.',
     'questions.sale.corrected': 'repris de votre correction de l’écriture : {code}',

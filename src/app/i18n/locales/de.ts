@@ -3140,6 +3140,7 @@ export const messages = {
   'questions.sale.marked': 'als «kein Umsatz» markiert: die Zahlung braucht keinen Beleg',
   'questions.sale.notSale': { one: 'kein Umsatz: {n} Buchung auf {account} umgebucht, ohne MWST-Code. War es ein Darlehen oder eine Rückzahlung, setz das Konto in der Buchung', other: 'kein Umsatz: {n} Buchungen auf {account} umgebucht, ohne MWST-Code. War es ein Darlehen oder eine Rückzahlung, setz das Konto in den Buchungen' },
   'questions.sale.rule': 'als Regel für diesen Zahler gemerkt (Firma › Regeln)',
+  'questions.sale.also': { one: 'gilt auch für {n} weitere offene Zahlung dieses Zahlers', other: 'gilt auch für {n} weitere offene Zahlungen dieses Zahlers' },
   'questions.sale.noRule': 'keine Regel: die Bank nennt den Zahler nicht eindeutig, die nächste Zahlung wird wieder gefragt',
   'questions.sale.bookedNow': 'Bis zu deiner Antwort ist sie mit {code} gebucht.',
   'questions.sale.corrected': 'aus deiner Korrektur der Buchung: {code}',
