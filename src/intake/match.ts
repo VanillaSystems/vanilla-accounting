@@ -96,6 +96,42 @@ function numbersIn(text: string): string[] {
 const BANK_WORDS = new Set(['zahlung', 'gutschrift', 'belastung', 'lastschrift', 'einkauf', 'karte', 'debit', 'kredit', 'transfer', 'payment', 'rechnung', 'auftrag', 'dauerauftrag', 'ebanking', 'twint', 'mastercard', 'visa', 'august', 'september', 'oktober', 'november', 'dezember', 'januar', 'februar', 'april', 'juni', 'juli']);
 const nameWords = (tx: BankTransaction) => [...new Set([tx.description, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference ?? ''])].join(' ').toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !BANK_WORDS.has(w));
 
+/**
+ * A credit note's total is money back: when the receipt's VAT says so (its tax, or its net and
+ * gross, below zero), its amount is negative too, whatever sign the reader gave it (corner-34).
+ */
+export function creditSigned(r: Pick<Receipt, 'amount' | 'vatSummary'>): number | undefined {
+  const groups = r.vatSummary ?? [];
+  const back = groups.length > 0 && (groups.reduce((sum, g) => sum + g.vat, 0) < 0 || groups.every((g) => (g.gross ?? g.net ?? 0) < 0));
+  return r.amount !== undefined && back && r.amount > 0 ? -r.amount : r.amount;
+}
+
+/**
+ * What code links without the model (MISSION: a payment that matches a receipt by amount and
+ * number): an archived receipt nothing is linked to, and an open payment without a receipt, the
+ * same amount to the Rappen in the same currency, money out for an invoice and in for a credit
+ * note, and one of the receipt's numbers («GS-1207») in the payment's text. Only a pair that is
+ * unique both ways is linked. Returns the links made.
+ */
+export function linkByCode(index: Books): Array<{ receipt: string; payment: string }> {
+  const lock = periodLock(index);
+  const linked = new Set(index.mappings.flatMap((m) => [m.receiptId, m.transactionRef]));
+  const cents = (n: number) => Math.round(Math.abs(n) * 100);
+  const receipts = index.receipts.filter((r) => r.location === 'archived' && !linked.has(r.id) && (!r.kind || r.kind === 'invoice')
+    && r.amount !== undefined && r.amount !== 0 && !(r.date && lock.isClosed(r.date)));
+  const payments = index.transactions.filter((t) => !linked.has(t.ref) && t.amount !== 0 && t.type !== 'wise-fee' && !lock.isClosed(t.date));
+  const fits = (r: Receipt, t: BankTransaction) => {
+    const numbers = numbersIn(r.extractedText ?? '');
+    const paid = squash([t.description, t.reference ?? '', t.remarks ?? '', ...(t.parts ?? []).map((p) => p.reference ?? '')].join(' '));
+    return (r.currency ?? baseCurrency()) === t.currency && cents(r.amount!) === cents(t.amount)
+      && (r.amount! < 0) === (t.direction === 'CRDT') && numbers.some((n) => paid.includes(n));
+  };
+  const pairs = receipts.flatMap((r) => payments.filter((t) => fits(r, t)).map((t) => ({ r, t })));
+  const once = pairs.filter(({ r, t }) => pairs.filter((p) => p.r === r).length === 1 && pairs.filter((p) => p.t === t).length === 1);
+  for (const { r, t } of once) index.mappings.push({ transactionRef: t.ref, receiptId: r.id });
+  return once.map(({ r, t }) => ({ receipt: r.id, payment: t.ref }));
+}
+
 const DAY = 864e5;
 const CANDIDATES = 20;
 
@@ -137,6 +173,8 @@ export function candidates(receipt: Receipt, all: readonly BankTransaction[], li
 
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
+  const byCode = books.update(linkByCode);
+  for (const l of byCode) log(`linked by amount and number: receipt ${l.receipt} → ${l.payment}`);
   const snapshot = books.read();
   const staged = snapshot.receipts.filter((r) => r.location === 'staged');
   if (staged.length === 0) {
@@ -221,7 +259,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     let twin: string | undefined;
     const dated = dateOf(answer.date, receipt);
     const target = archive(receipt, datedName(normalizeFilename(answer.suggestedFilename), dated.date), (r, index) => {
-      Object.assign(r, { date: dated.date, description: answer.description, amount: answer.amount, currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
+      Object.assign(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
       if (dated.dateSource) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;

@@ -12,6 +12,7 @@
  * without any VAT indicator is recorded hasSwissVat=false without a model call, on a receipt
  * that has no facts. Only a model answer that parses as VAT facts replaces facts.
  */
+import { creditSigned } from './match.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { periodLock, type Books } from '../books/store.js';
@@ -74,7 +75,10 @@ export function vatStep({ force = false } = {}): StepRun {
       for (const [was, facts] of items) {
         const r = index.receipts.find((x) => x.id === was.id);
         // A person may have set the facts while the model read them.
-        if (r && r.vatBy !== 'human' && r.extractedText === was.extractedText && (replace || !hasFacts(r))) Object.assign(r, facts);
+        if (r && r.vatBy !== 'human' && r.extractedText === was.extractedText && (replace || !hasFacts(r))) {
+          Object.assign(r, facts);
+          r.amount = creditSigned(r);
+        }
       }
     });
 
