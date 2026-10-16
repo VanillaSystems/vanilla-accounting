@@ -16,6 +16,8 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Firma › Regeln has «Neue Regel»: a rule made by hand, without the AI, for a business, a payer (IBAN or name) or a text, optionally with direction and amount, booked on an account with one of the firm's VAT codes (no VAT field for a firm not registered). «Vorschau» shows the same card as the AI's draft, with the payments of the open year it matches and «Trotzdem behalten» for a broad rule; «Behalten» saves it like any rule, in Änderungen and with its undo. The task for an unbooked payment links to the form, started from that payment. Persona finding r8k-4.
+
 - A mailbox is connected in the app: Firma › Quellen › «Postfach verbinden» takes the address, the IMAP server, the login and the app password. It writes the mailbox's source (every sender, the inbox, daily), which waits to be switched on like any source, and keeps the password in the keychain store, never in the books. A source's password is set or replaced on its row. «Verbindung prüfen» signs in and lists which of the last 60 days' mails the source would read, without fetching anything. The Mac app keeps the source and its password and checks the connection, but does not fetch mail by itself yet, and says so on the page; `npm start` and `npm run pull` do. Persona finding r5h-27.
 - Belege lists what lies in quarantine (`data/quarantine/`): each file with why it is there (Newsletter, AGB, Versandbestätigung, Preisliste, set aside by hand), «Ansehen», and «Ist ein Beleg», which puts it back into the inbox and has it read. Persona finding r5h-28.
 - Aufgaben lists the receipts that may be a copy of another, each with «Ist dasselbe» and «Verschieden». Persona finding r5h-34.
