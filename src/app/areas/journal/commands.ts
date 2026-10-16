@@ -1,6 +1,7 @@
 /** What the list, the detail and the keys of Buchungen share: the journal of the loaded books, and the commands on an entry. */
 import type { Index, JournalEntry, Receipt } from '../../../types/index.js';
-import { correctionKinds, correctionOf, type CorrectionKind } from '../../../accounting/correction.js';
+import { correctionKinds, correctionOf, receiptRate, type CorrectionKind } from '../../../accounting/correction.js';
+import { ownerAccount } from '../../../accounting/bank-accounts.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { localToday, booksOpenPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
@@ -40,10 +41,19 @@ export const splitReceipt = (r: Receipt) => splitTitle(r.description || r.filena
 export const isBankAccount = (account: string): boolean =>
   !!workspaceNow()?.bankAccounts.some((b) => b.account === account && b.bank !== 'manual');
 
+/** The owner's private account (its number): a purchase moved there claims no input tax. */
+export const isPrivateAccount = (account: string): boolean => {
+  const ws = workspaceNow();
+  return !!ws && !!account && ownerAccount(ws).split(' ')[0] === account;
+};
+
+/** The Swiss VAT rate the receipts linked to an entry show, if any. */
+export const receiptRateOf = (books: Index, e: JournalEntry): number | undefined => receiptRate(journalFor(books).byId.get(e.id)?.receipts ?? []);
+
 /** Opens the correction form of a filed entry for what was wrong with it. */
 export function correct(books: Index, e: JournalEntry, as: CorrectionKind): void {
   setUi({ overlay: { kind: 'new', correcting: { entry: e.id, as }, draft: {
-    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount),
+    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount, receiptRateOf(books, e)),
     corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
   } } });
 }

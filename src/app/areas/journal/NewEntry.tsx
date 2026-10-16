@@ -22,9 +22,9 @@ import type { JournalEntryInput } from '../../lib/api.js';
 import { AccountField } from './AccountField.js';
 import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
-import { banksMoved, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
-import { correct, isBankAccount, journalFor } from './commands.js';
-import { baseCurrency, chart } from '../../../engines/index.js';
+import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
+import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
+import { baseCurrency, chart, vat } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -41,6 +41,7 @@ export function NewEntry(props: Props) {
   const [reverse, setReverse] = useState<boolean | undefined>(undefined);
   /** The person was told the entry moves a bank account without its payment, and books it anyway with a second ↵. */
   const [sure, setSure] = useState(false);
+  const autoCode = useRef<string>();
   // A form started again (another kind of correction, a payment picked) is read once it is there.
   useEffect(() => redraw((n) => n + 1), [round]);
   if (s.overlay?.kind !== 'new') return null;
@@ -57,6 +58,24 @@ export function NewEntry(props: Props) {
   const as = s.overlay.correcting?.as;
   const moved = tx ? [] : banksMoved(sides, isBankAccount);
   const accounts = getAccountMap();
+  // An account correction onto the owner's private account takes the input tax back with it (r4t-7).
+  const privateTo = as === 'account' && corrected ? [sides.accountDebit, sides.accountCredit].find(isPrivateAccount) : undefined;
+  const privateCode = privateTo && corrected ? accountCorrectionCode(corrected, privateTo, isPrivateAccount) : undefined;
+  // A VAT correction of a purchase without input tax whose receipt shows Swiss VAT claims it (r4c-37).
+  const rate = corrected ? receiptRateOf(books, corrected) : undefined;
+  const claim = as === 'vat' && corrected && d.vatCode && d.vatCode === claimCode(corrected, d.accountDebit ?? '', rate) ? d.vatCode : undefined;
+  const taxOf = (code: string | undefined) => (corrected && code ? fmt(Math.abs(vat().vatLine({ ...corrected, id: '', transactionRef: '', date: d.date ?? '', vatCode: code })?.tax ?? 0)) : '');
+
+  /** The private code goes into the VAT field while the field is empty or holds the one put there before. */
+  function followPrivate() {
+    const field = form.current?.elements.namedItem('vatCode') as HTMLInputElement | null;
+    if (!field || as !== 'account' || !corrected) return;
+    const f = Object.fromEntries(new FormData(form.current!)) as Record<string, string>;
+    const to = [f.accountDebit.trim(), f.accountCredit.trim()].find(isPrivateAccount);
+    const code = to ? accountCorrectionCode(corrected, to, isPrivateAccount) : undefined;
+    if (code && !field.value.trim()) { field.value = code; autoCode.current = code; }
+    else if (!code && autoCode.current && field.value.trim() === autoCode.current) { field.value = ''; autoCode.current = undefined; }
+  }
 
   /** Another kind of correction: the form starts again from the filed entry. */
   function correctAs(kind: CorrectionKind) {
@@ -141,11 +160,13 @@ export function NewEntry(props: Props) {
                   <button key={k} type="button" role="tab" aria-selected={k === as} className={k === as ? 'on' : ''} data-correct={k} onClick={() => correctAs(k)}>{t(`journal.correctionAs.${k}`)}</button>
                 ))}
               </span>
-              <p className="m" data-testid="correction-how">{t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '' })}</p>
+              <p className="m" data-testid="correction-how">{claim
+                ? t('journal.correctionHow.claim', { rate: String(rate), code: claim, tax: taxOf(claim), was: corrected.vatCode ?? '' })
+                : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '' })}</p>
             </div>
           )}
         </div>
-        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => { redraw((n) => n + 1); setSure(false); if (err === t('journal.movesBankAgain')) setErr(''); }} onSubmit={(e) => { e.preventDefault(); book(); }}>
+        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => { followPrivate(); redraw((n) => n + 1); setSure(false); if (err === t('journal.movesBankAgain')) setErr(''); }} onSubmit={(e) => { e.preventDefault(); book(); }}>
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} title={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
@@ -167,6 +188,11 @@ export function NewEntry(props: Props) {
             </label>
           )}
           <VatCodeList />
+          {privateCode && (
+            <div className="notice" data-testid="correction-private">
+              {t('journal.correctionPrivate', { account: `${privateTo} ${accounts[privateTo!] ?? ''}`.trim(), tax: taxOf(corrected!.vatCode), was: corrected!.vatCode ?? '', code: privateCode })}
+            </div>
+          )}
           {moved.length > 0 && (
             <div className="notice warn" data-testid="moves-bank">
               {t(filed ? 'journal.movesBankCorrection' : 'journal.movesBank', { account: `${moved[0]} ${accounts[moved[0]] ?? ''}`.trim(), amount: fmt(now.amount ?? 0) })}

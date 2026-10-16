@@ -6,9 +6,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { banksMoved, correctionKinds, correctionOf } from '../src/accounting/correction.js';
+import { accountCorrectionCode, banksMoved, correctionKinds, correctionOf, privateUseCode, receiptRate } from '../src/accounting/correction.js';
+import { entriesForReturn } from '../src/accounting/declarations.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
-import { vat } from '../src/engines/index.js';
+import { filing, vat } from '../src/engines/index.js';
 import type { JournalEntry } from '../src/types/index.js';
 import type { BookChange } from '../src/types/assistant.js';
 import { changesIn } from '../src/assistant/changes.js';
@@ -82,4 +83,38 @@ test('a side left empty is refused with the way that works: the account on both 
   const b = { receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: [natel, { ...entry(correctionOf(natel, 'storno', '2026-10-16', 'K', isBank)), origin: 'manual' as const }], config: { closedThrough: '2026-09-30' } };
   const ctx = { bankAccounts: [], chart: new Set<string>(), earlier: [] };
   assert.throws(() => applyAnswer(b, asked('[{"kind":"entry","id":"corr","set":{"accountDebit":"6510","accountCredit":""}}]'), ctx), /6510\/6510/);
+});
+
+/** Ziffern 405, 415 and the payable tax of Q3 as its 0535 declares them from these entries. */
+const q3 = (es: JournalEntry[]) => {
+  const f = vat().figures(entriesForReturn(es, '2026-Q3', filing().length), '2026-Q3', []);
+  return { 405: f.ziffern['405'] ?? 0, 415: f.ziffern['415'] ?? 0, payable: Math.round(f.payable * 100) / 100 };
+};
+test('a filed purchase moved onto the owner\'s private account takes its input tax back: K81-B, 0535 Ziffer 415 (r4t-7)', () => {
+  const tank: JournalEntry = { id: 'tank', transactionRef: 'RB-7', date: '2026-08-12', accountDebit: '6200', accountCredit: '1020', amount: 74.2, vatCode: 'I81', description: 'Karte 5412 Tanken' };
+  const isPrivate = (a: string) => a === '2451';
+  assert.equal(accountCorrectionCode(tank, '2451', isPrivate), 'K81-B');
+  assert.equal(accountCorrectionCode(tank, '6210', isPrivate), undefined, 'onto another expense the VAT stays as declared');
+  assert.equal(accountCorrectionCode({ ...tank, vatCode: 'I0' }, '2451', isPrivate), undefined, 'no input tax claimed, none to take back');
+  assert.equal(privateUseCode('M26'), 'K26-B', 'at the purchase\'s own rate');
+  const draft = correctionOf(tank, 'account', '2026-10-16', 'Korrektur', isBank);
+  const corr = entry({ ...draft, accountDebit: '2451', vatCode: accountCorrectionCode(tank, '2451', isPrivate) });
+  assert.deepEqual([corr.accountDebit, corr.accountCredit, corr.amount, corr.vatCode], ['2451', '6200', 74.2, 'K81-B']);
+  assert.deepEqual(q3([tank]), { 405: 5.56, 415: 0, payable: -5.56 }, 'as filed: 5.56 input tax claimed');
+  assert.deepEqual(q3([tank, corr]), { 405: 5.56, 415: 5.56, payable: 0 }, 'the 0535: the input tax taken back at Ziffer 415');
+  assert.equal(bank([tank, corr]), bank([tank]), 'the bank stays');
+  assert.equal(tax(corr), tax(tank), 'the tax put back on 6200 is the input tax it had claimed: the expense nets to 0, the owner owes 74.20');
+});
+
+test('a filed purchase without input tax whose receipt shows Swiss VAT: the MWST-Code correction claims it, 0535 Ziffer 405 (r4c-37)', () => {
+  const geruest: JournalEntry = { id: 'g', transactionRef: 'RB-8', date: '2026-08-20', accountDebit: '6000', accountCredit: '1020', amount: 1120, vatCode: 'I0', description: 'Gerüst August' };
+  assert.equal(receiptRate([{ hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 83.92 }] }]), 8.1);
+  assert.equal(receiptRate([{ hasSwissVat: false, vatSummary: [{ ratePercent: 19, vat: 5 }] }]), undefined, 'a foreign VAT is no Swiss input tax');
+  const d = correctionOf(geruest, 'vat', '2026-10-16', 'Korrektur', isBank, 8.1);
+  assert.deepEqual([d.accountDebit, d.accountCredit, d.amount, d.vatCode], ['6000', '6000', 1120, 'I81']);
+  assert.deepEqual(q3([geruest]), { 405: 0, 415: 0, payable: 0 });
+  assert.deepEqual(q3([geruest, entry(d)]), { 405: 83.92, 415: 0, payable: -83.92 }, 'the 0535 claims the receipt\'s input tax');
+  assert.equal(bank([geruest, entry(d)]), bank([geruest]), 'the bank stays');
+  assert.equal(correctionOf(geruest, 'vat', '2026-10-16', 'Korrektur', isBank).vatCode, '-I0', 'without a receipt with Swiss VAT nothing to claim');
+  assert.equal(correctionOf(natel, 'vat', '2026-10-16', 'Korrektur', isBank, 8.1).vatCode, '-I81', 'a code with tax is still taken back');
 });
