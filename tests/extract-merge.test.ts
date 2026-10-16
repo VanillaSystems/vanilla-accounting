@@ -117,6 +117,16 @@ test('receipts and bank statements are the scan; journal and config are untouche
 
 // ─── (a) Every field not from the bank survives ──────────────────────────────
 
+test('a filed transaction stays exactly as the books hold it: the counterparty, reference and parts it was filed with are neither stripped nor taken from the camt053', () => {
+  const parts = [{ amount: 5, currency: 'CHF', counterparty: 'A' }, { amount: 5, currency: 'CHF', counterparty: 'B' }];
+  const filed = tx('T-closed', '2026-05-10', { counterparty: 'Familie Keller', counterpartyIban: 'CH00', reference: 'Rechnung 2026-028', parts });
+  const prev = previousIndex({ transactions: [filed, tx('T-open', '2026-08-10')] });
+  const merged = merge(prev, scan({ bankTransactions: [tx('T-closed', '2026-05-10', { counterparty: 'Familie Keller', counterpartyIban: 'CH00', reference: 'Rechnung 2026-028', parts }), tx('T-open', '2026-08-10')] }));
+  assert.deepEqual(byRef(merged, 'T-closed'), filed);
+  const renamed = merge(prev, scan({ bankTransactions: [tx('T-closed', '2026-05-10', { description: 'the bank corrected the text', counterparty: 'Keller' }), tx('T-open', '2026-08-10')] }));
+  assert.deepEqual(byRef(renamed, 'T-closed'), filed);
+});
+
 test('a field another step set on a bank transaction survives the rebuild', () => {
   const stamped = { ...tx('T-open', '2026-08-10'), checkedBy: 'evidence', noReceiptNeeded: false, remarks: '' } as BankTransaction;
   const merged = merge(previousIndex({ transactions: [tx('T-closed', '2026-05-10'), stamped] }), scan());
