@@ -144,3 +144,8 @@ file records every decision a person might have made differently, newest last.
     - Partly: the sidebar's advice on a 1 October registration is wrong; Perioden und Siegel lists quarter due dates for a firm without returns; H1 shows the corrected figure as filed.
     - Fix round firmtypes3 started (also every English or internal message that reaches the person, as a class).
     - Ken (16.10.): he tests by hand on his real books; automated tests never use them. Build rc.295-g49de54d handed to him.
+32. Round 6 Huber (rc.290, .verify/findings/r6-huber.md): of 19 round-5 rows not fixed, 16 fixed, 2 partly, 1 failing (r5h-22 invoice select race, 3 of 8 runs). x02 held until «Übernehmen», AI recorded as author, undo reopens the question, mailbox connect, quarantine, reminder, Swisscom, opening after filing, late-receipt I81 all fixed. Wishes: 5 right, 1 refused honestly, 0 wrong.
+    - New high r6h-24: a rule kept by answering the app's sale question is not switched on; «Automatisch buchen» answers with a hash.
+    - Medium: drop-held duplicates vanish (r6h-23); «Löschen» deletes at once and not in Änderungen (r6h-28); mailbox connect not atomic (r6h-25); drop dialog cut off with the sidebar open (r6h-30).
+    - The tester's GUI launcher passed the Claude token in `open --env` argv and `open` echoed it once into a tool output (no evidence file has it). Ken told to rotate it. The harness fix is in fix/huber6.
+    - Fix round huber6 started.
