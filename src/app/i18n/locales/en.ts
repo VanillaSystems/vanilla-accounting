@@ -908,6 +908,8 @@ export default {
     'receipts.vatMisfit': 'VAT does not fit the amount',
     'receipts.vatMisfitTip': 'The receipt\'s VAT belongs to {gross}, the amount is {amount}. Check the amount or read the receipt again.',
     'receipts.whyTaken': { one: 'already has {n} receipt', other: 'already has {n} receipts' },
+    'receipts.whyFiled': 'in a filed quarter: becomes a correction, not a link',
+    'receipts.toCorrection': 'to the correction',
     'receipts.withoutBank': 'Without a bank payment',
     'receipts.escKey': 'esc',
     'receipts.fxLine': '≈ CHF {amount} · ESTV {date}',

@@ -26,6 +26,7 @@ const books: Index = {
     receipt('undated', { amount: 7 }),
     receipt('brochure', { date: '2026-09-05', amount: 0 }),
     receipt('eur', { date: '2026-08-20', amount: 100, currency: 'EUR' }),
+    receipt('late', { date: '2026-06-12', amount: 30 }),
   ],
   transactions: [
     tx('T-paper', '2026-09-13', 58.4),
@@ -35,6 +36,7 @@ const books: Index = {
     tx('T-fee', '2026-09-12', 58.4, { type: 'wise-fee' }),
     tx('T-eur', '2026-08-21', 100, { currency: 'EUR' }),
     tx('T-chf-for-eur', '2026-08-21', 94),
+    tx('T-filed', '2026-06-12', 30),
   ],
   mappings: [
     { receiptId: 'linked', transactionRef: 'T-linked' },
@@ -80,6 +82,16 @@ test('the payment of the same amount and the nearest date ranks first; fees, clo
   assert.equal(best[0].days, 1);
   for (const gone of ['T-fee', 'T-closed']) assert.ok(!refs.includes(gone), gone);
   assert.deepEqual(candidates(view('linked'), l, flat).best.map((c) => c.tx.ref).includes('T-linked'), false);
+});
+
+test('a late receipt sees the filed payment it fits, marked, never as the one-key suggestion; a filed payment that fits nothing stays out (corner-33)', () => {
+  const { best } = candidates(view('late'), l, flat);
+  assert.equal(best[0].tx.ref, 'T-filed');
+  assert.equal(best[0].filed, true);
+  assert.equal(suggestion(view('late'), l, flat), undefined);
+  const all = candidates(view('paper'), l, flat);
+  assert.ok(![...all.best, ...all.more].some((c) => c.tx.ref === 'T-filed'));
+  assert.deepEqual(candidates(view('paper'), l, flat, 't-filed').more.map((c) => [c.tx.ref, c.filed]), [['T-filed', true]], 'a search finds it');
 });
 
 test('a foreign receipt ranks its own currency above a CHF payment of the same value', () => {

@@ -1,7 +1,8 @@
 /**
- * Zahlung verknüpfen: the open-period payments ranked for this receipt (best first), a search
- * over all of them, and "paid privately or in cash" last. ↑↓ choose, ↵ links, Esc closes. The
- * chosen payment says when its amount is off the receipt's, before it is linked.
+ * Zahlung verknüpfen: the payments ranked for this receipt (best first), a search over all of
+ * them, and "paid privately or in cash" last. ↑↓ choose, ↵ links, Esc closes. The chosen payment
+ * says when its amount is off the receipt's, before it is linked. A payment of a filed quarter is
+ * marked: ↵ on it opens its correction in the open quarter and links nothing (corner-33).
  */
 import { useMemo, useState } from 'react';
 import type { RouteOf } from '../../shell/route.js';
@@ -12,7 +13,7 @@ import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { candidates, chfOf, type Candidate, type Ledger, type ReceiptView } from './model.js';
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
-import { linkPayment, privateOutlay } from './actions.js';
+import { correctFiled, linkPayment, privateOutlay } from './actions.js';
 import { Kbd } from './commands.js';
 import { baseCurrency } from '../../../engines/index.js';
 
@@ -24,10 +25,11 @@ function why(c: Candidate): string {
     c.fit?.kind === 'skonto' ? fitText(c.fit) : '',
     c.days !== undefined ? dayText(c.days) : '',
     c.taken ? t('receipts.whyTaken', { n: c.taken }) : '',
+    c.filed ? t('receipts.whyFiled') : '',
   ].filter(Boolean).join(' · ');
 }
 
-export function LinkDialog({ v, l, nav, onClose }: Props) {
+export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const { r } = v;
   const { rates } = useFx();
   const owner = useWorkspace()?.bankAccounts.find((b) => b.bank === 'manual')?.account;
@@ -41,6 +43,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
     if (!item) return;
     onClose();
     if (item === 'private') privateOutlay(nav, v);
+    else if (item.filed) correctFiled(nav, books, l, item.tx.ref);
     else linkPayment(nav, v, item.tx.ref, txLine(item.tx), item.fit);
   }
 
@@ -56,7 +59,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
     const i = k++;
     const w = why(c);
     return (
-      <div key={c.tx.ref} className={`o tx2${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-ref={c.tx.ref} onMouseMove={() => i !== at && setIdx(i)} onClick={() => choose(c)}>
+      <div key={c.tx.ref} className={`o tx2${i === at ? ' on' : ''}${c.filed ? ' filed' : ''}`} role="option" aria-selected={i === at} data-ref={c.tx.ref} data-filed={c.filed ? '' : undefined} onMouseMove={() => i !== at && setIdx(i)} onClick={() => choose(c)}>
         <span className="d mono">{formatDate(c.tx.date)}</span>
         <span className="t"><span>{c.tx.description}</span><small>{bankOf(c.tx)}{w && ` · ${w}`}{i === at && c.fit?.kind === 'off' && <> · <b className="off">{fitText(c.fit)}</b></>}</small></span>
         <span className="a mono">{c.tx.currency !== baseCurrency() && <i>{c.tx.currency}</i>}{fmt(signed(c.tx))}</span>
@@ -89,7 +92,7 @@ export function LinkDialog({ v, l, nav, onClose }: Props) {
         </div>
         <div className="foot">
           <Kbd keys={['↑', '↓']} tip={t('receipts.pickTip')} /> {t('keys.select')}
-          <Kbd keys={['↵']} tip={t('receipts.linkTip')} /> {t('receipts.linkVerbShort')}
+          <Kbd keys={['↵']} tip={t('receipts.linkTip')} /> {items[at] !== 'private' && items[at]?.filed ? t('receipts.toCorrection') : t('receipts.linkVerbShort')}
           <Kbd keys={[t('receipts.escKey')]} tip={t('receipts.closeTip')} /> {t('receipts.close')}
         </div>
       </div>

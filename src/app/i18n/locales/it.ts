@@ -908,6 +908,8 @@ export default {
     'receipts.vatMisfit': 'l\'IVA non corrisponde all\'importo',
     'receipts.vatMisfitTip': 'L\'IVA del giustificativo appartiene a {gross}, l\'importo è {amount}. Verificare l\'importo o rileggere il giustificativo.',
     'receipts.whyTaken': { one: 'ha già {n} giustificativo', other: 'ha già {n} giustificativi' },
+    'receipts.whyFiled': 'in un trimestre già inoltrato: diventa una correzione, nessun collegamento',
+    'receipts.toCorrection': 'alla correzione',
     'receipts.withoutBank': 'Senza pagamento bancario',
     'receipts.escKey': 'esc',
     'receipts.fxLine': '≈ CHF {amount} · AFC {date}',

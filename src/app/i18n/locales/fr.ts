@@ -908,6 +908,8 @@ export default {
     'receipts.vatMisfit': 'la TVA ne correspond pas au montant',
     'receipts.vatMisfitTip': 'La TVA du justificatif appartient à {gross}, le montant est {amount}. Vérifier le montant ou relire le justificatif.',
     'receipts.whyTaken': { one: 'a déjà {n} justificatif', other: 'a déjà {n} justificatifs' },
+    'receipts.whyFiled': 'dans un trimestre déjà déposé : devient une correction, pas un rattachement',
+    'receipts.toCorrection': 'vers la correction',
     'receipts.withoutBank': 'Sans paiement bancaire',
     'receipts.escKey': 'esc',
     'receipts.fxLine': '≈ CHF {amount} · AFC {date}',

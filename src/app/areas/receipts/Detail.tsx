@@ -22,7 +22,7 @@ import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { correctFiled, deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
@@ -76,7 +76,7 @@ function lockedQuarter(v: ReceiptView, l: Ledger): string {
 }
 
 /** The receipt pays a payment of a filed quarter: no link is made; its tax is a correction in the open quarter, booked from that payment's entry. */
-function FiledPaymentNotice({ l, nav, payment, open }: Props & { l: Ledger; payment: string; open: string }) {
+function FiledPaymentNotice({ l, nav, books, canEdit, payment, open }: Props & { l: Ledger; payment: string; open: string }) {
   const tx = l.txByRef.get(payment);
   const entry = l.entriesByRef.get(payment)?.[0];
   if (!tx) return null;
@@ -85,6 +85,7 @@ function FiledPaymentNotice({ l, nav, payment, open }: Props & { l: Ledger; paym
     <div className="notice" data-testid="filed-payment">
       {ICONS.lock}<span>{t('receipts.filedPaymentNotice', { date: formatDate(tx.date), period: quarterName(tx.date), open })}</span>
       <a href="#" onClick={(e) => { e.preventDefault(); nav.go(go); }}>{t('receipts.filedPaymentOpen')}</a>
+      {canEdit && entry && open && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment); }}>{t('receipts.correctIn', { period: open })}</a>}
     </div>
   );
 }
@@ -210,7 +211,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
       </>
     );
   }
-  if (v.locked) return null;
+  // A receipt of a filed payment: the notice above says where its tax goes, not «Noch keine Zahlung».
+  if (v.locked || (v.r.filedPayment && l.txByRef.has(v.r.filedPayment))) return null;
   if (sug && canEdit) {
     const why = [t('receipts.whySameAmount'), sug.days !== undefined && dayText(sug.days)].filter(Boolean).join(' · ');
     return (

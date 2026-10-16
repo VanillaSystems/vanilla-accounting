@@ -35,14 +35,21 @@ test('the refund is linked to the credit note by amount, direction and number', 
   assert.deepEqual(linkByCode(b), [], 'linked once');
 });
 
-test('no link without the number, against the direction, at another amount, twice the same, or in a filed quarter', () => {
+test('no link without the number, against the direction, at another amount, or twice the same', () => {
   const none = (over: Partial<Books>) => assert.deepEqual(linkByCode(books(over)), []);
   none({ transactions: [{ ...refund, description: 'Gutschrift Farbmix AG' }] });
   none({ transactions: [{ ...refund, direction: 'DBIT' }] });
   none({ transactions: [{ ...refund, amount: 408.5 }] });
   none({ transactions: [refund, { ...refund, ref: 'RB-31' }] });
-  none({ transactions: [{ ...refund, date: '2026-09-28' }] });
   none({ receipts: [{ ...GS, location: 'staged' }] });
+});
+
+test('a payment of a filed quarter is never linked: the receipt names it as the filed payment it pays (corner-33)', () => {
+  const b = books({ transactions: [{ ...refund, date: '2026-09-28' }], receipts: [{ ...structuredClone(GS), date: '2026-09-25' }] });
+  assert.deepEqual(linkByCode(b), [{ receipt: 'gs', payment: 'RB-30', filed: true }]);
+  assert.deepEqual(b.mappings, []);
+  assert.equal(b.receipts[0].filedPayment, 'RB-30');
+  assert.deepEqual(linkByCode(b), [], 'said once');
 });
 
 test('the inbox run links it without the model, before anything else', async () => {

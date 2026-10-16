@@ -3,11 +3,14 @@
  * again. Every change says what it did in the toast and can be taken back there (or with ⌘Z);
  * the undo is the opposite write, for a delete the receipt back from the trash.
  */
-import type { BankTransaction, ReceiptKind, ReceiptPatch, VatFacts } from '../../../types/index.js';
+import type { BankTransaction, Index, ReceiptKind, ReceiptPatch, VatFacts } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
-import { together, type AmountFit, type ReceiptView, type Saves } from './model.js';
+import { together, type AmountFit, type Ledger, type ReceiptView, type Saves } from './model.js';
+import { at } from './view.js';
+import { correct } from '../journal/commands.js';
+import { correctionKinds } from '../../../accounting/correction.js';
 import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
 
@@ -30,6 +33,18 @@ export const linkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string,
   run(nav, () => api.addMapping(pair(v.r.id, ref)),
     fit?.kind === 'off' ? t('receipts.linkedOff', { what, amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` }) : t('receipts.linkedTo', { what }),
     () => api.removeMapping(pair(v.r.id, ref)));
+
+/**
+ * A payment of a filed quarter the receipt pays: never a link (golden rule 1). Its entry opens with
+ * the correction in the open quarter started; a payment without an entry opens itself (corner-33).
+ */
+export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string): void {
+  const tx = l.txByRef.get(ref);
+  const entry = l.entriesByRef.get(ref)?.[0];
+  if (!entry) { if (tx) nav.go(at({ area: 'bank', payment: ref }, tx.date)); return; }
+  nav.go(at({ area: 'journal', id: entry.id }, entry.date));
+  correct(books, entry, correctionKinds(entry)[0]);
+}
 
 export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
   run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping(pair(v.r.id, ref)));

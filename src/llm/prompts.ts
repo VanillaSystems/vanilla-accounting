@@ -40,7 +40,7 @@ export function buildMatchPrompt(
 
 ${receiptSection}
 
-## Bank Statement Transactions (the open payments most likely to fit, best first)
+## Bank Statement Transactions (the payments without a receipt most likely to fit, best first)
 ${JSON.stringify(transactions, null, 2)}
 
 ## Instructions
@@ -54,7 +54,8 @@ Rules:
 - One receipt can match multiple transactions (e.g. Wise multi-currency splits where one purchase debits multiple accounts)
 - Multiple receipts can match one transaction (e.g. FedEx freight invoice + customs invoice)
 - Multi-currency: receipt may be in EUR/USD, bank transaction in CHF
-- Transactions are a short selection of the open payments, ranked by an invoice number in their text, amount, vendor name and date
+- Transactions are a short selection of the payments without a receipt, ranked by an invoice number in their text, amount, vendor name and date
+- A transaction with "filed": true lies in a quarter whose VAT return is filed. Name it like any other when the receipt pays it (a receipt that came late); the app links nothing there and books its tax as a correction
 - If no good match exists, return empty matchedTransactionRefs and confidence < 0.5
 
 ## Grouped Vendor Note (Amazon, AliExpress, FedEx)

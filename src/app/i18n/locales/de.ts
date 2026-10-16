@@ -905,6 +905,8 @@ export const messages = {
   'receipts.vatMisfit': 'MWST passt nicht zum Betrag',
   'receipts.vatMisfitTip': 'Die MWST des Belegs gehört zu {gross}, der Betrag ist {amount}. Betrag prüfen oder den Beleg neu lesen.',
   'receipts.whyTaken': { one: 'hat schon {n} Beleg', other: 'hat schon {n} Belege' },
+  'receipts.whyFiled': 'im eingereichten Quartal: wird eine Korrektur, keine Zuordnung',
+  'receipts.toCorrection': 'zur Korrektur',
   'receipts.withoutBank': 'Ohne Bankzahlung',
   'receipts.escKey': 'esc',
   'receipts.fxLine': '≈ CHF {amount} · ESTV {date}',

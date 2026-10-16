@@ -189,15 +189,21 @@ export interface Candidate {
   taken: number;
   /** How its amount fits the receipt's, when it would hold only this receipt. */
   fit?: AmountFit;
+  /** It lies in a filed quarter: choosing it leads to a correction in the open one, never to a link (corner-33). */
+  filed?: true;
 }
 
 const DAY = 864e5;
+/** The score under which a payment is among the best fits. */
+const BEST = 25;
 
 /**
- * The open-period payments a receipt could belong to, best first: close in amount (in CHF),
- * close in date, the same currency. A payment that already has a receipt ranks lower but stays
- * findable (AliExpress, FedEx and Amazon put several receipts on one payment). Fees never need
- * a receipt. With a query, every payment it finds; else up to 3 best and 12 more.
+ * The payments a receipt could belong to, best first: close in amount (in CHF), close in date,
+ * the same currency. A payment that already has a receipt ranks lower but stays findable
+ * (AliExpress, FedEx and Amazon put several receipts on one payment). Fees never need a receipt.
+ * A payment of a filed quarter without a receipt is listed, marked `filed`, when it fits as well as
+ * a best one or a query finds it: a late receipt is led to its correction (corner-33). With a
+ * query, every payment it finds; else up to 3 best and 12 more.
  */
 export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''): { best: Candidate[]; more: Candidate[] } {
   const { r } = v;
@@ -206,7 +212,7 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
   const all: Candidate[] = [];
   for (const tx of l.txByRef.values()) {
     if (tx.amount === 0 || tx.type === 'wise-fee' || v.links.includes(tx.ref)) continue;
-    if (l.closedThrough && tx.date <= l.closedThrough) continue;
+    const filed = !!l.closedThrough && tx.date <= l.closedThrough;
     if (words.length) {
       const h = [tx.description, tx.bank, tx.date, tx.date.split('-').reverse().join('.'), Math.abs(tx.amount).toFixed(2), tx.remarks].join(' ').toLowerCase();
       if (!words.every((w) => h.includes(w))) continue;
@@ -218,12 +224,13 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
     const dAmt = want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
     const taken = (l.receiptsByRef.get(tx.ref) ?? []).length;
     const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken ? 30 : 0);
+    if (filed && (taken || (!words.length && score >= BEST))) continue;
     const fit = taken ? undefined : amountFit(r, tx, toChf);
-    all.push({ tx, score, sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}) });
+    all.push({ tx, score: score + (filed ? 0.5 : 0), sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}), ...(filed ? { filed: true as const } : {}) });
   }
   all.sort((a, b) => a.score - b.score || b.tx.date.localeCompare(a.tx.date));
   if (words.length) return { best: [], more: all.slice(0, 40) };
-  const best = all.filter((c) => c.score < 25).slice(0, 3);
+  const best = all.filter((c) => c.score < BEST).slice(0, 3);
   return { best, more: all.filter((c) => !best.includes(c)).slice(0, 12) };
 }
 
@@ -233,7 +240,7 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
  */
 export function suggestion(v: ReceiptView, l: Ledger, toChf: ToChf): Candidate | undefined {
   if (!needsYou(v, l) || v.r.amount == null || v.twin?.relation === 'duplicate') return undefined;
-  const fits = candidates(v, l, toChf).best.filter((c) => c.sameAmount && !c.taken && Math.abs(c.days ?? 99) <= 31);
+  const fits = candidates(v, l, toChf).best.filter((c) => c.sameAmount && !c.taken && !c.filed && Math.abs(c.days ?? 99) <= 31);
   return fits.length === 1 ? fits[0] : undefined;
 }
 

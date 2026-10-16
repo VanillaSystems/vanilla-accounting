@@ -108,44 +108,55 @@ export function creditSigned(r: Pick<Receipt, 'amount' | 'vatSummary'>): number 
 
 /**
  * What code links without the model (MISSION: a payment that matches a receipt by amount and
- * number): an archived receipt nothing is linked to, and an open payment without a receipt, the
- * same amount to the Rappen in the same currency, money out for an invoice and in for a credit
- * note, and one of the receipt's numbers («GS-1207») in the payment's text. Only a pair that is
- * unique both ways is linked. Returns the links made.
+ * number): an archived receipt nothing is linked to, and a payment without a receipt, the same
+ * amount to the Rappen in the same currency, money out for an invoice and in for a credit note,
+ * and one of the receipt's numbers («GS-1207») in the payment's text. Only a pair that is unique
+ * both ways counts. An open pair is linked; a payment of a filed quarter is never linked (golden
+ * rule 1): the receipt names it as its `filedPayment`, so it shows where its tax goes (corner-33).
+ * Returns what it did.
  */
-export function linkByCode(index: Books): Array<{ receipt: string; payment: string }> {
+export function linkByCode(index: Books): Array<{ receipt: string; payment: string; filed?: true }> {
   const lock = periodLock(index);
   const linked = new Set(index.mappings.flatMap((m) => [m.receiptId, m.transactionRef]));
   const cents = (n: number) => Math.round(Math.abs(n) * 100);
-  const receipts = index.receipts.filter((r) => r.location === 'archived' && !linked.has(r.id) && (!r.kind || r.kind === 'invoice')
-    && r.amount !== undefined && r.amount !== 0 && !(r.date && lock.isClosed(r.date)));
-  const payments = index.transactions.filter((t) => !linked.has(t.ref) && t.amount !== 0 && t.type !== 'wise-fee' && !lock.isClosed(t.date));
+  const unlinked = index.receipts.filter((r) => r.location === 'archived' && !linked.has(r.id) && (!r.kind || r.kind === 'invoice')
+    && r.amount !== undefined && r.amount !== 0);
+  const payments = index.transactions.filter((t) => !linked.has(t.ref) && t.amount !== 0 && t.type !== 'wise-fee');
   const fits = (r: Receipt, t: BankTransaction) => {
     const numbers = numbersIn(r.extractedText ?? '');
     const paid = squash([t.description, t.reference ?? '', t.remarks ?? '', ...(t.parts ?? []).map((p) => p.reference ?? '')].join(' '));
     return (r.currency ?? baseCurrency()) === t.currency && cents(r.amount!) === cents(t.amount)
       && (r.amount! < 0) === (t.direction === 'CRDT') && numbers.some((n) => paid.includes(n));
   };
-  const pairs = receipts.flatMap((r) => payments.filter((t) => fits(r, t)).map((t) => ({ r, t })));
+  const pairs = unlinked.flatMap((r) => payments.filter((t) => fits(r, t)).map((t) => ({ r, t })));
   const once = pairs.filter(({ r, t }) => pairs.filter((p) => p.r === r).length === 1 && pairs.filter((p) => p.t === t).length === 1);
-  for (const { r, t } of once) index.mappings.push({ transactionRef: t.ref, receiptId: r.id });
-  return once.map(({ r, t }) => ({ receipt: r.id, payment: t.ref }));
+  const open = once.filter(({ r, t }) => !lock.isClosed(t.date) && !(r.date && lock.isClosed(r.date)));
+  const filed = once.filter(({ r, t }) => lock.isClosed(t.date) && r.filedPayment !== t.ref);
+  for (const { r, t } of open) index.mappings.push({ transactionRef: t.ref, receiptId: r.id });
+  for (const { r, t } of filed) r.filedPayment = t.ref;
+  return [...open.map(({ r, t }) => ({ receipt: r.id, payment: t.ref })), ...filed.map(({ r, t }) => ({ receipt: r.id, payment: t.ref, filed: true as const }))];
 }
 
 const DAY = 864e5;
 const CANDIDATES = 20;
+/** The score from which a filed payment is shown: its amount to the half per mille, or a number of the receipt in its text. */
+const FILED_FIT = 40;
+
+export type Candidate = BankTransaction & { filed?: true };
 
 /**
- * The payments the model is shown for one receipt, at most 20, best first: the open payments (no
- * receipt yet, not in a filed quarter), ranked by an invoice number of the receipt in the payment's
- * text, the amount, the vendor's name and the date; newest first where nothing tells them apart. A
- * grouped vendor's payment (Amazon, AliExpress, FedEx) stays a candidate with receipts on it, and
- * its amount does not count.
+ * The payments the model is shown for one receipt, at most 20, best first: the payments without a
+ * receipt yet, ranked by an invoice number of the receipt in the payment's text, the amount, the
+ * vendor's name and the date; newest first where nothing tells them apart. A grouped vendor's
+ * payment (Amazon, AliExpress, FedEx) stays a candidate with receipts on it, and its amount does
+ * not count. A payment of a filed quarter is shown, marked `filed`, only when its number or amount
+ * fits and after the open ones of the same fit: a late receipt is pointed at it, never linked
+ * (golden rule 1, corner-33).
  */
-export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false): BankTransaction[] {
+export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false): Candidate[] {
   const text = receipt.extractedText ?? '';
   const grouped = text.match(GROUPED_VENDOR_PATTERN)?.[0].toLowerCase();
-  const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee' && !isClosed(tx.date));
+  const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee');
   const ofVendor = grouped ? usable.filter((tx) => (tx.description || '').toLowerCase().includes(grouped)) : [];
   const pool = ofVendor.length ? ofVendor : usable.filter((tx) => !linked.has(tx.ref));
   const { date, amount, currency } = factsOf(receipt);
@@ -166,15 +177,19 @@ export function candidates(receipt: Receipt, all: readonly BankTransaction[], li
     }
     return s;
   };
-  return pool.map((tx) => ({ tx, s: score(tx) }))
+  return pool.map((tx) => ({ tx, s: score(tx), filed: isClosed(tx.date) }))
+    .filter((x) => !x.filed || x.s >= FILED_FIT)
+    .map((x) => (x.filed ? { ...x, s: x.s - 1 } : x))
     .sort((a, b) => b.s - a.s || (b.tx.date ?? '').localeCompare(a.tx.date ?? ''))
-    .slice(0, CANDIDATES).map((x) => x.tx);
+    .slice(0, CANDIDATES).map((x) => (x.filed ? { ...x.tx, filed: true as const } : x.tx));
 }
 
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
-  const byCode = books.update(linkByCode);
-  for (const l of byCode) log(`linked by amount and number: receipt ${l.receipt} → ${l.payment}`);
+  const byCode = () => {
+    for (const l of books.update(linkByCode)) log(l.filed ? `pays the filed payment ${l.payment} by amount and number: receipt ${l.receipt}, not linked` : `linked by amount and number: receipt ${l.receipt} → ${l.payment}`);
+  };
+  byCode();
   const snapshot = books.read();
   const staged = snapshot.receipts.filter((r) => r.location === 'staged');
   if (staged.length === 0) {
@@ -296,6 +311,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     progress(visionNeeded.length + completed, total);
   }));
 
+  // The receipts just read: what code finds for them the model was not sure of.
+  byCode();
   log(`\nDone.`);
   log(`  Matched & linked : ${matched}`);
   log(`  Moved (unlinked) : ${unlinked}`);

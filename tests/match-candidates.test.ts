@@ -43,7 +43,7 @@ test('without a number, the amount (also the VAT block total) and the vendor ran
   assert.equal(candidates(euro, BOOKS)[0].ref, 'RB-1001');
 });
 
-test('only open payments: one with a receipt already, one of a filed quarter and a fee are left out; with nothing known the newest come first', () => {
+test('only payments without a receipt: one with a receipt already, one of a filed quarter that nothing fits and a fee are left out; with nothing known the newest come first', () => {
   const blank = receipt('scan.pdf', '');
   const linked = new Set(['RB-1004']);
   const shown = candidates(blank, [...BOOKS, { ...tx('FEE', '2026-10-13', 1.5, 'Gebühr'), type: 'wise-fee' }], linked, (d) => d <= '2026-06-30');
@@ -51,6 +51,18 @@ test('only open payments: one with a receipt already, one of a filed quarter and
   assert.equal(shown.length, 20);
   assert.ok(!refs(shown).includes('RB-1004') && !refs(shown).includes('FEE'));
   assert.deepEqual(refs(candidates(blank, [tx('Q2', '2026-06-30', 10, 'x')], linked, (d) => d <= '2026-06-30')), []);
+});
+
+test('a late receipt sees the filed payment it fits, marked filed, after an open one of the same fit (corner-33)', () => {
+  const late = receipt('Geruest_August.pdf', 'Gerüstbau Thurtal GmbH\nRechnung G-2208\nMiete Gerüst August\nTotal CHF 1\'120.00', { date: '2026-08-14' });
+  const filed = tx('RB-0812', '2026-08-14', 1120, 'Gerüstbau Thurtal GmbH');
+  const shown = candidates(late, [...BOOKS, filed], new Set(), (d) => d <= '2026-09-30');
+  assert.equal(shown[0].ref, 'RB-0812');
+  assert.equal(shown[0].filed, true, 'the model is told it is filed');
+  const twin = tx('RB-1020', '2026-10-14', 1120, 'Gerüstbau Thurtal GmbH');
+  const both = candidates({ ...late, date: '2026-09-14' }, [filed, twin], new Set(), (d) => d <= '2026-09-30');
+  assert.deepEqual(refs(both), ['RB-1020', 'RB-0812'], 'the open one first at the same fit');
+  assert.equal(both[0].filed, undefined);
 });
 
 test('a grouped vendor\'s payment stays a candidate with receipts on it, its amount aside', () => {
