@@ -16,6 +16,8 @@ import { parseRule, ruleWords, type RuleFacts } from '../src/booking/rules.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadBooks, PERSON, saveBooks, update, type Books } from '../src/books/store.js';
 import { CLOSED_REASON, closeAsksWithoutRule } from '../src/workflows/held.js';
+import { saleQuestionLine } from '../src/intake/sale-questions.js';
+import { appendQuestionLine, readQuestions } from '../src/questions/store.js';
 import { openEngine } from '../src/workflows/engine.js';
 import { loadWorkflows } from '../src/workflows/load.js';
 import { fillTask, taskOf } from '../src/workflows/model.js';
@@ -222,6 +224,24 @@ test('r7h-21: «Übernehmen» on a stale payout question never replaces the spli
   assert.deepEqual(byAmount(booked(ws)), SPLIT, 'the split stays');
   assert.equal(out.ok, true, 'the engine takes the answer, its booking gives way to the rule\'s');
   assert.deepEqual(engine.run(ask.id)!.steps.at(-1)!.effects.map((x) => x.applied), [false], 'nothing written');
+});
+
+test('r7h-27: «Automatisch buchen» on a payout a rule holds ends with the one question, no «Bewegung von Hand buchen», and the app\'s own VAT question about it is closed', async () => {
+  const { ws, engine, ask } = await heldPayout();
+  const tx = loadBooks(ws).transactions.find((t) => t.ref === 'REF-PO-88213')!;
+  const stale = saleQuestionLine(ws, tx, '2026-10-15T09:00:00.000Z');
+  appendQuestionLine(ws, stale, '2026-06-30');
+  assert.equal(readQuestions(ws).find((q) => q.id === stale.id)!.status, 'open');
+
+  const r = await engine.start('booking', { kind: 'transaction', id: 'REF-PO-88213' }, { kind: 'manual' });
+  assert.ok(r.ok, JSON.stringify(r));
+  await engine.idle();
+  const run = engine.run(r.run!)!;
+  assert.equal(run.state.status, 'done', JSON.stringify(run.state));
+  assert.deepEqual(run.steps.map((s) => [s.step, s.outcome]), [['open', 'open'], ['classify', 'held']], 'no «Bewegung von Hand buchen»');
+  assert.deepEqual(engine.runs().filter((x) => x.workflow === 'ask').map((x) => [x.id, x.state.status]), [[ask.id, 'waiting']], 'the one question, asked once');
+  const closed = readQuestions(ws).find((q) => q.id === stale.id)!;
+  assert.deepEqual([closed.status, closed.closed?.why], ['closed', 'ruleHolds']);
 });
 
 test('a reading that is no payout is refused, the payment stays unbooked', async () => {

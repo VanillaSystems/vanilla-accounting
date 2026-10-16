@@ -130,12 +130,14 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
   if (!repo) return [];
   const out: HandEdit[] = [];
   const trashed = trashedSince(ws, await lastSaveAt(ws));
+  // A booking in a filed period is as filed: no «Rückgängig» on it (r7h-36).
+  const closedThrough = (JSON.parse(read(ws.paths.ledger) || '{}') as { config?: { closedThrough?: string } }).config?.closedThrough ?? '';
   for (const year of yearsOf(ws.paths)) {
     const path = join(yearPaths(ws.paths, year).books, BOOK_FILES.journalEntries);
     const now = entriesIn(read(path), path);
     const saved = entriesIn(await headBlob(repo, relative(repo, path)), path);
     for (const e of now.values()) {
-      if (e.by?.kind !== 'person' && e.by?.kind !== 'assistant') continue;
+      if ((e.by?.kind !== 'person' && e.by?.kind !== 'assistant') || e.date <= closedThrough) continue;
       const was = saved.get(e.id);
       if (was && JSON.stringify(was) === JSON.stringify(e)) continue;
       out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(e.by.kind === 'assistant' ? { ai: true } : {}), ...(was ? { saved: was } : {}) });
@@ -143,11 +145,11 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
     const bookedSince = new Set([...now.values()].filter((e) => !saved.has(e.id)).map((e) => e.transactionRef));
     const wrote = existsSync(path) ? statSync(path).mtime.toISOString() : '';
     for (const was of saved.values()) {
-      if (now.has(was.id) || bookedSince.has(was.transactionRef)) continue;
+      if (now.has(was.id) || bookedSince.has(was.transactionRef) || was.date <= closedThrough) continue;
       out.push({ id: was.id, ref: was.transactionRef, date: was.date, text: was.description ?? was.transactionRef, at: wrote, deleted: true, saved: was });
     }
     for (const { deletedAt, entry, kept } of trashed) {
-      if (entry.date.slice(0, 4) !== year || now.has(entry.id) || out.some((h) => h.id === entry.id)) continue;
+      if (entry.date.slice(0, 4) !== year || now.has(entry.id) || out.some((h) => h.id === entry.id) || entry.date <= closedThrough) continue;
       out.push({ id: entry.id, ref: entry.transactionRef, date: entry.date, text: entry.description ?? entry.transactionRef, at: deletedAt, deleted: true, saved: entry, kept });
     }
   }

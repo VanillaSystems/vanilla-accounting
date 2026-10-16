@@ -190,7 +190,7 @@ function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; tu
         </span>
       ) : held.status === 'taken' ? (
         <span className="ruleacts">
-          <span className="m">{t('assistant.held.taken')}</span>
+          <span className="m">{t(standing ? 'assistant.held.taken' : 'assistant.held.undone')}</span>
           {standing ? <button type="button" className="linkbtn" onClick={() => void undoAll(turn)}>{t('assistant.held.undoAll')}</button> : null}
         </span>
       ) : <span className="m">{t('assistant.held.dropped')}</span>}

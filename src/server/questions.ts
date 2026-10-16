@@ -266,6 +266,7 @@ const GONE: Record<SaleGone, string> = {
   closed: 'Das Quartal der Zahlung ist eingereicht: die Frage ist geschlossen. Fehlt Steuer, bucht eine Korrektur in der offenen Periode sie nach.',
   hasReceipt: 'Die Zahlung hat jetzt einen Beleg, er entscheidet die Steuer: die Frage ist geschlossen.',
   hasInvoice: 'Die Zahlung ist aus einer Rechnung gebucht, die entscheidet die Steuer: die Frage ist geschlossen.',
+  ruleHolds: 'Eine Regel der Firma entscheidet diese Zahlung jetzt, oder fragt dich dazu unter Aufgaben: die Frage ist geschlossen.',
 };
 
 export function answerQuestion(id: string, { by, answer }: { by: string; answer: Answer }, from?: string): Question {

@@ -12,7 +12,7 @@ import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accountin
 import { BATCH_SIZE, CONCURRENCY, classifyTransactions, loadClassifyContext } from '../booking/classify.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { JournalEntry } from '../types/index.js';
-import { askSalesWithoutVat } from './sale-questions.js';
+import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { BooksPort, IntakeNote, StepRun } from './pipeline.js';
 
@@ -96,6 +96,8 @@ export function classifyStep({ force = false } = {}): StepRun {
     const held = [...asked.map((a) => a.ref), ...unasked];
     if (held.length) hold?.(held);
     if (classified.length) release?.(classified);
+    // A payment a rule holds has its question under Aufgaben; the app's own VAT question about it would ask twice (r7h-27).
+    closeSaleQuestionsHeld(ws, asked.map((a) => a.ref), scratch.config.closedThrough);
     const notes: IntakeNote[] = [
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
       ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),

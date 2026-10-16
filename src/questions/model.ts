@@ -53,8 +53,8 @@ export type QuestionOrigin = 'person' | 'assistant' | 'booking';
 export const NOT_ACTED = ['closed', 'noPayment', 'severalPayments', 'paidPrivately', 'notBankExpense', 'hasReceipt', 'hasInvoice', 'noSaleEntry', 'refused'] as const;
 export type NotActed = (typeof NOT_ACTED)[number];
 
-/** Why the app's question about a sale needs no answer any more: its payment is gone, filed, or a document decides it now. */
-export const SALE_GONE = ['noPayment', 'closed', 'hasReceipt', 'hasInvoice'] as const;
+/** Why the app's question about a sale needs no answer any more: its payment is gone, filed, a document decides it now, or a company rule holds or books it (r7h-27). */
+export const SALE_GONE = ['noPayment', 'closed', 'hasReceipt', 'hasInvoice', 'ruleHolds'] as const;
 export type SaleGone = (typeof SALE_GONE)[number];
 
 /**

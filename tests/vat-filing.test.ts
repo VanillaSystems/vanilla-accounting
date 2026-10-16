@@ -22,6 +22,8 @@ import { summaryOf, taskOf } from '../src/workflows/model.js';
 import { filedReturnsOf } from '../src/workspace/reads.js';
 import { returnSummary } from '../src/app/areas/automation/filing-summary.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { saleQuestionLine } from '../src/intake/sale-questions.js';
+import { appendQuestionLine, readQuestions } from '../src/questions/store.js';
 
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'vat-filing-runs-'));
 
@@ -278,6 +280,20 @@ test('«Eingereicht» never seals books that differ from the filed XML: a change
   await engine.idle();
   assert.equal(run().state.status, 'done', 'restored: «Weiter» seals');
   assert.equal(loadBooks(ws).config.closedThrough, '2026-06-30');
+});
+
+test('an open VAT question about a payment of the period is closed when the period is filed, with the reason (r7h-29)', async () => {
+  const ws = demo();
+  const tx = loadBooks(ws).transactions.find((t) => inQ2(t) && t.direction === 'CRDT')!;
+  const q = saleQuestionLine(ws, tx, '2026-07-01T09:00:00.000Z');
+  appendQuestionLine(ws, q, '2026-03-31');
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome }); await engine.idle(); }
+  assert.equal(engine.run(r.ok ? r.run! : '')!.state.status, 'done');
+  const closed = readQuestions(ws).find((x) => x.id === q.id)!;
+  assert.deepEqual([closed.status, closed.closed?.how, closed.closed?.why], ['closed', 'withdrawn', 'closed']);
 });
 
 test('a filing run discarded while the period was held frees it (r7h-24)', async () => {

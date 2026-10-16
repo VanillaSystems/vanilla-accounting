@@ -21,6 +21,7 @@ import { COLLECT_ACTIONS } from './collect.js';
 import { madeBetween, type Took } from './summary.js';
 import type { ItemRef } from './model.js';
 import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
+import { closeSaleQuestionsHeld } from '../intake/sale-questions.js';
 import { refuse, type Refused } from '../types/refusal.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -132,15 +133,22 @@ export const ACTIONS: Record<string, Action> = {
   },
 
   'accounting.expenses.classification': {
-    outcomes: ['decided', 'undecided'],
+    outcomes: ['decided', 'undecided', 'held'],
     effects: [],
     ai: true,
     // Code first: a rule books without the model; without one and without a model the step says why it waits (r4c-34).
-    async run(input, _effects, { ws, ask }) {
+    async run(input, effects, { ws, ask }) {
       const scratch = structuredClone(books(input));
       const before = scratch.journalEntries.length;
-      const { classified, failed, unasked } = await classifyTransactions(scratch, [tx(input)], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+      const t = tx(input);
+      const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries: scratch.journalEntries.slice(before) } };
+      // A rule holds the payment for the person: its one question (workflows/ask) is the task, not «Bewegung von Hand buchen» (r7h-27).
+      if (asked.length) {
+        effects['runs.start']?.(ASK_WORKFLOW, { kind: 'transaction', id: t.ref });
+        closeSaleQuestionsHeld(ws, [t.ref], scratch.config.closedThrough);
+        return { outcome: 'held', output: { why: 'asked' } };
+      }
       return { outcome: 'undecided', output: { why: unasked.length ? 'noModel' : failed.length ? 'failed' : 'asked' } };
     },
   },

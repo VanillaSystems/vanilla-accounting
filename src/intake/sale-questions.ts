@@ -65,3 +65,14 @@ export function closeGoneSaleQuestions(ws: Pick<Workspace, 'paths'>, books: Ques
   for (const { q, why } of gone) appendQuestionLine(ws, { v: 1, event: 'closed', id: q.id, at, by: APP_ASKER, how: 'withdrawn', why }, books.config?.closedThrough);
   return gone.length;
 }
+
+/**
+ * Closes the app's open sale questions about `refs`, payments a company rule now holds for the
+ * person or books (r7h-27): the rule decides their VAT, the question would ask twice. Returns the ids closed.
+ */
+export function closeSaleQuestionsHeld(ws: Pick<Workspace, 'paths'>, refs: readonly string[], closedThrough: string | undefined, at = new Date().toISOString()): string[] {
+  if (!refs.length) return [];
+  const open = readQuestions(ws).filter((q) => q.topic === 'saleVat' && q.status === 'open' && refs.includes(q.on.id));
+  for (const q of open) appendQuestionLine(ws, { v: 1, event: 'closed', id: q.id, at, by: APP_ASKER, how: 'withdrawn', why: 'ruleHolds' }, closedThrough);
+  return open.map((q) => q.id);
+}

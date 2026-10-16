@@ -19,6 +19,7 @@ import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/pe
 import { loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
+import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 import type { QuarterKey } from '../types/index.js';
 import { refuse } from '../types/refusal.js';
@@ -161,6 +162,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // Filed: the hold gave way to the close (or, for the year's last period, to the year close).
       if (books.config.approvedReturn?.period === key) delete books.config.approvedReturn;
       saveBooks(ws, books);
+      // The app's open VAT questions about the period's payments are closed with the reason, not merely hidden (r7h-29).
+      closeGoneSaleQuestions(ws, books);
       const prepared = preparedXml(ws, key);
       const filed = filedXml(ws, key);
       if (existsSync(prepared) && !existsSync(filed)) { mkdirSync(dirname(filed), { recursive: true }); copyFileSync(prepared, filed); }

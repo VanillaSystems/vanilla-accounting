@@ -20,6 +20,15 @@
 .rows.je .group .cap.vh { text-align: left; padding-left: 16px; }
 .rows.je .row.cont::before { content: ''; position: absolute; left: 92px; top: -50%; height: 100%; width: 7px; border-left: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2); border-bottom-left-radius: 5px; transform: translateY(-1px); }
 .rows.je .row.cont > .t { padding-left: 14px; }
+.rows.je .row > .t { min-width: 0; overflow: hidden; }
+/* A narrow list (a 1024 px window with the KI sidebar open): the amount stays whole, the currency column and the wide gaps go (r7h-28). */
+@container (max-width: 400px) {
+  .rows.je { grid-template-columns: 76px minmax(0, 1fr) auto auto auto 0 auto; }
+  .rows.je .cu { display: none; }
+  .rows.je .cr, .rows.je .vc, .rows.je .group .cap, .rows.je .group .cap.vh { padding-left: 8px; }
+  .rows.je .row > .t { padding-right: 6px; }
+  .rows.je .row.cont::before { left: 80px; }
+}
 
 .satz { margin-top: 14px; display: grid; gap: 2px; max-width: 640px; font-size: 13px; }
 .satz > div { display: grid; grid-template-columns: 52px 54px 1fr; gap: 10px; align-items: baseline; }

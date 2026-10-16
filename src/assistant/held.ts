@@ -50,9 +50,10 @@ export function heldRows(before: Books, after: Books): HeldRow[] {
 
 /** Why these rows are not made at once; empty: they are a small fix. */
 export function holdReasons(rows: readonly HeldRow[]): HoldReason[] {
-  const existing = rows.filter((r) => r.before);
-  const payments = new Set(existing.map((r) => r.ref));
-  const kinds = new Set(existing.map((r) => `${r.before!.accountDebit}/${r.before!.accountCredit}`));
+  // Rebooked: a booking that stays and changes. A deletion is its own reason, not a rebooking (r7h-26).
+  const rebooked = rows.filter((r) => r.before && r.after);
+  const payments = new Set(rebooked.map((r) => r.ref));
+  const kinds = new Set(rebooked.map((r) => `${r.before!.accountDebit}/${r.before!.accountCredit}`));
   const why: HoldReason[] = [];
   if (payments.size > 1 && (kinds.size > 1 || payments.size > FEW_PAYMENTS)) why.push('payments');
   if (rows.filter((r) => r.before && !r.after).length > 1) why.push('deletes');

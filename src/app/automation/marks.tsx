@@ -34,7 +34,8 @@ function runResultText(w: WorkflowDecl, r: RunDetail): string {
     case 'done': return t('marks.done', { workflow, n: res.entries });
     case 'waiting': {
       const step = typeof res.step === 'string' ? res.step : textIn(res.step, language());
-      return t(res.noModel ? 'marks.waitsNoModel' : 'marks.waits', { workflow, step });
+      // A workflow that books nothing (the VAT filing) does not say «nichts gebucht» (r7h-34).
+      return t(res.noModel ? 'marks.waitsNoModel' : w.id === 'vat-filing' ? 'marks.waitsReview' : 'marks.waits', { workflow, step });
     }
     case 'stuck': return t('marks.stuck', { workflow, error: refusalText(res.error, res.why) });
     case 'running': return t('marks.started', { workflow });
