@@ -126,6 +126,7 @@ function Return(props: Props) {
         <span>{t(head.kind === 'credit' ? 'vat.credit' : 'vat.toPay')}{head.filed ? ` · ${t('vat.asFiled')}` : ''}</span>
         <b className="mono"><small>CHF</small>{fmt(head.amount)}</b>
         {head.corrected ? <span className="m" data-testid="corrected-now">{t(head.corrected.kind === 'credit' ? 'vat.nowCredit' : 'vat.nowToPay', { amount: fmt(head.corrected.amount), diff: signed(head.corrected.diff) })}</span> : null}
+        {head.rounding ? <span className="m" data-testid="rounding-note">{t('vat.headRounding', { ziffern: fmt(head.rounding.ziffern) })}</span> : null}
       </button>
       <div className="rows vz" role="listbox" aria-label={t('vat.ziffern')}>
         {SECTIONS.map((s) => {

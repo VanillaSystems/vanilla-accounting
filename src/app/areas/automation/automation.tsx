@@ -450,7 +450,7 @@ function XmlFile({ x }: { x: PreparedXml }) {
   const file = fileName(x.path);
   return (
     <div className="wfreturn" data-testid="xml-file">
-      <span>{t('automation.xml.where', { path: x.path })}</span>
+      <span>{t('automation.xml.where', { file })}</span>
       <span className="wfactions"><a className="btn" href={api.filingXmlUrl(x.period)} download={file}>{t('automation.xml.download', { file })}</a></span>
       <span className="m">{t('automation.xml.next')}</span>
       {x.warnings.map((w) => <span key={w} className="warnline">{w}</span>)}

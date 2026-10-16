@@ -199,8 +199,14 @@ export function correctionDiff(books: Index, filed: ReturnFigures): number {
  * The figure the page leads with: for a filed period the filed one, as the authority has it, with
  * today's books' figure beside it when a correction changed it (r6f-26); else today's figure.
  */
-export function headline(v: VatReturn, filed: ReturnFigures | undefined, books: Index): { kind: 'toPay' | 'credit'; amount: number; filed: boolean; corrected?: { kind: 'toPay' | 'credit'; amount: number; diff: number } } {
-  if (v.state.kind !== 'filed' || !filed) return { kind: v.report.credit ? 'credit' : 'toPay', amount: v.report.credit || v.report.toPay, filed: false };
+export function headline(v: VatReturn, filed: ReturnFigures | undefined, books: Index): { kind: 'toPay' | 'credit'; amount: number; filed: boolean; corrected?: { kind: 'toPay' | 'credit'; amount: number; diff: number }; rounding?: { ziffern: number } } {
+  if (v.state.kind !== 'filed' || !filed) {
+    // The figure the return will carry (the approval card's and the XML's): the tax on each rate's total, as the authority computes it (r9c-13).
+    // The Ziffern below sum the entries' tax; when a Rappen differs, the page says so instead of showing two figures.
+    const payable = isFilingKey(v.key, filing().length) ? vat().figures(books.journalEntries ?? [], v.key as QuarterKey, v.adjustments).payable : v.report.toPay - v.report.credit;
+    const ziffern = Math.round((v.report.toPay - v.report.credit) * 100) / 100;
+    return { kind: payable < 0 ? 'credit' : 'toPay', amount: Math.abs(payable), filed: false, ...(Math.round(payable * 100) !== Math.round(ziffern * 100) ? { rounding: { ziffern: Math.abs(ziffern) } } : {}) };
+  }
   const payable = Math.round((((filed.ziffern['500'] ?? 0) - (filed.ziffern['510'] ?? 0)) * 100)) / 100;
   const diff = correctionDiff(books, filed);
   const now = Math.round((payable + diff) * 100) / 100;

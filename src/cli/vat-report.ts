@@ -37,7 +37,14 @@ function printPeriod(label: string, index: Index, from: string, to: string, deta
   console.log(`\n${'='.repeat(72)}`);
   console.log(`  MWST-Abrechnung  ${label}   (${from} … ${to})`);
   console.log('='.repeat(72));
-  if (periodLock(index).isClosed(to)) {
+  const lock = periodLock(index);
+  // Approved («Freigegeben») but not filed yet: the period is held, not set in stone (r9c-17).
+  const held = lock.heldBy(to);
+  if (held) {
+    console.log(`  FREIGEGEBEN, noch nicht eingereicht — ${held.period} is approved and waits for «Eingereicht»; its`);
+    console.log('  records are held until then (or until «Zurück» frees them). Nothing is in filings/ yet.');
+    console.log('-'.repeat(72));
+  } else if (lock.isClosed(to)) {
     console.log(`  EINGEREICHT — set in stone. The return as filed is in filings/${from.slice(0, 4)}/;`);
     if (isFilingKey(label, filing().length)) {
       console.log('  The figures below are recomputed from today\'s books, including entries tagged');
