@@ -34,7 +34,7 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'vat', group: 'reports', formats: REPORT },
   { id: 'ledger', group: 'reports', formats: REPORT },
   { id: 'ledgers', group: 'reports', formats: REPORT },
-  { id: 'journal', group: 'data', formats: [...TABLE, 'banana'] },
+  { id: 'journal', group: 'data', formats: [...TABLE, 'banana', 'pdf'] },
   { id: 'payments', group: 'data', formats: TABLE },
   { id: 'receiptList', group: 'data', formats: TABLE },
   { id: 'chart', group: 'data', formats: TABLE },
@@ -73,7 +73,7 @@ export interface Preset {
 export const PRESETS: readonly Preset[] = [
   {
     id: 'treuhand', period: 'open', sums: true, oneBook: false,
-    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf'], journal: ['banana', 'csv'], payments: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
+    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf'], journal: ['banana', 'csv', 'pdf'], payments: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
   },
   {
     id: 'audit', period: 'year', sums: true, oneBook: false,
@@ -108,9 +108,16 @@ export function quartersIn(period: Period, today: IsoDate = localToday()): strin
   return out;
 }
 
-/** The receipts of a period as the Belege list holds them: dated (or read) in it, and a receipt of their own. */
+/**
+ * The receipts of a period: dated (or read) in it as the Belege list holds them, and every receipt
+ * of a payment or entry of the period (cash basis: a September invoice paid in October is October's
+ * evidence, treuhaender-39). A receipt of their own only.
+ */
 export function receiptsIn(books: Index, period: Period) {
-  return receiptLedger(books, period.from).views.filter((v) => !v.none && !!v.day && v.day >= period.from && v.day <= period.to);
+  const l = receiptLedger(books, period.from);
+  const inside = (d: string | undefined) => !!d && d >= period.from && d <= period.to;
+  const booked = (ref: string) => inside(l.txByRef.get(ref)?.date) || (l.entriesByRef.get(ref) ?? []).some((e) => inside(e.date));
+  return l.views.filter((v) => !v.none && (inside(v.day) || v.links.some(booked)));
 }
 
 export const statementsIn = (books: Index, period: Period) =>

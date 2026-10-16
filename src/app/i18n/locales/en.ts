@@ -1208,6 +1208,7 @@ export default {
     'export.colReceipt': 'Receipt',
     'export.colEntryId': 'Entry',
     'export.colCurrency': 'Currency',
+    'export.colMonth': 'Month',
     'export.colRate': 'Rate',
     'export.colCorrects': 'Corrects',
     'export.colBank': 'Bank',

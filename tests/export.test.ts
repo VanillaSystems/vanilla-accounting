@@ -45,7 +45,7 @@ async function unzip(b: Bundle): Promise<Record<string, Uint8Array>> {
 
 const paths = (b: Bundle) => b.files.map((f) => f.path);
 
-test('Treuhänder-Paket: reports as PDF, journal for Banana and as CSV, payments, every original, LIESMICH and sums', async () => {
+test('Treuhänder-Paket: reports as PDF, journal for Banana, as CSV and as PDF, payments, every original, LIESMICH and sums', async () => {
   const b = await bundleOf('treuhand');
   const receipts = receiptsIn(books, Q3).map((v) => `Belege/${v.r.filename}`);
   const statements = statementsIn(books, Q3).map((s) => `Kontoauszuege/${s.bank}/${s.filename}`);
@@ -53,7 +53,7 @@ test('Treuhänder-Paket: reports as PDF, journal for Banana and as CSV, payments
   assert.deepEqual(paths(b).sort(), [
     'LIESMICH.txt',
     'Berichte/Erfolgsrechnung.pdf', 'Berichte/Bilanz.pdf', 'Berichte/Saldobilanz.pdf', 'Berichte/MWST-Abrechnungen.pdf',
-    'Daten/Banana-Import.tsv', 'Daten/Buchungen.csv', 'Daten/Zahlungen.csv',
+    'Daten/Banana-Import.tsv', 'Daten/Buchungen.csv', 'Daten/Buchungen.pdf', 'Daten/Zahlungen.csv',
     ...receipts, ...statements,
     'manifest.json', 'SHA256SUMS.txt',
   ].sort());
@@ -99,6 +99,24 @@ test('SHA256SUMS.txt and manifest.json name every file of the ZIP with the hash 
   assert.equal(Object.keys(zip).length, b.files.length, 'nothing in the ZIP but the files');
 });
 
+test('the quarter\'s receipts are those of its payments and entries too: an invoice of June paid in July is in Q3 (treuhaender-39)', () => {
+  const tx = books.transactions.find((t) => t.date >= Q3.from && t.date <= Q3.to && books.mappings.some((m) => m.transactionRef === t.ref))!;
+  const receipt = books.receipts.find((r) => books.mappings.some((m) => m.transactionRef === tx.ref && m.receiptId === r.id))!;
+  const june = { ...books, receipts: books.receipts.map((r) => (r.id === receipt.id ? { ...r, date: '2026-06-28' } : r)) };
+  assert.ok(receiptsIn(june, Q3).some((v) => v.r.id === receipt.id), 'paid in Q3');
+  const may = { ...june, receipts: june.receipts.map((r) => (r.id === receipt.id ? { ...r, date: '2026-05-28' } : r)) };
+  assert.ok(!receiptsIn(may, parsePeriod('2026-06', today)!).some((v) => v.r.id === receipt.id), 'not in June, where it was neither dated, paid nor booked');
+});
+
+test('the journal as PDF prints the period\'s entries by month', async () => {
+  let html = '';
+  const b = await buildBundle(ws, books, names, parseRequest({ period: Q3.token, items: { journal: ['pdf'] }, sums: false, oneBook: false, language: 'de' }), { print: async (h) => { html = h; return Buffer.from('%PDF'); } });
+  assert.deepEqual(paths(b), ['Daten/Buchungen.pdf']);
+  assert.match(html, /<th class="">Datum<\/th><th class="">Ref<\/th>/);
+  for (const m of ['07.2026', '08.2026', '09.2026']) assert.match(html, new RegExp(`<tr class="grp"><td colspan="9">${m}</td>`), m);
+  assert.equal((html.match(/<tr class="">/g) ?? []).length, entriesIn(books, Q3).length, 'one row per entry');
+});
+
 const journalOf = async (format: 'csv' | 'xlsx', period = Q3) =>
   buildBundle(ws, books, names, parseRequest({ period: period.token, items: { journal: [format] }, sums: false, oneBook: false, language: 'de' }), { print: stubPdf });
 
@@ -122,7 +140,7 @@ test('the journal as Excel holds the same entries, amounts as numbers', async ()
 });
 
 test('a request with an unknown part or format is refused at the boundary', () => {
-  assert.throws(() => parseRequest({ period: '2026-Q3', items: { journal: ['pdf'] }, language: 'de' }), BadRequest);
+  assert.throws(() => parseRequest({ period: '2026-Q3', items: { payments: ['pdf'] }, language: 'de' }), BadRequest);
   assert.throws(() => parseRequest({ period: '2026-Q3', items: { secrets: ['csv'] }, language: 'de' }), BadRequest);
   assert.throws(() => parseRequest({ period: 'gestern', items: { journal: ['csv'] }, language: 'de' }), BadRequest);
   assert.throws(() => parseRequest({ period: '2026-Q3', items: { ledger: ['csv'] }, language: 'de' }), BadRequest, 'a ledger needs its account');

@@ -84,7 +84,22 @@ function sheetOf(tb: Table): XlsxRow[] {
 const sheetName = (s: string) => s.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31);
 
 /** How many leading columns a PDF turns into a heading over its rows: the group, the quarter, the account. */
-const LEAD: Partial<Record<TableId, number>> = { income: 1, balance: 1, vat: 1, ledger: 2, ledgers: 2 };
+const LEAD: Partial<Record<TableId, number>> = { income: 1, balance: 1, vat: 1, ledger: 2, ledgers: 2, journal: 1 };
+
+/**
+ * The journal as printed (treuhaender-40): per month, each entry with its date, ref, text, Soll,
+ * Haben, MWST code, amount and its CHF; the entry id and the rate stay in the CSV.
+ */
+function journalSheet(tb: Table, w: Words): Table {
+  const cols = [0, 2, 3, 4, 5, 6, 7, 8, 10];
+  const months = w.t('export.colMonth');
+  return {
+    head: [months, ...cols.map((i) => tb.head[i])],
+    rows: tb.rows.map((r) => { const d = String(r[0]); return [`${d.slice(5, 7)}.${d.slice(0, 4)}`, date(d), ...cols.slice(1).map((i) => r[i])]; }),
+    styles: tb.styles,
+    money: [7, 9],
+  };
+}
 
 function reportHtml(id: TableId, tb: Table, title: string, meta: string, footer: string, fonts: string): string {
   const lead = LEAD[id] ?? 0;
@@ -193,8 +208,9 @@ export async function buildBundle(ws: Workspace, books: Index, names: Record<str
         else files.push({ path: `${base}.xlsx`, data: await writeXlsxFile(sheetOf(tb), { sheet: sheetName(title) }).toBuffer() });
       }
       if (f === 'pdf') {
+        const sheet = id === 'journal' ? journalSheet(tb, w) : tb;
         const meta = `${company} · ${span} · CHF${id === 'balance' ? ` · ${t('balance.asOf', { date: date(range.to) })}` : ''}`;
-        files.push({ path: `${base}.pdf`, data: await opts.print(reportHtml(id, tb, title, meta, `${company} · ${title} ·`, fonts), now) });
+        files.push({ path: `${base}.pdf`, data: await opts.print(reportHtml(id, sheet, title, meta, `${company} · ${title} ·`, fonts), now) });
       }
     }
   }

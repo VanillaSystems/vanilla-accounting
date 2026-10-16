@@ -1208,6 +1208,7 @@ export default {
     'export.colReceipt': 'Justificatif',
     'export.colEntryId': 'Écriture',
     'export.colCurrency': 'Monnaie',
+    'export.colMonth': 'Mois',
     'export.colRate': 'Cours',
     'export.colCorrects': 'Corrige',
     'export.colBank': 'Banque',

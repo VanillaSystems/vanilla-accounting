@@ -1205,6 +1205,7 @@ export const messages = {
   'export.colReceipt': 'Beleg',
   'export.colEntryId': 'Buchung',
   'export.colCurrency': 'Währung',
+  'export.colMonth': 'Monat',
   'export.colRate': 'Kurs',
   'export.colCorrects': 'Korrigiert',
   'export.colBank': 'Bank',

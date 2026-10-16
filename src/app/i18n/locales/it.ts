@@ -1208,6 +1208,7 @@ export default {
     'export.colReceipt': 'Giustificativo',
     'export.colEntryId': 'Registrazione',
     'export.colCurrency': 'Valuta',
+    'export.colMonth': 'Mese',
     'export.colRate': 'Cambio',
     'export.colCorrects': 'Corregge',
     'export.colBank': 'Banca',
