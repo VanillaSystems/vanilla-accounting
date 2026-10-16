@@ -34,7 +34,7 @@ const filingKeys = (year: string): QuarterKey[] => [...new Set(['01', '04', '07'
 
 const words = { t: (key: string, vars?: Record<string, string | number>) => `${key}${vars ? ' ' + JSON.stringify(vars) : ''}`, accountingName: (g: string) => g };
 
-for (const [demo, kind] of [['demo', 'effective'], ['demo-schreinerei', 'net-rate']] as const) {
+for (const [demo, kind] of [['demo', 'effective'], ['demo-consulting', 'effective'], ['demo-schreinerei', 'net-rate']] as const) {
   test(`${demo} (${kind}): the year's Bilanz balances and its result is the year close's, every account's balance too`, () => {
     const { books, names, year, closing, period } = open(demo);
     assert.equal(statements().vat, 'net');
