@@ -281,3 +281,45 @@ test('a payment booked in one piece offers no share rule', async () => {
   const books = loadBooks(ws);
   assert.equal(shareOffer(ws, books, books.transactions.find((t) => t.description === 'Rechnung Post CH August 2026')!.ref), undefined);
 });
+
+/** Card payments of the open quarter booked on four accounts today, one privately: what «alles mit Karte 5412» would hit (x02). */
+function cardPayments(ws: Workspace, accounts: string[]): void {
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => {
+    accounts.forEach((account, i) => {
+      const ref = `CARD-5412-${i}`;
+      const date = `2026-10-0${i + 1}`;
+      b.transactions.push({ ref, bank: 'Raiffeisen', date, amount: 40 + i, currency: 'CHF', direction: 'DBIT', description: `Karte 5412 Einkauf ${i}` });
+      b.journalEntries.push({ id: `card-${i}`, transactionRef: ref, date, accountDebit: account, accountCredit: '1021', amount: 40 + i, description: 'Karte', origin: 'manual' });
+    });
+  });
+  saveBooks(ws, books);
+}
+const CARD = `      - id: karte-material
+        when: { text: "Karte 5412", direction: out }
+        then: { account: "4000", vat: M81 }
+        source: wish 2026-10-16
+`;
+
+test('a rule whose payments are booked today on several other accounts, or privately, is kept only with «Trotzdem behalten», those payments shown (x02)', async () => {
+  const { ws } = await company();
+  cardPayments(ws, ['4000', '2451', '6641', '6200']);
+  draft(ws, GUIDE, BEFORE + CARD);
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual(d.wide, [], 'not a lone word: «Karte 5412» alone did not warn before');
+  const [p] = d.preview;
+  assert.deepEqual([p.spread?.accounts.sort(), p.spread?.private, d.spread.map((r) => r.id), d.confirm], [['2451', '6200', '6641'], true, ['karte-material'], true]);
+  const refused = await keepDraft(ws, GUIDE, d.basis);
+  assert.deepEqual([refused.ok, (refused as { refusal: string }).refusal], [false, 'wide']);
+  assert.match((refused as { message: string }).message, /karte-material.*verschiedenen Konten oder privat/);
+  assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE, 'nothing kept without the confirmation');
+  assert.equal((await keepDraft(ws, GUIDE, d.basis, true)).ok, true, '«Trotzdem behalten»');
+});
+
+test('a rule whose payments sit today on one other account, none private, keeps with one click: the usual correction', async () => {
+  const { ws } = await company();
+  cardPayments(ws, ['4000', '6200', '6200']);
+  draft(ws, GUIDE, BEFORE + CARD);
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual([d.preview[0].spread, d.confirm], [undefined, false]);
+});

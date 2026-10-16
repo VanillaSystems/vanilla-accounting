@@ -2738,6 +2738,8 @@ export default {
     'rules.preview.overlap': { one: '{n} de ces paiements est aussi touché par la règle {line}.', other: '{n} de ces paiements sont aussi touchés par la règle {line}.' },
     'rules.preview.theirs': { one: 'Pour {n}, c’est celle-là qui s’applique, pas celle-ci.', other: 'Pour {n}, c’est celle-là qui s’applique, pas celle-ci.' },
     'rules.preview.wide': 'Reconnaît les paiements au seul mot {words}, sans partenaire, payeur ni montant : le même mot figure sur des factures qui ne sont pas visées. Vérifiez les paiements ci-dessus avant de la garder.',
+    'rules.preview.spread': "Trop large ? Ces paiements sont comptabilisés autrement aujourd’hui, sur {accounts} : la règle les comptabiliserait tous de la même façon. À garder seulement si c’est juste.",
+    'rules.preview.spreadPrivate': "Trop large ? Ces paiements sont comptabilisés autrement aujourd’hui, sur {accounts}, dont du privé : la règle comptabiliserait aussi le privé comme commercial. À garder seulement si c’est juste.",
     'changes.ruleDrafts': 'Règles',
     'automation.toRules': 'Règles',
     'automation.outcome.accept': 'Reprendre',

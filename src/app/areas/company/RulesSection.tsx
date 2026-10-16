@@ -113,6 +113,12 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
         </span>
       ))}
       {p.loneWords.length ? <span className="warnline">{t('rules.preview.wide', { words: p.loneWords.map((w) => `«${w}»`).join(', ') })}</span> : null}
+      {p.spread ? (
+        <>
+          <span className="warnline" data-testid="rule-spread">{t(p.spread.private ? 'rules.preview.spreadPrivate' : 'rules.preview.spread', { accounts: p.spread.accounts.map((a) => (names.account(a) ? `${a} ${names.account(a)}` : a)).join(', ') })}</span>
+          {p.spread.payments.length ? <ul>{p.spread.payments.map((x) => <PaymentLine key={x.ref} p={x} names={names} />)}</ul> : null}
+        </>
+      ) : null}
     </div>
   );
 }

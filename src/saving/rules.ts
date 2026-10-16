@@ -50,6 +50,8 @@ export interface RuleDiff {
   refused: RuleRow[];
   /** Added or changed rules that rest on single words alone (loneWords): keeping them asks for confirmation. */
   wide: RuleRow[];
+  /** Added or changed rules whose payments are booked today on several other accounts or privately (RulePreview.spread): keeping them asks for confirmation. Filled by withPreview. */
+  spread: RuleRow[];
   /** The knowledge would not load with this file (it names the reason). */
   broken?: string;
 }
@@ -96,7 +98,7 @@ export function ruleDiff(ws: Ws, path: string, before: string, after: string): R
     try { others = withoutRules(before) !== withoutRules(after); } catch (e) { broken = (e as Error).message; }
   }
   if (!broken && after) { const k = knowledgeWith(ws, path, after); if ('error' in k) broken = k.error; }
-  return { path, added, changed, before: was, removed, others, refused: [...added, ...changed].filter((r) => r.kind !== 'rule'), wide, ...(broken ? { broken } : {}) };
+  return { path, added, changed, before: was, removed, others, refused: [...added, ...changed].filter((r) => r.kind !== 'rule'), wide, spread: [], ...(broken ? { broken } : {}) };
 }
 
 const placedOf = (r: RuleRow) => ({ rule: r.rule as BookingRule, ...(r.business ? { business: r.business } : {}) });
@@ -111,6 +113,7 @@ export function rulesRefusal(diffs: RuleDiff[], confirmed = false): string | und
     ...(d.broken ? [`${d.path}: ${d.broken}`] : []),
     ...d.refused.map((r) => `${d.path}: Regel «${r.id || '?'}» kann die App nicht ausführen (${r.kind === 'note' ? 'in Sätzen geschrieben' : r.refusal?.code ?? '?'})`),
     ...(confirmed ? [] : d.wide.map((r) => `${d.path}: Regel «${r.id}» erkennt Zahlungen nur an einzelnen Wörtern (${loneWords(placedOf(r)).join(', ')}): auf ihrer Karte die passenden Zahlungen ansehen und bestätigen`)),
+    ...(confirmed ? [] : d.spread.filter((r) => !d.wide.includes(r)).map((r) => `${d.path}: Regel «${r.id}» trifft Zahlungen, die heute auf verschiedenen Konten oder privat gebucht sind: auf ihrer Karte ansehen und bestätigen`)),
   ]);
   return lines.length ? lines.join('; ') : undefined;
 }
@@ -121,7 +124,7 @@ export interface DraftRules extends RuleDiff {
   basis: string;
   /** One click keeps it: the file loads, every rule in it is one the app carries out, and a rule changes. */
   keepable: boolean;
-  /** Keeping it needs the person's confirmation (`wide` is not empty): the button says «Trotzdem behalten». */
+  /** Keeping it needs the person's confirmation (`wide` or `spread` is not empty): the button says «Trotzdem behalten». */
   confirm: boolean;
   /** What each added or changed rule would do on this year's payments, in the order of `added` then `changed`. */
   preview: RulePreview[];
@@ -138,9 +141,17 @@ export function draftRules(ws: Workspace, path: string): DraftRules | undefined 
   const draft = join(draftDir(ws), path);
   if (!existsSync(draft)) return undefined;
   const after = read(draft);
-  const d = ruleDiff(ws, path, read(join(ws.paths.root, path)), after);
+  const { diff: d, preview } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
   const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0);
-  return { ...d, basis: hashOf(after), keepable, confirm: keepable && d.wide.length > 0, preview: d.broken ? [] : preview(ws, path, after, [...d.added, ...d.changed]) };
+  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0), preview };
+}
+
+/** A diff with what its added and changed rules would do on this year's payments, and which of them spread over decisions made (RulePreview.spread). */
+export function withPreview(ws: Workspace, d: RuleDiff, after: string): { diff: RuleDiff; preview: RulePreview[] } {
+  const targets = [...d.added, ...d.changed];
+  const shown = d.broken || !after ? [] : preview(ws, d.path, after, targets);
+  const spread = targets.filter((r) => shown.some((p) => p.key === ruleKey(r) && p.spread));
+  return { diff: { ...d, spread }, preview: shown };
 }
 
 /** The preview of `targets` (rules of the draft at `path`) on the books, with the draft's businesses routing the payments. */
@@ -190,9 +201,9 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   if (!existsSync(draft)) return { ok: false, refusal: 'gone', message: 'Diesen Entwurf gibt es nicht mehr.' };
   const after = read(draft);
   if (hashOf(after) !== basis) return { ok: false, refusal: 'stale', message: 'Der Entwurf hat sich seit der Anzeige geändert.' };
-  const d = ruleDiff(ws, path, read(join(ws.paths.root, path)), after);
+  const { diff: d } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
   const why = rulesRefusal([d], confirmed);
-  if (why) return { ok: false, refusal: d.wide.length && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
+  if (why) return { ok: false, refusal: (d.wide.length || d.spread.length) && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
   const to = join(ws.paths.root, path);
   mkdirSync(dirname(to), { recursive: true });
   if (after.trim()) writeFileSync(to, after); else rmSync(to, { force: true });

@@ -2735,6 +2735,8 @@ export const messages = {
   'rules.preview.overlap': { one: '{n} dieser Zahlungen trifft auch die Regel {line}.', other: '{n} dieser Zahlungen trifft auch die Regel {line}.' },
   'rules.preview.theirs': { one: 'Bei {n} gilt jene, nicht diese.', other: 'Bei {n} gilt jene, nicht diese.' },
   'rules.preview.wide': 'Erkennt Zahlungen nur am Wort {words}, ohne Geschäftspartner, Zahler oder Betrag: dasselbe Wort steht auch auf Rechnungen, die nicht gemeint sind. Prüf die Zahlungen oben, bevor du sie behältst.',
+  'rules.preview.spread': "Zu breit? Diese Zahlungen sind heute anders gebucht, auf {accounts}: die Regel würde sie alle gleich buchen. Behalten nur, wenn das stimmt.",
+  'rules.preview.spreadPrivate': "Zu breit? Diese Zahlungen sind heute anders gebucht, auf {accounts}, darunter privat: die Regel würde auch Privates als Geschäft buchen. Behalten nur, wenn das stimmt.",
   'changes.ruleDrafts': 'Regeln',
   'automation.toRules': 'Regeln',
   'automation.outcome.accept': 'Übernehmen',

@@ -2738,6 +2738,8 @@ export default {
     'rules.preview.overlap': { one: '{n} di questi pagamenti è toccato anche dalla regola {line}.', other: '{n} di questi pagamenti sono toccati anche dalla regola {line}.' },
     'rules.preview.theirs': { one: 'Per {n} vale quella, non questa.', other: 'Per {n} vale quella, non questa.' },
     'rules.preview.wide': 'Riconosce i pagamenti solo dalla parola {words}, senza partner, pagatore o importo: la stessa parola compare su fatture che non c’entrano. Controlla i pagamenti qui sopra prima di tenerla.',
+    'rules.preview.spread': "Troppo ampia? Questi pagamenti oggi sono registrati diversamente, su {accounts}: la regola li registrerebbe tutti allo stesso modo. Tenerla solo se è giusto.",
+    'rules.preview.spreadPrivate': "Troppo ampia? Questi pagamenti oggi sono registrati diversamente, su {accounts}, tra cui privati: la regola registrerebbe anche il privato come aziendale. Tenerla solo se è giusto.",
     'changes.ruleDrafts': 'Regole',
     'automation.toRules': 'Regole',
     'automation.outcome.accept': 'Accettare',

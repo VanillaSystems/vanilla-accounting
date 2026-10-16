@@ -18,7 +18,7 @@ import type { JournalEntry } from '../types/index.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { holdsRules } from '../booking/rule-book.js';
-import { ruleDiff, rulesRefusal } from './rules.js';
+import { ruleDiff, rulesRefusal, withPreview } from './rules.js';
 import { booksBasis, changesView, customizingNames, draftDir, fileDiff, lastSaveAt, recordsPaths, saveDetail } from './changes.js';
 import { BOOKS, diffLines, hunks, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type RunWrote, type SavingCommand, type SavingResult, type SyncState } from './model.js';
 
@@ -92,7 +92,7 @@ function parseAnswer(text: string): Answer {
 }
 
 /** `runs` names the runs that wrote into the books since a moment (the engine's): the books' item says whose they are. */
-export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date; runs?: (since: string | undefined) => RunWrote[] }): Saving {
+export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; runs?: (since: string | undefined) => RunWrote[] }): Saving {
   const now = deps.now ?? (() => new Date());
 
   /** The view with the runs that wrote the waiting books. */
@@ -164,7 +164,7 @@ export function openSaving(ws: Ws, deps: { ask: Ask; now?: () => Date; runs?: (s
     if (outsideCustomizing.length) return refuse('not-customizing', `Nicht über Änderungen zu speichern: ${outsideCustomizing.map((f) => f.path).join(', ')}`);
     // A rule is kept only when the app carries it out (src/saving/rules.ts): never as sentences nothing acts on.
     const ruleFiles = go.flatMap((s) => s.files).filter((f) => f.source !== 'books' && holdsRules(f.path));
-    const diffs = await Promise.all(ruleFiles.map(async (f) => { const d = await fileDiff(ws, f.source, f.path); return ruleDiff(ws, f.path, d?.before ?? '', d?.after ?? ''); }));
+    const diffs = await Promise.all(ruleFiles.map(async (f) => { const d = await fileDiff(ws, f.source, f.path); return withPreview(ws, ruleDiff(ws, f.path, d?.before ?? '', d?.after ?? ''), d?.after ?? '').diff; }));
     const unkept = rulesRefusal(diffs);
     if (unkept) return refuse('rules', unkept);
     let saved = 0;

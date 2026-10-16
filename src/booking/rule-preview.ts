@@ -41,6 +41,20 @@ export interface RuleOverlap {
   theirs: number;
 }
 
+/**
+ * The payments a rule holds for that are booked today on other accounts than its own: on two or
+ * more of them, or on the owner's private account, the rule would book over decisions (a cash
+ * withdrawal, a private purchase, a restaurant), so keeping it asks for «Trotzdem behalten» (x02).
+ */
+export interface RuleSpread {
+  /** The other accounts, as booked today, in the order first met. */
+  accounts: string[];
+  /** One of them is the owner's private account. */
+  private: boolean;
+  /** Such payments the newest examples leave out, at most PREVIEW_EXAMPLES. */
+  payments: PreviewPayment[];
+}
+
 export interface RulePreview {
   /** The drafted rule: `${step}#${id}`. */
   key: string;
@@ -53,6 +67,8 @@ export interface RulePreview {
   overlaps: RuleOverlap[];
   /** The single words it rests on (loneWords): keeping asks for confirmation. */
   loneWords: string[];
+  /** The payments it holds for are booked today on several other accounts or privately: keeping asks for confirmation. */
+  spread?: RuleSpread;
 }
 
 /** A rule of the books with the draft applied, and the row it reads as. */
@@ -107,28 +123,47 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
     const pool = rules.filter((r) => !r.placed.rule.off || ruleKey(r.row) === key);
     // The drafted rule counts as switched on: the preview says what it would do.
     const placed = pool.map((r) => ({ ...r.placed, rule: { ...r.placed.rule, off: false } }));
-    for (const tx of hits) {
-      const p = facts.get(tx.ref)!;
+    const t = target.placed.rule.then;
+    const payment = (tx: BankTransaction, p: ReturnType<typeof paymentFacts>): PreviewPayment => {
       const decider = ruleFor(placed, p);
       const deciderRow = decider && pool[placed.indexOf(decider)].row;
-      for (const other of on) {
-        if (ruleKey(other.row) === key || !holds(other.placed, p)) continue;
-        const o = overlaps.get(ruleKey(other.row)) ?? { row: other.row, shared: 0, theirs: 0 };
-        o.shared++;
-        if (deciderRow && ruleKey(deciderRow) === ruleKey(other.row)) o.theirs++;
-        overlaps.set(ruleKey(other.row), o);
-      }
-      if (examples.length >= PREVIEW_EXAMPLES) continue;
-      const t = target.placed.rule.then;
       const lines = t.booking ? wouldBook(books, tx, t.booking, context) : [];
-      examples.push({
+      return {
         ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction,
         text: [tx.description, tx.counterparty && !tx.description.includes(tx.counterparty) ? tx.counterparty : ''].filter(Boolean).join(' · '),
         would: t.kind === 'book' ? { kind: 'book', lines } : { kind: 'ask', question: t.question, lines },
         now: bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts)),
         ...(deciderRow && ruleKey(deciderRow) !== key ? { decidedBy: deciderRow.id } : {}),
-      });
+      };
+    };
+    // The accounts the rule books on: today's booking on any other is a decision it would overrule.
+    const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : []), ...(t.booking.fees ? [t.booking.fees.account] : [])] : []);
+    const others: string[] = [];
+    const elsewhere: BankTransaction[] = [];
+    for (const tx of hits) {
+      const p = facts.get(tx.ref)!;
+      for (const other of on) {
+        if (ruleKey(other.row) === key || !holds(other.placed, p)) continue;
+        const o = overlaps.get(ruleKey(other.row)) ?? { row: other.row, shared: 0, theirs: 0 };
+        o.shared++;
+        const decider = ruleFor(placed, p);
+        if (decider && ruleKey(pool[placed.indexOf(decider)].row) === ruleKey(other.row)) o.theirs++;
+        overlaps.set(ruleKey(other.row), o);
+      }
+      // An ask rule asks first: it overrules nobody.
+      if (t.kind === 'book') {
+        const off = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts)).map((l) => l.account).filter((a) => a && !own.has(a));
+        if (off.length) elsewhere.push(tx);
+        for (const a of off) if (!others.includes(a)) others.push(a);
+      }
+      if (examples.length < PREVIEW_EXAMPLES) examples.push(payment(tx, p));
     }
-    return { key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed) };
+    const isPrivate = !!context.ownerAccount && others.includes(context.ownerAccount);
+    const spread: RuleSpread | undefined = others.length >= 2 || isPrivate ? {
+      accounts: others,
+      private: isPrivate,
+      payments: elsewhere.filter((tx) => !examples.some((x) => x.ref === tx.ref)).slice(0, PREVIEW_EXAMPLES).map((tx) => payment(tx, facts.get(tx.ref)!)),
+    } : undefined;
+    return { key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed), ...(spread ? { spread } : {}) };
   });
 }

@@ -2738,6 +2738,8 @@ export default {
     'rules.preview.overlap': { one: '{n} of these payments is also matched by the rule {line}.', other: '{n} of these payments are also matched by the rule {line}.' },
     'rules.preview.theirs': { one: 'For {n}, that one applies, not this one.', other: 'For {n}, that one applies, not this one.' },
     'rules.preview.wide': 'Recognises payments by the word {words} alone, without a business, payer or amount: the same word appears on bills nobody meant. Check the payments above before you keep it.',
+    'rules.preview.spread': "Too wide? These payments are booked differently today, on {accounts}: the rule would book them all the same. Keep it only if that is right.",
+    'rules.preview.spreadPrivate': "Too wide? These payments are booked differently today, on {accounts}, private ones among them: the rule would book private spending as business too. Keep it only if that is right.",
     'changes.ruleDrafts': 'Rules',
     'automation.toRules': 'Rules',
     'automation.outcome.accept': 'Take it',
