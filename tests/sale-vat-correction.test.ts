@@ -127,7 +127,7 @@ test('a payment with no revenue booking the app may set is refused in words, not
 
 test('her V0 on a payer at home is asked back, not taken as «Ausland»; her answer then keeps the rule from her booking (r4c-35)', async () => {
   const b = loadBooks(api.ws);
-  b.transactions.push({ ref: 'S-HOME', bank: 'Raiffeisen', date: '2026-08-21', amount: 3274.4, currency: 'CHF', direction: 'CRDT', description: 'Malerarbeiten', counterparty: 'Hans Muster', counterpartyIban: 'CH5604835012345678009' });
+  b.transactions.push({ ref: 'S-HOME', bank: 'Raiffeisen', date: '2026-08-21', amount: 3274.4, currency: 'CHF', direction: 'CRDT', description: 'Malerarbeiten', counterparty: 'Hans Muster', counterpartyIban: 'CH0000235099999999999' });
   b.journalEntries.push({ id: 'e-home', transactionRef: 'S-HOME', date: '2026-08-21', accountDebit: '1021', accountCredit: '3400', amount: 3274.4, vatCode: 'V81', description: 'Kundenzahlung Hans Muster', origin: 'classify' });
   saveBooks(api.ws, b);
   const r = await api.send('PATCH', '/api/journal-entries/e-home', { vatCode: 'V0' });

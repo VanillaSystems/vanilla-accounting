@@ -89,7 +89,7 @@ export function saleVatCode(choice: SaleChoice): string | null {
 }
 
 /**
- * The code and rate an answer «mit MWST» books: the normal rate, or on the net tax rate method the
+ * The code and rate the answer «domestic sale» books: the normal rate, or on the net tax rate method the
  * firm's first approved rate (`net`), so the question names what it books. Undefined: no code.
  */
 export function domesticSale(): { code: string; rate: number; net: boolean } | undefined {

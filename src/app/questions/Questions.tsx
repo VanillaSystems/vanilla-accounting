@@ -19,7 +19,7 @@ import { domesticSale, normalRate, saleChoiceOf, saleProposal } from '../../acco
 import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
 
-/** «mit MWST (8.1 %)»; on the net tax rate method the firm's code and approved rate, which the answer books. */
+/** The domestic sale at the normal rate; on the net tax rate method the firm's code and approved rate, which the answer books. */
 function saleDomesticText(): string {
   const d = domesticSale();
   return d?.net ? t('questions.choice.saleDomesticNet', { code: d.code, rate: String(d.rate) }) : t('questions.choice.saleDomestic', { rate: String(d?.rate ?? normalRate()) });

@@ -252,9 +252,9 @@ export function openQuestionOn(on: QuestionTarget): Question | undefined {
 
 const GONE: Record<SaleGone, string> = {
   noPayment: 'Die Zahlung gibt es nicht mehr: die Frage ist geschlossen.',
-  closed: 'Das Quartal der Zahlung ist eingereicht: die Frage ist geschlossen. Fehlt die MWST, bucht eine Korrektur in der offenen Periode sie nach.',
-  hasReceipt: 'Die Zahlung hat jetzt einen Beleg, er entscheidet die MWST: die Frage ist geschlossen.',
-  hasInvoice: 'Die Zahlung ist aus einer Rechnung gebucht, die entscheidet die MWST: die Frage ist geschlossen.',
+  closed: 'Das Quartal der Zahlung ist eingereicht: die Frage ist geschlossen. Fehlt Steuer, bucht eine Korrektur in der offenen Periode sie nach.',
+  hasReceipt: 'Die Zahlung hat jetzt einen Beleg, er entscheidet die Steuer: die Frage ist geschlossen.',
+  hasInvoice: 'Die Zahlung ist aus einer Rechnung gebucht, die entscheidet die Steuer: die Frage ist geschlossen.',
 };
 
 export function answerQuestion(id: string, { by, answer }: { by: string; answer: Answer }, from?: string): Question {

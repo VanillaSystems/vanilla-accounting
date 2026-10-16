@@ -1,8 +1,8 @@
 /**
  * What is still open in a period before its return is filed (r4c-38): the questions about its
- * payments, receipts and bookings, the bookings whose code contradicts their receipts («I81 ohne
- * Beleg», «Beleg zeigt MWST»), the payments nobody booked, and the receipts without a payment. The
- * review lists them, each a link; none of them blocks the filing, the person decides.
+ * payments, receipts and bookings, the bookings whose code contradicts their receipts (input tax
+ * without a receipt, a receipt that shows VAT on a zero code), the payments nobody booked, and the
+ * receipts without a payment. The review lists them, each a link; none blocks the filing.
  */
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
