@@ -2148,6 +2148,8 @@ export const messages = {
   'issues.unbooked': 'Zahlung ohne Buchung: {date} {text} {amount}',
   'issues.unlinked': 'Beleg ohne Zahlung: {date} {text}',
   'issues.evidenceTitle': { one: '{n} Buchung passt nicht zu ihrem Beleg', other: '{n} Buchungen passen nicht zu ihren Belegen' },
+  'issues.filedTitle': { one: "{n} Buchung im eingereichten {period} passt nicht zu ihrem Beleg", other: "{n} Buchungen im eingereichten {period} passen nicht zu ihren Belegen" },
+  'issues.filedLead': "Vor dem Einreichen nicht geklärt. Die Buchung bleibt, wie sie ist; die Korrektur gehört in {open}: die Buchung öffnen und dort korrigieren.",
   'automation.mapEvents': 'Ereignisse',
   'automation.mapPhases': 'Phasen',
   'automation.mapLead': 'Die Buchhaltung eines Jahres in vier Phasen, in ihrer Reihenfolge. Jede Phase sagt, wie oft sie dran ist. Ein Ablauf anklicken öffnet ihn.',

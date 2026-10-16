@@ -1,7 +1,9 @@
 /**
  * What waits for the person under Aufgaben, for the AI sidebar's message (w08, w25): the open
  * questions with their text and buttons as their cards show them, the workflows' tasks, the
- * payments of the open period without a booking. Read when the message is sent, so the model never
+ * payments of the open period without a booking, the bookings that contradict their receipts
+ * (src/accounting/evidence-check.ts; those of the period filed last wait for a correction), and
+ * the receipts that may be copies of another. Read when the message is sent, so the model never
  * claims a question is missing that is open, or sends the person to answer one the app has closed.
  * The words are the UI's own, in the person's language; the frame is English, for the model.
  */
@@ -13,6 +15,12 @@ import { chart } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import { payText, unbookedPayments } from '../app/areas/bank/model.js';
 import { fillTask, textIn, type Task } from '../workflows/model.js';
+import { journalOf, unsettledAtFiling } from '../app/areas/journal/model.js';
+import { ledgerOf } from '../app/areas/receipts/model.js';
+import type { EvidenceCheck } from '../accounting/evidence-check.js';
+import type { JournalEntry } from '../types/index.js';
+import { filing } from '../engines/index.js';
+import { addDays } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
 
 const LIMIT = 20;
@@ -54,6 +62,10 @@ function questionLine(books: Books, q: Question, t: T): string {
   return parts.join('; ');
 }
 
+/** A contradiction in the words the booking page shows. */
+const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) =>
+  `- ${day(e.date)} ${e.description ?? ''} (${e.transactionRef}): «${c.kind === 'receiptShowsVat' ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ?? '' }) : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ?? '', zero: c.code })}»`;
+
 /**
  * The note for the message, or the plain statement that nothing waits. `tasks`: the workflows'
  * tasks as Automatisierung lists them, each with the rule that held its payment (workflows/ask).
@@ -68,9 +80,15 @@ export function openWork(ws: Pick<Workspace, 'paths'>, books: Books, tasks: Read
   const answered = questions.filter((q) => q.status === 'answered' && q.origin !== 'booking');
   const taskRefs = new Set(tasks.filter((x) => x.item.kind === 'transaction').map((x) => x.item.id));
   const unbooked = unbookedPayments(books).filter((p) => !taskRefs.has(p.ref));
+  const journal = journalOf(books);
+  const contradicting = journal.views.filter((v) => v.evidence);
+  const unsettled = unsettledAtFiling(journal, filing().length);
+  const ledger = ledgerOf(books, closed ? addDays(closed, 1) : '0000-01-01');
+  const twins = ledger.views.filter((v) => v.twin?.relation === 'duplicate' && !v.none && !v.locked);
+  const name = (id: string) => { const r = books.receipts.find((x) => x.id === id); return r?.description || r?.filename || id; };
   const where = `«${t('area.automation')} › ${t('automation.tasks')}»`;
   const head = `What waits for the person under ${where} now, read by the app when this message was sent${closed ? ` (the open period: after ${day(closed)})` : ''}. It is complete: what is not listed does not wait.`;
-  if (!questions.length && !tasks.length && !unbooked.length) return `${head}\nNothing waits: no open question, no task, no payment without a booking.`;
+  if (!questions.length && !tasks.length && !unbooked.length && !contradicting.length && !unsettled?.items.length && !twins.length) return `${head}\nNothing waits: no open question, no task, no payment without a booking, no booking against its receipt, no possible duplicate.`;
   return [
     head,
     `Open questions (${open.length}):`, ...capped(open.map((q) => questionLine(books, q, t))),
@@ -81,5 +99,8 @@ export function openWork(ws: Pick<Workspace, 'paths'>, books: Books, tasks: Read
       return `- «${title}» on the ${x.item.kind} ${x.item.id}, since ${day(x.since)}${rule}`;
     })),
     `Payments without a booking (${unbooked.length}):`, ...capped(unbooked.map((p) => `- ${day(p.date)} ${payText(p).name} ${money(p.currency, p.amount)} (${p.ref})`)),
+    `Bookings whose VAT code contradicts their receipts (${contradicting.length}), each with its one click on the booking and under ${where}:`, ...capped(contradicting.map((v) => evidenceLine(v.e, v.evidence!, t))),
+    ...(unsettled?.items.length ? [`Bookings of the filed ${unsettled.period} that contradicted their receipts and were not settled before filing (${unsettled.items.length}): they stay as filed, and wait for a correction in the open period:`, ...capped(unsettled.items.map((u) => evidenceLine(u.v.e, u.check, t)))] : []),
+    `Receipts that may be a copy of another (${twins.length}), answered on the receipt («${t('receipts.twin.same')}» or «${t('receipts.twin.distinct')}»):`, ...capped(twins.map((v) => `- «${name(v.r.id)}» may be a copy of «${name(v.twin!.of)}» (${v.twin!.why})`)),
   ].join('\n');
 }

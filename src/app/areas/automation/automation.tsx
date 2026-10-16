@@ -25,14 +25,14 @@ import { Paper } from '../receipts/Paper.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { fileName, returnSummary } from './filing-summary.js';
 import type { PeriodReturn, PreparedXml } from '../../../workflows/filing.js';
-import { baseCurrency, vat } from '../../../engines/index.js';
+import { baseCurrency, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
 import { questionsNow, useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
-import { EvidenceTasks, PeriodIssues } from './Issues.js';
-import { journalOf } from '../journal/model.js';
+import { EvidenceTasks, FiledEvidence, PeriodIssues } from './Issues.js';
+import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
 import { periodName } from '../../lib/period-label.js';
 
@@ -644,7 +644,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   // A payment nobody booked waits for the person even when no run asked about it (corner-9).
   const inTasks = new Set(tasks.map(unbooked).filter(Boolean));
   const waiting = unbookedPayments(books).filter((p) => !inTasks.has(p.ref));
-  const evidence = journalOf(books).views.some((v) => v.evidence);
+  const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length;
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
@@ -672,6 +672,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
         </div>
       ) : asked || waiting.length || evidence ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
       <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
+      <FiledEvidence books={books} nav={nav} />
       {waiting.length > 0 && (
         <section className="wfunbooked" data-testid="unbooked-payments">
           <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>

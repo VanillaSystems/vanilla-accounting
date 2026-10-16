@@ -2151,6 +2151,8 @@ export default {
     'issues.unbooked': 'Paiement sans écriture : {date} {text} {amount}',
     'issues.unlinked': 'Justificatif sans paiement : {date} {text}',
     'issues.evidenceTitle': { one: '{n} écriture ne correspond pas à son justificatif', other: '{n} écritures ne correspondent pas à leurs justificatifs' },
+    'issues.filedTitle': { one: "{n} écriture de la période déposée {period} ne correspond pas à son justificatif", other: "{n} écritures de la période déposée {period} ne correspondent pas à leurs justificatifs" },
+    'issues.filedLead': "Non réglé avant le dépôt. L'écriture reste telle quelle ; la correction se fait en {open} : ouvrir l'écriture et la corriger là.",
     'automation.mapEvents': 'Événements',
     'automation.mapPhases': 'Phases',
     'automation.mapLead': 'Une année de comptabilité en quatre phases, dans leur ordre. Chaque phase dit à quelle fréquence elle revient. Clique sur une procédure pour l’ouvrir.',

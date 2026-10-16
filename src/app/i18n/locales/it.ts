@@ -2151,6 +2151,8 @@ export default {
     'issues.unbooked': 'Pagamento senza registrazione: {date} {text} {amount}',
     'issues.unlinked': 'Giustificativo senza pagamento: {date} {text}',
     'issues.evidenceTitle': { one: '{n} registrazione non corrisponde al suo giustificativo', other: '{n} registrazioni non corrispondono ai loro giustificativi' },
+    'issues.filedTitle': { one: "{n} registrazione del periodo inoltrato {period} non corrisponde al suo giustificativo", other: "{n} registrazioni del periodo inoltrato {period} non corrispondono ai loro giustificativi" },
+    'issues.filedLead': "Non risolto prima dell'inoltro. La registrazione resta com'è; la correzione va in {open}: aprire la registrazione e correggerla lì.",
     'automation.mapEvents': 'Eventi',
     'automation.mapPhases': 'Fasi',
     'automation.mapLead': 'Un anno di contabilità in quattro fasi, nel loro ordine. Ogni fase dice quanto spesso tocca. Clicca su una procedura per aprirla.',

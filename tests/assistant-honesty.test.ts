@@ -132,7 +132,7 @@ test('an answer whose one change the app refused keeps all it said that did not 
 test('when nothing waits, the message says so plainly (1c)', async () => {
   for (const q of readQuestions(api.ws).filter((x) => x.status === 'open')) await api.send('POST', `/api/questions/${q.id}/close`, { by: 'Anna Muster', how: 'withdrawn' });
   const { prompts } = await wish(undefined);
-  assert.match(prompts.at(-1)!, /Nothing waits: no open question, no task, no payment without a booking\./);
+  assert.match(prompts.at(-1)!, /Nothing waits: no open question, no task, no payment without a booking, no booking against its receipt, no possible duplicate\./);
 });
 
 test('an answer\'s bold, lists and paragraphs are data, never markup; an unpaired ** stays as written (3)', () => {

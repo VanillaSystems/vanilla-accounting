@@ -4,7 +4,7 @@
  * filtered and searched. Pure, so the list, the keys and the tests read the same order.
  */
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
-import type { Period } from '../../../accounting/periods.js';
+import { derivePeriod, filingKeyOf, type FilingLength, type Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
 import { evidenceCheck, type EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -64,6 +64,29 @@ export function journalOf(books: Index): Journal {
   const byRef = new Map<string, EntryView[]>();
   for (const v of views) (byRef.get(v.e.transactionRef) ?? byRef.set(v.e.transactionRef, []).get(v.e.transactionRef)!).push(v);
   return { views, byId: new Map(views.map((v) => [v.e.id, v])), byRef, closedThrough };
+}
+
+/** A booking of a filed period whose code contradicts its receipts, with what the check proposes. */
+export interface Unsettled { v: EntryView; check: EvidenceCheck }
+
+/**
+ * The bookings of the period filed last that contradict their receipts and that no correction
+ * names (a correction's text names the payment, journal.correctionText): filing did not settle
+ * them, and they stay as filed; a correction in the open period does (r5h-33). Undefined before
+ * the first filing.
+ */
+export function unsettledAtFiling(j: Journal, length: FilingLength): { period: string; items: Unsettled[] } | undefined {
+  const closed = j.closedThrough;
+  if (!closed) return undefined;
+  const period = filingKeyOf(closed, length);
+  const from = derivePeriod(period)?.from ?? closed;
+  const corrected = (ref: string) => j.views.some((x) => x.e.corrects === period && (x.e.description ?? '').includes(ref));
+  const items = j.views.flatMap((v): Unsettled[] => {
+    if (v.e.date < from || v.e.date > closed || v.e.corrects || corrected(v.e.transactionRef)) return [];
+    const check = evidenceCheck(v.e, v.receipts, undefined);
+    return check ? [{ v, check }] : [];
+  });
+  return { period, items };
 }
 
 export const JOURNAL_FILTERS = ['ohneBeleg', 'korrekturen'] as const;

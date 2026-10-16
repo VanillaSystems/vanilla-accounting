@@ -9,7 +9,10 @@ import { useQuestions } from '../../questions/store.js';
 import { at } from '../receipts/view.js';
 import { evidenceText, patchOf } from '../journal/Detail.js';
 import { saveEntry } from '../journal/actions.js';
-import { journalOf } from '../journal/model.js';
+import { journalOf, unsettledAtFiling } from '../journal/model.js';
+import { filing } from '../../../engines/index.js';
+import { localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
+import { periodName } from '../../lib/period-label.js';
 import { periodIssues, type PeriodIssue } from './period-issues.js';
 import type { Location } from '../../shell/route.js';
 import type { Nav } from '../index.js';
@@ -85,6 +88,31 @@ export function EvidenceTasks({ books, nav, canEdit }: { books: Index; nav: Nav;
           <li key={v.e.id}>
             <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'journal', id: v.e.id }, v.e.date))}>{`${formatDate(v.e.date)} ${v.e.description ?? ''}: ${evidenceText(v.e, v.evidence!)}`}</button>
             {canEdit ? <EvidenceFix e={v.e} check={v.evidence!} nav={nav} /> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * The bookings of the period filed last that contradicted their receipts and were not settled
+ * before filing (r5h-33): they stay as filed, so each links to its booking, where the correction
+ * in the open period is made. Gone once a correction names its payment.
+ */
+export function FiledEvidence({ books, nav }: { books: Index; nav: Nav }) {
+  const u = unsettledAtFiling(journalOf(books), filing().length);
+  if (!u?.items.length) return null;
+  const name = (key: string) => { const p = parsePeriod(key, localToday()); return p ? periodName(p) : key; };
+  const open = openFilingPeriod(books.config?.closedThrough, localToday(), filing().length);
+  return (
+    <section className="wfissues" data-testid="filed-evidence">
+      <h3>{t('issues.filedTitle', { n: u.items.length, period: name(u.period) })}</h3>
+      <p className="m">{t('issues.filedLead', { open: periodName(open) })}</p>
+      <ul>
+        {u.items.map(({ v, check }) => (
+          <li key={v.e.id}>
+            <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'journal', id: v.e.id }, v.e.date))}>{`${formatDate(v.e.date)} ${v.e.description ?? ''}: ${evidenceText(v.e, check)}`}</button>
           </li>
         ))}
       </ul>
