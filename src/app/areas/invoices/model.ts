@@ -6,7 +6,8 @@
 import type { Period } from '../../../accounting/periods.js';
 import type { Customer, Draft, Invoice, InvoiceBook, Issued, SentDocument } from '../../../invoices/model.js';
 import type { DraftChange } from '../../lib/api.js';
-import { isOverdue, openAmount, totals } from '../../../invoices/rules.js';
+import { isOverdue, namesNumber, openAmount, totals } from '../../../invoices/rules.js';
+import type { BankTransaction, Index } from '../../../types/index.js';
 import type { InvoiceList } from '../../lib/api.js';
 import type { InvoiceStatus } from '../../shell/route.js';
 import { baseCurrency, chargesVat, invoiceRates, invoicing } from '../../../engines/index.js';
@@ -118,4 +119,34 @@ export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: { id: 
   if (abroad) return { customerId: c.id, language: c.language, lines: inv.lines.map((l) => ({ ...l, vatRate: 0 })), exemption: 'abroad', ...(['DE', 'FR', 'IT', 'AT'].includes(c.address.country) ? { currency: 'EUR' } : {}) };
   const allZero = inv.lines.length > 0 && inv.lines.every((l) => l.vatRate === 0);
   return { customerId: c.id, language: c.language, ...(allZero && chargesVat() ? { lines: inv.lines.map((l) => ({ ...l, vatRate: invoiceRates()[0] })), exemption: null, currency: 'CHF' } : {}) };
+}
+
+/** A payment is linked to a document once an allocation names its ref. */
+const allocatedRefs = (invoices: readonly Invoice[]): Set<string> =>
+  new Set(invoices.flatMap((i) => (i.status === 'issued' ? i.payments.map((p) => p.transactionRef) : [])));
+
+/**
+ * The open invoices an incoming payment can be linked to from the payment's page (r9c-3): issued,
+ * not cancelled, in the payment's currency, still owed; none once the payment is allocated. Those
+ * whose number the payment's text names come first.
+ */
+export function linkableInvoices(invoices: readonly Invoice[], tx: Pick<BankTransaction, 'ref' | 'direction' | 'currency' | 'description' | 'reference' | 'counterparty' | 'parts'>): Issued[] {
+  if (tx.direction !== 'CRDT' || allocatedRefs(invoices).has(tx.ref)) return [];
+  const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
+  return invoices
+    .filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.cancelled && i.currency === tx.currency && openAmount(i, invoices) > 0)
+    .sort((a, b) => Number(namesNumber(text, b.number)) - Number(namesNumber(text, a.number)) || a.number.localeCompare(b.number));
+}
+
+/**
+ * The incoming payments of the open period an invoice can be linked to from its page (r9c-3): in
+ * its currency, not allocated to any document yet, the newest first. The proposals the API makes
+ * are a subset; this lets a person pick any other, a prepayment before the invoice's date included.
+ */
+export function linkablePayments(books: Pick<Index, 'transactions' | 'config'>, invoices: readonly Invoice[], inv: Issued): BankTransaction[] {
+  const closed = books.config?.closedThrough ?? '';
+  const allocated = allocatedRefs(invoices);
+  return books.transactions
+    .filter((t) => t.direction === 'CRDT' && t.currency === inv.currency && t.date > closed && !allocated.has(t.ref) && t.amount > 0)
+    .sort((a, b) => b.date.localeCompare(a.date));
 }

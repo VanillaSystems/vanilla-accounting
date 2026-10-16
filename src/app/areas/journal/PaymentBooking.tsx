@@ -6,7 +6,7 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import type { Index, JournalEntry } from '../../../types/index.js';
-import { bookingDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
+import { formDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { firmCodes, formTakes, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
 import { withoutInputTax } from '../../../engines/index.js';
@@ -39,8 +39,9 @@ type Props = {
 export function PaymentBooking(props: Props) {
   const ws = useWorkspace();
   const inv = useInvoices();
-  const invoices = inv.state === 'ready' ? inv.data.invoices : undefined;
-  const draft = useMemo(() => ws && bookingDraft(props.books, props.payment, ws.bankAccounts, invoices), [ws, props.books, props.payment, invoices]);
+  const invoices = inv.state === 'ready' ? inv.data.invoices : inv.state === 'loading' ? 'loading' : undefined;
+  // The form's rows are set once from the draft, so it waits for the invoices too (formDraft, r9c-4).
+  const draft = useMemo(() => ws && formDraft(props.books, props.payment, ws.bankAccounts, invoices), [ws, props.books, props.payment, invoices]);
   const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
   if (!ws || !draft) return null;
   return (

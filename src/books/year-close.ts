@@ -28,6 +28,7 @@ import { roundCHF } from '../accounting/rappen.js';
 import { filingKeyOf } from '../accounting/periods.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn } from '../invoices/rules.js';
+import { unlinkedNaming } from '../invoices/payments.js';
 import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
@@ -60,17 +61,24 @@ export function bankBalances(ws: Workspace, books: Books): BankBalance[] {
 /** The account numbers of the workspace's chart. */
 export const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []));
 
-/** The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before it). */
-export function receivablesOf(ws: Workspace, year: string, rates: EstvRates): Receivables {
+/**
+ * The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before
+ * it), and the payments of the books that name one of them without being linked to it (r9c-3).
+ */
+export function receivablesOf(ws: Workspace, year: string, rates: EstvRates, books: Books): Receivables {
   const end = `${year}-12-31`;
-  const invoices = liveInvoices(loadInvoices(ws));
+  const book = loadInvoices(ws);
+  const invoices = liveInvoices(book);
   const open = invoices.flatMap((inv) => {
     const amount = inv.status === 'issued' ? openOn(inv, invoices, end) : 0;
     if (inv.status !== 'issued' || amount === 0) return [];
     const rate = inv.currency === 'CHF' ? 1 : rates.on(inv.currency, end)?.rate ?? 0;
     return [{ number: inv.number, customer: inv.customer.name, date: inv.date, currency: inv.currency, open: amount, chf: roundCHF(amount * rate) }];
   });
-  return { invoices: open, total: roundCHF(open.reduce((s, i) => s + i.chf, 0)), revenueAccount: ws.invoicing?.revenueAccount };
+  const numbers = new Set(open.map((i) => i.number));
+  const unlinked = unlinkedNaming(books, book).filter((p) => numbers.has(p.number) && p.date <= end)
+    .map((p) => ({ transactionRef: p.transactionRef, date: p.date, number: p.number, currency: p.currency, amount: p.amount }));
+  return { invoices: open, total: roundCHF(open.reduce((s, i) => s + i.chf, 0)), revenueAccount: ws.invoicing?.revenueAccount, ...(unlinked.length && { unlinked }) };
 }
 
 /** `ratesDir`, else VANILLA_RATES_DIR, points at another reference/ (a test, a rehearsal with a stand-in 31.12. rate). */
@@ -92,7 +100,7 @@ export function yearCloseOf(ws: Workspace, year: string, rates: EstvRates = rate
     doctor: workspaceChecks(ws).flatMap((r) => (r.status === 'fail' ? [r.label] : [])),
     rates,
     state: readState(ws, year),
-    receivables: receivablesOf(ws, year, rates),
+    receivables: receivablesOf(ws, year, rates, books),
   });
 }
 
@@ -180,6 +188,10 @@ export interface EntryInput {
 export function bookEntry(ws: Workspace, input: EntryInput, template?: string): JournalEntry {
   assertInChart(ws, input.accountDebit, input.accountCredit);
   const books = loadBooks(ws);
+  if (template === RECEIVABLES_ID) {
+    const unlinked = receivablesOf(ws, input.date.slice(0, 4), ratesOf(), books).unlinked ?? [];
+    if (unlinked.length) throw new YearCloseRefused({ code: 'paymentsUnlinked', params: { payments: unlinked.map((p) => `${p.transactionRef} → ${p.number}`).join(', ') } }, `Payments name open invoices without being linked to them (${unlinked.map((p) => `${p.transactionRef} → ${p.number}`).join(', ')}): link them first, or the Debitoren count their revenue twice.`);
+  }
   const entry = update(books, PERSON, (b) => {
     const year = input.date.slice(0, 4);
     if (template === RECEIVABLES_ID && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {

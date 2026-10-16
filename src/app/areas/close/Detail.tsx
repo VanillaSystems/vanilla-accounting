@@ -255,6 +255,11 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
         <span className="m">{tp.id === 'receivables' ? t('close.receivablesHint') : ''}</span>
       </div>
+      {tp.id === 'receivables' && d.receivables.unlinked?.length ? (
+        <p className="warnline" data-testid="receivables-unlinked">{I.dot}{t('close.receivablesUnlinked')}{' '}
+          {d.receivables.unlinked.map((p, i) => <Fragment key={p.transactionRef}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date))}>{p.transactionRef} → {p.number} ({p.currency} {fmt(p.amount)})</button></Fragment>)}
+        </p>
+      ) : null}
       {tp.id === 'receivables' && !d.accounts.receivables.inChart && (
         <p className="warnline" data-testid="receivables-account-missing">{I.dot}{t('close.receivablesAccountMissing', { account: d.accounts.receivables.account })}{' '}
           <button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(d.accounts.receivables.account, t('close.receivablesAccountName')), t('close.accountAdded', { account: d.accounts.receivables.account }))}>{t('close.addAccount', { account: d.accounts.receivables.account })}</button>

@@ -369,3 +369,13 @@ test('«zurück» on a booked step takes its booking back too (r9c-16): the entr
   const byHand = reopenTemplate(ws, '2026', 'depreciation');
   assert.deepEqual([byHand.state.templates, byHand.removed], [{}, []], 'marked done by hand, nothing booked: only the mark goes');
 });
+
+test('a payment that names an open invoice without being linked to it blocks the Debitoren: their revenue would count twice (r9c-3)', () => {
+  const b = books();
+  applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  const unlinked = [{ transactionRef: 'W1', date: '2026-10-12', number: '2026-002', currency: 'EUR', amount: 3000 }];
+  const receivables = { invoices: [{ number: '2026-002', customer: 'Kunde', date: '2026-10-16', currency: 'EUR', open: 4200, chf: 3906 }], total: 3906, revenueAccount: '3400', unlinked };
+  const close = yearClose(input(b, { receivables, chart: [...CHART, '1100'] }));
+  assert.deepEqual(close.blockers, [{ code: 'undecided', templates: ['receivables'] }, { code: 'paymentsUnlinked', payments: unlinked }]);
+  assert.deepEqual(yearClose(input(b, { receivables: { ...receivables, unlinked: undefined }, chart: [...CHART, '1100'] })).blockers, [{ code: 'undecided', templates: ['receivables'] }], 'linked: only the decision is open');
+});

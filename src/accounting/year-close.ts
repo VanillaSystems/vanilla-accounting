@@ -441,7 +441,15 @@ export interface Receivables {
   total: number;
   /** The revenue account the entry credits: invoicing.revenueAccount. */
   revenueAccount?: string;
+  /**
+   * Payments whose text names one of these invoices but are not linked to it: their revenue is
+   * booked (or will be) and the invoice still counts as open, so the Debitoren entry would count it
+   * twice. Linked first (Rechnungen, or the payment's «Rechnung zuordnen»), the open amount drops (r9c-3).
+   */
+  unlinked?: UnlinkedPayment[];
 }
+
+export interface UnlinkedPayment { transactionRef: string; date: string; number: string; currency: string; amount: number }
 
 export type TemplateState = 'done' | 'na';
 
@@ -483,6 +491,8 @@ export type Problem =
   /** A balance on an account the Bilanz leaves out: the year cannot close on it (r9c-2). */
   | { code: 'notInChart'; account: string; amount: number }
   | { code: 'outsideStatements'; account: string; amount: number }
+  /** Payments naming an open invoice without being linked to it: the Debitoren would count their revenue twice (r9c-3). */
+  | { code: 'paymentsUnlinked'; payments: UnlinkedPayment[] }
   | { code: 'noRate'; currency: string }
   | { code: 'fxToBook'; account: string; difference: number }
   | { code: 'yearLocked' }
@@ -660,6 +670,7 @@ export function yearClose(input: YearCloseInput): YearClose {
   }
   const undecided = templates.filter((t) => !t.state).map((t) => t.id);
   if (undecided.length) blockers.push({ code: 'undecided', templates: undecided });
+  if (receivables.unlinked?.length) blockers.push({ code: 'paymentsUnlinked', payments: receivables.unlinked });
   if (toRappen(ledger.residual) !== 0) blockers.push({ code: 'unbalanced', residual: ledger.residual });
   for (const c of ledger.causes) if (c.code === 'notInChart' || c.code === 'outsideStatements') blockers.push(c);
 

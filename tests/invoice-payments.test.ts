@@ -10,8 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { camt053Xml, type CamtEntry } from '../tools/demo/camt053.js';
-import { confirmPayment, matchPayments, paymentProposals, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
-import { cancel, creditNoteDraft, issue, refundDue, status, totals } from '../src/invoices/rules.js';
+import { confirmPayment, matchPayments, paymentProposals, unlinkedNaming, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
+import { cancel, creditNoteDraft, issue, openAmount, openOn, refundDue, status, totals } from '../src/invoices/rules.js';
 import { vat } from '../src/engines/index.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
 import { scorReference } from '../src/providers/qr-bill/reference.js';
@@ -130,12 +130,15 @@ test('a payment without a reference is proposed (amount, customer, date), and bo
   assert.throws(() => confirmPayment(b, book, inv.id, 'B1', ctx), PaymentError);
 });
 
-test('a hand-booked payment is not replaced by a confirmation', () => {
+test('a hand-booked payment is not replaced by a confirmation: linked, its booking stays as the revenue (r9c-3)', () => {
   const inv = invoice('in_a', []);
   const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
   const b = books(fromCamt([credit('B1', '2026-08-04', totals(inv.lines).gross)]));
   b.journalEntries.push({ id: 'm', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3000', amount: 963.72, origin: 'manual' });
-  assert.throws(() => confirmPayment(b, book, inv.id, 'B1', ctx), /von Hand gebucht/);
+  const out = confirmPayment(b, book, inv.id, 'B1', ctx);
+  assert.equal(out.paid[0].booked, false);
+  assert.deepEqual(b.journalEntries.map((e) => e.id), ['m']);
+  assert.equal(status(book.invoices[0], book.invoices), 'paid');
 });
 
 const debit = (ref: string, date: string, amount: number, text: string, payee = 'Beispiel Bistro AG'): CamtEntry =>
@@ -209,4 +212,36 @@ test('a refund to the customer without the number is proposed; confirmed, it is 
   confirmPayment(b, book, cn.id, 'R1', ctx);
   assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.vatCode, e.amount]), [['3300', '-V81', 200]]);
   assert.throws(() => confirmPayment(b, book, cn.id, 'R2', ctx), PaymentError);
+});
+
+test('a payment before the invoice date, or booked by hand, whose text names the invoice is proposed; linked, the open amount drops and a hand booking stays (r9c-3)', () => {
+  // EUR invoice of 16.10. for 4200; Wise pays EUR 3000 on 12.10. «Rechnung 2026-001 Teilzahlung», no reference.
+  const inv = invoice('in_e', [], { date: '2026-10-16', currency: 'EUR', lines: [{ text: 'Beratung Oktober', quantity: 1, price: 4200, vatRate: 0 }], exemption: 'export' }, { account: '1023', iban: 'BE38967000000002', bank: 'Wise' });
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
+  const b = books(fromCamt([credit('W1', '2026-10-12', 3000, 'Rechnung 2026-001 Teilzahlung', 'Beispiel Bistro AG')], 'EUR'));
+  assert.deepEqual(matchPayments(b, book, ctx).paid, [], 'a part payment is never booked by rule');
+  const proposed = paymentProposals(b, book);
+  assert.deepEqual(proposed.map((p) => [p.transactionRef, p.number, p.numberMatches, p.booked]), [['W1', '2026-001', true, false]], 'proposed although it came before the invoice: the text names it');
+
+  // Booked by hand first (1023 / 3400 V0-E): still proposed, as booked.
+  b.journalEntries.push({ id: 'm', transactionRef: 'W1', date: '2026-10-12', accountDebit: '1023', accountCredit: '3400', amount: 3000, vatCode: 'V0-E', exchangeCurrency: 'EUR', exchangeRate: 0.95661, origin: 'manual' });
+  assert.deepEqual(paymentProposals(b, book).map((p) => [p.transactionRef, p.booked]), [['W1', true]]);
+  const out = confirmPayment(b, book, inv.id, 'W1', { ...ctx, fx: { daily: () => 0.95661 } });
+  assert.deepEqual(out.paid, [{ transactionRef: 'W1', number: '2026-001', amount: 3000, fee: 0, booked: false }], 'allocated, not booked again');
+  assert.deepEqual(b.journalEntries.map((e) => e.id), ['m'], 'the hand booking is the revenue; it stays');
+  const linked = book.invoices[0] as Issued;
+  assert.deepEqual(linked.payments, [{ transactionRef: 'W1', date: '2026-10-12', amount: 3000, by: 'confirmed' }]);
+  assert.equal(openAmount(linked, book.invoices), 1200, 'the open amount drops to what is still owed');
+  assert.equal(openOn(linked, book.invoices, '2026-12-31'), 1200, 'the year end counts the rest only');
+  assert.ok(b.mappings.some((m) => m.transactionRef === 'W1' && m.receiptId === 'r_invoice'), 'the invoice is the payment\'s receipt');
+  assert.deepEqual(paymentProposals(b, book), [], 'nothing left to propose');
+  assert.throws(() => confirmPayment(b, book, inv.id, 'W1', ctx), /schon zugeordnet/);
+});
+
+test('unlinkedNaming: the payments whose text names an open invoice they are not linked to, for the year end (r9c-3)', () => {
+  const inv = invoice('in_a', []);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
+  const b = books(fromCamt([credit('B1', '2026-08-04', 500, 'Anzahlung Rechnung 2026-001', 'Hans Meier'), credit('B2', '2026-08-05', 963.72, undefined, 'Beispiel Bistro AG')]));
+  b.journalEntries.push({ id: 'm', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3300', amount: 500, vatCode: 'V81', origin: 'manual' });
+  assert.deepEqual(unlinkedNaming(b, book).map((p) => [p.transactionRef, p.number, p.amount]), [['B1', '2026-001', 500]], 'B2 fits by amount and name only: not named');
 });

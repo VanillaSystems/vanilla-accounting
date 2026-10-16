@@ -62,6 +62,7 @@ export function problemText(p: ShownProblem, year: string): string {
     case 'undecided': return tx('yearClose.problem.undecided', { templates: p.templates.map((id) => tx(`yearClose.template.${id}`)).join(', ') });
     case 'unbalanced': return tx('yearClose.problem.unbalanced', { residual: fmt(p.residual) });
     case 'notInChart': case 'outsideStatements': return tx(`yearClose.problem.${p.code}`, { account: p.account, amount: fmt(p.amount) });
+    case 'paymentsUnlinked': return tx('yearClose.problem.paymentsUnlinked', { n: p.payments.length, payments: p.payments.map((x) => `${x.transactionRef} → ${x.number}`).join(', ') });
     case 'cashNegative': return t('journal.warn.cashNegative', { account: p.account, date: formatDate(p.date), balance: fmt(p.balance) });
     case 'swappedSale': return t('journal.warn.swappedSale', { accountDebit: p.accountDebit, accountCredit: p.accountCredit });
     default: return tx(`yearClose.problem.${p.code}`, p as unknown as Record<string, string>);
@@ -123,8 +124,9 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
   const decided = d.templates.filter((tp) => tp.state).length;
   const entries: CheckRow = { id: 'entries', label: t('close.step.entries'), state: decided === d.templates.length ? 'ok' : 'open', detail: t('close.entriesDone', { done: decided, n: d.templates.length }), go: { step: 'entries' } };
   const r = d.receivables;
+  const unlinked = r.unlinked?.length ? problemText({ code: 'paymentsUnlinked', payments: r.unlinked }, year) : '';
   const invoices: CheckRow = r.invoices.length
-    ? { id: 'invoices', label: t('close.check.invoices'), state: d.templates.find((tp) => tp.id === 'receivables')?.state ? 'ok' : 'open', detail: t('close.invoicesOpen', { n: r.invoices.length, amount: fmt(r.total) }), go: { step: 'entries' } }
+    ? { id: 'invoices', label: t('close.check.invoices'), state: unlinked ? 'warn' : d.templates.find((tp) => tp.id === 'receivables')?.state ? 'ok' : 'open', detail: [t('close.invoicesOpen', { n: r.invoices.length, amount: fmt(r.total) }), unlinked].filter(Boolean).join(' · '), go: { step: 'entries' } }
     : { id: 'invoices', label: t('close.check.invoices'), state: 'ok', detail: t('close.invoicesNone') };
   const l = d.ledger;
   // Balanced means the Bilanz as shown balances: a balance on an account outside the chart fails it too (r9c-2).

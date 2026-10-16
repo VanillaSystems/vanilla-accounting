@@ -361,7 +361,8 @@ export const api = {
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
   sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),
   addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
-  confirmPayment: (id: string, transactionRef: string) => request<{ paid: unknown }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
+  /** Links a payment to an invoice; `booked` false when a person's booking of the payment stays as the revenue (r9c-3). */
+  confirmPayment: (id: string, transactionRef: string) => request<{ paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; booked: boolean }> }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
   /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */
   documentUrl: (file: string) => `/${file.split('/').map(encodeURIComponent).join('/')}`,
   filingXmlUrl: (period: string) => `/api/filing/${encodeURIComponent(period)}`,

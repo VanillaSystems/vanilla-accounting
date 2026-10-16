@@ -10,7 +10,7 @@ import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, moduleActor, periodLock, saveBooks, update, PERSON, type Books } from '../src/books/store.js';
-import { bookingDraft, inputTaxWithoutReceipt } from '../src/accounting/manual-booking.js';
+import { bookingDraft, formDraft, inputTaxWithoutReceipt } from '../src/accounting/manual-booking.js';
 import type { Invoice } from '../src/invoices/model.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { bookPayment } from '../src/server/edits.js';
@@ -227,4 +227,8 @@ test('a payment naming a cancelled invoice (r8c-5): the draft says which one, an
   const live = bookingDraft(books, 'P2', accounts, [{ ...cancelled, cancelled: undefined } as unknown as Invoice])!;
   assert.equal(live.cancelledInvoice, undefined, 'a live invoice is the payment rules\' business, not the hand form\'s');
   assert.equal(live.precedent?.id, 'j1');
+  // The form takes its rows once: while the invoices load there is no draft, so the blind one never reaches the form (r9c-4).
+  assert.equal(formDraft(books, 'P2', accounts, 'loading'), undefined);
+  assert.deepEqual(formDraft(books, 'P2', accounts, [cancelled])?.lines.map((l) => [l.accountCredit, l.vat]), [['', '']]);
+  assert.deepEqual(formDraft(books, 'P2', accounts, undefined)?.lines.map((l) => [l.accountCredit, l.vat]), [['3400', 'V81']], 'books without invoicing: the precedent as before');
 });

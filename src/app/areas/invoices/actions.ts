@@ -150,11 +150,14 @@ export async function comment(nav: Nav, inv: Invoice, text: string): Promise<boo
   return true;
 }
 
-export async function confirmPayment(nav: Nav, inv: Issued, ref: string): Promise<void> {
-  if (!(await run(nav, api.confirmPayment(inv.id, ref)))) return;
+/** A payment linked to a document: booked from it, or, when a person booked the payment already, allocated with her booking kept (r9c-3). */
+export async function confirmPayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, ref: string): Promise<boolean> {
+  const out = await run(nav, api.confirmPayment(inv.id, ref));
+  if (!out) return false;
   await reloadInvoices();
   nav.refresh();
-  nav.toast(t('invoices.paymentConfirmed', { number: inv.number }));
+  nav.toast(t(out.paid.some((p) => p.booked) ? 'invoices.paymentConfirmed' : 'invoices.paymentLinked', { number: inv.number }));
+  return true;
 }
 
 export async function saveCustomer(nav: Nav, id: string | undefined, fields: CustomerFields): Promise<Customer | undefined> {

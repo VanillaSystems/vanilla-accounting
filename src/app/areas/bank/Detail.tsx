@@ -28,6 +28,10 @@ import { AskAi } from '../../assistant/AskAi.js';
 import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
 import { intakeAdd } from '../receipts/intake.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
+import { useInvoices } from '../invoices/data.js';
+import { linkableInvoices } from '../invoices/model.js';
+import { confirmPayment } from '../invoices/actions.js';
+import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
 
@@ -222,8 +226,29 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
         </button></>
       ) : tx.amount ? <> · <span className="wn">{t('bank.notBooked')}</span></> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
+      {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
       {' '}<button type="button" className="x" title={t('bank.clear')} aria-label={t('bank.clear')} onClick={onClear}>×</button>
     </>
+  );
+}
+
+/** An incoming payment linked to one of the open invoices of its currency, from the payment's side (r9c-3): the named invoice first. */
+function LinkInvoice({ tx, nav }: { tx: BankTransaction; nav: Props['nav'] }) {
+  const inv = useInvoices();
+  const [pick, setPick] = useState('');
+  const invoices = inv.state === 'ready' ? inv.data.invoices : [];
+  const open = useMemo(() => linkableInvoices(invoices, tx), [invoices, tx]);
+  if (!open.length) return null;
+  const chosen = open.find((i) => i.id === pick) ?? open[0];
+  return (
+    <> · <span className="linkinv" data-testid="link-invoice">
+      <label>{t('bank.linkInvoice')}{' '}
+        <select value={chosen.id} onChange={(e) => setPick(e.target.value)}>
+          {open.map((i) => <option key={i.id} value={i.id}>{i.number} · {i.customer.name} · {i.currency} {fmt(openAmount(i, invoices))}</option>)}
+        </select>
+      </label>
+      {' '}<button type="button" className="golink" onClick={() => void confirmPayment(nav, chosen, tx.ref)}>{t('invoices.linkPayment')}</button>
+    </span></>
   );
 }
 

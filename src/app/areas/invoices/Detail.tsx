@@ -20,7 +20,7 @@ import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
-import { byRouteId, customerOf, issuedLater, routeId, rowState, wasSent, type RowState } from './model.js';
+import { byRouteId, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
 import { fixFor, parseNumber, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder } from './actions.js';
@@ -140,9 +140,10 @@ function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value
   return false;
 }
 
-function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { state: RowState; reminder: boolean }) {
+function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProps & { state: RowState; reminder: boolean }) {
   const today = localToday();
   const [proposals, setProposals] = useState<PaymentProposal[]>([]);
+  const [pick, setPick] = useState('');
   // An open invoice may be paid, a credit note may be paid back: what the bank shows that could be it.
   const awaits = inv.status === 'issued' && (state === 'open' || state === 'overdue' || (state === 'credit' && refundDue(inv, d.invoices) > 0));
   useEffect(() => {
@@ -210,10 +211,25 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
       {line}
       {proposals.map((p) => (
         <div key={p.transactionRef} className="notice ivpay">
-          <span>{t(p.direction === 'DBIT' ? 'invoices.refundProposal' : 'invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}</span>
-          {canEdit && <button type="button" className="btn ghost" onClick={() => void confirmPayment(nav, inv, p.transactionRef)}>{t('invoices.confirmPayment')}</button>}
+          <span>{t(p.direction === 'DBIT' ? 'invoices.refundProposal' : 'invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}{p.booked && <> {t('invoices.proposalBooked')}</>}</span>
+          {canEdit && <button type="button" className="btn ghost" onClick={() => void confirmPayment(nav, inv, p.transactionRef)}>{t(p.booked ? 'invoices.linkPayment' : 'invoices.confirmPayment')}</button>}
         </div>
       ))}
+      {canEdit && awaits && inv.kind === 'invoice' && (() => {
+        // Any other incoming payment of the invoice's currency, a prepayment before its date included (r9c-3).
+        const others = linkablePayments(books, d.invoices, inv).filter((x) => !proposals.some((p) => p.transactionRef === x.ref));
+        return others.length ? (
+          <div className="notice ivpay" data-testid="link-other-payment">
+            <label>{t('invoices.linkOther')}{' '}
+              <select value={pick} onChange={(e) => setPick(e.target.value)}>
+                <option value="">…</option>
+                {others.map((x) => <option key={x.ref} value={x.ref}>{formatDate(x.date)} · {x.currency} {fmt(x.amount)} · {x.counterparty || x.description}</option>)}
+              </select>
+            </label>
+            <button type="button" className="btn ghost" disabled={!pick} onClick={() => void confirmPayment(nav, inv, pick).then((ok) => { if (ok) setPick(''); })}>{t('invoices.linkPayment')}</button>
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }

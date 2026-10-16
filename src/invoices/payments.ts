@@ -184,7 +184,15 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
     origin: 'invoice',
   }));
   books.journalEntries.push(...entries);
+  attachInvoice(books, tx, inv, ctx, out);
+  return entries;
+}
 
+/** The document's PDF as the payment's receipt, filed and linked once: the payment shows which invoice it paid. */
+function attachInvoice(books: Books, tx: BankTransaction, inv: Issued, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): void {
+  const refund = inv.kind === 'credit-note';
+  const word = refund ? TEXTS.de.credit : TEXTS.de.invoice;
+  const text = `${word} ${inv.number} ${inv.customer.name}`;
   const pdf = ctx.pdfOf(inv);
   const id = ctx.receiptId(pdf);
   if (!books.receipts.some((r) => r.id === id)) {
@@ -213,14 +221,16 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
   }
   const link: Mapping = { transactionRef: tx.ref, receiptId: id, by: 'rule', rule: 'invoice-reference' };
   if (!books.mappings.some((m) => m.transactionRef === tx.ref && m.receiptId === id)) books.mappings.push(link);
-  return entries;
 }
 
 /**
  * A payment the rules could not tie to a document by themselves, that could pay it: an incoming
  * one for an open invoice (its open amount, or a part of it with its number in the text), an
  * outgoing one for a credit note's refund (its amount, to the customer or naming its number);
- * same currency, on or after the document's date.
+ * same currency, on or after the document's date. One whose text names the document is proposed
+ * also when it came before the document's date (a prepayment on the invoice) and when a person
+ * booked it already (`booked`: the link keeps her booking), so the year end never counts its
+ * revenue twice (r9c-3).
  */
 export interface PaymentProposal {
   transactionRef: string;
@@ -237,6 +247,8 @@ export interface PaymentProposal {
   nameMatches: boolean;
   /** The payment's text names the document's number. */
   numberMatches: boolean;
+  /** A person (or another module) booked the payment already: the link records the allocation and keeps that booking. */
+  booked: boolean;
 }
 
 const words = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2);
@@ -250,33 +262,39 @@ export function paymentProposals(books: Books, book: InvoiceBook): PaymentPropos
   const booked = new Set(books.journalEntries.filter((e) => e.origin !== 'classify').map((e) => e.transactionRef));
   const out: PaymentProposal[] = [];
   for (const tx of books.transactions) {
-    if (lock.isClosed(tx.date) || allocated.has(tx.ref) || booked.has(tx.ref)) continue;
+    if (lock.isClosed(tx.date) || allocated.has(tx.ref)) continue;
     const refs = [tx.reference, ...(tx.parts ?? []).map((p) => p.reference)].map((r) => (r ? parseReference(r)?.reference : undefined));
     if (tx.direction === 'CRDT' && refs.some((r) => r && references.has(r))) continue;
     const payer = tx.counterparty || (tx.parts ?? []).map((p) => p.counterparty).filter(Boolean).join(', ') || tx.description;
     const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
     for (const inv of open) {
-      if (directionOf(inv) !== tx.direction || inv.currency !== tx.currency || tx.date < inv.date) continue;
+      if (directionOf(inv) !== tx.direction || inv.currency !== tx.currency) continue;
+      const numberMatches = namesNumber(text, inv.number);
+      // Before the document's date, or booked already: only a payment that names the document is offered.
+      if (!numberMatches && (tx.date < inv.date || booked.has(tx.ref))) continue;
       const name = words(inv.customer.name);
       const nameMatches = name.length > 0 && name.some((w) => words(text).includes(w));
-      const numberMatches = namesNumber(text, inv.number);
       const due = dueOf(inv, book);
       const fits = due.includes(tx.amount) || (numberMatches && tx.amount < due[0]);
       // Money out is everyday; only a refund to the customer, or one naming the credit note, is offered.
       if (!fits || (tx.direction === 'DBIT' && !nameMatches && !numberMatches)) continue;
       out.push({
         transactionRef: tx.ref, direction: tx.direction, date: tx.date, amount: tx.amount, currency: tx.currency, payer, invoiceId: inv.id, number: inv.number,
-        customerName: inv.customer.name, nameMatches, numberMatches,
+        customerName: inv.customer.name, nameMatches, numberMatches, booked: booked.has(tx.ref),
       });
     }
   }
   return out.sort((a, b) => Number(b.numberMatches) - Number(a.numberMatches) || Number(b.nameMatches) - Number(a.nameMatches) || a.date.localeCompare(b.date));
 }
 
+/** The incoming payments whose text names an open invoice they are not linked to: the year end's Debitoren would count their revenue twice (r9c-3). */
+export const unlinkedNaming = (books: Books, book: InvoiceBook): PaymentProposal[] => paymentProposals(books, book).filter((p) => p.direction === 'CRDT' && p.numberMatches);
+
 /**
  * A person confirms that `tx` pays `inv` (an incoming payment an invoice, an outgoing one a credit
  * note's refund): the allocation is recorded and booked from the document. Entries the classifier
- * wrote for the transaction are replaced; any other entry refuses.
+ * wrote for the transaction are replaced. A payment a person booked already keeps her booking (it
+ * is the revenue): the allocation is recorded and the document filed as its receipt (r9c-3).
  */
 export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: string, transactionRef: string, ctx: PaymentContext): PaymentOutcome {
   const out: PaymentOutcome = { paid: [], questions: [], files: [] };
@@ -288,15 +306,17 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   if (inv.cancelled) throw new PaymentError(`${what} ist storniert.`);
   if (inv.currency !== tx.currency) throw new PaymentError(`${what} ist in ${inv.currency}, die Zahlung in ${tx.currency}.`);
   if (inv.payments.some((p) => p.transactionRef === tx.ref)) throw new PaymentError(`Die Zahlung ist ${what} schon zugeordnet.`);
-  const others = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
-  if (others.some((e) => e.origin !== 'classify')) throw new PaymentError('Die Zahlung ist schon von Hand gebucht; diese Buchungen zuerst löschen.');
+  const keep = books.journalEntries.some((e) => e.transactionRef === tx.ref && e.origin !== 'classify');
   const split = settle(inv, book, tx.amount, tx.date);
   if (split.surplus > 0) throw new PaymentError(`Die Zahlung ist ${tx.currency} ${split.surplus.toFixed(2)} höher als offen.`);
-  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
   const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed' };
   replace(book, withPayment(inv, a));
-  bookPayment(books, tx, inv, a, ctx, out);
-  out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: true });
+  if (keep) attachInvoice(books, tx, inv, ctx, out);
+  else {
+    books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
+    bookPayment(books, tx, inv, a, ctx, out);
+  }
+  out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: !keep });
   return out;
 }
 

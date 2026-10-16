@@ -118,6 +118,15 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(precedent && { precedent: precedent.entry }), ...(cancelled && { cancelledInvoice: cancelled }) };
 }
 
+/**
+ * The draft the hand form opens with, once the invoices are known: while they load (`'loading'`)
+ * there is no form yet, or a payment of a cancelled invoice would open with the earlier sale's
+ * account and code and keep them when the invoices arrive (r9c-4). Without invoicing: undefined.
+ */
+export function formDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices: readonly Invoice[] | 'loading' | undefined): BookingDraft | undefined {
+  return invoices === 'loading' ? undefined : bookingDraft(books, ref, accounts, invoices);
+}
+
 const sidesWith = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
   paymentSides({ transactions: books.transactions, journalEntries: lines.map((l, i) => ({ id: String(i), transactionRef: ref, date: '', ...l })) }, ref, accounts);
 

@@ -20,6 +20,7 @@ const PROBLEM_TEXT: { [C in Problem['code']]: (p: Extract<Problem, { code: C }>)
   unbalanced: (p) => `Aktiven and Passiven differ by CHF ${chf(p.residual)}: see the causes; never book the difference away`,
   notInChart: (p) => `account ${p.account} is not in accounts.json, so the Bilanz leaves out its CHF ${chf(p.amount)}: add the account or move the entry`,
   outsideStatements: (p) => `account ${p.account} is on neither statement (class 1 to 8), CHF ${chf(p.amount)}: move the entry`,
+  paymentsUnlinked: (p) => `payments name open invoices without being linked to them (${p.payments.map((x) => `${x.transactionRef} → ${x.number}`).join(', ')}): link them first (Rechnungen), or the Debitoren count their revenue twice`,
   cashNegative: (p) => `cash account ${p.account} is below zero on ${p.date} (CHF ${chf(p.balance)}, entry ${p.entry}): cash cannot fall under nothing; a booking has its sides swapped or a receipt of cash is missing`,
   swappedSale: (p) => `entry ${p.entry} of ${p.date} books ${p.accountDebit} / ${p.accountCredit}: revenue in the debit against cash or bank is a swapped sale, unless it is a refund to the customer (minus code)`,
 };
