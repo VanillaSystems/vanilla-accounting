@@ -20,7 +20,7 @@ import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
-import { outsideStatements } from '../workspace/accounts-write.js';
+import { outsideStatements } from '../accounting/placed-account.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);

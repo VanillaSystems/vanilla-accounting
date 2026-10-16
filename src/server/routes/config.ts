@@ -10,7 +10,8 @@ import { WorkspaceError } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
-import { AccountRefusal, setAccountName } from '../../workspace/accounts-write.js';
+import { accountName, setAccountName } from '../../workspace/accounts-write.js';
+import { assertPlaced } from '../edits.js';
 import { setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
 import { changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
@@ -24,7 +25,6 @@ function checked<T>(run: () => T): T {
   try {
     return run();
   } catch (e) {
-    if (e instanceof AccountRefusal) throw new RequestError(400, e.message, e.refusal);
     if (e instanceof WorkspaceError) throw new RequestError(400, e.message);
     throw e;
   }
@@ -36,6 +36,8 @@ router.get('/api/accounts', (_req, res) => {
 
 router.put('/api/accounts/:number', (req, res) => {
   const name = stringField(patchBody(req.body, ['name']), 'name');
+  // A new account goes only where the statements show it (x07); a rename of one the chart has stays possible.
+  if (checked(() => accountName(WS, req.params.number)) === undefined) assertPlaced(req.params.number);
   res.json(checked(() => setAccountName(WS, req.params.number, name)));
 });
 

@@ -7,31 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { writeAtomic } from '../invoices/store.js';
 import type { Workspace } from './workspace.js';
 import { WorkspaceError } from './workspace.js';
-import { chart as accountChart } from '../engines/index.js';
-import type { ApiRefusal } from '../types/api-error.js';
-
 export const ACCOUNT_NUMBER = /^\d{4}$/;
-
-type OutsideStatements = Extract<ApiRefusal, { code: 'accountOutsideStatements' }>;
-
-/** A refusal the UI says in the person's language (src/app/lib/api.ts errorText). */
-export class AccountRefusal extends WorkspaceError {
-  constructor(message: string, readonly refusal: OutsideStatements) { super(message); }
-}
-
-/**
- * Why `account` takes no booking: the chart places it on neither the Bilanz nor the
- * Erfolgsrechnung (a closing class such as 9xxx), so the statements would show a difference
- * nobody can find (x07). Undefined for an account the chart places.
- */
-export function outsideStatements(account: string): AccountRefusal | undefined {
-  if (!account || accountChart().isPlaced(account)) return undefined;
-  const classes = accountChart().placedClasses;
-  return new AccountRefusal(
-    `Konto ${account} gehört weder in die Bilanz noch in die Erfolgsrechnung: die App könnte es nirgends zeigen. Nimm eine Nummer der Klassen ${classes}, für eine Ausgabe zum Beispiel 6xxx.`,
-    { code: 'accountOutsideStatements', params: { account, classes } },
-  );
-}
 
 /** Sets the name of account `number`, adding the account when the chart has none of that number. */
 function readChart(path: string): Array<Record<string, unknown>> {
@@ -65,8 +41,6 @@ export function setAccountName(ws: Pick<Workspace, 'paths'>, number: string, nam
   const found = chart.find((a) => String(a.number) === number);
   if (found) found.name = clean;
   else {
-    const refused = outsideStatements(number);
-    if (refused) throw refused;
     const at = chart.findIndex((a) => String(a.number) > number);
     chart.splice(at < 0 ? chart.length : at, 0, { number, name: clean });
   }

@@ -6,7 +6,8 @@
  * period is closed to them.
  */
 import type { Books } from '../books/store.js';
-import { AccountRefusal, accountName, removeAccount, setAccountName } from '../workspace/accounts-write.js';
+import { accountName, removeAccount, setAccountName } from '../workspace/accounts-write.js';
+import { assertPlaced } from './edits.js';
 import { patchManifest } from '../workspace/manifest-write.js';
 import { WorkspaceError, type Workspace } from '../workspace/workspace.js';
 import { createCustomer, createDraft, parseCustomer, parseDraftPatch, removeDraft } from '../invoices/service.js';
@@ -25,7 +26,6 @@ function checked<T>(run: () => T): T {
     return run();
   } catch (e) {
     if (e instanceof InvoiceRuleError) throw new RequestError(400, e.message, { code: 'invoice', params: { refusal: e.code, ...(e.missing ? { missing: e.missing } : {}) } });
-    if (e instanceof AccountRefusal) throw new RequestError(400, e.message, e.refusal);
     if (e instanceof WorkspaceError) throw new RequestError(400, e.message);
     throw e;
   }
@@ -34,6 +34,8 @@ function checked<T>(run: () => T): T {
 function account(ws: Workspace, books: Books, number: string, name: string | null): Applied {
   if (name !== null) {
     const was = checked(() => accountName(ws, number));
+    // A new account goes only where the statements show it (x07); an undo of a rename puts back a name.
+    if (was === undefined) assertPlaced(number);
     checked(() => setAccountName(ws, number, name));
     return { undo: { kind: 'account', number, name: was ?? null } };
   }
