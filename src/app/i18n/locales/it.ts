@@ -301,6 +301,7 @@ export default {
     'journal.evidence.vatWithoutReceipt': '{code} senza giustificativo: l’imposta precedente richiede un giustificativo con IVA, altrimenti {zero}.',
     'journal.evidence.bookByReceipt': 'Registrare secondo il giustificativo',
     'journal.evidence.bookWithoutReceipt': 'Registrare senza giustificativo',
+    'journal.evidence.decided': 'Scelto così, a mano o su tua richiesta: la registrazione resta. Da modificare in Registrazioni.',
     'journal.reclassified': { one: 'Registrato di nuovo: {n} registrazione', other: 'Registrato di nuovo: {n} registrazioni' },
     'journal.keySelectTip': 'Scegli una registrazione',
     'journal.keyReceipt': 'giustificativo',

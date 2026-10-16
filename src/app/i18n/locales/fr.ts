@@ -301,6 +301,7 @@ export default {
     'journal.evidence.vatWithoutReceipt': '{code} sans justificatif : l’impôt préalable exige un justificatif avec TVA, sinon {zero}.',
     'journal.evidence.bookByReceipt': 'Comptabiliser selon le justificatif',
     'journal.evidence.bookWithoutReceipt': 'Comptabiliser sans justificatif',
+    'journal.evidence.decided': 'Choisi ainsi, à la main ou sur ta demande : l’écriture reste. À modifier dans Écritures.',
     'journal.reclassified': { one: 'Recomptabilisé: {n} écriture', other: 'Recomptabilisé: {n} écritures' },
     'journal.keySelectTip': 'Choisir une écriture',
     'journal.keyReceipt': 'justificatif',

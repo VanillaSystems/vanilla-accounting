@@ -301,6 +301,7 @@ export default {
     'journal.evidence.vatWithoutReceipt': '{code} without a receipt: input tax needs a receipt with VAT, else {zero}.',
     'journal.evidence.bookByReceipt': 'Book by receipt',
     'journal.evidence.bookWithoutReceipt': 'Book without receipt',
+    'journal.evidence.decided': 'Chosen so, by hand or on your wish: the entry stands. Change it in Journal.',
     'journal.reclassified': { one: 'Booked again: {n} entry', other: 'Booked again: {n} entries' },
     'journal.keySelectTip': 'Select an entry',
     'journal.keyReceipt': 'receipt',

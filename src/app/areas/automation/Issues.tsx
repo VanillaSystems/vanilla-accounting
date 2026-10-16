@@ -47,7 +47,9 @@ function textOf(books: Index, i: PeriodIssue): string {
 }
 
 /** One click that books the entry as its receipts say: «Nach Beleg buchen» or «Ohne Beleg buchen». */
+/** The click that books as the evidence says; for a code a person or the AI chose, the explanation instead (r8h-22). */
 function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck; nav: Nav }) {
+  if (check.decided) return <span className="m" data-testid="evidence-decided">{t('journal.evidence.decided')}</span>;
   return (
     <button type="button" className="btn ghost" data-testid="evidence-book" onClick={() => void saveEntry(nav, e, patchOf(check), ['vatCode'])}>
       {t(check.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}

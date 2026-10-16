@@ -298,6 +298,7 @@ export const messages = {
   'journal.evidence.vatWithoutReceipt': '{code} ohne Beleg: die Vorsteuer braucht einen Beleg mit MWST, sonst {zero}.',
   'journal.evidence.bookByReceipt': 'Nach Beleg buchen',
   'journal.evidence.bookWithoutReceipt': 'Ohne Beleg buchen',
+  'journal.evidence.decided': 'So gewählt, von Hand oder auf deinen Wunsch: die Buchung bleibt. Ändern unter Buchungen.',
   'journal.reclassified': { one: 'Neu gebucht: {n} Buchung', other: 'Neu gebucht: {n} Buchungen' },
   'journal.keySelectTip': 'Buchung wählen',
   'journal.keyReceipt': 'Beleg',

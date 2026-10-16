@@ -8,11 +8,17 @@
 import { vat } from '../engines/index.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
 
+/**
+ * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by): the task
+ * explains the contradiction and offers no click, a deliberate code beats the receipt rule's
+ * default (r8h-22). A minus rate code (-M81, a credit note) lowers the input tax and claims
+ * nothing, so it is never flagged without a receipt.
+ */
 export type EvidenceCheck =
   /** The proposal: the rate code of the entry's family, and the receipts the entry then records as seen. */
-  | { kind: 'receiptShowsVat'; rate: number; code: string; receipts: string[] }
+  | { kind: 'receiptShowsVat'; rate: number; code: string; receipts: string[]; decided?: true }
   /** The proposal: the zero code of the entry's family. */
-  | { kind: 'vatWithoutReceipt'; code: string };
+  | { kind: 'vatWithoutReceipt'; code: string; decided?: true };
 
 /** The Swiss VAT rate a read receipt shows, or undefined (none, or not read). */
 const swissRate = (r: Receipt): number | undefined =>
@@ -35,12 +41,13 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   if (!m || !info) return undefined;
   const [, sign, family] = m;
   const shown = receipts.map(swissRate).find((rate) => rate !== undefined);
+  const decided = e.by?.kind === 'person' || e.by?.kind === 'assistant' ? { decided: true as const } : {};
   if (info.rate === 0) {
     if (shown === undefined) return undefined;
     const boxes = vat().codes.purchaseBoxes;
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
-    return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id) } : undefined;
+    return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;
   }
-  if (shown !== undefined || receipts.some((r) => r.hasSwissVat === undefined)) return undefined;
-  return { kind: 'vatWithoutReceipt', code: `${sign}${family}0` };
+  if (sign || shown !== undefined || receipts.some((r) => r.hasSwissVat === undefined)) return undefined;
+  return { kind: 'vatWithoutReceipt', code: `${family}0`, ...decided };
 }
