@@ -33,7 +33,7 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Services to customers abroad: V0-E (box 221). Goods that stay in Switzerland: V81.
 
-**Rules:** `sv-order-tax`
+**Rules:** `sv-order-tax`, `sv-no-invoice`
 
 | Code | Banana text | Rate | Amount is | Boxes | Example |
 |---|---|---|---|---|---|
@@ -45,7 +45,7 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Exported goods: V0 (box 220). Services whose place the law sets otherwise (real estate, passenger transport, restaurants, events: Art. 8 para. 2).
 
-**Rules:** `sv-service-abroad`
+**Rules:** `sv-service-abroad`, `sv-place-abroad`
 
 | Code | Banana text | Rate | Amount is | Boxes | Example |
 |---|---|---|---|---|---|
@@ -98,7 +98,7 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** A customer abroad (a service: V0-E, goods exported: V0). An invoice without VAT. A refund to a customer: the same code with a minus.
 
-**Rules:** `sv-order-tax`, `sid-sale-refund`
+**Rules:** `sv-order-tax`, `sv-no-invoice`, `sv-card-terminal`, `sid-sale-refund`
 
 | Code | Banana text | Rate | Amount is | Boxes | Example |
 |---|---|---|---|---|---|

@@ -2676,6 +2676,8 @@ export default {
     'questions.sale.marked': 'marked as «no sale», the booking stays',
     'questions.sale.rule': 'kept as a rule for this payer (Company › Rules)',
     'questions.sale.noRule': 'no rule: the bank does not name the payer for certain, the next payment is asked again',
+    'questions.sale.bookedNow': 'Until you answer, it is booked with {code}.',
+    'questions.sale.corrected': 'from your correction of the booking: {code}',
     'questions.notActed.closed': 'Nothing booked: the quarter is filed (through {detail}). A correction goes into the open period.',
     'questions.notActed.noPayment': 'Nothing booked: the receipt has no payment. You decide.',
     'questions.notActed.severalPayments': 'Nothing booked: the receipt belongs to several payments. You decide.',

@@ -126,8 +126,9 @@ A run that cannot go on by itself is in one of three states, and each has its ow
   run waits for it. Planned: the person step «Bewegung von Hand buchen» carries such a question,
   so the booking that cannot decide asks the owner instead of guessing.
 - **The booking asks about sales without an invoice.** The step `intake.book` (classifyStep)
-  ends by asking the owner once about each customer payment it finds booked as revenue at a zero
-  code with no receipt and no invoice (src/intake/sale-questions.ts, the note `saleAsked`): with
+  ends by asking the owner once about each customer payment it booked as revenue with no receipt
+  and no invoice (at the app's proposal: the normal rate from the VAT territory, the export code
+  from abroad) (src/intake/sale-questions.ts, the note `saleAsked`): with
   VAT, abroad, or no sale, with the app's proposal. The answer rebooks the payment and keeps a rule
   keyed by the payer (`when: { payer, direction: in }`), which the next run of the step carries
   out in code before any model call; views.md, "The app asks too".

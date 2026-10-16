@@ -2673,6 +2673,8 @@ export const messages = {
   'questions.sale.marked': 'als «kein Umsatz» markiert, die Buchung bleibt',
   'questions.sale.rule': 'als Regel für diesen Zahler gemerkt (Firma › Regeln)',
   'questions.sale.noRule': 'keine Regel: die Bank nennt den Zahler nicht eindeutig, die nächste Zahlung wird wieder gefragt',
+  'questions.sale.bookedNow': 'Bis zu deiner Antwort ist sie mit {code} gebucht.',
+  'questions.sale.corrected': 'aus deiner Korrektur der Buchung: {code}',
   'questions.notActed.closed': 'Nichts gebucht: das Quartal ist eingereicht (bis {detail}). Eine Korrektur gehört in die offene Periode.',
   'questions.notActed.noPayment': 'Nichts gebucht: der Beleg hat keine Zahlung. Du entscheidest.',
   'questions.notActed.severalPayments': 'Nichts gebucht: der Beleg gehört zu mehreren Zahlungen. Du entscheidest.',

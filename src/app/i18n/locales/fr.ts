@@ -2676,6 +2676,8 @@ export default {
     'questions.sale.marked': 'marqué «pas de chiffre d’affaires», l’écriture reste',
     'questions.sale.rule': 'retenu comme règle pour ce payeur (Entreprise › Règles)',
     'questions.sale.noRule': 'pas de règle : la banque ne nomme pas le payeur avec certitude, le prochain paiement sera redemandé',
+    'questions.sale.bookedNow': 'Jusqu’à votre réponse, il est comptabilisé avec {code}.',
+    'questions.sale.corrected': 'repris de votre correction de l’écriture : {code}',
     'questions.notActed.closed': 'Rien comptabilisé : le trimestre est déposé (jusqu’au {detail}). Une correction va dans la période ouverte.',
     'questions.notActed.noPayment': 'Rien comptabilisé : le justificatif n’a pas de paiement. À vous de décider.',
     'questions.notActed.severalPayments': 'Rien comptabilisé : le justificatif appartient à plusieurs paiements. À vous de décider.',

@@ -27,13 +27,13 @@ interface KindSpec {
 
 /** Every kind of code, in the order the catalogue lists them. */
 export const VAT_CODE_KINDS = [
-  { kind: 'export', family: 'V', match: /^V0$/, rules: ['sv-order-tax'] },
-  { kind: 'abroad', family: 'V', match: /^V0-E$/, rules: ['sv-service-abroad'] },
+  { kind: 'export', family: 'V', match: /^V0$/, rules: ['sv-order-tax', 'sv-no-invoice'] },
+  { kind: 'abroad', family: 'V', match: /^V0-E$/, rules: ['sv-service-abroad', 'sv-place-abroad'] },
   { kind: 'notification', family: 'V', match: /^V0-T$/, rules: [] },
   { kind: 'notTaxable', family: 'V', match: /^V0-N$/, rules: [] },
   { kind: 'various', family: 'V', match: /^V0-D$/, rules: [] },
   { kind: 'saleOpted', family: 'V', match: /^V\d+-B$/, rules: [] },
-  { kind: 'sale', family: 'V', match: /^V\d+(-N)?$/, rules: ['sv-order-tax', 'sid-sale-refund'] },
+  { kind: 'sale', family: 'V', match: /^V\d+(-N)?$/, rules: ['sv-order-tax', 'sv-no-invoice', 'sv-card-terminal', 'sid-sale-refund'] },
   { kind: 'discount', family: 'VS', match: /^VS\d+(-N)?$/, rules: [] },
   { kind: 'flatRate', family: 'F', match: /^FS?\d$/, rules: [] },
   { kind: 'acquisition', family: 'B', match: /^B\d+(-[12])?$/, rules: ['pv-bezugsteuer'] },

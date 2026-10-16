@@ -203,6 +203,32 @@ steps:
         when: always
         then: "the code follows the tax the order or invoice itself states: Swiss 8.1% → swiss (V81); no Swiss tax and delivered abroad → export (V0) with the country as the recorded reason; anything else → new_case"
         source: booking.flow.yaml sale_vat expect
+      - id: sv-no-invoice
+        when: a customer payment with no invoice or order linked
+        then: >
+          the app's proposal, in code (src/accounting/sales-without-vat.ts saleCodeOf): the books' currency from an IBAN of the
+          VAT territory (Switzerland and Liechtenstein, modules/ch/invoicing.yaml territory) or with no IBAN named → V81;
+          a foreign currency or a foreign IBAN → V0. Never V0 for want of a paper. The owner confirms it once (the
+          app's question under Aufgaben), and her answer or her correction becomes a rule for the payer
+        why: "the output tax is owed on a domestic supply whether or not an invoice exists (MWSTG Art. 18); «no receipt, zero code» is the input-tax rule"
+        source: decision 2026-10-16, owner
+      - id: sv-card-terminal
+        when: a payout of a card terminal or payment provider (SumUp, Payrexx, Worldline, TWINT)
+        then: >
+          the card sales at the company's own place of business are domestic sales: the GROSS sales on the revenue
+          account with V81 (another rate only when the report shows it), a refund with -V81, the provider's fees as
+          their own row on the bank-fee account with I0 (payment processing is exempt, Art. 21: no Bezugsteuer).
+          Without the payout report: the whole payout with V81 until the report is linked
+        why: the payout report rarely shows MWST, yet the sales were made in Switzerland
+        source: proposed 2026-10-16 by Claude — confirm or replace
+      - id: sv-place-abroad
+        when: the sale's invoice shows no Swiss MWST and names the place of supply abroad (modules/ch/invoicing.yaml placeAbroad)
+        then: V0-E (Ziffer 221), in code; not V0, which is the export of goods
+        source: MWSTG Art. 8 Abs. 1
+      - id: sv-unregistered
+        when: the books are not registered for VAT
+        then: no VAT code on any sale
+        source: MWSTG Art. 10
     ask_human_when:
       - a sale with no order or invoice of its own (a private sale of equipment)
     precedents: []

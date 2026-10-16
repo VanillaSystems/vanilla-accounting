@@ -160,7 +160,13 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       - Otherwise use the suffix given for the rate: 8.1%→81, 2.6%→26, 3.8%→38
         (historical 7.7→77, 2.5→25, 3.7→37). Combine prefix + suffix, e.g. account 6570
         with an 8.1% fact → I81; a 4400 material line at 2.6% → M26.
-   c) No receipt at all (no VAT facts line) → 0-rate code (I0/M0/V0).
+   c) No receipt at all (no VAT facts line) on a PURCHASE → 0-rate code (I0/M0): no receipt, no input tax.
+      A SALE (CRDT on a 3xxx account) owes its output tax with or without an invoice: a customer in
+      Switzerland or Liechtenstein → V81, a customer abroad → V0. The app checks the code against the
+      payment and asks the owner; never book a domestic sale V0 for want of a receipt.
+   g) A sale whose invoice shows no Swiss MWST because the place of supply of the service is abroad
+      ("Leistungsort Deutschland", "nicht der schweizerischen MWST unterstellt") → V0-E (Ziffer 221).
+      V0 (Ziffer 220) is the export of goods only.
    d) Refunds invert the code with a minus prefix (e.g. -I81, -M26).
    e) Exception: Coop Pronto receipts can be assumed I81 (always charge 8.1% MWST even if OCR is bad).
    f) MULTI-RATE RECEIPTS: when a receipt's VAT facts list MORE THAN ONE positive rate
@@ -173,6 +179,12 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    a) Revenue: accountDebit "1093" / accountCredit "3450" — full order amount. Use V81 for Swiss customers, V0 for exports.
    b) Shopify fees: accountDebit "6580" / accountCredit "1093" — the fee amount (= order amount minus Stripe payout, as shown on the Shopify receipt)
    The system will automatically add a third entry for the Stripe payout (D=bank C=1093) — do NOT add it yourself.
+9a. Card-terminal and payment-provider payouts (SumUp, Payrexx, Worldline, Stripe Terminal, TWINT): the payout is
+   the card sales at the company's own place of business minus the provider's fees. Its payout report rarely shows MWST,
+   yet the sales are domestic sales: book the GROSS sales on the revenue account with V81 (the normal rate; another
+   rate only when the report shows it), a refund in the report with -V81, and the fees as their own row on the
+   bank-fee account with I0 (payment processing is exempt: no input tax, no Bezugsteuer). The rows sum to the payout.
+   Without the report: the whole payout on the revenue account with V81.
 9b. Shopify MONTHLY VAT correction (Vorsteuer on transaction fees) — a SEPARATE booking, not a sales order.
    The monthly Shopify billing statement ("Payments Invoice") shows the 8.1% Swiss MWST on the fees that the
    per-order payouts hide. Book ONLY the VAT as a SINGLE-LEG correction — this is the ONE case where a leg is
@@ -229,7 +241,7 @@ export function vatRateSuffix(rate: number): string {
 // classify prompt — so the rate no longer depends on (truncated) receipt text.
 export function formatVatFacts(r: ReceiptInput): string | null {
   if (r.hasSwissVat === undefined && !r.vatSummary) return null; // not extracted yet
-  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → use 0-rate code (I0/M0/V0)';
+  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → a purchase: 0-rate code (I0/M0); a sale: see rules 7c, 7g and 9a';
   const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0);
   if (groups.length === 0) {
     return r.hasSwissVat

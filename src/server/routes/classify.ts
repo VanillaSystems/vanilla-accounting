@@ -12,6 +12,7 @@ import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
 import type { Books } from '../../books/store.js';
 import { WS, assertOpen, readBooks, refDates, withBooks, RequestError } from '../books.js';
+import { learnFromCorrection } from '../questions.js';
 
 export const router = Router();
 
@@ -31,6 +32,8 @@ function openTransaction(books: Books, txRef: string, overwrite: boolean) {
 router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   const { txRef } = req.params;
   const overwrite = req.body?.overwrite === true;
+  // Her correction of a sale is kept as a rule first, so the classifier books it as she set.
+  if (overwrite) learnFromCorrection([txRef]);
   const scratch = readBooks();
   const tx = openTransaction(scratch, txRef, overwrite);
   scratch.journalEntries = scratch.journalEntries.filter((je) => je.transactionRef !== txRef);

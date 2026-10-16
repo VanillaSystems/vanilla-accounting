@@ -16,9 +16,11 @@ import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
+import { saleQuestionLine } from '../intake/sale-questions.js';
+import { chart } from '../engines/index.js';
 import { dropPrecedent, dropRule, keepPrecedent, keepRule, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
 import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget } from '../questions/model.js';
-import { saleVatCode, salesWithoutVat } from '../accounting/sales-without-vat.js';
+import { saleChoiceOf, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
 import { payerKey } from '../knowledge/payer.js';
 import { parseRule } from '../booking/rules.js';
 import { ruleFactsOf } from '../saving/rules.js';
@@ -135,7 +137,7 @@ function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { book
   const own = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   if (own.some((e) => e.origin === 'invoice')) throw new Unclear('hasInvoice', tx.description);
   assertOpen(books, [tx.date, ...own.map((e) => e.date)], 'editEntry');
-  const entries = salesWithoutVat({ ...books, transactions: [tx] }, true)[0]?.entries ?? [];
+  const entries = salesWithoutInvoice({ ...books, transactions: [tx] }, true)[0]?.entries ?? [];
   const account = entries[0]?.accountCredit;
   if (choice === 'notSale') {
     tx.noReceiptNeeded = true;
@@ -258,4 +260,47 @@ export function closeQuestion(id: string, by: string, how: 'done' | 'withdrawn')
   if (how === 'withdrawn' && q.status === 'answered') undoAnswer(id, by);
   append({ v: 1, event: 'closed', id, at: now(), by, how });
   return find(id);
+}
+
+/**
+ * A person's correction of a customer payment without an invoice (by hand, or by a wish in the AI
+ * sidebar) answers the app's question about it, as she would have: the code she set on its
+ * revenue decides the choice, and the answer is kept as a rule for the payer, so the payer's next
+ * payment, and «Neu klassifizieren» of this one, are booked as she set. The question is asked
+ * first when the app had not asked it yet. A question answered or closed before, a code that says
+ * neither a rate nor an exemption, and a payment with a receipt or an invoice are left alone; the
+ * answer's «Zurücknehmen» drops the rule and keeps her booking. Returns the questions it answered.
+ */
+export function learnFromCorrection(refs: Iterable<string>, by: string = WS.company.owner): Question[] {
+  if (!WS.company.vat) return [];
+  const books = readBooks();
+  const closed = books.config.closedThrough;
+  const answered: Question[] = [];
+  for (const ref of new Set(refs)) {
+    const tx = books.transactions.find((t) => t.ref === ref);
+    if (!tx || tx.direction !== 'CRDT' || tx.noReceiptNeeded || (closed && tx.date <= closed)) continue;
+    if (books.mappings.some((m) => m.transactionRef === ref)) continue;
+    const own = books.journalEntries.filter((e) => e.transactionRef === ref);
+    if (own.some((e) => e.origin === 'invoice')) continue;
+    const sales = own.filter((e) => chart().typeOf(e.accountCredit) === 'revenue');
+    const hers = sales.filter((e) => e.origin === 'manual');
+    const codes = [...new Set(hers.map((e) => e.vatCode ?? ''))];
+    if (!hers.length || hers.length !== sales.length || codes.length !== 1) continue;
+    const choice = saleChoiceOf(codes[0]);
+    if (!choice) continue;
+    const asked = readQuestions(WS).filter((q) => q.topic === 'saleVat' && q.on.id === ref);
+    if (asked.some((q) => q.status !== 'open')) continue;
+    const at = now();
+    let q = asked[0];
+    if (!q) {
+      const line = saleQuestionLine(WS, tx, at);
+      append(line);
+      q = find(line.id);
+    }
+    const rule = keepSaleRule(q, choice, tx, hers[0].accountCredit, codes[0], at);
+    const acted: Acted = { booked: [], undo: [], vatCode: codes[0], correction: true, ...(rule ? { rule } : {}) };
+    append({ v: 1, event: 'answered', id: q.id, at, by, answer: { choice }, acted });
+    answered.push(find(q.id));
+  }
+  return answered;
 }

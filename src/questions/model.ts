@@ -46,10 +46,11 @@ export type NotActed = (typeof NOT_ACTED)[number];
  * What the app did with an answer: the bookings it wrote or changed, with the changes that take
  * them back, and the precedent or the rule it kept; or why it did nothing (a filed quarter, a
  * payment it cannot read; `detail`: the refusal's own words). A sale's answer says the VAT code it
- * booked (`vatCode`, empty: none) and, «kein Umsatz», that it marked the payment as needing no receipt.
+ * booked (`vatCode`, empty: none) and, «kein Umsatz», that it marked the payment as needing no receipt;
+ * `correction`: the answer is a person's correction of the booking, which booked it already.
  */
 export type Acted =
-  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true }
+  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true; correction?: true }
   | { precedent: string }
   | { refused: NotActed; detail?: string };
 

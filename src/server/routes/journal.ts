@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
 import { isIsoDate } from '../../accounting/periods.js';
-import { patchBody, stringField, withBooks, RequestError } from '../books.js';
+import { patchBody, stringField, updateBooks, withBooks, RequestError } from '../books.js';
+import { learnFromCorrection } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, deleteEntry, setEntry } from '../edits.js';
 
@@ -16,10 +17,12 @@ router.patch('/api/journal-entries/:id', (req, res) => {
   const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount']);
   const set = b as EntrySet;
   if ('amount' in b) set.amount = amountField(b);
-  return withBooks(res, (books) => {
+  const ref = updateBooks((books) => {
     setEntry(books, req.params.id, set);
-    return { ok: true };
+    return books.journalEntries.find((e) => e.id === req.params.id)!.transactionRef;
   });
+  if ('vatCode' in set) learnFromCorrection([ref]);
+  res.json({ ok: true });
 });
 
 type Origin = NonNullable<JournalEntry['origin']>;

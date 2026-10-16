@@ -2676,6 +2676,8 @@ export default {
     'questions.sale.marked': 'segnato «nessuna cifra d’affari», la registrazione resta',
     'questions.sale.rule': 'tenuto come regola per questo pagatore (Azienda › Regole)',
     'questions.sale.noRule': 'nessuna regola: la banca non indica il pagatore con certezza, il prossimo pagamento verrà chiesto di nuovo',
+    'questions.sale.bookedNow': 'Fino alla tua risposta è registrato con {code}.',
+    'questions.sale.corrected': 'dalla tua correzione della registrazione: {code}',
     'questions.notActed.closed': 'Niente registrato: il trimestre è inoltrato (fino al {detail}). Una correzione va nel periodo aperto.',
     'questions.notActed.noPayment': 'Niente registrato: il giustificativo non ha pagamento. Decidi tu.',
     'questions.notActed.severalPayments': 'Niente registrato: il giustificativo appartiene a più pagamenti. Decidi tu.',

@@ -16,7 +16,7 @@ import type { Location } from '../shell/route.js';
 import type { Index } from '../../types/index.js';
 import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
-import { baseCurrency, invoicing } from '../../engines/index.js';
+import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
 
 const choiceText = (c: Choice) => (c === 'saleDomestic' ? t('questions.choice.saleDomestic', { rate: String(normalRate()) }) : t(`questions.choice.${c}` as 'questions.choice.private'));
@@ -28,6 +28,12 @@ const asker = (q: Question) => (q.origin === 'assistant' ? t('questions.ai') : q
 function questionText(q: Question, books: Index): string {
   const tx = q.topic === 'saleVat' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
   return tx ? t('questions.sale.text', { who: tx.counterparty || tx.description, amount: `${tx.currency} ${fmt(tx.amount)}`, date: formatDate(tx.date) }) : q.text;
+}
+
+/** How the app's question's payment is booked while it waits: the code on its revenue, so the owner sees what her answer changes. */
+function bookedNow(q: Question, books: Index): string {
+  const codes = [...new Set((books.journalEntries ?? []).filter((e) => e.transactionRef === q.on.id && chart().typeOf(e.accountCredit) === 'revenue').map((e) => e.vatCode || t('journal.noVat')))];
+  return codes.length ? t('questions.sale.bookedNow', { code: codes.join(', ') }) : '';
 }
 
 /** Runs a command; a refusal is said in the toast. */
@@ -58,7 +64,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   if ('refused' in a) return <p className="qnote warn">{t(`questions.notActed.${a.refused}` as 'questions.notActed.refused', { detail: a.detail ?? '' })}</p>;
   if ('vatCode' in a) {
     const sale = [
-      a.marked ? t('questions.sale.marked') : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
+      a.marked ? t('questions.sale.marked') : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
       a.rule ? t('questions.sale.rule') : t('questions.sale.noRule'),
     ];
     return <p className="qnote" data-testid="sale-acted">{sale.join(' · ')}</p>;
@@ -88,7 +94,7 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
       {q.status === 'open' ? (
         <>
           {q.choices.includes('private') && !mine ? <p className="qnote">{t('questions.privateDoes', { account: owner })}</p> : null}
-          {q.proposal ? <p className="qnote" data-testid="sale-proposal">{t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {t('questions.sale.does')}</p> : null}
+          {q.proposal ? <p className="qnote" data-testid="sale-proposal">{t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {bookedNow(q, books)} {t('questions.sale.does')}</p> : null}
           {canEdit ? (
             <div className="qacts">
               {mine ? null : <>

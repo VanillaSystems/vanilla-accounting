@@ -15,6 +15,7 @@ import { isActionChange, isBookChange, isWorkspaceChange, type ActionChange, typ
 import type { Books } from '../../books/store.js';
 import { applyAnswer, applyChange, relinked, unbookedPayments } from '../edits.js';
 import { applyWorkspaceChange } from '../workspace-edits.js';
+import { learnFromCorrection } from '../questions.js';
 import { appMap } from '../app-map.js';
 import { bookAgain } from './automation.js';
 import { accountsOf } from '../../workspace/reads.js';
@@ -150,6 +151,7 @@ const apply: ApplyChanges = async (changes, earlier, language) => {
     throw new RefusedChanges((e as Error).message, refusalOf(e));
   }
   after();
+  learnFromCorrection(books.flatMap((m) => (m.payment ? [m.payment] : [])));
   const actions: Array<Omit<MadeChange, 'id'>> = [];
   for (const c of changes.filter(isActionChange)) actions.push({ change: c, ...(await run(c, language)) });
   return [...outside, ...books, ...actions].map((m) => ({ id: randomUUID().slice(0, 8), ...m }));

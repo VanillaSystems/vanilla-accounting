@@ -17,6 +17,7 @@ import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { baseCurrency } from '../engines/index.js';
+import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
@@ -125,6 +126,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   counterparties?: readonly Counterparty[];
   /** The owner's private account (its number): where a rule's private share goes. */
   ownerAccount?: string;
+  /** Whether the books charge VAT on their sales; absent: registered, the only setup a workspace loads with (src/workspace/manifest.ts). */
+  vatRegistered?: boolean;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -194,6 +197,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
     ownerAccount: ownerAccount(ws).split(' ')[0],
+    vatRegistered: !!ws.company.vat,
   };
 }
 
@@ -309,6 +313,21 @@ export function mappedReceipts(books: Books, tx: BankTransaction) {
     .filter((r): r is NonNullable<typeof r> => !!r && r.kind !== 'duplicate');
 }
 
+/**
+ * The model's sale lines with the code that code decides (src/accounting/sales-without-vat.ts
+ * saleCodeOf): a customer payment without an invoice gets the app's proposal, never a zero code for
+ * want of a paper; an invoice that places its service abroad the abroad code; books not registered
+ * for VAT no code. Such a line's reason says why, in place of the model's.
+ */
+function withSaleCodes(tx: BankTransaction, entries: JournalEntry[], documents: ReturnType<typeof mappedReceipts>, vatRegistered: boolean): JournalEntry[] {
+  return entries.map((e) => {
+    const decided = saleCodeOf(e.vatCode, e.accountCredit, tx, documents, vatRegistered);
+    if (!decided) return e;
+    const { vatCode: _, ...rest } = e;
+    return { ...rest, ...(decided.code ? { vatCode: decided.code } : {}), reason: saleCodeReason(decided, tx.currency) };
+  });
+}
+
 export interface ClassifyDeps {
   /** Absent: no model; what no rule decides is left in `unasked`. */
   ask?: (prompt: string, opts: AskOptions) => Promise<string>;
@@ -396,7 +415,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const bankAccount = bankAccountFor(tx, context.bankAccounts);
         const said = result[tx.ref].reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
-        const entries = entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason });
+        const entries = withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason }), mapped, context.vatRegistered ?? true);
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

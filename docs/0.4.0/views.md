@@ -250,10 +250,11 @@ the other's when they next open the books.
   the bookings and the precedent back and opens the question again.
 - **The AI asks too.** A change `question` of the sidebar's block puts a question to the owner
   (or the person it names) when the AI cannot decide; its card's «Rückgängig» withdraws it.
-- **The app asks too: a customer payment without an invoice.** For VAT-registered books, an
-  incoming payment of the open period with no receipt and no invoice of the app, booked as revenue
-  at a zero code, would be declared as an export. The booking step (`intake.book`, after
-  classify) asks the owner about each one once (src/intake/sale-questions.ts; origin `booking`,
+- **The app asks too: a customer payment without an invoice.** For VAT-registered books, the
+  classifier books an incoming payment of the open period with no receipt and no invoice of the
+  app with the app's proposal, in code (src/accounting/sales-without-vat.ts `saleCodeOf`), never at
+  a zero code for want of a paper. The booking step (`intake.book`, after classify) asks the owner
+  about each one once (src/intake/sale-questions.ts; origin `booking`,
   topic `saleVat`, «die App» as the asker). The card says who paid what on which day and offers
   «mit MWST (8.1 %)», «ohne MWST (Ausland)» and «keine MWST darauf (kein Umsatz: Darlehen,
   Rückzahlung …)». The app's proposal is the highlighted button, marked «Vorschlag», with its
@@ -268,9 +269,15 @@ the other's when they next open the books.
   classifier books that payer's next payment by the rule, without a question (Firma › Regeln
   lists it). A payer the bank names only by a generic text («Gutschrift») gets no rule: the next
   such payment is asked again. A payment with a receipt or booked from an invoice, or one of a
-  filed quarter, is never changed: the answer is refused and says why. The warning on the payment,
-  in MWST and in Automatisierung stays until the question is answered. «Zurücknehmen» takes the
-  booking, the mark and the rule back.
+  filed quarter, is never changed: the answer is refused and says why. The card says how the
+  payment is booked while it waits («Bis zu deiner Antwort ist sie mit V81 gebucht»). The warning
+  on the payment, in MWST and in Automatisierung (a sale still at a zero code) stays until the
+  question is answered. «Zurücknehmen» takes the booking, the mark and the rule back. A person's
+  correction answers the question too: when she sets the code of such a sale by hand or by a wish,
+  the app answers its question with her code (asking it first if it had not) and keeps the rule,
+  so «Neu klassifizieren» › «Trotzdem neu buchen» books what she set (src/server/questions.ts
+  `learnFromCorrection`; the card says «aus deiner Korrektur der Buchung»). Its «Zurücknehmen»
+  drops the rule and keeps her booking.
 
 ## Status, top right
 
