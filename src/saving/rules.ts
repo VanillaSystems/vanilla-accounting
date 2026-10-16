@@ -20,6 +20,7 @@ import { previewRules, ruleKey, type PlacedRow, type RulePreview } from '../book
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { hasBooks, loadBooks } from '../books/store.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
+import { payerNames } from '../knowledge/payer.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
@@ -174,7 +175,7 @@ const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's use
 
 /** The subject of a save that keeps rules, in plain German. */
 function subjectOf(ws: Workspace, d: RuleDiff): string {
-  const ctx = { chartOfAccounts: chartOf(ws), counterparties: loadKnowledge(APP_ROOT, ws.paths.root).counterparties };
+  const ctx = { chartOfAccounts: chartOf(ws), counterparties: loadKnowledge(APP_ROOT, ws.paths.root).counterparties, payers: hasBooks(ws) ? payerNames(loadBooks(ws).transactions) : {} };
   const say = (r: RuleRow) => (r.rule ? ruleLine({ rule: r.rule, ...(r.business ? { business: r.business } : {}) }, ctx) : r.id);
   const parts = [
     ...d.added.map((r) => `Neue Regel: ${say(r)}`),

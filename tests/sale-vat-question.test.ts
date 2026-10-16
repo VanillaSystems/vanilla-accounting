@@ -116,6 +116,8 @@ test('the payer\'s next payment is booked by the rule in code, without a questio
   await bookingStep();
   const [ch] = entriesOf('N-CH');
   assert.deepEqual([ch.accountDebit, ch.accountCredit, ch.vatCode, ch.origin, ch.rule?.startsWith('sale-')], ['1021', '3400', 'V81', 'classify', true]);
+  assert.match(ch.reason ?? '', /^Regel: .*Zahler Beispiel Kunde AG/, 'the reason names the payer as Firma › Regeln does (r4w-8)');
+  assert.doesNotMatch(ch.reason ?? '', new RegExp(CH_IBAN), 'not by its key');
   const [eu] = entriesOf('N-EU');
   assert.deepEqual([eu.accountDebit, eu.accountCredit, eu.vatCode, eu.exchangeCurrency], ['1023', '3400', 'V0', 'EUR']);
   assert.deepEqual(saleQuestions().filter((q) => q.on.id.startsWith('N-')).map((q) => q.on.id), ['N-GEN'], 'only the generic payer is asked');

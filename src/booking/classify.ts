@@ -22,6 +22,7 @@ import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
+import { payerNames } from '../knowledge/payer.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
@@ -227,12 +228,16 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
 /** The money a rule names, in the books' currency, as the books write it. */
 const money = (n: number) => `${baseCurrency()} ${n.toLocaleString('de-CH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-/** A rule in plain German words, for the booking's reason (booking texts stay German, docs/i18n.md). */
-export function ruleLine(placed: PlacedRule, context: Pick<ClassifyContext, 'chartOfAccounts' | 'counterparties'>): string {
+/**
+ * A rule in plain German words, for the booking's reason (booking texts stay German, docs/i18n.md).
+ * `payers` names a payer by the key `when.payer` holds (payerNames); a booking passes its own payment's.
+ */
+export function ruleLine(placed: PlacedRule, context: Pick<ClassifyContext, 'chartOfAccounts' | 'counterparties'> & { payers?: Readonly<Record<string, string>> }): string {
   const accounts = chartNames(context.chartOfAccounts);
   const names: RuleNames = {
     account: (n) => accounts.get(n),
     business: (id) => context.counterparties?.find((c) => c.id === id)?.name,
+    payer: (key) => context.payers?.[key],
     money,
   };
   const de = wordsIn('de');
@@ -324,7 +329,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
   // A payout rule without its report books the whole payout as sales until the report is linked (its link books it again).
   const noReport = booking.fees ? `; ${wordsIn('de').t('rules.say.noPayoutReport')}` : '';
-  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts })
+  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts })
     .map((e) => ({ ...e, rule: placed.rule.id }));
 }
 
@@ -482,7 +487,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
         const payout = payouts.get(tx.ref);
         const read = payout && payoutLines(
-          entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, context)}; ${wordsIn('de').t('rules.say.payoutRead')}` }),
+          entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, { ...context, payers: payerNames([tx]) })}; ${wordsIn('de').t('rules.say.payoutRead')}` }),
           bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue',
         )?.map((e) => ({ ...e, rule: payout.placed.rule.id }));
         if (payout && !read) {
