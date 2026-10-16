@@ -155,6 +155,6 @@ test('Firma › Regeln over the API: every rule of the workspace in plain words,
     assert.equal((await api.send('POST', '/api/rules', { kind: 'restore', ...(del.json.undo as object) })).json.ok, true);
     assert.equal(((await api.send('GET', '/api/rules')).json as unknown as RulesView).rules.filter((r) => r.id === 'cash-prose').length, 1);
   } finally {
-    api.stop();
+    await api.stop();
   }
 });
