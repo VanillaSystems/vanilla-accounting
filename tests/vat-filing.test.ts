@@ -332,3 +332,27 @@ test('a filing run discarded while the period was held frees it (r7h-24)', async
   const state = engine.run(r.ok ? r.run! : '')!.state;
   assert.deepEqual([state.status, state.status === 'discarded' ? state.reason : ''], ['discarded', 'von einer Person verworfen'], 'the run page shows the reason as it is: in the books\' language, not English (r8f-44)');
 });
+
+test('r8f-49: «Zurück» from the filing task recomputes the return, so the review task shows today\'s figures, not the ones approved', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT, onRest: (run) => releaseApproval(ws, run) });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  const id = r.ok ? r.run! : '';
+  await engine.command({ kind: 'answer', run: id, outcome: 'approved' });
+  await engine.idle();
+  const approved = payableNow(ws);
+  await engine.command({ kind: 'answer', run: id, outcome: 'back' });
+  await engine.idle();
+  const books = loadBooks(ws);
+  flipOne(books);
+  saveBooks(ws, books);
+  const now = payableNow(ws);
+  assert.notEqual(now, approved);
+  await engine.command({ kind: 'answer', run: id, outcome: 'back' });
+  await engine.idle();
+  const run = engine.run(id)!;
+  const task = taskOf(loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'vat-filing')!, run)!;
+  assert.deepEqual(at(run), ['waiting', 'review']);
+  assert.equal((task.reads!.return as PeriodReturn).payable, now, 'the review task reads the recomputed return');
+});
