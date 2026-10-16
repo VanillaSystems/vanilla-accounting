@@ -109,6 +109,19 @@ export function openSaleQuestionsIn(questions: readonly Question[], books: { tra
   });
 }
 
+/**
+ * Whether an answer can be taken back («Zurücknehmen»): its payment or booking lies in the open
+ * period. A question about a filed period keeps its answer; the button would only run into the
+ * period lock (r7f-36, r8f-35).
+ */
+export function undoable(q: Pick<Question, 'on'>, books: { config?: { closedThrough?: string }; transactions: ReadonlyArray<{ ref: string; date: string }>; journalEntries?: ReadonlyArray<{ id: string; date: string }> }): boolean {
+  const closed = books.config?.closedThrough;
+  if (!closed) return true;
+  const date = q.on.kind === 'payment' ? books.transactions.find((t) => t.ref === q.on.id)?.date
+    : q.on.kind === 'entry' ? books.journalEntries?.find((e) => e.id === q.on.id)?.date : undefined;
+  return !date || date > closed;
+}
+
 /** GET /api/questions: every question, the names to pick from, the owner's account («2451 Kontokorrent …»), which «privat» books on. */
 export interface QuestionsView { questions: Question[]; people: string[]; owner: string }
 

@@ -14,7 +14,7 @@ import { at } from '../areas/receipts/view.js';
 import type { Nav } from '../areas/index.js';
 import type { Location } from '../shell/route.js';
 import type { Index } from '../../types/index.js';
-import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
+import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, undoable, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
 import { domesticSale, normalRate, saleChoiceOf, saleProposal } from '../../accounting/sales-without-vat.js';
 import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
@@ -148,7 +148,7 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
           {canEdit && q.status === 'answered' ? (
             <div className="qacts">
               {mine || q.origin === 'assistant' ? <button type="button" className="btn" onClick={() => void run(nav, closeQuestion(q.id, 'done'))}>{t('questions.done')}</button> : null}
-              {q.answer.acted && !('refused' in q.answer.acted) ? <button type="button" className="btn ghost" title={t('questions.undoTip')} onClick={() => void run(nav, undoAnswer(q.id), t('questions.undone'))}>{t('questions.undo')}</button> : null}
+              {q.answer.acted && !('refused' in q.answer.acted) && undoable(q, books) ? <button type="button" className="btn ghost" title={t('questions.undoTip')} onClick={() => void run(nav, undoAnswer(q.id), t('questions.undone'))}>{t('questions.undo')}</button> : null}
             </div>
           ) : null}
         </>
