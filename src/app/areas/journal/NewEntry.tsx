@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { localToday, parsePeriod, parseSwissDate } from '../../../accounting/periods.js';
-import { formTakes, lookupVatCode } from '../../../accounting/vat-codes.js';
+import { firmCodes, formTakes, lookupVatCode } from '../../../accounting/vat-codes.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { periodName } from '../../lib/period-label.js';
@@ -92,7 +92,7 @@ export function NewEntry(props: Props) {
   /** What the fields hold now, so a payment picked (or dropped) keeps what was typed. */
   function typed(): Partial<JournalEntryInput> {
     const f = Object.fromEntries(new FormData(form.current!)) as Record<string, string>;
-    return { ...d, date: parseSwissDate(f.date) ?? d.date, accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), amount: parseAmount(f.amount) ?? undefined, vatCode: f.vatCode.trim(), description: f.description };
+    return { ...d, date: parseSwissDate(f.date) ?? d.date, accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), amount: parseAmount(f.amount) ?? undefined, vatCode: (f.vatCode ?? '').trim(), description: f.description };
   }
 
   /** A payment picked: the entry books it, on its date, its amount and bank side filled where empty. */
@@ -114,7 +114,7 @@ export function NewEntry(props: Props) {
     const date = parseSwissDate(f.date);
     const closed = books.config?.closedThrough;
     const amount = parseAmount(f.amount);
-    const [dr, cr, vat, text] = [f.accountDebit.trim(), f.accountCredit.trim(), f.vatCode.trim(), f.description.trim()];
+    const [dr, cr, vat, text] = [f.accountDebit.trim(), f.accountCredit.trim(), (f.vatCode ?? '').trim(), f.description.trim()];
     const problem = !date && !tx ? t('journal.errDate')
       : !tx && closed && date! <= closed ? t('journal.errFiledDate', { date: formatDate(closed) })
       : [dr, cr].find((n) => n && !accounts[n]) ? t('journal.errAccount', { account: [dr, cr].find((n) => n && !accounts[n])! })
@@ -181,10 +181,12 @@ export function NewEntry(props: Props) {
             <AccountField name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />
             <AccountField name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={d.accountCredit ?? ''} />
           </div>
-          <div className="two">
-            <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={d.vatCode ?? ''} list="vat-codes" /></label>
-            <span />
-          </div>
+          {firmCodes().length ? (
+            <div className="two">
+              <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={d.vatCode ?? ''} list="vat-codes" /></label>
+              <span />
+            </div>
+          ) : null}
           <label>{t('journal.field.description')}<input name="description" defaultValue={d.description ?? ''} /></label>
           {accrual && (
             <label className="jrev" data-testid="reverse-on-new-year">

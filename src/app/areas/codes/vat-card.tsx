@@ -18,8 +18,10 @@ import './codes.css';
 
 export const kindName = (e: VatCodeEntry) => t(`vatCodes.kind.${e.kind}.name`);
 
-/** A code's line: Banana's text for it, else what kind of code it is. */
-export const codeText = (code: string) => {
+/** A code as the person reads it: the firm's own rate («1. Saldosteuersatz (Schreinerei) 4.5 %», r6f-25), else the code list's text, else what kind of code it is. */
+export const codeText = (code: string): string => {
+  const own = vat().rateRows.find((r) => r.kind === 'net-rate' && r.code === code.replace(/^-/, ''));
+  if (own) return `${accountingName(own.name)} ${own.rate} %`;
   const found = lookupVatCode(code);
   return found ? found.entry.bananaText ?? kindName(found.entry) : t('vatCodes.unknown');
 };

@@ -4,7 +4,7 @@
  * Areas own only their list, detail and keys (docs/redesign/architecture.md §3).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { localToday, booksOpenPeriod, parsePeriod } from '../../accounting/periods.js';
+import { localToday, booksOpenPeriod, filingKeyOf, parsePeriod } from '../../accounting/periods.js';
 import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
 import type { Index } from '../../types/index.js';
@@ -206,9 +206,10 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     return [...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
   }, [go, goArea]);
 
+  // The filing periods that hold payments: quarters, or half years on a half-yearly setup (r6f-29).
   const quarters = useMemo(() => {
     const qs = new Set<string>();
-    for (const tx of books.transactions) qs.add(`${tx.date.slice(0, 4)}-Q${Math.ceil(Number(tx.date.slice(5, 7)) / 3)}`);
+    for (const tx of books.transactions) qs.add(filingKeyOf(tx.date, filing().length));
     return [...qs].sort().reverse();
   }, [books.transactions]);
 

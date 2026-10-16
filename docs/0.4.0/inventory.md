@@ -166,7 +166,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/journal/journal.tsx` | MWST 1 |
 | `src/app/areas/journal/model.ts` | CHF 1 |
 | `src/app/areas/receipts/Detail.tsx` | CHF 1 |
-| `src/app/areas/receipts/model.ts` | CHF 3, ESTV 2 |
+| `src/app/areas/receipts/model.ts` | CHF 3, MWST 1, ESTV 2 |
 | `src/app/areas/receipts/view.ts` | CHF 2 |
 | `src/app/areas/reports/Detail.tsx` | CHF 1 |
 | `src/app/areas/reports/reports.tsx` | CHF 1 |
