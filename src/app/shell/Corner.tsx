@@ -14,7 +14,7 @@ import { useQuestions } from '../questions/store.js';
 import { forMe } from '../../questions/model.js';
 import { useAssistant } from '../assistant/store.js';
 import { ICONS } from '../areas/icons.js';
-import { readsInWords } from '../areas/automation/filing-summary.js';
+import { readsInWords } from '../areas/automation/words.js';
 
 export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssistant(): void }) {
   const { view } = useAutomation();

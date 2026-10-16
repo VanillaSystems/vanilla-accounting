@@ -21,6 +21,7 @@ import type { Index } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 import { SESSION } from './support/inbox-run.js';
+import './support/jurisdiction.js';
 
 const REPO = process.cwd();
 const listAfter = (args: string[], flag: string) => {
