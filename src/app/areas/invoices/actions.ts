@@ -54,7 +54,6 @@ const draftSaves = inOrder();
 export async function saveDraft(nav: Nav, draft: Draft, patch: DraftChange): Promise<void> {
   const local = { ...draft } as Draft & Record<string, unknown>;
   for (const [k, v] of Object.entries(patch)) { if (v === null) delete local[k]; else local[k] = v; }
-  edits.touch(draft.id);
   put({ invoice: local });
   const { result: saved, latest } = await edits.saving(draft.id, draftSaves(draft.id, () => run(nav, api.patchDraft(draft.id, patch))));
   if (!latest) return;
