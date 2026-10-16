@@ -11,6 +11,7 @@ import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
 import { bookingWarnings } from '../../accounting/booking-warnings.js';
 import type { Books } from '../../books/store.js';
+import { UNDO_FIELDS } from '../../books/entry-input.js';
 
 export const router = Router();
 
@@ -45,9 +46,13 @@ router.patch('/api/journal-entries/:id', (req, res) => {
 });
 
 
-/** A new entry booked by hand (src/server/edits.ts addEntry). `id`, the exchange fields and `origin` let an undo put a deleted entry back as it was. */
+/**
+ * A new entry booked by hand (src/server/edits.ts addEntry). `id`, the exchange fields, `origin`
+ * and the provenance (UNDO_FIELDS: by, rule, reason, run, receipts) let an undo put a deleted entry
+ * back as it was (r8f-46); the provenance is taken only with `id`.
+ */
 router.post('/api/journal-entries', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction']);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', ...UNDO_FIELDS]);
   const date = stringField(b, 'date');
   if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
   const amount = amountField(b);
@@ -73,6 +78,7 @@ router.post('/api/journal-entries', (req, res) => {
   // An undo puts back an entry without an origin (books from before origins) without one.
   const origin = optional('origin') ?? (id ? undefined : 'manual');
   if (origin && !ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
+  const provenance = provenanceOf(b, !!id);
 
   return withBooks(res, (books) => {
     const original = correctsEntry ? books.journalEntries.find((e) => e.id === correctsEntry) : undefined;
@@ -90,12 +96,31 @@ router.post('/api/journal-entries', (req, res) => {
       ...(corrects && { corrects }),
       ...(origin && { origin: origin as Origin }),
       // Booked by hand now, not put back by an undo: a person decided it (Änderungen lists it).
-      ...(id ? {} : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
+      ...(id ? provenance : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
     });
     if (original && corrects) books.config.correctionCases = [...(books.config.correctionCases ?? []), correctionCaseFor(original, entry, (correction ?? 'vat') as CorrectionKind, corrects)];
     return withWarnings(books, entry);
   });
 });
+
+/** The provenance an undo sends (UNDO_FIELDS), each checked; refused on a new booking, which is its author's. */
+function provenanceOf(b: Record<string, unknown>, undo: boolean): Pick<JournalEntry, (typeof UNDO_FIELDS)[number]> {
+  const sent = UNDO_FIELDS.filter((k) => b[k] !== undefined);
+  if (!sent.length) return {};
+  if (!undo) throw new RequestError(400, `Nur ein Rückgängig (mit id) setzt ${sent.join(', ')}.`);
+  const out: Pick<JournalEntry, (typeof UNDO_FIELDS)[number]> = {};
+  if (b.by !== undefined) {
+    const by = parseBookedBy(b.by);
+    if (!by) throw new RequestError(400, 'by: rule, code, model, person oder assistant.');
+    out.by = by;
+  }
+  for (const k of ['rule', 'reason', 'run'] as const) if (b[k] !== undefined) out[k] = stringField(b, k);
+  if (b.receipts !== undefined) {
+    if (!(Array.isArray(b.receipts) && b.receipts.every((r) => typeof r === 'string'))) throw new RequestError(400, 'receipts muss eine Liste von Beleg-Ids sein.');
+    out.receipts = b.receipts as string[];
+  }
+  return out;
+}
 
 /** The saved booking with what code can say against it (r8k-8): a warning, never a refusal. */
 const withWarnings = (books: Books, entry: JournalEntry) => ({ entry, warnings: bookingWarnings(books, entry) });
