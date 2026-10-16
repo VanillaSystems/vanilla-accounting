@@ -37,3 +37,4 @@ src/workspace/reads.ts -> src/accounting/filed-return.ts
 src/workspace/reads.ts -> src/engines/return.ts
 src/workspace/workspace.ts -> src/engines/index.ts
 src/workspace/workspace.ts -> src/invoices/model.ts
+src/books/store.ts -> src/engines/index.ts

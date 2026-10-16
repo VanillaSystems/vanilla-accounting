@@ -22,8 +22,11 @@ export type ApiRefusal =
   | { code: 'readonly' }
   | { code: 'localOnly' }
   | { code: 'phoneToken' }
-  /** `approved`: the date is not filed but held by that period's approved return (r7h-24). */
-  | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason; approved?: string } }
+  /**
+   * `approved`: the date is not filed but held by that period's approved return (r7h-24).
+   * `filed`: the period was filed with the tax authority and is not sealed yet; the change would move the books further from the return filed (r10h-4).
+   */
+  | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason; approved?: string; filed?: string } }
   | { code: 'manualOnly' }
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }

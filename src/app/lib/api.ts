@@ -167,6 +167,7 @@ export function errorText(e: unknown): string {
     case 'vatMethodHeld': return t('error.vatMethodHeld', { year: b.params.year, n: b.params.entries, next: String(Number(b.params.year) + 1) });
     case 'vatSetup': return t(`error.vatSetup.${b.params.reason}`, { rate: String(b.params.rate) });
     case 'periodClosed': {
+      if (b.params.filed) return t('error.periodFiledDrift', { period: b.params.filed });
       const closed = b.params.approved ? t('error.periodApproved', { period: b.params.approved }) : t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;
     }

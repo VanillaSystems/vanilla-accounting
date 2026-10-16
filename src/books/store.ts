@@ -9,7 +9,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
-import type { AccountingConfig, ApprovedReturn, Index, JournalEntry, Receipt } from '../types/index.js';
+import type { AccountingConfig, ApprovedReturn, FiledFigures, Index, JournalEntry, Receipt } from '../types/index.js';
+import { vat } from '../engines/index.js';
 import { APP_FOLDER, findFile, yearPaths, yearsOf, type Workspace, type WorkspacePaths } from '../workspace/workspace.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { ClosedReason } from '../types/api-error.js';
@@ -22,9 +23,11 @@ export type Books = Index & { journalEntries: JournalEntry[]; config: Accounting
 export class ClosedPeriodError extends Error {
   /**
    * `reason` names which refusal (src/types/api-error.ts) when the API's assertOpen threw it;
-   * `approved` the period whose approved return holds the date, when it is held and not filed.
+   * `approved` the period whose approved return holds the date, when it is held and not filed;
+   * `filed` the period filed with the tax authority and not sealed, whose return the change would move the
+   * books away from (r10h-4).
    */
-  constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason, readonly approved?: string) { super(message); }
+  constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason, readonly approved?: string, readonly filed?: string) { super(message); }
 }
 /** A filed quarter's seal no longer matches the books: they read, but are never written. */
 export class SealBrokenError extends ClosedPeriodError {}
@@ -232,6 +235,7 @@ export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
   const heldBy = (date: string | undefined) => (isClosed(date) && !(closedThrough && date! <= closedThrough) ? approved : undefined);
   const closedText = (date: string | undefined) => {
     const held = heldBy(date);
+    if (held?.filed) return `${held.period} ist bei der Steuerbehörde eingereicht, die Bücher weichen von der Abrechnung ab: bis ${held.through} nur Änderungen, die sie zur eingereichten Abrechnung zurückbringen.`;
     return held ? `${held.period} ist freigegeben und wartet auf die Einreichung: bis ${held.through} ändert sich nichts.` : `Periode geschlossen bis ${closedThrough}.`;
   };
   return {
@@ -276,16 +280,41 @@ export class OwnershipError extends Error {}
 const guards = new WeakMap<Books, () => void>();
 
 /**
+ * How far each box and the payable of `held.period` stand from the return filed, in cents
+ * (r10h-4). A change a person makes in a filed, unsealed period passes the write door only when no
+ * distance grows and their sum shrinks: the books come back toward the return.
+ */
+function filedDistance(books: Books, held: ApprovedReturn & { filed: FiledFigures }): Map<string, number> {
+  const now = vat().figures(books.journalEntries, held.period, books.config.vatAdjustments ?? []);
+  const boxes = new Set([...Object.keys(held.filed.figures), ...Object.keys(now.ziffern), 'payable']);
+  const rappen = (x: number | undefined) => Math.round((x ?? 0) * 100);
+  const at = (z: string, f: { figures: Record<string, number>; payable: number }) => (z === 'payable' ? f.payable : f.figures[z]);
+  return new Map([...boxes].map((z) => [z, Math.abs(rappen(at(z, { figures: now.ziffern as Record<string, number>, payable: now.payable })) - rappen(at(z, held.filed)))]));
+}
+
+const filedHoldOf = (books: Books): (ApprovedReturn & { filed: FiledFigures }) | undefined => {
+  const a = books.config?.approvedReturn;
+  return a?.filed ? (a as ApprovedReturn & { filed: FiledFigures }) : undefined;
+};
+
+/**
  * The one write door. Runs `fn` as `actor`, then throws ClosedPeriodError if any closed-period
  * journal entry, closed transaction, or mapping to a closed transaction was changed, added or
  * removed (golden rule 1), and OwnershipError if an actor other than a person changed or removed
- * a person's entry. A saveBooks inside `fn` runs the same checks before it writes.
+ * a person's entry. A saveBooks inside `fn` runs the same checks before it writes. One exception
+ * (r10h-4): in a period filed with the tax authority whose books differ from the return (approvedReturn.filed),
+ * a person's change passes only when it brings the books closer to the figures filed: no box
+ * and not the payable moves further away, and together they come closer. So the books can be
+ * brought back and then sealed; any other change, a run's or a module's, is refused there.
  */
 export function update<T>(books: Books, actor: Actor, fn: (books: Books) => Promise<T>): Promise<T>;
 export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T): T;
 export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | Promise<T>): T | Promise<T> {
   const was = periodLock(books);
   const before = { lockedThrough: was.lockedThrough, ...closedPart(books, was.lockedThrough) };
+  const filedHold = actor.kind === 'person' ? filedHoldOf(books) : undefined;
+  const filedPart = filedHold ? closedPart(books, was.closedThrough) : undefined;
+  const distanceBefore = filedHold ? filedDistance(books, filedHold) : undefined;
   const persons = actor.kind === 'person' ? undefined : personsEntries(books);
   const check = () => {
     const lock = periodLock(books);
@@ -294,7 +323,18 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
     }
     const after = closedPart(books, lock.lockedThrough);
     const changed = (['entries', 'transactions', 'mappings'] as const).flatMap((k) => diff(k, before[k], after[k]));
-    if (changed.length) {
+    if (changed.length && filedHold && filedPart && distanceBefore) {
+      const sealed = closedPart(books, lock.closedThrough);
+      const inFiled = (['entries', 'transactions', 'mappings'] as const).flatMap((k) => diff(k, filedPart[k], sealed[k]));
+      if (inFiled.length) throw new ClosedPeriodError(`Periode geschlossen bis ${lock.closedThrough}. ${inFiled.join('; ')}`, lock.closedThrough);
+      const distanceAfter = filedDistance(books, filedHold);
+      const worse = [...distanceAfter].filter(([z, d]) => d > (distanceBefore.get(z) ?? 0)).map(([z]) => z);
+      const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+      if (worse.length || sum(distanceAfter) >= sum(distanceBefore)) {
+        const why = worse.length ? `die Änderung entfernt die Bücher weiter von der eingereichten Abrechnung (Feld ${worse.join(', ')})` : 'die Änderung bringt die Bücher der eingereichten Abrechnung nicht näher';
+        throw new ClosedPeriodError(`${filedHold.period} ist bei der Steuerbehörde eingereicht: ${why}. Nur Wiederherstellen, dann «Weiter»; eine andere Korrektur als neue Buchung in der offenen Periode.`, lock.closedThrough, undefined, undefined, filedHold.period);
+      }
+    } else if (changed.length) {
       throw new ClosedPeriodError(`${lock.closedText(lock.lockedThrough)} ${changed.join('; ')}`, lock.closedThrough, undefined, lock.heldBy(lock.lockedThrough)?.period);
     }
     if (persons) {

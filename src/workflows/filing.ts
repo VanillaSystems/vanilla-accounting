@@ -66,10 +66,12 @@ const returnOf = (books: Books, key: QuarterKey): PeriodReturn => {
   return { period: key, from, to, figures: ziffern as Record<string, number>, payable };
 };
 
-const sameFigures = (a: PeriodReturn, b: PeriodReturn): boolean => {
+/** The boxes (and the payable) on which two returns differ; empty when they are the same return. */
+const differingBoxes = (a: PeriodReturn, b: PeriodReturn): string[] => {
   const boxes = new Set([...Object.keys(a.figures), ...Object.keys(b.figures)]);
-  return a.payable === b.payable && [...boxes].every((z) => (a.figures[z] ?? 0) === (b.figures[z] ?? 0));
+  return [...[...boxes].filter((z) => (a.figures[z] ?? 0) !== (b.figures[z] ?? 0)).sort(), ...(a.payable === b.payable ? [] : ['payable'])];
 };
+const sameFigures = (a: PeriodReturn, b: PeriodReturn): boolean => differingBoxes(a, b).length === 0;
 
 /**
  * The hold of `key` set or lifted. The hold and closedThrough are the lines the write door never
@@ -81,6 +83,16 @@ function hold(ws: Workspace, books: Books, key: QuarterKey, on: boolean): void {
   if (on ? held?.period === key : !held || held.period !== key) return;
   if (on) books.config.approvedReturn = { period: key, through: derivePeriod(key)!.to };
   else delete books.config.approvedReturn;
+  saveBooks(ws, books);
+}
+
+/**
+ * The hold of a period filed with the tax authority whose books differ from the return (r10h-4): it stays,
+ * with the figures as filed, so the write door takes only changes that bring the books back
+ * (src/books/store.ts update) until «Weiter» seals.
+ */
+function holdFiled(ws: Workspace, books: Books, key: QuarterKey, filed: PeriodReturn): void {
+  books.config.approvedReturn = { period: key, through: derivePeriod(key)!.to, filed: { figures: filed.figures, payable: filed.payable } };
   saveBooks(ws, books);
 }
 
@@ -108,6 +120,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       if (closed && to <= closed) throw refuse('periodFiled', { period: key, through: closed }, `${key} is filed already (closed through ${closed}); a correction is declared on its own form`);
       const today = localToday(new Date(now()));
       if (to >= today) throw refuse('periodRunning', { period: key, ends: to, from: addDays(to, 1) }, `${key} runs until ${to}: it can be filed from ${addDays(to, 1)}`);
+      // A period filed with the tax authority whose books still differ from the return is not prepared again: the books are restored and «Weiter» seals (r10h-4).
+      if (books.config.approvedReturn?.period === key && books.config.approvedReturn.filed) throw refuse('filedNotSealed', { period: key }, `${key} is filed with the tax authority and not sealed: restore the books, then «Weiter» on the filing run`);
       // «Zurück» from the filing task, or a review the books outgrew: the approval is taken back and the period is free again.
       if (run?.mode === 'live') { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key, false); }
       const ret = returnOf(books, key);
@@ -156,10 +170,11 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // The books sealed are the books filed: a change that got past the hold stops here, with the figures.
       const filedReturn = input.return as PeriodReturn;
       const today = returnOf(books, key);
-      if (!sameFigures(filedReturn, today)) {
-        // The hold gave way: the person restores the bookings in the app, then «Weiter» (r8h-26).
-        hold(ws, books, key, false);
-        throw refuse('figuresChanged', { period: key, filed: filedReturn.payable.toFixed(2), now: today.payable.toFixed(2) }, `${key}: the books (payable ${today.payable.toFixed(2)}) differ from the return filed (payable ${filedReturn.payable.toFixed(2)}); nothing closed or sealed until they are restored`);
+      const boxes = differingBoxes(filedReturn, today);
+      if (boxes.length) {
+        // The hold stays, in its filed mode: the person restores the bookings in the app (only changes that bring them back pass), then «Weiter» (r8h-26, r10h-4).
+        holdFiled(ws, books, key, filedReturn);
+        throw refuse('figuresChanged', { period: key, filed: filedReturn.payable.toFixed(2), now: today.payable.toFixed(2), boxes: boxes.filter((z) => z !== 'payable').join(', ') }, `${key}: the books (payable ${today.payable.toFixed(2)}, boxes ${boxes.join(', ')}) differ from the return filed (payable ${filedReturn.payable.toFixed(2)}); nothing closed or sealed until they are restored`);
       }
       if (!closed || closed < end) {
         const next = closed ? periodKeyOf(addDays(closed, 1), ws.filingLength) : key;

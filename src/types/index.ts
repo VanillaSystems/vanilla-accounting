@@ -205,8 +205,15 @@ export type BookedBy =
 /** A filing period: a quarter ("2026-Q2") for a firm filing quarterly, a half year ("2026-H1") for one filing half-yearly. */
 export type QuarterKey = `${number}-Q${1 | 2 | 3 | 4}` | `${number}-H${1 | 2}`;
 
-/** A return approved for filing: its period and the period's last day, through which the books are held. */
-export interface ApprovedReturn { period: QuarterKey; through: string }
+/**
+ * A return approved for filing: its period and the period's last day, through which the books are
+ * held. `filed` (r10h-4): «Eingereicht» found the books differ from the return filed with the tax authority;
+ * the hold stays, and the write door lets a person make only changes that bring every box and
+ * the payable back to these figures (src/books/store.ts update), until «Weiter» seals.
+ */
+export interface ApprovedReturn { period: QuarterKey; through: string; filed?: FiledFigures }
+/** The return's figures as filed: each box and the payable. */
+export interface FiledFigures { figures: Record<string, number>; payable: number }
 
 export interface AccountingConfig {
   closedThrough?: string;

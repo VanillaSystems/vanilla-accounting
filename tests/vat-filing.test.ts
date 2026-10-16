@@ -268,10 +268,22 @@ test('«Eingereicht» never seals books that differ from the filed XML: a change
   await engine.idle();
   const state = run().state;
   assert.equal(state.status, 'stuck');
-  assert.deepEqual(state.status === 'stuck' ? state.why : undefined, { code: 'figuresChanged', params: { period: Q, filed: approved.toFixed(2), now: now.toFixed(2) } });
+  assert.deepEqual(state.status === 'stuck' ? state.why : undefined, { code: 'figuresChanged', params: { period: Q, filed: approved.toFixed(2), now: now.toFixed(2), boxes: '405, 479, 500' } });
   assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31', 'nothing closed');
   assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json')), false, 'nothing sealed');
-  assert.equal(loadBooks(ws).config.approvedReturn, undefined, 'the hold is lifted, so the books can be restored in the app (r8h-26)');
+  // r10h-4: the hold stays, in its filed mode: the period is filed at the ESTV, the books must come back to the return.
+  const held = loadBooks(ws).config.approvedReturn;
+  assert.deepEqual([held?.period, held?.through, held?.filed?.payable], [Q, '2026-06-30', approved], 'the period stays held, with the figures as filed (r10h-4)');
+
+  // Only a change that brings the books back to the filed return gets through the write door.
+  const drift = loadBooks(ws);
+  const another = drift.journalEntries.find((x) => inQ2(x) && x.vatCode === 'I81' && x.id !== flipped)!;
+  assert.throws(() => update(drift, PERSON, (b) => { b.journalEntries.find((x) => x.id === another.id)!.vatCode = 'I0'; }), (e: unknown) => e instanceof ClosedPeriodError && e.filed === Q, 'an unrelated change that moves a Ziffer further from the return is refused, naming the filed period');
+  const same = loadBooks(ws);
+  assert.throws(() => update(same, PERSON, (b) => { b.journalEntries.find((x) => x.id === flipped)!.description = 'Text geändert'; }), (e: unknown) => e instanceof ClosedPeriodError && e.filed === Q, 'a change that brings the books no closer is refused too: the filed period changes only back toward the return');
+  assert.throws(() => update(same, { kind: 'run', id: 'r', workflow: 'w' }, (b) => { b.journalEntries.find((x) => x.id === flipped)!.vatCode = 'I81'; }), ClosedPeriodError, 'a run never writes there, not even the restoring change');
+  assert.ok(periodLock(same).isClosed('2026-05-15'), 'runs and scripts still see the period as closed');
+  assert.ok(periodLock(same).heldBy('2026-05-15')?.filed, 'and the hold says it is filed');
 
   const back = loadBooks(ws);
   update(back, PERSON, (b) => { b.journalEntries.find((x) => x.id === flipped)!.vatCode = 'I81'; });
@@ -280,6 +292,26 @@ test('«Eingereicht» never seals books that differ from the filed XML: a change
   await engine.idle();
   assert.equal(run().state.status, 'done', 'restored: «Weiter» seals');
   assert.equal(loadBooks(ws).config.closedThrough, '2026-06-30');
+  assert.equal(loadBooks(ws).config.approvedReturn, undefined, 'sealed: the hold gave way to the close');
+});
+
+test('«Weiter» after a stuck seal compares every Ziffer, not the payable alone: two changes that cancel in the payable keep the run stuck (r10h-4)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
+  await engine.idle();
+  const approved = (engine.run(r.ok ? r.run! : '')!.steps[0].output!.return as PeriodReturn).payable.toFixed(2);
+  const books = loadBooks(ws);
+  // Input tax moved from Ziffer 405 to 400: the same 8.1 %, the payable unchanged.
+  books.journalEntries.find((x) => inQ2(x) && x.vatCode === 'I81')!.vatCode = 'M81';
+  saveBooks(ws, books);
+  await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'filed' });
+  await engine.idle();
+  const state = engine.run(r.ok ? r.run! : '')!.state;
+  assert.equal(state.status, 'stuck', 'the books differ from the return in their Ziffern');
+  assert.deepEqual(state.status === 'stuck' ? [state.why?.code, state.why?.params] : [], ['figuresChanged', { period: Q, filed: approved, now: approved, boxes: '400, 405' }]);
 });
 
 test('a VAT question open about a payment of the period withholds the filing: the review withholds «Freigegeben», the XML step stops with questionsOpen and holds nothing; answered or closed, «Weiter» goes on; a question asked after the approval is closed with the reason at the seal (r8h-24, r7h-29)', async () => {

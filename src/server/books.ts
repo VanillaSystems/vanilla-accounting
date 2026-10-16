@@ -59,9 +59,14 @@ export const CLOSED: Record<ClosedReason, string> = {
   openingBalance: 'Die Eröffnungssaldi eines Jahres mit geschlossenen Perioden bleiben, wie sie sind.',
 };
 
+/**
+ * Refuses a write dated in a closed or held period. A period filed with the tax authority whose books differ
+ * from the return (the hold's `filed`, r10h-4) lets the write through to the write door, which
+ * keeps only a change that brings the books back (src/books/store.ts update).
+ */
 export function assertOpen(books: Pick<Index, 'config'>, dates: Array<string | undefined>, reason: ClosedReason): void {
   const lock = periodLock(books);
-  const date = dates.find(lock.isClosed);
+  const date = dates.find((d) => lock.isClosed(d) && !lock.heldBy(d)?.filed);
   if (date) throw new ClosedPeriodError(`${lock.closedText(date)} ${CLOSED[reason]}`, lock.closedThrough, reason, lock.heldBy(date)?.period);
 }
 
@@ -80,7 +85,7 @@ export function receiptDates(books: Pick<Index, 'transactions' | 'journalEntries
 
 /** The code of a refusal (src/types/api-error.ts) the UI says in the person's language; none for one without. */
 export function refusalOf(err: unknown): ApiRefusal | undefined {
-  if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}), ...(err.approved ? { approved: err.approved } : {}) } };
+  if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}), ...(err.approved ? { approved: err.approved } : {}), ...(err.filed ? { filed: err.filed } : {}) } };
   return err instanceof RequestError ? err.refusal : undefined;
 }
 
