@@ -103,14 +103,21 @@ from its structure (src/booking/rules.ts), so a rule needs no AI to prepare its 
   **Verwerfen**. Behalten saves exactly that draft file, as the person saw it, as one save of its
   own; Änderungen shows the same card for a drafted rules file. A removal the person asked for is
   confirmed with that button, never by typing a confirmation.
+- **The card shows what it would do.** Under each added or changed rule the card lists, computed
+  in code, the payments of the open year it matches (the count, the newest five with the booking
+  it would make and their booking today), a changed rule as it was and as it would be, and the
+  other rules that hold for the same payments (src/booking/rule-preview.ts). A rule that
+  recognises payments only by single words, without a business, payer or amount, is kept only
+  with **Trotzdem behalten**; Speichern refuses it. A removal says how many of its questions
+  wait; keeping it closes them.
 - **Refused when kept.** A rule the app cannot carry out (one written as sentences, an account
   the chart lacks, a VAT code it does not know, a field it does not read) is refused by Behalten
   and by Speichern alike, with the reason, and the file stays as it was. Rules written as
   sentences before this (in business files, by Claude Code) still load: they show as notes for
   the AI and decide nothing.
 - **Firma › Regeln** lists every rule of the company in plain words (notes as written), where it
-  came from (`source: wish …`, `correction …`, the app, or its source as written), and how many
-  payments it booked. **Ausschalten** (`off: true`) and **Löschen** change the file in place,
+  came from (`source: wish …`, `correction …`, the app, or its source as written), how many
+  payments it booked, and how many it held to ask about. **Ausschalten** (`off: true`) and **Löschen** change the file in place,
   its comments kept, and save at once; the toast's **Rückgängig** puts the file back as it was,
   unless it changed since.
 

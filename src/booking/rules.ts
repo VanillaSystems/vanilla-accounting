@@ -17,7 +17,8 @@
  * `when` takes counterparty (a business's file id), payer (the other party's IBAN or its
  * counterparty text as a key, src/knowledge/payer.ts: what an answered question keeps), text (a
  * pattern over the payment's text), direction (in, out), amount ({ over, under }, in the books'
- * currency) and account (the bank account that paid); all must hold. A rule whose `when` and
+ * currency) and account (the bank account that paid); all must hold. `then.private` (a percent)
+ * books that share on the owner's account without VAT and the rest as the rule says. A rule whose `when` and
  * `then` are sentences is a note for
  * the AI and people: it loads and shows, but nothing carries it out, so a new one is refused when
  * it is kept (src/saving/rules.ts).
