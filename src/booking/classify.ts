@@ -27,6 +27,7 @@ import { codeSignFor } from '../accounting/code-sign.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
+import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
@@ -408,6 +409,30 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
     .map((e) => ({ ...e, rule: placed.rule.id }));
 }
 
+/**
+ * A collective payment no rule decides as a whole, by its parts (r10h-14): each part is a payment
+ * of its own to the rules (its payer, its amount, its reference as the text), and a rule that books
+ * books that part's line. Undefined when no part is decided. `whole`: every part was, so the lines
+ * add up to the payment; else the payment is booked in part and the rest is the person's (a run
+ * never books over a payment booked in part, src/workflows/actions.ts). A rule that asks, or books
+ * a payout's fees, decides no part.
+ */
+function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean } | undefined {
+  const parts = context.rules?.length ? partsOf(tx) : undefined;
+  if (!parts) return undefined;
+  const sign = tx.amount < 0 ? -1 : 1;
+  const decided = parts.map((p) => {
+    const part: BankTransaction = { ...tx, amount: sign * Math.abs(p.amount), description: partText(p), counterparty: p.counterparty, counterpartyIban: p.counterpartyIban, parts: undefined, reference: p.reference };
+    const routing = identify(signalsOfTransaction(part, []), context.counterparties ?? []);
+    const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
+    const placed = ruleFor(context.rules!, { tx: part, counterparty: routing.kind === 'known' ? routing.counterparty : undefined, bankAccount: bankAccountFor(tx, context.bankAccounts), amount: part.amount * rate });
+    const then = placed?.rule.then;
+    return placed && then?.kind === 'book' && !then.booking.fees ? ruleEntries(books, part, placed, then.booking, context, fx) : undefined;
+  });
+  const entries = decided.flatMap((e) => e ?? []);
+  return entries.length ? { entries, whole: decided.every(Boolean) } : undefined;
+}
+
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
 /** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts. */
@@ -500,6 +525,8 @@ export interface ClassifyOutcome {
   asked: Asked[];
   /** Payments no rule decided, left unbooked because there is no model. */
   unasked: string[];
+  /** Collective payments booked in part, one line per part a rule decided; the rest is the person's (r10h-14). Also in `classified`. */
+  partly: string[];
 }
 
 /**
@@ -512,7 +539,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const { ask, fx, context, log = () => {}, afterWave, proposeAsked = true } = deps;
   const lock = periodLock(books);
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
-  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [] };
+  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
@@ -533,6 +560,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         outcome.classified.push(tx.ref);
         continue;
       }
+    }
+    const byParts = placed ? undefined : partRuleEntries(books, tx, context, fx);
+    if (byParts) {
+      books.journalEntries.push(...byParts.entries);
+      log(`  ${tx.ref}  → rules by part${byParts.whole ? '' : ', the rest waits for the person'}`);
+      outcome.classified.push(tx.ref);
+      if (!byParts.whole) outcome.partly.push(tx.ref);
+      continue;
     }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book' && then.booking.fees && mappedReceipts(books, tx).length) {

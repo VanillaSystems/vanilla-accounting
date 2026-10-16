@@ -302,6 +302,8 @@ export interface BankTransactionPart {
   counterparty: string;
   /** QR / creditor reference or remittance text. */
   reference?: string;
+  /** The other party's IBAN as the bank names it for this part: a payer rule keyed by IBAN decides the part (r10h-14). */
+  counterpartyIban?: string;
 }
 
 export interface BankTransaction {

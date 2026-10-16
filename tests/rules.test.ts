@@ -308,3 +308,35 @@ test('«Übernehmen» never replaces a booking a person made', async () => {
   await engine.idle();
   assert.deepEqual(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'REF-CASH-800').map((e) => e.id), ['mine-800']);
 });
+
+const PAYER_RULE = `${RULES}      - id: sale-keller
+        when: { payer: CH4431999123000889012, direction: in }
+        then: { account: "3400", vat: V81 }
+        source: correction 2026-10-15
+      - id: sale-weber
+        when: { payer: weberanna, direction: in }
+        then: { account: "3400", vat: V0 }
+        source: correction 2026-10-15
+`;
+const batchIn = (ref: string, parts: BankTransaction['parts']) =>
+  tx({ ref, direction: 'CRDT', amount: parts!.reduce((s, p) => s + p.amount, 0), description: 'Sammelgutschrift', parts });
+
+test('a payer rule decides the part of a collective payment it matches: that part is booked by the rule, the other waits for the person; every part ruled books the whole payment (r10h-14)', async () => {
+  const ws = company(PAYER_RULE);
+  const books = booksOf([
+    batchIn('BATCH-1', [
+      { amount: 1500, currency: 'CHF', counterparty: 'Familie Keller', counterpartyIban: 'CH44 3199 9123 0008 8901 2', reference: 'Rechnung 2026-030' },
+      { amount: 800, currency: 'CHF', counterparty: 'Hans Meier', reference: 'Rechnung 2026-031' },
+    ]),
+    batchIn('BATCH-2', [
+      { amount: 1500, currency: 'CHF', counterparty: 'Familie Keller', counterpartyIban: 'CH4431999123000889012' },
+      { amount: 400, currency: 'CHF', counterparty: 'Weber Anna' },
+    ]),
+  ]);
+  const out = await classifyTransactions(books, books.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  const by = (ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '', e.rule]);
+  assert.deepEqual(by('BATCH-1'), [['1021', '3400', 1500, 'V81', 'sale-keller']], 'Keller\'s part by the payer rule; Meier\'s part is the person\'s');
+  assert.match(books.journalEntries[0].description ?? '', /Familie Keller/);
+  assert.deepEqual(by('BATCH-2'), [['1021', '3400', 1500, 'V81', 'sale-keller'], ['1021', '3400', 400, 'V0', 'sale-weber']], 'every part decided: the whole payment booked by rules');
+  assert.deepEqual([out.classified.sort(), out.partly, out.unasked], [['BATCH-1', 'BATCH-2'], ['BATCH-1'], []], 'no model was asked: the rest of BATCH-1 is the person\'s, not «no rule decided»');
+});

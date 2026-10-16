@@ -131,6 +131,17 @@ test('r9k-6: a batch part without RmtInf keeps its AddtlTxInf as reference (Raif
   ]);
 });
 
+test('r10h-14: a batch part keeps its payer\'s IBAN, so a payer rule keyed by IBAN decides that part', () => {
+  const detail = (amt: string, who: string, iban: string) =>
+    `<TxDtls><Amt Ccy="CHF">${amt}</Amt><RltdPties><Dbtr><Pty><Nm>${who}</Nm></Pty></Dbtr>${iban ? `<DbtrAcct><Id><IBAN>${iban}</IBAN></Id></DbtrAcct>` : ''}</RltdPties></TxDtls>`;
+  const [batch] = parse(ntry(`<Ntry><AcctSvcrRef>R-IBAN</AcctSvcrRef><Amt Ccy="CHF">30.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-10-20</Dt></BookgDt>
+<NtryDtls>${detail('10.00', 'Alpha AG', 'CH44 3199 9123 0008 8901 2')}${detail('20.00', 'Beta GmbH', '')}</NtryDtls></Ntry>`));
+  assert.deepEqual(batch.parts, [
+    { amount: 10, currency: 'CHF', counterparty: 'Alpha AG', counterpartyIban: 'CH4431999123000889012' },
+    { amount: 20, currency: 'CHF', counterparty: 'Beta GmbH' },
+  ]);
+});
+
 function tx(ref: string, date: string, direction: 'CRDT' | 'DBIT', amount: number, currency = 'CHF'): BankTransaction {
   return { ref, bank: 'Wise', date, amount, currency, direction, description: '' };
 }

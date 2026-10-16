@@ -143,10 +143,12 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const parts = txDtlsArr.length > 1
       ? txDtlsArr.map((d) => {
           const ref = remittanceRef(d.RmtInf) ?? (String(d.AddtlTxInf ?? '').trim() || undefined);
+          const iban = String((direction === 'DBIT' ? d.RltdPties?.CdtrAcct : d.RltdPties?.DbtrAcct)?.Id?.IBAN ?? '').replace(/\s+/g, '').toUpperCase();
           return {
             ...getAmt(d.Amt ?? d.AmtDtls?.TxAmt?.Amt),
             counterparty: counterpartyOf(d),
             ...(ref !== undefined ? { reference: String(ref) } : {}),
+            ...(iban ? { counterpartyIban: iban } : {}),
           };
         })
       : undefined;
