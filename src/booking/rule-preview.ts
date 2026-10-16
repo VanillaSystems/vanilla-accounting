@@ -112,7 +112,8 @@ function wouldBook(books: Books, tx: BankTransaction, booking: RuleBooking, cont
   const mapped = mappedReceipts(books, tx);
   const bank = bankAccountFor(tx, context.bankAccounts);
   const today = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
-  const split = booking.fees && mapped.length && today.length ? payoutLines(today, bank, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue') : undefined;
+  const read = today.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '' }));
+  const split = booking.fees && mapped.length && today.length ? payoutLines(read, bank, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue') : undefined;
   if (split) return split.map((e) => ({ account: e.accountDebit === bank ? e.accountCredit : e.accountDebit, ...(e.vatCode ? { vat: e.vatCode } : {}), amount: e.amount }));
   return ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount);
 }

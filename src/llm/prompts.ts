@@ -105,12 +105,17 @@ export function buildVisionPrompt(absPdfPath: string): string {
     'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar.';
 }
 
+/** A line's role in a payout report (rule 9a): the code books it on the rule's accounts whatever sides and sign the model wrote (src/booking/classify.ts payoutLines). */
+export type PayoutKind = 'sale' | 'refund' | 'fee';
+
 export interface ClassifyEntry {
   accountDebit: string;
   accountCredit: string;
   amount: number;
   vatCode: string;
   description: string;
+  /** Only for a payout report's lines. */
+  kind?: PayoutKind;
 }
 
 export interface BatchClassifyResult {
@@ -186,6 +191,8 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    yet the sales are domestic sales: book the GROSS sales on the revenue account with V81 (the normal rate; another
    rate only when the report shows it), a refund in the report with -V81, and the fees as their own row on the
    bank-fee account with I0 (payment processing is exempt: no input tax, no Bezugsteuer). The rows sum to the payout.
+   Give every row of a payout report its role, "kind": "sale", "refund" or "fee", and its amount as a positive
+   number; the role decides the accounts and codes, so a fee is never written as a negative sale.
    Without the report: the whole payout on the revenue account with V81.
 9b. Shopify MONTHLY VAT correction (Vorsteuer on transaction fees) — a SEPARATE booking, not a sales order.
    The monthly Shopify billing statement ("Payments Invoice") shows the 8.1% Swiss MWST on the fees that the

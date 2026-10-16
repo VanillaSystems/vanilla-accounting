@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext } from '../llm/prompts.js';
+import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext, type PayoutKind } from '../llm/prompts.js';
 import { NoClaudeError, type AskOptions } from '../llm/ask.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
@@ -293,23 +293,37 @@ export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, swis
   return [{ ...whole, amount: (total - own) / 100 }, { account: owner, amount: own / 100 }];
 }
 
+/** A line of a payout report as read: its sides (an empty one is the bank), its amount with the sign the reader wrote, its words, and its role when the reader named it. */
+export interface PayoutRead { accountDebit: string; accountCredit: string; amount: number; description: string; kind?: PayoutKind }
+
+/** The reader's own words for a provider's fee, in the report's languages: the fallback when a line names no role and sits on revenue. */
+const FEE_WORDS = /geb[üu]hr|\bfee|frais|commission|provision|kommission|spesen|\bcosti\b/i;
+
 /**
- * A payout rule (RuleBooking.fees) applied to the model's reading of the payout report: each line
- * that brings money into the bank is a sale on the rule's account with its code; a line that takes
- * money out is a refund on that account (the code's minus) when the reading put it on revenue, else
- * the provider's fee on fees.account with fees.vat. The figures stay the reading's; accounts and
- * codes are the rule's. Undefined: a line off the bank, which no payout has.
+ * A payout rule (RuleBooking.fees) applied to the model's reading of the payout report, normalised
+ * in code so that the same report gives the same booking whatever sides and sign the reading wrote
+ * (r8h-20): each line's role is the one it names (`kind`), else its structure: a minus flips the
+ * sides, money into the bank is a sale, money out of it a refund when it sits on revenue and does
+ * not read as a fee, else the provider's fee. A sale lands on the rule's account with its code,
+ * a refund there with the code's minus, a fee on fees.account with fees.vat; amounts are positive,
+ * never negative revenue. The figures stay the reading's. Undefined: a line off the bank with no
+ * role, which no payout has.
  */
-export function payoutLines(entries: readonly JournalEntry[], bankAccount: string, booking: RuleBooking, fees: NonNullable<RuleBooking['fees']>, isRevenue: (account: string) => boolean): JournalEntry[] | undefined {
-  const sale = ruleVatCode(booking.vat, { direction: 'CRDT' }, true);
-  const refund = ruleVatCode(booking.vat, { direction: 'DBIT' }, true);
-  const out: JournalEntry[] = [];
+export function payoutLines(entries: readonly PayoutRead[], bankAccount: string, booking: RuleBooking, fees: NonNullable<RuleBooking['fees']>, isRevenue: (account: string) => boolean): ClassifyEntry[] | undefined {
+  const sale = ruleVatCode(booking.vat, { direction: 'CRDT' }, true) ?? '';
+  const refund = ruleVatCode(booking.vat, { direction: 'DBIT' }, true) ?? '';
+  const out: ClassifyEntry[] = [];
   for (const e of entries) {
-    const { vatCode: _, ...rest } = e;
-    if (e.accountDebit === bankAccount) out.push({ ...rest, accountCredit: booking.account, ...(sale ? { vatCode: sale } : {}) });
-    else if (e.accountCredit === bankAccount && isRevenue(e.accountDebit)) out.push({ ...rest, accountDebit: booking.account, ...(refund ? { vatCode: refund } : {}) });
-    else if (e.accountCredit === bankAccount) out.push({ ...rest, accountDebit: fees.account, vatCode: fees.vat });
-    else return undefined;
+    let debit = e.accountDebit || (e.accountCredit ? bankAccount : '');
+    let credit = e.accountCredit || (e.accountDebit ? bankAccount : '');
+    if (e.amount < 0) [debit, credit] = [credit, debit];
+    const kind: PayoutKind | undefined = e.kind
+      ?? (debit === bankAccount ? 'sale' : credit === bankAccount ? (isRevenue(debit) && !FEE_WORDS.test(e.description) ? 'refund' : 'fee') : undefined);
+    if (!kind) return undefined;
+    const amount = Math.abs(e.amount);
+    out.push(kind === 'sale' ? { accountDebit: bankAccount, accountCredit: booking.account, amount, vatCode: sale, description: e.description }
+      : kind === 'refund' ? { accountDebit: booking.account, accountCredit: bankAccount, amount, vatCode: refund, description: e.description }
+        : { accountDebit: fees.account, accountCredit: bankAccount, amount, vatCode: fees.vat, description: e.description });
   }
   return out;
 }
@@ -489,10 +503,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const said = result[tx.ref].reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
         const payout = payouts.get(tx.ref);
-        const read = payout && payoutLines(
-          entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, { ...context, payers: payerNames([tx]) })}; ${wordsIn('de').t('rules.say.payoutRead')}` }),
-          bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue',
-        )?.map((e) => ({ ...e, rule: payout.placed.rule.id }));
+        const normalised = payout && payoutLines(llmEntries, bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue');
+        const read = payout && normalised && entriesFor(tx, normalised, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, { ...context, payers: payerNames([tx]) })}; ${wordsIn('de').t('rules.say.payoutRead')}` })
+          .map((e) => ({ ...e, rule: payout.placed.rule.id }));
         if (payout && !read) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: the reading of the payout report is no payout`);
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);

@@ -128,7 +128,7 @@ const negativeSales: NonNullable<ClassifyDeps['ask']> = async (prompt) => {
 };
 
 /** The same reading without the roles: the sign and the model's own words for the line decide. */
-const negativeSalesUnnamed: NonNullable<ClassifyDeps['ask']> = async (prompt) => JSON.stringify(JSON.parse(await negativeSales(prompt), (k, v) => (k === 'kind' ? undefined : v)));
+const negativeSalesUnnamed: NonNullable<ClassifyDeps['ask']> = async (prompt, options) => JSON.stringify(JSON.parse(await negativeSales(prompt, options), (k, v) => (k === 'kind' ? undefined : v)));
 
 test('r8h-20: a reading that writes the fees and the refund as negative sales is normalised in code: fees on the rule\'s fee account and code, sales and refunds on its account with the right sign, never negative revenue, the same for every reading of the report', async () => {
   const ws = company();
