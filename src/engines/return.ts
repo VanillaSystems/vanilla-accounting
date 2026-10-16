@@ -69,6 +69,8 @@ export interface ReturnEngine {
   complete(period: QuarterKey, declared: Record<BoxId, number>): ReturnFigures & { payable: number };
   /** The return today's books declare for a quarter: what a filing would send. */
   figures(entries: JournalEntry[], period: QuarterKey, adjustments: VatAdjustment[]): ReturnFigures & { payable: number };
+  /** The report of a filing period with the figures the return files: the page and the CLI show these. */
+  filedReport(entries: JournalEntry[], period: QuarterKey, adjustments: VatAdjustment[]): VatReport;
 }
 
 /** The tax on a rate row's declared amount, full precision: a supply is gross and holds its tax; an acquisition is net and a net-rate row gross, the rate on top of either. */
@@ -204,7 +206,17 @@ export function returnEngine(j: Jurisdiction, setup?: VatSetup): ReturnEngine {
 
   // The jurisdiction's statutory rates, whatever form the firm files: a receipt's 8.1 % is domestic for a net-rate firm too.
   const domestic = new Set(Object.values(j.rates.rows).map((row) => row.rate));
-  return { codes, form: r, rateRows, isDomesticRate: (rate) => domestic.has(rate), vatLine, adjustmentsFor, lines, report, complete, figures };
+  function filedReport(entries: JournalEntry[], period: QuarterKey, adjustments: VatAdjustment[]): VatReport {
+    const rep = report(entries, period, adjustments);
+    const fig = figures(entries, period, adjustments);
+    const derived = new Set(derivedOrder);
+    const rates = rep.rates.map((x) => ({ ...x, tax: roundCHF(taxOfRow(x.row, fig.ziffern[x.row.ziffer] ?? 0)) }));
+    const taxOf = new Map(rates.filter((x) => x.row.kind === 'acquisition').map((x) => [x.row.ziffer, x.tax]));
+    const ziffern = rep.ziffern.map((z) => (derived.has(z.number) && fig.ziffern[z.number] !== undefined ? { ...z, amount: fig.ziffern[z.number] } : taxOf.has(z.number) ? { ...z, amount: taxOf.get(z.number)! } : z));
+    return { ...rep, ziffern, rates, toPay: Math.max(0, fig.payable), credit: Math.max(0, roundCHF(-fig.payable)) };
+  }
+
+  return { codes, form: r, rateRows, isDomesticRate: (rate) => domestic.has(rate), vatLine, adjustmentsFor, lines, report, complete, figures, filedReport };
 }
 
 /** The tax in an entry's amount, in rappen; the amount is gross unless the code says net or tax; a net-rate code's tax is the rate on the gross. */

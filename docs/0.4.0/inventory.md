@@ -174,16 +174,16 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/vat/filed.ts` | ESTV 1 |
 | `src/app/areas/vat/form0535.ts` | ESTV 1, Ziffer 3, form 0535 1 |
 | `src/app/areas/vat/links.tsx` | MWST 1 |
-| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 10, eCH-0217 1, form 0535 3, Rappen 3 |
+| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 10, form 0535 3, Rappen 2 |
 | `src/app/areas/vat/vat.tsx` | CHF 1, MWST 1, Ziffer 6, form 0535 2 |
 | `src/app/areas/vat/view.ts` | MWST 1, Ziffer 2, form 0535 1 |
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 39, MWST 217, ESTV 31, Ziffer 50, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/en.ts` | CHF 39, MWST 4, ESTV 18, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
-| `src/app/i18n/locales/fr.ts` | CHF 39, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/it.ts` | CHF 39, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 41, MWST 217, ESTV 31, Ziffer 50, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/en.ts` | CHF 41, MWST 4, ESTV 18, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
+| `src/app/i18n/locales/fr.ts` | CHF 41, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/it.ts` | CHF 41, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 1 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |
@@ -199,7 +199,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/vat-ech0217.ts` | CHF 1, MWST 2, ESTV 1, eCH-0217 1, form 0535 1 |
 | `src/cli/vat-report-html.ts` | CHF 2, MWST 5, ESTV 3, Ziffer 9 |
 | `src/cli/vat-report.ts` | CHF 2, MWST 3, Ziffer 5, form 0535 1 |
-| `src/cli/year-close-text.ts` | CHF 10, ESTV 1, camt.053 1 |
+| `src/cli/year-close-text.ts` | CHF 11, ESTV 1, camt.053 1 |
 | `src/cli/year-close.ts` | CHF 4, ESTV 3, form 0535 1 |
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |

@@ -8,7 +8,7 @@
  * Usage: npm run vat-report                 # every quarter of the current year so far, plus H1
  *        npm run vat-report -- 2026-Q1      # a single period
  */
-import type { Index } from '../types/index.js';
+import type { Index, QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod, filingKeyOf, isFilingKey } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -32,7 +32,8 @@ function fmt(n: number): string {
 function printPeriod(label: string, index: Index, from: string, to: string, detail: boolean) {
   const entries = index.journalEntries ?? [];
   const adjustments = index.config?.vatAdjustments ?? [];
-  const rep = vat().report(entries, label, adjustments);
+  // A filing period prints the figures the return files (the page's, the XML's); a year or a half-year sum print the entries' tax (r10c-5).
+  const rep = isFilingKey(label, filing().length) ? vat().filedReport(entries, label as QuarterKey, adjustments) : vat().report(entries, label, adjustments);
   const lines = detail ? vat().lines(entries, label, adjustments) : {};
   console.log(`\n${'='.repeat(72)}`);
   console.log(`  MWST-Abrechnung  ${label}   (${from} … ${to})`);
