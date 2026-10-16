@@ -194,7 +194,7 @@ function StatementRow({ r, byMonth, same, sel, searching, bad, onSelect }: { r: 
   const sub = !s.file ? t(s.running ? 'bank.running' : 'bank.missing') : searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
   return (
     <div className={`row${sel ? ' sel' : ''}${!s.file && !s.running ? ' missing' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-stmt={s.key} onClick={() => onSelect(s.key)}>
-      <span className="d mono">{same ? <span className="sr">{formatDate(s.to)}</span> : formatDate(s.to)}</span>
+      <span className="d mono">{same ? <span className="sr">{formatDate(s.to)}</span> : <><span className="dl">{formatDate(s.to)}</span><span className="ds">{formatDate(s.to).slice(0, 6)}</span></>}</span>
       <span className="t">{bad && I.dot}{byMonth ? s.account.label : statementName(s)} <small>{sub}{r.open > 0 && <> · <span className="wn">{t('bank.nWithoutReceipt', { n: r.open })}</span></>}</small></span>
       <span className="a mono">{r.c?.close != null ? fmt(r.c.close) : ''}</span>
     </div>

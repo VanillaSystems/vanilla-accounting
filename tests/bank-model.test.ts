@@ -103,6 +103,47 @@ test('a payment\'s statement: the one holding its date; none when paid privately
   assert.equal(b.statementOf(b.txByRef.get('M1')!), undefined);
 });
 
+test('several statements in one month: each its own key, totals, and payments; a payment opens the statement that holds it (r4t-1)', () => {
+  const oct = books({
+    transactions: [tx('A1', '2026-10-02', -40), tx('A2', '2026-10-14', 1000), tx('B1', '2026-10-15', -89), tx('C1', '2026-10-22', 250), tx('C2', '2026-10-28', -10)],
+    bankStatements: [
+      { bank: 'Raiffeisen', filename: 'camt_14-10.xml', fromDate: '2026-10-01', toDate: '2026-10-14' },
+      { bank: 'Raiffeisen', filename: 'camt_15-10.xml', fromDate: '2026-10-15', toDate: '2026-10-15' },
+      { bank: 'Raiffeisen', filename: 'camt_31-10.xml', fromDate: '2026-10-16', toDate: '2026-10-31' },
+    ],
+    statementBalances: [
+      { account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-09-30', amount: 100, source: 'camt', sourceFile: 'a' },
+      { account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-10-14', amount: 1060, source: 'camt', sourceFile: 'a' },
+      { account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-10-15', amount: 971, source: 'camt', sourceFile: 'b' },
+      { account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-10-31', amount: 1211, source: 'camt', sourceFile: 'c' },
+    ],
+    journalEntries: [],
+  });
+  const b = bankOf(oct, ACCOUNTS, '2026-11-02');
+  const files = b.statements('2026-10-01', '2026-10-31').filter((s) => s.file && s.account.account === '1021');
+  assert.deepEqual(files.map((s) => s.key), ['1021-2026-10-16', '1021-2026-10-15', '1021-2026-10-01']);
+  assert.deepEqual(files.map((s) => b.byKey(s.key)!.file!.filename), ['camt_31-10.xml', 'camt_15-10.xml', 'camt_14-10.xml'], 'each key opens its own file');
+  const c = b.check(b.byKey('1021-2026-10-15')!);
+  assert.deepEqual({ open: c.open, inc: c.inc, out: c.out, close: c.close, n: c.n, ok: c.ok }, { open: 1060, inc: 0, out: 89, close: 971, n: 1, ok: true }, 'the 15.10. statement has its own day, not the month');
+  const late = b.check(b.byKey('1021-2026-10-16')!);
+  assert.deepEqual({ inc: late.inc, out: late.out, close: late.close, ok: late.ok }, { inc: 250, out: 10, close: 1211, ok: true });
+  const st = b.statementOf(b.txByRef.get('C1')!)!;
+  assert.equal(st.key, '1021-2026-10-16');
+  assert.deepEqual(b.payments(st).map((p) => p.ref), ['C2', 'C1'], 'the unbooked payment is in the statement its link opens');
+  assert.equal(b.byKey('1021-2026-10')?.file?.filename, 'camt_14-10.xml', 'an old month link opens the month\'s first statement');
+});
+
+test('two statements starting the same day get keys of their own', () => {
+  const b = bankOf(books({ bankStatements: [
+    { bank: 'Raiffeisen', filename: 'a.xml', fromDate: '2026-07-01', toDate: '2026-07-31' },
+    { bank: 'Raiffeisen', filename: 'b.pdf', fromDate: '2026-07-01', toDate: '2026-07-15' },
+    { bank: 'Raiffeisen', filename: 'c.pdf', fromDate: '2026-07-01', toDate: '2026-07-20' },
+  ] }), ACCOUNTS, '2026-08-15');
+  const keys = b.statements('2026-07-01', '2026-07-31').filter((s) => s.account.account === '1021').map((s) => s.key);
+  assert.equal(new Set(keys).size, keys.length, keys.join(' '));
+  assert.equal(b.statementOf(b.txByRef.get('R1')!)?.file?.filename, 'b.pdf', 'the narrowest statement holding the day');
+});
+
 test('the dock counts statements with a problem from the open quarter on', () => {
   const b = bankOf(books(), ACCOUNTS, '2026-09-15');
   assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), 2, 'the two missing Augusts; July adds up, September is running');

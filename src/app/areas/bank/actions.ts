@@ -11,7 +11,7 @@ import { baseCurrency } from '../../../engines/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
-import type { Account } from './model.js';
+import { fileKey, type Account } from './model.js';
 import { forgetPages } from './StatementPaper.js';
 
 export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, undoing = false): Promise<void> {
@@ -57,7 +57,7 @@ const STATEMENT_FILE = /\.(xml|pdf)$/i;
 export async function importStatements(files: File[], nav: Nav, into?: { account: Account; month: string }): Promise<void> {
   const ok = files.filter((f) => STATEMENT_FILE.test(f.name));
   const skipped = files.filter((f) => !ok.includes(f)).map((f) => f.name);
-  let last: { account: string; month: string } | undefined;
+  let last: Awaited<ReturnType<typeof api.importStatement>> | undefined;
   let added = 0;
   for (const f of ok) {
     try {
@@ -76,7 +76,7 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
   void startIntake();
   forgetPages();
   nav.refresh();
-  nav.go({ route: { area: 'bank', statement: `${last.account}-${last.month}` }, query: {} });
+  nav.go({ route: { area: 'bank', statement: last.from ? fileKey(last.account, last.from, last.to) : `${last.account}-${last.month}` }, query: {} });
 }
 
 /** Opens the system's file dialog for camt.053 and statement PDFs. */

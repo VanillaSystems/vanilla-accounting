@@ -15,6 +15,7 @@ import type { Index } from '../../../types/index.js';
 import type { Nav } from '../index.js';
 import type { Route } from '../../shell/route.js';
 import { takeOpening } from '../bank/actions.js';
+import { fileKey } from '../bank/model.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 
 type Filter = 'all' | 'unreviewed' | 'check' | 'you' | 'error';
@@ -139,7 +140,7 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
         </td>
         <td className="st">
           {b.kind === 'differs' || l.withoutVat.length ? <span className="rpill check">{t('runs.st.check')}</span> : null}
-          <button type="button" className="linkbtn" onClick={() => go({ area: 'bank', statement: `${l.a.account}-${l.a.to.slice(0, 7)}` })}>{t('runs.view')}</button>
+          <button type="button" className="linkbtn" onClick={() => go({ area: 'bank', statement: l.a.from ? fileKey(l.a.account, l.a.from, l.a.to) : `${l.a.account}-${l.a.to.slice(0, 7)}` })}>{t('runs.view')}</button>
         </td></tr>
       {o ? (
         <tr className="rline"><td /><td /><td />

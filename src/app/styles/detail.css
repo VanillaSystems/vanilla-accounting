@@ -150,6 +150,8 @@
 /* the app's own: the PDF pages sit straight in the paper, the delete question, the inbox file */
 .paper.real .pages { display: contents; }
 .detail { container-type: inline-size; }
+/* A narrow detail (a small window, the AI sidebar open): the big amount goes under the title, smaller, never cut off. */
+@container (max-width: 520px) { .detail-in > .head { flex-wrap: wrap; gap: 8px 24px; } .detail-in > .head .amount { font-size: 30px; } }
 @media (max-width: 1340px) { .body { grid-template-columns: minmax(0, 1fr) 240px; gap: 28px; } }
 .confirm { width: 440px; top: 22vh; padding: 20px 22px 16px; }
 .confirm h2 { font: 700 17px "Hanken Grotesk"; margin: 0 0 6px; }

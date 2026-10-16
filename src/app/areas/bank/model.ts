@@ -15,7 +15,11 @@ import { baseCurrency } from '../../../engines/index.js';
 export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'statements'>;
 
 export interface Statement {
-  /** `<account>-<yyyy-mm>` of its first day: the statement's id in a link (docs/urls.md). */
+  /**
+   * The statement's id in a link (docs/urls.md): `<account>-<yyyy-mm>` for a calendar month (a
+   * statement of the whole month, or the month missing one), `<account>-<yyyy-mm-dd>` of its first
+   * day for a statement of some days (several in one month), `_<last day>` added when two start the same day.
+   */
   key: string;
   account: Account;
   from: IsoDate;
@@ -59,10 +63,34 @@ export const isCamt = (f: Pick<BankStatement, 'filename'>) => /\.xml$/i.test(f.f
 
 export const statementKey = (account: string, from: IsoDate) => `${account}-${from.slice(0, 7)}`;
 
-/** A statement key's account and month: "1021-2026-09" → ["1021", "2026-09"]. */
-export function parseStatementKey(key: string): { account: string; month: string } | undefined {
-  const m = /^(.+)-(\d{4}-\d{2})$/.exec(key);
-  return m ? { account: m[1], month: m[2] } : undefined;
+/** A statement key's account and month: "1021-2026-09" → 1021, 2026-09; "1021-2026-10-15" also names its day. */
+export function parseStatementKey(key: string): { account: string; month: string; day?: string } | undefined {
+  const m = /^(.+?)-(\d{4}-\d{2})(?:-(\d{2})(?:_\d{4}-\d{2}-\d{2})?)?$/.exec(key);
+  return m ? { account: m[1], month: m[2], ...(m[3] ? { day: m[3] } : {}) } : undefined;
+}
+
+/** Whether statements, one or several end to end, cover every day of [first, last]. */
+function coversMonth(list: readonly Statement[], first: IsoDate, last: IsoDate): boolean {
+  let next = first;
+  for (const s of [...list].sort((x, y) => x.from.localeCompare(y.from))) {
+    if (s.from > next) break;
+    if (s.to >= next) next = addDays(s.to, 1);
+    if (next > last) return true;
+  }
+  return false;
+}
+
+/** The key of a statement file of `account` covering [from, to]: its month when it covers the whole month, else its first day. */
+export const fileKey = (account: string, from: IsoDate, to: IsoDate) =>
+  (from.slice(8) === '01' && to >= monthEnd(from) ? statementKey(account, from) : `${account}-${from}`);
+
+/** Each file statement of one account gets a key no other statement has (several statements in one month, treuhaender r4t-1). */
+function keyed(account: string, list: Statement[]): Statement[] {
+  const base = (s: Statement) => fileKey(account, s.from, s.to);
+  return list.map((s) => {
+    const same = list.filter((x) => base(x) === base(s));
+    return { ...s, key: same.length > 1 && same[0] !== s ? `${account}-${s.from}_${s.to}` : base(s) };
+  });
 }
 
 /** A Wise fee is folded into its payment when that payment is there ("FEE-CARD-1" belongs to "CARD-1"). */
@@ -149,7 +177,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
       const from = first === s.from.slice(0, 7) ? s.from : `${first}-01`;
       return [{ ...s, key: statementKey(account, from), from }];
     });
-    files.set(account, [...pdfs, ...camts]);
+    files.set(account, keyed(account, [...pdfs, ...camts]));
   }
 
   // An account's months start with its first statement or payment, or the year its books open.
@@ -167,7 +195,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     if (start) {
       for (let m = (from > start ? from : start).slice(0, 7); `${m}-01` <= to && `${m}-01` <= today; m = monthAdd(m, 1)) {
         const first = `${m}-01`, last = monthEnd(first);
-        if (files.get(a.account)!.some((s) => s.from <= first && s.to >= last)) continue;
+        if (coversMonth(files.get(a.account)!, first, last)) continue;
         const running = last >= today;
         if (running && !byAccount.get(a.account)!.some((t) => t.date >= first)) continue;
         missing.push({ key: statementKey(a.account, first), account: a, from: first, to: last, ...(running && { running }) });
@@ -207,12 +235,19 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
       const k = parseStatementKey(key);
       const a = k && banked.find((x) => x.account === k.account);
       if (!a || !k) return undefined;
-      return files.get(a.account)!.find((s) => s.key === key) ?? forAccount(a, `${k.month}-01`, monthEnd(`${k.month}-01`)).find((s) => s.key === key);
+      const own = files.get(a.account)!;
+      const first = `${k.month}-01`;
+      return own.find((s) => s.key === key) ?? forAccount(a, first, monthEnd(first)).find((s) => s.key === key)
+        // A link from before statements of some days had keys of their own: the month's first statement.
+        ?? (k.day ? undefined : own.filter((s) => s.from.startsWith(k.month)).sort((x, y) => x.from.localeCompare(y.from))[0]);
     },
     statementOf(t) {
       const a = accountOf(t.bank, t.currency);
       if (!a) return undefined;
-      return files.get(a.account)!.find((s) => t.date >= s.from && t.date <= s.to) ?? forAccount(a, t.date, t.date)[0];
+      // The narrowest statement that holds the day: a statement of some days before the month's.
+      const days = (s: Statement) => Date.parse(s.to) - Date.parse(s.from);
+      return files.get(a.account)!.filter((s) => t.date >= s.from && t.date <= s.to).sort((x, y) => days(x) - days(y) || y.from.localeCompare(x.from))[0]
+        ?? forAccount(a, t.date, t.date)[0];
     },
     payments: (s) => byAccount.get(s.account.account)!
       .filter((t) => t.date >= s.from && t.date <= s.to && !folded(t))
