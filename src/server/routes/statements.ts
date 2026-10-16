@@ -9,11 +9,12 @@ import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
-import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, statementPdf, withinBooks } from '../../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, refsHeldWithout, statementPdf, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../../providers/camt053/camt053.js';
+import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
 import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
@@ -243,6 +244,54 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     throw e;
   }
 }
+
+/** The refs a statement file alone brought: every ref the folder's files hold, less those the other files hold. */
+function refsOnlyIn(file: string): string[] {
+  const books = readBooks();
+  const all = assignUniqueRefs(withinBooks(transactionsOfFiles(readBankStatements(WS).filter((f) => f.status === 'read')), books.config).kept).map((t) => t.ref);
+  const held = refsHeldWithout(WS, file, books.config);
+  return all.filter((ref) => !held.has(ref));
+}
+
+/**
+ * A statement taken back (the drop dialog's «Rückgängig», the statement page's «Auszug entfernen»,
+ * the toast after an import, r9k-3): its file, its closing balances, the payments it alone brought
+ * (`refs`: as the import recorded them, else read from the folder) with their links and entries;
+ * a payment another file on disk still holds (the bank's exports overlap) stays with its bookings,
+ * and the statement list is read again from the folder. Never in the closed period, never over an
+ * entry a person booked by hand (such a payment stays, and the refusal says so).
+ */
+export function removeStatement(file: string, refs?: readonly string[]): void {
+  const path = findFile(WS.paths, 'statements', file);
+  if (!path) throw new RequestError(404, `Den Auszug ${file} gibt es nicht.`, { code: 'gone', params: { what: 'file' } });
+  const books = readBooks();
+  const held = refsHeldWithout(WS, file, books.config);
+  const mine = new Set((refs ?? refsOnlyIn(file)).filter((ref) => !held.has(ref)));
+  assertOpen(books, [...mine].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
+  if ((books.journalEntries ?? []).some((e) => mine.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
+  const bytes = readFileSync(path);
+  rmSync(path, { force: true });
+  try {
+    updateBooks((b) => {
+      b.transactions = b.transactions.filter((t) => !mine.has(t.ref));
+      b.journalEntries = b.journalEntries.filter((e) => !mine.has(e.transactionRef));
+      b.mappings = b.mappings.filter((m) => !mine.has(m.transactionRef));
+      const files = readStatementFiles(WS);
+      b.bankStatements = files.statements;
+      const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(file)), files.balances);
+      if (balances) b.statementBalances = balances;
+      else delete b.statementBalances;
+    });
+  } catch (e) {
+    writeFileSync(path, bytes);
+    throw e;
+  }
+}
+
+router.delete('/api/statements/:bank/:filename', (req, res) => {
+  removeStatement(`${req.params.bank}/${basename(req.params.filename)}`);
+  res.json({ ok: true });
+});
 
 /**
  * An account's opening balance of a year: a bank account's as its first statement offers it

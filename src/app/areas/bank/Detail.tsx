@@ -19,7 +19,7 @@ import type { AreaProps } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
-import { importStatements, pickStatements, setNote, setNoReceipt } from './actions.js';
+import { importStatements, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
 import { at } from '../receipts/view.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
@@ -183,6 +183,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                 <dt>{t('bank.statement')}</dt><dd className="mono" style={{ fontSize: 11.5 }} title={s.file.filename}>{s.file.filename}</dd>
                 <dt>{t('bank.account')}</dt><dd className="mono">{s.account.account}</dd>
               </dl>
+              {canEdit && !closed ? <button type="button" className="linkbtn" data-testid="remove-statement" title={t('bank.removeStatementTip')} onClick={() => void removeStatement(nav, s)}>{t('bank.removeStatement')}</button> : null}
             </Sec>
           )}
         </aside>

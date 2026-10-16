@@ -17,12 +17,12 @@ import express, { Router } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
-import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, refDates, updateBooks } from '../books.js';
+import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, updateBooks } from '../books.js';
 import { findFile } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
-import { importStatement } from './statements.js';
-import { readStatementFiles, refsHeldWithout, withCamtBalances } from '../../books/bank-import.js';
+import { importStatement, removeStatement } from './statements.js';
+
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
@@ -249,30 +249,8 @@ function undo(row: DropRow): string[] {
   const run = row.run ? engine().run(row.run) : undefined;
   if (run && run.state.status === 'running') throw new RequestError(409, 'Der Lauf arbeitet gerade daran. Gleich noch einmal.');
   if (row.statement) {
-    const books = readBooks();
-    const mine = row.statement.file;
-    const held = refsHeldWithout(WS, mine, books.config);
-    const refs = new Set(row.statement.refs.filter((ref) => !held.has(ref)));
-    assertOpen(books, [...refs].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
-    if ((books.journalEntries ?? []).some((e) => refs.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
-    const path = findFile(WS.paths, 'statements', mine);
-    const bytes = path ? readFileSync(path) : undefined;
-    if (path) rmSync(path, { force: true });
-    try {
-      updateBooks((b) => {
-        b.transactions = b.transactions.filter((t) => !refs.has(t.ref));
-        b.journalEntries = b.journalEntries.filter((e) => !refs.has(e.transactionRef));
-        b.mappings = b.mappings.filter((m) => !refs.has(m.transactionRef));
-        const files = readStatementFiles(WS);
-        b.bankStatements = files.statements;
-        const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(mine)), files.balances);
-        if (balances) b.statementBalances = balances;
-        else delete b.statementBalances;
-      });
-    } catch (e) {
-      if (path && bytes) writeFileSync(path, bytes);
-      throw e;
-    }
+    // The same convergent undo as the statement page's «Auszug entfernen» (r9k-3); a file already gone (removed there) leaves nothing to do.
+    if (findFile(WS.paths, 'statements', row.statement.file)) removeStatement(row.statement.file, row.statement.refs);
   } else {
     // A photo became a PDF under another name and id: the run's arrival says which (r8k-9).
     const arrival = run?.arrived?.find((a) => a.kind === 'receipt' && a.file === row.name);

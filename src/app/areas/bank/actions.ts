@@ -4,14 +4,15 @@
  * POST /api/statements, which reads them into the books as `npm run extract` would.
  */
 import { startIntake } from '../../automation/intake.js';
-import type { BankTransaction } from '../../../types/index.js';
+import type { BankTransaction, StatementImport } from '../../../types/index.js';
 import type { OpeningOffer } from '../../../accounting/opening-balance.js';
 import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
-import { api, errorText } from '../../lib/api.js';
+import { api, errorText, sources } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
-import { fileKey, type Account } from './model.js';
+import { at } from '../receipts/view.js';
+import { fileKey, type Account, type Statement } from './model.js';
 import { forgetPages } from './StatementPaper.js';
 
 export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, undoing = false): Promise<void> {
@@ -53,30 +54,69 @@ export async function takeOpening(nav: Nav, o: OpeningOffer, undoing = false): P
 
 const STATEMENT_FILE = /\.(xml|pdf)$/i;
 
-/** Reads each file in as a statement; Kontoauszüge opens the last one read. `into`: the missing month a file is for. */
+/** The statement's key in a link, as Kontoauszüge lists it. */
+const keyOf = (s: Pick<StatementImport, 'account' | 'from' | 'to' | 'month'>) => (s.from ? fileKey(s.account, s.from, s.to) : `${s.account}-${s.month}`);
+
+/**
+ * Reads each file in as a statement; Kontoauszüge opens the last one read, in the period it covers.
+ * The toast's «Rückgängig» takes the files read out again, the same way the drop dialog's does
+ * (r9k-3). `into`: the missing month a file is for.
+ */
 export async function importStatements(files: File[], nav: Nav, into?: { account: Account; month: string }): Promise<void> {
   const ok = files.filter((f) => STATEMENT_FILE.test(f.name));
   const skipped = files.filter((f) => !ok.includes(f)).map((f) => f.name);
-  let last: Awaited<ReturnType<typeof api.importStatement>> | undefined;
-  let added = 0;
+  const read: StatementImport[] = [];
   for (const f of ok) {
     try {
-      const r = await api.importStatement(f, f.name, into && { account: into.account.account, month: into.month });
-      last = r;
-      added += r.added;
+      read.push(await api.importStatement(f, f.name, into && { account: into.account.account, month: into.month }));
     } catch (e) {
       nav.toast(`${f.name}: ${errorText(e)}`);
-      if (last) nav.refresh();
+      if (read.length) nav.refresh();
       return;
     }
   }
-  if (skipped.length) nav.toast([last && t('bank.imported', { n: added }), t('bank.importSkipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '));
-  else if (last) nav.toast(t('bank.imported', { n: added }));
+  const last = read.at(-1);
+  const added = read.reduce((n, r) => n + r.added, 0);
+  const undo = last ? async () => {
+    for (const r of [...read].reverse()) {
+      try { await api.deleteStatement(r.file); } catch (e) { nav.toast(errorText(e)); break; }
+    }
+    forgetPages();
+    nav.refresh();
+  } : undefined;
+  if (skipped.length) nav.toast([last && t('bank.imported', { n: added }), t('bank.importSkipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '), undo);
+  else if (last) nav.toast(t('bank.imported', { n: added }), undo);
   if (!last) return;
   void startIntake();
   forgetPages();
   nav.refresh();
-  nav.go({ route: { area: 'bank', statement: last.from ? fileKey(last.account, last.from, last.to) : `${last.account}-${last.month}` }, query: {} });
+  nav.go(at({ area: 'bank', statement: keyOf(last) }, last.to));
+}
+
+/**
+ * «Auszug entfernen» on a statement's page: the file leaves the books as the drop dialog's undo
+ * takes it (its payments, their links and entries, its balances; a hand booking refuses it). The
+ * toast's «Rückgängig» reads the same file in again, so nothing is lost by a wrong click (r9k-3).
+ */
+export async function removeStatement(nav: Nav, s: Statement): Promise<void> {
+  if (!s.file) return;
+  const file = `${s.file.bank}/${s.file.filename}`;
+  let bytes: Blob | undefined;
+  try {
+    bytes = await (await fetch(sources.statement(s.file.bank, s.file.filename))).blob();
+    await api.deleteStatement(file);
+  } catch (e) {
+    nav.toast(errorText(e));
+    return;
+  }
+  forgetPages();
+  nav.refresh();
+  const kept = bytes;
+  nav.toast(t('bank.statementRemoved', { name: s.file.filename }), () => {
+    api.importStatement(kept, s.file!.filename, { account: s.account.account, month: s.from.slice(0, 7) })
+      .then((r) => { forgetPages(); nav.refresh(); nav.go(at({ area: 'bank', statement: keyOf(r) }, r.to)); }, (e) => nav.toast(errorText(e)));
+  });
+  nav.go(at({ area: 'bank' }, s.to));
 }
 
 /** Opens the system's file dialog for camt.053 and statement PDFs. */

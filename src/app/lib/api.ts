@@ -309,11 +309,14 @@ export const api = {
     return (await res.json()) as { filename: string };
   },
 
-  /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
   /** A bank account's opening balance of `year`; null takes it back (src/accounting/opening-balance.ts). */
   setOpeningBalance: (year: string, account: string, amount: number | null) =>
     request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount }),
 
+  /** A statement taken back out of the books (`file`: `<bank>/<filename>` as the import named it): the drop dialog's undo, from the page (r9k-3). */
+  deleteStatement: (file: string) => request<Ok>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
+
+  /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
   importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {
     if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
     const qs = new URLSearchParams({ name, ...into });
