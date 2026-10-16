@@ -1,7 +1,8 @@
 /**
  * The AI sidebar in the browser (docs/0.4.0/views.md, "The AI, as a sidebar"): whether it is
  * open, the conversation in it, what it refers to beyond the page, and the answer as it streams,
- * with the changes it made to the books. One store for the shell, the areas' «Mit KI ändern…» and the sidebar itself. Open, the
+ * with the changes it made to the books. Which conversation it continues, across pages and a
+ * reload: src/app/assistant/thread.ts. One store for the shell, the areas' «Mit KI …» and the sidebar itself. Open, the
  * sidebar takes its width from the page (--aiw), and every fixed element centres on what is left.
  */
 import { useSyncExternalStore } from 'react';
@@ -11,26 +12,20 @@ import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { reloadInvoices } from '../areas/invoices/data.js';
 import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
+import { KEPT_CONVERSATION, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
 
 /** 400 px, less on a small window, so the page keeps room for its list and its detail. */
 export const SIDEBAR_WIDTH = 'min(400px, 34vw)';
 
-export interface AssistantState {
-  open: boolean;
+export interface AssistantState extends Thread {
   /** The conversations list instead of a conversation. */
   listing: boolean;
-  conversation?: string;
-  turns: Turn[];
-  /** Added by «Mit KI ändern…» or @, beside the page's own reference. */
-  extra: ContextRef[];
-  /** The page's reference is left out of the next message. */
-  pageOff: boolean;
   sending: boolean;
   conversations?: ConversationSummary[];
   error?: string;
 }
 
-let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], extra: [], pageOff: false, sending: false };
+let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], extra: [], pageOff: false, sending: false, ...startThread(stored) };
 const listeners = new Set<() => void>();
 let stop: AbortController | undefined;
 
@@ -40,7 +35,17 @@ function set(patch: Partial<AssistantState>): void {
     remember('assistant.open', state.open ? '1' : null);
     document.documentElement.style.setProperty('--aiw', state.open ? SIDEBAR_WIDTH : '0px');
   }
+  if ('conversation' in patch) remember(KEPT_CONVERSATION, state.conversation ?? null);
   for (const l of listeners) l();
+}
+
+/** The conversation open before the window was loaded again: its turns, or a new one when it is gone. */
+if (state.conversation) {
+  const id = state.conversation;
+  api.assistantConversation(id).then(
+    (c) => { if (state.conversation === id && !state.turns.length) set({ turns: c.turns, pageOff: false }); },
+    () => { if (state.conversation === id && !state.turns.length) set({ conversation: undefined }); },
+  );
 }
 
 export const useAssistant = (): AssistantState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
@@ -51,10 +56,10 @@ export const syncSidebarWidth = () => document.documentElement.style.setProperty
 export function toggleAssistant(): void { set({ open: !state.open }); }
 export function closeAssistant(): void { set({ open: false }); }
 
-/** «Mit KI ändern…» on an object: the sidebar opens in a new conversation, that object as its context. */
+/** «Mit KI …» on an object (src/app/assistant/thread.ts askAboutThread): into the open conversation, or a new one when the sidebar was closed. */
 export function askAbout(ref: ContextRef): void {
   if (state.sending) { set({ open: true }); return; }
-  set({ open: true, listing: false, conversation: undefined, turns: [], extra: [ref], pageOff: true, error: undefined });
+  set({ listing: false, error: undefined, ...askAboutThread(state, ref) });
 }
 
 /** The page reloads the books when an answer changed them or a change was taken back. */
@@ -64,7 +69,7 @@ export function onBooksChanged(f: () => void): () => void { changed.add(f); retu
 const booksChanged = () => { reloadWorkspace(); void reloadInvoices(); for (const f of changed) f(); };
 export function addContext(ref: ContextRef): void { if (!state.extra.some((r) => r.kind === ref.kind && r.id === ref.id)) set({ extra: [...state.extra, ref] }); }
 export function removeContext(ref: ContextRef | 'page'): void { set(ref === 'page' ? { pageOff: true } : { extra: state.extra.filter((r) => !(r.kind === ref.kind && r.id === ref.id)) }); }
-export function newConversation(): void { if (!state.sending) set({ listing: false, conversation: undefined, turns: [], extra: [], pageOff: false, error: undefined }); }
+export function newConversation(): void { if (!state.sending) set({ listing: false, error: undefined, ...newThread() }); }
 
 export async function showConversations(): Promise<void> {
   set({ listing: true });
@@ -103,7 +108,7 @@ function apply(e: AssistantEvent): void {
 /** Sends a message with the page's reference (unless taken off) and the added ones; the answer streams into the last turn. */
 export async function sendMessage(text: string, page: ContextRef | undefined): Promise<void> {
   if (state.sending || !text.trim()) return;
-  const context = [...(page && !state.pageOff ? [page] : []), ...state.extra];
+  const { conversation, context } = messageOf(state, page);
   const at = new Date().toISOString();
   set({
     sending: true, error: undefined, extra: [], pageOff: false,
@@ -113,7 +118,7 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
   try {
     const res = await fetch('/api/assistant', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: stop.signal,
-      body: JSON.stringify({ conversation: state.conversation, text, context, language: language() }),
+      body: JSON.stringify({ conversation, text, context, language: language() }),
     });
     if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `HTTP ${res.status}`);
     const reader = res.body.getReader();
