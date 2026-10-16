@@ -45,14 +45,23 @@ const camt = (id: string, iban: string, date: string) => `<?xml version="1.0"?><
 const books = (): Books => loadBooks(workspaceAt(api.ws.paths.root));
 const transactionsFile = () => readFileSync(join(api.root, 'transactional-data/2026/books/transactions.jsonl'), 'utf8');
 const start = async () => (await api.send('POST', '/api/automation', { kind: 'start', workflow: 'receipt-intake', item: { kind: 'company', id: 'inbox' } })).json as unknown as CommandResult & { run: string };
-async function rested(id: string): Promise<RunDetail> {
+/** Reads every 20 ms until `read` gives a value, for 30 s at most. */
+async function until<T>(what: string, read: () => Promise<T | undefined>): Promise<T> {
   for (let i = 0; i < 1500; i++) {
-    const r = (await api.send('GET', `/api/automation/runs/${id}`)).json as unknown as RunDetail;
-    if (r.status !== 'queued' && r.status !== 'running') return r;
+    const v = await read();
+    if (v !== undefined) return v;
     await new Promise((res) => setTimeout(res, 20));
   }
-  assert.fail(`timed out waiting for run ${id}`);
+  assert.fail(`timed out waiting for ${what}`);
 }
+const runDetail = async (id: string) => (await api.send('GET', `/api/automation/runs/${id}`)).json as unknown as RunDetail;
+const rested = (id: string) => until(`run ${id} to rest`, async () => { const r = await runDetail(id); return r.status === 'queued' || r.status === 'running' ? undefined : r; });
+/** The inbox's row of `name` once it names a failure; until the run that read the file rests, the row reads as «wird gelesen». */
+const failedOn = (name: string) => until(`the inbox to name a failure on ${name}`, async () => {
+  const file = ((await api.send('GET', '/api/inbox')).json as unknown as InboxFile[]).find((f) => f.filename === name);
+  assert.ok(file, 'the file is still in the inbox');
+  return file.failed ? { ...file, failed: file.failed } : undefined;
+});
 function drop(name: string, salt: string): void {
   mkdirSync(join(api.root, 'beleg-import'), { recursive: true });
   copyFileSync(join(DEMO_ROOT, 'transactional-data/2026/receipts/20260105-example-cloud-invoice-2026-01.pdf'), join(api.root, 'beleg-import', name));
@@ -99,14 +108,16 @@ test('a receipt whose only payment is filed is archived without a link and names
 test('a run that fails names the failure on the inbox file, and the next run takes the file', async () => {
   const stray = join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen/unknown-account.xml');
   writeFileSync(stray, camt('STRAY', OTHER_IBAN, '2026-08-03'));
+  // The file's arrival starts its run, as for a file from the Finder (src/server/background.ts,
+  // every 5 s). A start by hand is no fresh read of the inbox. It hands back a run already under
+  // way (here the one the arrival of LATE started behind the first test's), which may have
+  // scanned the inbox before this drop and so ends done.
   drop(SECOND, 'second');
-  const run = await rested((await start()).run);
-  assert.equal(run.status, 'stuck');
-  const inbox = (await api.send('GET', '/api/inbox')).json as unknown as InboxFile[];
-  const file = inbox.find((f) => f.filename === SECOND);
-  assert.ok(file, 'the file is still in the inbox');
-  assert.equal(file.failed?.run, run.id);
-  assert.match(file.failed?.error ?? '', /unknown-account\.xml/);
+  const file = await failedOn(SECOND);
+  assert.match(file.failed.error, /unknown-account\.xml/);
+  const failed = await runDetail(file.failed.run);
+  assert.equal(failed.status, 'stuck');
+  assert.match(failed.error ?? '', /unknown-account\.xml/);
   rmSync(stray);
   const again = await rested((await start()).run);
   assert.equal(again.status, 'done', again.error);
