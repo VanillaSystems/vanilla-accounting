@@ -3,7 +3,7 @@
  * books what the classifier would): the form's first lines, decided by rules only, and whether
  * the lines add up to the payment. The write is src/server/edits.ts bookPayment.
  */
-import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
+import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
 import { codeForRate, formTakes, lookupVatCode } from './vat-codes.js';
@@ -114,7 +114,11 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const groups = receipts.length === 1 && receipts[0].currency === tx.currency ? vatRates(receipts[0]) : [];
   const split = groups.length > 1 && groups.every((g) => gross(g) !== undefined) && toRappen(groups.reduce((s, g) => s + gross(g)!, 0)) === toRappen(paid);
   const rates = new Set(receipts.flatMap(vatRates).map((g) => g.ratePercent));
-  const lines = split ? groups.map((g) => line(gross(g)!, g.ratePercent)) : [line(paid, rates.size === 1 ? [...rates][0] : undefined)];
+  // A collective payment (Sammelauftrag): one line per part, named by its payee and reference, when the parts add up to it (r9k-6).
+  const parts = partsOf(tx, paid);
+  const lines = split ? groups.map((g) => line(gross(g)!, g.ratePercent))
+    : parts ? parts.map((p) => ({ ...line(Math.abs(p.amount)), description: partText(p) }))
+      : [line(paid, rates.size === 1 ? [...rates][0] : undefined)];
   return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(precedent && { precedent: precedent.entry }), ...(cancelled && { cancelledInvoice: cancelled }) };
 }
 
@@ -126,6 +130,16 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
 export function formDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices: readonly Invoice[] | 'loading' | undefined): BookingDraft | undefined {
   return invoices === 'loading' ? undefined : bookingDraft(books, ref, accounts, invoices);
 }
+
+/** The parts of a collective payment when they are two or more, in its currency, and add up to what the bank paid; else undefined. */
+export function partsOf(tx: Pick<BankTransaction, 'parts' | 'currency' | 'amount'>, paid = tx.amount): BankTransactionPart[] | undefined {
+  const parts = tx.parts ?? [];
+  if (parts.length < 2 || parts.some((p) => p.currency !== tx.currency)) return undefined;
+  return toRappen(parts.reduce((s, p) => s + Math.abs(p.amount), 0)) === toRappen(Math.abs(paid)) ? parts : undefined;
+}
+
+/** One part of a collective payment in words: its payee and its reference (the invoice number), as the bank gave them. */
+export const partText = (p: Pick<BankTransactionPart, 'counterparty' | 'reference'>): string => [p.counterparty.trim(), p.reference?.trim()].filter(Boolean).join(' · ');
 
 const sidesWith = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
   paymentSides({ transactions: books.transactions, journalEntries: lines.map((l, i) => ({ id: String(i), transactionRef: ref, date: '', ...l })) }, ref, accounts);

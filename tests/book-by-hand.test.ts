@@ -232,3 +232,25 @@ test('a payment naming a cancelled invoice (r8c-5): the draft says which one, an
   assert.deepEqual(formDraft(books, 'P2', accounts, [cancelled])?.lines.map((l) => [l.accountCredit, l.vat]), [['', '']]);
   assert.deepEqual(formDraft(books, 'P2', accounts, undefined)?.lines.map((l) => [l.accountCredit, l.vat]), [['3400', 'V81']], 'books without invoicing: the precedent as before');
 });
+
+test('r9k-6: a collective payment (Sammelauftrag) is drafted as one line per part, each naming its payee and invoice number, so the owner splits by what the bank says', () => {
+  const books = {
+    transactions: [{
+      ref: 'S1', bank: 'Bank', date: '2026-10-28', amount: 410, currency: 'CHF', direction: 'DBIT' as const, description: 'Sammelauftrag 2 Zahlungen',
+      parts: [
+        { amount: 260, currency: 'CHF', counterparty: 'BEISPIEL HAARKOSMETIK AG', reference: 'Rechnung HK-2026-10b' },
+        { amount: 150, currency: 'CHF', counterparty: 'STADTWERK BEISPIEL', reference: 'Rechnung SW-2026-1028' },
+      ],
+    }],
+    receipts: [],
+    mappings: [],
+    journalEntries: [],
+  };
+  const draft = bookingDraft(books, 'S1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }])!;
+  assert.deepEqual(draft.lines, [
+    { accountDebit: '', accountCredit: '1020', amount: 260, vat: '', description: 'BEISPIEL HAARKOSMETIK AG · Rechnung HK-2026-10b' },
+    { accountDebit: '', accountCredit: '1020', amount: 150, vat: '', description: 'STADTWERK BEISPIEL · Rechnung SW-2026-1028' },
+  ]);
+  const odd = bookingDraft({ ...books, transactions: [{ ...books.transactions[0], amount: 400 }] }, 'S1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }])!;
+  assert.equal(odd.lines.length, 1, 'parts that do not add up to the payment are not a split');
+});

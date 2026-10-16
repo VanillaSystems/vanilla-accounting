@@ -1260,6 +1260,8 @@ export default {
     'bank.entry': 'Entry {debit} / {credit}',
     'bank.openEntry': 'Show the entry',
     'bank.notBooked': 'not booked',
+    'bank.parts': { one: "Collective payment · {n} part", other: "Collective payment · {n} parts" },
+    'bank.entries': "Entry {lines}",
     'bank.onlyUnbooked': 'Only without an entry ({n})',
     'bank.showAllPayments': 'Show all {n}',
     'bank.unbookedMark': 'unbooked',

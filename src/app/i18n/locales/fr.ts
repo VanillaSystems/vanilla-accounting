@@ -1260,6 +1260,8 @@ export default {
     'bank.entry': 'Écriture {debit} / {credit}',
     'bank.openEntry': "Afficher l'écriture",
     'bank.notBooked': 'non comptabilisé',
+    'bank.parts': { one: "Ordre groupé · {n} partie", other: "Ordre groupé · {n} parties" },
+    'bank.entries': "Écriture {lines}",
     'bank.onlyUnbooked': 'Seulement sans écriture ({n})',
     'bank.showAllPayments': 'Afficher les {n}',
     'bank.unbookedMark': 'non comptabilisé',

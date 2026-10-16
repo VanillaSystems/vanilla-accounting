@@ -24,6 +24,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
 import { Paper } from '../receipts/Paper.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
+import { Parts } from '../bank/Parts.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
@@ -701,6 +702,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item, readsInWords(task.reads))}</p> : null}
+                {task.item.kind === 'transaction' ? (() => { const p = books.transactions.find((x) => x.ref === task.item.id); return p ? <Parts tx={p} /> : null; })() : null}
                 {Object.entries(task.reads ?? {}).filter(([k]) => !tx(task.title).includes(`{${k}}`)).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
                 {task.reads?.return ? <ReturnIssues ret={task.reads.return as PeriodReturn} books={books} nav={nav} canEdit={canEdit} /> : null}
                 {withheld?.rates.length ? (

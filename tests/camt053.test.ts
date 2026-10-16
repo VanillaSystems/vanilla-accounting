@@ -120,6 +120,17 @@ test('synthetic batch: debit parts name the creditor, credit parts the debtor', 
   assert.equal(credit.reference, undefined, 'a batch has no single reference');
 });
 
+test('r9k-6: a batch part without RmtInf keeps its AddtlTxInf as reference (Raiffeisen puts the invoice number there), so the owner can split by it', () => {
+  const detail = (amt: string, who: string, info: string) =>
+    `<TxDtls><Refs><AcctSvcrRef>91000000013-${amt}</AcctSvcrRef></Refs><Amt Ccy="CHF">${amt}</Amt><CdtDbtInd>DBIT</CdtDbtInd><RltdPties><Cdtr><Pty><Nm>${who}</Nm></Pty></Cdtr></RltdPties><AddtlTxInf>${info}</AddtlTxInf></TxDtls>`;
+  const [batch] = parse(ntry(`<Ntry><AcctSvcrRef>91000000013</AcctSvcrRef><Amt Ccy="CHF">410.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-28</Dt></BookgDt>
+<NtryDtls>${detail('260.00', 'BEISPIEL HAARKOSMETIK AG', 'Rechnung HK-2026-10b')}${detail('150.00', 'STADTWERK BEISPIEL', 'Rechnung SW-2026-1028')}</NtryDtls><AddtlNtryInf>Sammelauftrag 2 Zahlungen</AddtlNtryInf></Ntry>`));
+  assert.deepEqual(batch.parts, [
+    { amount: 260, currency: 'CHF', counterparty: 'BEISPIEL HAARKOSMETIK AG', reference: 'Rechnung HK-2026-10b' },
+    { amount: 150, currency: 'CHF', counterparty: 'STADTWERK BEISPIEL', reference: 'Rechnung SW-2026-1028' },
+  ]);
+});
+
 function tx(ref: string, date: string, direction: 'CRDT' | 'DBIT', amount: number, currency = 'CHF'): BankTransaction {
   return { ref, bank: 'Wise', date, amount, currency, direction, description: '' };
 }

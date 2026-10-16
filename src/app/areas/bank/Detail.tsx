@@ -22,6 +22,7 @@ import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, pickStatements, setNote, setNoReceipt } from './actions.js';
 import { at } from '../receipts/view.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
+import { Parts } from './Parts.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -197,7 +198,10 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
   const vatRegistered = useWorkspace()?.company.vat.registered ?? true;
   if (!tx) return <span className="payhint">{t('bank.payHint')}</span>;
   const receipts = b.receiptsOf(tx.ref);
-  const entry = b.entriesOf(tx.ref)[0];
+  const entries = b.entriesOf(tx.ref);
+  const entry = entries[0];
+  // Every line of a split, not only the first (r9k-6).
+  const lines = entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${entries.length > 1 ? ` ${fmt(e.amount)}` : ''}`).join(' + ');
   const fee = b.feeOf(tx.ref);
   const first = receipts[0] ? b.receiptOf(receipts[0]) : undefined;
   const edit = canEdit && !closed;
@@ -222,12 +226,13 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       ) : null}
       {entry ? (
         <> · <button type="button" className="golink" data-testid="go-entry" title={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
-          {t('bank.entry', { debit: entry.accountDebit || '–', credit: entry.accountCredit || '–' })}
+          {t('bank.entries', { lines })}
         </button></>
       ) : tx.amount ? <> · <span className="wn">{t('bank.notBooked')}</span></> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
       {' '}<button type="button" className="x" title={t('bank.clear')} aria-label={t('bank.clear')} onClick={onClear}>×</button>
+      <Parts tx={tx} />
     </>
   );
 }

@@ -125,10 +125,11 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       return String(side?.Pty?.Nm ?? side?.Nm ?? '');
     };
 
-    // A batch keeps its parts, so each payment inside it can be matched and booked.
+    // A batch keeps its parts, so each payment inside it can be matched and booked. A part without
+    // remittance info carries its invoice number in AddtlTxInf (Raiffeisen): kept as its reference (r9k-6).
     const parts = txDtlsArr.length > 1
       ? txDtlsArr.map((d) => {
-          const ref = remittanceRef(d.RmtInf);
+          const ref = remittanceRef(d.RmtInf) ?? (String(d.AddtlTxInf ?? '').trim() || undefined);
           return {
             ...getAmt(d.Amt ?? d.AmtDtls?.TxAmt?.Amt),
             counterparty: counterpartyOf(d),

@@ -1260,6 +1260,8 @@ export default {
     'bank.entry': 'Registrazione {debit} / {credit}',
     'bank.openEntry': 'Mostra la registrazione',
     'bank.notBooked': 'non registrato',
+    'bank.parts': { one: "Ordine collettivo · {n} parte", other: "Ordine collettivo · {n} parti" },
+    'bank.entries': "Registrazione {lines}",
     'bank.onlyUnbooked': 'Solo senza registrazione ({n})',
     'bank.showAllPayments': 'Mostrare tutti i {n}',
     'bank.unbookedMark': 'non registrato',

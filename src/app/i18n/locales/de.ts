@@ -1257,6 +1257,8 @@ export const messages = {
   'bank.entry': 'Buchung {debit} / {credit}',
   'bank.openEntry': 'Buchung zeigen',
   'bank.notBooked': 'nicht gebucht',
+  'bank.parts': { one: "Sammelauftrag · {n} Teil", other: "Sammelauftrag · {n} Teile" },
+  'bank.entries': "Buchung {lines}",
   'bank.onlyUnbooked': 'Nur ohne Buchung ({n})',
   'bank.showAllPayments': 'Alle {n} zeigen',
   'bank.unbookedMark': 'ungebucht',
