@@ -53,6 +53,21 @@ export const deleteEntry = (nav: Nav, e: JournalEntry) =>
 export const createEntry = (nav: Nav, input: JournalEntryInput) =>
   run(nav, () => api.createJournalEntry(input), (entry) => t('journal.created', { ref: entry.transactionRef }), (entry) => api.deleteJournalEntry(entry.id));
 
+/** An accrual and its reversal on the next 1.1., booked in one step; undo removes both. */
+export const createWithReversal = (nav: Nav, input: JournalEntryInput, reversal: JournalEntryInput) =>
+  run(nav, async () => {
+    const entry = await api.createJournalEntry(input);
+    try {
+      return { entry, back: await api.createJournalEntry(reversal) };
+    } catch (e) {
+      await api.deleteJournalEntry(entry.id);
+      throw e;
+    }
+  }, ({ entry, back }) => t('journal.createdReversed', { ref: entry.transactionRef, back: back.transactionRef, date: back.date.split('-').reverse().join('.') }), async ({ entry, back }) => {
+    await api.deleteJournalEntry(back.id);
+    await api.deleteJournalEntry(entry.id);
+  }).then((r) => r?.entry);
+
 /**
  * The payment booked again by the classifier (it asks the model). `overwrite`: the person said a
  * booking of hers may go (the API refuses otherwise). Undo removes its entries and puts the ones

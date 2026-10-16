@@ -13,7 +13,8 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { at } from '../receipts/view.js';
-import { bookPayment, createEntry } from './actions.js';
+import { bookPayment, createEntry, createWithReversal } from './actions.js';
+import { isAccrual, newYearAfter, reversalOf, reversedAsRule } from '../../../accounting/reversal.js';
 import { PaymentField } from './PaymentField.js';
 import { bookingDraft } from '../../../accounting/manual-booking.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -34,11 +35,18 @@ export function NewEntry(props: Props) {
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
   const [round, setRound] = useState(0);
+  const [, redraw] = useState(0);
+  const [reverse, setReverse] = useState<boolean | undefined>(undefined);
   if (s.overlay?.kind !== 'new') return null;
   const d = s.overlay.draft;
   const close = () => setUi({ overlay: null });
   const filed = d.corrects && parsePeriod(d.corrects, localToday());
   const tx = d.transactionRef ? books.transactions.find((x) => x.ref === d.transactionRef) : undefined;
+  const now = form.current ? typed() : d;
+  // An accrual typed by hand may be reversed on the next 1.1. in the same step (treuhaender-27).
+  const sides = { accountDebit: now.accountDebit ?? '', accountCredit: now.accountCredit ?? '' };
+  const accrual = !tx && !d.corrects && isAccrual(sides) && !!now.date;
+  const reverseIt = accrual && (reverse ?? reversedAsRule(sides));
 
   /** What the fields hold now, so a payment picked (or dropped) keeps what was typed. */
   function typed(): Partial<JournalEntryInput> {
@@ -85,7 +93,10 @@ export function NewEntry(props: Props) {
       return;
     }
     close();
-    const entry = await createEntry(nav, { date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }) });
+    const input: JournalEntryInput = { date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }) };
+    const entry = reverseIt
+      ? await createWithReversal(nav, input, reversalOf(input, newYearAfter(date!), t('journal.accrualText', { text, year: date!.slice(0, 4) })))
+      : await createEntry(nav, input);
     if (!entry) return;
     listed.pending = entry.id;
     nav.go(at({ area: 'journal', id: entry.id }, entry.date, props.period));
@@ -103,7 +114,7 @@ export function NewEntry(props: Props) {
         <div className="ctx">
           <div><span className="lbl">{filed ? t('journal.correctionTitle') : t('journal.addTitle')}</span>{filed ? t('journal.correctionHint', { filed: periodName(filed) }) : t('journal.addHint')}</div>
         </div>
-        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onSubmit={(e) => { e.preventDefault(); book(); }}>
+        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => redraw((n) => n + 1)} onSubmit={(e) => { e.preventDefault(); book(); }}>
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} title={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
@@ -118,6 +129,12 @@ export function NewEntry(props: Props) {
             <span />
           </div>
           <label>{t('journal.field.description')}<input name="description" defaultValue={d.description ?? ''} /></label>
+          {accrual && (
+            <label className="jrev" data-testid="reverse-on-new-year">
+              <input type="checkbox" checked={reverseIt} onChange={(e) => setReverse(e.target.checked)} />
+              {t('journal.reverseNewYear', { date: formatDate(newYearAfter(now.date!)) })}
+            </label>
+          )}
           <VatCodeList />
           <div className="err" role="alert">{err}</div>
           <div className="dacts">

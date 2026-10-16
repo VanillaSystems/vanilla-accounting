@@ -10,6 +10,7 @@ import { journalOf, type Journal } from './model.js';
 import { listed, setUi, ui } from './state.js';
 import { deleteEntry } from './actions.js';
 import { filing } from '../../../engines/index.js';
+import { isAccrual, newYearAfter, reversalOf } from '../../../accounting/reversal.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -33,7 +34,7 @@ export function newEntryDate(books: Index): string {
 
 export const splitReceipt = (r: Receipt) => splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
 
-export type Act = 'edit' | 'del' | 'correct' | 'receipt' | 'payment' | 'download';
+export type Act = 'edit' | 'del' | 'correct' | 'reverse' | 'reverseNewYear' | 'copy' | 'receipt' | 'payment' | 'download';
 
 /** An action on the selected entry, from a button or a key. One that changes it refuses a filed entry with the reason. */
 export function runAct(p: Props, a: Act, id = p.route.id): boolean {
@@ -58,13 +59,24 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
     case 'correct':
       if (!p.canEdit) return false;
       setUi({ overlay: { kind: 'new', draft: {
-        date: newEntryDate(p.books),
-        accountDebit: e.accountCredit,
-        accountCredit: e.accountDebit,
-        amount: e.amount,
-        vatCode: e.vatCode && (e.vatCode.startsWith('-') ? e.vatCode.slice(1) : `-${e.vatCode}`),
-        description: t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }),
+        ...reversalOf(e, newEntryDate(p.books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' })),
         corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
+      } } });
+      return true;
+    // A Gegenbuchung of an open entry, its accrual's reversal on the next 1.1., a copy (treuhaender-27).
+    case 'reverse':
+      if (!p.canEdit || v.locked) return false;
+      setUi({ overlay: { kind: 'new', draft: reversalOf(e, newEntryDate(p.books), t('journal.reverseText', { ref: e.transactionRef, text: e.description ?? '' })) } });
+      return true;
+    case 'reverseNewYear':
+      if (!p.canEdit || !isAccrual(e)) return false;
+      setUi({ overlay: { kind: 'new', draft: reversalOf(e, newYearAfter(e.date), t('journal.accrualText', { text: e.description ?? '', year: e.date.slice(0, 4) })) } });
+      return true;
+    case 'copy':
+      if (!p.canEdit) return false;
+      setUi({ overlay: { kind: 'new', draft: {
+        date: newEntryDate(p.books), accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount,
+        ...(e.vatCode && { vatCode: e.vatCode }), description: e.description ?? '',
       } } });
       return true;
   }

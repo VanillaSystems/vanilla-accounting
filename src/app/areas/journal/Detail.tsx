@@ -24,6 +24,7 @@ import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain, codeText } from '../codes/vat-card.js';
 import { whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
 import { selectNew, setUi, useUi, type Section } from './state.js';
+import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
 import { RunLink } from '../../automation/marks.js';
@@ -89,6 +90,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         </div>
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
       </div>
+
+      {canEdit && <EntryActions {...props} />}
 
       <div className="status jst">
         {tx
@@ -156,6 +159,24 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         </aside>
       </div>
       {asking && <KeepHers hers={hers} onKeep={() => setAsking(false)} onRebook={() => rebook(true)} />}
+    </div>
+  );
+}
+
+/** Book from this entry: its Gegenbuchung, a copy, and for an accrual its reversal on the next 1.1. (treuhaender-27). */
+function EntryActions(props: Props & { v: EntryView; j: Journal }) {
+  const { v, nav } = props;
+  const { e } = v;
+  const accrual = e.origin !== 'year-close' && isAccrual(e);
+  const back = accrual ? reversalIn(props.books.journalEntries ?? [], e) : undefined;
+  const newYear = newYearAfter(e.date);
+  return (
+    <div className="jacts" data-testid="entry-actions">
+      {!v.locked && <button type="button" className="quiet2" title={t('journal.reverseTip')} onClick={() => runAct(props, 'reverse')}>{t('journal.reverse')}</button>}
+      <button type="button" className="quiet2" title={t('journal.copyTip')} onClick={() => runAct(props, 'copy')}>{t('journal.copy')}</button>
+      {accrual && (back
+        ? <button type="button" className="golink" data-testid="reversed" onClick={() => nav.select({ area: 'journal', id: back.id })}>{t('journal.reversedOn', { date: formatDate(back.date) })}</button>
+        : <button type="button" className="quiet2" data-testid="reverse-new-year" title={t('journal.reverseNewYearTip')} onClick={() => runAct(props, 'reverseNewYear')}>{t('journal.reverseNewYear', { date: formatDate(newYear) })}</button>)}
     </div>
   );
 }
