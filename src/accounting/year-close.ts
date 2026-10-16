@@ -509,11 +509,28 @@ export const emptyState = (year: string): YearCloseState => ({ year, templates: 
  * each on its side, wherever they were booked (Buchungen, the step's own form). A template with no
  * account given is the person's to mark.
  */
-export function bookedFor(entries: readonly JournalEntry[], year: string, t: Pick<EntryTemplate, 'accountDebit' | 'accountCredit'>): Array<Pick<JournalEntry, 'id' | 'transactionRef'>> {
-  if (!t.accountDebit && !t.accountCredit) return [];
-  return entries
-    .filter((e) => e.date === yearEnd(year) && (!t.accountDebit || e.accountDebit === t.accountDebit) && (!t.accountCredit || e.accountCredit === t.accountCredit))
-    .map((e) => ({ id: e.id, transactionRef: e.transactionRef }));
+export function bookedFor(entries: readonly JournalEntry[], year: string, t: Pick<EntryTemplate, 'id' | 'accountDebit' | 'accountCredit'>): BookedEntry[] {
+  const onAccounts = (e: JournalEntry) => (!!t.accountDebit || !!t.accountCredit) && e.date === yearEnd(year) && (!t.accountDebit || e.accountDebit === t.accountDebit) && (!t.accountCredit || e.accountCredit === t.accountCredit);
+  // The receivables entry carries the year's id, whatever accounts the person picked for it.
+  const own = (e: JournalEntry) => t.id === RECEIVABLES_ID && e.id === receivablesEntryId(year);
+  return entries.filter((e) => own(e) || onAccounts(e)).map((e) => ({ id: e.id, transactionRef: e.transactionRef, chf: chfAmount(e) }));
+}
+
+/** An entry that books a step: `chf` is what it adds to the step's figure. */
+export interface BookedEntry { id: string; transactionRef: string; chf: number }
+
+/**
+ * A booked step whose figure the books compute differently today (r10c-1): the Debitoren were
+ * booked, then an invoice was cancelled or paid. `booked` is what the entries hold, `now` the
+ * figure of today; the step is booked again with one click, and the year does not close before.
+ */
+export interface StaleFigure { booked: number; now: number }
+
+/** The step's bookings against the figure it proposes today; undefined while they agree, or while the step proposes no figure. */
+export function staleFigure(t: Pick<EntryTemplate, 'amount'>, booked: readonly BookedEntry[]): StaleFigure | undefined {
+  if (t.amount === undefined || !booked.length) return undefined;
+  const sum = fromRappen(booked.reduce((s, b) => s + toRappen(b.chf), 0));
+  return toRappen(sum) === toRappen(t.amount) ? undefined : { booked: sum, now: t.amount };
 }
 
 // ─── The checklist ───────────────────────────────────────────────────────────
@@ -540,6 +557,8 @@ export type Problem =
   | { code: 'fxToBook'; account: string; difference: number }
   | { code: 'yearLocked' }
   | { code: 'undecided'; templates: string[] }
+  /** A step booked with a figure the books no longer compute (r10c-1): book it again before the close. */
+  | { code: 'entryStale'; template: string; booked: number; now: number }
   | { code: 'unbalanced'; residual: number }
   /** Hints of the bookings' plausibility (src/accounting/booking-warnings.ts): named, never blocking (r8k-8). */
   | Plausibility;
@@ -587,8 +606,8 @@ export interface YearClose {
   checks: Check[];
   revaluations: Revaluation[];
   vat: VatCheck;
-  /** `state` as marked, or 'done' when an entry of the year's 31.12. books on the template's accounts (`booked`: those entries). */
-  templates: Array<EntryTemplate & { state?: TemplateState; booked?: Array<Pick<JournalEntry, 'id' | 'transactionRef'>> }>;
+  /** `state` as marked, or 'done' when an entry of the year's 31.12. books on the template's accounts (`booked`: those entries); `stale` while their figure is not today's (r10c-1). */
+  templates: Array<EntryTemplate & { state?: TemplateState; booked?: BookedEntry[]; stale?: StaleFigure }>;
   receivables: Receivables;
   ledger: ClosingLedger;
   /** Why "Jahr abschliessen" refuses; empty when it may run. */
@@ -700,13 +719,15 @@ export function yearClose(input: YearCloseInput): YearClose {
   const reval = revaluations(books, year, foreignAccounts(input.bankAccounts), input.rates);
   const ledger = closingLedger(books, year, input.chart, accounts);
   const receivables = input.receivables ?? { invoices: [], total: 0 };
-  const proposed = receivables.invoices.length
+  // The step stays while its entry is booked, so a figure that fell to 0 (every invoice paid or cancelled since) is still seen (r10c-1).
+  const proposed = receivables.invoices.length || books.journalEntries.some((x) => x.id === receivablesEntryId(year))
     ? [{ ...receivablesTemplate(accounts), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
   const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
   const templates = [...yearEndTemplates(owner, input.legalForm), ...proposed].map((t) => {
     const booked = bookedFor(books.journalEntries, year, t);
-    return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }) };
+    const stale = staleFigure(t, booked);
+    return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }), ...(stale && { stale }) };
   });
 
   // A hint (status warn) is named, never a blocker.
@@ -717,6 +738,7 @@ export function yearClose(input: YearCloseInput): YearClose {
   }
   const undecided = templates.filter((t) => !t.state).map((t) => t.id);
   if (undecided.length) blockers.push({ code: 'undecided', templates: undecided });
+  for (const t of templates) if (t.stale) blockers.push({ code: 'entryStale', template: t.id, ...t.stale });
   if (receivables.unlinked?.length) blockers.push({ code: 'paymentsUnlinked', payments: receivables.unlinked });
   if (toRappen(ledger.residual) !== 0) blockers.push({ code: 'unbalanced', residual: ledger.residual });
   for (const c of ledger.causes) if (c.code === 'notInChart' || c.code === 'outsideStatements') blockers.push(c);

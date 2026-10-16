@@ -7,7 +7,7 @@ import { Router, type Response } from 'express';
 import { isIsoDate } from '../../accounting/periods.js';
 import type { TemplateState } from '../../accounting/year-close.js';
 import {
-  bookEntry, bookRevaluation, closeYear, markTemplate, openingFor, openYear, reopenTemplate, YearCloseRefused, yearCloseOf,
+  bookEntry, bookRevaluation, closeYear, markTemplate, openingFor, openYear, rebookTemplate, reopenTemplate, YearCloseRefused, yearCloseOf,
 } from '../../books/year-close.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, stringField } from '../books.js';
 
@@ -49,6 +49,16 @@ router.put('/api/year-close/:year/templates/:id', async (req, res) => {
   if (state !== null && state !== 'done' && state !== 'na') throw new RequestError(400, 'state: done, na oder null.');
   // Open again: the booking the step made goes with it, and the answer names it for the toast and its undo (r9c-16).
   await answer(res, () => (state === null ? reopenTemplate(WS, year, req.params.id) : markTemplate(WS, year, req.params.id, state as TemplateState)));
+});
+
+// «Neu buchen» on a step whose figure changed since it was booked (r10c-1): the booking is replaced by today's figure, with the person's text.
+router.post('/api/year-close/:year/templates/:id/rebook', async (req, res) => {
+  const year = yearOf(req.params.year);
+  const b = patchBody(req.body, ['description']);
+  const description = stringField(b, 'description').trim();
+  if (!description) throw new RequestError(400, 'description darf nicht leer sein.');
+  assertOpen(readBooks(), [`${year}-12-31`], 'newTransaction');
+  await answer(res, () => rebookTemplate(WS, year, req.params.id, description));
 });
 
 router.post('/api/year-close/:year/entries', async (req, res) => {

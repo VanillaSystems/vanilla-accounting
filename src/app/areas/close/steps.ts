@@ -55,6 +55,7 @@ export function problemText(p: ShownProblem, year: string): string {
     case 'unbookedLinked': return tx('yearClose.problem.unbookedLinked', { n: p.count });
     case 'fxToBook': return tx('yearClose.problem.fxToBook', { account: p.account, difference: signed(p.difference) });
     case 'undecided': return tx('yearClose.problem.undecided', { templates: p.templates.map((id) => tx(`yearClose.template.${id}`)).join(', ') });
+    case 'entryStale': return tx('yearClose.problem.entryStale', { template: tx(`yearClose.template.${p.template}`), booked: fmt(p.booked), now: fmt(p.now) });
     case 'unbalanced': return tx('yearClose.problem.unbalanced', { residual: fmt(p.residual) });
     case 'notInChart': case 'outsideStatements': return tx(`yearClose.problem.${p.code}`, { account: p.account, amount: fmt(p.amount) });
     case 'paymentsUnlinked': return tx('yearClose.problem.paymentsUnlinked', { n: p.payments.length, payments: p.payments.map((x) => `${x.transactionRef} → ${x.number}`).join(', ') });
@@ -117,11 +118,14 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
     ...(d.vat.unexplained === 0 ? { state: 'ok', detail: t('yearClose.vatExplained') } : { state: over ? 'warn' : 'later', detail: t('yearClose.vatUnexplained', { amount: fmt(d.vat.unexplained), correction: correctionName() }) }),
   }] : [];
   const decided = d.templates.filter((tp) => tp.state).length;
-  const entries: CheckRow = { id: 'entries', label: t('close.step.entries'), state: decided === d.templates.length ? 'ok' : 'open', detail: t('close.entriesDone', { done: decided, n: d.templates.length }), go: { step: 'entries' } };
+  // A booked step whose figure changed since is a hint, not done (r10c-1).
+  const stale = d.templates.filter((tp) => tp.stale).map((tp) => problemText({ code: 'entryStale', template: tp.id, ...tp.stale! }, year));
+  const entries: CheckRow = { id: 'entries', label: t('close.step.entries'), state: stale.length ? 'warn' : decided === d.templates.length ? 'ok' : 'open', detail: [t('close.entriesDone', { done: decided, n: d.templates.length }), ...stale].join(' · '), go: { step: 'entries' } };
   const r = d.receivables;
   const unlinked = r.unlinked?.length ? problemText({ code: 'paymentsUnlinked', payments: r.unlinked }, year) : '';
-  const invoices: CheckRow = r.invoices.length
-    ? { id: 'invoices', label: t('close.check.invoices'), state: unlinked ? 'warn' : d.templates.find((tp) => tp.id === 'receivables')?.state ? 'ok' : 'open', detail: [t('close.invoicesOpen', { n: r.invoices.length, amount: fmt(r.total) }), unlinked].filter(Boolean).join(' · '), go: { step: 'entries' } }
+  const debtors = d.templates.find((tp) => tp.id === 'receivables');
+  const invoices: CheckRow = r.invoices.length || debtors?.stale
+    ? { id: 'invoices', label: t('close.check.invoices'), state: unlinked || debtors?.stale ? 'warn' : debtors?.state ? 'ok' : 'open', detail: [t('close.invoicesOpen', { n: r.invoices.length, amount: fmt(r.total) }), unlinked].filter(Boolean).join(' · '), go: { step: 'entries' } }
     : { id: 'invoices', label: t('close.check.invoices'), state: 'ok', detail: t('close.invoicesNone') };
   const l = d.ledger;
   // Balanced means the Bilanz as shown balances: a balance on an account outside the chart fails it too (r9c-2).
@@ -151,7 +155,8 @@ export function stepState(step: Step, d: YearCloseView | undefined, today: strin
     }
     case 'entries': {
       const done = d.templates.filter((tp) => tp.state).length;
-      return done === d.templates.length ? ['ok', t('close.done')] : ['open', t('close.nOfM', { done, n: d.templates.length })];
+      const stale = d.templates.filter((tp) => tp.stale).length;
+      return stale ? ['warn', t('close.staleN', { n: stale })] : done === d.templates.length ? ['ok', t('close.done')] : ['open', t('close.nOfM', { done, n: d.templates.length })];
     }
     case 'close':
       return d.closed ? ['ok', t('close.closedOn', { date: formatDate(d.state.closedAt) })] : closeBlockers(d).length ? ['later', t('close.locked')] : ['open', t('close.ready')];

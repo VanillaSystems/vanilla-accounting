@@ -18,6 +18,7 @@ const PROBLEM_TEXT: { [C in Problem['code']]: (p: Extract<Problem, { code: C }>)
   fxToBook: (p) => `${p.account}: a Kursdifferenz of CHF ${chf(p.difference)} is not booked yet (npm run year:close books it)`,
   yearLocked: () => 'the books are closed through 31.12. already, so the Kursdifferenz can no longer be dated 31.12.',
   undecided: (p) => `guided year-end entries not yet booked or marked not needed: ${p.templates.join(', ')} (--done or --na)`,
+  entryStale: (p) => `${p.template}: booked CHF ${chf(p.booked)}, the books say CHF ${chf(p.now)} today: book it again (Jahresabschluss › Abschlussbuchungen › Neu buchen)`,
   unbalanced: (p) => `Aktiven and Passiven differ by CHF ${chf(p.residual)}: see the causes; never book the difference away`,
   notInChart: (p) => `account ${p.account} is not in accounts.json, so the Bilanz leaves out its CHF ${chf(p.amount)}: add the account or move the entry`,
   outsideStatements: (p) => `account ${p.account} is on neither statement (class 1 to 8), CHF ${chf(p.amount)}: move the entry`,

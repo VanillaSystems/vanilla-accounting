@@ -188,16 +188,34 @@ function Entries({ d, nav, canEdit }: StepProps) {
         await api.markYearEndEntry(d.year, id, before ?? null);
       });
   };
+  // The figure changed since the step was booked (r10c-1): the booking is replaced by today's; the undo books the old one back.
+  const rebook = (tp: YearCloseView['templates'][number]) => {
+    const label = tx(`yearClose.template.${tp.id}`);
+    const description = tp.id === 'receivables' ? t('close.receivablesText', { year: d.year, numbers: d.receivables.invoices.map((i) => i.number).join(', ') }) : label;
+    let result: { removed: JournalEntry[]; entry?: JournalEntry } = { removed: [] };
+    act(nav, async () => { result = await api.rebookYearEndEntry(d.year, tp.id, description); },
+      tp.stale!.now > 0 ? t('close.rebooked', { label, now: fmt(tp.stale!.now), booked: fmt(tp.stale!.booked) }) : t('close.rebookedGone', { label, refs: (tp.booked ?? []).map((b) => b.transactionRef).join(', ') }),
+      async () => {
+        if (result.entry) await api.deleteJournalEntry(result.entry.id);
+        for (const e of result.removed) await api.createJournalEntry({ id: e.id, transactionRef: e.transactionRef, date: e.date, accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '', ...(e.vatCode && { vatCode: e.vatCode }), origin: e.origin });
+        await api.markYearEndEntry(d.year, tp.id, tp.state ?? null);
+      });
+  };
   return (
     <>
       <p className="lead">{t('close.entriesLead')}</p>
       <div className="yel">
         {d.templates.map((tp) => (
           <div key={tp.id} data-template={tp.id}>
-            <div className={`ye${tp.state ? ' done' : ''}`}>
+            <div className={`ye${tp.stale ? ' stale' : tp.state ? ' done' : ''}`}>
               <span className="cx"><b>{tx(`yearClose.template.${tp.id}`)}</b><span>{tp.id === 'privateUse' && withoutInputTax() ? t('yearClose.templateHint.privateUseNoInputTax') : tx(`yearClose.templateHint.${tp.id}`)}</span></span>
               <span className="mono acc">{tp.amount !== undefined ? `${fmt(tp.amount)} · ` : ''}{accountsOf(tp)}</span>
-              {tp.state ? (
+              {tp.stale ? (
+                <>
+                  <span className="st stale" data-testid="stale-figure">{t('close.staleFigure', { booked: fmt(tp.stale.booked), now: fmt(tp.stale.now) })}</span>
+                  {editable && <button type="button" className="btn" onClick={() => rebook(tp)}>{t('close.rebook')}</button>}
+                </>
+              ) : tp.state ? (
                 <>
                   <span className={`st${tp.state === 'na' ? ' na' : ''}`}>{tp.state === 'na' ? t('yearClose.stateNa') : <>{I.check}{t('close.booked')}</>}</span>
                   {tp.booked && !d.state.templates[tp.id]

@@ -155,18 +155,73 @@ export function markTemplate(ws: Workspace, year: string, id: string, state: Tem
  */
 export function reopenTemplate(ws: Workspace, year: string, id: string): { state: YearCloseState; removed: JournalEntry[] } {
   const books = loadBooks(ws);
-  const template = yearEndTemplates().find((t) => t.id === id);
-  const ids = new Set([
-    ...(id === RECEIVABLES_ID ? [receivablesEntryId(year)] : []),
-    ...(template ? bookedFor(books.journalEntries, year, template).map((b) => b.id) : []),
-  ]);
-  const removed = books.journalEntries.filter((e) => ids.has(e.id) && e.origin === 'manual');
+  const removed = stepBookings(books, year, id);
   if (removed.length) {
     assertYearOpen(books, year, 'its bookings of 31.12. stay.');
     update(books, PERSON, (b) => { b.journalEntries = b.journalEntries.filter((e) => !removed.includes(e)); });
     saveBooks(ws, books);
   }
   return { state: markTemplate(ws, year, id, null), removed };
+}
+
+/** The person's entries that book step `id` (the receivables entry by its id, the others on their accounts): what «zurück» and «Neu buchen» replace. */
+function stepBookings(books: Books, year: string, id: string): JournalEntry[] {
+  const template = yearEndTemplates().find((t) => t.id === id) ?? (id === RECEIVABLES_ID ? { id, accountDebit: '', accountCredit: '' } : undefined);
+  const ids = new Set(template ? bookedFor(books.journalEntries, year, template).map((b) => b.id) : []);
+  return books.journalEntries.filter((e) => ids.has(e.id) && e.origin === 'manual');
+}
+
+/**
+ * «Neu buchen» on a step whose figure changed since it was booked (r10c-1): its bookings go, and
+ * today's figure is booked on the accounts of the booking it replaces, with the person's text.
+ * A figure of 0 (every invoice paid or cancelled since) books nothing, and the step is open again.
+ */
+export function rebookTemplate(ws: Workspace, year: string, id: string, description: string, rates: EstvRates = ratesOf()): { removed: JournalEntry[]; entry?: JournalEntry } {
+  const books = loadBooks(ws);
+  assertYearOpen(books, year, 'its bookings of 31.12. stay.');
+  const close = yearCloseOf(ws, year, rates, books);
+  const step = close.templates.find((t) => t.id === id);
+  if (!step) throw new YearCloseRefused({ code: 'yearEndEntryUnknown', params: { id } }, `Unknown year-end entry "${id}".`);
+  if (!step.stale) throw new YearCloseRefused({ code: 'entryNotStale', params: { id } }, `The booking of "${id}" holds today's figure already: nothing to book again.`);
+  if (id === RECEIVABLES_ID) assertLinked(close.receivables);
+  const removed = stepBookings(books, year, id);
+  const was = removed[0];
+  const entry = step.stale.now > 0
+    ? newEntry(books, year, id, { date: `${year}-12-31`, accountDebit: was?.accountDebit ?? step.accountDebit, accountCredit: was?.accountCredit ?? step.accountCredit, amount: step.stale.now, vatCode: was?.vatCode ?? step.vatCode, description })
+    : undefined;
+  if (entry) assertInChart(ws, entry.accountDebit, entry.accountCredit);
+  update(books, PERSON, (b) => {
+    b.journalEntries = b.journalEntries.filter((e) => !removed.includes(e));
+    if (entry) b.journalEntries.push(entry);
+  });
+  saveBooks(ws, books);
+  markTemplate(ws, year, id, entry ? 'done' : null);
+  return { removed, ...(entry && { entry }) };
+}
+
+/** The Debitoren are booked only once every payment naming an open invoice is linked to it (r9c-3): else the entry counts their revenue twice. */
+function assertLinked(receivables: Receivables): void {
+  const unlinked = receivables.unlinked ?? [];
+  if (!unlinked.length) return;
+  const list = unlinked.map((p) => `${p.transactionRef} → ${p.number}`).join(', ');
+  throw new YearCloseRefused({ code: 'paymentsUnlinked', params: { payments: list } }, `Payments name open invoices without being linked to them (${list}): link them first, or the Debitoren count their revenue twice.`);
+}
+
+/** A person's entry of the close under the step's id (the receivables keep the year's id, src/accounting/year-close.ts) and the next free M<year>-NNN ref. */
+function newEntry(b: Books, year: string, template: string | undefined, input: EntryInput): JournalEntry {
+  return {
+    id: template === RECEIVABLES_ID ? receivablesEntryId(year) : randomBytes(8).toString('hex'),
+    transactionRef: nextManualRef(b, year),
+    date: input.date,
+    accountDebit: input.accountDebit,
+    accountCredit: input.accountCredit,
+    amount: input.amount,
+    ...(input.vatCode ? { vatCode: input.vatCode } : {}),
+    description: input.description,
+    origin: 'manual',
+    // A person booked it on the close's form: Änderungen lists it with its «Rückgängig» (r9c-6).
+    by: { kind: 'person', at: new Date().toISOString() },
+  };
 }
 
 export interface EntryInput {
@@ -190,28 +245,13 @@ export function bookEntry(ws: Workspace, input: EntryInput, template?: string): 
   }
   assertInChart(ws, input.accountDebit, input.accountCredit);
   const books = loadBooks(ws);
-  if (template === RECEIVABLES_ID) {
-    const unlinked = receivablesOf(ws, input.date.slice(0, 4), ratesOf(), books).unlinked ?? [];
-    if (unlinked.length) throw new YearCloseRefused({ code: 'paymentsUnlinked', params: { payments: unlinked.map((p) => `${p.transactionRef} → ${p.number}`).join(', ') } }, `Payments name open invoices without being linked to them (${unlinked.map((p) => `${p.transactionRef} → ${p.number}`).join(', ')}): link them first, or the Debitoren count their revenue twice.`);
-  }
+  if (template === RECEIVABLES_ID) assertLinked(receivablesOf(ws, input.date.slice(0, 4), ratesOf(), books));
   const entry = update(books, PERSON, (b) => {
     const year = input.date.slice(0, 4);
     if (template === RECEIVABLES_ID && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {
       throw new YearCloseRefused({ code: 'receivablesBooked', params: { year } }, `The receivables of ${year} are booked already.`);
     }
-    const entry: JournalEntry = {
-      id: template === RECEIVABLES_ID ? receivablesEntryId(year) : randomBytes(8).toString('hex'),
-      transactionRef: nextManualRef(b, year),
-      date: input.date,
-      accountDebit: input.accountDebit,
-      accountCredit: input.accountCredit,
-      amount: input.amount,
-      ...(input.vatCode ? { vatCode: input.vatCode } : {}),
-      description: input.description,
-      origin: 'manual',
-      // A person booked it on the close's form: Änderungen lists it with its «Rückgängig» (r9c-6).
-      by: { kind: 'person', at: new Date().toISOString() },
-    };
+    const entry = newEntry(b, year, template, input);
     b.journalEntries.push(entry);
     return entry;
   });
