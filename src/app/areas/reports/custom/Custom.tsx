@@ -4,7 +4,7 @@
  * which runs for its own period or, with one click, for the page's; «PDF», «CSV», «Bearbeiten»,
  * «Löschen» with «Rückgängig». Every figure is the server's run of the spec on the books.
  */
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import { localToday, parsePeriod } from '../../../../accounting/periods.js';
 import type { RouteOf } from '../../../shell/route.js';
 import { ListHead } from '../../../shell/ListHead.js';
@@ -13,36 +13,17 @@ import { periodName } from '../../../lib/period-label.js';
 import { api, errorText } from '../../../lib/api.js';
 import { language, t } from '../../../i18n/index.js';
 import type { AreaProps } from '../../index.js';
+import { ICONS } from '../../icons.js';
 import { Tabs } from '../Tabs.js';
 import { postDownload } from '../../export/state.js';
 import { specData } from '../../../../reports/spec.js';
 import type { ReportResult } from '../../../../reports/run.js';
-import type { SavedReport, SavedWrite } from '../../../../reports/saved.js';
 import { filtersInWords, refusalText } from '../../../../reports/words.js';
 import { ReportView, uiWords } from './ReportView.js';
-import { editing, useEditing } from './editing.js';
+import { editing, reloadSaved, startEditing, undoWrite, useEditing, useSaved } from './store.js';
+import { ReportForm } from './Form.js';
 
 type Props = AreaProps<Extract<RouteOf<'reports'>, { report: 'custom' }>>;
-
-/** The saved reports, loaded once and again after every write of this page or the sidebar's card. */
-const store: { list: SavedReport[] | undefined; error: string; subs: Set<() => void> } = { list: undefined, error: '', subs: new Set() };
-const notify = () => { for (const f of store.subs) f(); };
-export async function reloadSaved(): Promise<void> {
-  try { store.list = await api.savedReports(); store.error = ''; } catch (e) { store.error = errorText(e); store.list = store.list ?? []; }
-  notify();
-}
-let version = 0;
-function useSaved(): { list: SavedReport[] | undefined; error: string } {
-  useSyncExternalStore((f) => { const g = () => { version++; f(); }; store.subs.add(g); return () => store.subs.delete(g); }, () => version);
-  useEffect(() => { if (store.list === undefined) void reloadSaved(); }, []);
-  return { list: store.list, error: store.error };
-}
-
-/** A save made somewhere, with its «Rückgängig»: the file as it was. */
-export async function undoWrite(w: SavedWrite): Promise<void> {
-  await api.restoreReport(w);
-  await reloadSaved();
-}
 
 const listed: { slugs: string[] } = { slugs: [] };
 
@@ -58,6 +39,7 @@ export function CustomList(props: Props) {
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit} />
       <Tabs route={route} nav={nav}>
+        {canEdit ? <button type="button" className="rall rnew" data-testid="report-new" onClick={() => startEditing({})}>{ICONS.plus}{t('custom.new')}</button> : null}
       </Tabs>
       {error ? <p className="warnline">{error}</p> : null}
       {list && !list.length && !edit ? <div className="empty"><p className="m">{t('custom.empty')}</p></div> : null}
@@ -100,7 +82,7 @@ export function CustomDetail(props: Props) {
     return () => { live = false; };
   }, [spec, token]);
 
-  if (edit) return null;
+  if (edit) return <ReportForm {...props} />;
   if (!saved) return <div className="detail-empty"><div>{t('custom.select')}</div></div>;
   if (!spec) return <div className="detail-empty"><div>{t('custom.unreadable', { why: 'refusal' in saved ? refusalText(saved.refusal, uiWords.t) : '' })}</div></div>;
 
@@ -127,6 +109,7 @@ export function CustomDetail(props: Props) {
       <div className="ruleacts cacts">
         <button type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</button>
         <button type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</button>
+        {canEdit ? <button type="button" className="btn ghost" data-testid="report-edit" onClick={() => startEditing({ slug: saved.slug, spec })}>{t('custom.edit')}</button> : null}
         {canEdit ? <button type="button" className="btn ghost" data-testid="report-delete" onClick={() => void remove()}>{t('custom.delete')}</button> : null}
       </div>
       {error ? <p className="warnline">{error}</p> : null}

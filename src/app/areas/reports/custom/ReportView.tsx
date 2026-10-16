@@ -50,7 +50,9 @@ export function ReportView({ result, preview, go }: { result: ReportResult; prev
   return (
     <div className="rpt" data-testid="report">
       {result.sections.map((s, i) => {
-        const cols = s.section.columns;
+        // The sidebar's card is narrow: a row there is its date, its text and its amount; the whole table is in the PDF, the CSV and Eigene Berichte.
+        const money = s.section.columns.filter((c) => MONEY.includes(c));
+        const cols = preview ? [...s.section.columns.filter((c) => c === 'date' || c === 'text'), ...money.slice(-1)] : s.section.columns;
         const shown = s.groups.reduce((n, g) => n + g.rows.length, 0);
         const grouped = s.section.group !== 'none';
         const totalRow = (label: string, ts: Totals[], cls: string) => {
@@ -67,7 +69,7 @@ export function ReportView({ result, preview, go }: { result: ReportResult; prev
             {many || s.section.title ? <h3>{s.section.title || `${i + 1}. ${uiWords.t(`custom.source.${s.section.source}` as Key)}`}</h3> : null}
             <p className="m rptf">{filtersInWords(s.section, uiWords)} · {t('custom.rows', { n: s.count })}</p>
             {s.count === 0 ? <p className="m">{t('assistant.report.empty')}</p> : (
-              <table className="rptt">
+              <table className={`rptt${preview ? ' compact' : ''}`}>
                 <thead><tr>{cols.map((c) => <th key={c} className={MONEY.includes(c) ? 'n' : ''}>{uiWords.t(`custom.col.${c}` as Key)}</th>)}</tr></thead>
                 <tbody>
                   {s.groups.map((g) => (
@@ -99,7 +101,7 @@ export function ReportView({ result, preview, go }: { result: ReportResult; prev
         </p>
       ) : null}
       {comment ? <p className="rptc" data-testid="report-comment">{comment}</p> : null}
-      {result.vat ? <p className="m rptv">{t('custom.vatNote', { net: fmt(result.vat.net), parts: vatParts(result.vat).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}</p> : null}
+      {result.vat ? <p className="m rptv">{t('custom.vatNote', { net: fmt(result.vat.net), parts: vatParts(result.vat).filter((x) => x.amount !== 0).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}</p> : null}
     </div>
   );
 }

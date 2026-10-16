@@ -46,7 +46,7 @@ export const commentOf = (r: ReportResult): string | undefined =>
 /** The VAT the amounts still hold, as Bilanz and ER say it. */
 export function vatNoteOf(r: ReportResult, w: Words): string | undefined {
   if (!r.vat) return undefined;
-  return w.t('custom.vatNote', { net: money(r.vat.net), parts: vatParts(r.vat).map((x) => w.t(x.key, { amount: money(x.amount) })).join(', ') });
+  return w.t('custom.vatNote', { net: money(r.vat.net), parts: vatParts(r.vat).filter((x) => x.amount !== 0).map((x) => w.t(x.key, { amount: money(x.amount) })).join(', ') });
 }
 
 function sectionHtml(r: ReportResult, i: number, w: Words): string {

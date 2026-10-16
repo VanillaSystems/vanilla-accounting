@@ -28,7 +28,7 @@ import { spanOf } from '../../reports/words.js';
 import { specData } from '../../reports/spec.js';
 import type { ReportResult } from '../../reports/run.js';
 import type { SavedWrite } from '../../reports/saved.js';
-import { reloadSaved, undoWrite } from '../areas/reports/custom/Custom.js';
+import { reloadSaved, undoWrite } from '../areas/reports/custom/store.js';
 import { builtInTexts } from '../../invoices/texts.js';
 import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
