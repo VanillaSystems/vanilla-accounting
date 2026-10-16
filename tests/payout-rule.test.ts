@@ -1,7 +1,9 @@
 /**
  * «bei SumUp immer so» (corner-39): a rule books a card terminal's payout as gross sales at the
  * firm's rate and the provider's fees apart (`then.fees`), the figures read from the payout report
- * linked to it; without the report the whole payout is sales until the report is linked.
+ * linked to it. Without the report nothing is booked: the payout waits for the person as a
+ * question under Aufgaben (workflows/ask), with the whole payout as sales for «Übernehmen», and
+ * the question closes by itself once the report is linked (r4c-21, r5h-12).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,16 +14,23 @@ import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '..
 import { parseRule, ruleWords, type RuleFacts } from '../src/booking/rules.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadBooks, PERSON, saveBooks, update, type Books } from '../src/books/store.js';
+import { closeAsksWithoutRule } from '../src/workflows/held.js';
+import { openEngine } from '../src/workflows/engine.js';
+import { loadWorkflows } from '../src/workflows/load.js';
+import { fillTask, taskOf } from '../src/workflows/model.js';
 import { draftDir } from '../src/saving/changes.js';
 import { draftRules } from '../src/saving/rules.js';
 import { initRepository } from '../src/workspace/git.js';
-import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { wordsIn } from '../src/export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
 
+process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'payout-runs-'));
+
 const GUIDE = 'knowledge/rules/booking.guide.yaml';
+const QUESTION = 'Auszahlungsbericht fehlt: Bericht verknüpfen, oder die ganze Auszahlung als Umsatz buchen?';
 const SUMUP = `      - id: sumup-umsatz
         when: { text: "SumUp" }
         then: { account: "3400", vat: V81, fees: { account: "6840", vat: I0 } }
@@ -102,18 +111,70 @@ test('with its report linked, the payout is booked gross at the rule\'s rate, th
   assert.match(sale.reason!, /^Regel: .*; die Beträge hat Claude aus dem Auszahlungsbericht gelesen$/);
 });
 
-test('without its report the whole payout is sales at the rule\'s rate, in code; with the report and no model the payout waits', async () => {
+test('without its report the payout is held for the person, nothing booked: the question names the missing report, the proposal is the whole payout at the rule\'s rate; with the report and no model it waits', async () => {
   const ws = company();
   const alone = booksOf([payout('PO')]);
   const out = await classifyTransactions(alone, alone.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
-  assert.deepEqual(out.classified, ['PO']);
-  assert.deepEqual(lines(alone, 'PO'), [['1021', '3400', 1412.35, 'V81']]);
-  assert.match(alone.journalEntries[0].reason!, /bis der Bericht verknüpft ist$/);
-  assert.deepEqual(alone.journalEntries[0].receipts, [], 'a report linked later books it again');
+  assert.deepEqual([out.classified, out.unasked, out.failed, alone.journalEntries], [[], [], [], []]);
+  const [held] = out.asked;
+  assert.deepEqual([out.asked.length, held.ref, held.rule, held.question], [1, 'PO', 'sumup-umsatz', QUESTION]);
+  assert.deepEqual(held.entries.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']), [['1021', '3400', 1412.35, 'V81']]);
+  assert.match(held.entries[0].reason!, /^Regel: .*; ohne Auszahlungsbericht: die ganze Auszahlung als Umsatz, auf deine Übernahme hin$/);
+  assert.deepEqual(held.entries[0].receipts, [], 'a report linked later books it again');
 
   const withReport = booksOf([payout('PO')], 'PO');
   const waits = await classifyTransactions(withReport, withReport.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
-  assert.deepEqual([waits.classified, waits.unasked, withReport.journalEntries], [[], ['PO'], []]);
+  assert.deepEqual([waits.classified, waits.asked, waits.unasked, withReport.journalEntries], [[], [], ['PO'], []]);
+});
+
+/** A camt.053 of the demo's Raiffeisen account: one SumUp payout without its report. */
+const STATEMENT = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>R-PO</MsgId><CreDtTm>2026-10-16T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>R-PO</Id><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Ntry><Amt Ccy="CHF">1412.35</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-10-15</Dt></BookgDt><AcctSvcrRef>REF-PO-88213</AcctSvcrRef><AddtlNtryInf>SumUp Payments Ltd SumUp Auszahlung PO-88213</AddtlNtryInf></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+
+/** The inbox run on a company with the SumUp rule and the statement above: the payout's ask run. */
+async function heldPayout() {
+  const ws = company();
+  writeFileSync(join(ws.paths.root, 'transactional-data/2026/bank-statements/Raiffeisen/oktober.xml'), STATEMENT);
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const started = await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
+  assert.ok(started.ok, JSON.stringify(started));
+  await engine.idle();
+  const asks = engine.runs().filter((r) => r.workflow === 'ask');
+  assert.deepEqual(asks.map((r) => [r.item.id, r.state.status, 'at' in r.state ? r.state.at : '']), [['REF-PO-88213', 'waiting', 'ask']]);
+  return { ws, engine, ask: asks[0] };
+}
+
+const booked = (ws: Workspace) => loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'REF-PO-88213').map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode, e.rule]);
+
+test('r4c-21: the inbox run books no payout without its report; it asks «Frag: Auszahlungsbericht fehlt …» with the whole payout as the proposal, and «Übernehmen» books that, stamped with the rule', async () => {
+  const { ws, engine, ask } = await heldPayout();
+  assert.deepEqual(booked(ws), [], 'nothing booked: no sale question can be asked about it either');
+  const task = taskOf(loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'ask')!, ask)!;
+  assert.equal(fillTask(task.title.de!, task.item, task.reads), `Frag: ${QUESTION}`);
+  assert.deepEqual(task.outcomes, ['accept', 'byHand']);
+  assert.deepEqual((task.reads?.entries as Array<{ accountDebit: string; accountCredit: string; amount: number; vatCode?: string }>).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode]), [['1021', '3400', 1412.35, 'V81']]);
+
+  assert.deepEqual(await engine.command({ kind: 'answer', run: ask.id, outcome: 'accept' }), { ok: true, run: ask.id });
+  await engine.idle();
+  assert.deepEqual(booked(ws), [['1021', '3400', 1412.35, 'V81', 'sumup-umsatz']]);
+  assert.equal(engine.run(ask.id)!.state.status, 'done');
+});
+
+test('r5h-12: the report linked while the payout waits closes its question; the next run books the split from the report', async () => {
+  const { ws, engine, ask } = await heldPayout();
+  assert.deepEqual(await closeAsksWithoutRule(engine, ws), [], 'no report yet: the question stays');
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => {
+    b.receipts.push({ id: 'po', filename: 'po.pdf', extractedText: 'SumUp Auszahlungsbericht PO-88213: Kartenzahlungen 1480.00, Rückerstattung -40.00, Gebühren -27.65' } as Receipt);
+    b.mappings.push({ transactionRef: 'REF-PO-88213', receiptId: 'po' });
+  });
+  saveBooks(ws, books);
+  assert.deepEqual(await closeAsksWithoutRule(engine, ws), [ask.id]);
+  assert.equal(engine.run(ask.id)!.state.status, 'discarded');
+  assert.deepEqual(booked(ws), [], 'the split needs the model to read the report: nothing booked without one');
 });
 
 test('a reading that is no payout is refused, the payment stays unbooked', async () => {
