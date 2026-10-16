@@ -162,7 +162,9 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
     const multi = 'multi' in QUESTIONS[key];
     const now = answerList(x.answers, key);
     const next = multi ? (now.includes(value) ? now.filter((v) => v !== value) : [...now, value]) : value;
-    return { ...x, answers: { ...x.answers, [key]: next } };
+    // The reporting period follows the method (r5f-14): half-yearly on the net tax rate, quarterly on the effective one; the person may still change it.
+    const period: Partial<Answers> = key === 'vatMethod' ? { period: value === 'net-rate' ? 'half-yearly' : 'quarterly' } : {};
+    return { ...x, answers: { ...x.answers, [key]: next, ...period } };
   });
   const chooseFolder = async () => {
     const dir = await desktop?.chooseFolder(t('desktop.chooseNew'));

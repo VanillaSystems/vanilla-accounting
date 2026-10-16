@@ -188,3 +188,24 @@ export function byCode(lines: EntryLine[]): Array<[code: string, lines: EntryLin
 
 /** The quarter a correction entry corrects, as a period for its label. */
 export const correctedPeriod = (q: string) => parsePeriod(q, localToday())!;
+
+/** Korrigiert minus filed tax: what the 0535 changes (positive: more to pay). */
+export function correctionDiff(books: Index, filed: ReturnFigures): number {
+  const corrected = vat().figures(books.journalEntries ?? [], filed.period, books.config?.vatAdjustments ?? []);
+  return Math.round((corrected.payable - ((filed.ziffern['500'] ?? 0) - (filed.ziffern['510'] ?? 0))) * 100) / 100;
+}
+
+/**
+ * The figure the page leads with: for a filed period the filed one, as the authority has it, with
+ * today's books' figure beside it when a correction changed it (r6f-26); else today's figure.
+ */
+export function headline(v: VatReturn, filed: ReturnFigures | undefined, books: Index): { kind: 'toPay' | 'credit'; amount: number; filed: boolean; corrected?: { kind: 'toPay' | 'credit'; amount: number; diff: number } } {
+  if (v.state.kind !== 'filed' || !filed) return { kind: v.report.credit ? 'credit' : 'toPay', amount: v.report.credit || v.report.toPay, filed: false };
+  const payable = Math.round((((filed.ziffern['500'] ?? 0) - (filed.ziffern['510'] ?? 0)) * 100)) / 100;
+  const diff = correctionDiff(books, filed);
+  const now = Math.round((payable + diff) * 100) / 100;
+  return {
+    kind: payable < 0 ? 'credit' : 'toPay', amount: Math.abs(payable), filed: true,
+    ...(diff !== 0 ? { corrected: { kind: now < 0 ? 'credit' : 'toPay', amount: Math.abs(now), diff } } : {}),
+  };
+}

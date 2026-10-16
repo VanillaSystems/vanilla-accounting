@@ -16,7 +16,7 @@ templates:
   - { id: accruedIncome, accountDebit: "1301", accountCredit: "" }
   - { id: deferredIncome, accountDebit: "", accountCredit: "2301" }
   - { id: provision, accountDebit: "", accountCredit: "2330" }
-  - { id: taxProvision, accountDebit: "8900", accountCredit: "2208" }
+  - { id: taxProvision, accountDebit: "8900", accountCredit: "2208", legalForms: [GmbH, AG] }
   - { id: privateUse, accountDebit: "2451", accountCredit: "", vatCode: K81-B }
   - { id: inventoryChange, accountDebit: "", accountCredit: "" }
   - { id: socialInsurance, accountDebit: "5700", accountCredit: "2270" }

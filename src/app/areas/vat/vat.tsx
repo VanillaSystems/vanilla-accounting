@@ -23,7 +23,7 @@ import {
   FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
-import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
+import { correctionDiff, signed, useReturn, zifferLabel, headline } from './view.js';
 import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
@@ -101,6 +101,7 @@ function Return(props: Props) {
   const select = (n: string) => nav.select({ area: 'vat', ziffer: n });
   const corrections = v.corrections.length;
   const result = resultZiffer(v);
+  const head = headline(v, filed, books);
 
   return (
     <div className="page">
@@ -121,9 +122,10 @@ function Return(props: Props) {
         <button type="button" className="clink2" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('vatCodes.open')}</button>
       </div>
       <SalesWithoutVat books={books} period={period} nav={nav} />
-      <button type="button" className="vresult" onClick={() => select(result)}>
-        <span>{t(result === '510' ? 'vat.credit' : 'vat.toPay')}</span>
-        <b className="mono"><small>CHF</small>{fmt(v.report.credit || v.report.toPay)}</b>
+      <button type="button" className="vresult" data-filed={head.filed || undefined} onClick={() => select(result)}>
+        <span>{t(head.kind === 'credit' ? 'vat.credit' : 'vat.toPay')}{head.filed ? ` · ${t('vat.asFiled')}` : ''}</span>
+        <b className="mono"><small>CHF</small>{fmt(head.amount)}</b>
+        {head.corrected ? <span className="m" data-testid="corrected-now">{t(head.corrected.kind === 'credit' ? 'vat.nowCredit' : 'vat.nowToPay', { amount: fmt(head.corrected.amount), diff: signed(head.corrected.diff) })}</span> : null}
       </button>
       <div className="rows vz" role="listbox" aria-label={t('vat.ziffern')}>
         {SECTIONS.map((s) => {

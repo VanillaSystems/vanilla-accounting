@@ -5,6 +5,7 @@ import { localToday, booksOpenPeriod, type Period } from '../../../accounting/pe
 import { fmt } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { rateOf, vatKeyOf, vatReturn, type VatReturn } from './model.js';
+export { correctionDiff, headline } from './model.js';
 import { useFiledReturn } from './filed.js';
 import { vat, filing } from '../../../engines/index.js';
 import type { ReturnFigures } from '../../../engines/return.js';
@@ -25,10 +26,5 @@ export function useReturn({ books, period }: { books: Index; period: Period }) {
   return { v, filed, key };
 }
 
-/** Korrigiert minus filed tax: what the 0535 changes (positive: more to pay). */
-export function correctionDiff(books: Index, filed: ReturnFigures): number {
-  const corrected = vat().figures(books.journalEntries ?? [], filed.period, books.config?.vatAdjustments ?? []);
-  return Math.round((corrected.payable - ((filed.ziffern['500'] ?? 0) - (filed.ziffern['510'] ?? 0))) * 100) / 100;
-}
 
 export const signed = (n: number) => (n > 0 ? `+${fmt(n)}` : fmt(n));

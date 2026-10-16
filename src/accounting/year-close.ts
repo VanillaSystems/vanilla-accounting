@@ -356,10 +356,12 @@ export interface EntryTemplate {
  * jurisdiction's default owner account (setup.yaml, the GmbH's 2451) replaced by this firm's own
  * (`owner`: 2850 on an Einzelfirma), so the private-use entry debits the right account.
  */
-export const yearEndTemplates = (owner?: string): EntryTemplate[] => {
+export const yearEndTemplates = (owner?: string, legalForm?: string): EntryTemplate[] => {
   const standIn = setup().owner.otherwise.account;
   const own = (account: string) => (owner && account === standIn ? owner : account);
-  return yearEndData().templates.map(({ vatCode, ...t }) => ({ ...t, accountDebit: own(t.accountDebit), accountCredit: own(t.accountCredit), ...(vatCode && formTakes(vatCode) && { vatCode }) }));
+  return yearEndData().templates
+    .filter((t) => !t.legalForms || !legalForm || t.legalForms.includes(legalForm))
+    .map(({ vatCode, legalForms: _forms, ...t }) => ({ ...t, accountDebit: own(t.accountDebit), accountCredit: own(t.accountCredit), ...(vatCode && formTakes(vatCode) && { vatCode }) }));
 };
 
 /**
@@ -622,7 +624,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     ? [{ ...receivablesTemplate(), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
   const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
-  const templates = [...yearEndTemplates(owner), ...proposed].map((t) => {
+  const templates = [...yearEndTemplates(owner, input.legalForm), ...proposed].map((t) => {
     const booked = bookedFor(books.journalEntries, year, t);
     return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }) };
   });

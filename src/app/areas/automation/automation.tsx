@@ -26,7 +26,7 @@ import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
-import { baseCurrency, filing, vat } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
 import { questionsNow, useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
@@ -108,7 +108,7 @@ function List({ route, nav, books }: Props) {
         {row({ area: 'automation', view: 'tasks' }, <><span className="t">{t('automation.tasks')}</span>{waiting.length + asked ? <span className="a"><span className="wfpill warn">{waiting.length + asked}</span></span> : null}</>)}
         <div className="row" role="option" aria-selected={false} tabIndex={-1} data-to="rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}><span className="t">{t('automation.toRules')}</span><span className="a">→</span></div>
         {PHASES.map((p) => {
-          const ws = view?.workflows.filter((w) => w.phase === p) ?? [];
+          const ws = view?.workflows.filter((w) => w.phase === p && forThisFirm(w)) ?? [];
           if (!ws.length) return null;
           return (
             <Fragment key={p}>
@@ -412,9 +412,13 @@ function Proposal({ entries }: { entries: JournalEntry[] }) {
   );
 }
 
-/** A box's name: a rate row by its rate, else the dictionary's name of the box, else the module's. */
+/** A workflow for a filing period belongs to a firm that files returns; a firm without any has no such period (r5f-12). */
+const forThisFirm = (w: WorkflowDecl): boolean => w.for !== 'period' || chargesVat();
+
+/** A box's name: a rate row by its rate (a net tax rate by its own name, never «Bezugsteuer», r6f-25), else the dictionary's name of the box, else the module's. */
 function boxLabel(box: string): string {
   const row = vat().rateRows.find((r) => r.ziffer === box);
+  if (row?.kind === 'net-rate') return row.name ?? t('vat.nNetRate', { name: '', rate: row.rate }).trim();
   if (row) return t(row.kind === 'supply' ? 'vat.nSupply' : 'vat.nAcquisition', { rate: row.rate });
   const key = `vat.n${box}`;
   if (isKey(key)) return tData(key);
@@ -559,7 +563,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
 }
 
 function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'events'; nav: Nav }) {
-  const m = processMap(view.workflows);
+  const m = processMap(view.workflows.filter(forThisFirm));
   const byId = (id: string) => view.workflows.find((w) => w.id === id)!;
   const open = (id: string) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: id, tab: 'graph' }, query: {} });
   return (

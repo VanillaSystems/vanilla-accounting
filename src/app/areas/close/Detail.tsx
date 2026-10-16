@@ -288,7 +288,7 @@ function Close({ d, nav, canEdit }: StepProps) {
         <p><button type="button" className="btn" onClick={() => act(nav, () => api.bookRevaluation(d.year), t('close.fxBookedToast'))}>{t('yearClose.fxBook')}</button> <span className="m">{t('close.fxRebook')}</span></p>
       )}
       <h3>{t('yearClose.sectionResult')}</h3>
-      <p className="m">{t('yearClose.resultIntro')}</p>
+      <p className="m">{t(chargesVat() ? 'yearClose.resultIntro' : 'yearClose.resultIntroNoVat')}</p>
       <div className="ftab sums">
         <div className="fr"><span className="m">{t('yearClose.totalAssets')}</span><span className="r mono">{fmt(l.totalAssets)}</span></div>
         <div className="fr"><span className="m">{t('yearClose.totalLiabilities')}</span><span className="r mono">{fmt(l.totalLiabilities)}</span></div>

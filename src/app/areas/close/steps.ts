@@ -19,8 +19,8 @@ export const stepGone = (s: string | undefined): boolean => s !== undefined && !
 
 export const GROUPS = [['close.groupBefore', ['q4', 'checks', 'entries']], ['close.groupClose', ['close', 'open']], ['close.groupAfter', ['profit', 'handover']]] as const;
 
-/** The year's last filing period as the form names it: Q4, or H2 for a firm filing half-yearly. */
-export const lastPeriodOf = (year: string): string => filingKeyOf(`${year}-12-31`, filing().length).slice(5);
+/** The year's last filing period as the form names it: Q4, or H2 for a firm filing half-yearly; a firm without returns has the whole year sealed (r6f-14). */
+export const lastPeriodOf = (year: string): string => (chargesVat() ? filingKeyOf(`${year}-12-31`, filing().length).slice(5) : t('close.wholeYear'));
 
 export function stepLabel(step: Step, year: string): string {
   const next = String(+year + 1);
@@ -130,6 +130,7 @@ export function stepState(step: Step, d: YearCloseView | undefined, today: strin
   const next = String(+d.year + 1);
   switch (step) {
     case 'q4': {
+      if (!chargesVat()) return ['ok', t('close.noReturnState')];
       const filed = d.checks.find((c) => c.id === 'q4Filed')?.status === 'ok';
       return filed ? ['ok', t('close.filed')] : yearOver(d.year, today) ? ['open', t('close.dueOn', { date: formatDate(`${next}-03-01`) })] : ['later', t('close.fromDate', { date: formatDate(`${next}-01-01`) })];
     }

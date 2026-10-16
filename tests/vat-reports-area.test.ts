@@ -10,6 +10,7 @@ import type { Index, JournalEntry } from '../src/types/index.js';
 import { computeIncomeStatement } from '../src/accounting/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { filedDiff, formAmount, shownZiffern, vatKeyOf, vatReturn } from '../src/app/areas/vat/model.js';
+import { headline } from '../src/app/areas/vat/model.js';
 import { NO_ACCOUNT, accountsOf, filterBlocks, ledgerOf, reportView, searchReport } from '../src/app/areas/reports/model.js';
 
 const p = (token: string) => parsePeriod(token, '2026-10-11')!;
@@ -27,6 +28,15 @@ const books: Index = {
     je('fix', '2026-09-30', '', '4000', 8.1, { vatCode: 'M81-2', corrects: '2026-Q2' }),
   ],
 };
+
+test('a filed quarter leads with the filed figure, today\'s figure beside it when a correction changed it; an open quarter with today\'s (r6f-26)', () => {
+  const filed = { period: '2026-Q2' as const, ziffern: { '500': 0, '510': 4.05 } };
+  const q2 = vatReturn(books, '2026-Q2', '2026-10-11');
+  assert.deepEqual(headline(q2, filed, books), { kind: 'credit', amount: 4.05, filed: true, corrected: { kind: 'credit', amount: 12.15, diff: -8.1 } }, 'the filed 4.05 stays the headline; the 8.10 correction shows beside it');
+  assert.deepEqual(headline(q2, { period: '2026-Q2', ziffern: { '500': 0, '510': 12.15 } }, books), { kind: 'credit', amount: 12.15, filed: true }, 'nothing beside it when the books match the filed return');
+  const q3 = vatReturn(books, '2026-Q3', '2026-10-11');
+  assert.deepEqual(headline(q3, undefined, books), { kind: 'toPay', amount: 81 - 8.1, filed: false });
+});
 
 test('a period that is no ESTV period shows the open quarter; a quarter shows itself', () => {
   assert.equal(vatKeyOf(p('2026-09'), p('2026-Q3')), '2026-Q3');

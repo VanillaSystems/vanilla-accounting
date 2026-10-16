@@ -132,7 +132,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <button type="button" className="miss" disabled={!edit} title={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
           {vat.length
             ? vat.map((g) => <span key={g.ratePercent} title={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
-            : r.hasSwissVat === undefined ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
+            : r.hasSwissVat === undefined && withoutInputTax() !== 'none' ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
             : <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>}
           {r.vatBy === 'human' && <ByHand />}
           {misfit !== undefined && <span className="misfit" data-testid="vat-misfit" title={t('receipts.vatMisfitTip', { gross: `${cur} ${fmt(misfit)}`, amount: `${cur} ${fmt(r.amount!)}` })}>{t('receipts.vatMisfit')}</span>}
@@ -375,7 +375,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
           <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
           <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
-        <VatFields v={v} nav={nav} edit={edit} />
+        {withoutInputTax() !== 'none' ? <VatFields v={v} nav={nav} edit={edit} /> : null}
         <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!edit} /></label>
         <label>{t('receipts.field.remarks')}<textarea name="remarks" defaultValue={r.remarks ?? ''} readOnly={!edit} placeholder={t('receipts.remarksPlaceholder')} /></label>
         <div className="err" role="alert">{err}</div>

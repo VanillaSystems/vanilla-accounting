@@ -186,7 +186,7 @@ export interface StatementsData {
 }
 
 /** A guided year-end entry; a blank account is the user's pick. */
-export interface YearEndTemplate { id: string; accountDebit: string; accountCredit: string; vatCode?: string }
+export interface YearEndTemplate { id: string; accountDebit: string; accountCredit: string; vatCode?: string; /** Only for these legal forms (a GmbH's tax provision; an Einzelfirma's owner pays the income tax). */ legalForms?: string[] }
 
 /** year-end.yaml: the accounts the year close books on, its entry forms, the dividend's withholding tax. */
 export interface YearEndData {

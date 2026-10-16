@@ -96,7 +96,7 @@ export const QUESTIONS = {
   },
   fiscalYear: {
     ask: 'Fiscal year',
-    why: 'The books open on 1 January; opening balances, the year-end and the VAT quarters follow the calendar year.',
+    why: 'The books open on 1 January; opening balances, the year-end and the periods follow the calendar year.',
     options: [
       { value: 'calendar', label: 'calendar year (1.1.-31.12.)' },
       { value: 'other', label: 'other', unsupported: 'A fiscal year other than the calendar year is not supported yet: opening balances and the year-end are kept per calendar year.' },
@@ -148,7 +148,7 @@ export const QUESTIONS = {
   },
   privateUse: {
     ask: 'Private use of a company car or phone',
-    why: 'The private share takes back part of the input tax (Eigenverbrauch, VAT code K81-B).',
+    why: 'The private share is charged to the owner at the year-end; a firm registered for VAT also takes back the input tax on it (Eigenverbrauch).',
     multi: true,
     options: [{ value: 'car', label: 'car' }, { value: 'phone', label: 'phone' }],
   },

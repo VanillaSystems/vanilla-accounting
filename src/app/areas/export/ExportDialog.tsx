@@ -8,7 +8,7 @@ import './export.css';
 import type { Index } from '../../../types/index.js';
 import { localToday, booksOpenPeriod, type Period } from '../../../accounting/periods.js';
 import { GROUPS, ITEMS, PRESETS, countOf, quartersIn, receiptsIn, type Format, type ItemDef, type ItemId } from '../../../export/model.js';
-import { t } from '../../i18n/index.js';
+import { t, tWith } from '../../i18n/index.js';
 import { errorText, STATIC_EXPORT } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { periodName } from '../../lib/period-label.js';
@@ -16,6 +16,7 @@ import { PeriodPicker } from '../../shell/PeriodPicker.js';
 import { ICONS } from '../icons.js';
 import { configOf, download, ownConfig, ownPresets, periodOf, saveOwnPresets, type DialogConfig, type OwnPreset } from './state.js';
 import { filing } from '../../../engines/index.js';
+import { periodWord } from '../../lib/vat-words.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 
 interface Props {
@@ -120,7 +121,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
 
   const hint = (i: ItemDef): string => {
     const n = counts[i.id];
-    if (i.id === 'vat') return n ? quartersIn(period, localToday(), filing().length).map((q) => periodName(periodOf(q))).join(', ') : t('export.noQuarter');
+    if (i.id === 'vat') return n ? quartersIn(period, localToday(), filing().length).map((q) => periodName(periodOf(q))).join(', ') : t('export.noQuarter', { period: periodWord().one });
     if (i.id === 'ledger') return account === undefined ? t('export.noAccountChosen') : account === '' ? t('reports.noAccount') : `${account} ${names[account] ?? ''}`;
     if (!n) return t('export.nothingIn');
     switch (i.id) {
@@ -130,7 +131,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
       case 'ledgers': case 'chart': return t('export.unit.accounts', { n });
       case 'receipts': return `${t('export.unit.files', { n })} · ${kb(receiptKb)}`;
       case 'statements': return t('export.unit.files', { n });
-      case 'filings': return t('export.unit.quarters', { n });
+      case 'filings': return t('export.unit.quarters', { n, period: periodWord().one, periods: periodWord().many });
       default: return '';
     }
   };
@@ -164,7 +165,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
             <div className="gh">{t('export.presets')}</div>
             {PRESETS.map((p) => (
               <button key={p.id} type="button" className={c.preset === p.id ? 'on' : ''} onClick={() => setC(configOf(p.id, open, page))}>
-                <b>{t(`export.preset.${p.id}` as 'export.title')}</b><span>{t(`export.preset.${p.id}Note` as 'export.title')}</span>
+                <b>{t(`export.preset.${p.id}` as 'export.title')}</b><span>{tWith(`export.preset.${p.id}Note`, { period: periodWord().one })}</span>
               </button>
             ))}
             {own.length > 0 && <div className="gh">{t('export.own')}</div>}
@@ -231,7 +232,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                 autoFocus
                 placeholder={t('export.presetName')}
                 aria-label={t('export.presetName')}
-                defaultValue={c.preset && !PRESETS.some((p) => p.id === c.preset) ? c.preset : t('export.presetDefault')}
+                defaultValue={c.preset && !PRESETS.some((p) => p.id === c.preset) ? c.preset : t('export.presetDefault', { period: periodWord().one })}
                 onFocus={(e) => e.currentTarget.select()}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); e.stopPropagation(); saveNamed(); } }}
               />

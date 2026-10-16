@@ -46,6 +46,7 @@ function explanation(v: VatReturn, n: string): string {
   const r = rateOf(v, n);
   if (r?.row.kind === 'net-rate') return t('vat.xNetRate');
   if (r) return t(r.row.kind === 'supply' ? 'vat.xSupply' : 'vat.xAcquisition', { rate: r.row.rate });
+  if (n === '500' && methodOf(vatSetup()) === 'net-rate') return t('vat.x500NetRate');
   if (n in sumsOf() || n === '200') return t(`vat.x${n}` as 'vat.x289');
   return t(`vat.z${n}` as 'vat.z200');
 }

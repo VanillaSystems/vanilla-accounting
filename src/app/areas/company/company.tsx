@@ -4,6 +4,7 @@
  * periods and seals are read only (a quarter closes with the seal CLI, the year with Abschluss);
  * Darstellung is this browser's own.
  */
+import { periodCards } from './periods.js';
 import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
 import { COMPANY_SECTIONS, companySection, type CompanySection, type RouteOf } from '../../shell/route.js';
@@ -512,14 +513,12 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
         <Fragment key={y}>
           {years.length > 1 && <h3>{y}</h3>}
           <div className="qgrid">
-            {[1, 2, 3, 4].map((n) => {
-              const q = `${y}-Q${n}`;
-              const range = parsePeriod(q, today)!;
+            {periodCards(y, today, filed).map(({ key: q, label, range, state, due }) => {
               const seal = ws.seals.find((s) => s.quarter === q);
               return (
-                <button key={q} type="button" className="qcard" data-quarter={q} onClick={() => nav.go({ route: { area: 'vat' }, query: { period: range } })}>
-                  <b>{t('company.quarter', { n, year: y })}</b>
-                  <span>{filed.has(q) ? t('close.qFiled') : range.to < today ? t('close.qOpenDue', { date: formatDate(addDays(range.to, 60)) }) : range.from <= today ? t('close.qRuns') : ''}</span>
+                <button key={q} type="button" className="qcard" data-quarter={q} data-state={state} onClick={() => nav.go({ route: { area: 'vat' }, query: { period: range } })}>
+                  <b>{label.kind === 'quarter' ? t('company.quarter', { n: label.n, year: y }) : label.kind === 'half' ? t('period.half', { half: label.n, year: y }) : t('company.yearCard', { year: y })}</b>
+                  <span>{state === 'filed' ? t('close.qFiled') : state === 'due' ? t('close.qOpenDue', { date: formatDate(due!) }) : state === 'runs' ? t('close.qRuns') : state === 'closesWithYear' && seal?.status !== 'intact' ? t('company.yearOpen') : ''}</span>
                   {seal?.status === 'intact' && (
                     <>
                       <span className="m">{ICONS.lock}{t('company.sealedOn', { date: formatDate(seal.sealedAt) })}</span>
