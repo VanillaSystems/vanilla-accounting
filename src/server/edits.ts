@@ -201,10 +201,11 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   if (off) throw unbalanced(off);
   const rate = tx.currency === baseCurrency() ? {} : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
+  const at = new Date().toISOString();
   const entries = lines.map((l): JournalEntry => ({
     id: randomBytes(8).toString('hex'), transactionRef: ref, date: tx.date,
     accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
-    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts,
+    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, by: { kind: 'person', at },
   }));
   books.journalEntries.push(...entries);
   return entries;
@@ -229,11 +230,22 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
   if (off) throw unbalanced(off);
   const before = entries.map((e) => ({ ...e }));
   const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
-  for (const e of entries) Object.assign(e, { transactionRef: ref, date: tx.date, receipts, origin: 'manual' });
+  for (const e of entries) Object.assign(e, { transactionRef: ref, date: tx.date, receipts, origin: 'manual', by: { kind: 'person', at: new Date().toISOString() } });
   return before;
 }
 
 /** Deletes a booking of the open period; returns it as it was. */
+/**
+ * A booking a person changed or made by hand put back as the last save holds it (`saved`), or
+ * taken out when it was booked since (Änderungen › «Rückgängig», src/saving/changes.ts handEdits).
+ */
+export function restoreSaved(books: Books, id: string, saved: JournalEntry | undefined): void {
+  if (!saved) { deleteEntry(books, id); return; }
+  const e = entryOf(books, id);
+  assertOpen(books, [e.date, saved.date], 'editEntry');
+  books.journalEntries = books.journalEntries.map((x) => (x.id === id ? saved : x));
+}
+
 export function deleteEntry(books: Books, id: string): JournalEntry {
   const entry = entryOf(books, id);
   assertOpen(books, [entry.date], 'deleteEntry');
@@ -248,7 +260,8 @@ export function applyChange(books: Books, c: BookChange): BookChange | undefined
     case 'link': return link(books, c.receipt, c.payment);
     case 'unlink': return unlink(books, c.receipt, c.payment);
     case 'entry': return setEntry(books, c.id, c.set);
-    case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry).id };
+    // A new booking (not one an undo puts back, which keeps its id and author) is the person's decision.
+    case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry.id ? c.entry : { ...c.entry, by: { kind: 'person', at: new Date().toISOString() } }).id };
     case 'deleteEntry': return { kind: 'newEntry', entry: deleteEntry(books, c.id) };
     case 'receiptKind': return setReceiptKind(books, c);
   }

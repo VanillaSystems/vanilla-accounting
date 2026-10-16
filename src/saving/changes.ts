@@ -10,7 +10,9 @@ import { join, relative } from 'node:path';
 import git from 'isomorphic-git';
 import { repositoryAt } from '../workspace/git.js';
 import { LAYOUT, yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
-import { counts, type BooksChange, type ChangesView, type FileChange, type FileDiff, type SaveDetail, type SaveSummary } from './model.js';
+import { BOOK_FILES, fromJsonl } from '../books/years.js';
+import type { JournalEntry } from '../types/index.js';
+import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type SaveDetail, type SaveSummary } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
@@ -75,12 +77,37 @@ export async function outsideChanges(ws: Ws): Promise<FileChange[]> {
 /** The books' own files: hashing every receipt and statement (hundreds of MB) would make the page slow. */
 const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog, yearPaths(ws.paths, y).questions])];
 
-/** How many of the books' own files differ from the last save. The runs that wrote them are the engine's to name. */
+/** How many of the books' own files differ from the last save, and the bookings a person changed since. The runs that wrote them are the engine's to name. */
 export async function booksChange(ws: Ws): Promise<BooksChange> {
   const repo = await repositoryAt(ws.paths.repository);
-  if (!repo) return { files: 0, runs: [] };
+  if (!repo) return { files: 0, runs: [], hand: [] };
   const rows = await git.statusMatrix({ fs, dir: repo, filepaths: ownBooks(ws).map((p) => relative(repo, p)) });
-  return { files: rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1) && !(head === 0 && workdir === 0)).length, runs: [] };
+  const files = rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1) && !(head === 0 && workdir === 0)).length;
+  return { files, runs: [], hand: files ? await handEdits(ws) : [] };
+}
+
+const entriesIn = (text: string, file: string) => new Map((fromJsonl(text, file) as JournalEntry[]).map((e) => [e.id, e]));
+
+/**
+ * The bookings a person changed or booked by hand since the last save: those whose `by` names a
+ * person and that differ from the last save, each with the booking as that save holds it.
+ */
+export async function handEdits(ws: Ws): Promise<HandEdit[]> {
+  const repo = await repositoryAt(ws.paths.repository);
+  if (!repo) return [];
+  const out: HandEdit[] = [];
+  for (const year of yearsOf(ws.paths)) {
+    const path = join(yearPaths(ws.paths, year).books, BOOK_FILES.journalEntries);
+    const now = entriesIn(read(path), path);
+    const saved = entriesIn(await headBlob(repo, relative(repo, path)), path);
+    for (const e of now.values()) {
+      if (e.by?.kind !== 'person') continue;
+      const was = saved.get(e.id);
+      if (was && JSON.stringify(was) === JSON.stringify(e)) continue;
+      out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(was ? { saved: was } : {}) });
+    }
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
 }
 
 /** The books as they are now, as one fingerprint: their own files' content and the names of the receipts and statements beside them. */

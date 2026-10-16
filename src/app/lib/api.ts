@@ -97,6 +97,7 @@ export function errorText(e: unknown): string {
     case 'accountInUse': return t('error.accountInUse', { account: b.params.account, n: b.params.entries });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
+    case 'gone': return t(`error.gone.${b.params.what}`);
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'setup': return setupText(b.params);
@@ -182,6 +183,8 @@ export const api = {
   createJournalEntry: (input: JournalEntryInput) =>
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
+  /** Änderungen › «Rückgängig» of a change by hand: the booking as the last save holds it, or gone when booked since. */
+  restoreSavedEntry: (id: string) => request<Ok>('POST', `/api/journal-entries/${encodeURIComponent(id)}/as-saved`),
   classifyTransaction: (txRef: string, overwrite = false) =>
     request<{ entries: JournalEntry[] }>('POST', `/api/journal-entries/classify/${encodeURIComponent(txRef)}`, { overwrite }).then((r) => r.entries),
 

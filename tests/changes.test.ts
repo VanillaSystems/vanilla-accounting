@@ -50,7 +50,7 @@ test('the books wait as one item, beside the AI\'s draft and an outside edit', a
   const view = await changesView(ws);
   assert.deepEqual(view.outside.map((f) => [f.path, f.state, f.added, f.removed]), [['knowledge/rules/house.guide.yaml', 'modified', 1, 0]]);
   assert.deepEqual(view.draft.map((f) => [f.path, f.state]), [['workflows/booking/classify/step.yaml', 'added']]);
-  assert.deepEqual(view.books, { files: 1, runs: [] }, 'the books as one item: the runs that wrote are the engine\'s to name');
+  assert.deepEqual(view.books, { files: 1, runs: [], hand: [] }, 'the books as one item: the runs that wrote are the engine\'s to name');
   assert.equal(view.outside.some((f) => f.path.includes('transactional-data') || f.path === 'ledger.json'), false);
   const diff = await fileDiff(ws, 'outside', 'knowledge/rules/house.guide.yaml');
   assert.deepEqual([diff!.before.split('\n').length, diff!.after.endsWith('three\n')], [4, true]);

@@ -11,12 +11,13 @@ import type { RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
-import { changesCommand, changesNow as lastView, useChanges, useDiff, useSave } from '../../changes/store.js';
-import { errorText } from '../../lib/api.js';
+import { changesCommand, changesNow as lastView, pollChanges, useChanges, useDiff, useSave } from '../../changes/store.js';
+import { api, errorText } from '../../lib/api.js';
 import { BotIcon } from '../automation/Graph.js';
 import { BOOKS, diffLines, hunks, type ChangesView, type FileChange, type SaveSummary, type SavingCommand, type SavingResult } from '../../../saving/model.js';
 import { ICONS } from '../icons.js';
 import { RuleDraft } from '../company/RulesSection.js';
+import { at } from '../receipts/view.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 
 type Props = AreaProps<RouteOf<'changes'>>;
@@ -149,6 +150,17 @@ function useCommand(nav: Nav): [string | undefined, (cmd: SavingCommand) => Prom
   return [busy, go];
 }
 
+/** «Rückgängig» of a change by hand: the booking back as saved, or gone when it was booked since. */
+async function restoreSaved(id: string, nav: Nav) {
+  try {
+    await api.restoreSavedEntry(id);
+    nav.refresh();
+    await pollChanges();
+  } catch (e) {
+    nav.toast(errorText(e));
+  }
+}
+
 function SyncLine({ view, nav }: { view: ChangesView; nav: Nav }) {
   const [busy, go] = useCommand(nav);
   const last = view.history[0] ? <span className="m">{t('changes.lastSaved', { when: sayWhen(view.history[0].at) })}</span> : null;
@@ -208,8 +220,23 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                       <span className="m mono">{t('changes.entries', { n: r.entries + r.links + r.receipts })}</span>
                     </button>
                   ))}
-                  {!view.books.runs.length ? <div className="chrawrow"><span><span className="chwho">{PERSON}</span>{t('changes.direct')}</span><span className="m mono">{t('changes.fileCount', { n: view.books.files })}</span></div> : null}
+                  {!view.books.runs.length && !view.books.hand.length ? <div className="chrawrow"><span><span className="chwho">{PERSON}</span>{t('changes.direct')}</span><span className="m mono">{t('changes.fileCount', { n: view.books.files })}</span></div> : null}
                 </div>
+                {view.books.hand.length ? (
+                  <>
+                    <div className="group"><span>{t('changes.byHand')}</span></div>
+                    <div className="chraw" data-testid="hand-edits">
+                      {view.books.hand.map((h) => (
+                        <div key={h.id} className="chrawrow" data-hand={h.id}>
+                          <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: h.id }, h.date))}>
+                            <span className="chwho">{PERSON}</span>{h.text} · {t(h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
+                          </button>
+                          <button type="button" className="quiet2" title={t(h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
               </>
             ) : null}
             {ruleDrafts.length ? (

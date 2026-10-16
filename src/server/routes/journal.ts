@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
 import { isIsoDate } from '../../accounting/periods.js';
-import { patchBody, stringField, updateBooks, withBooks, RequestError } from '../books.js';
+import { patchBody, stringField, updateBooks, withBooks, RequestError, WS } from '../books.js';
 import { learnFromCorrection } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
-import { addEntry, deleteEntry, setEntry } from '../edits.js';
+import { addEntry, deleteEntry, restoreSaved, setEntry } from '../edits.js';
+import { handEdits } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 
 export const router = Router();
@@ -76,8 +77,17 @@ router.post('/api/journal-entries', (req, res) => {
       ...(exchangeCurrency && { exchangeCurrency, exchangeRate }),
       ...(corrects && { corrects }),
       ...(origin && { origin: origin as Origin }),
+      // Booked by hand now, not put back by an undo: a person decided it (Änderungen lists it).
+      ...(id ? {} : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
     }),
   }));
+});
+
+/** Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as saved, or gone. */
+router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
+  const edit = (await handEdits(WS)).find((h) => h.id === req.params.id);
+  if (!edit) throw new RequestError(404, 'Diese Buchung hat seit dem letzten Speichern keine Änderung von Hand.', { code: 'gone', params: { what: 'handEdit' } });
+  withBooks(res, (books) => { restoreSaved(books, edit.id, edit.saved); return { ok: true }; });
 });
 
 router.delete('/api/journal-entries/:id', (req, res) => withBooks(res, (books) => {

@@ -52,7 +52,9 @@ export type ApiRefusal =
   /** An opening balance typed for an account that takes none by hand (Firma › Eröffnung). */
   | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' } }
   /** Opening balances typed for a year an earlier year of the books opens. */
-  | { code: 'openingNotFirstYear'; params: { year: string } };
+  | { code: 'openingNotFirstYear'; params: { year: string } }
+  /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
+  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' } };
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):

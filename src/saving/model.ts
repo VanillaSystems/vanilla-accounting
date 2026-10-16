@@ -6,6 +6,8 @@
  * save. Verlauf is git's log.
  */
 
+import type { JournalEntry } from '../types/index.js';
+
 /** Where a change waits: the books (one item, written by runs and edits), the AI's draft, a file changed outside the app. */
 export type ChangeSource = 'draft' | 'outside' | 'books';
 
@@ -15,12 +17,20 @@ export const BOOKS = 'Bücher';
 /** What one run wrote into the books since the last save. */
 export interface RunWrote { run: string; workflow: string; label: string; at: string; entries: number; links: number; receipts: number }
 
+/**
+ * A booking a person changed or booked by hand since the last save (JournalEntry.by of kind
+ * person), newest first; `saved` is the booking as the last save holds it (absent: booked since).
+ */
+export interface HandEdit { id: string; ref: string; date: string; text: string; at: string; saved?: JournalEntry }
+
 /** The books' changes since the last save. */
 export interface BooksChange {
   /** The books' own files that differ from the last save (ledger, books/*.jsonl, run log, invoices). */
   files: number;
   /** The runs that wrote since the last save, newest first. A direct edit in the app has none. */
   runs: RunWrote[];
+  /** The bookings a person changed or made by hand since the last save. */
+  hand: HandEdit[];
 }
 
 /** How a saved change takes effect (workflows.md "Changing a workflow"): at once, once switched on, or after its maintainer's review. */
