@@ -64,8 +64,11 @@ root, as `APP_ROOT` expects) and fails when the bundle imports a package that is
 dependency in `package.json`, since only those are packed. The icon is the brand's: the wave in tram
 blue (`assets/app-icons/macos/AppIcon.svg` and `AppIcon-1024.png` of the branding repository,
 copied to `desktop/icon.svg` and `desktop/icon.png`; its `web/` set is `public/favicon*` and
-`apple-touch-icon.png`). Copy them again when the brand changes; `tools/desktop/icon.mjs` renders
-`desktop/icon.svg` to `desktop/icon.png` when only the SVG is at hand.
+`apple-touch-icon.png`; its `ios/` icon is the phone app's AppIcon set). `node tools/brand/icons.mjs
+<branding repo>` copies them all, renders the phone sizes and pins each file's hash in
+`desktop/brand-icons.json`; the hashes it replaces become `retired`. tests/brand-icons.test.ts and
+`desktop:build` refuse an icon that is not pinned or a retired one anywhere in the repository, so
+the old receipt icon cannot come back through a merge.
 
 **Run it in a VM, never on your own desktop:** `npm run desktop:e2e` installs the built app into
 the Tart VM `vanilla-e2e` over the copy there (as an update would) and runs the smoke test inside

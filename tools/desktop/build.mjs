@@ -8,8 +8,13 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { describeBuild } from '../../src/version.ts';
+import { iconProblems } from '../brand/icons.mjs';
 
 const { NOT_PACKED } = createRequire(import.meta.url)('../../desktop/not-packed.cjs');
+
+// The dmg carries the brand's icon or none: an old icon brought back by a merge stops the build here.
+const icons = iconProblems();
+if (icons.length) { console.error(`desktop:build refused, the icons are not the brand's:\n  ${icons.join('\n  ')}`); process.exit(1); }
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 // The packed app has no git: its build is baked in, and electron-builder names the dmg after it.
