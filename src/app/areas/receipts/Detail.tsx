@@ -150,7 +150,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {!v.locked && !v.links.length && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} />}
       <TwinNotice {...props} />
       {v.none
-        ? <div className="notice">{t('receipts.noneNotice')} {edit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
+        ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: t(`receipts.why.${v.noneWhy}`) }) : t('receipts.noneNotice')} {edit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
         : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
 
       <div className="body">

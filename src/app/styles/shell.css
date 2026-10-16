@@ -61,6 +61,12 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .hidden-note { margin-top: 28px; font-size: 12.5px; color: var(--faint); }
 .hidden-note button { color: var(--muted); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
 .hidden-note button:hover { color: var(--ink); }
+.quarantine .qlead { font-size: 12.5px; margin: 8px 0; }
+.quarantine .qlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.quarantine .qlist li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.quarantine .qfile { color: var(--ink-2); overflow-wrap: anywhere; }
+.quarantine .qacts { margin-left: auto; display: flex; gap: 12px; }
+.nonewhy { color: var(--muted); }
 .row.nonreceipt .t { color: var(--muted); font-style: italic; }
 
 /* empty */

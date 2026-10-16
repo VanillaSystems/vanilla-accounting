@@ -25,6 +25,7 @@ import { importStatement } from './statements.js';
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
+import { freeName, putInQuarantine, release } from '../../intake/quarantine.js';
 import { twinFinder, type Comparable } from '../../intake/duplicates.js';
 import { textFacts } from '../../parsers/receipt-text.js';
 import { documents } from '../../engines/index.js';
@@ -32,6 +33,8 @@ import { periodLock } from '../../books/store.js';
 import type { DropAction, DropRow, DropSession } from '../../types/drop.js';
 
 export const router = Router();
+
+const isSupporting = (why: DropRow['document']) => why === 'order-confirmation' || why === 'delivery-note' || why === 'reminder';
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const dir = (id: string) => join(WS.paths.data, 'drop', id);
@@ -57,7 +60,7 @@ function known(): Set<string> {
 async function add(s: DropSession, name: string, bytes: Buffer, from?: string, password?: string): Promise<void> {
   const id = sha16(bytes);
   const seen = new Set([...known(), ...s.rows.filter((r) => r.state !== 'refused' && r.state !== 'undone').map((r) => r.id)]);
-  const { text, ...r } = recognize(bytes, name);
+  const { text, ...r } = await recognize(bytes, name);
   const row: DropRow = { key: randomUUID().slice(0, 8), id, name, size: bytes.length, ...(from ? { from } : {}), ...r };
   if (row.kind === 'zip') {
     const out = await unzip(bytes, password);
@@ -86,9 +89,9 @@ async function add(s: DropSession, name: string, bytes: Buffer, from?: string, p
 function twinOf(s: DropSession, row: DropRow, text: string): DropRow['twin'] {
   const facts = (t: string) => { const f = textFacts(t); return { date: f.date, amount: f.amount, currency: f.currency, vatId: f.vatId }; };
   const rows = s.rows.filter((r) => r.state !== 'refused' && r.state !== 'undone' && r.state !== 'quarantine' && existsSync(textOf(s.id, r.key)));
-  const own: Comparable[] = rows.map((r) => { const t = readFileSync(textOf(s.id, r.key), 'utf8'); return { id: r.id, extractedText: t, ...facts(t), ...(r.document === 'order-confirmation' || r.document === 'delivery-note' ? { kind: 'supporting' as const } : {}) }; });
+  const own: Comparable[] = rows.map((r) => { const t = readFileSync(textOf(s.id, r.key), 'utf8'); return { id: r.id, extractedText: t, ...facts(t), ...(isSupporting(r.document) ? { kind: 'supporting' as const } : {}) }; });
   const books = readBooks().receipts;
-  const me: Comparable = { id: row.id, extractedText: text, ...facts(text), ...(row.document === 'order-confirmation' || row.document === 'delivery-note' ? { kind: 'supporting' as const } : {}) };
+  const me: Comparable = { id: row.id, extractedText: text, ...facts(text), ...(isSupporting(row.document) ? { kind: 'supporting' as const } : {}) };
   const twin = twinFinder([...books, ...own], documents()).find(me);
   if (!twin) return undefined;
   const name = books.find((r) => r.id === twin.of)?.filename ?? rows.find((r) => r.id === twin.of)?.name ?? twin.of;
@@ -183,15 +186,7 @@ function setAsidePrivate(s: DropSession, row: DropRow): void {
   rmSync(fileOf(s.id, row.key), { force: true });
 }
 
-/** A free name in `folder` for `name`: the same stem with -2, -3 … when taken. */
-function freeName(folder: string, name: string): string {
-  const ext = extname(name), stem = name.slice(0, name.length - ext.length);
-  let out = name;
-  for (let n = 2; existsSync(join(folder, out)); n++) out = `${stem}-${n}${ext}`;
-  return out;
-}
-
-const QUARANTINE = () => join(WS.paths.data, 'quarantine');
+const OTHER_WHY = ['newsletter', 'terms', 'price-list', 'tracking', 'no-receipt'] as const;
 
 /**
  * Takes every row that can be taken: a receipt goes into the inbox, a statement is read into the
@@ -200,11 +195,8 @@ const QUARANTINE = () => join(WS.paths.data, 'quarantine');
 async function takeWaiting(s: DropSession): Promise<void> {
   for (const row of s.rows) {
     if (row.state === 'quarantine' && !row.quarantined && existsSync(fileOf(s.id, row.key))) {
-      mkdirSync(QUARANTINE(), { recursive: true });
-      const name = freeName(QUARANTINE(), row.name);
-      writeFileSync(join(QUARANTINE(), name), readFileSync(fileOf(s.id, row.key)));
-      writeFileSync(join(QUARANTINE(), `${name}.reason.txt`), `${row.reason ?? ''}\n`);
-      row.quarantined = name;
+      const why = OTHER_WHY.find((w) => w === row.document);
+      row.quarantined = putInQuarantine(WS.paths.data, row.name, readFileSync(fileOf(s.id, row.key)), row.reason === 'not-receipt' ? { kind: 'not-receipt', ...(why ? { why } : {}) } : { kind: 'held' });
       continue;
     }
     if (row.state !== 'take') continue;
@@ -237,8 +229,7 @@ async function takeWaiting(s: DropSession): Promise<void> {
 
 function unquarantine(row: DropRow): void {
   if (!row.quarantined) return;
-  rmSync(join(QUARANTINE(), row.quarantined), { force: true });
-  rmSync(join(QUARANTINE(), `${row.quarantined}.reason.txt`), { force: true });
+  release(WS.paths.data, row.quarantined);
   delete row.quarantined;
 }
 

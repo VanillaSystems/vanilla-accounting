@@ -32,17 +32,17 @@ async function zipOf(files: Array<[string, Uint8Array | string]>, opts: { passwo
   return Buffer.from(await w.close());
 }
 
-test('recognized by structure: a receipt PDF, a photo, a camt.053 with its facts; 7z, Word and a bank CSV refused with what would work', () => {
-  assert.deepEqual([recognize(readFileSync(RECEIPT), 'a.pdf').kind, recognize(readFileSync(RECEIPT), 'a.pdf').state], ['receipt', 'take']);
-  assert.equal(recognize(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0]), 'IMG_1.PNG').kind, 'photo');
+test('recognized by structure: a receipt PDF, a photo, a camt.053 with its facts; 7z, Word and a bank CSV refused with what would work', async () => {
+  assert.deepEqual([(await recognize(readFileSync(RECEIPT), 'a.pdf')).kind, (await recognize(readFileSync(RECEIPT), 'a.pdf')).state], ['receipt', 'take']);
+  assert.equal((await recognize(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0]), 'IMG_1.PNG')).kind, 'photo');
   const camt = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><Stmt><Acct><Id><IBAN>CH6580808000000000001</IBAN></Id></Acct><Ntry><BookgDt><Dt>2026-10-01</Dt></BookgDt></Ntry><Ntry><BookgDt><Dt>2026-10-13</Dt></BookgDt></Ntry></Stmt></Document>`;
-  const c = recognize(Buffer.from(camt), 'x.xml');
+  const c = await recognize(Buffer.from(camt), 'x.xml');
   assert.deepEqual([c.kind, c.how, c.facts], ['camt', 'structure', { iban: 'CH6580808000000000001', from: '2026-10-01', to: '2026-10-13', entries: 2 }]);
-  assert.deepEqual(recognize(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0, 4]), 'a.7z'), { state: 'refused', reason: 'as-zip' });
-  assert.equal(recognize(Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0]), 'Offerte.docx').reason, 'office', 'a real .docx is a ZIP and must not be unpacked');
-  assert.equal(recognize(Buffer.from('Buchungsdatum;Text;Belastung;Gutschrift;Saldo\n01.07.2026;Farbmix;100.00;;\n'), 'export.txt').reason, 'bank-csv');
-  assert.equal(recognize(Buffer.from('a;b\n'), 'Kontoauszug.csv').reason, 'bank-csv');
-  assert.equal(recognize(Buffer.from('hello'), 'notes.txt').reason, 'as-pdf');
+  assert.deepEqual((await recognize(Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0, 4]), 'a.7z')), { state: 'refused', reason: 'as-zip' });
+  assert.equal((await recognize(Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0]), 'Offerte.docx')).reason, 'office', 'a real .docx is a ZIP and must not be unpacked');
+  assert.equal((await recognize(Buffer.from('Buchungsdatum;Text;Belastung;Gutschrift;Saldo\n01.07.2026;Farbmix;100.00;;\n'), 'export.txt')).reason, 'bank-csv');
+  assert.equal((await recognize(Buffer.from('a;b\n'), 'Kontoauszug.csv')).reason, 'bank-csv');
+  assert.equal((await recognize(Buffer.from('hello'), 'notes.txt')).reason, 'as-pdf');
 });
 
 test('a ZIP is unpacked three levels deep and no deeper; a bomb is refused before it is unpacked', async () => {

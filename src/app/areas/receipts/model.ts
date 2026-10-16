@@ -9,6 +9,22 @@ import type { Period } from '../../../accounting/periods.js';
 import type { ReceiptFilter } from '../../shell/route.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
+import { documentKind } from '../../../intake/document-kind.js';
+import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
+
+/** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
+export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
+
+/** Why `r` is no receipt: the word rule that typed it, its kind, else what its text says, else its missing amount. */
+export function noneWhyOf(r: Pick<Receipt, 'kind' | 'kindRule' | 'extractedText'>): NoneWhy {
+  if (r.kind === 'duplicate' || r.kind === 'statement') return r.kind;
+  const rule = /^document:(.+)$/.exec(r.kindRule ?? '')?.[1] as SupportingWhy | OtherWhy | undefined;
+  if (rule) return rule;
+  const text = r.extractedText ? documentKind(r.extractedText, documents()) : undefined;
+  if (r.kind === 'supporting') return text?.is === 'supporting' ? text.why : 'supporting';
+  if (text?.is === 'other') return text.why;
+  return r.kind === 'noise' ? 'no-receipt' : 'empty';
+}
 
 /** The kinds of document that are not a receipt of their own. */
 const NON_RECEIPT_KINDS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
@@ -30,6 +46,8 @@ export interface ReceiptView {
    * merely unread) with no VAT and no link (brochures, labels, blank captures).
    */
   none: boolean;
+  /** Why it needs no payment, when `none` (shown with it, r5h-28). */
+  noneWhy?: NoneWhy;
   /** Linked to a payment or entry of a filed quarter: it never changes again (golden rule 1). */
   locked: boolean;
   /** Another receipt it seems to repeat (asked: «ist dasselbe» or «verschieden»), or the invoice it accompanies. */
@@ -84,7 +102,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
       || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
-    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, locked: links.some(refClosed), ...(twin ? { twin } : {}) };
+    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
 }

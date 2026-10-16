@@ -5,15 +5,12 @@
  * is, src/intake/document-kind.ts). No model: what stays unclear is asked in the row, and the
  * workflow reads it properly later.
  */
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { DropRow } from '../types/drop.js';
 import type { DocumentsData, OtherWhy } from '../core/modules/schema.js';
 import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
 import { documentKind } from './document-kind.js';
+import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 
 /** What the file is, and a PDF's text of its first pages (for the duplicate check; never stored in the row). */
 type Recognized = Pick<DropRow, 'kind' | 'how' | 'facts' | 'state' | 'reason' | 'document'> & { text?: string };
@@ -21,24 +18,22 @@ type Recognized = Pick<DropRow, 'kind' | 'how' | 'facts' | 'state' | 'reason' | 
 const starts = (b: Buffer, ...bytes: number[]) => bytes.every((x, i) => b[i] === x);
 const head = (b: Buffer, n = 4096) => b.subarray(0, n).toString('latin1');
 
-/** The text of a PDF's first two pages, or '' without pdftotext. */
-export function firstPages(bytes: Buffer): string {
-  const dir = mkdtempSync(join(tmpdir(), 'drop-'));
+/**
+ * The text of a PDF's first two pages, read in Node (src/parsers/pdf-text.ts) as the run reads it:
+ * the packed app has no poppler, so a program outside Node would leave every drop unjudged
+ * (r5h-28). '' for a PDF pdf.js cannot open.
+ */
+export async function firstPages(bytes: Buffer): Promise<string> {
   try {
-    const file = join(dir, 'f.pdf');
-    writeFileSync(file, bytes);
-    const r = spawnSync('pdftotext', ['-l', '2', '-q', file, '-'], { encoding: 'utf8', timeout: 10_000 });
-    return r.status === 0 ? r.stdout : '';
+    return textOf(await pdfRuns(bytes, 2), 'reading');
   } catch {
     return '';
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
   }
 }
 
 const IBAN = /\b(CH|LI|DE|AT|GB|BE|NL|FR|IT)\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/;
 
-export function recognize(bytes: Buffer, name: string, words?: DocumentsData): Recognized {
+export async function recognize(bytes: Buffer, name: string, words?: DocumentsData): Promise<Recognized> {
   const lower = name.toLowerCase();
   if (starts(bytes, 0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c) || starts(bytes, 0x52, 0x61, 0x72, 0x21) || /\.(7z|rar)$/.test(lower)) {
     return { state: 'refused', reason: 'as-zip' };
@@ -49,7 +44,7 @@ export function recognize(bytes: Buffer, name: string, words?: DocumentsData): R
     if (/\/Encrypt\b/.test(bytes.subarray(Math.max(0, bytes.length - 65_536)).toString('latin1'))) {
       return { kind: 'receipt', how: 'structure', state: 'take', reason: 'pdf-password' };
     }
-    const text = firstPages(bytes);
+    const text = await firstPages(bytes);
     const iban = IBAN.exec(text)?.[0];
     if (/kontoauszug|account statement|relevé de compte|estratto conto/i.test(text) && iban) {
       return { kind: 'statement-pdf', how: 'hint', state: 'take', facts: { iban: iban.replace(/\s/g, '') } };
@@ -75,9 +70,9 @@ export function recognize(bytes: Buffer, name: string, words?: DocumentsData): R
  * a price list): a mailbox source puts it into quarantine instead of the inbox. A PDF without text
  * (a scan) is left to the run's reading.
  */
-export function notReceipt(bytes: Buffer, words?: DocumentsData): OtherWhy | undefined {
+export async function notReceipt(bytes: Buffer, words?: DocumentsData): Promise<OtherWhy | undefined> {
   if (!starts(bytes, 0x25, 0x50, 0x44, 0x46)) return undefined;
-  const text = firstPages(bytes);
+  const text = await firstPages(bytes);
   if (!text.trim()) return undefined;
   const v = documentKind(text, words ?? documents());
   return v.is === 'other' ? v.why : undefined;

@@ -20,6 +20,7 @@ import { router as assistant } from './routes/assistant.js';
 import { router as drop } from './routes/drop.js';
 import { router as sourcesRoute } from './routes/sources.js';
 import { router as twins } from './routes/twins.js';
+import { router as quarantine } from './routes/quarantine.js';
 import { router as rules } from './routes/rules.js';
 import { router as questions } from './routes/questions.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
@@ -67,7 +68,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, sourcesRoute, twins, rules, questions);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);

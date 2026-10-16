@@ -11,6 +11,8 @@ receipt:
 
 supporting:
   order-confirmation: [Auftragsbestätigung, Bestellbestätigung, Bestelleingang, Order confirmation, Confirmation de commande, Confirmation d'ordre, Conferma d'ordine, Conferma dell'ordine]
+  # A reminder of an invoice: its number links it to the invoice, it never is a second one to pay.
+  reminder: [Zahlungserinnerung, Mahnung, Erste Mahnung, Zweite Mahnung, Letzte Mahnung, Payment reminder, Reminder, Overdue notice, Rappel, Rappel de paiement, Sommation, Sollecito, Sollecito di pagamento, Promemoria di pagamento]
   delivery-note: [Lieferschein, Delivery note, Packing slip, Bulletin de livraison, Bon de livraison, Bolla di consegna, Documento di trasporto]
 
 # Newsletter words count anywhere (they stand in the footer); the others where a document names

@@ -16,6 +16,7 @@ import { nodeLauncher, runFeed, ChildCrashed, SourceError, type Launcher } from 
 import { appendLedger, feedState, readLedger } from './ledger.js';
 import { imapBackend, mailChannel, sha256, type Held, type MailBackend } from './mail-channel.js';
 import { notReceipt } from '../../intake/recognize.js';
+import { freeName, putInQuarantine } from '../../intake/quarantine.js';
 import { secretKey, type Cadence, type FeedDecl, type MailReach, type SourceDecl } from './model.js';
 import { ReachError } from './reach.js';
 
@@ -70,14 +71,6 @@ function known(ws: Workspace): Map<string, string> {
   return out;
 }
 
-function freeName(dir: string, name: string): string {
-  const clean = name.replace(/[/\\\u0000-\u001f]/g, '_').slice(-120) || 'document.pdf';
-  const ext = extname(clean), stem = clean.slice(0, clean.length - ext.length);
-  let out = clean;
-  for (let n = 2; existsSync(join(dir, out)); n++) out = `${stem}-${n}${ext}`;
-  return out;
-}
-
 export async function pull(req: PullRequest): Promise<PullOutcome> {
   const now = req.now ?? (() => new Date());
   const { decl, folder, entry } = located(req);
@@ -127,7 +120,7 @@ export async function pull(req: PullRequest): Promise<PullOutcome> {
         if (!file) throw new SourceError(`${item.file} is no file the host fetched`);
         const sum = sha256(file.content);
         const dup = bytes.get(sum.slice(0, 16));
-        const why = dup ? undefined : notReceipt(file.content);
+        const why = dup ? undefined : await notReceipt(file.content);
         if (dup) report.duplicates++; else if (why) report.quarantined++; else report.documents++;
         state.keys.add(item.key);
         if (req.mode !== 'live') { if (!dup) bytes.set(sum.slice(0, 16), `${feed.id} ${item.key}`); continue; }
@@ -135,11 +128,7 @@ export async function pull(req: PullRequest): Promise<PullOutcome> {
         let quarantined: { file: string; why: NonNullable<typeof why> } | undefined;
         if (!dup && why) {
           // Clearly no receipt by its words: kept apart with its reason, the books never see it.
-          const dir = join(req.ws.paths.data, 'quarantine');
-          mkdirSync(dir, { recursive: true });
-          quarantined = { file: freeName(dir, file.name), why };
-          writeFileSync(join(dir, quarantined.file), file.content);
-          writeFileSync(join(dir, `${quarantined.file}.reason.txt`), `not-receipt ${why}${file.from ? ` from ${file.from}` : ''}\n`);
+          quarantined = { file: putInQuarantine(req.ws.paths.data, file.name, file.content, { kind: 'not-receipt', why, ...(file.from ? { from: file.from } : {}) }), why };
           bytes.set(sum.slice(0, 16), `quarantine ${quarantined.file}`);
         } else if (!dup) {
           mkdirSync(req.ws.paths.inbox, { recursive: true });

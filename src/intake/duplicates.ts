@@ -83,10 +83,12 @@ function same(a: Prepared, b: Prepared, df: Map<string, number>, companion: bool
   const sharedRare = [...a.ids].some((t) => b.ids.has(t) && (df.get(t) ?? 0) <= RARE);
   const apart = a.r.date && b.r.date ? Math.abs(day(a.r.date) - day(b.r.date)) : undefined;
   if (companion) {
+    // A number only these documents carry ties them whenever they are dated and whatever they
+    // total: a reminder comes weeks later, often with a fee on top.
+    if (sharedRare) return { why: 'same-number', score: 2 };
     // An order confirmation comes before its invoice, a delivery note with it; one carries no total.
     if (apart !== undefined && apart > COMPANION_DAYS) return undefined;
     if (x !== undefined && y !== undefined && !near(x, y)) return undefined;
-    if (sharedRare) return { why: 'same-number', score: 2 };
     const o = overlap(a.words, b.words);
     return o >= COMPANION_WORDS ? { why: 'same-facts', score: o } : undefined;
   }

@@ -226,7 +226,7 @@ export interface DocumentsData {
   /** Words of a receipt: its title, its total, its due date, a payment slip, the label of its number. */
   receipt: Record<'title' | 'total' | 'due' | 'slip' | 'number', string[]>;
   /** Documents kept as proof beside an invoice, never paid on their own. */
-  supporting: Record<'order-confirmation' | 'delivery-note', string[]>;
+  supporting: Record<'order-confirmation' | 'delivery-note' | 'reminder', string[]>;
   /** Documents that are no receipt at all. */
   other: Record<'newsletter' | 'terms' | 'price-list' | 'tracking' | 'no-receipt', string[]>;
 }

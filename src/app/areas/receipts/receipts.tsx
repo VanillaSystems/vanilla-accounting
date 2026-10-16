@@ -2,7 +2,9 @@
  * Belege: the receipts of a period, what needs you first, then month by month; the receipt with
  * its paper, its payment, its details and its file on the right (the mockup's Belege).
  */
-import { Fragment, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import type { QuarantinedFile } from '../../../types/drop.js';
+import { api, errorText } from '../../lib/api.js';
 import type { InboxFile } from '../../../types/index.js';
 import { RECEIPT_FILTERS, type ReceiptFilter, type RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
@@ -184,6 +186,7 @@ function List(props: Props) {
           )}
         </>
       )}
+      <Quarantine nav={nav} canEdit={canEdit} />
     </div>
   );
 }
@@ -202,7 +205,7 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       onClick={() => onSelect(r.id)}
     >
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
-      <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}</span>
+      <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{v.noneWhy && <small className="nonewhy" data-testid="none-why"> · {t(`receipts.why.${v.noneWhy}`)}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
@@ -220,6 +223,51 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
           </>
         )}
       </span>
+    </div>
+  );
+}
+
+/**
+ * data/quarantine/: what came in and is no receipt by its words, each with its reason; «Ist ein
+ * Beleg» puts it into the inbox, whose run reads it (src/server/routes/quarantine.ts).
+ */
+function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean }) {
+  const [files, setFiles] = useState<QuarantinedFile[]>([]);
+  const [open, setOpen] = useState(false);
+  const load = () => { api.quarantine().then(setFiles, () => setFiles([])); };
+  useEffect(load, []);
+  if (!files.length) return null;
+  const why = (q: QuarantinedFile) => [q.reason.kind === 'held' ? t('receipts.quarantineHeld') : t(`receipts.why.${q.reason.why ?? 'no-receipt'}`), q.reason.kind === 'not-receipt' && q.reason.from ? t('receipts.quarantineFrom', { from: q.reason.from }) : ''].filter(Boolean).join(' · ');
+  async function take(file: string) {
+    try {
+      await api.takeFromQuarantine(file);
+      nav.toast(t('receipts.quarantineTaken', { file }));
+      load();
+      nav.refresh();
+    } catch (e) { nav.toast(errorText(e)); }
+  }
+  return (
+    <div className="quarantine" data-testid="quarantine">
+      <div className="hidden-note">
+        {t('receipts.quarantineNote', { n: files.length })} · <button type="button" onClick={() => setOpen(!open)}>{open ? t('receipts.hideAgain') : t('receipts.show')}</button>
+      </div>
+      {open && (
+        <>
+          <p className="m qlead">{t('receipts.quarantineLead')}</p>
+          <ul className="qlist">
+            {files.map((q) => (
+              <li key={q.file} data-file={q.file}>
+                <span className="mono qfile">{q.file}</span>
+                <span className="m">{why(q)} · {formatDate(q.at.slice(0, 10))}</span>
+                <span className="qacts">
+                  <a href={`/api/quarantine/${encodeURIComponent(q.file)}`} target="_blank" rel="noreferrer">{t('receipts.quarantineOpen')}</a>
+                  {canEdit && <button type="button" className="linkbtn" onClick={() => void take(q.file)}>{t('receipts.quarantineTake')}</button>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

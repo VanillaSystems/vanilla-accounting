@@ -25,7 +25,7 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 import type { Conversation, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
-import type { DropAction, DropSession } from '../../types/drop.js';
+import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.js';
 import type { SourceRow } from '../../platform/sources/model.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
@@ -226,6 +226,8 @@ export const api = {
   assistantUndo: (id: string, change: string) => request<MadeChange[]>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
   assistantHeld: (id: string, turn: number, take: boolean, language: string) => request<Extract<Turn, { role: 'ai' }>>('POST', `/api/assistant/${encodeURIComponent(id)}/held/${turn}`, { take, language }),
   sources: () => request<SourceRow[]>('GET', '/api/sources'),
+  quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
+  takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
   rules: () => request<RulesView>('GET', '/api/rules'),
