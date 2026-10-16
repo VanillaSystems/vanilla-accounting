@@ -12,15 +12,20 @@ const ACCRUALS = ['prepaidExpense', 'accruedIncome', 'accruedExpense', 'deferred
 /** Of those, the ones reversed as a rule; a provision usually stays until it is used. */
 const REVERSED = ['prepaidExpense', 'accruedIncome', 'accruedExpense', 'deferredIncome'] as const;
 
-const accountsOf = (ids: readonly string[]) => new Set(yearEndTemplates().filter((t) => ids.includes(t.id)).flatMap((t) => [t.accountDebit, t.accountCredit]).filter(Boolean));
-
 export type Sides = Pick<JournalEntry, 'accountDebit' | 'accountCredit'>;
 
+/**
+ * Whether an entry builds one of these templates' accruals: its account on the side the template
+ * books it (1300 in Soll, 2300 in Haben). The reversal, with the account on the other side, is none.
+ */
+const builds = (ids: readonly string[], e: Sides) =>
+  yearEndTemplates().some((t) => ids.includes(t.id) && ((!!t.accountDebit && t.accountDebit === e.accountDebit) || (!!t.accountCredit && t.accountCredit === e.accountCredit)));
+
 /** Whether an entry books an accrual or a provision, so it may be reversed on 1.1. */
-export const isAccrual = (e: Sides): boolean => { const a = accountsOf(ACCRUALS); return a.has(e.accountDebit) || a.has(e.accountCredit); };
+export const isAccrual = (e: Sides): boolean => builds(ACCRUALS, e);
 
 /** Whether such an entry is reversed on 1.1. as a rule (the new-entry form ticks it then). */
-export const reversedAsRule = (e: Sides): boolean => { const a = accountsOf(REVERSED); return a.has(e.accountDebit) || a.has(e.accountCredit); };
+export const reversedAsRule = (e: Sides): boolean => builds(REVERSED, e);
 
 /** 1 January after the entry's date. */
 export const newYearAfter = (date: string): string => `${Number(date.slice(0, 4)) + 1}-01-01`;

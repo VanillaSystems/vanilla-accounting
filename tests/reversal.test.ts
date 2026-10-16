@@ -20,6 +20,8 @@ test('which entries are accruals: the transitory accounts reversed as a rule, a 
   assert.equal(isAccrual(je('pr', '2026-12-31', '6100', '2330', 3000)), true);
   assert.equal(reversedAsRule(je('pr', '2026-12-31', '6100', '2330', 3000)), false);
   assert.equal(isAccrual(je('dep', '2026-12-31', '6800', '1530', 4000)), false);
+  assert.equal(isAccrual(je('back', '2027-01-01', '6300', '1300', 653.35)), false, 'the reversal itself is no accrual to reverse again');
+  assert.equal(isAccrual(je('used', '2027-03-01', '2330', '1020', 3000)), false, 'a provision used is none');
 });
 
 test('the reversal swaps Soll and Haben, turns the VAT code, keeps the amount; dated on the next 1.1.', () => {
