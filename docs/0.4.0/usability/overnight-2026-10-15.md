@@ -70,3 +70,13 @@ file records every decision a person might have made differently, newest last.
     lists; it creates invoice drafts, sets payment terms and texts, adds accounts, sets a receipt
     aside as duplicate, packs the Treuhänder-Paket, starts the booking; the VAT family follows the
     account; it refuses to silently take back an earlier change.
+18. Phone path merged: Firma › Handy switches on a listener on the local network for the phone's
+    paths only, with a pairing token in a QR code (constant-time compare, stable port, a new code
+    locks out old phones); the books API stays on 127.0.0.1. The Mac app processes arriving files
+    by itself. The iOS app pairs by QR (built for the simulator, unsigned; not installed on a
+    device). Residual risk, documented: plain HTTP on the LAN, so a sniffed token lets someone
+    upload into the inbox, never read the books.
+19. Found by the rules batch: the classifier did not carry out rules at all before; «Swisscom →
+    6510» only worked because the model guessed. Rules with a structured «then» are now applied in
+    code before any model call (also without Claude); free-text rules (all 88 of the real books)
+    stay notes for the model, so the real books' bookings do not change.
