@@ -267,12 +267,15 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (t?.relation === 'duplicate') { twin = index.receipts.find((x) => x.id === t.of)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
+      const filed: string[] = [];
       linked = answer.matchedTransactionRefs.filter((ref) => {
         const tx = index.transactions.find((t) => t.ref === ref);
         if (tx && !lock.isClosed(tx.date)) return true;
-        if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); skippedClosed++; }
+        if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); skippedClosed++; filed.push(ref); }
         return false;
       });
+      // Its only payment is filed: the receipt names it, so the person sees where its tax goes (a correction in the open quarter).
+      if (!linked.length && filed.length) r.filedPayment = filed[0];
       for (const transactionRef of linked) {
         if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id });
       }

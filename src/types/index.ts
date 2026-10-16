@@ -63,6 +63,11 @@ export interface Receipt {
   title?: ReceiptTitle;
   /** Receipts a person said are other documents, though their facts look alike (src/intake/duplicates.ts): never paired again. */
   distinctFrom?: string[];
+  /**
+   * The payment it pays, when that payment lies in a filed quarter (src/intake/match.ts): no link
+   * is made (golden rule 1); the receipt says so, and its tax is a correction in the open quarter.
+   */
+  filedPayment?: string;
 }
 
 export interface ReceiptTitle { vendor: string; what: string }
@@ -77,6 +82,8 @@ export interface InboxFile {
   filename: string;
   size: number;
   addedAt: string;
+  /** The last run of the inbox that covered the file stopped: the file waits for the next run, and the person is told why. */
+  failed?: { run: string; error: string };
 }
 
 export interface Mapping {

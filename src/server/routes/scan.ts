@@ -8,6 +8,7 @@ import { APP_ROOT } from '../../workspace/workspace.js';
 import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload.js';
 import { capturedStem } from '../../intake/captured.js';
 import { smallerPdf } from '../../parsers/smaller.js';
+import { INTAKE, engine } from './automation.js';
 
 export const router = Router();
 
@@ -74,8 +75,13 @@ export function inboxFiles({ withRead = false, photos = false } = {}): InboxFile
     });
 }
 
+/** The inbox's files; one whose last run stopped carries that run and its reason, so no file reads as «wird gelesen» for good. */
 router.get('/api/inbox', (_req, res) => {
-  res.json(inboxFiles());
+  const runs = engine().runs().filter((r) => r.workflow === INTAKE && r.item.id === 'inbox').sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  res.json(inboxFiles().map((f) => {
+    const last = runs.find((r) => r.arrived?.some((a) => a.kind === 'receipt' && a.id === f.id) || r.startedAt >= f.addedAt);
+    return last?.state.status === 'stuck' ? { ...f, failed: { run: last.id, error: last.state.reason } } : f;
+  }));
 });
 
 // A page that still shows the file as waiting may ask for it after the processing has read it.

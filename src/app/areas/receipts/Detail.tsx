@@ -13,6 +13,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { language, t } from '../../i18n/index.js';
 import { useAutomation } from '../../automation/store.js';
+import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
@@ -37,21 +38,30 @@ export function Detail(props: Props) {
   const l = ledgerFor(books);
   const v = route.id ? l.byId.get(route.id) : undefined;
   const pending = route.id && !v ? s.inbox.find((f) => f.id === route.id) : undefined;
-  if (pending) return <PendingDetail file={pending} />;
+  if (pending) return <PendingDetail file={pending} nav={props.nav} />;
   if (!v) return <div className="detail-empty"><div>{route.id ? t('receipts.gone') : ''}</div></div>;
   return <ReceiptDetail key={v.r.id} {...props} v={v} l={l} />;
 }
 
-function PendingDetail({ file }: { file: InboxFile }) {
+function PendingDetail({ file, nav }: { file: InboxFile; nav: Props['nav'] }) {
   const s = useUi();
+  const running = useIntakeRunning();
+  const failed = file.failed;
   return (
     <div className="detail-in">
-      <div className="head"><h2 className="who"><span className="shimmer" style={{ width: 260, height: 18 }} /><small>{t('receipts.readingDetail')}</small></h2></div>
+      <div className="head"><h2 className="who">{failed ? file.filename : <span className="shimmer" style={{ width: 260, height: 18 }} />}<small>{failed ? t('receipts.readFailedDetail') : t('receipts.readingDetail')}</small></h2></div>
       <div className="facts"><span>{file.filename}</span></div>
+      {failed && (
+        <div className="notice warn" data-testid="read-failed">
+          {I.dot}<span>{failed.error}</span>
+          <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'automation', view: 'run', run: failed.run }, query: {} }); }}>{t('receipts.readFailedRun')}</a>
+          <button type="button" className="btn ghost" disabled={running} onClick={() => void startIntake()}>{running ? t('intake.running') : t('receipts.readAgainNow')}</button>
+        </div>
+      )}
       <div className="body">
         <div className="desk"><div className="paper real"><Paper key={file.id} src={api.inboxFile(file.id)} /></div></div>
         <aside className="margin" aria-label={t('receipts.details')}>
-          <div className="note">{t('receipts.readingTip')}</div>
+          <div className="note">{failed ? t('receipts.readFailedTip') : t('receipts.readingTip')}</div>
         </aside>
       </div>
       {s.overlay === 'quick' && <Quick src={api.inboxFile(file.id)} file={file.filename} />}
@@ -62,7 +72,25 @@ function PendingDetail({ file }: { file: InboxFile }) {
 /** The quarter a locked receipt belongs to: that of its first payment or entry in a filed quarter. */
 function lockedQuarter(v: ReceiptView, l: Ledger): string {
   const dates = v.links.flatMap((ref) => [l.txByRef.get(ref)?.date, ...(l.entriesByRef.get(ref) ?? []).map((e) => e.date)]);
-  const d = dates.find((x) => x && l.closedThrough && x <= l.closedThrough) ?? l.closedThrough ?? '';
+  return quarterName(dates.find((x) => x && l.closedThrough && x <= l.closedThrough) ?? l.closedThrough ?? '');
+}
+
+/** The receipt pays a payment of a filed quarter: no link is made; its tax is a correction in the open quarter, booked from that payment's entry. */
+function FiledPaymentNotice({ l, nav, payment, open }: Props & { l: Ledger; payment: string; open: string }) {
+  const tx = l.txByRef.get(payment);
+  const entry = l.entriesByRef.get(payment)?.[0];
+  if (!tx) return null;
+  const go = entry ? at({ area: 'journal', id: entry.id }, entry.date) : at({ area: 'bank', payment }, tx.date);
+  return (
+    <div className="notice" data-testid="filed-payment">
+      {ICONS.lock}<span>{t('receipts.filedPaymentNotice', { date: formatDate(tx.date), period: quarterName(tx.date), open })}</span>
+      <a href="#" onClick={(e) => { e.preventDefault(); nav.go(go); }}>{t('receipts.filedPaymentOpen')}</a>
+    </div>
+  );
+}
+
+/** The name of the quarter a date lies in. */
+function quarterName(d: string): string {
   const p = parsePeriod(`${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}`, localToday());
   return p ? periodName(p) : d;
 }
@@ -115,6 +143,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: open ? periodName(open) : '' })}</a>
         </div>
       )}
+      {!v.locked && !v.links.length && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} />}
       <TwinNotice {...props} />
       {v.none
         ? <div className="notice">{t('receipts.noneNotice')} {edit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>

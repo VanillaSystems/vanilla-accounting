@@ -81,3 +81,28 @@ test('a receipt dropped after the filing gets in: the run ends, the filed rows a
   assert.deepEqual(closedPart(books(), '2026-06-30'), before);
   assert.ok(!existsSync(join(api.root, 'beleg-import', LATE)), 'the file left the inbox');
 });
+test('a receipt whose only payment is filed is archived without a link and names that payment', async () => {
+  const b = books();
+  const r = b.receipts.find((x) => x.originalFilename === LATE);
+  assert.ok(r, 'the receipt is in the books');
+  assert.equal(r.location, 'archived');
+  assert.ok(!b.mappings.some((m) => m.receiptId === r.id), 'no link into the filed quarter');
+  assert.equal(r.filedPayment, FILED_REF);
+});
+
+test('a run that fails names the failure on the inbox file, and the next run takes the file', async () => {
+  const stray = join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen/unknown-account.xml');
+  writeFileSync(stray, camt('STRAY', 'CH9300762011623852957', '2026-08-03'));
+  drop(SECOND, 'second');
+  const run = await rested((await start()).run);
+  assert.equal(run.status, 'stuck');
+  const inbox = (await api.send('GET', '/api/inbox')).json as unknown as InboxFile[];
+  const file = inbox.find((f) => f.filename === SECOND);
+  assert.ok(file, 'the file is still in the inbox');
+  assert.equal(file.failed?.run, run.id);
+  assert.match(file.failed?.error ?? '', /unknown-account\.xml/);
+  rmSync(stray);
+  const again = await rested((await start()).run);
+  assert.equal(again.status, 'done', again.error);
+  assert.deepEqual((await api.send('GET', '/api/inbox')).json, []);
+});

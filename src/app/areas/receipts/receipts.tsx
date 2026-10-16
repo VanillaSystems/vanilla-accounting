@@ -235,6 +235,15 @@ function RunInbox() {
 }
 
 function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; onSelect(id: string): void }) {
+  if (file.failed) {
+    return (
+      <div className={`row reading failed${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} title={file.failed.error} onClick={() => onSelect(file.id)}>
+        <span className="d mono" />
+        <span className="t">{file.filename} <span style={{ fontSize: 12, marginLeft: 6 }}>{t('receipts.readFailed')}</span></span>
+        <span className="a mono" />
+      </div>
+    );
+  }
   return (
     <div className={`row reading${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} title={t('receipts.readingTip')} onClick={() => onSelect(file.id)}>
       <span className="d mono"><span className="shimmer" style={{ width: 70 }} /></span>
