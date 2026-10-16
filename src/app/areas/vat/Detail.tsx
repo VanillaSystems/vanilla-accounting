@@ -221,7 +221,9 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
             {check.unexplained.map((u) => (
               <span key={u.ziffer} className="block">{t('cases.unexplainedLine', { ziffer: u.ziffer, difference: signed(u.difference), explained: signed(u.explained), open: signed(roundCHF(u.difference - u.explained)) })}</span>
             ))}
-            {check.orphans.length > 0 && <span className="block">{t('cases.orphans', { n: check.orphans.length })}: {check.orphans.map((e) => e.id).join(', ')}</span>}
+            {check.orphans.length > 0 && (
+              <span className="block" data-testid="orphans">{t('cases.orphans', { n: check.orphans.length })}: {check.orphans.map((e, i) => <Fragment key={e.id}>{i > 0 && ', '}<Go to={entryAt(e, period)} nav={nav} className="mono">{e.id}</Go></Fragment>)}</span>
+            )}
           </span>
         </div>
       )}

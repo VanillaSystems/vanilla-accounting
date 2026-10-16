@@ -136,7 +136,10 @@ export function NewEntry(props: Props) {
       return;
     }
     close();
-    const input: JournalEntryInput = { date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }) };
+    const input: JournalEntryInput = {
+      date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }),
+      ...(d.corrects && corrected && as && { correctsEntry: corrected.id, correction: as }),
+    };
     const entry = reverseIt
       ? await createWithReversal(nav, input, reversalOf(input, newYearAfter(date!), t('journal.accrualText', { text, year: date!.slice(0, 4) })))
       : await createEntry(nav, input);

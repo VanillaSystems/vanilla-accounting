@@ -14,6 +14,10 @@ import type { JournalEntry, Receipt } from '../src/types/index.js';
 import type { BookChange } from '../src/types/assistant.js';
 import { changesIn } from '../src/assistant/changes.js';
 import { applyAnswer } from '../src/server/edits.js';
+import { reconcileCases } from '../src/accounting/correction-cases.js';
+import { loadBooks } from '../src/books/store.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
+import { startApi } from './support/api-server.js';
 
 /** The changes an answer of the AI asks for, as its ```vanilla-changes block says them. */
 const asked = (json: string) => changesIn('```vanilla-changes\n' + json + '\n```') as BookChange[];
@@ -132,4 +136,32 @@ test('a late receipt for a filed payment claims its input tax: the receipt point
   const unpointed = { ...late, filedPayment: undefined };
   assert.equal(receiptRate(correctionReceipts(geruest, [], [unpointed], 'late')), 8.1, 'opened from a receipt («Zahlung verknüpfen» on a filed payment): that receipt is read');
   assert.equal(correctionReceipts(geruest, [late], [late], 'late').length, 1, 'a linked receipt is read once');
+});
+
+test('a correction booked by hand gets its case (r8c-6): the 0535 explains it, no orphan; an entry put back without the original gets none', async () => {
+  const api = await startApi('tests/fixtures/period-lock-index.json');
+  try {
+    const at = () => loadBooks(workspaceAt(api.ws.paths.root));
+    const jc = at().journalEntries.find((e) => e.id === 'jc')!;
+    const body = { date: '2026-08-15', accountDebit: jc.accountDebit, accountCredit: jc.accountDebit, amount: jc.amount, vatCode: '-I81', description: `Korrektur zu ${jc.transactionRef}`, corrects: '2026-Q2' };
+    const { status, json } = await api.send('POST', '/api/journal-entries', { ...body, correctsEntry: 'jc', correction: 'vat' });
+    assert.equal(status, 200, String(json.error));
+    const entry = (json as { entry: JournalEntry }).entry;
+    const cases = at().config.correctionCases ?? [];
+    const c = cases.find((x) => x.correctionEntryIds.includes(entry.id))!;
+    assert.ok(c, 'the correction has a case');
+    assert.deepEqual([c.period, c.originalEntryIds], ['2026-Q2', ['jc']]);
+    assert.match(c.title, /MWST/);
+    assert.match(c.wrong, /jc/);
+    assert.match(c.fix, /-I81/);
+    const filed = { period: '2026-Q2' as const, ziffern: {} };
+    assert.deepEqual(reconcileCases(cases, at().journalEntries, filed, filed).orphans, [], 'the 0535 lists no orphan');
+    const plain = await api.send('POST', '/api/journal-entries', { ...body, description: 'Korrektur ohne Fall' });
+    assert.equal(plain.status, 200);
+    assert.equal((at().config.correctionCases ?? []).length, 1, 'without the original named, no case is invented');
+    const unknown = await api.send('POST', '/api/journal-entries', { ...body, correctsEntry: 'nope', correction: 'vat' });
+    assert.equal(unknown.status, 404);
+  } finally {
+    await api.stop();
+  }
 });

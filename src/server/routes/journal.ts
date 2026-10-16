@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { correctionCaseFor, type CorrectionKind } from '../../accounting/correction.js';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
 import { isIsoDate } from '../../accounting/periods.js';
 import { patchBody, stringField, updateBooks, withBooks, RequestError, WS } from '../books.js';
@@ -42,7 +43,7 @@ router.patch('/api/journal-entries/:id', (req, res) => {
 
 /** A new entry booked by hand (src/server/edits.ts addEntry). `id`, the exchange fields and `origin` let an undo put a deleted entry back as it was. */
 router.post('/api/journal-entries', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin']);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction']);
   const date = stringField(b, 'date');
   if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
   const amount = amountField(b);
@@ -58,14 +59,21 @@ router.post('/api/journal-entries', (req, res) => {
   if (!exchangeCurrency !== (exchangeRate === undefined)) throw new RequestError(400, 'exchangeCurrency und exchangeRate gehören zusammen.');
   if (exchangeRate !== undefined && !(exchangeRate > 0)) throw new RequestError(400, 'exchangeRate muss grösser als 0 sein.');
   const corrects = optional('corrects');
+  // A correction of a filed entry names it and what was wrong: its case explains the 0535 (r8c-6).
+  const correctsEntry = optional('correctsEntry');
+  const correction = optional('correction');
+  if (correction && !(['vat', 'account', 'storno'] as const).includes(correction as CorrectionKind)) throw new RequestError(400, 'correction: vat, account oder storno.');
+  if (correctsEntry && !corrects) throw new RequestError(400, 'correctsEntry braucht corrects.');
   const transactionRef = optional('transactionRef');
   const id = optional('id');
   // An undo puts back an entry without an origin (books from before origins) without one.
   const origin = optional('origin') ?? (id ? undefined : 'manual');
   if (origin && !ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
 
-  return withBooks(res, (books) => ({
-    entry: addEntry(books, {
+  return withBooks(res, (books) => {
+    const original = correctsEntry ? books.journalEntries.find((e) => e.id === correctsEntry) : undefined;
+    if (correctsEntry && !original) throw new RequestError(404, `Buchung ${correctsEntry} gibt es nicht.`, { code: 'gone', params: { what: 'entry' } });
+    const entry = addEntry(books, {
       ...(id && { id }),
       ...(transactionRef && { transactionRef }),
       date,
@@ -79,8 +87,10 @@ router.post('/api/journal-entries', (req, res) => {
       ...(origin && { origin: origin as Origin }),
       // Booked by hand now, not put back by an undo: a person decided it (Änderungen lists it).
       ...(id ? {} : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
-    }),
-  }));
+    });
+    if (original && corrects) books.config.correctionCases = [...(books.config.correctionCases ?? []), correctionCaseFor(original, entry, (correction ?? 'vat') as CorrectionKind, corrects)];
+    return { entry };
+  });
 });
 
 /** Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as saved, or gone. */

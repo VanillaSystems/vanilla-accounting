@@ -4,7 +4,7 @@
  * correction of the VAT code or of the account leaves the bank alone; only a storno takes the
  * whole entry back, bank side included. Pure: Buchungen opens its correction form with these.
  */
-import type { JournalEntry, Receipt } from '../types/index.js';
+import type { CorrectionCase, JournalEntry, Receipt } from '../types/index.js';
 import { chart, vat, yearEnd } from '../engines/index.js';
 import { reversalOf, turned, type Draft } from './reversal.js';
 import { codeForRate } from './vat-codes.js';
@@ -106,3 +106,26 @@ export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, d
 /** The bank accounts an entry typed without its payment would move: money no statement shows. */
 export const banksMoved = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit'>, isBank: (account: string) => boolean): string[] =>
   e.accountDebit === e.accountCredit ? [] : [e.accountDebit, e.accountCredit].filter((a) => !!a && isBank(a));
+
+const line = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'vatCode'>) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} ${e.amount.toFixed(2)}`;
+const day = (iso: string) => iso.split('-').reverse().join('.');
+
+const KIND_TITLE: Record<CorrectionKind, string> = { vat: 'MWST-Code korrigiert', account: 'Konto korrigiert', storno: 'Buchung storniert' };
+const KIND_WRONG: Record<CorrectionKind, string> = { vat: 'der MWST-Code war falsch', account: 'das Konto war falsch', storno: 'die Buchung gehörte nicht in die Bücher' };
+
+/**
+ * The case a correction booked by hand writes into config.correctionCases (r8c-6): what was filed,
+ * what fixes it, both entries by id. The 0535 then explains the correction instead of listing an
+ * orphan. Written in the books' language, as the cases of the demo books are.
+ */
+export function correctionCaseFor(original: JournalEntry, correction: JournalEntry, kind: CorrectionKind, period: string): CorrectionCase {
+  return {
+    id: `${period}-${correction.id}`,
+    period: period as CorrectionCase['period'],
+    title: `${KIND_TITLE[kind]}: ${original.description || original.transactionRef}`,
+    wrong: `Buchung ${original.id} vom ${day(original.date)} (${line(original)}) wie eingereicht: ${KIND_WRONG[kind]}.`,
+    fix: `Korrekturbuchung ${correction.id} vom ${day(correction.date)} (${line(correction)}) mit corrects ${period}; die eingereichte Buchung bleibt, wie sie ist.`,
+    originalEntryIds: [original.id],
+    correctionEntryIds: [correction.id],
+  };
+}
