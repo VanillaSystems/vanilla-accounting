@@ -243,6 +243,8 @@ export default {
     'journal.payment.dateIs': 'La data del pagamento: l’IVA conta nel periodo del pagamento.',
     'journal.byHand.lead': 'Alla data del pagamento, {date} · importi in {currency} · Tab da campo a campo, ↵ registra',
     'journal.byHand.precedent': 'Conto come per lo stesso fornitore il {date}',
+    'journal.byHand.cancelledInvoice': 'Il pagamento cita la fattura annullata {number}: nessun ricavo, nessuna IVA. Il denaro è del cliente, da rimborsare o da registrare come debito fino ad allora.',
+    'journal.byHand.showInvoice': 'Mostra fattura',
     'journal.byHand.rest': 'Ancora aperto: {currency} {amount}',
     'journal.byHand.over': 'Troppo: {currency} {amount}',
     'journal.byHand.adds': 'Dà il pagamento: {currency} {amount}',

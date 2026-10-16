@@ -243,6 +243,8 @@ export default {
     'journal.payment.dateIs': 'La date du paiement : la TVA compte dans la période du paiement.',
     'journal.byHand.lead': 'À la date du paiement, {date} · montants en {currency} · Tab de champ en champ, ↵ comptabilise',
     'journal.byHand.precedent': 'Compte comme pour le même fournisseur le {date}',
+    'journal.byHand.cancelledInvoice': 'Le paiement cite la facture annulée {number} : pas de chiffre d’affaires, pas de TVA. L’argent appartient au client, à rembourser ou à comptabiliser comme dette jusque-là.',
+    'journal.byHand.showInvoice': 'Afficher la facture',
     'journal.byHand.rest': 'Reste ouvert : {currency} {amount}',
     'journal.byHand.over': 'Trop : {currency} {amount}',
     'journal.byHand.adds': 'Donne le paiement : {currency} {amount}',

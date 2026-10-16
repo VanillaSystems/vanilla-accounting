@@ -10,7 +10,8 @@ import type {
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
 import { chargesVat, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
-import { referenceFor } from '../providers/qr-bill/reference.js';
+import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
+import type { BankTransaction } from '../types/index.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,20 @@ export function refundDue(cn: Invoice, invoices: readonly Invoice[]): number {
 }
 
 /** The text names the document's number, not as part of a longer number ("Rechnung 2026-005", "RE2026-005/Garage"). */
+/**
+ * The issued document a payment names: by its structured reference, else the one whose number its
+ * text carries. A cancelled invoice too: the hand form then says so instead of booking revenue (r8c-5).
+ */
+export function namedInvoice(tx: Pick<BankTransaction, 'reference' | 'description' | 'counterparty' | 'parts'>, invoices: readonly Invoice[]): Issued | undefined {
+  const issued = invoices.filter((i): i is Issued => i.status === 'issued' && !i.deleted);
+  const refs = [tx.reference, ...(tx.parts ?? []).map((p) => p.reference)].flatMap((r) => (r ? [parseReference(r)?.reference] : []));
+  const byRef = issued.find((i) => refs.includes(i.reference));
+  if (byRef) return byRef;
+  const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.reference, p.counterparty])].filter(Boolean).join(' ');
+  const named = issued.filter((i) => namesNumber(text, i.number));
+  return named.length === 1 ? named[0] : undefined;
+}
+
 export const namesNumber = (text: string, number: string): boolean => new RegExp(`(?<![0-9])${number.replace(/[^0-9A-Za-z]/g, (c) => `\\${c}`)}(?![0-9])`).test(text);
 
 /** Reminder fees not paid yet. */

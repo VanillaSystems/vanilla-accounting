@@ -240,6 +240,8 @@ export const messages = {
   'journal.payment.dateIs': 'Das Datum der Zahlung: die MWST zählt in der Periode der Zahlung.',
   'journal.byHand.lead': 'Am Datum der Zahlung, {date} · Beträge in {currency} · Tab von Feld zu Feld, ↵ bucht',
   'journal.byHand.precedent': 'Konto wie bei derselben Firma am {date}',
+  'journal.byHand.cancelledInvoice': 'Die Zahlung nennt die stornierte Rechnung {number}: kein Umsatz, keine MWST. Das Geld gehört dem Kunden, zurückzahlen oder bis dahin als Verbindlichkeit buchen.',
+  'journal.byHand.showInvoice': 'Rechnung zeigen',
   'journal.byHand.rest': 'Noch offen: {currency} {amount}',
   'journal.byHand.over': 'Zu viel: {currency} {amount}',
   'journal.byHand.adds': 'Ergibt die Zahlung: {currency} {amount}',

@@ -20,6 +20,9 @@ import type { Nav } from '../index.js';
 import { AccountField } from './AccountField.js';
 import { VatCodeList } from './Detail.js';
 import { attachEntries, bookPayment } from './actions.js';
+import { useInvoices } from '../invoices/data.js';
+import { Go } from '../vat/links.js';
+import { at } from '../receipts/view.js';
 
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) && s.trim() ? n : null; };
 const FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const;
@@ -35,7 +38,9 @@ type Props = {
 /** Waits for the workspace's bank accounts: the first lines put the bank on its side. */
 export function PaymentBooking(props: Props) {
   const ws = useWorkspace();
-  const draft = useMemo(() => ws && bookingDraft(props.books, props.payment, ws.bankAccounts), [ws, props.books, props.payment]);
+  const inv = useInvoices();
+  const invoices = inv.state === 'ready' ? inv.data.invoices : undefined;
+  const draft = useMemo(() => ws && bookingDraft(props.books, props.payment, ws.bankAccounts, invoices), [ws, props.books, props.payment, invoices]);
   const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
   if (!ws || !draft) return null;
   return (
@@ -145,6 +150,12 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
         <span className="m">{t('journal.byHand.lead', { date: formatDate(draft.date), currency: draft.currency })}</span>
         {draft.precedent ? <span className="m">{t('journal.byHand.precedent', { date: formatDate(draft.precedent.date) })}</span> : null}
       </div>
+      {draft.cancelledInvoice ? (
+        <p className="pbw" data-testid="cancelled-invoice" data-number={draft.cancelledInvoice.number}>
+          {t('journal.byHand.cancelledInvoice', { number: draft.cancelledInvoice.number })}{' '}
+          <Go to={at({ area: 'invoices', view: 'list', id: draft.cancelledInvoice.number }, draft.date)} nav={nav}>{t('journal.byHand.showInvoice')}</Go>
+        </p>
+      ) : null}
       {rows.map(({ key, init }, i) => {
         const vat = now[i]?.vat;
         const zero = noReceipt ? inputTaxWithoutReceipt(vat?.code) : undefined;

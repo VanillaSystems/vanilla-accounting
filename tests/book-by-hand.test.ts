@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, moduleActor, periodLock, saveBooks, update, PERSON, type Books } from '../src/books/store.js';
 import { bookingDraft, inputTaxWithoutReceipt } from '../src/accounting/manual-booking.js';
+import type { Invoice } from '../src/invoices/model.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { bookPayment } from '../src/server/edits.js';
 import { classifyStep } from '../src/intake/classify.js';
@@ -203,4 +204,27 @@ test('without a receipt the draft prefills the code the app would book: the vend
   const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen CHF' }];
   assert.equal(bookingDraft(books, 'S9', accounts)!.lines[0].vat, 'I0', 'August had a receipt with 8.1 %; September has none');
   assert.equal(bookingDraft(books, 'P2', accounts)!.lines[0].vat, 'I0');
+});
+
+test('a payment naming a cancelled invoice (r8c-5): the draft says which one, and takes neither the revenue account nor the V81 of the customer\'s earlier sale', () => {
+  const books = {
+    transactions: [
+      { ref: 'P2', bank: 'Bank', date: '2026-10-19', amount: 1070.19, currency: 'CHF', direction: 'CRDT' as const, description: 'Gutschrift', counterparty: 'Muster AG', reference: 'RF49 2026 005' },
+      { ref: 'P1', bank: 'Bank', date: '2026-09-01', amount: 500, currency: 'CHF', direction: 'CRDT' as const, description: 'Gutschrift', counterparty: 'Muster AG' },
+    ],
+    receipts: [],
+    mappings: [],
+    journalEntries: [{ id: 'j1', transactionRef: 'P1', date: '2026-09-01', accountDebit: '1020', accountCredit: '3400', amount: 500, vatCode: 'V81' }],
+  };
+  const accounts = [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }];
+  const cancelled = { id: 'i5', status: 'issued', kind: 'invoice', deleted: false, number: '2026-005', reference: 'RF492026005', currency: 'CHF', date: '2026-10-01', cancelled: { date: '2026-10-18', reason: 'doppelt' }, payments: [], lines: [] } as unknown as Invoice;
+  const blind = bookingDraft(books, 'P2', accounts)!;
+  assert.deepEqual([blind.lines[0].accountCredit, blind.lines[0].vat], ['3400', 'V81'], 'without the invoices, the customer\'s last sale is the precedent');
+  const draft = bookingDraft(books, 'P2', accounts, [cancelled])!;
+  assert.deepEqual(draft.cancelledInvoice, { id: 'i5', number: '2026-005' });
+  assert.deepEqual(draft.lines, [{ accountDebit: '1020', accountCredit: '', amount: 1070.19, vat: '', description: 'Gutschrift' }]);
+  assert.equal(draft.precedent, undefined);
+  const live = bookingDraft(books, 'P2', accounts, [{ ...cancelled, cancelled: undefined } as unknown as Invoice])!;
+  assert.equal(live.cancelledInvoice, undefined, 'a live invoice is the payment rules\' business, not the hand form\'s');
+  assert.equal(live.precedent?.id, 'j1');
 });

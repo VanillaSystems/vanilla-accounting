@@ -243,6 +243,8 @@ export default {
     'journal.payment.dateIs': 'The payment’s date: VAT counts in the payment’s period.',
     'journal.byHand.lead': 'On the payment’s date, {date} · amounts in {currency} · Tab from field to field, ↵ books',
     'journal.byHand.precedent': 'Account as for the same vendor on {date}',
+    'journal.byHand.cancelledInvoice': 'The payment names the cancelled invoice {number}: no revenue, no VAT. The money is the customer’s, refund it or book it as a liability until then.',
+    'journal.byHand.showInvoice': 'Show invoice',
     'journal.byHand.rest': 'Still open: {currency} {amount}',
     'journal.byHand.over': 'Too much: {currency} {amount}',
     'journal.byHand.adds': 'Adds up to the payment: {currency} {amount}',

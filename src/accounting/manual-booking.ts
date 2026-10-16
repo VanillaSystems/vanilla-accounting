@@ -10,6 +10,8 @@ import { codeForRate, formTakes, lookupVatCode } from './vat-codes.js';
 import { chart, withoutInputTax } from '../engines/index.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { isManualRef } from '../books/refs.js';
+import type { Invoice } from '../invoices/model.js';
+import { namedInvoice } from '../invoices/rules.js';
 
 /** One line of the booking, in the payment's currency. */
 export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string }
@@ -29,6 +31,8 @@ export interface BookingDraft {
   lines: DraftLine[];
   /** The earlier booking of the same vendor the account was taken from. */
   precedent?: Pick<JournalEntry, 'id' | 'transactionRef' | 'date'>;
+  /** The payment names an invoice that was cancelled: no revenue, no precedent; the form says so (r8c-5). */
+  cancelledInvoice?: { id: string; number: string };
 }
 
 type Books = Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts'>;
@@ -87,15 +91,18 @@ function withoutReceipt(code: string | undefined): string {
  * a line per rate when the receipt states several that add up to the payment. Undefined when no
  * payment has the ref.
  */
-export function bookingDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[]): BookingDraft | undefined {
+export function bookingDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices?: readonly Invoice[]): BookingDraft | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) return undefined;
+  const named = invoices && tx.direction === 'CRDT' ? namedInvoice(tx, invoices) : undefined;
+  const cancelled = named?.cancelled ? { id: named.id, number: named.number } : undefined;
   const [side] = paymentSides({ transactions: books.transactions, journalEntries: [] }, ref, accounts);
   const bank = side && { account: side.account, side: side.paid < 0 ? 'accountCredit' as const : 'accountDebit' as const };
   const paid = side ? Math.abs(side.paid) : tx.amount;
   const receiptIds = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
   const receipts = books.receipts.filter((r) => receiptIds.includes(r.id));
-  const precedent = bank && precedentOf(books, tx, bank, new Set(accounts.map((a) => a.account)));
+  // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
+  const precedent = !cancelled && bank ? precedentOf(books, tx, bank, new Set(accounts.map((a) => a.account))) : undefined;
   const text = receipts.find((r) => r.description)?.description ?? tx.description;
   const line = (amount: number, rate?: number): DraftLine => {
     const accountDebit = bank?.side === 'accountDebit' ? bank.account : precedent?.account ?? '';
@@ -107,7 +114,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const split = groups.length > 1 && groups.every((g) => gross(g) !== undefined) && toRappen(groups.reduce((s, g) => s + gross(g)!, 0)) === toRappen(paid);
   const rates = new Set(receipts.flatMap(vatRates).map((g) => g.ratePercent));
   const lines = split ? groups.map((g) => line(gross(g)!, g.ratePercent)) : [line(paid, rates.size === 1 ? [...rates][0] : undefined)];
-  return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(precedent && { precedent: precedent.entry }) };
+  return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(precedent && { precedent: precedent.entry }), ...(cancelled && { cancelledInvoice: cancelled }) };
 }
 
 const sidesWith = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
