@@ -84,6 +84,19 @@ test('a transfer between the company\'s own money accounts carries no VAT code, 
   assert.equal(tool.vatCode, 'I81', 'a fixed asset bought keeps its input tax');
 });
 
+test('a VAT code from the model follows the money: a supplier credit (bank debited, the expense credited) takes the minus code, the zero code too (r9h-11)', () => {
+  const ctx = { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } as const };
+  const credit = tx({ ref: 'GS', bank: 'Raiffeisen', direction: 'CRDT', amount: 408.6 });
+  const [m0] = entriesFor(credit, [{ accountDebit: '1021', accountCredit: '4400', amount: 408.6, vatCode: 'M0', description: 'Gutschrift GS-1207' }], ctx);
+  assert.deepEqual([m0.accountDebit, m0.accountCredit, m0.vatCode], ['1021', '4400', '-M0']);
+  const [m81] = entriesFor(credit, [{ accountDebit: '', accountCredit: '4400', amount: 408.6, vatCode: 'M81', description: 'Gutschrift GS-1207' }], ctx);
+  assert.equal(m81.vatCode, '-M81');
+  const [purchase] = entriesFor(tx({ ref: 'FM', bank: 'Raiffeisen', amount: 408.6 }), [{ accountDebit: '4400', accountCredit: '', amount: 408.6, vatCode: '-M0', description: 'Rechnung FM-78230' }], ctx);
+  assert.equal(purchase.vatCode, 'M0', 'a minus the model put on a purchase goes');
+  const [refund] = entriesFor(tx({ ref: 'RF', bank: 'Raiffeisen', amount: 50 }), [{ accountDebit: '3400', accountCredit: '', amount: 50, vatCode: 'V81', description: 'Rückerstattung' }], ctx);
+  assert.equal(refund.vatCode, '-V81', 'a customer refund takes -V81');
+});
+
 test('a Stripe payout books its 1093 entries on the order date and adds the payout leg', () => {
   const payout = tx({ ref: 'P', direction: 'CRDT', amount: 95, currency: 'EUR', bank: 'Wise' });
   const llm: ClassifyEntry[] = [

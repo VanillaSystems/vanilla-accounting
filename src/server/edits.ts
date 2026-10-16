@@ -10,6 +10,7 @@ import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
 import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, chart, filing } from '../engines/index.js';
+import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
@@ -212,25 +213,6 @@ export function assertCodeTaken(code: string | undefined): void {
     ? `Den Steuercode ${code} gibt es in dieser Firma nicht: sie ist nicht steuerpflichtig eingetragen und bucht brutto, ohne Codes.`
     : `Den Steuercode ${code} nimmt das Formular dieser Firma nicht: Einkäufe ohne Code, Verkäufe mit dem Code ihres bewilligten Satzes.`;
   throw new RequestError(400, why, { code: 'codeNotTaken', params: { code, method } });
-}
-
-/**
- * The sign a code must carry on this line, when the accounts say so (r7h-22): a purchase code (M,
- * I) on a line that credits an expense is a refund or a supplier's credit note and carries the
- * minus (-M81); a sales code (V) on a line that debits revenue is a customer refund (-V81). The
- * plain code there would claim input tax on money received, or declare turnover on money paid out.
- * Undefined when the accounts give no direction: a correction on one account, a VAT-only leg
- * (M81-2), Bezugsteuer, an export code, two balance-sheet accounts.
- */
-export function codeSignFor(code: string | undefined, accountDebit: string | undefined, accountCredit: string | undefined): string | undefined {
-  const m = /^(-?)([MIV])(\d+)$/.exec(code ?? '');
-  if (!m || !accountDebit || !accountCredit || accountDebit === accountCredit) return undefined;
-  const side = m[2] === 'V' ? 'revenue' : 'expense';
-  const debit = chart().typeOf(accountDebit) === side;
-  const credit = chart().typeOf(accountCredit) === side;
-  if (debit === credit) return undefined;
-  const back = m[2] === 'V' ? debit : credit;
-  return `${back ? '-' : ''}${m[2]}${m[3]}`;
 }
 
 export function assertCodeSign(code: string | undefined, accountDebit: string | undefined, accountCredit: string | undefined): void {

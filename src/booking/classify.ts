@@ -23,6 +23,7 @@ import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
+import { codeSignFor } from '../accounting/code-sign.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
@@ -97,7 +98,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: transfer ? undefined : permittedCode(e.vatCode),
+      vatCode: transfer ? undefined : signed(permittedCode(e.vatCode), accountDebit, accountCredit),
       description: e.description || tx.description,
     });
   });
@@ -473,6 +474,8 @@ function withCreditNoteCodes(books: Books, tx: BankTransaction, entries: Journal
  * model's code stands as written, so a person sees a code the engine does not know.
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
+/** The model's code with the sign the accounts give it (r9h-11): a credit note's M0 becomes -M0, whatever the model wrote. */
+const signed = (code: string | undefined, accountDebit: string, accountCredit: string): string | undefined => codeSignFor(code, accountDebit, accountCredit) ?? code;
 
 export interface ClassifyDeps {
   /** Absent: no model; what no rule decides is left in `unasked`. */
