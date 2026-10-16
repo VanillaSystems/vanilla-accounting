@@ -38,7 +38,7 @@ export interface ReceiptSet {
 }
 
 /** A booking's fields as a change sets them; `origin` and `reason` only from an undo, `null` for a booking that had none. */
-export type EntrySet = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount'>> & { origin?: JournalEntry['origin'] | null; reason?: string | null };
+export type EntrySet = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>> & { origin?: JournalEntry['origin'] | null; reason?: string | null };
 
 /**
  * A new booking: on a payment (`transactionRef`) or, without one, standing alone under the next

@@ -14,9 +14,10 @@ function amountField(b: Record<string, unknown>): number {
 }
 
 router.patch('/api/journal-entries/:id', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount']);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount', 'receipts']);
   const set = b as EntrySet;
   if ('amount' in b) set.amount = amountField(b);
+  if ('receipts' in b && !(Array.isArray(b.receipts) && b.receipts.every((id) => typeof id === 'string'))) throw new RequestError(400, 'receipts muss eine Liste von Beleg-Ids sein.');
   const ref = updateBooks((books) => {
     setEntry(books, req.params.id, set);
     return books.journalEntries.find((e) => e.id === req.params.id)!.transactionRef;

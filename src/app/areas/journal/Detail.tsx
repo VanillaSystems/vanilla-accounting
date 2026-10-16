@@ -24,6 +24,7 @@ import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain, codeText } from '../codes/vat-card.js';
 import { whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
 import { selectNew, setUi, useUi, type Section } from './state.js';
+import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
@@ -103,6 +104,13 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           : v.missing && <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('journal.noReceipt')}</span>}
       </div>
 
+      {v.evidence && (
+        <div className="notice warn" data-testid="evidence">
+          {I.dot}<span>{evidenceText(e, v.evidence)}</span>
+          {edit && <a href="#" data-testid="evidence-book" onClick={(ev) => { ev.preventDefault(); void saveEntry(nav, e, patchOf(v.evidence!), ['vatCode']); }}>{t(v.evidence.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}</a>}
+        </div>
+      )}
+
       {e.corrects
         ? <div className="notice">{ICONS.lock}<span>{t('journal.correctsNotice', { filed: filedName(e.corrects), declared: quarterName(e.date) })}</span></div>
         : v.locked && (
@@ -164,6 +172,16 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
     </div>
   );
 }
+
+/** What the booking page and the row say when an entry contradicts its receipts (src/accounting/evidence-check.ts). */
+export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
+  return c.kind === 'receiptShowsVat'
+    ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ?? '' })
+    : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ?? '', zero: c.code });
+}
+
+/** The click: the proposed code, and for a receipt that shows VAT the receipts the entry now records as seen. */
+const patchOf = (c: EvidenceCheck) => (c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code });
 
 /** Book from this entry: its Gegenbuchung, a copy, and for an accrual its reversal on the next 1.1. (treuhaender-27). */
 function EntryActions(props: Props & { v: EntryView; j: Journal }) {

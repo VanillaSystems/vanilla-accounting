@@ -132,7 +132,7 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser', missing?: Missin
 
 type Ok = { ok: true };
 type Link = { receiptId: string; transactionRef: string };
-export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount'>>;
+export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>;
 /** A new entry by hand; `id` and `transactionRef` put a deleted one back (undo). */
 export type JournalEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount'> & { description: string }
   & Partial<Pick<JournalEntry, 'id' | 'transactionRef' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate' | 'corrects' | 'origin'>>;

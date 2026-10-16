@@ -22,7 +22,7 @@ import { codesUi, setCodesUi } from '../codes/state.js';
 import { byMonth, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
 import { listed, setUi, toggleMonth, ui, useUi } from './state.js';
 import { journalFor, newEntryDate, runAct } from './commands.js';
-import { Detail } from './Detail.js';
+import { Detail, evidenceText } from './Detail.js';
 import { NewEntry } from './NewEntry.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './journal.css';
@@ -151,7 +151,7 @@ function Row({ v, prev, sel, acName, onSelect }: { v: EntryView; prev?: EntryVie
       {side(e.accountDebit, 'dr')}
       {side(e.accountCredit, 'cr')}
       {e.vatCode
-        ? <span className={`mono vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })}>{e.vatCode}</span>
+        ? <span className={`mono vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })} title={v.evidence && evidenceText(e, v.evidence)}>{v.evidence && I.dot}{e.vatCode}</span>
         : <span className="mono vc none" title={t('journal.noVat')}>·</span>}
       <span className="mono cu">{e.exchangeCurrency && e.exchangeCurrency !== baseCurrency() ? e.exchangeCurrency : ''}</span>
       <span className="a mono">{fmt(e.amount)}</span>

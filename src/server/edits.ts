@@ -129,6 +129,12 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   if (set.reason !== undefined) { if (set.reason) e.reason = set.reason; else delete e.reason; }
   else if (e.reason && (['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const).some((k) => k in set)) { before.reason = e.reason; delete e.reason; }
   if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
+  if (set.receipts !== undefined) {
+    const unknown = set.receipts.find((id) => !books.receipts.some((r) => r.id === id));
+    if (unknown) throw new RequestError(400, `receipts: Beleg ${unknown} gibt es nicht.`);
+    before.receipts = e.receipts;
+    e.receipts = set.receipts;
+  }
   const origin = set.origin === undefined ? 'manual' : set.origin;
   if (origin) e.origin = origin;
   else delete e.origin;

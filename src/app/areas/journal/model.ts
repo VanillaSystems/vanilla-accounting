@@ -6,6 +6,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
+import { evidenceCheck, type EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
 import { chart } from '../../../engines/index.js';
@@ -20,6 +21,8 @@ export interface EntryView {
   missing: boolean;
   /** Dated in a filed quarter: it never changes again (golden rule 1). */
   locked: boolean;
+  /** Its VAT code contradicts its receipts, with the code a click would set. */
+  evidence?: EvidenceCheck;
   /** Its text split for the list and the head: "Sunrise" and "Mobilabo Sep 2026". */
   title: string;
   sub: string;
@@ -55,7 +58,8 @@ export function journalOf(books: Index): Journal {
     const tx = txByRef.get(e.transactionRef);
     const receipts = receiptsByRef.get(e.transactionRef) ?? [];
     const [title, sub] = splitText(e.description || e.transactionRef);
-    return { e, tx, receipts, missing: !!tx && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, title, sub };
+    const evidence = evidenceCheck(e, receipts, closedThrough);
+    return { e, tx, receipts, missing: !!tx && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, ...(evidence && { evidence }), title, sub };
   });
   const byRef = new Map<string, EntryView[]>();
   for (const v of views) (byRef.get(v.e.transactionRef) ?? byRef.set(v.e.transactionRef, []).get(v.e.transactionRef)!).push(v);
