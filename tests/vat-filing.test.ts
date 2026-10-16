@@ -15,7 +15,7 @@ import { derivePeriod } from '../src/accounting/periods.js';
 import { vat } from '../src/engines/index.js';
 import { ech0217Xml } from '../src/providers/ech0217/xml.js';
 import { APP_ROOT, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
-import { openEngine } from '../src/workflows/engine.js';
+import { openEngine, SKIPPED } from '../src/workflows/engine.js';
 import { filedXml, filingXml, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
 import { loadWorkflows } from '../src/workflows/load.js';
 import { taskOf } from '../src/workflows/model.js';
@@ -72,6 +72,26 @@ test('a filing run: the report\'s figures, the review, the XML of vat-xml, the f
   assert.match(second.state.status === 'stuck' ? second.state.reason : '', /filed already/);
 });
 
+test('a replay of a filed run recomputes nothing: the period is filed, the run says so, and the filing stays as it was (r5f-19)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const first = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: first.ok ? first.run! : '', outcome }); await engine.idle(); }
+  const filed = readFileSync(filedXml(ws, Q), 'utf8');
+  const sealed = readFileSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json'), 'utf8');
+
+  const replay = await engine.command({ kind: 'replay', run: first.ok ? first.run! : '' });
+  assert.ok(replay.ok && replay.run, JSON.stringify(replay));
+  await engine.idle();
+  const run = engine.run(replay.run!)!;
+  assert.equal(run.mode, 'replay');
+  assert.equal(run.state.status, 'stuck');
+  assert.match(run.state.status === 'stuck' ? run.state.reason : '', /filed already/);
+  assert.equal(readFileSync(filedXml(ws, Q), 'utf8'), filed, 'the filed XML is as it was');
+  assert.equal(readFileSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json'), 'utf8'), sealed, 'the seal is as it was');
+});
+
 test('a dry run of a filing never closes or seals', async () => {
   const ws = demo();
   const engine = openEngine(ws, { appRoot: APP_ROOT });
@@ -80,7 +100,8 @@ test('a dry run of a filing never closes or seals', async () => {
   for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome }); await engine.idle(); }
   const run = engine.run(r.ok ? r.run! : '')!;
   assert.equal(run.state.status, 'done');
-  assert.equal(run.steps.at(-1)!.effects[0].would, 'skipped: not run in a dry run');
+  assert.equal(run.steps.at(-1)!.outcome, 'skipped', 'a step that wrote nothing does not say ok (r5f-19)');
+  assert.equal(run.steps.at(-1)!.effects[0].would, SKIPPED);
   assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31');
   assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json')), false);
 });

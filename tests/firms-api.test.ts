@@ -62,3 +62,15 @@ test('not registered: the server refuses every VAT code, a code typed by hand in
   const ok = await api.send('POST', '/api/journal-entries', ENTRY);
   assert.equal(ok.status, 200, JSON.stringify(ok.json));
 });
+
+test('not registered: the year closes without a return, and the private-use entry debits the owner\'s own account (r5f-11, seams: 2850)', async () => {
+  const api = await start('demo-coiffeur');
+  const res = await api.send('GET', '/api/year-close/2026');
+  assert.equal(res.status, 200, JSON.stringify(res.json));
+  const close = res.json as { checks: Array<{ id: string; status: string; problems: Array<{ code: string }> }>; blockers: Array<{ code: string }>; templates: Array<{ id: string; accountDebit: string }> };
+  assert.ok(!close.checks.some((c) => c.id === 'q4Filed'), 'no return to file');
+  const sealed = close.checks.find((c) => c.id === 'quartersSealed')!;
+  assert.deepEqual([sealed.status, sealed.problems], ['ok', []], 'a firm without returns closes its periods with the year');
+  assert.ok(!close.blockers.some((b) => b.code === 'q4NotFiled' || b.code === 'notClosed'), JSON.stringify(close.blockers));
+  assert.equal(close.templates.find((tp) => tp.id === 'privateUse')?.accountDebit, '2850', 'an Einzelfirma\'s private account, not the GmbH\'s 2451');
+});
