@@ -19,7 +19,7 @@ import { candidates, chfOf, linkKey, type Candidate, type Ledger, type ReceiptVi
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { correctFiled, linkPayment, privateOutlay } from './actions.js';
 import { Kbd } from './commands.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClose(): void };
 
@@ -30,9 +30,12 @@ function why(c: Candidate): string {
     c.fit?.kind === 'skonto' ? fitText(c.fit) : '',
     c.days !== undefined ? dayText(c.days) : '',
     c.taken ? t('receipts.whyTaken', { n: c.taken }) : '',
-    c.filed ? t('receipts.whyFiled') : '',
+    c.filed ? t(noCorrection(c) ? 'receipts.whyFiledNoInputTax' : 'receipts.whyFiled') : '',
   ].filter(Boolean).join(' · ');
 }
+
+/** A payment of a filed period in a firm without input tax (r8f-34): a receipt changes nothing on it, there is no input tax to claim in a correction. */
+const noCorrection = (c: Candidate): boolean => !!c.filed && !!withoutInputTax() && c.tx.direction === 'DBIT';
 
 export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const { r } = v;
@@ -51,6 +54,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   function choose(item: Candidate | 'private' | undefined) {
     if (!item) return;
     if (item === 'private') { onClose(); privateOutlay(nav, v); return; }
+    if (noCorrection(item)) return;
     if (item.filed) { onClose(); correctFiled(nav, books, l, item.tx.ref, r.id); return; }
     if (paid.length && second !== item) { setSecond(item); return; }
     onClose();
@@ -82,7 +86,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const privateAt = k + best.length + more.length;
   const picked = at >= 0 ? items[at] : undefined;
   const enterDoes = at < 0 ? t('receipts.pickFirst')
-    : picked !== 'private' && picked?.filed ? t('receipts.toCorrection')
+    : picked !== 'private' && picked && noCorrection(picked) ? t('receipts.noCorrection')
+      : picked !== 'private' && picked?.filed ? t('receipts.toCorrection')
       : second && second === picked ? t('receipts.confirmVerb') : t('receipts.linkVerbShort');
 
   return (

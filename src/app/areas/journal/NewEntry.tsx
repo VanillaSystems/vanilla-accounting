@@ -170,7 +170,7 @@ export function NewEntry(props: Props) {
               <p className="m" data-testid="correction-how">{claim
                 ? t('journal.correctionHow.claim', { rate: String(rate), code: claim, tax: taxOf(claim), was: corrected.vatCode ?? '' })
                 : as === 'account' && noInputTax ? t(`journal.correctionHowNoInputTax.${noInputTax}`)
-                  : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '' })}</p>
+                  : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '', side: t(chart().typeOf(corrected.accountCredit) === 'revenue' ? 'journal.correctionSide.revenue' : 'journal.correctionSide.expense') })}</p>
             </div>
           )}
         </div>
