@@ -885,6 +885,7 @@ export default {
     'receipts.filedPaymentNoInputTax.none': "Règle le paiement du {date}, qui se trouve dans {period}, déjà clôturé : plus de rattachement. L’entreprise n’est pas assujettie à la TVA : il n’y a pas d’impôt préalable à saisir.",
     'receipts.filedPaymentNoInputTax.net-rate': "Règle le paiement du {date}, qui se trouve dans {period}, déjà déposé : plus de rattachement. Avec le taux de la dette fiscale nette, il n’y a pas d’impôt préalable à saisir.",
     'receipts.filedPaymentOpen': 'Ouvrir le paiement →',
+    'receipts.filedPaymentCorrected': "Règle le paiement du {date}, qui se trouve dans {period}, déjà déposé. L’impôt préalable est saisi comme correction : l’écriture ci-dessous.",
     'receipts.morePayment': 'Autre paiement',
     'receipts.morePayments': 'Autres paiements',
     'receipts.nPayments': { one: '{n} paiement', other: '{n} paiements' },

@@ -885,6 +885,7 @@ export default {
     'receipts.filedPaymentNoInputTax.none': "Paga il pagamento del {date}, che si trova nel {period} già chiuso: nessun collegamento. L’impresa non è assoggettata all’IVA: non c’è imposta precedente da registrare.",
     'receipts.filedPaymentNoInputTax.net-rate': "Paga il pagamento del {date}, che si trova nel {period} già inoltrato: nessun collegamento. Con l’aliquota saldo non c’è imposta precedente da registrare.",
     'receipts.filedPaymentOpen': 'Apri il pagamento →',
+    'receipts.filedPaymentCorrected': "Paga il pagamento del {date}, che si trova nel {period} già inoltrato. L’imposta precedente è registrata come correzione: la registrazione qui sotto.",
     'receipts.morePayment': 'Altro pagamento',
     'receipts.morePayments': 'Altri pagamenti',
     'receipts.nPayments': { one: '{n} pagamento', other: '{n} pagamenti' },

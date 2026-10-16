@@ -37,6 +37,8 @@ export interface TaxCodeEngine {
   netRateCode(n: 1 | 2): string | undefined;
   /** The prefix that makes a code a refund or reversal. */
   negativePrefix: string;
+  /** The code whose amount is the tax itself (M81 → M81-2), for a gross purchase code of a family that has one; undefined otherwise. */
+  taxAmountCode(code: string): string | undefined;
   /** Where a purchase's input tax goes, by the income section of its account. */
   purchaseBoxes: TaxCodesData['purchaseBoxes'];
   /** By meaning: the first catalogue code that deducts input tax at `rate` in `box` (no acquisition tax). */
@@ -87,11 +89,17 @@ export function taxCodeEngine(data: TaxCodesData, form: Pick<ReturnData, 'codes'
 
   const named = [...Object.keys(data.codes), ...Object.keys(data.netRateCodes ?? {})].filter((c) => meaningOf(c) !== null);
   const meanings = named.map((code) => [code, meaningOf(code)!] as const);
-  return {
+  const engine: TaxCodeEngine = {
     named,
     saleAt: (rate) => meanings.find(([, m]) => m.revenueZiffer && !m.flatOnGross && m.rate === rate)?.[0],
     netRateCode: (n) => Object.entries(data.netRateCodes ?? {}).find(([code, m]) => m.netRate === n && meaningOf(code))?.[0],
     negativePrefix: data.negativePrefix,
+    taxAmountCode(code) {
+      const family = data.amountSuffix.families.find((f) => code.startsWith(f));
+      if (!family || suffixRe.test(code) || code.startsWith(data.negativePrefix)) return undefined;
+      const tax = `${code}${data.amountSuffix.tax}`;
+      return engine.parse(tax) ? tax : undefined;
+    },
     purchaseBoxes: data.purchaseBoxes,
     purchaseAt: (rate, box) => meanings.find(([, m]) => m.inputTaxZiffer === box && !m.acquisitionZiffer && m.rate === rate)?.[0],
     deductedIn: (box) => meanings.find(([, m]) => m.deductionZiffer === box)?.[0],
@@ -116,6 +124,7 @@ export function taxCodeEngine(data: TaxCodesData, form: Pick<ReturnData, 'codes'
       ].filter((z): z is string => !!z);
     },
   };
+  return engine;
 }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

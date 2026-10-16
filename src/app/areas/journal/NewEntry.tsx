@@ -59,6 +59,7 @@ export function NewEntry(props: Props) {
   const reverseIt = accrual && (reverse ?? reversedAsRule(sides));
   const corrected = s.overlay.correcting && journalFor(books).byId.get(s.overlay.correcting.entry)?.e;
   const as = s.overlay.correcting?.as;
+  const from = s.overlay.correcting?.from;
   const moved = tx ? [] : banksMoved(sides, isBankAccount);
   const accounts = getAccountMap();
   // The account the correction moves the amount to: the side that is not the filed entry's own.
@@ -148,6 +149,8 @@ export function NewEntry(props: Props) {
       // A correction or reversal of a foreign-currency entry keeps its currency and rate: the amount typed is in that currency (r9c-1).
       ...(fx && { exchangeCurrency: fx.currency, exchangeRate: fx.rate }),
       ...(d.corrects && corrected && as && { correctsEntry: corrected.id, correction: as }),
+      // Opened from a late receipt of the filed payment: the correction is its booking (r10h-6).
+      ...(d.corrects && from && { receipt: from }),
     };
     const entry = reverseIt
       ? await createWithReversal(nav, input, reversalOf(input, newYearAfter(date!), t('journal.accrualText', { text, year: date!.slice(0, 4) })))

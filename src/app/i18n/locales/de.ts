@@ -882,6 +882,7 @@ export const messages = {
   'receipts.filedPaymentNoInputTax.none': "Zahlt die Zahlung vom {date}, die im abgeschlossenen {period} liegt: keine Zuordnung mehr. Die Firma ist nicht steuerpflichtig: es gibt keine Vorsteuer zu erfassen.",
   'receipts.filedPaymentNoInputTax.net-rate': "Zahlt die Zahlung vom {date}, die im eingereichten {period} liegt: keine Zuordnung mehr. Mit dem Saldosteuersatz gibt es keine Vorsteuer zu erfassen.",
   'receipts.filedPaymentOpen': 'Zahlung öffnen →',
+  'receipts.filedPaymentCorrected': "Zahlt die Zahlung vom {date}, die im eingereichten {period} liegt. Die Vorsteuer ist als Korrektur gebucht: die Buchung unten.",
   'receipts.morePayment': 'Weitere Zahlung',
   'receipts.morePayments': 'Weitere Zahlungen',
   'receipts.nPayments': { one: '{n} Zahlung', other: '{n} Zahlungen' },

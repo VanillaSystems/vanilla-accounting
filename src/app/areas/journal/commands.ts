@@ -1,6 +1,6 @@
 /** What the list, the detail and the keys of Buchungen share: the journal of the loaded books, and the commands on an entry. */
 import type { Index, JournalEntry, Receipt } from '../../../types/index.js';
-import { correctionKinds, correctionOf, correctionReceipts, receiptRate, type CorrectionKind } from '../../../accounting/correction.js';
+import { correctionKinds, correctionOf, correctionReceipts, receiptRate, receiptVat, type CorrectionKind } from '../../../accounting/correction.js';
 import { ownerAccount } from '../../../accounting/bank-accounts.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { localToday, booksOpenPeriod, filingKeyOf, parsePeriod, type Period } from '../../../accounting/periods.js';
@@ -55,10 +55,14 @@ export const isPrivateAccount = (account: string): boolean => {
 export const receiptRateOf = (books: Index, e: JournalEntry, from?: string): number | undefined =>
   receiptRate(correctionReceipts(e, journalFor(books).byId.get(e.id)?.receipts ?? [], books.receipts, from));
 
+/** The tax those receipts state at that rate (r10h-6): the figure the correction claims. */
+export const receiptVatOf = (books: Index, e: JournalEntry, from?: string): number | undefined =>
+  receiptVat(correctionReceipts(e, journalFor(books).byId.get(e.id)?.receipts ?? [], books.receipts, from), receiptRateOf(books, e, from));
+
 /** Opens the correction form of a filed entry for what was wrong with it; `from`: the receipt it was opened from. */
 export function correct(books: Index, e: JournalEntry, as: CorrectionKind, from?: string): void {
   setUi({ overlay: { kind: 'new', correcting: { entry: e.id, as, ...(from && { from }) }, draft: {
-    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount, receiptRateOf(books, e, from)),
+    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount, receiptRateOf(books, e, from), receiptVatOf(books, e, from)),
     corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
   } } });
 }

@@ -885,6 +885,7 @@ export default {
     'receipts.filedPaymentNoInputTax.none': "Pays the payment of {date}, which lies in the closed {period}: no link is made. The firm is not registered for VAT: there is no input tax to enter.",
     'receipts.filedPaymentNoInputTax.net-rate': "Pays the payment of {date}, which lies in the filed {period}: no link is made. On the net tax rate method there is no input tax to enter.",
     'receipts.filedPaymentOpen': 'Open the payment →',
+    'receipts.filedPaymentCorrected': "Pays the payment of {date}, which lies in the filed {period}. The input tax is booked as a correction: the booking below.",
     'receipts.morePayment': 'Another payment',
     'receipts.morePayments': 'More payments',
     'receipts.nPayments': { one: '{n} payment', other: '{n} payments' },

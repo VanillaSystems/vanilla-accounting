@@ -5,7 +5,7 @@ import { isIsoDate } from '../../accounting/periods.js';
 import { patchBody, stringField, updateBooks, withBooks, RequestError, WS } from '../books.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
-import { addEntry, deleteEntry, restoreSaved, setEntry } from '../edits.js';
+import { addEntry, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
@@ -54,7 +54,7 @@ router.patch('/api/journal-entries/:id', (req, res) => {
  * back as it was (r8f-46); the provenance is taken only with `id`.
  */
 router.post('/api/journal-entries', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', ...UNDO_FIELDS]);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', 'receipt', ...UNDO_FIELDS]);
   const date = stringField(b, 'date');
   if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
   const amount = amountField(b);
@@ -76,6 +76,7 @@ router.post('/api/journal-entries', (req, res) => {
   if (correction && !(['vat', 'account', 'storno'] as const).includes(correction as CorrectionKind)) throw new RequestError(400, 'correction: vat, account oder storno.');
   if (correctsEntry && !corrects) throw new RequestError(400, 'correctsEntry braucht corrects.');
   const transactionRef = optional('transactionRef');
+  const receipt = optional('receipt');
   const id = optional('id');
   // An undo puts back an entry without an origin (books from before origins) without one.
   const origin = optional('origin') ?? (id ? undefined : 'manual');
@@ -101,6 +102,15 @@ router.post('/api/journal-entries', (req, res) => {
       ...(id ? provenance : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
     });
     if (original && corrects) books.config.correctionCases = [...(books.config.correctionCases ?? []), correctionCaseFor(original, entry, (correction ?? 'vat') as CorrectionKind, corrects)];
+    // The receipt the booking is for (r10h-6): linked to it, so the receipt shows its booking and the input tax has its voucher;
+    // a late receipt of a filed payment points at that payment, which itself takes no link (its quarter is sealed).
+    if (receipt) {
+      const r = books.receipts.find((x) => x.id === receipt);
+      if (!r) throw new RequestError(404, `Beleg ${receipt} gibt es nicht.`, { code: 'gone', params: { what: 'receipt' } });
+      if (books.transactions.some((t) => t.ref === entry.transactionRef)) link(books, receipt, entry.transactionRef);
+      else books.mappings.push({ transactionRef: entry.transactionRef, receiptId: receipt, by: 'human' });
+      if (original && !r.filedPayment && books.transactions.some((t) => t.ref === original.transactionRef)) r.filedPayment = original.transactionRef;
+    }
     return withWarnings(books, entry);
   });
 });

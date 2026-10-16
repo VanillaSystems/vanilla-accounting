@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { accountCorrectionCode, banksMoved, correctionKinds, correctionOf, correctionReceipts, privateUseCode, receiptRate } from '../src/accounting/correction.js';
+import { accountCorrectionCode, banksMoved, correctionKinds, correctionOf, correctionReceipts, privateUseCode, receiptRate, receiptVat } from '../src/accounting/correction.js';
 import { entriesForReturn } from '../src/accounting/declarations.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import { filing, vat } from '../src/engines/index.js';
@@ -136,6 +136,46 @@ test('a late receipt for a filed payment claims its input tax: the receipt point
   const unpointed = { ...late, filedPayment: undefined };
   assert.equal(receiptRate(correctionReceipts(geruest, [], [unpointed], 'late')), 8.1, 'opened from a receipt («Zahlung verknüpfen» on a filed payment): that receipt is read');
   assert.equal(correctionReceipts(geruest, [late], [late], 'late').length, 1, 'a linked receipt is read once');
+});
+
+test('a late receipt that states its tax: the correction claims that figure as a tax-amount line, not the tax recomputed from the gross (r10h-6)', () => {
+  // A receipt states CHF 11.89 on CHF 158.60 gross; 8.1 % recomputed from the gross gives 11.88.
+  const baucenter: JournalEntry = { id: 'b', transactionRef: 'RB-9', date: '2026-09-09', accountDebit: '6100', accountCredit: '1020', amount: 158.6, vatCode: 'I0', description: 'Baucenter' };
+  const stated: Receipt[] = [{ id: 'late', filename: 'baucenter.pdf', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 11.89 }] } as Receipt];
+  assert.equal(receiptVat(stated, 8.1), 11.89);
+  assert.equal(receiptVat(stated, 2.6), undefined, 'no figure at another rate');
+  assert.equal(receiptVat([{ hasSwissVat: false, vatSummary: [{ ratePercent: 8.1, vat: 11.89 }] } as Receipt], 8.1), undefined, 'a receipt without Swiss VAT states none');
+  const d = correctionOf(baucenter, 'vat', '2026-10-16', 'Korrektur', isBank, 8.1, 11.89);
+  assert.deepEqual(d, { date: '2026-10-16', accountDebit: '', accountCredit: '6100', amount: 11.89, vatCode: 'I81-2', description: 'Korrektur' }, 'the tax itself, off the expense, one-legged like the Shopify Vorsteuer line');
+  assert.deepEqual(q3([baucenter, entry(d)]), { 405: 11.89, 415: 0, payable: -11.89 }, 'the 0535 claims the receipt\'s figure');
+  const gross = correctionOf(baucenter, 'vat', '2026-10-16', 'Korrektur', isBank, 8.1);
+  assert.deepEqual([gross.accountDebit, gross.accountCredit, gross.amount, gross.vatCode], ['6100', '6100', 158.6, 'I81'], 'without a stated figure the gross line as before');
+  assert.equal(q3([baucenter, entry(gross)])[405], 11.88, 'which the engine rounds to 11.88');
+  assert.equal(bank([baucenter, entry(d)]), bank([baucenter]), 'the bank stays');
+  const foreign: JournalEntry = { ...baucenter, exchangeCurrency: 'EUR', exchangeRate: 0.95 };
+  assert.equal(correctionOf(foreign, 'vat', '2026-10-16', 'Korrektur', isBank, 8.1, 11.89).vatCode, 'I81', 'a foreign-currency entry keeps the gross correction in its currency');
+});
+
+test('the correction booked from a late receipt links the receipt, which then points at its filed payment (r10h-6)', async () => {
+  const api = await startApi('tests/fixtures/period-lock-index.json');
+  try {
+    const at = () => loadBooks(workspaceAt(api.ws.paths.root));
+    // The fixture's receipts are all linked: free one to stand for the late receipt of the filed payment C1.
+    assert.equal((await api.send('POST', '/api/mapping/remove', { transactionRef: 'O1', receiptId: 'ro' })).status, 200);
+    const jc = at().journalEntries.find((e) => e.id === 'jc')!;
+    const body = { date: '2026-08-15', accountDebit: '', accountCredit: jc.accountDebit, amount: 0.75, vatCode: 'I81-2', description: `Korrektur zu ${jc.transactionRef}`, corrects: '2026-Q2', correctsEntry: 'jc', correction: 'vat', receipt: 'ro' };
+    const { status, json } = await api.send('POST', '/api/journal-entries', body);
+    assert.equal(status, 200, String(json.error));
+    const entry = (json as { entry: JournalEntry }).entry;
+    const books = at();
+    assert.deepEqual(books.mappings.filter((m) => m.receiptId === 'ro').map((m) => m.transactionRef), [entry.transactionRef], 'the receipt is linked to the correction');
+    assert.equal(books.receipts.find((r) => r.id === 'ro')!.filedPayment, 'C1', 'and points at the filed payment it pays');
+    assert.ok(!books.mappings.some((m) => m.transactionRef === 'C1' && m.receiptId === 'ro'), 'the filed payment itself gets no link (its quarter is sealed)');
+    const gone = await api.send('POST', '/api/journal-entries', { ...body, receipt: 'nope' });
+    assert.equal(gone.status, 404, 'a receipt the books lack is refused');
+  } finally {
+    await api.stop();
+  }
 });
 
 test('a correction booked by hand gets its case (r8c-6): the 0535 explains it, no orphan; an entry put back without the original gets none', async () => {

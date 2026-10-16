@@ -32,6 +32,17 @@ function inputTaxRate(code: string | undefined): number | undefined {
   return info && info.inputTaxZiffer && !info.acquisitionZiffer && !info.isNegative && info.rate > 0 ? info.rate : undefined;
 }
 
+/**
+ * The tax the receipts state at `rate` (r10h-6): the voucher's own figure, which the correction
+ * claims as it stands (a supplier rounds its way: 11.89 on a gross the engine would make 11.88).
+ * Undefined when no receipt with Swiss VAT states a figure at that rate.
+ */
+export function receiptVat(receipts: ReadonlyArray<Pick<Receipt, 'hasSwissVat' | 'vatSummary' | 'kind'>>, rate: number | undefined): number | undefined {
+  if (!rate) return undefined;
+  const stated = receipts.filter((r) => r.hasSwissVat && r.kind !== 'duplicate').flatMap((r) => (r.vatSummary ?? []).filter((g) => g.ratePercent === rate && g.vat > 0).map((g) => g.vat));
+  return stated.length ? Math.round(stated.reduce((a, b) => a + b, 0) * 100) / 100 : undefined;
+}
+
 /** The Swiss VAT rate the receipts of an entry show (the highest with tax on it); undefined when none shows Swiss VAT. */
 export function receiptRate(receipts: ReadonlyArray<Pick<Receipt, 'hasSwissVat' | 'vatSummary' | 'kind'>>): number | undefined {
   const rates = receipts.filter((r) => r.hasSwissVat && r.kind !== 'duplicate').flatMap((r) => (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && g.vat > 0).map((g) => g.ratePercent));
@@ -96,19 +107,24 @@ export function accountCorrectionCode(e: Corrected, to: string, isPrivate: (acco
  * - `vat`: the expense (or revenue) account against itself with the VAT code turned, so only the
  *   tax is taken back (6510/6510 -I81). A one-sided VAT entry is turned whole: it has no bank side.
  *   A purchase booked without input tax whose receipt shows Swiss VAT at `receiptRate` claims it
- *   instead (6000/6000 I81, r4c-37): turning a zero code would book nothing.
+ *   instead (6000/6000 I81, r4c-37): turning a zero code would book nothing. When the receipt
+ *   states the tax (`receiptVat`), the claim is that figure as a tax-amount line off the expense
+ *   (– / 4400 11.89 M81-2, as the Shopify Vorsteuer line is booked), not the tax recomputed from
+ *   the gross (r10h-6); a foreign-currency entry keeps the gross line in its currency.
  * - `account`: the amount moved from the old account to a new one, left blank for the person; the
  *   VAT stays as declared (onto the private account: accountCorrectionCode).
  * - `storno`: the entry the other way round, bank side included.
  * A foreign-currency entry's correction keeps its currency and rate (sameMoney): the tax taken
  * back is the tax on the base-currency value as booked, not on the foreign figure read as such (r9c-1).
  */
-export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, description: string, isBank: (account: string) => boolean, receiptRate?: number): Draft {
+export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, description: string, isBank: (account: string) => boolean, receiptRate?: number, receiptVat?: number): Draft {
   const own = ownSide(e, isBank);
   const account = e[own];
   if (kind === 'storno' || (kind === 'vat' && (!e.accountDebit || !e.accountCredit))) return reversalOf(e, date, description);
   const claim = kind === 'vat' ? claimCode(e, account, receiptRate) : undefined;
   const money = sameMoney(e);
+  const taxCode = claim && receiptVat && !e.exchangeCurrency ? vat().codes.taxAmountCode(claim) : undefined;
+  if (taxCode) return { date, accountDebit: own === 'accountDebit' ? '' : account, accountCredit: own === 'accountDebit' ? account : '', amount: receiptVat!, vatCode: taxCode, description };
   if (claim) return { date, accountDebit: account, accountCredit: account, ...money, vatCode: claim, description };
   if (kind === 'vat') {
     const vatCode = turned(e.vatCode);
