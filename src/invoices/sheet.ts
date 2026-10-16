@@ -188,7 +188,8 @@ export function sheetBlocks(d: SheetData): Block[] {
     const settled = back > 0 ? (c.settlement === 'offset' ? L.offset(A(back)) : L.refund(A(back))) : L.stillOpen(c.number, A(Math.round((open - credit) * 100) / 100));
     B.push({ html: `<div class="settle"><div><span>${esc(L.ofInvoice(c.number, formatDate(c.date, d.language)))}</span><span>${n(c.gross)}</span></div>${c.paid ? `<div><span>${L.paidOn(formatDate(c.paidDate ?? c.date, d.language))}</span><span>${n(-c.paid)}</span></div>` : ''}<div><span>${L.creditLine}</span><span>${n(-credit)}</span></div></div><p class="settled">${esc(settled)}</p>` });
   }
-  if (draft && d.lines.some((l) => l.vatRate === 0)) {
+  // The reason for 0 % is a registered firm's: one that charges no VAT has none to give.
+  if (draft && withVat && d.lines.some((l) => l.vatRate === 0)) {
     const options: Array<[string, string]> = [...(d.exemption ? [] : [['', ed.words.noExemption] as [string, string]]), ['abroad', L.exemption.abroad], ['export', L.exemption.export]];
     B.push({ html: `<p class="abroad">${pick('exemption', options, d.exemption ?? '')}</p>` });
   } else if (d.exemption) B.push({ html: `<p class="abroad">${esc(L.exemption[d.exemption])}</p>` });

@@ -32,8 +32,12 @@ const line = (price: number, vatRate: InvoiceLine['vatRate']): InvoiceLine => ({
 const draft = (lines: InvoiceLine[]): Draft => ({
   id: 'in_d', createdAt: '2026-10-01T09:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-05', currency: 'CHF', language: 'de', lines, comments: [],
 });
-const html = (lines: InvoiceLine[]): string => {
-  const d: SheetData = { kind: 'invoice', language: 'de', number: '2026-001', date: '2026-10-05', dueDate: '2026-11-04', currency: 'CHF', customer, sender, lines, intro: '', closing: 'Danke', layout: DEFAULT_LAYOUT };
+const WORDS = { newCustomer: '+', chooseCustomer: 'Kunde', addLine: '+', removeLine: '×', intro: 'Einleitung', closing: 'Schluss', desc: 'Text', noExemption: 'Grund für 0 % wählen …', supplied: 'Leistung' };
+const html = (lines: InvoiceLine[], draft = false): string => {
+  const d: SheetData = {
+    kind: 'invoice', language: 'de', ...(draft ? {} : { number: '2026-001' }), date: '2026-10-05', dueDate: '2026-11-04', currency: 'CHF', customer, sender, lines, intro: '', closing: 'Danke', layout: DEFAULT_LAYOUT,
+    ...(draft ? { screen: { qrPlaceholder: 'QR', edit: { scope: 'draft' as const, customers: [{ id: customer.id, name: customer.name }], customerId: customer.id, words: WORDS } } } : {}),
+  };
   const blocks = sheetBlocks(d);
   return assembleSheets(d, blocks, paginate(blocks, blocks.map(() => 10), { footer: true, qrBill: false }));
 };
@@ -49,6 +53,9 @@ test('not registered: the only rate is 0, a line at 0 needs no exemption, the sh
   assert.ok(!/MWST-Nr\./.test(out), 'no VAT number label');
   assert.ok(!/MWST \d/.test(out), 'no VAT line');
   assert.ok(!/<th class="r">MWST<\/th>/.test(out), 'no VAT column');
+  const editing = html([line(50, 0)], true);
+  assert.ok(!editing.includes('data-ed="exemption"'), 'a draft asks no reason for 0 %');
+  assert.ok(!editing.includes('data-ed="l:0:vatRate"'), 'a draft offers no rate to pick');
 });
 
 test('registered: the jurisdiction\'s rates, the VAT number and the VAT line as before; the net tax rate method books a sale with F1', () => {
@@ -58,6 +65,7 @@ test('registered: the jurisdiction\'s rates, the VAT number and the VAT line as 
   const out = html([line(50, 8.1)]);
   assert.ok(out.includes('CHE-975.310.864 MWST'));
   assert.ok(/MWST 8.1 % auf/.test(out));
+  assert.ok(html([line(50, 0)], true).includes('data-ed="exemption"'), 'a registered firm\'s draft asks the reason for 0 %');
   assert.equal(revenueVatCode(8.1, undefined), 'V81');
   setJurisdiction(ch, NET_RATE);
   assert.equal(revenueVatCode(8.1, undefined), 'F1');
