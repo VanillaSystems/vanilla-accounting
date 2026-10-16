@@ -4,7 +4,8 @@
  * of a rule the AI drafted: the sidebar and Änderungen show it, «Behalten» saves it at once.
  */
 import { useEffect, useState } from 'react';
-import { t } from '../../i18n/index.js';
+import { language, t } from '../../i18n/index.js';
+import { textIn } from '../../../workflows/model.js';
 import { api, errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import type { RuleRow } from '../../../booking/rule-book.js';
@@ -57,6 +58,13 @@ export function RulesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
   return (
     <div className="rules">
       <p className="m">{t('rules.lead')}</p>
+      {view.waiting.map((w) => (
+        <p key={w.workflow} className="warnline" data-testid="rules-waiting">
+          {t('rules.waiting', { files: w.files.join(', '), workflow: textIn(w.label, language()) })}
+          {' '}
+          <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.workflow, tab: 'graph' }, query: {} })}>{t('rules.goSwitchOn')}</button>
+        </p>
+      ))}
       {!lines.length ? <p className="m">{t('rules.none')}</p> : null}
       <ul className="rulelist">
         {lines.map(({ key, row, line, acts, applied, last, asked }) => (
@@ -73,6 +81,7 @@ export function RulesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
             {row.kind === 'broken' ? <span className="warnline">{refusalText(row)}</span> : null}
             <span className="ruleacts">
               {row.off ? <span className="wfpill muted">{t('rules.isOff')}</span> : null}
+              {!row.off && view.waiting.some((w) => w.files.includes(row.file)) ? <span className="wfpill warn">{t('rules.waitingPill')}</span> : null}
               {canEdit && row.kind === 'rule' ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void act(row, row.off ? 'on' : 'off')}>{t(row.off ? 'rules.switchOn' : 'rules.switchOff')}</button> : null}
               {canEdit ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void act(row, 'delete')}>{t('rules.delete')}</button> : null}
             </span>

@@ -22,7 +22,7 @@ import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
-import { openSwitch } from '../../workflows/switch-on.js';
+import { keepSwitchedOn, openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { engine, queueCommit } from './automation.js';
 import { askedBy, askRuns, closeAsksWithoutRule } from '../../workflows/held.js';
@@ -57,7 +57,9 @@ export function rulesView(): RulesView {
     const used = r.kind === 'rule' ? byRule.get(r.id) : undefined;
     return { ...r, applied: used?.refs.size ?? 0, ...(used?.last ? { last: used.last } : {}), asked: r.kind === 'rule' ? asked[r.id] ?? 0 : 0 };
   });
-  return { rules, ...namesView() };
+  const sw = openSwitch(WS);
+  const waiting = loadWorkflows(APP_ROOT, WS.paths.root).workflows.flatMap((w) => { const p = sw.pending(w); return p ? [{ workflow: w.id, label: w.label, files: p.files }] : []; });
+  return { rules, waiting, ...namesView() };
 }
 
 /** The payments each ask rule held, by rule id: all its questions, or (`waiting`) those still open. */
@@ -75,10 +77,9 @@ function keepingSwitchedOn<T>(change: () => Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     void queueCommit(async () => {
       try {
-        const sw = openSwitch(WS);
-        const on = loadWorkflows(APP_ROOT, WS.paths.root).workflows.filter((w) => sw.isApproved(w)).map((w) => w.id);
+        const switchedOn = keepSwitchedOn(WS, () => loadWorkflows(APP_ROOT, WS.paths.root).workflows);
         const out = await change();
-        for (const w of loadWorkflows(APP_ROOT, WS.paths.root).workflows) if (on.includes(w.id) && !sw.isApproved(w)) sw.approve(w);
+        switchedOn();
         // A rule removed or switched off asks nothing more: its open questions close (wishes3-7).
         await closeAsksWithoutRule(engine(), WS);
         resolve(out);

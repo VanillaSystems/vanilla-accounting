@@ -119,6 +119,19 @@ export function openSwitch(ws: Ws, now = () => new Date()): Switch {
   };
 }
 
+/**
+ * A person's change to the company's rules or knowledge is their switching on (docs/0.4.0/workflows.md
+ * "Changing a workflow"): a rule kept on its card, an answer to the app's question, a correction,
+ * an undo of one of these. Returns the step to take after the change: every workflow that ran as
+ * switched on before it runs switched on after it; one that waited already keeps waiting. The AI's
+ * own edits never come this way (r6h-24: an answer wrote a rule, and «Buchen» waited for «Einschalten»).
+ */
+export function keepSwitchedOn(ws: Ws, workflows: () => WorkflowDecl[]): () => void {
+  const sw = openSwitch(ws);
+  const on = new Set(workflows().filter((w) => sw.isApproved(w)).map((w) => w.id));
+  return () => { for (const w of workflows()) if (on.has(w.id) && !sw.isApproved(w)) sw.approve(w); };
+}
+
 /** The first time: what the workspace runs today counts as switched on. Never again after that. */
 export function baseline(ws: Ws, workflows: WorkflowDecl[], now = () => new Date()): boolean {
   if (existsSync(approvalsPath(ws))) return false;

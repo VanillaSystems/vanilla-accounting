@@ -9,6 +9,7 @@ import { commandRefusalText, refusalText } from './refusal.js';
 import { buttonsFor, hasAi, runResult, stepOf, textIn, type ItemFact, type ItemKind, type RunDetail, type WorkflowDecl } from '../../workflows/model.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import type { Nav } from '../areas/index.js';
+import type { Location } from '../shell/route.js';
 import { api, errorText } from '../lib/api.js';
 import { automationCommand, useAutomation } from './store.js';
 import { useState } from 'react';
@@ -44,18 +45,23 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
   const { view } = useAutomation();
   // What the last click came to, beside the button as well as in the toast: a toast is gone in
   // seconds and easily missed (r4c-34, r5h-20: «Automatisch buchen» without Claude seemed to do nothing).
-  const [said, setSaid] = useState<{ item: string; text: string }>();
+  const [said, setSaid] = useState<{ item: string; text: string; go?: Location }>();
   if (!view) return null;
   const buttons = buttonsFor(view.workflows, kind, facts).filter((b) => b.runnable);
   if (!buttons.length) return null;
-  const say = (text: string) => { setSaid({ item: id, text }); nav.toast(text); };
+  const say = (text: string, go?: Location) => { setSaid({ item: id, text, ...(go ? { go } : {}) }); nav.toast(text); };
   // The button says what came of it, not only that something started: a run without the AI may only wait for a person.
   async function start(workflow: WorkflowDecl) {
     const name = textIn(workflow.label, language());
     say(t('marks.started', { workflow: name }));
     try {
       const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
-      if (!r.ok) { say(t('marks.refused', { workflow: name, why: commandRefusalText(r) })); return; }
+      if (!r.ok) {
+        // A refusal in words, never a code or a version hash (r6h-24): what waits, and where to act.
+        if (r.refusal === 'not-approved') say(t('marks.waitsSwitchOn', { workflow: name }), { route: { area: 'automation', view: 'workflow', workflow: workflow.id, tab: 'graph' }, query: {} });
+        else say(t('marks.refused', { workflow: name, why: commandRefusalText(r) }));
+        return;
+      }
       if (!r.run) return;
       say(runResultText(workflow, await rested(r.run)));
       nav.refresh();
@@ -63,7 +69,12 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
   }
   return (
     <span className="wfbuttons">
-      {said?.item === id && <span className="wfsaid" role="status" data-testid="workflow-said">{said.text}</span>}
+      {said?.item === id && (
+        <span className="wfsaid" role="status" data-testid="workflow-said">
+          {said.text}
+          {said.go ? <> <button type="button" className="linkbtn" onClick={() => nav.go(said.go!)}>{t('marks.goSwitchOn')}</button></> : null}
+        </span>
+      )}
       {buttons.map(({ workflow, label, ai }) => {
         const open = view.runs.find((r) => r.workflow === workflow.id && r.item.id === id && OPEN.has(r.status));
         if (open) {

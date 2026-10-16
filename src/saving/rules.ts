@@ -229,6 +229,8 @@ export interface RuleListed extends RuleRow { applied: number; last?: string; as
 /** GET /api/rules. */
 export interface RulesView {
   rules: RuleListed[];
+  /** The workflows waiting to be switched on because a rules or knowledge file they read changed (the AI's edit, a hand edit): the rules in those files are not live (r6h-24). */
+  waiting: Array<{ workflow: string; label: { en: string } & Partial<Record<'de' | 'fr' | 'it', string>>; files: string[] }>;
   /** What a rule's plain words name: accounts, businesses and payers (by the key `when.payer` holds) by their names. */
   names: { accounts: Record<string, string>; businesses: Record<string, string>; payers: Record<string, string> };
   currency: string;

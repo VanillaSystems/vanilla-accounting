@@ -28,9 +28,20 @@ import type { BankTransaction } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
 import { WS, RequestError, assertOpen, readBooks, updateBooks } from './books.js';
 import { applyChange, bookPayment, setEntry } from './edits.js';
+import { keepSwitchedOn } from '../workflows/switch-on.js';
+import { loadWorkflows } from '../workflows/load.js';
+import { APP_ROOT } from '../workspace/workspace.js';
 
 const now = () => new Date().toISOString();
 const append = (line: QuestionLine) => appendQuestionLine(WS, line, readBooks().config.closedThrough);
+
+/** A person's answer, or its undo, is their switching on: the rule or precedent it writes leaves no workflow waiting (r6h-24). */
+function asSwitchedOn<T>(change: () => T): T {
+  const switchedOn = keepSwitchedOn(WS, () => loadWorkflows(APP_ROOT, WS.paths.root).workflows);
+  const out = change();
+  switchedOn();
+  return out;
+}
 
 export interface AskInput { on: QuestionTarget; by: string; text: string; choices?: Choice[]; to?: string; origin?: QuestionOrigin }
 
@@ -268,7 +279,7 @@ export function answerQuestion(id: string, { by, answer }: { by: string; answer:
     throw new RequestError(409, GONE[gone], { code: 'questionGone', params: { why: gone } });
   }
   const at = now();
-  const acted = act(q, answer, by, at, from);
+  const acted = asSwitchedOn(() => act(q, answer, by, at, from));
   append({ v: 1, event: 'answered', id, at, by, answer, ...(acted ? { acted } : {}), ...(from ? { from } : {}) });
   return find(id);
 }
@@ -281,8 +292,10 @@ export function undoAnswer(id: string, by: string): Question {
   // A booking the answer changed that was booked anew since (Neu klassifizieren) is no longer there to put back: the rest is.
   const there = (b: Books, c: BookChange) => c.kind !== 'entry' || b.journalEntries.some((e) => e.id === c.id);
   if (acted && 'undo' in acted && acted.undo.length) updateBooks((b) => { for (const c of [...acted.undo].reverse()) if (there(b, c)) applyChange(b, c); });
-  if (acted && 'precedent' in acted && acted.precedent) dropPrecedent(WS, acted.precedent);
-  if (acted && 'rule' in acted && acted.rule) dropRule(WS, acted.rule);
+  asSwitchedOn(() => {
+    if (acted && 'precedent' in acted && acted.precedent) dropPrecedent(WS, acted.precedent);
+    if (acted && 'rule' in acted && acted.rule) dropRule(WS, acted.rule);
+  });
   // A booking the withdrawn rule made is the app's guess again, so the next answer books it (r4c-28).
   if (acted && 'rule' in acted && acted.rule) {
     const rule = acted.rule;
@@ -343,7 +356,7 @@ export function learnFromCorrection(refs: Iterable<string>, by: string = WS.comp
     }
     // A zero code on a payer at home is an export or no sale at all: asked back once, not taken as «Ausland» (r4c-35).
     if (choice === 'saleAbroad' && saleProposal(tx).choice === 'saleDomestic') continue;
-    const rule = keepSaleRule(q, choice, tx, hers[0].accountCredit, codes[0], at);
+    const rule = asSwitchedOn(() => keepSaleRule(q, choice, tx, hers[0].accountCredit, codes[0], at));
     const acted: Acted = { booked: [], undo: [], vatCode: codes[0], correction: true, ...(rule ? { rule } : {}) };
     append({ v: 1, event: 'answered', id: q.id, at, by, answer: { choice }, acted });
     answered.push(find(q.id));
