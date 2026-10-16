@@ -7,10 +7,11 @@
  */
 import { bookRevaluation, closeYear, openYear } from '../books/year-close.js';
 import type { Action } from './actions.js';
+import { refuse } from '../types/refusal.js';
 
 const yearOf = (input: Record<string, unknown>): string => {
   const year = String(input.year ?? '');
-  if (!/^\d{4}$/.test(year)) throw new Error(`"${year}" is no year`);
+  if (!/^\d{4}$/.test(year)) throw refuse('notYear', { year }, `"${year}" is no year`);
   return year;
 };
 

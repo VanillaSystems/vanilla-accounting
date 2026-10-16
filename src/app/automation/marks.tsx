@@ -5,6 +5,7 @@
  * button, and removing the workflow removes the button.
  */
 import { language, t } from '../i18n/index.js';
+import { refusalText } from './refusal.js';
 import { buttonsFor, hasAi, runResult, stepOf, textIn, type ItemFact, type ItemKind, type RunDetail, type WorkflowDecl } from '../../workflows/model.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import type { Nav } from '../areas/index.js';
@@ -34,7 +35,7 @@ function runResultText(w: WorkflowDecl, r: RunDetail): string {
       const step = typeof res.step === 'string' ? res.step : textIn(res.step, language());
       return t(res.noModel ? 'marks.waitsNoModel' : 'marks.waits', { workflow, step });
     }
-    case 'stuck': return t('marks.stuck', { workflow, error: res.error });
+    case 'stuck': return t('marks.stuck', { workflow, error: refusalText(res.error, res.why) });
     case 'running': return t('marks.started', { workflow });
   }
 }

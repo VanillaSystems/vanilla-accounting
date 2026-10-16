@@ -10,6 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { emptyBooks, hasBooks, loadBooks, periodLock, saveBooks, update, type Actor, type Books } from '../books/store.js';
 import { stemOf, type BooksPort } from '../intake/pipeline.js';
 import type { AskOptions } from '../llm/ask.js';
+import { refusalOf, refuse, type Refused } from '../types/refusal.js';
 import type { BankTransaction, JournalEntry, Mapping } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { ACTIONS, type Effects } from './actions.js';
@@ -183,7 +184,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     retryAt.delete(id);
     run = move(run, { status: 'running', at: run.state.at, since: now() });
     for (let hops = 0; run.state.status === 'running'; hops++) {
-      if (hops >= MAX_HOPS) { run = move(run, { status: 'stuck', at: run.state.at, since: now(), reason: `more than ${MAX_HOPS} steps in one go` }); break; }
+      if (hops >= MAX_HOPS) { run = move(run, stuck(run.state.at, refuse('tooManySteps', { n: String(MAX_HOPS) }, `more than ${MAX_HOPS} steps in one go`))); break; }
       run = await advance(run);
     }
     settle(run);
@@ -192,12 +193,17 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   }
 
   /** One step of a running run, saved before it returns. */
+  /** The stuck state of a refusal: the log's line and the words' code. */
+  const stuck = (at: string, e: Refused): Extract<RunState, { status: 'stuck' }> => ({ status: 'stuck', at, since: now(), reason: e.message, why: e.why });
+  /** A step that refused before it ran: its record carries the refusal too. */
+  const refused = (run: Run, record: StepRecord, at: string, e: Refused): Run => move({ ...run, steps: [...run.steps, { ...record, error: e.message, why: e.why }] }, stuck(at, e));
+
   async function advance(run: Run): Promise<Run> {
     const state = run.state as Extract<RunState, { status: 'running' }>;
     const w = workflow(run.workflow);
-    if (!w) return move(run, { status: 'stuck', at: state.at, since: now(), reason: `the workflow ${run.workflow} no longer loads` });
+    if (!w) return move(run, stuck(state.at, refuse('workflowGone', { workflow: run.workflow }, `the workflow ${run.workflow} no longer loads`)));
     const step = stepOf(w, state.at);
-    if (!step) return move(run, { status: 'stuck', at: state.at, since: now(), reason: `${w.id} has no step ${state.at}` });
+    if (!step) return move(run, stuck(state.at, refuse('stepGone', { workflow: w.id, step: state.at }, `${w.id} has no step ${state.at}`)));
     const body = step.body;
     const books = booksFor(run);
     const available: Record<string, unknown> = { ...outputsOf(run), books, item: run.item, [run.item.kind]: itemValue(run.item, books) };
@@ -210,12 +216,12 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       return move({ ...run, steps: [...run.steps, record] }, { status: 'parked', at: step.id, since: now(), until });
     }
     if (body.kind === 'call') return call(run, w, step, record, available);
-    if (body.kind === 'code') return move({ ...run, steps: [...run.steps, { ...record, error: 'a step of its own code does not run yet' }] }, { status: 'stuck', at: step.id, since: now(), reason: 'run.ts steps do not run yet' });
+    if (body.kind === 'code') return refused(run, record, step.id, refuse('ownCodeStep', { step: step.id }, 'a step of its own code does not run yet'));
 
     const action = ACTIONS[body.uses];
-    if (!action?.run) return move({ ...run, steps: [...run.steps, { ...record, error: `${body.uses} is not built yet` }] }, { status: 'stuck', at: step.id, since: now(), reason: `${body.uses} is not built yet` });
+    if (!action?.run) return refused(run, record, step.id, refuse('notBuilt', { action: body.uses }, `${body.uses} is not built yet`));
     if (run.item.kind === 'transaction' && step.reads.includes('transaction') && available.transaction === undefined) {
-      return move({ ...run, steps: [...run.steps, { ...record, error: `no transaction ${run.item.id}` }] }, { status: 'stuck', at: step.id, since: now(), reason: `the transaction ${run.item.id} is gone` });
+      return refused(run, record, step.id, refuse('transactionGone', { id: run.item.id }, `the transaction ${run.item.id} is gone`));
     }
     const inputs = Object.fromEntries(step.reads.map((k) => [k, available[k]]));
     const recorded = run.mode === 'replay' ? recordedAnswers(run) : undefined;
@@ -244,21 +250,22 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }
     try {
-      const result = await action.run(inputs, effects, { ws, ask, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run) });
+      const result = await action.run(inputs, effects, { ws, ask, now, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run) });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));
-      if (extra.length) throw new Error(`returned ${extra.join(', ')}, which ${step.id}/step.yaml does not emit`);
+      if (extra.length) throw refuse('emitsExtra', { step: step.id, keys: extra.join(', ') }, `returned ${extra.join(', ')}, which ${step.id}/step.yaml does not emit`);
       if (Object.keys(output).length) record.output = output;
     } catch (e) {
       const message = String(e instanceof Error ? e.message : e);
-      return move({ ...run, steps: [...run.steps, { ...record, error: message, finishedAt: now() }] }, { status: 'stuck', at: step.id, since: now(), reason: message });
+      const why = refusalOf(e);
+      return move({ ...run, steps: [...run.steps, { ...record, error: message, ...(why ? { why } : {}), finishedAt: now() }] }, { status: 'stuck', at: step.id, since: now(), reason: message, ...(why ? { why } : {}) });
     } finally {
       release?.();
     }
     const done = { ...run, steps: [...run.steps, { ...record, finishedAt: now() }] };
     const target = step.outcomes[record.outcome!];
-    if (!target) return move(done, { status: 'stuck', at: step.id, since: now(), reason: `outcome ${record.outcome} of ${step.id} leads nowhere` });
+    if (!target) return move(done, stuck(step.id, refuse('leadsNowhere', { outcome: record.outcome!, step: step.id }, `outcome ${record.outcome} of ${step.id} leads nowhere`)));
     return move(done, target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
   }
 
@@ -347,7 +354,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   async function call(run: Run, w: WorkflowDecl, step: WorkflowDecl['steps'][number], record: StepRecord, available: Record<string, unknown>): Promise<Run> {
     const body = step.body as { kind: 'call'; workflow: string };
     const called = workflow(body.workflow);
-    if (!called?.runnable.ok) return move({ ...run, steps: [...run.steps, { ...record, error: `${body.workflow} cannot run yet` }] }, { status: 'stuck', at: step.id, since: now(), reason: `${body.workflow} cannot run yet` });
+    if (!called?.runnable.ok) return refused(run, record, step.id, refuse('cannotRunYet', { workflow: body.workflow }, `${body.workflow} cannot run yet`));
     const items = step.forEach ? (available[step.forEach] as ItemRef[] | undefined) ?? [] : [run.item];
     const parked = move({ ...run, steps: [...run.steps, record] }, { status: 'parked', at: step.id, since: now(), until: { event: `children:${run.id}` } });
     if (!items.length) return childRested(parked).then(() => runs.get(run.id)!);
@@ -367,7 +374,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     const step = stepOf(w, parent.state.at)!;
     const target = step.outcomes.done;
     const steps = parent.steps.map((s, i) => (i === parent.steps.length - 1 ? { ...s, outcome: 'done', finishedAt: now() } : s));
-    if (!target) { settle(move({ ...parent, steps }, { status: 'stuck', at: step.id, since: now(), reason: `outcome done of ${step.id} leads nowhere` })); return; }
+    if (!target) { settle(move({ ...parent, steps }, stuck(step.id, refuse('leadsNowhere', { outcome: 'done', step: step.id }, `outcome done of ${step.id} leads nowhere`)))); return; }
     if (target.to === 'end') { settle(move({ ...parent, steps }, { status: 'done', finishedAt: now() })); return; }
     move({ ...parent, steps }, { status: 'queued', at: target.step, since: now() });
     pump();
@@ -415,7 +422,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     const used = run.steps.reduce((n, s) => n + s.llm.length, 0);
     let i = used;
     return async () => {
-      if (i >= answers.length) throw new Error(`run ${run.startedBy.kind === 'replay' ? run.startedBy.of : ''} recorded no further model answer`);
+      if (i >= answers.length) throw refuse('noMoreAnswers', { run: run.startedBy.kind === 'replay' ? run.startedBy.of : '' }, `run ${run.startedBy.kind === 'replay' ? run.startedBy.of : ''} recorded no further model answer`);
       return answers[i++];
     };
   }

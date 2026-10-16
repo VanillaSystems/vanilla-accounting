@@ -1,17 +1,21 @@
 /**
  * The actions of the workflow vat-filing (workflows/vat-filing): the return of an open period
  * from the books, its XML for the tax authority's import, and, once a person filed it, the close
- * and the seal of the quarter. They do what `npm run vat-xml` and `npm run seal -- <q> --close`
- * do, in that order, with a person's review and filing between them.
+ * and the seal of the period. They do what `npm run vat-xml` and `npm run seal -- <q> --close`
+ * do, in that order, with a person's review and filing between them. A period is prepared only
+ * once it has ended (r6f-33); the year's last period is archived but sealed by the year close,
+ * after the year-end entries of 31.12. Every refusal is a code the screens have words for
+ * (src/types/refusal.ts).
  */
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { addDays, derivePeriod, isFilingKey } from '../accounting/periods.js';
+import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
 import { loadBooks, periodLock, saveBooks } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingMethod, vat } from '../engines/index.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 import type { QuarterKey } from '../types/index.js';
+import { refuse } from '../types/refusal.js';
 import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import type { Action } from './actions.js';
 
@@ -20,7 +24,7 @@ export interface PeriodReturn { period: string; from: string; to: string; figure
 
 const periodOf = (input: Record<string, unknown>): QuarterKey => {
   const key = String(input.period ?? (input.return as PeriodReturn | undefined)?.period ?? '');
-  if (!isFilingKey(key, filing().length)) throw new Error(`"${key}" is no filing period`);
+  if (!isFilingKey(key, filing().length)) throw refuse('notFilingKey', { period: key }, `"${key}" is no filing period`);
   return key as QuarterKey;
 };
 
@@ -32,20 +36,33 @@ const preparedXml = (ws: Workspace, key: string): string => join(ws.paths.data, 
 /** What the XML step hands on: where the file is, for the person to upload it. */
 export interface PreparedXml { path: string; period: string; warnings: string[] }
 
+/** What the seal step hands on: the seal's file, or that the year close seals this period. */
+export type SealOutput = { file: string } | { yearClose: true };
+
 /** A period's XML as it is now: the filed one once the period is sealed, else the prepared one; undefined before either. */
 export function filingXml(ws: Workspace, key: string): string | undefined {
   return [filedXml(ws, key), preparedXml(ws, key)].find((p) => existsSync(p));
+}
+
+/** The firm's net tax rates whose activity code is missing, among those the return has turnover on: the XML cannot name them. */
+export function ratesWithoutActivityId(figures: Record<string, number>): string[] {
+  return vat().rateRows
+    .filter((row) => row.kind === 'net-rate' && !row.activityId && (figures[row.ziffer] ?? 0) !== 0)
+    .map((row) => row.name ?? `${row.rate} %`);
 }
 
 export const FILING_ACTIONS: Record<string, Action> = {
   'accounting.tax.vat-return': {
     outcomes: ['ok'],
     effects: [],
-    run(input, _fx, { ws }) {
+    run(input, _fx, { ws, now }) {
       const key = periodOf(input);
       const books = loadBooks(ws);
       const { from, to } = derivePeriod(key)!;
-      if (periodLock(books).isClosed(to)) throw new Error(`${key} is filed already (closed through ${books.config.closedThrough}); a correction is declared on its own form`);
+      const closed = books.config.closedThrough ?? '';
+      if (periodLock(books).isClosed(to)) throw refuse('periodFiled', { period: key, through: closed }, `${key} is filed already (closed through ${closed}); a correction is declared on its own form`);
+      const today = localToday(new Date(now()));
+      if (to >= today) throw refuse('periodRunning', { period: key, ends: to, from: addDays(to, 1) }, `${key} runs until ${to}: it can be filed from ${addDays(to, 1)}`);
       const { ziffern, payable } = vat().figures(books.journalEntries, key, books.config.vatAdjustments ?? []);
       const ret: PeriodReturn = { period: key, from, to, figures: ziffern as Record<string, number>, payable };
       return { outcome: 'ok', output: { return: ret } };
@@ -56,6 +73,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
     effects: [],
     run(input, _fx, { ws }) {
       const ret = input.return as PeriodReturn;
+      const missing = ratesWithoutActivityId(ret.figures);
+      if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (Firma › MWST), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({
         uid: ws.company.uid, organisationName: ws.company.name, period: { key: ret.period, from: ret.from, to: ret.to },
         ziffern: ret.figures as Parameters<typeof ech0217Xml>[0]['ziffern'], payable: ret.payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(),
@@ -73,22 +92,26 @@ export const FILING_ACTIONS: Record<string, Action> = {
     effects: ['files.filings', 'books.seal'],
     run(input, _fx, { ws }) {
       const key = periodOf(input);
-      if (closesTheYear(key)) throw new Error(`${key} closes with the year: the year close books the year-end entries on 31.12. first, then closes and seals it`);
       const books = loadBooks(ws);
       const end = derivePeriod(key)!.to;
       const closed = books.config.closedThrough;
+      const lastOfYear = closesTheYear(key);
       if (!closed || closed < end) {
         const next = closed ? periodKeyOf(addDays(closed, 1), ws.filingLength) : key;
-        if (next !== key) throw new Error(`the books are closed through ${closed}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${key}`);
+        if (next !== key) throw refuse('nextToClose', { through: closed ?? '', next, period: key }, `the books are closed through ${closed}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${key}`);
         // Closing moves closedThrough, which the write door never allows: as `npm run seal -- <q> --close` does, after the person filed.
-        books.config.closedThrough = end;
-        saveBooks(ws, books);
+        // The year's last period is left open: the year close books the year-end entries on 31.12., then closes and seals it.
+        if (!lastOfYear) {
+          books.config.closedThrough = end;
+          saveBooks(ws, books);
+        }
       }
       const prepared = preparedXml(ws, key);
       const filed = filedXml(ws, key);
       if (existsSync(prepared) && !existsSync(filed)) { mkdirSync(dirname(filed), { recursive: true }); copyFileSync(prepared, filed); }
+      if (lastOfYear) return { outcome: 'ok', output: { seal: { yearClose: true } satisfies SealOutput } };
       const seal = writeSeal(ws, books, key, new Date().toISOString().slice(0, 10));
-      return { outcome: 'ok', output: { seal: seal.file } };
+      return { outcome: 'ok', output: { seal: { file: seal.file } satisfies SealOutput } };
     },
   },
 };

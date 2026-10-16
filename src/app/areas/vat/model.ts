@@ -97,6 +97,8 @@ export interface EntryLine extends VatLine {
 }
 
 export type ReturnState =
+  /** The period has not ended: no return yet, from the day after its end (r6f-33). */
+  | { kind: 'running'; ends: IsoDate; from: IsoDate }
   | { kind: 'open'; due: IsoDate; overdue: boolean }
   | { kind: 'filed' }
   /** A half year or a year: a sum of returns, no return of its own. */
@@ -128,6 +130,7 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
   const due = addDays(range.to, filing().dueDays);
   const state: ReturnState = !quarter ? { kind: 'overview' }
     : closed && range.to <= closed ? { kind: 'filed' }
+    : range.to >= today ? { kind: 'running', ends: range.to, from: addDays(range.to, 1) }
     : { kind: 'open', due, overdue: due < today };
   const lines: Record<string, EntryLine[]> = {};
   for (const entry of entriesForReturn(entries, key, filing().length)) {

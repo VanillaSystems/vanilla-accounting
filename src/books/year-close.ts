@@ -7,6 +7,7 @@
  * The close record is filings/<year>/year-close.json: which guided entries were done or are not
  * needed, and when the year closed and opened. It sits next to the year's returns and seals.
  */
+import { Refused } from '../types/refusal.js';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -95,11 +96,12 @@ export function yearCloseOf(ws: Workspace, year: string, rates: EstvRates = rate
   });
 }
 
-export class YearCloseRefused extends Error {}
+/** A refusal of the year close: `why` for the screens (src/types/refusal.ts), the message for the CLI. */
+export class YearCloseRefused extends Refused {}
 
 const assertYearOpen = (books: Books, year: string, what: string) => {
   const closedThrough = books.config.closedThrough;
-  if (closedThrough && closedThrough >= `${year}-12-31`) throw new YearCloseRefused(`${year} is closed through ${closedThrough}: ${what}`);
+  if (closedThrough && closedThrough >= `${year}-12-31`) throw new YearCloseRefused({ code: 'yearClosedAlready', params: { year, through: closedThrough } }, `${year} is closed through ${closedThrough}: ${what}`);
 };
 
 /**
@@ -111,7 +113,7 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
   assertYearOpen(books, year, 'the Kursdifferenz can no longer be dated 31.12.');
   const rows = yearCloseOf(ws, year, rates, books).revaluations;
   const missing = rows.filter((r) => r.status === 'no-rate').map((r) => r.currency);
-  if (missing.length) throw new YearCloseRefused(`The ESTV rate of 31.12.${year} is not published yet for ${[...new Set(missing)].join(', ')}: npm run fetch-rates -- --year ${year} once it is.`);
+  if (missing.length) throw new YearCloseRefused({ code: 'rateNotPublished', params: { year, currencies: [...new Set(missing)].join(', ') } }, `The ESTV rate of 31.12.${year} is not published yet for ${[...new Set(missing)].join(', ')}: npm run fetch-rates -- --year ${year} once it is.`);
   const entries = revaluationEntries(year, rows, yearEndAccounts(chartOf(ws)).fxDifference);
   update(books, moduleActor('year-close'), (b) => applyRevaluation(b, year, entries));
   saveBooks(ws, books);
@@ -120,9 +122,9 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
 
 export function markTemplate(ws: Workspace, year: string, id: string, state: TemplateState | null): YearCloseState {
   const known = [...yearEndTemplates().map((t) => t.id), RECEIVABLES_ID];
-  if (!known.includes(id)) throw new YearCloseRefused(`Unknown year-end entry "${id}". Known: ${known.join(', ')}`);
+  if (!known.includes(id)) throw new YearCloseRefused({ code: 'yearEndEntryUnknown', params: { id } }, `Unknown year-end entry "${id}". Known: ${known.join(', ')}`);
   const current = readState(ws, year);
-  if (current.closedAt) throw new YearCloseRefused(`${year} is closed: its checklist no longer changes.`);
+  if (current.closedAt) throw new YearCloseRefused({ code: 'yearChecklistClosed', params: { year } }, `${year} is closed: its checklist no longer changes.`);
   const templates = { ...current.templates };
   if (state) templates[id] = state; else delete templates[id];
   const next = { ...current, templates };
@@ -149,7 +151,7 @@ export function bookEntry(ws: Workspace, input: EntryInput, template?: string): 
   const entry = update(books, PERSON, (b) => {
     const year = input.date.slice(0, 4);
     if (template === RECEIVABLES_ID && b.journalEntries.some((x) => x.id === receivablesEntryId(year))) {
-      throw new YearCloseRefused(`The receivables of ${year} are booked already.`);
+      throw new YearCloseRefused({ code: 'receivablesBooked', params: { year } }, `The receivables of ${year} are booked already.`);
     }
     const entry: JournalEntry = {
       id: template === RECEIVABLES_ID ? receivablesEntryId(year) : randomBytes(8).toString('hex'),
@@ -180,7 +182,7 @@ export interface CloseResult { closedThrough: string; seal: string; committed: b
 export async function closeYear(ws: Workspace, year: string, rates: EstvRates = ratesOf(), today = new Date().toISOString().slice(0, 10)): Promise<CloseResult> {
   const books = loadBooks(ws);
   const close = yearCloseOf(ws, year, rates, books);
-  if (close.blockers.length) throw new YearCloseRefused(`${year} cannot close yet: ${close.blockers.length} item(s) open.`);
+  if (close.blockers.length) throw new YearCloseRefused({ code: 'yearItemsOpen', params: { year, n: String(close.blockers.length) } }, `${year} cannot close yet: ${close.blockers.length} item(s) open.`);
   const end = `${year}-12-31`;
   if (!books.config.closedThrough || books.config.closedThrough < end) {
     books.config.closedThrough = end;
@@ -221,10 +223,10 @@ export async function openYear(ws: Workspace, year: string, rates: EstvRates = r
   const state = readState(ws, year);
   const books = loadBooks(ws);
   if (!state.closedAt || !books.config.closedThrough || books.config.closedThrough < `${year}-12-31`) {
-    throw new YearCloseRefused(`${year} is not closed yet: npm run year:close -- ${year} first.`);
+    throw new YearCloseRefused({ code: 'yearNotClosed', params: { year } }, `${year} is not closed yet: npm run year:close -- ${year} first.`);
   }
   const opening = openingFor(ws, year, rates, books);
-  if (opening.residual !== 0) throw new YearCloseRefused(`The opening of ${opening.year} does not balance: Aktiven − Passiven = ${opening.residual.toFixed(2)}.`);
+  if (opening.residual !== 0) throw new YearCloseRefused({ code: 'openingUnbalanced', params: { year: opening.year, residual: opening.residual.toFixed(2) } }, `The opening of ${opening.year} does not balance: Aktiven − Passiven = ${opening.residual.toFixed(2)}.`);
   const changes = openingChanges(books.config.openingBalances?.[opening.year], opening.balances);
   const reversal = receivablesReversal(books.journalEntries, year);
   update(books, moduleActor('year-close'), (b) => {

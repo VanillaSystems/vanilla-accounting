@@ -9,7 +9,7 @@ import { periodLock, type Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
-import { noteLines, stemOf, type BooksPort, type StepRun } from '../intake/pipeline.js';
+import { noteLines, stemOf, type BooksPort, type IntakeNote, type StepRun } from '../intake/pipeline.js';
 import { readStep } from '../intake/read.js';
 import { vatCandidates, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
@@ -20,6 +20,7 @@ import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
 import { madeBetween, type Took } from './summary.js';
 import type { ItemRef } from './model.js';
+import { refuse, type Refused } from '../types/refusal.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -29,6 +30,8 @@ export interface ActionContext {
   run?: { id: string; mode: 'live' | 'dry' | 'replay' };
   /** The model, recorded by the runner; a replay answers from the recording. */
   ask?: (prompt: string, opts: AskOptions) => Promise<string>;
+  /** The engine's clock (an ISO time): what «today» is to a step that asks whether a period has ended. */
+  now: () => string;
   /** Inbox files that came in with a run of the same workflow still waiting behind this one: that run reads them, not this one (r4c-7). */
   later?: () => ReadonlySet<string>;
 }
@@ -73,10 +76,21 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
     // A payment a company rule holds for the person becomes a question of its own (workflows/ask).
     const hold = start && ((refs: string[]) => refs.forEach((id) => start('ask', { kind: 'transaction', id })));
     const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(later ? { later } : {}) });
-    if (r.stop) throw new Error(noteLines(r.notes).join('; '));
+    if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
   };
+}
+
+/** The refusal of an inbox step that stopped: the first note that stops it, in the screens' words; the log keeps every note. */
+function stopped(notes: IntakeNote[]): Refused {
+  const message = noteLines(notes).join('; ');
+  const first = notes[0];
+  switch (first?.code) {
+    case 'unmatched': return refuse('statementsUnmatched', { n: String(first.files.length), files: first.files.join(', ') }, message);
+    case 'error': return /two year folders/.test(first.detail) ? refuse('receiptsTwice', { files: first.detail.split(':')[0] }, message) : refuse('stepFailed', { detail: first.detail }, message);
+    default: return refuse('stepFailed', { detail: message }, message);
+  }
 }
 
 /** The documents lying in the inbox (PDFs and photos): what reading has in front of it. */

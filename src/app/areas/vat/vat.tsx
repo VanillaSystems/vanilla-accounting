@@ -105,7 +105,7 @@ function Return(props: Props) {
   return (
     <div className="page">
       <ListHead period={v.period} books={books} canEdit={canEdit}>
-        {v.state.kind !== 'filed' ? <WorkflowButtons kind="period" id={String(key)} nav={nav} canEdit={canEdit} /> : null}
+        {v.state.kind === 'open' ? <WorkflowButtons kind="period" id={String(key)} nav={nav} canEdit={canEdit} /> : null}
       </ListHead>
       <div className="counts vst">
         {v.state.kind === 'filed' ? (
@@ -115,6 +115,8 @@ function Return(props: Props) {
           </>
         ) : v.state.kind === 'open' ? (
           <span className={v.state.overdue ? 'warn' : ''}>{t(v.state.overdue ? 'vat.stateOverdue' : 'vat.stateOpen', { date: formatDate(v.state.due) })}</span>
+        ) : v.state.kind === 'running' ? (
+          <span data-testid="period-running">{t('vat.stateRunning', { ends: formatDate(v.state.ends), from: formatDate(v.state.from) })}</span>
         ) : <span>{t('vat.stateOverview')}</span>}
         <button type="button" className="clink2" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('vatCodes.open')}</button>
       </div>

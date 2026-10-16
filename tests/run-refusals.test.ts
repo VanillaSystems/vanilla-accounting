@@ -19,9 +19,10 @@ const INNER = /closedThrough|activityId|company\.vat|rates\[\]|\.yaml|\.json|ste
 for (const { code, locale } of locales) {
   test(`${code}: every refusal code has words, without the app's inner names`, () => {
     for (const c of REFUSAL_CODES) {
-      const text = locale.messages[`runWhy.${c}` as keyof typeof locale.messages];
-      assert.ok(typeof text === 'string' && text.trim(), `${code} runWhy.${c}`);
-      assert.doesNotMatch(text, INNER, `${code} runWhy.${c}`);
+      const entry = locale.messages[`runWhy.${c}` as keyof typeof locale.messages];
+      const texts = typeof entry === 'string' ? [entry] : entry ? [entry.one, entry.other] : [];
+      assert.ok(texts.length && texts.every((x) => x.trim()), `${code} runWhy.${c}`);
+      for (const text of texts) assert.doesNotMatch(text, INNER, `${code} runWhy.${c}`);
     }
   });
 }

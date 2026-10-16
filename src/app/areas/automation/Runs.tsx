@@ -11,6 +11,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { automationCommand } from '../../automation/store.js';
 import { openCount, textIn, type Arrival, type AutomationView, type RunSummary } from '../../../workflows/model.js';
 import { linesOf, standOf, type Line, type Stand } from './runs-model.js';
+import { refusalText } from '../../automation/refusal.js';
 import type { Index } from '../../../types/index.js';
 import type { Nav } from '../index.js';
 import type { Route } from '../../shell/route.js';
@@ -76,7 +77,7 @@ function inText(r: RunSummary, lines: Line[], view: AutomationView, books: Index
 
 /** WAS DARAUS WURDE, in one line and a smaller one. */
 function outText(r: RunSummary, lines: Line[]): [string, string] {
-  if (r.status === 'stuck' || r.status === 'discarded') return [r.error ?? '', ''];
+  if (r.status === 'stuck' || r.status === 'discarded') return [refusalText(r.error, r.why), ''];
   const st = lines.filter((l): l is Extract<Line, { kind: 'statement' }> => l.kind === 'statement');
   const added = st.reduce((n, l) => n + l.a.added, 0);
   const d = r.digest;

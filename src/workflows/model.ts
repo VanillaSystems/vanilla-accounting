@@ -5,6 +5,7 @@
  * and the buttons in other areas cannot disagree with what runs.
  */
 import type { StatementImport } from '../types/index.js';
+import type { Refusal } from '../types/refusal.js';
 import type { Made, Took } from './summary.js';
 
 /** Route segments of /automation/<x>: no workflow may take these ids (load.ts checks). */
@@ -229,7 +230,8 @@ export type RunState =
   | { status: 'running'; at: string; since: string }
   | { status: 'waiting'; at: string; since: string }
   | { status: 'parked'; at: string; since: string; until: { event: string } | { time: string } }
-  | { status: 'stuck'; at: string; since: string; reason: string }
+  /** `reason` is the log's line; `why` the refusal the screens have words for (src/types/refusal.ts). */
+  | { status: 'stuck'; at: string; since: string; reason: string; why?: Refusal }
   | { status: 'done'; finishedAt: string }
   | { status: 'discarded'; at: string; reason: string };
 
@@ -279,6 +281,7 @@ export interface StepRecord {
   llm: LlmCall[];
   effects: EffectRecord[];
   error?: string;
+  why?: Refusal;
   /** A person's answer to the step's task. */
   answer?: { outcome: string; at: string };
 }
@@ -346,8 +349,9 @@ export interface RunSummary {
   path: string[];
   /** The step it is on or stopped at. */
   at?: string;
-  /** Why it stopped, when it is stuck. */
+  /** Why it stopped, when it is stuck: the log's line, and the refusal the screens have words for. */
   error?: string;
+  why?: Refusal;
   reason?: QueueReason;
   /** Still open past its workflow's deadline. */
   overdue?: boolean;
@@ -414,7 +418,7 @@ export function summaryOf(run: Run, w?: WorkflowDecl, now = new Date().toISOStri
     ...(s.status === 'done' ? { finishedAt: s.finishedAt } : {}),
     status: s.status, path: run.steps.map((r) => r.step),
     ...('at' in s && s.status !== 'discarded' ? { at: s.at } : {}),
-    ...(s.status === 'stuck' ? { error: s.reason } : s.status === 'discarded' ? { error: s.reason } : {}),
+    ...(s.status === 'stuck' ? { error: s.reason, ...(s.why ? { why: s.why } : {}) } : s.status === 'discarded' ? { error: s.reason } : {}),
     ...(s.status === 'queued' && s.reason ? { reason: s.reason } : {}),
     ...(overdue(run, w, now) ? { overdue: true } : {}),
     startedBy: run.startedBy,
@@ -433,14 +437,14 @@ export interface RunDetail extends RunSummary { steps: StepRecord[] }
 export type RunResult =
   | { kind: 'done'; entries: number }
   | { kind: 'waiting'; step: Text | string; noModel: boolean }
-  | { kind: 'stuck'; error: string }
+  | { kind: 'stuck'; error: string; why?: Refusal }
   | { kind: 'running' };
 
-export function runResult(w: WorkflowDecl, r: Pick<RunDetail, 'status' | 'at' | 'error' | 'digest' | 'steps'>): RunResult {
+export function runResult(w: WorkflowDecl, r: Pick<RunDetail, 'status' | 'at' | 'error' | 'why' | 'digest' | 'steps'>): RunResult {
   switch (r.status) {
     case 'done': return { kind: 'done', entries: r.digest.entries };
     case 'waiting': return { kind: 'waiting', step: (r.at && stepOf(w, r.at)?.label) || r.at || '', noModel: r.steps.some((s) => s.output?.why === 'noModel') };
-    case 'stuck': return { kind: 'stuck', error: r.error ?? '' };
+    case 'stuck': return { kind: 'stuck', error: r.error ?? '', ...(r.why ? { why: r.why } : {}) };
     default: return { kind: 'running' };
   }
 }

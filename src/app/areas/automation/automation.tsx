@@ -24,7 +24,8 @@ import { sources } from '../../lib/api.js';
 import { Paper } from '../receipts/Paper.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { fileName, returnSummary } from './filing-summary.js';
-import type { PeriodReturn, PreparedXml } from '../../../workflows/filing.js';
+import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
+import { refusalText } from '../../automation/refusal.js';
 import { baseCurrency, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
 import { questionsNow, useQuestions } from '../../questions/store.js';
@@ -396,6 +397,7 @@ function RunValue({ name, value }: { name: string; value: unknown }) {
   if (name === 'return') return <ReturnFacts ret={value as PeriodReturn} />;
   if (name === 'entries' && Array.isArray(value)) return <Proposal entries={value as JournalEntry[]} />;
   if (name === 'xml') return <XmlFile x={value as PreparedXml} />;
+  if (name === 'seal') return <SealLine seal={value as SealOutput} />;
   return <div className="mono">{name}: {short(value)}</div>;
 }
 
@@ -429,6 +431,11 @@ function ReturnFacts({ ret }: { ret: PeriodReturn }) {
       <dl>{r.boxes.map((b) => <Fragment key={b.box}><dt><span className="mono">{b.box}</span> {boxLabel(b.box)}</dt><dd className="mono">{fmt(b.amount)}</dd></Fragment>)}</dl>
     </div>
   );
+}
+
+/** What the seal step did: the seal's file, or that the year close seals the year's last period. */
+function SealLine({ seal }: { seal: SealOutput }) {
+  return <p className="m">{'yearClose' in seal ? t('automation.seal.yearClose') : t('automation.seal.written', { file: fileName(seal.file) })}</p>;
 }
 
 function XmlFile({ x }: { x: PreparedXml }) {
@@ -511,7 +518,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.mode !== 'live' ? ` · ${t(data.mode === 'dry' ? 'automation.mode.dry' : 'automation.mode.replay')}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
       </p>
       <p className="m mono runid">{id}</p>
-      {data.error ? <p className="warnline">{data.error}</p> : null}
+      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}</p> : null}
       <div className="wfactions">
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
@@ -535,7 +542,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
                 <div className="box"><small>{t('automation.io.took')}</small><Took s={s} /></div>
                 <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
               </div>
-              {s.error ? <div className="warnline">{s.error}</div> : null}
+              {s.error ? <div className="warnline">{refusalText(s.error, s.why)}</div> : null}
               {((s.output?.notes as StepNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
               {s.effects.filter((e) => e.refused || (!e.applied && e.would !== undefined)).map((e, j) => (
                 <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.skippedEffect')}</div>
