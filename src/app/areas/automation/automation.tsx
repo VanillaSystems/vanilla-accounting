@@ -656,7 +656,11 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const forms = useRef(new Map<string, HTMLFormElement | null>());
   /** A payment still without an entry: the task carries its booking form, and «Gebucht» leads there instead of claiming it. */
   const unbooked = (task: Task) => (task.item.kind === 'transaction' && books.transactions.some((x) => x.ref === task.item.id) && !(books.journalEntries ?? []).some((e) => e.transactionRef === task.item.id) ? task.item.id : undefined);
+  // «Eingereicht» seals the period for good: it asks once before it acts (r9n-36).
+  const [confirming, setConfirming] = useState<string | undefined>();
   const answer = (task: Task, outcome: string) => () => {
+    if (outcome === 'filed' && confirming !== task.run) { setConfirming(task.run); return; }
+    setConfirming(undefined);
     const form = outcome === 'booked' && unbooked(task) ? forms.current.get(task.run) : undefined;
     if (!form) { send(task, outcome); return; }
     nav.toast(t('automation.bookFirst'));
@@ -713,9 +717,16 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                     <Go to={{ route: { area: 'company', section: 'rules' }, query: { payment: pay } }} nav={nav} className="golink">{t('area.company')} › {t('company.rules')}</Go>
                   </p>
                 ) : null}
+                {confirming === task.run ? (
+                  <p className="warnline" data-testid="confirm-filed">
+                    {t('automation.confirmFiled', { period: String((task.reads?.return as PeriodReturn | undefined)?.period ?? task.item.id) })}{' '}
+                    <button type="button" className="btn" onClick={answer(task, 'filed')}>{t('automation.confirmFiledYes')}</button>{' '}
+                    <button type="button" className="btn ghost" onClick={() => setConfirming(undefined)}>{t('common.cancel')}</button>
+                  </p>
+                ) : null}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
-                  {task.outcomes.filter((o) => o !== withheld?.outcome).map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}
+                  {task.outcomes.filter((o) => o !== withheld?.outcome && !(o === 'filed' && confirming === task.run)).map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}
                   <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: task.run }, query: {} })}>{t('automation.run', { id: task.run })}</button>
                 </span>
               </div>

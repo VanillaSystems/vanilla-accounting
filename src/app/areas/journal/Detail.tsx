@@ -187,7 +187,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
                 {e.reason && <div className="m">{reasonText(e, e.reason, say)}</div>}
                 {(e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was && <div className="m">{t(`journal.why.${e.by.kind}`, { changes: changesText(e, e.by.was, say) })}</div>}
               </dd></> : null}
-              {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} nav={nav} /></dd></> : null}
+              {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} by={e.by} nav={nav} /></dd></> : null}
             </dl>
             <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (

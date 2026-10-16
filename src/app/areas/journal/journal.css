@@ -124,7 +124,10 @@
 .jnew .jrev { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
 
 /* Who booked an entry, as a filter beside Alle / Ohne Beleg / Korrekturen (journal.tsx). */
-.counts .origins { display: inline-flex; gap: inherit; padding-left: 12px; border-left: 1px solid var(--line); }
+.counts .origins { display: inline-flex; flex-wrap: wrap; row-gap: 6px; gap: inherit; padding-left: 12px; border-left: 1px solid var(--line); }
+/* A phone (390 px): the chips wrap under the counts instead of pushing the page sideways (r9n-38). */
+[data-area="journal"] .counts { flex-wrap: wrap; row-gap: 6px; }
+html.phone .counts .origins { padding-left: 0; border-left: 0; flex-basis: 100%; }
 .jnew .jcorr { margin-top: 10px; }
 .jnew .jcorr .seg { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--hover); border-radius: 7px; padding: 2px; }
 .jnew .jcorr .seg .m { font-size: 12px; color: var(--muted); padding: 0 8px 0 6px; }

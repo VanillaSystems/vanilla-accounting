@@ -96,12 +96,15 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
   );
 }
 
-/** "von KI gebucht · Lauf …": the run a record came from, and why it is like this. */
-export function RunLink({ run, nav }: { run: string; nav: Nav }) {
+/**
+ * "von KI gebucht · Lauf …": the run a record came from, and why it is like this. `by`: who decided the
+ * record; a rule's or the code's booking in a run with an AI step is not the AI's (r9n-32).
+ */
+export function RunLink({ run, by, nav }: { run: string; by?: { kind: string }; nav: Nav }) {
   const { view } = useAutomation();
   const summary = view?.runs.find((r) => r.id === run);
   const w = summary && view!.workflows.find((x) => x.id === summary.workflow);
-  const byAi = !!w && summary!.path.some((s) => stepOf(w, s)?.kind === 'agent') && hasAi(w, view!.workflows);
+  const byAi = (by ? by.kind === 'model' : true) && !!w && summary!.path.some((s) => stepOf(w, s)?.kind === 'agent') && hasAi(w, view!.workflows);
   return (
     <button type="button" className="linkbtn runlink" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run }, query: {} })}>
       {byAi ? <BotIcon /> : null}{byAi ? t('marks.byAi', { run }) : t('marks.byRun', { run })}

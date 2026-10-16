@@ -105,11 +105,15 @@ function haystack(v: EntryView, accountName: (n: string) => string): string {
     formatDate(e.date), fmt(e.amount), fmt(chfAmount(e))].join(' ').toLowerCase();
 }
 
-/** Who booked an entry: Claude (the classifier), a person, the AI sidebar on her wish, an invoice, the year-end; what the AI did is reviewed as a list (treuhaender-43). */
-export const JOURNAL_ORIGINS = ['classify', 'manual', 'assistant', 'invoice', 'year-close'] as const;
+/** Who booked an entry: Claude (the classifier), a company rule, the app's code, a person, the AI sidebar on her wish, an invoice, the year-end; what the AI did is reviewed as a list (treuhaender-43). */
+export const JOURNAL_ORIGINS = ['classify', 'rule', 'code', 'manual', 'assistant', 'invoice', 'year-close'] as const;
 export type JournalOrigin = typeof JOURNAL_ORIGINS[number];
-/** A change the AI sidebar made is origin manual (a person's decision) and `by` the assistant: it counts as KI, not as by hand (r6h-29). */
-const whoOf = (e: JournalEntry): string | undefined => (e.by?.kind === 'assistant' ? 'assistant' : e.origin);
+/**
+ * A change the AI sidebar made is origin manual (a person's decision) and `by` the assistant: it counts as KI, not as by
+ * hand (r6h-29). A booking of origin classify that a rule or the app's code decided is theirs, not Claude's (r9n-32).
+ */
+const whoOf = (e: JournalEntry): string | undefined =>
+  (e.by?.kind === 'assistant' ? 'assistant' : e.by?.kind === 'rule' || e.by?.kind === 'code' ? (e.origin === 'manual' ? 'manual' : e.by.kind) : e.origin);
 
 export interface Rows { rows: EntryView[]; counts: Counts; origins: Record<JournalOrigin, number> }
 
