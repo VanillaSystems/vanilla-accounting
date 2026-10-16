@@ -16,6 +16,7 @@ export const messages = {
   'col.name': 'Name',
 
   'error.readonly': 'Prüfmodus: Änderungen sind deaktiviert.',
+  'error.secretStore': 'Der Passwortspeicher dieses Macs ist gerade nicht erreichbar: nichts gespeichert. Später noch einmal, oder das Passwort auf der Zeile des Postfachs hinterlegen.',
   'error.localOnly': 'Nur von diesem Computer aus erreichbar.',
   'error.phoneToken': "Dieses Handy ist nicht gekoppelt: den Code am Mac neu scannen.",
   'error.periodClosed': 'Periode geschlossen bis {date}.',
@@ -2628,6 +2629,7 @@ export const messages = {
   'sources.none': 'Noch keine Quellen. Eine Mailbox, ein Portal oder eine API wird eine Quelle als Ordner sources/<name>/ im Workspace.',
   'sources.addMailbox': 'Postfach verbinden',
   'sources.added': 'Postfach als Quelle {id} angelegt: prüfen, dann einschalten',
+  'sources.updated': 'Dieses Postfach war schon verbunden ({id}): Einstellungen und Passwort aktualisiert.',
   'sources.field.address': 'E-Mail-Adresse',
   'sources.field.host': 'IMAP-Server',
   'sources.field.account': 'Login',

@@ -49,12 +49,19 @@ export function mailSourceYaml(i: MailSourceInput): string {
   return `# The mailbox ${address}, connected in Firma › Quellen. Its password is a secret of the app, never in this folder.\n${stringify(decl)}`;
 }
 
-/** Writes the source's folder; refuses an id that exists. */
-export function writeMailSource(ws: Pick<Workspace, 'paths'>, id: string, i: MailSourceInput): void {
+/** Writes the source's folder; refuses an id that exists unless `replace` (the same mailbox connected again, r6h-25). */
+export function writeMailSource(ws: Pick<Workspace, 'paths'>, id: string, i: MailSourceInput, replace = false): void {
   const dir = join(ws.paths.root, 'sources', id);
-  if (existsSync(join(dir, 'source.yaml'))) throw new Error(`sources/${id} exists`);
+  if (!replace && existsSync(join(dir, 'source.yaml'))) throw new Error(`sources/${id} exists`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'source.yaml'), mailSourceYaml(i));
+}
+
+/** The mailbox source of the workspace that holds `address` (its login or one of its boxes), by id. */
+export function mailSourceFor(address: string, decls: readonly SourceDecl[]): SourceDecl | undefined {
+  const a = address.trim().toLowerCase();
+  return decls.find((d) => d.reach.mail && (d.reach.mail.account.toLowerCase() === a
+    || (Array.isArray(d.settings.boxes) && (d.settings.boxes as Array<{ address?: string }>).some((b) => b.address?.toLowerCase() === a))));
 }
 
 /** One mail of the check: who sent it, its subject and day, and whether the source would read it. */

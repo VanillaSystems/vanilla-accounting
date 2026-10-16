@@ -19,6 +19,7 @@ export default {
     'col.name': 'Name',
 
     'error.readonly': 'Audit mode: changes are disabled.',
+    'error.secretStore': 'This Mac\'s keychain is not available right now: nothing saved. Try again later, or set the password on the mailbox\'s row.',
     'error.localOnly': 'Only reachable from this computer.',
     'error.phoneToken': "This phone is not paired: scan the code on the Mac again.",
     'error.periodClosed': 'Period closed up to {date}.',
@@ -2631,6 +2632,7 @@ export default {
     'sources.none': 'No sources yet. A mailbox, a portal or an API becomes a source as a folder sources/<name>/ in the workspace.',
     'sources.addMailbox': 'Connect a mailbox',
     'sources.added': 'Mailbox added as source {id}: check it, then switch it on',
+    'sources.updated': 'This mailbox was connected already ({id}): settings and password brought up to date.',
     'sources.field.address': 'E-mail address',
     'sources.field.host': 'IMAP server',
     'sources.field.account': 'Login',

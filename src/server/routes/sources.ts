@@ -16,7 +16,7 @@ import { approveSource, sources } from '../../platform/sources/index.js';
 import { RequestError } from '../books.js';
 import { secretKey, type MailCheck, type SourceDecl, type SourceRow, type SourcesView } from '../../platform/sources/model.js';
 import { mailSecret, secrets } from '../../secrets/secrets.js';
-import { mailInputProblem, mailSourceId, previewMailbox, writeMailSource, type MailSourceInput } from '../../platform/sources/mail-setup.js';
+import { mailInputProblem, mailSourceFor, mailSourceId, previewMailbox, writeMailSource, type MailSourceInput } from '../../platform/sources/mail-setup.js';
 import { mailBackend, mailFailure, type MailBackend } from '../../platform/sources/mail-channel.js';
 import { sourcesRunHere } from '../../platform/sources/launcher.js';
 import { readLedger } from '../../platform/sources/ledger.js';
@@ -50,12 +50,24 @@ router.post('/api/sources/mail', async (req, res) => {
   if (problem) throw new RequestError(400, `Das Feld ${problem} ist nicht gültig.`, { code: 'mailSourceField', params: { field: problem } });
   if (body.password !== undefined && (typeof body.password !== 'string' || !body.password)) throw new RequestError(400, 'password: ein Text.');
   if (body.password && !secrets.inApp()) throw new RequestError(409, `Das Passwort gehört nach ${secrets.where(mailSecret('<id>'))}.`);
-  const taken = new Set(sources(WS, APP_ROOT).map((v) => (v.kind === 'invalid' ? v.id : v.decl.id)));
-  const id = mailSourceId(input.address, taken);
-  writeMailSource(WS, id, input);
-  if (body.password) await secrets.set(mailSecret(id), body.password);
-  res.json({ ok: true, id });
+  // One source per mailbox (r6h-25): the same address again brings that source up to date. The
+  // password goes into the store first, the one step that can fail: nothing is written when it does.
+  const all = sources(WS, APP_ROOT);
+  const existing = mailSourceFor(input.address, all.flatMap((v) => (v.kind === 'invalid' ? [] : [v.decl])));
+  const id = existing?.id ?? mailSourceId(input.address, new Set(all.map((v) => (v.kind === 'invalid' ? v.id : v.decl.id))));
+  if (body.password) await storeSecret(mailSecret(id), body.password);
+  writeMailSource(WS, id, input, !!existing);
+  res.json({ ok: true, id, ...(existing ? { updated: true } : {}) });
 });
+
+/** Into the secret store, or a refusal the UI can word: the keychain is not at hand (an app started outside the GUI session, a locked store). */
+async function storeSecret(name: Parameters<typeof secrets.set>[0], value: string | null): Promise<void> {
+  try {
+    await secrets.set(name, value);
+  } catch (e) {
+    throw new RequestError(503, `Der Passwortspeicher ist nicht erreichbar: ${(e as Error).message}`, { code: 'secretStore' });
+  }
+}
 
 /** The password of a source's mailbox, into the secret store; null removes it. Never echoed, never logged. */
 router.put('/api/sources/:id/secret', async (req, res) => {
@@ -63,7 +75,7 @@ router.put('/api/sources/:id/secret', async (req, res) => {
   const password = (req.body as { password?: unknown })?.password;
   if (password !== null && (typeof password !== 'string' || !password)) throw new RequestError(400, 'password: ein Text, oder null zum Entfernen.');
   if (!secrets.inApp()) throw new RequestError(409, `Das Passwort gehört nach ${secrets.where(mailSecret(decl.id))}.`);
-  await secrets.set(mailSecret(decl.id), password);
+  await storeSecret(mailSecret(decl.id), password);
   res.json({ ok: true });
 });
 

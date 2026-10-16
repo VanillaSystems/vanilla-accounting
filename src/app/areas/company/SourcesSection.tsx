@@ -26,14 +26,14 @@ function Lines({ lines, first = 6 }: { lines: string[]; first?: number }) {
 const folderOf = (id: string) => ['sources', id].join('/');
 
 /** «Postfach verbinden»: address, IMAP server, login (the address unless it differs) and the app password. */
-function AddMailbox({ view, done, cancel }: { view: SourcesView; done(id: string): void; cancel(): void }) {
+function AddMailbox({ view, done, cancel }: { view: SourcesView; done(id: string, updated: boolean): void; cancel(): void }) {
   const [f, setF] = useState({ address: '', host: '', account: '', password: '' });
   const [err, setErr] = useState('');
   async function save(e: FormEvent) {
     e.preventDefault();
     try {
       const r = await api.addMailSource({ address: f.address, host: f.host, ...(f.account.trim() ? { account: f.account } : {}), ...(f.password ? { password: f.password } : {}) });
-      done(r.id);
+      done(r.id, !!r.updated);
     } catch (x) { setErr(errorText(x)); }
   }
   const field = (k: 'address' | 'host' | 'account', placeholder: string) => (
@@ -117,7 +117,7 @@ export function SourcesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean })
   if (!view) return <p className="m">{t('changes.loading')}</p>;
   const rows = view.rows;
   const add = canEdit && (adding
-    ? <AddMailbox view={view} cancel={() => setAdding(false)} done={(id) => { setAdding(false); nav.toast(t('sources.added', { id })); reload(); }} />
+    ? <AddMailbox view={view} cancel={() => setAdding(false)} done={(id, updated) => { setAdding(false); nav.toast(t(updated ? 'sources.updated' : 'sources.added', { id })); reload(); }} />
     : <div className="fedit"><button type="button" className="btn" data-testid="connect-mailbox" onClick={() => setAdding(true)}>{t('sources.addMailbox')}</button></div>);
   const notHere = !view.runsHere && <p className="notice warn" data-testid="sources-not-here">{t('sources.notInApp')}</p>;
   if (!rows.length) return <>{notHere}<p className="m">{t('sources.none')}</p>{add}</>;

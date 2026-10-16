@@ -19,6 +19,7 @@ export default {
     'col.name': 'Nome',
 
     'error.readonly': 'Modalità revisione: le modifiche sono disattivate.',
+    'error.secretStore': 'Il portachiavi di questo Mac non è raggiungibile al momento: nulla salvato. Riprova più tardi, o inserisci la password sulla riga della casella.',
     'error.localOnly': 'Accessibile solo da questo computer.',
     'error.phoneToken': "Questo telefono non è associato: scansionare di nuovo il codice sul Mac.",
     'error.periodClosed': 'Periodo chiuso fino al {date}.',
@@ -2631,6 +2632,7 @@ export default {
     'sources.none': 'Ancora nessuna fonte. Una casella, un portale o un’API diventa una fonte come cartella sources/<nome>/ nel workspace.',
     'sources.addMailbox': 'Collegare una casella',
     'sources.added': 'Casella creata come fonte {id}: verificare, poi attivare',
+    'sources.updated': 'Questa casella era già collegata ({id}): impostazioni e password aggiornate.',
     'sources.field.address': 'Indirizzo e-mail',
     'sources.field.host': 'Server IMAP',
     'sources.field.account': 'Login',

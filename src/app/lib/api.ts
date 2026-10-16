@@ -100,6 +100,7 @@ export function errorText(e: unknown): string {
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
     case 'gone': return t(`error.gone.${b.params.what}`);
+    case 'secretStore': return t('error.secretStore');
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
     case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
     case 'unknownCustomer': return t('error.unknownCustomer');
@@ -228,7 +229,7 @@ export const api = {
   assistantUndo: (id: string, change: string) => request<MadeChange[]>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
   assistantHeld: (id: string, turn: number, take: boolean, language: string) => request<Extract<Turn, { role: 'ai' }>>('POST', `/api/assistant/${encodeURIComponent(id)}/held/${turn}`, { take, language }),
   sources: () => request<SourcesView>('GET', '/api/sources'),
-  addMailSource: (input: { address: string; host: string; account?: string; password?: string }) => request<{ ok: true; id: string }>('POST', '/api/sources/mail', input),
+  addMailSource: (input: { address: string; host: string; account?: string; password?: string }) => request<{ ok: true; id: string; updated?: true }>('POST', '/api/sources/mail', input),
   saveSourcePassword: (id: string, password: string | null) => request<{ ok: true }>('PUT', `/api/sources/${encodeURIComponent(id)}/secret`, { password }),
   checkSource: (id: string) => request<MailCheck>('POST', `/api/sources/${encodeURIComponent(id)}/check`),
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),

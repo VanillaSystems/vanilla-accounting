@@ -19,6 +19,7 @@ export default {
     'col.name': 'Nom',
 
     'error.readonly': 'Mode révision: les modifications sont désactivées.',
+    'error.secretStore': 'Le trousseau de ce Mac n’est pas accessible pour le moment : rien n’a été enregistré. Réessaie plus tard, ou saisis le mot de passe sur la ligne de la boîte.',
     'error.localOnly': 'Accessible uniquement depuis cet ordinateur.',
     'error.phoneToken': "Ce téléphone n'est pas couplé : scanner à nouveau le code sur le Mac.",
     'error.periodClosed': 'Période clôturée jusqu’au {date}.',
@@ -2631,6 +2632,7 @@ export default {
     'sources.none': 'Pas encore de sources. Une boîte mail, un portail ou une API devient une source dans un dossier sources/<nom>/ du workspace.',
     'sources.addMailbox': 'Connecter une boîte mail',
     'sources.added': 'Boîte mail créée comme source {id} : vérifier, puis activer',
+    'sources.updated': 'Cette boîte était déjà connectée ({id}) : réglages et mot de passe mis à jour.',
     'sources.field.address': 'Adresse e-mail',
     'sources.field.host': 'Serveur IMAP',
     'sources.field.account': 'Identifiant',
