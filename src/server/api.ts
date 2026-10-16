@@ -23,6 +23,7 @@ import { router as twins } from './routes/twins.js';
 import { router as quarantine } from './routes/quarantine.js';
 import { router as rules } from './routes/rules.js';
 import { router as questions } from './routes/questions.js';
+import { router as reports } from './routes/reports.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
@@ -51,9 +52,9 @@ app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
 // whole app without risk of accidental edits/deletes or triggering paid LLM calls.
-// The export is a POST that only reads the books: it stays open.
+// The export and a report's run and file are POSTs that only read the books: they stay open.
 export const READONLY = process.env.READONLY === '1';
-const READ_POSTS: ReadonlySet<string> = new Set(['/api/export']);
+const READ_POSTS: ReadonlySet<string> = new Set(['/api/export', '/api/reports/run', '/api/reports/file']);
 if (READONLY) {
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && !READ_POSTS.has(req.path)) {
@@ -68,7 +69,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);

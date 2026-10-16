@@ -38,6 +38,7 @@ import type { ShareOffer } from '../../saving/share-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
+import { refusalText } from '../../reports/words.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -149,6 +150,7 @@ export function errorText(e: unknown): string {
     case 'unknownVatCode': return t('error.unknownVatCode', b.params);
     case 'codeNotTaken': return t(b.params.method === 'none' ? 'error.codeNotTaken.none' : 'error.codeNotTaken.netRate', { code: b.params.code });
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
+    case 'report': return t('error.report', { why: refusalText(b.params.refusal, (k, v) => t(k, v as never)) });
     case 'noDescription': return t('error.noDescription');
     case 'accountNumber': return t('error.accountNumber', b.params);
     case 'accountName': return t('error.accountName', b.params);

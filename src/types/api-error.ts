@@ -5,6 +5,7 @@ import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
 import type { SaleGone } from '../questions/model.js';
 import type { RuleRefusal } from './rule-refusal.js';
+import type { ReportRefusal } from '../reports/spec.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -49,6 +50,8 @@ export type ApiRefusal =
   | { code: 'takesBack' }
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }
+  /** A report spec the app cannot run (src/reports/spec.ts): from the sidebar, the form or a saved file. */
+  | { code: 'report'; params: { refusal: ReportRefusal } }
   | { code: 'oneSided'; params: { account: string } }
   /** The same account on both sides without a VAT code books nothing (src/server/edits.ts assertTwoSides); a VAT-only correction may (M81-2 shapes). */
   | { code: 'sameAccount'; params: { account: string } }

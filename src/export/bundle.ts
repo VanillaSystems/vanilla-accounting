@@ -46,15 +46,16 @@ type Request = ExportRequest & { range: Period };
 
 const enc = new TextEncoder();
 const sha256 = (data: Uint8Array) => createHash('sha256').update(data).digest('hex');
-const date = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
-const money = (n: number) => n.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+export const date = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+export const money = (n: number) => n.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 /** "Buchungen (Journal)" → "Buchungen": a file name without the label's explanation. */
-const fileStem = (label: string) => label.replace(/\s*\(.*\)/, '').trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
+export const fileStem = (label: string) => label.replace(/\s*\(.*\)/, '').trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-');
 
 const label = (w: Words, id: ItemId) => w.t(`export.item.${id}` as Key);
 
-function csvOf(tb: Table): string {
+/** A table as CSV: UTF-8 with its BOM, semicolons, CRLF, amounts with two decimals. */
+export function csvOf(tb: Table): string {
   const cell = (v: string | number, money: boolean) => {
     const s = typeof v === 'number' ? (money ? v.toFixed(2) : String(v)) : v;
     return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -119,12 +120,20 @@ function reportHtml(id: TableId, tb: Table, title: string, meta: string, footer:
     if (lead && g !== group) { group = g; body += `<tr class="grp"><td colspan="${cols.length}">${esc(g)}</td></tr>`; }
     body += `<tr class="${style ?? ''}">${r.slice(lead).map((v, i) => td(v, i)).join('')}</tr>`;
   });
-  const landscape = cols.length > 6;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${fonts}
-@page { size: A4 ${landscape ? 'landscape' : 'portrait'}; margin: 16mm 14mm 18mm; @bottom-left { content: "${esc(footer)} " counter(page) " / " counter(pages); font: 7.5pt Inter, sans-serif; color: #969ca8; } }
+  const head = `<table><thead><tr>${cols.map((h, i) => `<th class="${isMoney(i) ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+  return pageHtml({ title, meta, footer, fonts, landscape: cols.length > 6 }, head);
+}
+
+/** An A4 page of the export's reports: the title, the line under it, then `body`; the footer with the page number. */
+export function pageHtml(p: { title: string; meta: string; footer: string; fonts: string; landscape: boolean }, body: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(p.title)}</title><style>${p.fonts}
+@page { size: A4 ${p.landscape ? 'landscape' : 'portrait'}; margin: 16mm 14mm 18mm; @bottom-left { content: "${esc(p.footer)} " counter(page) " / " counter(pages); font: 7.5pt Inter, sans-serif; color: #969ca8; } }
 body { font: 8.5pt/1.4 Inter, sans-serif; color: #0b1220; margin: 0; }
 h1 { font-size: 15pt; font-weight: 700; margin: 0; }
+h2 { font-size: 11pt; font-weight: 700; margin: 16pt 0 2pt; }
 .meta { color: #6e7685; margin: 3pt 0 14pt; font-size: 9pt; }
+.lead { color: #6e7685; margin: 0 0 6pt; }
+.note { margin: 12pt 0 0; }
 table { width: 100%; border-collapse: collapse; }
 th { text-align: left; font-weight: 600; font-size: 7.5pt; color: #6e7685; border-bottom: 1pt solid #0b1220; padding: 3pt 4pt; }
 td { padding: 2.5pt 4pt; border-bottom: .5pt solid #e7eaf0; vertical-align: top; }
@@ -135,8 +144,8 @@ tr.tot td { border-top: 1pt solid #0b1220; }
 tr.open td { color: #6e7685; font-style: italic; }
 thead { display: table-header-group; }
 tr { break-inside: avoid; }
-</style></head><body><h1>${esc(title)}</h1><div class="meta">${esc(meta)}</div>
-<table><thead><tr>${cols.map((h, i) => `<th class="${isMoney(i) ? 'n' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+</style></head><body><h1>${esc(p.title)}</h1><div class="meta">${esc(p.meta)}</div>
+${body}</body></html>`;
 }
 
 /** The files of filed quarters in the period (returns, seals) from transactional-data/<year>/filings/. */

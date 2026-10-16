@@ -199,11 +199,14 @@ export function parseSpec(raw: unknown, today: IsoDate = localToday()): Parsed<R
 /** What a spec is checked against: the firm's chart and whether its form takes a VAT code. */
 export interface SpecFacts { accounts: Record<string, string>; takesCode(code: string): boolean }
 
-/** The firm's facts: an account a filter names is in the chart (a range holds one of its accounts), a VAT code is one the firm's form knows. */
+/**
+ * The firm's facts: an account a filter names is in the chart (a range holds one of its accounts),
+ * a VAT code is one the firm's form knows. A workspace without a chart has no accounts to check.
+ */
 export function checkSpec(spec: ReportSpec, facts: SpecFacts): ReportRefusal | undefined {
   const chart = Object.keys(facts.accounts);
   for (const s of spec.sections) {
-    for (const r of s.filter.accounts ?? []) {
+    for (const r of chart.length ? s.filter.accounts ?? [] : []) {
       if (!chart.some((a) => inRange(a, r))) return { code: 'unknownAccount', params: { account: accountRangeText(r) } };
     }
     for (const c of s.filter.vatCodes ?? []) if (!facts.takesCode(c)) return { code: 'unknownVatCode', params: { code: c } };
