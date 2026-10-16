@@ -15,7 +15,7 @@ import type { InvoiceList as Records } from '../../lib/api.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
-import { invoicesNow, reloadInvoices, useInvoices } from './data.js';
+import { followBooks, invoicesNow, reloadInvoices, useInvoices } from './data.js';
 import { byRouteId, counts, customerOpen, customerRows, customerOf, groupsOf, openSums, routeId, rowsOf, sentRows, type InvoiceRow } from './model.js';
 import { listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { invoiceAt, invoicePath, newDraftFor } from './actions.js';
@@ -60,13 +60,7 @@ function List(props: Props) {
   const load = useInvoices();
   useUi();
 
-  // A statement dropped or a run may have paid an invoice: read them again whenever the books change.
-  const books = useRef(props.books);
-  useEffect(() => {
-    if (books.current === props.books) return;
-    books.current = props.books;
-    void reloadInvoices();
-  }, [props.books]);
+  useEffect(() => followBooks(props.books), [props.books]);
 
   // /invoices/new?customer=<id>: a new draft for that customer, then its own link.
   const creating = useRef(false);

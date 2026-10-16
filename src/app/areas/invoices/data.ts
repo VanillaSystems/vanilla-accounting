@@ -34,6 +34,19 @@ export function useInvoices(): Load {
   return l;
 }
 
+let readFor: object | undefined;
+
+/**
+ * A statement dropped or a run may have paid an invoice or refunded a credit note: the records are
+ * read again whenever the books shown are not the ones they were last read with.
+ */
+export function followBooks(books: object): void {
+  if (books === readFor) return;
+  const first = readFor === undefined && load.state === 'loading';
+  readFor = books;
+  if (!first) void reloadInvoices();
+}
+
 /** The records for code outside components (⌘K, the tab title, keys). */
 export const invoicesNow = (): InvoiceList | undefined => (load.state === 'ready' ? load.data : undefined);
 
