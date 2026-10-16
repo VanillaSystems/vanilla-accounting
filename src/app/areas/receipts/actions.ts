@@ -29,11 +29,18 @@ async function run(nav: Nav, call: () => Promise<unknown>, message: string | (()
 
 const pair = (receiptId: string, transactionRef: string) => ({ receiptId, transactionRef });
 
-/** A link whose payment is off the receipt's amount says so in its toast. `second`: the person confirmed a second payment for the receipt (r8h-21). */
-export const linkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string, fit?: AmountFit, second = false) =>
-  run(nav, () => api.addMapping({ ...pair(v.r.id, ref), ...(second ? { confirm: true } : {}) }),
-    fit?.kind === 'off' ? t('receipts.linkedOff', { what, amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` }) : t('receipts.linkedTo', { what }),
+/**
+ * A link whose payment is off the receipt's amount says so in its toast. `second`: the person
+ * confirmed a second payment for the receipt (r8h-21). Without a model the payment's booking stays
+ * as it is (`kept`): the toast says so, and that its VAT code is the person's to check (r8f-41).
+ */
+export function linkPayment(nav: Nav, v: ReceiptView, ref: string, what: string, fit?: AmountFit, second = false) {
+  let kept = false;
+  const said = () => (kept ? t('receipts.linkedKept', { what })
+    : fit?.kind === 'off' ? t('receipts.linkedOff', { what, amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` }) : t('receipts.linkedTo', { what }));
+  return run(nav, async () => { kept = !!(await api.addMapping({ ...pair(v.r.id, ref), ...(second ? { confirm: true } : {}) })).kept?.length; }, said,
     () => api.removeMapping(pair(v.r.id, ref)));
+}
 
 /**
  * A payment of a filed quarter the receipt pays: never a link (golden rule 1). Its entry opens with
@@ -48,9 +55,12 @@ export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, fro
   correct(books, entry, correctionKinds(entry)[0], from);
 }
 
-/** The undo puts a link back that the person had: a second payment of the receipt included. */
-export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
-  run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
+/** The undo puts a link back that the person had: a second payment of the receipt included. Without a model the booking stays (`kept`), and the toast says so. */
+export function unlinkPayment(nav: Nav, v: ReceiptView, ref: string, what: string) {
+  let kept = false;
+  return run(nav, async () => { kept = !!(await api.removeMapping(pair(v.r.id, ref))).kept?.length; }, () => t(kept ? 'receipts.unlinkedKept' : 'receipts.unlinked', { what }),
+    () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
+}
 
 /**
  * Paid privately or in cash: one write makes the owner's payment on the receipt's date and amount

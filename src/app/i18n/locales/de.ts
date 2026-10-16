@@ -965,6 +965,8 @@ export const messages = {
   'receipts.whyOff': 'Betrag weicht um {amount} ab',
   'receipts.whySkonto': '{percent} % weniger · Skonto?',
   'receipts.linkedOff': 'Verknüpft · {what} · Betrag weicht um {amount} ab',
+  'receipts.linkedKept': 'Verknüpft · {what} · die Buchung bleibt: ohne Claude Code wird nicht neu gebucht, prüf ihren MWST-Code',
+  'receipts.unlinkedKept': 'Gelöst · {what} · die Buchung bleibt: ohne Claude Code wird nicht neu gebucht',
   'receipts.fitOffNotice': 'Die Zahlung weicht um {amount} vom Beleg ab. Gehört sie wirklich zu diesem Beleg?',
   'receipts.fitSkontoNotice': '{percent} % weniger bezahlt als der Beleg: Skonto. Die MWST zählt auf dem bezahlten Betrag.',
   'receipts.vatMisfit': 'MWST passt nicht zum Betrag',

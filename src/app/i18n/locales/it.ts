@@ -968,6 +968,8 @@ export default {
     'receipts.whyOff': 'importo diverso di {amount}',
     'receipts.whySkonto': '{percent} % in meno · sconto?',
     'receipts.linkedOff': 'Collegato · {what} · importo diverso di {amount}',
+    'receipts.linkedKept': 'Collegato · {what} · la registrazione resta: senza Claude Code non si registra di nuovo, controlla il suo codice IVA',
+    'receipts.unlinkedKept': 'Scollegato · {what} · la registrazione resta: senza Claude Code non si registra di nuovo',
     'receipts.fitOffNotice': 'Il pagamento differisce dal giustificativo di {amount}. Appartiene davvero a questo giustificativo?',
     'receipts.fitSkontoNotice': 'Pagato il {percent} % in meno del giustificativo: sconto. L\'IVA conta sull\'importo pagato.',
     'receipts.vatMisfit': 'l\'IVA non corrisponde all\'importo',

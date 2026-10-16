@@ -22,6 +22,9 @@ export function recordReplaced(ws: Pick<Workspace, 'paths'>, payment: string, re
   writeFileSync(file, JSON.stringify(record, null, 2));
 }
 
+/** Whether a record of bookings the link of `receipt` to `payment` replaced is kept. */
+export const hasReplaced = (ws: Pick<Workspace, 'paths'>, payment: string, receipt: string): boolean => existsSync(fileOf(ws, payment, receipt));
+
 /** The bookings the link of `receipt` to `payment` replaced, and the record is gone; undefined when none was kept. */
 export function takeReplaced(ws: Pick<Workspace, 'paths'>, payment: string, receipt: string): JournalEntry[] | undefined {
   const file = fileOf(ws, payment, receipt);

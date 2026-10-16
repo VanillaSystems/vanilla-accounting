@@ -186,6 +186,7 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser', missing?: Missin
 type Ok = { ok: true };
 /** `confirm`: a second bank payment of another payee for a receipt that has one, confirmed (r8h-21). */
 type Link = { receiptId: string; transactionRef: string; confirm?: true };
+type Linked = Ok & { again: string[]; kept?: string[] };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };
@@ -233,8 +234,9 @@ export const api = {
   attachEntries: (ref: string, own: string) =>
     request<{ before: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }).then((r) => r.before),
 
-  addMapping: (link: Link) => request<Ok>('POST', '/api/mapping/add', link),
-  removeMapping: (link: Link) => request<Ok>('POST', '/api/mapping/remove', link),
+  /** `again`: the payments booked again by a run; `kept`: a booked payment whose booking stays because no model is there to rebook it (r8f-41). */
+  addMapping: (link: Link) => request<Linked>('POST', '/api/mapping/add', link),
+  removeMapping: (link: Link) => request<Linked>('POST', '/api/mapping/remove', link),
 
   patchJournalEntry: (id: string, patch: JournalEntryPatch) =>
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),

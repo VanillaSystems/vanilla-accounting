@@ -968,6 +968,8 @@ export default {
     'receipts.whyOff': 'montant différent de {amount}',
     'receipts.whySkonto': '{percent} % de moins · escompte ?',
     'receipts.linkedOff': 'Lié · {what} · montant différent de {amount}',
+    'receipts.linkedKept': 'Lié · {what} · l’écriture reste : sans Claude Code, rien n’est recomptabilisé, vérifie son code TVA',
+    'receipts.unlinkedKept': 'Délié · {what} · l’écriture reste : sans Claude Code, rien n’est recomptabilisé',
     'receipts.fitOffNotice': 'Le paiement diffère du justificatif de {amount}. Appartient-il vraiment à ce justificatif ?',
     'receipts.fitSkontoNotice': 'Payé {percent} % de moins que le justificatif : escompte. La TVA compte sur le montant payé.',
     'receipts.vatMisfit': 'la TVA ne correspond pas au montant',

@@ -968,6 +968,8 @@ export default {
     'receipts.whyOff': 'amount differs by {amount}',
     'receipts.whySkonto': '{percent} % less · discount?',
     'receipts.linkedOff': 'Linked · {what} · amount differs by {amount}',
+    'receipts.linkedKept': 'Linked · {what} · the booking stays: without Claude Code nothing is booked again, check its VAT code',
+    'receipts.unlinkedKept': 'Unlinked · {what} · the booking stays: without Claude Code nothing is booked again',
     'receipts.fitOffNotice': 'The payment differs from the receipt by {amount}. Does it really belong to this receipt?',
     'receipts.fitSkontoNotice': 'Paid {percent} % less than the receipt: a cash discount (Skonto). The VAT counts on the amount paid.',
     'receipts.vatMisfit': 'VAT does not fit the amount',
