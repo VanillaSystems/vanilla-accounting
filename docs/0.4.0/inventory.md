@@ -11,7 +11,7 @@ and the providers.
 | core | 42 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 60 | 26 |
+| split | 61 | 26 |
 | infrastructure | 31 | 4 |
 | workflow | 18 | 0 |
 | view | 212 | 59 |
@@ -62,7 +62,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/ledger.ts` | CHF 3 |
 | `src/accounting/rappen.ts` | Rappen 1 |
 | `src/accounting/validate.ts` | MWST 1, Ziffer 1, tax code 11 |
-| `src/books/bank-import.ts` | camt.053 13 |
+| `src/books/bank-import.ts` | camt.053 14 |
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
 | `src/core/modules/check.ts` | Ziffer 7 |
@@ -180,7 +180,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 27, MWST 162, ESTV 17, Ziffer 45, eCH-0217 2, form 0535 6, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 27, MWST 164, ESTV 17, Ziffer 45, eCH-0217 2, form 0535 6, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/i18n/locales/en.ts` | CHF 27, MWST 2, ESTV 16, eCH-0217 2, form 0535 6, UID 1, camt.053 14, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 27, MWST 1, eCH-0217 2, form 0535 6, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 27, MWST 1, eCH-0217 2, form 0535 6, UID 1, camt.053 14, QR-bill 1 |

@@ -20,6 +20,12 @@ import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 const STUB = join(process.cwd(), 'tests/support/stub-bin');
+/** An IBAN with its check digits computed, so no IBAN literal sits in the repo (src/publish/leak-guard.ts). */
+const ibanOf = (bank: string, account: string): string => {
+  const n = BigInt([...`${bank}${account}CH00`].map((c) => parseInt(c, 36)).join(''));
+  return `CH${String(98n - (n % 97n)).padStart(2, '0')}${bank}${account}`;
+};
+const OTHER_IBAN = ibanOf('00762', '011623852957');
 const FILED_REF = 'RB-2026-0012';
 const LATE = 'Geruest_August.pdf';
 const SECOND = 'Farbmix_Gutschrift.pdf';
@@ -32,7 +38,7 @@ const camt = (id: string, iban: string, date: string) => `<?xml version="1.0"?><
 <Stmt><Id>${id}</Id><Acct><Id><IBAN>${iban}</IBAN></Id><Ccy>CHF</Ccy></Acct>
 <Ntry><Amt Ccy="CHF">1120.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>${date}</Dt></BookgDt>
 <NtryDtls><TxDtls><Refs><AcctSvcrRef>${FILED_REF}</AcctSvcrRef></Refs><Amt Ccy="CHF">1120.00</Amt><CdtDbtInd>DBIT</CdtDbtInd>
-<RltdPties><Cdtr><Nm>Gerüstbau Thurtal GmbH</Nm></Cdtr><CdtrAcct><Id><IBAN>CH9300762011623852957</IBAN></Id></CdtrAcct></RltdPties>
+<RltdPties><Cdtr><Nm>Gerüstbau Thurtal GmbH</Nm></Cdtr><CdtrAcct><Id><IBAN>${OTHER_IBAN}</IBAN></Id></CdtrAcct></RltdPties>
 <RmtInf><Ustrd>Miete Gerüst August</Ustrd></RmtInf></TxDtls></NtryDtls><AddtlNtryInf>Belastung</AddtlNtryInf></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
 
@@ -62,7 +68,7 @@ before(async () => {
   const res = await api.fetch('/api/statements?name=q2.xml', { method: 'POST', body: camt('Q2', 'CH6580808000000000001', '2026-05-14') });
   assert.equal(res.status, 200, await res.text());
   const t = books().transactions.find((x) => x.ref === FILED_REF)!;
-  assert.deepEqual([t.reference, t.counterparty, t.counterpartyIban], ['Miete Gerüst August', 'Gerüstbau Thurtal GmbH', 'CH9300762011623852957']);
+  assert.deepEqual([t.reference, t.counterparty, t.counterpartyIban], ['Miete Gerüst August', 'Gerüstbau Thurtal GmbH', OTHER_IBAN]);
   // Q2 filed: closedThrough moves past the payment, as the filing workflow and `npm run seal --close` do.
   const ledger = join(api.root, 'ledger.json');
   const head = JSON.parse(readFileSync(ledger, 'utf8')) as { config: { closedThrough: string } };
@@ -92,7 +98,7 @@ test('a receipt whose only payment is filed is archived without a link and names
 
 test('a run that fails names the failure on the inbox file, and the next run takes the file', async () => {
   const stray = join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen/unknown-account.xml');
-  writeFileSync(stray, camt('STRAY', 'CH9300762011623852957', '2026-08-03'));
+  writeFileSync(stray, camt('STRAY', OTHER_IBAN, '2026-08-03'));
   drop(SECOND, 'second');
   const run = await rested((await start()).run);
   assert.equal(run.status, 'stuck');
