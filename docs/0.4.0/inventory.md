@@ -11,7 +11,7 @@ and the providers.
 | core | 47 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 64 | 27 |
+| split | 64 | 26 |
 | infrastructure | 33 | 4 |
 | workflow | 19 | 0 |
 | view | 228 | 59 |
@@ -109,7 +109,6 @@ Layers are assigned by path prefix, most specific first:
 |---|---|
 | `src/accounting/classify-force.ts` | form 0535 1 |
 | `src/accounting/correction-cases.ts` | Ziffer 8, form 0535 2 |
-| `src/accounting/correction.ts` | form 0535 1 |
 | `src/accounting/filed-return.ts` | Ziffer 3, eCH-0217 2 |
 | `src/accounting/fx-conversion.ts` | CHF 4, ESTV 8 |
 | `src/accounting/fx-rates.ts` | CHF 2, ESTV 5 |
