@@ -31,6 +31,7 @@ import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.
 import type { MailCheck, SourcesView } from '../../platform/sources/model.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
+import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
@@ -282,6 +283,9 @@ export const api = {
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
+  /** «Regel anpassen?» after a person corrected a rule's booking (r9k-5): the rule's change the correction teaches, and its draft for the card. */
+  correctionOffer: (ref: string) => request<{ offer: CorrectionOffer | null }>('GET', `/api/rules/correction?ref=${encodeURIComponent(ref)}`),
+  draftCorrection: (ref: string) => request<{ path: string }>('POST', '/api/rules/correction', { ref }),
   handStart: (payment: string) => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}`),
   draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),

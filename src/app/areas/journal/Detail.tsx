@@ -41,6 +41,7 @@ import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
 import { isCamt } from '../bank/model.js';
+import { CorrectionOffer } from '../company/RulesSection.js';
 import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 
@@ -181,7 +182,9 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             <dl className="kv">
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
-              <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} /></dd>
+              <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} />
+                {e.by?.kind === 'person' && e.by.was && !edit ? <CorrectionOffer ref={e.transactionRef} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
+              </dd>
               {seen || e.reason || e.by?.kind === 'person' || e.by?.kind === 'assistant' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
                 {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
                 {e.reason && <div className="m">{reasonText(e, e.reason, say)}</div>}

@@ -7,6 +7,8 @@
  *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
  *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
+ *   GET  /api/rules/correction?ref=   the rule change a person's correction of a rule booking teaches («Regel anpassen?»), or null
+ *   POST /api/rules/correction        { ref }: that change drafted into the rule's file; the answer names the file for its card
  *   GET  /api/rules/hand?payment=     the form of a rule made by hand, started from that payment
  *   POST /api/rules/hand              a HandRule: drafted into its file for the same card; refused when the app cannot carry it out
  *
@@ -24,6 +26,7 @@ import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { correctionOffer, draftCorrectionRule } from '../../saving/correction-rule.js';
 import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.js';
 import { keepSwitchedOn, openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
@@ -129,6 +132,18 @@ router.post('/api/rules/share', (req, res) => {
   if (typeof ref !== 'string') throw new RequestError(400, 'ref erwartet.');
   const path = draftShareRule(WS, ref);
   if (!path) throw new RequestError(404, 'Diese Zahlung ist nicht in einen privaten und einen geschäftlichen Teil aufgeteilt.');
+  res.json({ path });
+});
+
+router.get('/api/rules/correction', (req, res) => {
+  res.json({ offer: correctionOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });
+});
+
+router.post('/api/rules/correction', (req, res) => {
+  const ref = (req.body as { ref?: unknown })?.ref;
+  if (typeof ref !== 'string') throw new RequestError(400, 'ref erwartet.');
+  const path = draftCorrectionRule(WS, ref);
+  if (!path) throw new RequestError(404, 'Diese Buchung lehrt keine Regel: keine Regel hat die Zahlung gebucht, oder die Buchung ist nicht von Hand korrigiert.');
   res.json({ path });
 });
 

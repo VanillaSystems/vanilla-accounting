@@ -15,6 +15,7 @@ import type { RuleLine } from '../../../booking/classify.js';
 import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
 import type { DraftView, RulesView } from '../../../saving/rules.js';
 import type { ShareOffer } from '../../../saving/share-rule.js';
+import type { CorrectionOffer as CorrectionOfferView } from '../../../saving/correction-rule.js';
 import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
 import { emptyForm, handRuleOf, type HandForm } from './hand-rule-model.js';
@@ -309,6 +310,39 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
       <span>{t('rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button></span>
+    </div>
+  );
+}
+
+/**
+ * «Regel anpassen?» on a booking a person corrected after a rule made it (r9k-5): the rule's change
+ * the correction teaches, drafted on the click and then shown on its card with the payments it
+ * would book differently; «Behalten» keeps it. Nothing while the booking is still the rule's.
+ */
+export function CorrectionOffer({ ref, onRules }: { ref: string; onRules?(): void }) {
+  const [offer, setOffer] = useState<CorrectionOfferView | null>(null);
+  const [path, setPath] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    const load = () => { api.correctionOffer(ref).then((x) => { if (live) setOffer(x.offer); }, () => { if (live) setOffer(null); }); };
+    load();
+    const off = onBooksChanged(load);
+    return () => { live = false; off(); };
+  }, [ref]);
+  if (path) return <RuleDraft path={path} onRules={onRules} title={t('rules.correction.title')} />;
+  if (!offer) return null;
+  const draft = () => {
+    setBusy(true);
+    api.draftCorrection(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+  };
+  const who = offer.business?.name ?? offer.rule;
+  return (
+    <div className="ruledraft" data-correction={offer.ref}>
+      <span>{t(offer.to.vat !== offer.from.vat ? 'rules.correction.askVat' : 'rules.correction.ask', { who, from: offer.from.account, to: offer.to.account, vat: offer.to.vat ?? t('journal.noVat') })}</span>
+      {error ? <span className="warnline">{error}</span> : null}
+      <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-testid="correction-draft" onClick={draft}>{t('rules.correction.draft')}</button></span>
     </div>
   );
 }

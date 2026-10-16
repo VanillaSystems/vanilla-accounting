@@ -197,8 +197,13 @@ function chartFromAccounts(ws: Pick<Workspace, 'paths'>): string {
   return ['Konto\tBeschreibung', ...accounts.map((a) => `${a.number}\t${a.name}`)].join('\n');
 }
 
-/** The chart the classifier books on, as `number<TAB>name` lines: the prior-year export, else accounts.json. */
+/**
+ * The chart the classifier and the rules book on, as `number<TAB>name` lines: the firm's own
+ * accounts.json, which Firma › Kontenplan edits (an account added there is a rule's to name, r9k-5),
+ * else the prior-year export of books that have no chart of their own yet.
+ */
 export function chartOf(ws: Pick<Workspace, 'paths'>): string {
+  if (existsSync(ws.paths.accounts)) return chartFromAccounts(ws);
   const prior = priorYearExport(ws.paths.history);
   return prior ? readFileSync(join(ws.paths.history, `${prior}.Konten.txt`), 'utf8') : chartFromAccounts(ws);
 }
