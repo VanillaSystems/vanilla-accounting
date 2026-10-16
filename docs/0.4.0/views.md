@@ -102,11 +102,20 @@ bot button at the top right, or ⌘J, opens and closes it. ⌘K stays search onl
      filtered as the person types; a pick becomes a chip.
   3. **The + menu:** this view, the selected rows, search, a file attached for this
      conversation only.
-- **«Mit KI ändern…»** on any object opens the sidebar with that object as context.
+- **«Mit KI …»** on any object adds it to the open conversation as one more chip; with the
+  sidebar closed, it opens a new conversation about that object.
+- **One conversation goes on** across pages and a reload of the window: the open one's id is
+  remembered in the browser and its turns read again at start (src/app/assistant/thread.ts). A
+  new one starts only on **Neu**, or from «Mit KI …» with the sidebar closed (wishes test 3: «und
+  auch bei den nächsten Rechnungen» after a look at Bilanz & ER landed in a new conversation that
+  did not know what «auch» meant).
 
 **What it knows.** The prompt carries a map of the app (src/server/app-map.ts, given to the prompt by the route): every area,
 every section of Firma and the export dialog, by the names on screen in the person's language,
-with its path, what a person does there and which changes the sidebar makes there. The map is
+what a person does there and which changes the sidebar makes there. It names no web address
+(wishes test 3: «unter MWST (/vat)»), and gives the app's own word for a filed quarter
+(«eingereicht», not «gefiltert»); the prompt forbids inner names such as `closedThrough`, field
+names of the change list and file paths, and the export card names the file, not its path. The map is
 keyed by the app's own lists (the areas, `COMPANY_SECTIONS`, the export presets), so a new area or
 section does not compile without its line, and tests/assistant-app-map.test.ts checks every area
 folder is one of them (wishes test 2026-10-15: the sidebar said the app writes no invoices, has no
@@ -128,13 +137,17 @@ in the answer as a card with **Zeigen** (it opens what changed) and **Rückgäng
   the answer's bookings on it back too. The chart is never drafted (wishes test w12: bookings
   pointed at an account that existed only in a draft).
 - **The invoicing settings** (Firma › Rechnungslayout): the payment term, which also goes to every
-  customer who had the old one (as the field there does by hand), and per language the texts above
-  and below the table and of the e-mail. Made at once, no detour through Änderungen: the owner
-  wants one click, and the card says plainly what is set now.
+  customer who had the old one (as the field there does by hand), and per language the greeting
+  line («Anrede», none by default), the texts above and below the table and of the e-mail. Made
+  at once, no detour through Änderungen: the owner wants one click, and the card shows each text
+  before → after. A greeting («Grüezi») goes into the Anrede above the text before the table and
+  never replaces that text; the AI changes a text only as far as asked, from the current one
+  (wishes test 3: «Grüezi» replaced the whole thank-you sentence, and the answer said it replaced
+  «Sehr geehrte …», which the invoices never had).
 - **An invoice draft** (Rechnungen): for a customer, or for a new one added with it. The person
   issues and sends it; the AI never does. Rückgängig deletes the draft and a customer added with it.
 - **An export** (a preset of the export dialog, e.g. the Treuhänder-Paket of a quarter): packed
-  into data/exports/, the card downloads it and names where it lies. Nothing to undo.
+  into data/exports/, the card names the file and downloads it. Nothing to undo.
 - **Booking again** («buch alles neu»): the inbox run books every open payment without a booking,
   as it does on its own; the AI never relinks by hand for that. Nothing to undo.
 
@@ -154,6 +167,18 @@ It refuses an answer that
   does it (wishes test w06 relinked a photo the person had asked to remove);
 - links a receipt a person set aside as a duplicate or no receipt.
 
+**What it says is what happened.** All of an answer's changes are made, or none. When the app
+refuses them, the answer's own text said they were made («Ich habe die Anrede auf «Grüezi»
+gesetzt», wishes test 3), so that text goes: the model, in the same session, gets the refusal and
+writes one or two sentences in its place, saying what is not done, why, and what the person can
+do. One short call more, and only on a refusal; the conversation then knows it too. The stored
+turn keeps the first text as `withdrawn`, the refusal and the new text; the next message tells
+the model again that nothing of that answer was changed. Without a model answer (an error, a
+stop) the text stays empty and the app's own line «Nicht geändert: …» says why. Marking the claim
+in the text was the other way: the app cannot tell which sentence is the claim, so it would have
+to strike all of it and the model would still believe it worked. While an answer streams, its
+words are grey until the app has applied what it asks for.
+
 A purchase code follows the account a booking lands on (`codeOnAccount` in
 src/accounting/vat-codes.ts, rule pv-prefix-from-account): moved to material or goods it takes M,
 to operating costs or an investment I, with its rate and sign; the card says «MWST-Code folgt dem
@@ -164,14 +189,19 @@ between them, and a correction may hang on a payment with a date of its own. **R
 one booking of a payment takes back the answer's other changes on that payment with it, so its
 bookings add up again. A vague wish («mach alles richtig») gets a short question back with what
 the AI would do; it never takes back an earlier change or a person's own correction without
-naming it. A change to how the app works (rules, workflows, knowledge) lands under Änderungen,
+naming it. A booking changed by an answer or by hand loses the classifier's reason once its
+accounts, code or amount change: the reason named the booking as it was («auf 4400, M81»);
+Rückgängig puts it back. A change to how the app works (rules, workflows, knowledge) lands under Änderungen,
 unsaved ([saving.md](saving.md)). A rule is the exception that makes the mission's «keeps it
 with one click» true: when the answer drafted a rule, its card shows the rule in one plain line
 («Swisscom → Konto 6510 Telefon, MWST I81»), with **Behalten** and **Verwerfen** (a removal:
 **Ja, entfernen**). Behalten saves that one draft at once, without the AI step «Speichern
 vorbereiten»; a rule the app cannot carry out is named with its reason and cannot be kept
 ([saving.md](saving.md), "One click for a rule"). **Firma › Regeln** lists every rule of the
-company, linked from Automatisierung.
+company, linked from Automatisierung. The prompt and the map say so: a drafted rule's one click
+is «Behalten» on its card, never «Speichern» under Änderungen, and until then the answer says it
+is drafted, not set (tests/assistant-app-map.test.ts; wishes test 3 told the person to press
+«Speichern»).
 
 ## Questions between the people who keep the books
 

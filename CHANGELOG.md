@@ -23,6 +23,11 @@ Two markers flag an entry you must read before you update:
 - Firma › Rechnungslayout has «Zahlungsfrist in Tagen» after setup too; a new term also goes to every customer who had the old one.
 
 ### Fixed
+- The KI sidebar never says it did what the app refused. When the app does not apply an answer's changes («Rechnungen sind noch nicht eingerichtet», an address without postcode), the answer's text is replaced by a short one from the model saying what is not done and why; the conversation remembers it. Wishes test 3, finding wishes3-5.
+- The KI sidebar's conversation goes on across pages and a reload; «Mit KI …» adds its object to the open conversation. A new one starts with «Neu». Finding wishes3-9.
+- The KI sidebar tells you to keep a rule with «Behalten» on its card, no longer «Speichern» under Änderungen; it names places as the app shows them, without web addresses or inner names, and the export card names the file instead of its path. Findings wishes3-8, wishes3-13.
+- Invoices have a greeting line of their own, «Anrede» in Firma › Rechnungslayout (none by default), above the text before the table. «schreib Grüezi» sets it and keeps the text; the sidebar card shows a text before → after. Finding wishes3-10.
+- A booking whose accounts, VAT code or amount you or the KI sidebar change no longer shows the classifier's old reason. Finding wishes3-11.
 - The KI sidebar's VAT code follows the account: a booking moved to material or goods takes M, to operating costs or an investment I, with its rate, and the card says so. Wishes test w02.
 - The KI sidebar never takes back a change an earlier answer of the conversation made (that change's «Rückgängig» does), never links a receipt you set aside as a duplicate, and never books on an account the chart lacks. «buch alles neu» books through the inbox run instead of relinking by hand. Wishes test w03, w06, w12.
 
