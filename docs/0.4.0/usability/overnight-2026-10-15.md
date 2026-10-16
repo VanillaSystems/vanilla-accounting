@@ -98,3 +98,4 @@ file records every decision a person might have made differently, newest last.
     answer kept as a rule for that customer; it changes no entry of the real books (measured: none
     qualifies today). Decision 3 (Bilanz/ER net: derive the VAT legs at read time) stays Ken's:
     the statement golden files would move and need his review.
+23. Decision 2 built and merged: a customer payment without an invoice becomes one question with a proposal (CHF from a Swiss/LI IBAN: standard rate; foreign: export), the answer rebooks and becomes a rule for that payer (by IBAN, else the payer name; generic texts never). The bank import now keeps the payer IBAN for open periods.
