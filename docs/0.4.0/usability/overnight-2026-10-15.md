@@ -134,3 +134,8 @@ file records every decision a person might have made differently, newest last.
     - r4c-34 «Automatisch buchen» now writes its outcome beside the button; the packed-app silence was not reproduced, cause unknown. Run counts, the invoice select race, the hand-form VAT prefill and duplicates on Aufgaben fixed.
     - Rebase: Aufgaben keeps both new sections (filed bookings that contradict their receipts, possible duplicate receipts).
     - Started fix/leftovers: r5f-9 threshold warning and task, r5f-26 typing in the MWST field, r4c-21 SumUp payout without report.
+30. Merged leftovers (after rc.290, so not in round 6's build); tests 998 pass, real-books golden master 18/18.
+    - r5f-9: a firm not registered is warned from 90 % of the threshold, reached or projected at the year's pace (after 91 days); Aufgaben carries a task once it is passed.
+    - r4c-21/r5h-12: a SumUp payout without its report is held as a question («Bericht verknüpfen, oder die ganze Auszahlung als Umsatz buchen?»), not booked V81 on the net; a report linked later closes it. Reason: VAT is owed on the gross, and a provisional entry filed as it stands would need a 0535 for every late report.
+    - r5f-26 did not reproduce in the sandbox; likely round 5's driver clicked «+ Buchung». The round-6 firms tester checks it in the packed app.
+    - Open for Ken: should the threshold task count in the dock badge? Is holding a reportless payout right, or should the AI book it from the bank text?
