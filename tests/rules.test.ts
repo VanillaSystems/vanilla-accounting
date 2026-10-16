@@ -266,7 +266,7 @@ async function heldWithdrawal() {
   const engine = openEngine(ws, { appRoot: APP_ROOT });
   await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
   await engine.idle();
-  const [ask] = engine.runs().filter((r) => r.workflow === 'ask');
+  const ask = engine.runs().find((r) => r.workflow === 'ask' && askedBy(r) === 'cash-ask')!;
   assert.equal(ask.state.status, 'waiting');
   return { ws, engine, ask };
 }

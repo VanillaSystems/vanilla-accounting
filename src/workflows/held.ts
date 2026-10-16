@@ -27,7 +27,7 @@ export const CLOSED_REASON = 'Die Regel, die fragen liess, gilt nicht mehr: der 
 
 /** Closes each waiting question whose payment no rule asks about any more. Returns the runs it closed. */
 export async function closeAsksWithoutRule(engine: Pick<Engine, 'runs' | 'command'>, ws: Workspace): Promise<string[]> {
-  const waiting = askRuns(engine).filter((r) => r.state.status === 'waiting' && r.item.kind === 'transaction');
+  const waiting = askRuns(engine).filter((r) => r.state.status === 'waiting' && r.item.kind === 'transaction' && askedBy(r) !== undefined);
   if (!waiting.length || !hasBooks(ws)) return [];
   const books = loadBooks(ws);
   const context = loadClassifyContext(ws);
