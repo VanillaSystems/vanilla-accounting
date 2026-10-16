@@ -49,7 +49,7 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .head .askai { margin-left: auto; }
 
 /* Dateien hinzufügen (docs/0.4.0/intake.md): anchored below the top, grows down, never re-centres. */
-.palette.dropdlg { width: 780px; top: 10vh; max-height: 80vh; display: flex; flex-direction: column; padding: 14px 16px; }
+.palette.dropdlg { --w: min(780px, 100vw - 32px); top: 10vh; max-height: 80vh; display: flex; flex-direction: column; padding: 14px 16px; }
 .dropdlg .dhd { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .dropdlg .dhd b { font-size: 15px; flex: 1; }
 .dropdlg .wftabs .mono { color: var(--muted); font-size: 11px; margin-left: 4px; }

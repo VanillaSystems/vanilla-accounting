@@ -166,7 +166,8 @@ main { margin-left: var(--abw); }
 .menu button .s { margin-left: auto; color: var(--muted); font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
 .menu button.cur { font-weight: 600; }
 .scrim { position: fixed; inset: 0; z-index: 30; }
-.palette { position: fixed; z-index: 41; left: var(--page-mid); top: 14vh; width: 600px; max-width: calc(100vw - 32px); transform: translateX(-50%); border-radius: 16px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); overflow: hidden; animation: pop .16s ease; }
+/* Centred over the page beside the sidebar, but never past the window's edge: with the sidebar open in a narrow window the page's middle lies too far left for the dialog's width (r6h-30). */
+.palette { --w: min(600px, 100vw - 32px); position: fixed; z-index: 41; left: clamp(calc(16px + var(--w) / 2), var(--page-mid), calc(100vw - 16px - var(--w) / 2)); top: 14vh; width: var(--w); transform: translateX(-50%); border-radius: 16px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); overflow: hidden; animation: pop .16s ease; }
 .palette input { width: 100%; border: 0; outline: 0; background: transparent; padding: 18px 20px; font-size: 16px; border-bottom: 1px solid var(--line); }
 .palette .res { max-height: 52vh; overflow: auto; padding: 6px; }
 .palette .gh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 10px 12px 4px; }
