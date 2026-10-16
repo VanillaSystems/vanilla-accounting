@@ -57,7 +57,7 @@ router.patch('/api/transactions/:ref', (req, res) => {
 
   return withBooks(res, (books) => {
     const idx = books.transactions.findIndex((t) => t.ref === ref);
-    if (idx === -1) throw new RequestError(404, 'Transaction not found');
+    if (idx === -1) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     assertOpen(books, refDates(books, ref), 'editTransaction');
 
     books.transactions[idx] = { ...books.transactions[idx], ...patch };
@@ -69,7 +69,7 @@ router.delete('/api/transactions/:ref', (req, res) => {
   const { ref } = req.params;
   return withBooks(res, (books) => {
     const tx = books.transactions.find((t) => t.ref === ref);
-    if (!tx) throw new RequestError(404, 'Transaction not found');
+    if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     if (tx.source !== 'manual') {
       throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).', { code: 'manualOnly' });
     }

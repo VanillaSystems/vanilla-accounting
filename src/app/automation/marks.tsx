@@ -5,7 +5,7 @@
  * button, and removing the workflow removes the button.
  */
 import { language, t } from '../i18n/index.js';
-import { refusalText } from './refusal.js';
+import { commandRefusalText, refusalText } from './refusal.js';
 import { buttonsFor, hasAi, runResult, stepOf, textIn, type ItemFact, type ItemKind, type RunDetail, type WorkflowDecl } from '../../workflows/model.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import type { Nav } from '../areas/index.js';
@@ -55,7 +55,7 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
     say(t('marks.started', { workflow: name }));
     try {
       const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
-      if (!r.ok) { say(t('marks.refused', { workflow: name, why: r.detail ?? r.refusal })); return; }
+      if (!r.ok) { say(t('marks.refused', { workflow: name, why: commandRefusalText(r) })); return; }
       if (!r.run) return;
       say(runResultText(workflow, await rested(r.run)));
       nav.refresh();

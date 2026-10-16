@@ -164,9 +164,11 @@ export function assertCodeTaken(code: string | undefined): void {
 }
 
 export function setEntry(books: Books, id: string, set: EntrySet, author: Author = BY_HAND): BookChange {
-  const e = entryOf(books, id);
   // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only, with a code the form takes.
+  // The firm's rule comes before the entry's lookup: a block that first changed the receipt's facts has unbooked the entry
+  // already, and the person must hear that the code is not the firm's, not that the entry is gone (r6f-8).
   if (set.origin === undefined) { assertPlaced(set.accountDebit, set.accountCredit); assertCodeTaken(set.vatCode); }
+  const e = entryOf(books, id);
   assertOpen(books, [e.date, set.date], 'editEntry');
   if (e.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
   if (set.amount !== undefined && (!Number.isFinite(set.amount) || set.amount === 0)) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });

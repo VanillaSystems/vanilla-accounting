@@ -58,7 +58,7 @@ export type ApiRefusal =
   | { code: 'openingYearClosed'; params: { year: string } }
   | { code: 'mailSourceField'; params: { field: 'address' | 'host' | 'account' } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
-  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' } }
+  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' } }
   /** An invoicing refusal met through the AI sidebar (src/server/workspace-edits.ts): which rule, and what is missing. */
   | { code: 'invoice'; params: { refusal: InvoiceRefusal; missing?: Missing[] } }
   /** A change a person can meet that the books refuse: invoicing not set up, a customer the invoices lack, a booking of 0, without an account, a VAT code or text, an account number or name the chart cannot take. */

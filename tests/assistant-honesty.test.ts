@@ -156,6 +156,8 @@ test('a payer rule reads with the payer\'s name, not its key (3, r4w-8)', () => 
 
 test('the invoice texts are quoted as they read, with the company\'s term, never with an unfilled {days} (3, w16)', () => {
   const prompt = assistantSystem('de', '2451 Kontokorrent', '', 10);
+  assert.match(prompt, /registered from a date inside the year .* charges VAT on every invoice and owes it from that date on/, 'a registration inside the year rules from its date (r6f-11)');
+  assert.match(prompt, /never tell such a person that they show no VAT or owe none after their registration date/);
   assert.match(prompt, /as they read with the company's term of 10 days: [^\n]*Zahlbar innert 10 Tagen/);
   const quoted = prompt.slice(prompt.indexOf('as they read with'), prompt.indexOf('and keep the rest of it'));
   assert.doesNotMatch(quoted, /\{days\}/);

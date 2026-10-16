@@ -9,6 +9,9 @@ import { formatDate } from '../lib/utils.js';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** An engine command the server refused (a start, an answer, a replay): the refusal's words, with its detail where the text takes one. */
+export const commandRefusalText = (r: { refusal: string; detail?: string }): string => tWith(`automation.refusal.${r.refusal}`, { detail: r.detail ?? '' });
+
 export function refusalText(error: string | undefined, why?: Refusal): string {
   if (!why) return error ?? '';
   const params = Object.fromEntries(Object.entries(why.params).map(([k, v]) => [k, ISO_DATE.test(v) ? formatDate(v) : k === 'n' ? Number(v) : v]));

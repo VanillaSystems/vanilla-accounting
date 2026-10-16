@@ -87,7 +87,7 @@ router.get('/api/inbox', (_req, res) => {
 // A page that still shows the file as waiting may ask for it after the processing has read it.
 router.get('/api/inbox/:id', (req, res) => {
   const file = inboxFiles({ withRead: true }).find((f) => f.id === req.params.id);
-  if (!file) throw new RequestError(404, 'Not in the inbox');
+  if (!file) throw new RequestError(404, 'Not in the inbox', { code: 'gone', params: { what: 'file' } });
   res.setHeader('Content-Type', 'application/pdf');
   res.sendFile(join(WS.paths.inbox, file.filename));
 });

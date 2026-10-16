@@ -11,7 +11,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { automationCommand } from '../../automation/store.js';
 import { openCount, textIn, type Arrival, type AutomationView, type RunSummary } from '../../../workflows/model.js';
 import { linesOf, standOf, type Line, type Stand } from './runs-model.js';
-import { refusalText } from '../../automation/refusal.js';
+import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import type { Index } from '../../../types/index.js';
 import type { Nav } from '../index.js';
 import type { Route } from '../../shell/route.js';
@@ -191,7 +191,7 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
   const todays = rows.filter((x) => sameDay(new Date(x.r.startedAt), today));
   const arrivedToday = todays.flatMap((x) => x.r.arrived ?? []);
   const toggle = (id: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(id)) next.add(id); return next; });
-  const review = (id: string, on: boolean) => void automationCommand({ kind: 'review', run: id, on }).then((res) => { if (!res.ok) nav.toast(res.detail ?? res.refusal); });
+  const review = (id: string, on: boolean) => void automationCommand({ kind: 'review', run: id, on }).then((res) => { if (!res.ok) nav.toast(commandRefusalText(res)); });
   const sum = [
     arrivedToday.some((a) => a.kind === 'statement') ? t('runs.in.statements', { n: arrivedToday.filter((a) => a.kind === 'statement').length }) : '',
     arrivedToday.some((a) => a.kind === 'receipt') ? t('runs.in.receipts', { n: arrivedToday.filter((a) => a.kind === 'receipt').length }) : '',

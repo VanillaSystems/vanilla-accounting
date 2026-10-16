@@ -25,7 +25,7 @@ import { Paper } from '../receipts/Paper.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
-import { refusalText } from '../../automation/refusal.js';
+import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import { baseCurrency, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
 import { questionsNow, useQuestions } from '../../questions/store.js';
@@ -259,7 +259,7 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
     setBusy(true);
     try {
       const r = await automationCommand(cmd);
-      nav.toast(r.ok ? done ?? t('automation.done') : t(`automation.refusal.${r.refusal}` as 'automation.refusal.not-found', { detail: r.detail ?? '' }));
+      nav.toast(r.ok ? done ?? t('automation.done') : commandRefusalText(r));
     } catch (e) {
       nav.toast(errorText(e));
     } finally {
@@ -504,7 +504,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
   if (error) return <div className="detail-empty"><div>{error}</div></div>;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
-  const act = (cmd: AutomationCommand) => () => { void automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); }); };
+  const act = (cmd: AutomationCommand) => () => { void automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); }); };
   const seconds = data.finishedAt ? Math.max(1, Math.round((Date.parse(data.finishedAt) - Date.parse(data.startedAt)) / 1000)) : undefined;
   return (
     <div className="detail-in wfpage" key={id}>
@@ -627,7 +627,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
 function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; nav: Nav; run?: string; books: Index; canEdit: boolean }) {
   const q = useQuestions();
   const asked = forMe(q.questions, q.me).length;
-  const send = (task: Task, outcome: string) => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(r.detail ?? r.refusal); }); };
+  const send = (task: Task, outcome: string) => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); }); };
   const forms = useRef(new Map<string, HTMLFormElement | null>());
   /** A payment still without an entry: the task carries its booking form, and «Gebucht» leads there instead of claiming it. */
   const unbooked = (task: Task) => (task.item.kind === 'transaction' && books.transactions.some((x) => x.ref === task.item.id) && !(books.journalEntries ?? []).some((e) => e.transactionRef === task.item.id) ? task.item.id : undefined);
