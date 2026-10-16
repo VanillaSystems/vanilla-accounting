@@ -91,14 +91,32 @@ export function VatFields({ v, nav, edit }: { v: ReceiptView; nav: Nav; edit: bo
     commit(line(i, { rate, ...(derived && { vat: taxIn(r.amount, rate), guess: true }) }));
   };
   const free = rates.find((x) => !d.lines.some((l) => l.rate === x));
+  /**
+   * The two radios are one Tab stop (treuhaender-6): ←/→ (↑/↓) choose the other, Space or Enter the
+   * focused one, so the area's keys (Space: the quick view) never take them.
+   */
+  function onRadioKey(e: React.KeyboardEvent) {
+    const el = e.target as HTMLElement;
+    if (!edit || el.getAttribute('role') !== 'radio') return;
+    const focused = el.dataset.on === 'true';
+    let next: boolean | undefined;
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) next = !focused;
+    else if (e.key === ' ' || e.key === 'Enter') next = focused;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (d.on !== next) choose(next);
+    (el.parentElement?.querySelector(`[data-on="${next}"]`) as HTMLElement | null)?.focus();
+  }
   const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(d); } };
 
   return (
     <div className="vatf" ref={box} role="group" aria-label={t('receipts.field.vat')}>
       <div className="lbl">{t('receipts.field.vat')}{r.vatBy === 'human' && <ByHand />}</div>
-      <span className="seg2" role="radiogroup" aria-label={t('receipts.field.vat')}>
+      <span className="seg2" role="radiogroup" aria-label={t('receipts.field.vat')} onKeyDown={onRadioKey}>
         {([false, true] as const).map((on) => (
-          <button key={String(on)} type="button" role="radio" aria-checked={d.on === on} className={d.on === on ? 'on' : ''} disabled={!edit} onClick={() => d.on !== on && choose(on)}>
+          <button key={String(on)} type="button" role="radio" aria-checked={d.on === on} className={d.on === on ? 'on' : ''} disabled={!edit}
+            tabIndex={(d.on ?? false) === on ? 0 : -1} data-on={String(on)} onClick={() => d.on !== on && choose(on)}>
             {t(on ? 'receipts.vatYes' : 'receipts.vatNone')}
           </button>
         ))}
