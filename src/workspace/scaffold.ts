@@ -106,6 +106,13 @@ beleg-import/
 .llm-concurrency.json
 `;
 
+/**
+ * Two people who keep the books append to the same questions file in their clones; git keeps
+ * both sides' lines instead of a conflict (src/questions/store.ts: append-only, folded by id).
+ */
+export const GITATTRIBUTES = `${APP_FOLDER}/transactional-data/*/questions.jsonl merge=union
+`;
+
 const SOURCES_README = `# Sources
 
 Each folder here is a place the app collects documents from (ADR 0014 of the app): a mailbox, a
@@ -242,6 +249,7 @@ export function planWorkspace(input: InitInput, chart: Chart, root: string, appR
       ['AGENTS.md', agentsMd(input, appRel)],
       ['CLAUDE.md', '@AGENTS.md\n'],
       ['.gitignore', GITIGNORE],
+      ['.gitattributes', GITATTRIBUTES],
       [app(MANIFEST_FILE), manifestYaml(input, bankAccounts)],
     ],
   };

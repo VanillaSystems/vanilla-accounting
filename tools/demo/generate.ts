@@ -26,6 +26,7 @@ import { BOOKS_SCHEMA } from '../../src/workspace/schema.js';
 import { writeBooks } from '../../src/books/store.js';
 import { BOOK_FILES, splitByYear, toJsonl } from '../../src/books/years.js';
 import { APP_FOLDER, workspacePaths } from '../../src/workspace/workspace.js';
+import { GITATTRIBUTES } from '../../src/workspace/scaffold.js';
 import { camt053Xml, type CamtEntry } from './camt053.js';
 import { textPdf } from './pdf.js';
 import { chf, PAID_PRIVATELY, uidChecksumValid, YEAR, type Demo, type Doc, type Payment, type StatementBank } from './kit.js';
@@ -355,6 +356,7 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
   tree.set(`${APP_FOLDER}/belege.workspace.yaml`, manifest(demo));
   for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`${APP_FOLDER}/knowledge/${file}`, yaml);
   tree.set('.gitignore', 'data/\n.env\nbeleg-import/\n');
+  tree.set('.gitattributes', GITATTRIBUTES);
   return tree;
 }
 

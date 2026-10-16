@@ -36,11 +36,18 @@ const vatRates = (r: Receipt) => (r.hasSwissVat ? (r.vatSummary ?? []).filter((g
 const gross = (g: NonNullable<Receipt['vatSummary']>[number]) => g.gross ?? (g.net !== undefined ? g.net + g.vat : undefined);
 const norm = (s: string | undefined) => s?.toLowerCase().replace(/[^a-z0-9äöü]/g, '') || undefined;
 
+/** The VAT numbers and the vendors of a payment's receipts, each normalized: what names its other party for certain. */
+export function receiptKeys(books: Pick<Books, 'mappings' | 'receipts'>, tx: Pick<BankTransaction, 'ref'>): { uids: Set<string>; vendors: Set<string> } {
+  const ids = new Set(books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => m.receiptId));
+  const receipts = books.receipts.filter((r) => ids.has(r.id));
+  const set = (keys: Array<string | undefined>) => new Set(keys.filter((k): k is string => !!k));
+  return { uids: set(receipts.map((r) => norm(r.vatId))), vendors: set(receipts.map((r) => norm(r.title?.vendor))) };
+}
+
 /** What names the other party of a payment: the VAT numbers and vendors of its receipts, the bank's counterparty. */
 function vendorKeys(books: Books, tx: BankTransaction): Set<string> {
-  const ids = new Set(books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => m.receiptId));
-  const keys = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => [norm(r.vatId), norm(r.title?.vendor)]);
-  return new Set([...keys, norm(tx.counterparty)].filter((k): k is string => !!k));
+  const { uids, vendors } = receiptKeys(books, tx);
+  return new Set([...uids, ...vendors, norm(tx.counterparty)].filter((k): k is string => !!k));
 }
 
 /** The account the newest booking of the same vendor used on the side opposite the bank, with that entry. */

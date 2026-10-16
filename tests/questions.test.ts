@@ -7,7 +7,8 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -16,6 +17,8 @@ import { loadBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { readQuestions } from '../src/questions/store.js';
 import { askedByMe, fold, forMe, type Question, type QuestionLine } from '../src/questions/model.js';
+import { isGenericText } from '../src/knowledge/precedents.js';
+import { GITATTRIBUTES } from '../src/workspace/scaffold.js';
 
 let api: ApiServer;
 before(async () => { api = await startApi('tests/fixtures/questions-index.json'); });
@@ -56,7 +59,7 @@ test('«privat» books the payment on the owner\'s account without VAT code and 
   assert.deepEqual([e.accountDebit, e.accountCredit, e.vatCode, e.origin], ['2451', '1021', undefined, 'manual']);
   const guide = parse(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8')) as { steps: { private: { precedents: Array<Record<string, unknown>> } } };
   const [p] = guide.steps.private.precedents;
-  assert.deepEqual([p.choice, (p.match as { tx: string }).tx, p.by, p.question], ['private', 'coop pronto bern', OWNER, q.id]);
+  assert.deepEqual([p.choice, p.match, p.by, p.question], ['private', { tx: 'coopprontobern' }, OWNER, q.id]);
   assert.deepEqual(forMe((await list()).questions, OWNER), [], 'answered: no longer waiting for the owner');
   assert.equal(askedByMe((await list()).questions, MONIKA)[0].status, 'answered', 'shown to the asker as answered');
   const again = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'business' });
@@ -76,7 +79,31 @@ test('undo takes the answer\'s booking back and opens the question again; the pr
   const r = await api.send('POST', `/api/questions/${q.id}/undo`, { by: MONIKA });
   assert.equal((r.json as unknown as Question).status, 'open');
   assert.deepEqual(entriesOf('P2'), []);
-  assert.match(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8'), /coop pronto bern/);
+  assert.match(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8'), /coopprontobern/);
+});
+
+test('a generic card text is never a precedent: the next card payment is asked, not answered', async () => {
+  const q = await ask({ kind: 'payment', id: 'G1' });
+  const r = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'private' });
+  const acted = (r.json as unknown as Question).answer?.acted;
+  assert.ok(acted && 'booked' in acted && !acted.precedent, 'booked, but kept as no precedent');
+  assert.equal(entriesOf('G1')[0].accountDebit, '2451');
+  const next = await ask({ kind: 'payment', id: 'G2' });
+  assert.equal(next.status, 'open', '«Karte 5412 Einkauf» names nobody: asked again');
+  assert.deepEqual(entriesOf('G2'), []);
+});
+
+test('a specific vendor on the receipt answers the next question, whatever the bank text says', async () => {
+  const q = await ask({ kind: 'payment', id: 'V1' });
+  await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'business' });
+  const next = await ask({ kind: 'payment', id: 'V2' });
+  assert.deepEqual([next.status, next.answer?.answer], ['answered', { choice: 'business' }], 'same vendor Digitec Galaxus AG behind «TWINT Zahlung»');
+  assert.deepEqual(entriesOf('V2'), [], '«geschäftlich» books nothing itself');
+});
+
+test('isGenericText: a way to pay is no counterparty', () => {
+  for (const g of ['Karte 5412 Einkauf', 'Einkauf', 'Kartenzahlung', 'Zahlung', 'Belastung', 'TWINT', 'TWINT Zahlung 0791234567', 'Card transaction of 39.00 EUR', 'Achat carte 12.09.2026']) assert.ok(isGenericText(g), g);
+  for (const v of ['Coop Pronto Bern', 'Digitec Galaxus', 'Migros', 'SBB']) assert.ok(!isGenericText(v), v);
 });
 
 test('a text answer books nothing; the asker marks it done and it leaves her list', async () => {
@@ -146,5 +173,25 @@ test('the AI sidebar asks with a change «question»: to the owner, origin assis
   } finally {
     await ai.stop();
     rmSync(log, { recursive: true, force: true });
+  }
+});
+
+test('two clones that each asked merge without a conflict: the scaffolded .gitattributes unions questions.jsonl', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'questions-merge-'));
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: repo, encoding: 'utf8' });
+  const file = join(repo, 'vanilla-accounting/transactional-data/2026/questions.jsonl');
+  const line = (id: string, by: string) => `${JSON.stringify({ v: 1, event: 'asked', id, at: '2026-10-16T08:00:00Z', by, on: { kind: 'payment', id: 'P' }, text: '?', choices: [], origin: 'person' })}\n`;
+  try {
+    git('init', '-q', '-b', 'main');
+    writeFileSync(join(repo, '.gitattributes'), GITATTRIBUTES);
+    mkdirSync(join(repo, 'vanilla-accounting/transactional-data/2026'), { recursive: true });
+    writeFileSync(file, line('q-0', 'Anna'));
+    git('add', '-A'); git('commit', '-qm', 'base');
+    git('checkout', '-qb', 'treuhand'); appendFileSync(file, line('q-1', 'Monika')); git('commit', '-qam', 'Monika asks');
+    git('checkout', '-q', 'main'); appendFileSync(file, line('q-2', 'Anna')); git('commit', '-qam', 'Anna asks');
+    git('merge', '-q', '--no-edit', 'treuhand');
+    assert.deepEqual(readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l).id).sort(), ['q-0', 'q-1', 'q-2']);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
   }
 });

@@ -180,6 +180,11 @@ The accountant and the owner ask each other what only the other knows, on the it
 and no e-mail; the questions travel with the books folder (git, a shared folder), so each sees
 the other's when they next open the books.
 
+- **Two clones, one file.** The repository's `.gitattributes` (written by `npm run init`, and in
+  the demos) says `vanilla-accounting/transactional-data/*/questions.jsonl merge=union`: when the
+  accountant and the owner both asked or answered before they synced, git keeps both sides'
+  lines instead of a conflict, and the fold puts them in order. A repository set up before this
+  needs the line added once.
 - **Where they are kept.** `transactional-data/<year>/questions.jsonl` (`LAYOUT`), one event per
   line, appended and never rewritten: `asked` (on a payment, receipt or booking, by whom, to whom,
   the text, the choices `private` / `business`), `answered` (a choice or a few words, with what
@@ -203,8 +208,13 @@ the other's when they next open the books.
   one booking against its bank, a booked one has its expense side moved and its code removed (a
   booking that is not bank against expense is not guessed at). «privat» or «geschäftlich» is kept
   as a precedent of the booking guide's `private` step in `knowledge/rules/booking.guide.yaml`,
-  with `match.tx` (the payment's counterparty) and `choice`; the next such question about the same
-  counterparty is answered by it at once, and booked. A filed quarter, a receipt with no or several
+  with `match` and `choice`; the next such question about the same counterparty is answered by it
+  at once, and booked. A wrong auto-answer is worse than a question, so `match` names one
+  counterparty for certain (src/knowledge/precedents.ts `precedentKey`): the receipts' one VAT
+  number (`uid`), else their one vendor (`vendor`), else the bank's counterparty text (`tx`) when
+  it is not generic. A text of nothing but ways to pay and numbers («Karte 5412 Einkauf»,
+  «Kartenzahlung», «TWINT Zahlung …») names nobody: the answer books, but is kept as no
+  precedent, and the next such payment is asked again. A filed quarter, a receipt with no or several
   payments, an answer in words: the app books nothing and the asker decides. «Zurücknehmen» takes
   the bookings and the precedent back and opens the question again.
 - **The AI asks too.** A change `question` of the sidebar's block puts a question to the owner

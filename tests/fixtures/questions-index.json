@@ -1,18 +1,158 @@
 {
-  "config": { "closedThrough": "2026-06-30" },
+  "config": {
+    "closedThrough": "2026-06-30"
+  },
   "receipts": [
-    { "id": "r1", "filename": "coop.pdf", "originalFilename": "coop.pdf", "extractedText": "Coop Pronto Bern", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-09-10T00:00:00Z", "location": "archived", "date": "2026-09-09", "amount": 158.6, "currency": "CHF" }
+    {
+      "id": "r1",
+      "filename": "coop.pdf",
+      "originalFilename": "coop.pdf",
+      "extractedText": "Coop Pronto Bern",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1,
+      "indexedAt": "2026-09-10T00:00:00Z",
+      "location": "archived",
+      "date": "2026-09-09",
+      "amount": 158.6,
+      "currency": "CHF"
+    },
+    {
+      "id": "rv1",
+      "filename": "rv1.pdf",
+      "originalFilename": "rv1.pdf",
+      "extractedText": "Digitec Galaxus AG",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1,
+      "indexedAt": "2026-09-10T00:00:00Z",
+      "location": "archived",
+      "title": {
+        "vendor": "Digitec Galaxus AG",
+        "what": "Zubehör"
+      }
+    },
+    {
+      "id": "rv2",
+      "filename": "rv2.pdf",
+      "originalFilename": "rv2.pdf",
+      "extractedText": "Digitec Galaxus AG",
+      "extractionMethod": "pdftotext",
+      "fileSize": 1,
+      "indexedAt": "2026-09-10T00:00:00Z",
+      "location": "archived",
+      "title": {
+        "vendor": "Digitec Galaxus AG",
+        "what": "Zubehör"
+      }
+    }
   ],
   "transactions": [
-    { "ref": "C1", "bank": "Raiffeisen", "date": "2026-05-10", "amount": 10, "currency": "CHF", "direction": "DBIT", "description": "Baeckerei Ruch" },
-    { "ref": "P1", "bank": "Raiffeisen", "date": "2026-09-09", "amount": 158.6, "currency": "CHF", "direction": "DBIT", "description": "Coop Pronto Bern" },
-    { "ref": "P2", "bank": "Raiffeisen", "date": "2026-09-20", "amount": 42.3, "currency": "CHF", "direction": "DBIT", "description": "Coop Pronto Bern" },
-    { "ref": "P3", "bank": "Raiffeisen", "date": "2026-09-21", "amount": 99, "currency": "CHF", "direction": "DBIT", "description": "Digitec Galaxus" }
+    {
+      "ref": "C1",
+      "bank": "Raiffeisen",
+      "date": "2026-05-10",
+      "amount": 10,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Baeckerei Ruch"
+    },
+    {
+      "ref": "P1",
+      "bank": "Raiffeisen",
+      "date": "2026-09-09",
+      "amount": 158.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Coop Pronto Bern"
+    },
+    {
+      "ref": "P2",
+      "bank": "Raiffeisen",
+      "date": "2026-09-20",
+      "amount": 42.3,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Coop Pronto Bern"
+    },
+    {
+      "ref": "P3",
+      "bank": "Raiffeisen",
+      "date": "2026-09-21",
+      "amount": 99,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Digitec Galaxus"
+    },
+    {
+      "ref": "G1",
+      "bank": "Raiffeisen",
+      "date": "2026-09-02",
+      "amount": 12.5,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Einkauf"
+    },
+    {
+      "ref": "G2",
+      "bank": "Raiffeisen",
+      "date": "2026-09-03",
+      "amount": 8.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Einkauf"
+    },
+    {
+      "ref": "V1",
+      "bank": "Raiffeisen",
+      "date": "2026-09-04",
+      "amount": 49.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Kartenzahlung 12.09.2026"
+    },
+    {
+      "ref": "V2",
+      "bank": "Raiffeisen",
+      "date": "2026-09-05",
+      "amount": 19.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "TWINT Zahlung 0791234567"
+    }
   ],
-  "mappings": [{ "transactionRef": "P1", "receiptId": "r1" }],
+  "mappings": [
+    {
+      "transactionRef": "P1",
+      "receiptId": "r1"
+    },
+    {
+      "transactionRef": "V1",
+      "receiptId": "rv1"
+    },
+    {
+      "transactionRef": "V2",
+      "receiptId": "rv2"
+    }
+  ],
   "bankStatements": [],
   "journalEntries": [
-    { "id": "c1", "transactionRef": "C1", "date": "2026-05-10", "accountDebit": "6700", "accountCredit": "1021", "amount": 10, "vatCode": "I81" },
-    { "id": "e1", "transactionRef": "P1", "date": "2026-09-09", "accountDebit": "6700", "accountCredit": "1021", "amount": 158.6, "vatCode": "I81", "origin": "classify" }
+    {
+      "id": "c1",
+      "transactionRef": "C1",
+      "date": "2026-05-10",
+      "accountDebit": "6700",
+      "accountCredit": "1021",
+      "amount": 10,
+      "vatCode": "I81"
+    },
+    {
+      "id": "e1",
+      "transactionRef": "P1",
+      "date": "2026-09-09",
+      "accountDebit": "6700",
+      "accountCredit": "1021",
+      "amount": 158.6,
+      "vatCode": "I81",
+      "origin": "classify"
+    }
   ]
 }

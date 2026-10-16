@@ -12,7 +12,7 @@ import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
-import { counterpartyKey, dropPrecedent, keepPrecedent, precedentFor, type ChoicePrecedent } from '../knowledge/precedents.js';
+import { dropPrecedent, keepPrecedent, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
 import { CHOICES, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget } from '../questions/model.js';
 import type { BankTransaction } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
@@ -124,7 +124,7 @@ function act(q: Question, answer: Answer, by: string, at: string, from: string |
       throw e;
     }
   }
-  const key = counterpartyKey(tx);
+  const key = precedentKey(books, tx);
   const precedent = key && !from ? keep(q, answer.choice, by, at, tx, key) : undefined;
   if (booked) return { ...booked, ...(precedent ? { precedent } : {}) };
   return precedent ? { precedent } : undefined;
@@ -135,11 +135,11 @@ const DECISION: Record<Choice, (owner: string) => string> = {
   business: () => 'business: booked as the company\'s expense',
 };
 
-function keep(q: Question, choice: Choice, by: string, at: string, tx: BankTransaction, key: string): string {
+function keep(q: Question, choice: Choice, by: string, at: string, tx: BankTransaction, key: PrecedentMatch): string {
   const day = tx.date.split('-').reverse().join('.');
   const p: ChoicePrecedent = {
-    id: `prec-${q.id}`, date: at.slice(0, 10), item: `${key} (${day}, ${tx.currency} ${Math.abs(tx.amount).toFixed(2)})`,
-    decision: DECISION[choice](ownerAccount(WS).split(' ')[0]), by, match: { tx: key }, choice, question: q.id,
+    id: `prec-${q.id}`, date: at.slice(0, 10), item: `${tx.counterparty || tx.description} (${day}, ${tx.currency} ${Math.abs(tx.amount).toFixed(2)})`,
+    decision: DECISION[choice](ownerAccount(WS).split(' ')[0]), by, match: key, choice, question: q.id,
   };
   keepPrecedent(WS, p);
   return p.id;
@@ -162,7 +162,8 @@ export function askQuestion(input: AskInput): Question {
   const at = now();
   append({ v: 1, event: 'asked', id, at, by: input.by, on: input.on, text: input.text, choices: input.choices ?? [], ...(input.to ? { to: input.to } : {}), origin: input.origin ?? 'person' });
   const decides = CHOICES.every((c) => input.choices?.includes(c));
-  const key = decides ? counterpartyKey(paymentOf(books, input.on).tx ?? { description: '' }) : undefined;
+  const tx = decides ? paymentOf(books, input.on).tx : undefined;
+  const key = tx && precedentKey(books, tx);
   const p = key ? precedentFor(WS, key) : undefined;
   if (p) answerQuestion(id, { by: p.by, answer: { choice: p.choice } }, p.id);
   return find(id);
