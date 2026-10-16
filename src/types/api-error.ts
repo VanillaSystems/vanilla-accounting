@@ -81,6 +81,8 @@ export type ApiRefusal =
   | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' } }
   /** Firma › Bankkonten › «Entfernen» (or the undo of an add) while statements, bookings or invoices use the account (r9k-1). */
   | { code: 'bankInUse'; params: { account: string; label: string; statements: number; entries: number; invoices: number } }
+  /** Firma › Bankkonten › «Bankkonto hinzufügen» on a ledger account another bank account already has (r10h-2): the one that has it. */
+  | { code: 'ledgerAccountTaken'; params: { account: string; bank: string; currency: string; label: string } }
   /** The secret store (the Mac's keychain) could not take a password: nothing else was written. */
   | { code: 'secretStore' }
   /** An invoicing refusal met through the AI sidebar (src/server/workspace-edits.ts): which rule, and what is missing. */

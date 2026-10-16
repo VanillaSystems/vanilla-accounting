@@ -13,6 +13,7 @@ import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } fro
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { readBankStatements } from '../../workspace/bank-statements.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
+import type { JournalEntry } from '../../types/index.js';
 import { assertPlaced } from '../edits.js';
 import { account, setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
@@ -97,15 +98,27 @@ function bankPatch(raw: unknown): BankPatch {
   return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), label: optText(b, 'label') ?? undefined, iban };
 }
 
+/**
+ * A new bank account takes a ledger account of its own (r10h-2): on one another bank account already
+ * uses, every statement would list under both and the balance sheet would show the account twice.
+ */
 function newBank(raw: unknown): NewBank {
   const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban']);
-  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account: stringField(b, 'account'), label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined };
+  const account = stringField(b, 'account').trim();
+  const taken = WS.bankAccounts.find((a) => a.account === account);
+  if (taken) {
+    throw new RequestError(400, `Konto ${account} gehört schon zum Bankkonto ${taken.label} (${taken.bank} ${taken.currency}). Jedes Bankkonto braucht ein eigenes Konto im Kontenplan.`,
+      { code: 'ledgerAccountTaken', params: { account, bank: taken.bank, currency: taken.currency, label: taken.label } });
+  }
+  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined };
 }
 
 /**
  * The bank account to take out (r9k-1), refused while the books use it: statements read into it,
- * bookings on its ledger account or payments on it, invoices paid to it. The refusal counts them, so
- * the page says what to clear first.
+ * its payments and their bookings, bookings on its ledger account, invoices paid to it. The refusal
+ * counts them, so the page says what to clear first. Books set up before the ledger-account check
+ * may hold two bank accounts on one ledger account (r10h-2): then only the bank's own count, so
+ * the one added by mistake can still go.
  */
 function removedBank(raw: unknown): NonNullable<ManifestPatch['removeBank']> {
   const b = patchBody(raw, ['bank', 'currency']);
@@ -114,9 +127,12 @@ function removedBank(raw: unknown): NonNullable<ManifestPatch['removeBank']> {
   if (!bank || bank.bank === 'manual') return r;
   const books = readBooks();
   const statements = readBankStatements(WS).filter((f) => f.status === 'read' && f.account.bank === bank.bank && f.account.currency === bank.currency).length;
-  const entries = books.journalEntries.filter((e) => e.accountDebit === bank.account || e.accountCredit === bank.account).length
-    + books.transactions.filter((t) => t.bank === bank.bank && t.currency === bank.currency).length;
-  const invoices = Object.values(WS.invoicing?.payTo ?? {}).filter((to) => to?.account === bank.account).length;
+  const payments = books.transactions.filter((t) => t.bank === bank.bank && t.currency === bank.currency);
+  const refs = new Set(payments.map((t) => t.ref));
+  const shared = WS.bankAccounts.some((a) => a !== bank && a.account === bank.account);
+  const own = (e: JournalEntry) => (e.transactionRef !== undefined && refs.has(e.transactionRef)) || (!shared && (e.accountDebit === bank.account || e.accountCredit === bank.account));
+  const entries = books.journalEntries.filter(own).length + payments.length;
+  const invoices = Object.entries(WS.invoicing?.payTo ?? {}).filter(([cur, to]) => cur === bank.currency && to?.account === bank.account).length;
   if (statements || entries || invoices) {
     throw new RequestError(400, `Das Bankkonto ${bank.label} (${bank.account}) wird gebraucht: ${statements} Auszüge, ${entries} Buchungen oder Zahlungen, ${invoices} Rechnungskonten. Erst diese entfernen.`,
       { code: 'bankInUse', params: { account: bank.account, label: bank.label, statements, entries, invoices } });

@@ -2883,6 +2883,7 @@ export default {
     'error.bankInUse.statements': { one: "{n} estratto conto", other: "{n} estratti conto" },
     'error.bankInUse.entries': { one: "{n} registrazione o pagamento", other: "{n} registrazioni o pagamenti" },
     'error.bankInUse.invoices': { one: "{n} conto di pagamento delle fatture", other: "{n} conti di pagamento delle fatture" },
+    'error.ledgerAccountTaken': "Il conto {account} appartiene già al conto bancario {label} ({bank} {currency}). Ogni conto bancario ha bisogno di un proprio conto nel piano dei conti.",
     'company.removeBank': "Rimuovere",
     'company.removeBankTip': "Togliere il conto bancario dai libri. Possibile solo finché nessun estratto, registrazione o fattura vi si riferisce.",
     'company.bankRemoved': "Conto bancario {label} rimosso",

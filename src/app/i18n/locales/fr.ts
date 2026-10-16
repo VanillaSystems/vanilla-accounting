@@ -2883,6 +2883,7 @@ export default {
     'error.bankInUse.statements': { one: "{n} relevé", other: "{n} relevés" },
     'error.bankInUse.entries': { one: "{n} écriture ou paiement", other: "{n} écritures ou paiements" },
     'error.bankInUse.invoices': { one: "{n} compte de paiement des factures", other: "{n} comptes de paiement des factures" },
+    'error.ledgerAccountTaken': "Le compte {account} appartient déjà au compte bancaire {label} ({bank} {currency}). Chaque compte bancaire a besoin de son propre compte dans le plan comptable.",
     'company.removeBank': "Supprimer",
     'company.removeBankTip': "Retirer le compte bancaire des livres. Possible seulement tant qu’aucun relevé, écriture ou facture ne s’y rapporte.",
     'company.bankRemoved': "Compte bancaire {label} supprimé",

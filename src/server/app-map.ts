@@ -39,7 +39,7 @@ export const AREA_PLACES: { readonly [A in AreaId]: Place } = {
 export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   profile: { does: 'name, UID, owner, address' },
   vat: { does: 'the VAT registration and method' },
-  banks: { does: 'the bank accounts with their IBAN; a new account' },
+  banks: { does: 'the bank accounts with their IBAN; «{company.addBank}» adds one (on a ledger account of its own); under «{company.editBanks}» each has «{company.removeBank}», which takes it out again with an undo, refused with the reason while its statements, payments or invoices use it. You cannot add or remove one' },
   'invoice-layout': { does: 'how invoices look and read: font, colour, logo, envelope window, shown elements, the payment term in days, and per language (de, fr, it, en) the text above and below the table and the e-mail', kinds: ['invoicing'] },
   mail: { does: 'the mailbox the invoices are sent from' },
   sources: {

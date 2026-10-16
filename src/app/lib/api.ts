@@ -132,6 +132,7 @@ export function errorText(e: unknown): string {
       b.params.entries && t('error.bankInUse.entries', { n: b.params.entries }),
       b.params.invoices && t('error.bankInUse.invoices', { n: b.params.invoices }),
     ].filter(Boolean).join(', ') });
+    case 'ledgerAccountTaken': return t('error.ledgerAccountTaken', b.params);
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
     case 'gone': return t(`error.gone.${b.params.what}`);

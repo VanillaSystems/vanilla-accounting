@@ -2880,6 +2880,7 @@ export const messages = {
   'error.bankInUse.statements': { one: "{n} Kontoauszug", other: "{n} Kontoauszüge" },
   'error.bankInUse.entries': { one: "{n} Buchung oder Zahlung", other: "{n} Buchungen oder Zahlungen" },
   'error.bankInUse.invoices': { one: "{n} Zahlungskonto der Rechnungen", other: "{n} Zahlungskonten der Rechnungen" },
+  'error.ledgerAccountTaken': "Konto {account} gehört schon zum Bankkonto {label} ({bank} {currency}). Jedes Bankkonto braucht ein eigenes Konto im Kontenplan.",
   'company.removeBank': "Entfernen",
   'company.removeBankTip': "Das Bankkonto aus den Büchern nehmen. Geht nur, solange keine Auszüge, Buchungen oder Rechnungen darauf stehen.",
   'company.bankRemoved': "Bankkonto {label} entfernt",

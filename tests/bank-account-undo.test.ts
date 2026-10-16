@@ -8,7 +8,8 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { startApi } from './support/api-server.js';
@@ -81,4 +82,48 @@ test('an account nobody uses is removed with its chart account (the toast\'s «R
     const manual = await api.send('PATCH', '/api/workspace', { removeBank: { bank: 'manual', currency: 'CHF' } });
     assert.equal(manual.status, 400, 'the owner\'s private account is no bank account to remove');
   } finally { await api.stop(); }
+});
+
+/**
+ * A second bank account on a ledger account another bank account already uses (r10h-2): the add is
+ * refused with the account that has it, so one statement never lists twice. Books set up that way
+ * before the refusal keep working: removing the bank account counts what is its own (its statements,
+ * its payments and their bookings, invoices paid to it), not everything on the shared ledger account.
+ */
+test('a ledger account in use refuses a second bank account; a bank sharing one from before is removed by its own uses', async () => {
+  const api = await startApi('tests/fixtures/fresh-books-index.json', {}, { manifestOf: COIFFEUR });
+  try {
+    const own = await api.fetch('/api/statements?name=okt.xml', { method: 'POST', body: camt('S-OKT', SALON, 'Salon Beispiel', [['2026-10-02', -89.9, '91000000001']]) });
+    assert.equal(own.status, 200, await own.clone().text());
+    const twice = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'PostFinance', currency: 'CHF', account: '1020', label: 'PostFinance CHF' } });
+    assert.equal(twice.status, 400, JSON.stringify(twice.json));
+    const refusal = twice.json as unknown as { error: string } & Extract<ApiRefusal, { code: 'ledgerAccountTaken' }>;
+    assert.equal(refusal.code, 'ledgerAccountTaken');
+    assert.deepEqual(refusal.params, { account: '1020', bank: 'Raiffeisen', currency: 'CHF', label: 'Bank Raiffeisen' }, 'names the bank account that has it');
+    const manifest = () => parse(readFileSync(join(api.root, MANIFEST_FILE), 'utf8')) as { bankAccounts: Array<{ bank: string; account: string }> };
+    assert.deepEqual(manifest().bankAccounts.filter((b) => b.account === '1020').map((b) => b.bank), ['Raiffeisen'], 'nothing added');
+    const owners = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'PostFinance', currency: 'CHF', account: '2850', label: 'PostFinance CHF' } });
+    assert.equal((owners.json as { code?: string }).code, 'ledgerAccountTaken', 'the owner\'s private account is taken too');
+  } finally { await api.stop(); }
+
+  // Books from before the refusal: PostFinance CHF sits on Raiffeisen's 1020.
+  const shared = mkdtempSync(join(tmpdir(), 'shared-bank-'));
+  writeFileSync(join(shared, MANIFEST_FILE), readFileSync(join(COIFFEUR, MANIFEST_FILE), 'utf8')
+    .replace(/^bankAccounts:\n/m, `bankAccounts:\n  - { bank: PostFinance, currency: CHF, account: "1020", label: PostFinance CHF, iban: ${NEIGHBOUR} }\n`)
+    .replace('label: Bank Raiffeisen,', `label: Bank Raiffeisen, iban: ${SALON},`));
+  const legacy = await startApi('tests/fixtures/fresh-books-index.json', {}, { manifestOf: shared });
+  try {
+    const own = await legacy.fetch('/api/statements?name=okt.xml', { method: 'POST', body: camt('S-OKT', SALON, 'Salon Beispiel', [['2026-10-02', -89.9, '91000000001']]) });
+    assert.equal(own.status, 200, await own.clone().text());
+    const raiffeisen = await legacy.send('PATCH', '/api/workspace', { removeBank: { bank: 'Raiffeisen', currency: 'CHF' } });
+    assert.equal(raiffeisen.status, 400);
+    assert.deepEqual((raiffeisen.json as unknown as Refused).params, { account: '1020', label: 'Bank Raiffeisen', statements: 1, entries: 1, invoices: 0 }, 'Raiffeisen\'s own statement and payment');
+    assert.equal((await legacy.send('PUT', '/api/accounts/1020', { name: 'Bank Raiffeisen' })).status, 200);
+    const postfinance = await legacy.send('PATCH', '/api/workspace', { removeBank: { bank: 'PostFinance', currency: 'CHF' } });
+    assert.equal(postfinance.status, 200, JSON.stringify(postfinance.json));
+    const accounts = (await legacy.send('GET', '/api/accounts')).json as unknown as Account[];
+    assert.ok(accounts.some((a) => a.number === '1020'), 'the shared ledger account stays with Raiffeisen');
+    const after = parse(readFileSync(join(legacy.root, MANIFEST_FILE), 'utf8')) as { bankAccounts: Array<{ bank: string }> };
+    assert.deepEqual(after.bankAccounts.map((b) => b.bank), ['Raiffeisen', 'manual']);
+  } finally { await legacy.stop(); rmSync(shared, { recursive: true, force: true }); }
 });

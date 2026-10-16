@@ -2883,6 +2883,7 @@ export default {
     'error.bankInUse.statements': { one: "{n} statement", other: "{n} statements" },
     'error.bankInUse.entries': { one: "{n} entry or payment", other: "{n} entries or payments" },
     'error.bankInUse.invoices': { one: "{n} invoice payment account", other: "{n} invoice payment accounts" },
+    'error.ledgerAccountTaken': "Account {account} already belongs to the bank account {label} ({bank} {currency}). Every bank account needs a ledger account of its own.",
     'company.removeBank': "Remove",
     'company.removeBankTip': "Take the bank account out of the books. Possible only while no statements, entries or invoices use it.",
     'company.bankRemoved': "Bank account {label} removed",
