@@ -112,7 +112,7 @@ app)
   ssh_ 'pkill -9 -f "Contents/MacOS/Vanilla Accountin[g]" 2>/dev/null; sleep 2; [ -f ~/.claude-token ] && export CLAUDE_CODE_OAUTH_TOKEN=$(cat ~/.claude-token); (nohup "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222 < /dev/null > /tmp/va.log 2>&1 &); for i in $(seq 1 30); do curl -s localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "app did not open its DevTools port" >&2; exit 1'
   [ -f "$ROOT/$RUN/tunnel.pid" ] && kill "$(cat "$ROOT/$RUN/tunnel.pid")" 2>/dev/null || true
   PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
-  ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -N -L "$PORT:127.0.0.1:9222" "admin@$IP" < /dev/null > /dev/null 2>&1 & echo $! > "$ROOT/$RUN/tunnel.pid"
+  ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -N -L "$PORT:127.0.0.1:9222" "admin@$IP" < /dev/null > /dev/null 2>&1 & echo $! > "$ROOT/$RUN/tunnel.pid"
   grep -v '^CDP=' "$ROOT/$RUN/env" > "$ROOT/$RUN/env.t"; echo "CDP=http://127.0.0.1:$PORT" >> "$ROOT/$RUN/env.t"; mv "$ROOT/$RUN/env.t" "$ROOT/$RUN/env"
   sleep 1; echo "CDP=http://127.0.0.1:$PORT"
   ;;
