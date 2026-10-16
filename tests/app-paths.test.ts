@@ -28,10 +28,10 @@ before(async () => {
   mkdirSync(join(api.root, 'transactional-data/2026/receipts'), { recursive: true });
   writeFileSync(join(api.root, 'transactional-data/2026/receipts', 'scan.pdf'), '%PDF-1.4');
 });
-after(() => { api?.stop(); rmSync(dist, { recursive: true, force: true }); });
+after(async () => { await api?.stop(); rmSync(dist, { recursive: true, force: true }); });
 
 test('the server answers every app path with the built app, and files as files', async () => {
-  const get = (path: string) => fetch(`http://127.0.0.1:${api.port}${path}`);
+  const get = (path: string) => api.fetch(`${path}`);
   for (const path of ['/journal/M2026-001', '/receipts/3f2a9c01b7d4e5f6', '/receipts', '/vat/codes/I81?period=2026-Q3', '/de/2026-Q3/journal-entries']) {
     const res = await get(path);
     assert.equal(res.status, 200, path);

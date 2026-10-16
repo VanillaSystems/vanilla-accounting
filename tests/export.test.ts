@@ -140,7 +140,7 @@ test('POST /api/export answers in audit mode with the ZIP, the books unchanged',
   const api = await startApi('tests/fixtures/period-lock-index.json', { READONLY: '1' });
   const before = JSON.stringify(booksOnDisk(api.ws));
   try {
-    const res = await fetch(`http://127.0.0.1:${api.port}/api/export`, {
+    const res = await api.fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ period: 'all', items: { journal: ['csv', 'json'] }, sums: true, language: 'de' }),
     });
@@ -152,6 +152,6 @@ test('POST /api/export answers in audit mode with the ZIP, the books unchanged',
     assert.equal(bad.status, 400);
     assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'books.json is byte-identical');
   } finally {
-    api.stop();
+    await api.stop();
   }
 });

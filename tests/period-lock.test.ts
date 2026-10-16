@@ -199,7 +199,7 @@ const camt = (id: string, date: string) => `<?xml version="1.0"?><Document xmlns
 <Ntry><Amt Ccy="CHF">12.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>${date}</Dt></BookgDt><AcctSvcrRef>REF-${id}</AcctSvcrRef><AddtlNtryInf>Upload ${id}</AddtlNtryInf></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
 
-const upload = (name: string, body: string) => fetch(`http://127.0.0.1:${api.port}/api/statements?name=${encodeURIComponent(name)}`, { method: 'POST', body })
+const upload = (name: string, body: string) => api.fetch(`/api/statements?name=${encodeURIComponent(name)}`, { method: 'POST', body })
   .then(async (r) => ({ status: r.status, json: await r.json() as Record<string, unknown> }));
 
 test('refused: POST /api/statements with a statement wholly inside the filed quarter -> 403, index unchanged, no file kept', async () => {
@@ -243,7 +243,7 @@ test('the closed period is still exactly as in the fixture', () => {
 
 test('open period: POST /api/workspace/logo succeeds: a logo is no dated record, the books stay as they were', async () => {
   const before = JSON.stringify(booksOnDisk(api.ws));
-  const res = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([137, 80, 78, 71]) });
+  const res = await api.fetch('/api/workspace/logo', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array([137, 80, 78, 71]) });
   assert.equal(res.status, 200);
   assert.match(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), /logo: logos\/logo-[0-9a-f]{12}\.png/);
   assert.equal(JSON.stringify(booksOnDisk(api.ws)), before);

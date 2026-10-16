@@ -13,7 +13,7 @@ before(async () => { api = await startApi('tests/fixtures/period-lock-index.json
 after(() => api?.stop());
 
 test('two PDFs of the same second are both kept', async () => {
-  const send = (body: string) => fetch(`http://127.0.0.1:${api.port}/api/upload`, {
+  const send = (body: string) => api.fetch('/api/upload', {
     method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Captured-At': '2026-10-09T10:11:12' }, body,
   }).then((r) => r.json() as Promise<{ filename: string }>);
   const a = await send('%PDF-1.4 a');
@@ -26,7 +26,7 @@ test('two PDFs of the same second are both kept', async () => {
 });
 
 test('a photo (JPG, PNG, HEIC) goes into the inbox as it is, under a name its PDF will not share; another type is refused', async () => {
-  const send = (type: string, body: string) => fetch(`http://127.0.0.1:${api.port}/api/upload`, {
+  const send = (type: string, body: string) => api.fetch('/api/upload', {
     method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': '2026-10-09T12:00:00' }, body,
   });
   const heic = await (await send('image/heic', 'heic')).json() as { filename: string };

@@ -42,7 +42,7 @@ test('«Neu klassifizieren» keeps a booking set by hand unless the person says 
     const now = entriesOf(loadBooks(workspaceAt(api.ws.paths.root)) as Books, 'W1');
     assert.deepEqual(now.map((e) => [e.origin, e.vatCode]), [['classify', 'I81']]);
   } finally {
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -51,7 +51,7 @@ test('a change made by a wish in the AI sidebar is hers too: «Neu klassifiziere
   const api = await startApi('tests/fixtures/classify-index.json', { PATH: stubPath, CLAUDE_STUB_CHANGES: changes });
   try {
     writeFileSync(changes, JSON.stringify([{ kind: 'entry', id: 'jw', set: { vatCode: 'I81' } }]));
-    const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'bitte mit Vorsteuer', language: 'de', context: [] }) });
+    const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'bitte mit Vorsteuer', language: 'de', context: [] }) });
     const events = (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
     assert.ok(events.some((e) => e.type === 'changes'), JSON.stringify(events.at(-1)));
     const wished = entriesOf(loadBooks(workspaceAt(api.ws.paths.root)) as Books, 'W1');
@@ -61,7 +61,7 @@ test('a change made by a wish in the AI sidebar is hers too: «Neu klassifiziere
     assert.equal(asked.status, 409);
     assert.deepEqual(entriesOf(loadBooks(workspaceAt(api.ws.paths.root)) as Books, 'W1'), wished);
   } finally {
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -77,7 +77,7 @@ test('«Neu klassifizieren» books the Skonto answer balanced, and refuses an an
     const booked = entriesOf(loadBooks(workspaceAt(api.ws.paths.root)) as Books, 'W1');
     assert.deepEqual(booked.map((e) => [e.accountDebit, e.accountCredit, e.amount]).sort(), [['1023', '4400', 1.02], ['4400', '1023', 51.02]]);
   } finally {
-    api.stop();
+    await api.stop();
   }
 
   const short = { W1: { entries: [{ accountDebit: '4400', accountCredit: '', amount: 51.02, vatCode: 'M81', description: 'Shop EU, Material' }] } };
@@ -89,7 +89,7 @@ test('«Neu klassifizieren» books the Skonto answer balanced, and refuses an an
     assert.deepEqual([json.code, json.params], ['classifyBalance', { date: '2026-08-14', currency: 'EUR', paid: 50, booked: 51.02 }]);
     assert.ok(JSON.stringify(booksOnDisk(api2.ws)) === before, 'a refused answer: books byte-identical');
   } finally {
-    api2.stop();
+    await api2.stop();
   }
 });
 

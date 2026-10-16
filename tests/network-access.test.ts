@@ -15,7 +15,7 @@ before(async () => { api = await startApi('tests/fixtures/period-lock-index.json
 after(() => api?.stop());
 
 test('from this computer, the books are served', async () => {
-  const res = await fetch(`http://127.0.0.1:${api.port}/books.json`);
+  const res = await api.fetch('/books.json');
   assert.equal(res.status, 200);
 });
 

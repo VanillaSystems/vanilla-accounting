@@ -33,7 +33,7 @@ test('a copy read by the run gets no link and no booking; Belege shows it as a p
       run = (await api.send('GET', `/api/automation/runs/${started.run}`)).json as unknown as RunDetail;
     }
     assert.equal(run?.status, 'done');
-    const books = (await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as Index;
+    const books = (await (await api.fetch('/books.json')).json()) as Index;
     const copy = books.receipts.find((r) => r.filename === '20260910-gruenkaffee-kopie.pdf')!;
     const original = books.receipts.find((r) => r.filename === SEPT)!;
     assert.ok(copy, 'read, named and archived');
@@ -41,6 +41,6 @@ test('a copy read by the run gets no link and no booking; Belege shows it as a p
     assert.deepEqual(books.mappings.filter((m) => m.transactionRef === '90000000060').map((m) => m.receiptId), [original.id], 'the payment keeps its one receipt');
     assert.deepEqual(ledgerOf(books, '2026-07-01').byId.get(copy.id)?.twin, { of: original.id, why: 'same-text', relation: 'duplicate' });
   } finally {
-    api.stop();
+    await api.stop();
   }
 });

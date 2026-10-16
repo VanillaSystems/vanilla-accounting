@@ -53,8 +53,8 @@ before(async () => {
   copyFileSync(join(DEMO_ROOT, 'transactional-data/2026/receipts/20260105-example-cloud-invoice-2026-01.pdf'), join(api.root, 'beleg-import', DROPPED));
   appendFileSync(join(api.root, 'beleg-import', DROPPED), '\n% scanned\n');
 });
-after(() => {
-  api?.stop();
+after(async () => {
+  await api?.stop();
   rmSync(dirname(gate), { recursive: true, force: true });
 });
 
@@ -83,9 +83,16 @@ const cli = (name: string) => spawnSync(process.execPath, ['--import', 'tsx', `s
   env: { ...process.env, VANILLA_WORKSPACE: api.root, PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_GATE: gate, CLAUDE_STUB_PROMPTS: prompts },
 });
 
+const intakeRuns = async () => ((await api.send('GET', '/api/automation')).json as unknown as { runs: Array<{ id: string; workflow: string }> }).runs.filter((r) => r.workflow === 'receipt-intake');
+
+// The scan lies in the inbox, so the inbox starts its run on its own within a few seconds; the
+// test takes that run, as a person who clicks Start meanwhile does. A start made before it would
+// race the inbox: one that comes while the run reads gets a run of its own behind it.
 test('one run at a time: a start while one runs is that run, a CLI is refused, and the payment is booked once', async () => {
-  const started = await start();
-  assert.equal(started.ok, true);
+  let first: string | undefined;
+  await until('the run the scan started', async () => !!(first = (await intakeRuns())[0]?.id));
+  const started = { run: first! };
+  assert.deepEqual((await runOf(started.run)).startedBy, { kind: 'outside', file: DROPPED });
   await until('a model call', () => existsSync(`${gate}.started`));
 
   const again = await start();
@@ -161,12 +168,12 @@ test('without a working claude CLI the run reads and imports, and says what wait
     assert.ok(r.extractedText.length > 30, 'its text was read without a model');
     assert.ok(b.transactions.some((t) => t.ref === 'REF-T2'), 'the statement was imported');
   } finally {
-    noModel.stop();
+    await noModel.stop();
   }
 });
 
 test('a photo put into the inbox from the Finder or the phone starts a run on its own; Belege lists PDFs only', async () => {
-  const before = (await api.send('GET', '/api/automation')).json as unknown as { runs: Array<{ id: string; workflow: string }> };
+  const before = await intakeRuns();
   const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGP4z8DwHwYBAB7FA/+WnI5aAAAAAElFTkSuQmCC', 'base64');
   writeFileSync(join(api.root, 'beleg-import', 'IMG_0005.HEIC.icloud'), '');
   writeFileSync(join(api.root, 'beleg-import', 'IMG_0005.PNG'), photo);
@@ -175,8 +182,7 @@ test('a photo put into the inbox from the Finder or the phone starts a run on it
   assert.ok(!listed.some((f) => f.id === id), 'Belege shows PDFs only');
   let fresh: string | undefined;
   await until('a run started by the inbox', async () => {
-    const now = (await api.send('GET', '/api/automation')).json as unknown as { runs: Array<{ id: string; workflow: string }> };
-    fresh = now.runs.find((r) => r.workflow === 'receipt-intake' && !before.runs.some((b) => b.id === r.id))?.id;
+    fresh = (await intakeRuns()).find((r) => !before.some((b) => b.id === r.id))?.id;
     return !!fresh;
   });
   assert.equal((await rested(fresh!)).status, 'done');

@@ -28,8 +28,8 @@ before(async () => {
   promptLog = join(scratch, 'prompts.txt');
   api = await startApi(FIXTURE, { PATH: `${stubBin}:${process.env.PATH}`, CLAUDE_STUB_GATE: gate, CLAUDE_STUB_PROMPTS: promptLog });
 });
-after(() => {
-  api?.stop();
+after(async () => {
+  await api?.stop();
   rmSync(dirname(gate), { recursive: true, force: true });
 });
 

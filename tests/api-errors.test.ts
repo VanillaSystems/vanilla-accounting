@@ -20,8 +20,8 @@ before(async () => {
   mkdirSync(join(api.root, 'transactional-data/2026/receipts'), { recursive: true });
   writeFileSync(join(api.root, 'transactional-data/2026/receipts', '2026-08-12_shop-eu_rechnung.pdf'), 'PDF rw');
 });
-after(() => {
-  api?.stop();
+after(async () => {
+  await api?.stop();
   rmSync(bin, { recursive: true, force: true });
 });
 

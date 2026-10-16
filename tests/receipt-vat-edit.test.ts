@@ -44,6 +44,6 @@ test('VAT facts set by hand are a person\'s: the receipt\'s payment is booked ag
     assert.deepEqual([read.hasSwissVat, read.vatBy, !!read.vatExtractedAt], [false, undefined, true], 'without facts the VAT step reads them again');
   } finally {
     await session.rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });

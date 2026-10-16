@@ -112,7 +112,7 @@ test('API: PATCH /api/workspace answers and serves the changed manifest at once;
     assert.match(String(refused.json.error), /company\.uid/);
     assert.equal(readFileSync(join(api.root, MANIFEST_FILE), 'utf8'), before);
   } finally {
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -149,24 +149,24 @@ test('API: a logo upload is stored by its checksum and becomes the layout\'s log
   const api = await startApi('tests/fixtures/period-lock-index.json');
   try {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10"><rect width="40" height="10"/></svg>';
-    const up = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'image/svg+xml' }, body: svg });
+    const up = await api.fetch('/api/workspace/logo', { method: 'POST', headers: { 'Content-Type': 'image/svg+xml' }, body: svg });
     assert.equal(up.status, 200);
     const info = await up.json() as CompanyInfo;
     const logo = info.invoicing!.layout.logo!;
     assert.match(logo, /^logos\/logo-[0-9a-f]{12}\.svg$/);
     assert.equal(readFileSync(join(api.root, logo), 'utf8'), svg);
     assert.match(readFileSync(join(api.root, MANIFEST_FILE), 'utf8'), new RegExp(`logo: ${logo.replace('.', '\\.')}`));
-    const served = await fetch(`http://127.0.0.1:${api.port}/api/invoice-logo?path=${encodeURIComponent(logo)}`);
+    const served = await api.fetch(`/api/invoice-logo?path=${encodeURIComponent(logo)}`);
     assert.equal(await served.text(), svg);
     assert.equal((await api.send('GET', '/api/invoice-logo?path=books.json')).status, 404, 'no other file of the workspace');
-    const bad = await fetch(`http://127.0.0.1:${api.port}/api/workspace/logo`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'x' });
+    const bad = await api.fetch('/api/workspace/logo', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'x' });
     assert.equal(bad.status, 400);
     const layout = await api.send('PATCH', '/api/workspace', { invoicing: { layout: { logo: null, accent: '#0f766e' }, texts: { de: { intro: 'Hallo' } } } });
     assert.equal(layout.status, 200);
     const now = (await api.send('GET', '/api/workspace')).json as unknown as CompanyInfo;
     assert.deepEqual([now.invoicing!.layout.logo, now.invoicing!.layout.accent, now.invoicing!.texts.de?.intro], [undefined, '#0f766e', 'Hallo']);
   } finally {
-    api.stop();
+    await api.stop();
   }
 });
 

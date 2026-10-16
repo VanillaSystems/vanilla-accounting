@@ -29,11 +29,10 @@ async function setUp() {
   const changes = join(dir, 'changes.json');
   const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_CHANGES: changes });
   cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
-  const base = `http://127.0.0.1:${api.port}`;
-  const books = async () => (await (await fetch(`${base}/books.json`)).json()) as Index;
+  const books = async () => (await (await api.fetch('/books.json')).json()) as Index;
   const rest = async () => {
     for (let i = 0; i < 300; i++) {
-      const v = (await (await fetch(`${base}/api/automation`)).json()) as { runs: Array<{ status: string }> };
+      const v = (await (await api.fetch('/api/automation')).json()) as { runs: Array<{ status: string }> };
       if (!v.runs.some((r) => r.status === 'running' || r.status === 'queued')) return;
       await new Promise((r) => setTimeout(r, 50));
     }
@@ -41,21 +40,21 @@ async function setUp() {
   };
   /** The payment's bookings as [VAT code, the receipts it saw, origin]. */
   const onL = async () => ((await books()).journalEntries ?? []).filter((e) => e.transactionRef === 'REF-L').map((e) => [e.vatCode, e.receipts, e.origin ?? '']);
-  const drop = (await (await fetch(`${base}/api/drop`, { method: 'POST' })).json()) as DropSession;
-  await fetch(`${base}/api/drop/${drop.id}/files?name=september.xml`, { method: 'POST', body: CAMT, headers: { 'Content-Type': 'application/octet-stream' } });
+  const drop = (await (await api.fetch('/api/drop', { method: 'POST' })).json()) as DropSession;
+  await api.fetch(`/api/drop/${drop.id}/files?name=september.xml`, { method: 'POST', body: CAMT, headers: { 'Content-Type': 'application/octet-stream' } });
   await rest();
   const receipt = (await books()).receipts.find((r) => r.filename === RECEIPT)!;
   assert.ok(receipt.hasSwissVat, 'the receipt shows Swiss VAT');
   assert.deepEqual(await onL(), [['I0', [], 'classify']], 'the statement run booked the payment without a receipt: no input tax');
   const ask = async (asked: unknown) => {
     writeFileSync(changes, JSON.stringify(asked));
-    const res = await fetch(`${base}/api/assistant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Beleg zur Zahlung', language: 'de', context: [] }) });
+    const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Beleg zur Zahlung', language: 'de', context: [] }) });
     const events = (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
     const made = events.find((e): e is Extract<AssistantEvent, { type: 'changes' }> => e.type === 'changes');
     assert.ok(made, JSON.stringify(events.at(-1)));
     return { conversation: (events[0] as { id: string }).id, made: made.changes };
   };
-  const done = async () => { await rest().catch(() => {}); api.stop(); rmSync(dir, { recursive: true, force: true }); };
+  const done = async () => { await rest().catch(() => {}); await api.stop(); rmSync(dir, { recursive: true, force: true }); };
   return { api, receipt, rest, onL, ask, done };
 }
 

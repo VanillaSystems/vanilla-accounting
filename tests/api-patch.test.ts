@@ -21,9 +21,9 @@ before(async () => {
   api = await startApi(FIXTURE);
   receiptsDir = join(api.root, 'transactional-data/2026/receipts');
 });
-after(() => {
+after(async () => {
   chmodSync(yearPaths(api.ws.paths, '2026').books, 0o755);
-  api?.stop();
+  await api?.stop();
 });
 
 beforeEach(() => {

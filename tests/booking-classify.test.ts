@@ -218,6 +218,6 @@ test('UI re-classify books through the classifier: daily rate, VAT facts, origin
     assert.equal(closed.status, 403);
     assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'closed transaction: index byte-identical');
   } finally {
-    api.stop();
+    await api.stop();
   }
 });

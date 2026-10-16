@@ -85,7 +85,7 @@ test('a message streams its answer, is stored, reads its context, and the next o
   });
   try {
     const post = async (body: unknown) => {
-      const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       return (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
     };
     const first = await post({ text: 'Warum so gebucht?', language: 'de', context: [{ kind: 'workflow', id: 'booking', label: 'Buchen' }] });
@@ -105,7 +105,7 @@ test('a message streams its answer, is stored, reads its context, and the next o
     assert.deepEqual((list.json as unknown as Array<{ id: string; title: string; context: string[] }>).map((c) => [c.id, c.title, c.context]), [[id, 'Warum so gebucht?', ['Buchen']]]);
     assert.equal((await api.send('POST', '/api/assistant', { text: ' ', context: [] })).status, 400);
   } finally {
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -125,9 +125,9 @@ test('the changes an answer asks for are made at once, each undone on its own; o
   cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
   const { rest } = SESSION(api);
   try {
-    const books = async () => (await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as Index;
+    const books = async () => (await (await api.fetch('/books.json')).json()) as Index;
     const post = async (body: unknown) => {
-      const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       return (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
     };
     const vat = { hasSwissVat: true, vatId: 'CHE-123.456.789', vatSummary: [{ ratePercent: 8.1, net: 100, vat: 8.1, gross: 108.1 }] };
@@ -158,7 +158,7 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     assert.equal(untouched.receipts.find((r) => r.id === filed.id)!.amount, filed.amount);
   } finally {
     await rest().catch(() => {});
-    api.stop();
+    await api.stop();
     rmSync(log, { recursive: true, force: true });
   }
 });
@@ -189,10 +189,10 @@ test('a booking split by the AI keeps its payment whole: half alone is refused, 
   const changes = join(log, 'changes.json');
   const api = await startApi('demo/vanilla-accounting', { PATH: `${join(REPO, 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_CHANGES: changes });
   try {
-    const entriesOf = async () => ((await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as Index).journalEntries!.filter((e) => e.transactionRef === tx.ref);
+    const entriesOf = async () => ((await (await api.fetch('/books.json')).json()) as Index).journalEntries!.filter((e) => e.transactionRef === tx.ref);
     const answer = async (asked: unknown) => {
       writeFileSync(changes, JSON.stringify(asked));
-      const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Die Hälfte ist privat', language: 'de', context: [] }) });
+      const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Die Hälfte ist privat', language: 'de', context: [] }) });
       const events = (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
       return { id: (events[0] as { id: string }).id, events };
     };
@@ -232,7 +232,7 @@ test('a booking split by the AI keeps its payment whole: half alone is refused, 
     assert.equal((await api.send('POST', `/api/assistant/${replaced.id}/changes/${swap[0].id}/undo`)).status, 200);
     assert.deepEqual(await entriesOf(), [entry], 'the deleted booking comes back as it was, id and origin too');
   } finally {
-    api.stop();
+    await api.stop();
     rmSync(log, { recursive: true, force: true });
   }
 });
@@ -247,10 +247,10 @@ test('cash basis: the AI never dates a payment\'s booking off the payment\'s dat
   const changes = join(log, 'changes.json');
   const api = await startApi('demo/vanilla-accounting', { PATH: `${join(REPO, 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_CHANGES: changes });
   try {
-    const entriesOf = async () => ((await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as Index).journalEntries!.filter((e) => e.transactionRef === tx.ref);
+    const entriesOf = async () => ((await (await api.fetch('/books.json')).json()) as Index).journalEntries!.filter((e) => e.transactionRef === tx.ref);
     const answer = async (asked: unknown) => {
       writeFileSync(changes, JSON.stringify(asked));
-      const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Die Rechnung ist vom Juni, bitte im Juni buchen', language: 'de', context: [] }) });
+      const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Die Rechnung ist vom Juni, bitte im Juni buchen', language: 'de', context: [] }) });
       return (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
     };
     const refused = (events: AssistantEvent[]) => events.find((e) => e.type === 'refused') as Extract<AssistantEvent, { type: 'refused' }> | undefined;
@@ -273,7 +273,7 @@ test('cash basis: the AI never dates a payment\'s booking off the payment\'s dat
     assert.ok(clearing.some((e) => e.type === 'changes'), JSON.stringify(refused(clearing)));
     assert.deepEqual((await entriesOf()).map((e) => [e.accountCredit, e.date]).sort(), [['1021', tx.date], ['1093', before]]);
   } finally {
-    api.stop();
+    await api.stop();
     rmSync(log, { recursive: true, force: true });
   }
 });

@@ -57,7 +57,7 @@ test('issue, the PDF as issued, frozen, sent, commented, reminded, cancelled', {
   assert.deepEqual([issued.json.number, issued.json.dueDate], ['2026-001', '2026-12-01']);
   const pdf = (issued.json as { pdf: { file: string; sha256: string } }).pdf;
 
-  const res = await fetch(`http://127.0.0.1:${api.port}/invoices/2026-001.pdf`);
+  const res = await api.fetch('/invoices/2026-001.pdf');
   const bytes = Buffer.from(await res.arrayBuffer());
   assert.equal(res.headers.get('content-type'), 'application/pdf');
   assert.equal(createHash('sha256').update(bytes).digest('hex'), pdf.sha256);
@@ -75,7 +75,7 @@ test('issue, the PDF as issued, frozen, sent, commented, reminded, cancelled', {
   assert.deepEqual([reminder.json.level, reminder.json.dueDate], [1, '2026-12-20']);
   assert.match(String(reminder.json.intro), /^Notre facture 2026-001/);
 
-  const preview = await fetch(`http://127.0.0.1:${api.port}/api/invoices/${d.id}/preview`);
+  const preview = await api.fetch(`/api/invoices/${d.id}/preview`);
   assert.match(await preview.text(), /<div class="a4 [^"]*has-qr/);
 
   const cancelled = await api.send('POST', `/api/invoices/${d.id}/cancel`, { date: '2026-12-01', reason: 'Fehler' });

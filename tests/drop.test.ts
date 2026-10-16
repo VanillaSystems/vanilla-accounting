@@ -71,8 +71,7 @@ test('the dialog: a file is taken as it comes, a duplicate is not, a ZIP waits f
   const api = await startApi('demo');
   try {
     cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
-    const base = `http://127.0.0.1:${api.port}`;
-    const post = async (path: string, body?: Buffer | object): Promise<DropSession> => (await (await fetch(base + path, {
+    const post = async (path: string, body?: Buffer | object): Promise<DropSession> => (await (await api.fetch(path, {
       method: 'POST', body: Buffer.isBuffer(body) ? new Uint8Array(body) : body ? JSON.stringify(body) : undefined,
       headers: Buffer.isBuffer(body) ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' },
     })).json()) as DropSession;
@@ -95,7 +94,7 @@ test('the dialog: a file is taken as it comes, a duplicate is not, a ZIP waits f
   } finally {
     // The run a drop started works on; the workspace goes only once it rests.
     await SESSION(api).rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -136,7 +135,7 @@ test('by their words and facts: a newsletter waits in quarantine until «doch ei
     assert.ok(inbox().includes('Herbstaktion.pdf'));
   } finally {
     await SESSION(api).rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -161,7 +160,7 @@ test('each file tells its run what it is: a statement by its bank, account and d
   } finally {
     // The run a drop started works on; the workspace goes only once it rests.
     await SESSION(api).rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -196,7 +195,7 @@ test('«Rückgängig» takes a file back out: a receipt the run read leaves the 
   } finally {
     // The run a drop started works on; the workspace goes only once it rests.
     await SESSION(api).rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -213,7 +212,7 @@ test('«Rückgängig» on a receipt books its payment again as without it; the s
     assert.deepEqual(await onG(), [[rc.id]], 'and booked with it once more');
   } finally {
     await session.rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -239,7 +238,7 @@ test('deleting a receipt books its payment again without it; the trash gives it 
     assert.equal((await api.send('POST', `/api/receipts/${rc.id}/restore`)).status, 404, 'once');
   } finally {
     await session.rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -261,7 +260,7 @@ test('«Rückgängig» of a delete while the run that books the payment without 
   } finally {
     writeFileSync(gate, '');
     await session.rest().catch(() => {});
-    api.stop();
+    await api.stop();
     rmSync(gate, { force: true });
     rmSync(`${gate}.started`, { force: true });
   }
@@ -297,7 +296,7 @@ test('deleted, dropped again, deleted again: «Rückgängig» brings back the la
     assert.equal(existsSync(join(api.root, 'data/trash', rc.id)), false, 'the trash holds nothing of it any more');
   } finally {
     await session.rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });
 
@@ -325,6 +324,6 @@ test('a camt.053 of an account the books lack names its bank and asks; «Nein, p
     await assert.rejects(post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'private' }), /400/, 'once');
   } finally {
     await SESSION(api).rest().catch(() => {});
-    api.stop();
+    await api.stop();
   }
 });

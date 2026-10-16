@@ -54,7 +54,7 @@ before(async () => {
   withIssuedInvoice(api.root);
 });
 after(async () => {
-  api?.stop();
+  await api?.stop();
   await new Promise<void>((resolve) => smtp.close(resolve));
 });
 

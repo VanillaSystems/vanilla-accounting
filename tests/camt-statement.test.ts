@@ -31,7 +31,7 @@ const accounts = (): Account[] => api.ws.bankAccounts as Account[];
 
 test('a quarter\'s camt.053: one statement Jul–Sep, its balances recorded, every month covered, the balance checked', async () => {
   const q3 = camt('Q3', '2026-06-30', [['2026-07-14', 4860], ['2026-08-12', -120], ['2026-09-03', -1000]], '2026-09-30', 8450.35, 12190.35);
-  const res = await fetch(`http://127.0.0.1:${api.port}/api/statements?name=q3.xml`, { method: 'POST', body: q3 });
+  const res = await api.fetch('/api/statements?name=q3.xml', { method: 'POST', body: q3 });
   assert.equal(res.status, 200, await res.clone().text());
 
   const b = books();
@@ -51,7 +51,7 @@ test('a quarter\'s camt.053: one statement Jul–Sep, its balances recorded, eve
 
 test('an opening dated on a day the bank booked is the close of the day before (Raiffeisen\'s export)', async () => {
   const oct = camt('OCT', '2026-10-08', [['2026-10-08', -50], ['2026-10-09', 20]], '2026-10-09', 12190.35, 12160.35);
-  const res = await fetch(`http://127.0.0.1:${api.port}/api/statements?name=oct.xml`, { method: 'POST', body: oct });
+  const res = await api.fetch('/api/statements?name=oct.xml', { method: 'POST', body: oct });
   assert.equal(res.status, 200, await res.clone().text());
   const b = books();
   assert.deepEqual(b.bankStatements.find((s) => s.filename === 'oct.xml'), { bank: accounts()[0].bank, filename: 'oct.xml', fromDate: '2026-10-08', toDate: '2026-10-09', currency: 'CHF' });

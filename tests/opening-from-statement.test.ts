@@ -35,7 +35,7 @@ const lineOf = (a: Arrival) => {
 };
 
 test('the first statement of fresh books offers its opening balance; taken, the balance check agrees; taken back, the books are as before', async () => {
-  const res = await fetch(`http://127.0.0.1:${api.port}/api/statements?name=q3.xml`, { method: 'POST', body: q3 });
+  const res = await api.fetch('/api/statements?name=q3.xml', { method: 'POST', body: q3 });
   const imported = await res.json() as StatementImport;
   assert.equal(res.status, 200);
   assert.deepEqual(imported.opening, { date: '2026-06-30', amount: 8450.35 });

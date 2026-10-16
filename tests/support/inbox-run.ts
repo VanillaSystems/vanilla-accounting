@@ -9,15 +9,14 @@ import type { DropSession } from '../../src/types/drop.js';
 import type { JournalEntry, Receipt } from '../../src/types/index.js';
 import type { RunDetail } from '../../src/workflows/model.js';
 import { DEMO_ROOT } from './workspace.js';
-import { startApi } from './api-server.js';
+import { startApi, type ApiServer } from './api-server.js';
 import { textPdf } from './text-pdf.js';
 
 export const RECEIPT = join(DEMO_ROOT, 'transactional-data/2026/receipts/20260105-example-cloud-invoice-2026-01.pdf');
 
-export const SESSION = (api: { port: number }) => {
-  const base = `http://127.0.0.1:${api.port}`;
+export const SESSION = (api: Pick<ApiServer, 'fetch'>) => {
   const post = async (path: string, body?: Buffer | object): Promise<DropSession> => {
-    const r = await fetch(base + path, {
+    const r = await api.fetch(path, {
       method: 'POST', body: Buffer.isBuffer(body) ? new Uint8Array(body) : body ? JSON.stringify(body) : undefined,
       headers: Buffer.isBuffer(body) ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' },
     });
@@ -25,17 +24,17 @@ export const SESSION = (api: { port: number }) => {
     if (!r.ok) throw new Error(`${r.status} ${json.error}`);
     return json as DropSession;
   };
-  const runOf = async (id: string) => (await (await fetch(`${base}/api/automation/runs/${id}`)).json()) as RunDetail;
+  const runOf = async (id: string) => (await (await api.fetch(`/api/automation/runs/${id}`)).json()) as RunDetail;
   /** Until no run of the inbox works any more. */
   const rest = async () => {
     for (let i = 0; i < 200; i++) {
-      const v = (await (await fetch(`${base}/api/automation`)).json()) as { runs: Array<{ status: string }> };
+      const v = (await (await api.fetch('/api/automation')).json()) as { runs: Array<{ status: string }> };
       if (!v.runs.some((r) => r.status === 'running' || r.status === 'queued')) return;
       await new Promise((r) => setTimeout(r, 50));
     }
     throw new Error('the inbox run did not come to rest');
   };
-  const books = async () => (await (await fetch(`${base}/books.json`)).json()) as { receipts: Array<{ id: string; filename: string }>; transactions: Array<{ ref: string }> };
+  const books = async () => (await (await api.fetch('/books.json')).json()) as { receipts: Array<{ id: string; filename: string }>; transactions: Array<{ ref: string }> };
   return { post, runOf, rest, books };
 };
 
@@ -53,7 +52,7 @@ export async function bookedWithReceipt(env: Record<string, string> = {}) {
   const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_ANSWER: JSON.stringify(LINKS_TO_G), ...env });
   cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
   const session = SESSION(api);
-  const full = async () => (await (await fetch(`http://127.0.0.1:${api.port}/books.json`)).json()) as { receipts: Receipt[]; mappings: Array<{ receiptId: string; transactionRef: string }>; journalEntries: JournalEntry[] };
+  const full = async () => (await (await api.fetch('/books.json')).json()) as { receipts: Receipt[]; mappings: Array<{ receiptId: string; transactionRef: string }>; journalEntries: JournalEntry[] };
   const onG = async () => (await full()).journalEntries.filter((e) => e.transactionRef === 'REF-G').map((e) => e.receipts);
   let s = await session.post('/api/drop');
   s = await session.post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(SCAFFOLD));
