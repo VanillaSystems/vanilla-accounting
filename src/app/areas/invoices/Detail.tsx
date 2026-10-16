@@ -7,7 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
-import { missingForIssue, openAmount, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
+import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -193,7 +193,9 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
     );
   } else if (state === 'paid') {
     const last = inv.payments.at(-1);
-    line = <span className="linked">{I.check}{last ? t('invoices.paidOn', { date: formatDate(last.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` }) : t('invoices.settledByCredit')}</span>;
+    // A reminder fee not paid with the invoice stays named: open until it comes or is waived (r8c-15).
+    const fee = openFees(inv);
+    line = <span className="linked">{I.check}{last ? t('invoices.paidOn', { date: formatDate(last.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` }) : t('invoices.settledByCredit')}{fee > 0 ? ` · ${t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(fee)}` })}` : ''}</span>;
   } else {
     const due = inv.dueDate;
     const r = inv.reminders.at(-1);
@@ -202,6 +204,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       state === 'overdue' ? t('invoices.overdueSince', { n: days(due, today) }) : t('invoices.openDue', { when: due === today ? t('invoices.today') : t('invoices.inDays', { n: days(today, due) }) }),
       ...(r ? [t('invoices.lastReminder', { level: r.level, date: formatDate(r.date) })] : []),
       ...(paid ? [t('invoices.partlyPaid', { paid: fmt(paid), open: fmt(openAmount(inv, d.invoices)) })] : []),
+      ...(openFees(inv) > 0 ? [t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(openFees(inv))}` })] : []),
       firstSent ? t('invoices.sentOn', { date: formatDate(firstSent.sentAt.slice(0, 10)) }) : t('invoices.notSent'),
     ];
     line = <span className={`notice${state === 'overdue' ? ' warn' : ''}`}>{state === 'overdue' && I.dot}{parts.join(' · ')}</span>;

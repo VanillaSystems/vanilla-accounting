@@ -8,8 +8,7 @@ import assert from 'node:assert/strict';
 import { isQRReferenceValid, isSCORReferenceValid, calculateQRReferenceChecksum } from 'swissqrbill/utils';
 import {
   allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, openOn, reminderDraft,
-  revenueSplit, status, totals, withPayment, InvoiceRuleError,
-} from '../src/invoices/rules.js';
+  revenueSplit, status, totals, withPayment, InvoiceRuleError, creditable } from '../src/invoices/rules.js';
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/providers/qr-bill/reference.js';
 import { PAGE, addressLines, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type Sender } from '../src/invoices/model.js';
@@ -147,6 +146,10 @@ test('credit notes: a part over the invoice rates, or at one rate; they reduce w
   const credited: Issued = { ...issued(one, all), id: 'in_o' };
   assert.equal(openAmount(inv, [inv, credited]), Math.round((totals(inv.lines).gross - 51.3) * 100) / 100);
   assert.equal(openAmount(inv, [inv, credited], '2026-10-01'), totals(inv.lines).gross, 'a credit note written later does not count for an earlier payment');
+  // «Stornieren» after a partial credit proposes what is left to credit, not the whole invoice again (r8c-14).
+  assert.equal(creditable(inv, [inv]), totals(inv.lines).gross);
+  assert.equal(creditable(inv, [inv, credited]), Math.round((totals(inv.lines).gross - 51.3) * 100) / 100);
+  assert.equal(creditable(credited, [inv, credited]), 0, 'a credit note is not credited');
   const tooMuch = { ...creditNoteDraft(inv, { reason: '' }, env('in_t'), '2026-10-12') };
   assert.deepEqual(missingForIssue(tooMuch, { customer, sender, invoices: [inv, credited] }).map((m) => m.field), ['credit.exceeds']);
   assert.throws(() => creditNoteDraft(inv, { amount: 99999, reason: '' }, env('in_x'), '2026-10-12'), (e: InvoiceRuleError) => e.code === 'incomplete');

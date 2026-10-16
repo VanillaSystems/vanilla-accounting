@@ -62,6 +62,13 @@ export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: st
  * What the customer owed at the end of `date`: an invoice issued by then and not cancelled by
  * then, less the payments and credit notes dated by then. The year-end's receivables (ADR 0010).
  */
+/** What a credit note may still take off an invoice: its total less the credit notes issued before (r8c-14); 0 for a draft, a credit note or a cancelled invoice. */
+export function creditable(inv: Invoice, invoices: readonly Invoice[]): number {
+  if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.cancelled) return 0;
+  const credited = creditNotesOf(inv, invoices).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
+  return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - credited));
+}
+
 export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string): number {
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
   const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);

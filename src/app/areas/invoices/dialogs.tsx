@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import type { Customer, CustomerFields, Invoice, Issued } from '../../../invoices/model.js';
-import { openAmount, paidAmount, totals } from '../../../invoices/rules.js';
+import { openAmount, paidAmount, totals, creditable } from '../../../invoices/rules.js';
 import type { RouteOf } from '../../shell/route.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
@@ -319,6 +319,8 @@ function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: I
   const gross = totals(inv.lines).gross;
   const paid = paidAmount(inv);
   const open = openAmount(inv, invoices);
+  // After an earlier credit note «alles» is what is left to credit, not the whole invoice again (r8c-14).
+  const max = creditable(inv, invoices);
   const [scope, setScope] = useState<'all' | 'part'>('all');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
@@ -326,9 +328,9 @@ function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: I
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus(), []);
   const typed = Number(amount.replace(/[’'\s]/g, '').replace(',', '.'));
-  const credit = scope === 'all' ? gross : Number.isFinite(typed) ? Math.round(typed * 100) / 100 : 0;
+  const credit = scope === 'all' ? max : Number.isFinite(typed) ? Math.round(typed * 100) / 100 : 0;
   const back = Math.max(0, Math.round((credit - open) * 100) / 100);
-  const ok = credit > 0 && credit <= gross;
+  const ok = credit > 0 && credit <= max;
   const seg = <T extends string>(value: T, set: (v: T) => void, opts: Array<[T, string]>) => (
     <span className="seg2" role="radiogroup">
       {opts.map(([v, l], i) => <button key={v} ref={i === 0 ? first : undefined} type="button" role="radio" aria-checked={value === v} className={value === v ? 'on' : ''} onClick={() => set(v)}>{l}</button>)}
@@ -336,7 +338,7 @@ function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: I
   );
   const run = async () => {
     if (!ok) return;
-    if (await creditNote(nav, inv, { reason, ...(scope === 'part' ? { amount: credit } : {}), ...(back > 0 ? { settlement } : {}) })) close();
+    if (await creditNote(nav, inv, { reason, ...(scope === 'part' || max < gross ? { amount: credit } : {}), ...(back > 0 ? { settlement } : {}) })) close();
   };
   return (
     <Frame className="icredit" label={t('invoices.creditTitle', { number: inv.number })} title={`${inv.customer.name} · ${inv.currency} ${fmt(gross)}`}
@@ -353,7 +355,7 @@ function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: I
           <div><span>{t('invoices.creditLine')}</span><span className="mono">−{fmt(credit)}</span></div>
           <div className="tot"><span>{back > 0 ? (settlement === 'refund' ? t('invoices.refundTotal') : t('invoices.offsetTotal')) : t('invoices.stillOpen')}</span><span className="mono">{inv.currency} {fmt(back > 0 ? back : Math.round((open - credit) * 100) / 100)}</span></div>
         </div>
-        {credit > gross && <p className="warnline">{I.dot}{t('invoices.creditTooHigh')}</p>}
+        {credit > max && <p className="warnline">{I.dot}{t('invoices.creditTooHigh', { max: `${inv.currency} ${fmt(max)}` })}</p>}
       </div>
     </Frame>
   );
