@@ -118,6 +118,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           s.running
             ? <span className="notice" style={{ margin: 0 }}>{t('bank.runningNotice')}</span>
             : <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.missingNotice')}</span>
+        ) : c!.gap ? (
+          <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
         ) : c!.ok ? (
           <span className="linked">{I.check}{t('bank.checkOk', { n: c!.n })}</span>
         ) : c!.diff == null ? (
@@ -126,7 +128,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.checkDiff', { diff: fmt(c!.diff) })}</span>
         )}
       </div>
-      {c?.bookDiff ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
+      {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
 
       <div className="body">
         <div className="desk">

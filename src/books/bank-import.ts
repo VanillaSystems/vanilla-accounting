@@ -43,11 +43,36 @@ export function transactionsOfFiles(files: StatementFile[]): BankTransaction[] {
   for (const f of files) {
     if (f.status !== 'read') continue;
     for (const t of transactionsOf(f.statement, f.account)) {
-      const key = [t.bank, t.ref, t.date, t.direction, t.amount.toFixed(2), t.currency].join('\u0000');
+      const key = identity(t);
       const first = seenIn.get(key);
       if (first !== undefined && first !== f.file) continue;
       seenIn.set(key, f.file);
       out.push(t);
+    }
+  }
+  return out;
+}
+
+/** What makes a bank's booking the same transaction in every export that holds it. */
+const identity = (t: BankTransaction) => [t.bank, t.ref, t.date, t.direction, t.amount.toFixed(2), t.currency].join('\u0000');
+
+/**
+ * The payments each file holds, named by the refs the books carry (the first file's ref, made
+ * unique as the books make it): what a statement lists (r10c-2). A payment the books have from
+ * another file is named in both files' lists.
+ */
+export function refsByFile(files: StatementFile[]): Map<string, string[]> {
+  const canonical = transactionsOfFiles(files);
+  const keys = canonical.map(identity);
+  assignUniqueRefs(canonical);
+  const refOf = new Map(keys.map((k, i) => [k, canonical[i].ref]));
+  const out = new Map<string, string[]>();
+  for (const f of files) {
+    if (f.status !== 'read') continue;
+    const refs = out.get(f.file) ?? out.set(f.file, []).get(f.file)!;
+    for (const t of transactionsOf(f.statement, f.account)) {
+      const ref = refOf.get(identity(t));
+      if (ref !== undefined && !refs.includes(ref)) refs.push(ref);
     }
   }
   return out;
@@ -106,15 +131,17 @@ export function readStatementFiles(ws: Ws): StatementFiles {
     }
   }
   const balances: StatementClosingBalance[] = [];
+  const files = readBankStatements(ws);
+  const refs = refsByFile(files);
   const byFile = new Map<string, Read[]>();
-  for (const f of readBankStatements(ws)) if (f.status === 'read') (byFile.get(f.file) ?? byFile.set(f.file, []).get(f.file)!).push(f);
+  for (const f of files) if (f.status === 'read') (byFile.get(f.file) ?? byFile.set(f.file, []).get(f.file)!).push(f);
   for (const [file, reads] of byFile) {
     const { account } = reads[0];
     const [folder, filename, ...deeper] = file.split('/');
     if (folder !== account.bank || !filename || deeper.length || reads.some((r) => r.account.account !== account.account)) continue;
     const span = statementSpan(reads.map((r) => r.statement), account, filename);
     if (!span) continue;
-    statements.push({ bank: account.bank, filename, fromDate: span.from, toDate: span.to, currency: account.currency });
+    statements.push({ bank: account.bank, filename, fromDate: span.from, toDate: span.to, currency: account.currency, refs: refs.get(file) ?? [] });
     balances.push(...span.balances);
   }
   return { statements: statements.sort((a, b) => a.fromDate.localeCompare(b.fromDate)), balances };

@@ -1235,6 +1235,8 @@ export const messages = {
   'bank.bookTip': 'Saldo des Kontos in der Buchhaltung am letzten Tag, in der Kontowährung',
   'bank.checkOk': { one: 'Stimmt. Anfangssaldo und {n} Zahlung ergeben den Endsaldo der Bank.', other: 'Stimmt. Anfangssaldo und {n} Zahlungen ergeben den Endsaldo der Bank.' },
   'bank.checkDiff': 'Differenz {diff}: eine Zahlung fehlt oder ist doppelt erfasst.',
+  'bank.gap': 'Zwischen dem Auszug davor (Saldo {bank}) und diesem (Anfang {open}) fehlt ein Auszug für {from} bis {to}: die Bank hat {diff} bewegt, ohne dass ein Auszug es zeigt. Den fehlenden Auszug einlesen; eine fehlende Buchung ist es nicht.',
+  'bank.nGaps': { one: '{n} Auszug fehlt zwischen zwei Auszügen', other: '{n} Auszüge fehlen zwischen Auszügen' },
   'bank.noOpen': 'Der Anfangssaldo fehlt (Auszug des Vormonats nicht im Archiv).',
   'bank.noClose': 'Der Endsaldo ist aus dem PDF nicht gelesen.',
   'bank.bookDiff': 'Die Buchhaltung weicht um {diff} vom Endsaldo der Bank ab: eine Zahlung ist nicht oder falsch gebucht.',

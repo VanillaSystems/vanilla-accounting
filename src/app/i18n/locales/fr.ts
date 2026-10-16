@@ -1238,6 +1238,8 @@ export default {
     'bank.bookTip': 'Solde du compte en comptabilité au dernier jour, dans sa monnaie',
     'bank.checkOk': { one: 'Juste. Le solde initial et {n} paiement donnent le solde final de la banque.', other: 'Juste. Le solde initial et {n} paiements donnent le solde final de la banque.' },
     'bank.checkDiff': 'Différence {diff} : un paiement manque ou est compté deux fois.',
+    'bank.gap': 'Entre le relevé précédent (solde {bank}) et celui-ci (début {open}), un relevé manque pour la période du {from} au {to} : la banque a déplacé {diff} sans qu\'un relevé le montre. Lire le relevé manquant ; ce n\'est pas une écriture manquante.',
+    'bank.nGaps': { one: '{n} relevé manque entre deux relevés', other: '{n} relevés manquent entre les relevés' },
     'bank.noOpen': "Le solde initial manque (le relevé du mois précédent n'est pas dans l'archive).",
     'bank.noClose': "Le solde final n'a pas été lu dans le PDF.",
     'bank.bookDiff': "La comptabilité diffère de {diff} du solde final de la banque : un paiement n'est pas comptabilisé ou mal.",

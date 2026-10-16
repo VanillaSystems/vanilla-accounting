@@ -21,10 +21,11 @@ import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { matchPayments } from '../../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
-import type { BankTransaction, StatementClosingBalance, StatementImport } from '../../types/index.js';
+import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
-import { RequestError, WS, assertOpen, readBooks, updateBooks, withBooks } from '../books.js';
+import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, withBooks } from '../books.js';
+import { addEntry } from '../edits.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../accounting/year-close.js';
 import { chartOf } from '../../books/year-close.js';
@@ -261,7 +262,7 @@ function refsOnlyIn(file: string): string[] {
  * and the statement list is read again from the folder. Never in the closed period, never over an
  * entry a person booked by hand (such a payment stays, and the refusal says so).
  */
-export function removeStatement(file: string, refs?: readonly string[]): void {
+export function removeStatement(file: string, refs?: readonly string[]): StatementRemoved {
   const path = findFile(WS.paths, 'statements', file);
   if (!path) throw new RequestError(404, `Den Auszug ${file} gibt es nicht.`, { code: 'gone', params: { what: 'file' } });
   const books = readBooks();
@@ -272,7 +273,8 @@ export function removeStatement(file: string, refs?: readonly string[]): void {
   const bytes = readFileSync(path);
   rmSync(path, { force: true });
   try {
-    updateBooks((b) => {
+    return updateBooks((b) => {
+      const removed = { entries: b.journalEntries.filter((e) => mine.has(e.transactionRef)), mappings: b.mappings.filter((m) => mine.has(m.transactionRef)) };
       b.transactions = b.transactions.filter((t) => !mine.has(t.ref));
       b.journalEntries = b.journalEntries.filter((e) => !mine.has(e.transactionRef));
       b.mappings = b.mappings.filter((m) => !mine.has(m.transactionRef));
@@ -281,6 +283,7 @@ export function removeStatement(file: string, refs?: readonly string[]): void {
       const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(file)), files.balances);
       if (balances) b.statementBalances = balances;
       else delete b.statementBalances;
+      return { ok: true, removed };
     });
   } catch (e) {
     writeFileSync(path, bytes);
@@ -288,9 +291,33 @@ export function removeStatement(file: string, refs?: readonly string[]): void {
   }
 }
 
+/** What a removal took with the statement's payments: the undo puts them back once the file is read again (r10h-3). */
+export interface StatementRemoved { ok: true; removed: { entries: JournalEntry[]; mappings: Mapping[] } }
+
 router.delete('/api/statements/:bank/:filename', (req, res) => {
-  removeStatement(`${req.params.bank}/${basename(req.params.filename)}`);
-  res.json({ ok: true });
+  res.json(removeStatement(`${req.params.bank}/${basename(req.params.filename)}`));
+});
+
+/**
+ * The undo of «Auszug entfernen», second half (r10h-3): after the file is read again, the bookings
+ * and links the removal took go back as they were (who booked them included), no run in between.
+ * An entry whose payment the books do not hold, or one booked meanwhile, is refused with the rest.
+ */
+router.post('/api/statements/bookings', (req, res) => {
+  const b = patchBody(req.body, ['entries', 'mappings']);
+  const entries = Array.isArray(b.entries) ? b.entries as JournalEntry[] : [];
+  const mappings = Array.isArray(b.mappings) ? b.mappings as Mapping[] : [];
+  for (const e of entries) if (!e || typeof e.id !== 'string' || typeof e.transactionRef !== 'string' || typeof e.date !== 'string') throw new RequestError(400, 'entries: Buchungen mit id, transactionRef und date.');
+  for (const m of mappings) if (!m || typeof m.receiptId !== 'string' || typeof m.transactionRef !== 'string') throw new RequestError(400, 'mappings: receiptId und transactionRef.');
+  withBooks(res, (books) => {
+    assertOpen(books, entries.map((e) => e.date), 'newEntry');
+    for (const e of entries) addEntry(books, { ...e, description: e.description ?? e.transactionRef });
+    const refs = new Set(books.transactions.map((t) => t.ref));
+    const receipts = new Set(books.receipts.map((r) => r.id));
+    const has = (m: Mapping) => books.mappings.some((x) => x.receiptId === m.receiptId && x.transactionRef === m.transactionRef);
+    for (const m of mappings) if (refs.has(m.transactionRef) && receipts.has(m.receiptId) && !has(m)) books.mappings.push(m);
+    return { ok: true };
+  });
 });
 
 /**

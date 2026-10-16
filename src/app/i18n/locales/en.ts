@@ -1238,6 +1238,8 @@ export default {
     'bank.bookTip': "The account's balance in the books on the last day, in its currency",
     'bank.checkOk': { one: "Correct. The opening balance and {n} payment make the bank's closing balance.", other: "Correct. The opening balance and {n} payments make the bank's closing balance." },
     'bank.checkDiff': 'Difference {diff}: a payment is missing or counted twice.',
+    'bank.gap': 'Between the statement before (balance {bank}) and this one (opening {open}) a statement is missing for {from} to {to}: the bank moved {diff} that no statement shows. Read the missing statement in; it is not a missing entry.',
+    'bank.nGaps': { one: '{n} statement missing between statements', other: '{n} statements missing between statements' },
     'bank.noOpen': "The opening balance is missing (the previous month's statement is not in the archive).",
     'bank.noClose': 'The closing balance was not read from the PDF.',
     'bank.bookDiff': "The books differ from the bank's closing balance by {diff}: a payment is not booked, or booked wrong.",

@@ -86,6 +86,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
   { method: 'POST', path: '/api/year-close/2026/entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1520', amount: 100, description: 'rückdatiert' }, status: 403 },
   { method: 'POST', path: '/api/year-close/2025/templates/receivables/rebook', body: { description: 'Debitoren 2025' }, status: 403 },
+  { method: 'POST', path: '/api/statements/bookings', body: { entries: [{ id: 'back', transactionRef: 'C1', date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zurück' }], mappings: [] }, status: 403 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
 ];
 

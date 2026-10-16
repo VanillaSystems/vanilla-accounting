@@ -95,7 +95,7 @@ test('r10h-3: the removal answers with the bookings and links it took, so that t
     assert.equal((await books()).journalEntries?.length ?? 0, 0);
 
     assert.equal((await api.fetch('/api/statements?name=a.xml', { method: 'POST', body: A })).status, 200, 'the undo reads the file again');
-    const back = await api.send('POST', '/api/journal-entries', taken.removed.entries[0]);
+    const back = await api.send('POST', '/api/statements/bookings', taken.removed);
     assert.equal(back.status, 200, JSON.stringify(back.json));
     const e = (await books()).journalEntries!.find((x) => x.id === 'rb1')!;
     assert.deepEqual([e.transactionRef, e.origin, e.by?.kind], ['91000000001', 'classify', 'rule'], 'and the booking is back as it was');

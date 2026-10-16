@@ -70,7 +70,8 @@ function List(props: Props) {
 
   const files = rows.filter((r) => r.s.file).length;
   const missing = rows.filter((r) => !r.s.file && !r.s.running).length;
-  const bad = rows.filter((r) => r.c && troubled(b, r.s)).length;
+  const gaps = rows.filter((r) => r.c?.gap).length;
+  const bad = rows.filter((r) => r.c && troubled(b, r.s)).length - gaps;
   const strays = useMemo(() => b.strays(period.from, period.to), [b, period.from, period.to]);
   const open = (d: string) => !b.closedThrough || d > b.closedThrough;
   const unbooked = useMemo(() => books.transactions.filter((x) => x.date >= period.from && x.date <= period.to && open(x.date) && b.unbooked(x) && !!b.statementOf(x))
@@ -115,9 +116,10 @@ function List(props: Props) {
         <div className="counts stc">
           <span>{t('bank.nStatements', { n: files })}</span>
           {missing > 0 && <span className="warn">{I.dot}{t('bank.nMissing', { n: missing })}</span>}
+          {gaps > 0 && <span className="warn" data-testid="gap-count">{I.dot}{t('bank.nGaps', { n: gaps })}</span>}
           {bad > 0
             ? <span className="warn">{I.dot}{t('bank.nDiffer', { n: bad })}</span>
-            : files > 0 && !strays.length && <span className="ok" title={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
+            : files > 0 && !gaps && !strays.length && <span className="ok" title={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
           {unbooked.length > 0 && (
             <button type="button" className="warn golink" data-testid="unbooked-count" title={t('bank.unbookedTip')} onClick={() => nav.go(at({ area: 'bank', payment: unbooked[0].ref }, unbooked[0].date, query.period))}>
               {I.dot}{t('bank.nUnbooked', { n: unbooked.length })}

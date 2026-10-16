@@ -47,6 +47,12 @@ export interface Check {
   book: number;
   /** book − close: not 0 when a payment is not booked, or booked wrong. */
   bookDiff: number | null;
+  /**
+   * The bank's balance moved between the statement before this one and this one's opening with no
+   * statement in between (r10h-7): a statement is missing for [from, to], or a file is wrong.
+   * `diff` is open − bank (this statement's opening less the earlier statement's closing).
+   */
+  gap?: { from: IsoDate; to: IsoDate; bank: number; open: number; diff: number };
 }
 
 /** A payment's amount with its direction: money out is negative. */
@@ -212,6 +218,17 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   }
 
   const balanceOn = (account: string, date: IsoDate) => books.statementBalances?.find((b) => b.account === account && b.date === date)?.amount ?? null;
+  /** The balances the statement's own file states, oldest first: its opening and its closing (r10c-2). */
+  const ownBalances = (s: Statement) => (books.statementBalances ?? []).filter((b) => b.account === s.account.account && b.sourceFile === s.file?.filename).sort((a, b) => a.date.localeCompare(b.date));
+  /** A statement's payments: those its file holds (`refs`), else those of its days (a PDF, books from before refs). */
+  const held = (s: Statement): BankTransaction[] => {
+    const own = byAccount.get(s.account.account)!;
+    if (!s.file?.refs) return own.filter((t) => t.date >= s.from && t.date <= s.to);
+    const refs = new Set(s.file.refs);
+    return own.filter((t) => refs.has(t.ref));
+  };
+  /** The account's statement before `s`: the latest one that ends by the day `s` starts. */
+  const before = (s: Statement) => files.get(s.account.account)!.filter((x) => x !== s && x.to <= s.from && x.from < s.from).sort((x, y) => y.to.localeCompare(x.to) || y.from.localeCompare(x.from))[0];
 
   const checks = new Map<string, Check>();
   function check(s: Statement): Check {
@@ -219,20 +236,30 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     if (hit) return hit;
     const { account, currency } = s.account;
     const year = s.from.slice(0, 4);
-    const open = balanceOn(account, addDays(s.from, -1))
+    const own = ownBalances(s);
+    const ownOpen = own.find((b) => b.date < s.to && b.date !== s.to && own.length > 1)?.amount;
+    const open = ownOpen ?? balanceOn(account, addDays(s.from, -1))
       ?? (s.from.slice(5) === '01-01' && books.config?.openingBalances?.[year] ? nativeOpening(books, account, currency, year) : null);
-    const close = balanceOn(account, s.to);
-    const xs = byAccount.get(account)!.filter((t) => t.date >= s.from && t.date <= s.to);
+    const close = own.find((b) => b.date === s.to)?.amount ?? balanceOn(account, s.to);
+    const xs = held(s);
     const inc = round(xs.filter((t) => signed(t) > 0).reduce((a, t) => a + signed(t), 0));
     const out = round(xs.filter((t) => signed(t) < 0).reduce((a, t) => a - signed(t), 0));
     const diff = open == null || close == null ? null : round(open + inc - out - close);
     const book = bookBalanceNative(books.journalEntries ?? [], account, currency, s.to.slice(0, 4), s.to, nativeOpening(books, account, currency, s.to.slice(0, 4)));
     const c: Check = { open, close, inc, out, n: xs.length, diff, ok: diff === 0, book, bookDiff: close == null ? null : round(book - close) };
+    // The statement before this one closed on another balance than this one opens on: the bank moved money no statement shows (r10h-7).
+    const prev = ownOpen !== undefined ? before(s) : undefined;
+    const prevClose = prev ? check(prev).close : null;
+    if (prev && prevClose != null && toRappen(prevClose) !== toRappen(ownOpen!)) {
+      const from = addDays(prev.to, 1), to = addDays(s.from, -1);
+      c.gap = { ...(from <= to ? { from, to } : { from: prev.to, to: s.from }), bank: prevClose, open: ownOpen!, diff: round(ownOpen! - prevClose) };
+    }
     checks.set(s.key, c);
     return c;
   }
 
-  const desc = (x: Statement, y: Statement) => y.to.localeCompare(x.to) || banked.indexOf(x.account) - banked.indexOf(y.account);
+  // Newest last day first; of two ending the same day, the one that started later (it holds the later balance, r10c-2).
+  const desc = (x: Statement, y: Statement) => y.to.localeCompare(x.to) || y.from.localeCompare(x.from) || banked.indexOf(x.account) - banked.indexOf(y.account);
 
   return {
     accounts: banked,
@@ -251,13 +278,15 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     statementOf(t) {
       const a = accountOf(t.bank, t.currency);
       if (!a) return undefined;
-      // The narrowest statement that holds the day: a statement of some days before the month's.
+      // The file that holds the payment; else the narrowest statement that holds the day: a statement of some days before the month's.
       const days = (s: Statement) => Date.parse(s.to) - Date.parse(s.from);
-      return files.get(a.account)!.filter((s) => t.date >= s.from && t.date <= s.to).sort((x, y) => days(x) - days(y) || y.from.localeCompare(x.from))[0]
+      const own = files.get(a.account)!;
+      return own.find((s) => s.file?.refs?.includes(t.ref))
+        ?? own.filter((s) => !s.file?.refs && t.date >= s.from && t.date <= s.to).sort((x, y) => days(x) - days(y) || y.from.localeCompare(x.from))[0]
         ?? forAccount(a, t.date, t.date)[0];
     },
-    payments: (s) => byAccount.get(s.account.account)!
-      .filter((t) => t.date >= s.from && t.date <= s.to && !folded(t))
+    payments: (s) => held(s)
+      .filter((t) => !folded(t))
       .sort((x, y) => y.date.localeCompare(x.date) || y.ref.localeCompare(x.ref)),
     feeOf: (ref) => fees.get(ref),
     check,
@@ -280,7 +309,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
 export const troubled = (b: Bank, s: Statement) => {
   if (!s.file) return !s.running;
   const c = b.check(s);
-  return c.diff != null && !c.ok;
+  return c.gap !== undefined || (c.diff != null && !c.ok);
 };
 
 /** What the dock's badge counts: statements with a problem from the open quarter until today. */

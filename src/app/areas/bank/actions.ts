@@ -8,7 +8,7 @@ import type { BankTransaction, StatementImport } from '../../../types/index.js';
 import type { OpeningOffer } from '../../../accounting/opening-balance.js';
 import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
-import { api, errorText, sources } from '../../lib/api.js';
+import { api, errorText, sources, type StatementRemoved } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
 import { at } from '../receipts/view.js';
@@ -102,9 +102,10 @@ export async function removeStatement(nav: Nav, s: Statement): Promise<void> {
   if (!s.file) return;
   const file = `${s.file.bank}/${s.file.filename}`;
   let bytes: Blob | undefined;
+  let taken: StatementRemoved['removed'] = { entries: [], mappings: [] };
   try {
     bytes = await (await fetch(sources.statement(s.file.bank, s.file.filename))).blob();
-    await api.deleteStatement(file);
+    taken = (await api.deleteStatement(file)).removed;
   } catch (e) {
     nav.toast(errorText(e));
     return;
@@ -112,8 +113,10 @@ export async function removeStatement(nav: Nav, s: Statement): Promise<void> {
   forgetPages();
   nav.refresh();
   const kept = bytes;
+  // The undo reads the file again, then puts its bookings and links back as they were (r10h-3): the payment comes back booked.
   nav.toast(t('bank.statementRemoved', { name: s.file.filename }), () => {
     api.importStatement(kept, s.file!.filename, { account: s.account.account, month: s.from.slice(0, 7) })
+      .then(async (r) => { if (taken.entries.length || taken.mappings.length) await api.restoreStatementBookings(taken); return r; })
       .then((r) => { forgetPages(); nav.refresh(); nav.go(at({ area: 'bank', statement: keyOf(r) }, r.to)); }, (e) => nav.toast(errorText(e)));
   });
   nav.go(at({ area: 'bank' }, s.to));

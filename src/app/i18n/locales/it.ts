@@ -1238,6 +1238,8 @@ export default {
     'bank.bookTip': "Saldo del conto in contabilità all'ultimo giorno, nella sua valuta",
     'bank.checkOk': { one: 'Corretto. Saldo iniziale e {n} pagamento danno il saldo finale della banca.', other: 'Corretto. Saldo iniziale e {n} pagamenti danno il saldo finale della banca.' },
     'bank.checkDiff': 'Differenza {diff}: manca un pagamento o è contato due volte.',
+    'bank.gap': 'Tra l\'estratto precedente (saldo {bank}) e questo (inizio {open}) manca un estratto dal {from} al {to}: la banca ha mosso {diff} senza che un estratto lo mostri. Leggere l\'estratto mancante; non è una registrazione mancante.',
+    'bank.nGaps': { one: '{n} estratto manca tra due estratti', other: '{n} estratti mancano tra gli estratti' },
     'bank.noOpen': "Manca il saldo iniziale (l'estratto del mese precedente non è nell'archivio).",
     'bank.noClose': 'Il saldo finale non è stato letto dal PDF.',
     'bank.bookDiff': 'La contabilità differisce di {diff} dal saldo finale della banca: un pagamento non è registrato o è registrato male.',

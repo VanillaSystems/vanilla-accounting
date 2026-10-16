@@ -108,6 +108,12 @@ export interface BankStatement {
   fromDate: string;
   toDate: string;
   currency?: string;
+  /**
+   * The payments the file holds, with the refs the books carry (a payment an earlier file brought
+   * keeps its ref, src/books/bank-import.ts): a statement lists these, not every payment of its days,
+   * so two statements that share a day stay apart (r10c-2). Absent on a PDF and in books from before.
+   */
+  refs?: string[];
 }
 
 /** POST /api/statements read a statement in: its file, the statement to open (account and month it ends in), the payments new to the books. */

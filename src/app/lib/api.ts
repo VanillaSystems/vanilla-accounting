@@ -1,5 +1,7 @@
 import type { StatementProblem } from '../../types/api-error.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { StatementRemoved } from '../../server/routes/statements.js';
+export type { StatementRemoved };
 import type { BookingLine } from '../../accounting/manual-booking.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { WorkspaceModules } from '../../core/modules/load.js';
@@ -321,7 +323,9 @@ export const api = {
     request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount }),
 
   /** A statement taken back out of the books (`file`: `<bank>/<filename>` as the import named it): the drop dialog's undo, from the page (r9k-3). */
-  deleteStatement: (file: string) => request<Ok>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
+  deleteStatement: (file: string) => request<StatementRemoved>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
+  /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
+  restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
 
   /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
   importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {

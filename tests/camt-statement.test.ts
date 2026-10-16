@@ -36,7 +36,7 @@ test('a quarter\'s camt.053: one statement Jul–Sep, its balances recorded, eve
 
   const b = books();
   const [account] = accounts().filter((a) => a.statements);
-  assert.deepEqual(b.bankStatements, [{ bank: account.bank, filename: 'q3.xml', fromDate: '2026-07-01', toDate: '2026-09-30', currency: 'CHF' }]);
+  assert.deepEqual(b.bankStatements, [{ bank: account.bank, filename: 'q3.xml', fromDate: '2026-07-01', toDate: '2026-09-30', currency: 'CHF', refs: b.transactions.map((t) => t.ref) }], 'the statement names the payments its file holds (r10c-2)');
   assert.deepEqual(b.statementBalances?.map(({ date, amount, source, sourceFile }) => ({ date, amount, source, sourceFile })), [
     { date: '2026-06-30', amount: 8450.35, source: 'camt', sourceFile: 'q3.xml' },
     { date: '2026-09-30', amount: 12190.35, source: 'camt', sourceFile: 'q3.xml' },
@@ -54,7 +54,7 @@ test('an opening dated on a day the bank booked is the close of the day before (
   const res = await api.fetch('/api/statements?name=oct.xml', { method: 'POST', body: oct });
   assert.equal(res.status, 200, await res.clone().text());
   const b = books();
-  assert.deepEqual(b.bankStatements.find((s) => s.filename === 'oct.xml'), { bank: accounts()[0].bank, filename: 'oct.xml', fromDate: '2026-10-08', toDate: '2026-10-09', currency: 'CHF' });
+  assert.deepEqual(b.bankStatements.find((s) => s.filename === 'oct.xml'), { bank: accounts()[0].bank, filename: 'oct.xml', fromDate: '2026-10-08', toDate: '2026-10-09', currency: 'CHF', refs: ['OCT-0', 'OCT-1'] });
   assert.ok(b.statementBalances?.some((x) => x.date === '2026-10-07' && x.amount === 12190.35 && x.sourceFile === 'oct.xml'));
 });
 
