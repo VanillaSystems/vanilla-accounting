@@ -85,6 +85,10 @@ file records every decision a person might have made differently, newest last.
     without one can be attached to it; accruals reverse on 1.1. with the entry; Gegenbuchung and
     Kopieren on every entry; the Abschluss checklist ticks entries booked in Buchungen; a journal
     filter by origin; the journal as PDF in the Treuhänder-Paket.
-21. Question channel (accountant ↔ owner): built; held back until an answered «privat» becomes a
+21. Question channel (accountant ↔ owner): merged after an answered «privat» becomes a
     precedent only on a specific key (VAT number, vendor), never a generic bank text like «Karte
     … Einkauf», which would book every card purchase as private.
+    For Ken: books set up before this version need one line in the books repository's
+    .gitattributes so two clones merge questions without a conflict:
+    `vanilla-accounting/transactional-data/*/questions.jsonl merge=union` (not added to the real
+    books repository; that is Ken's to do).
