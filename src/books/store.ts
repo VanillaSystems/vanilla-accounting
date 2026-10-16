@@ -14,6 +14,7 @@ import { APP_FOLDER, findFile, yearPaths, yearsOf, type Workspace, type Workspac
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
+import { parseBookedBy } from './booked-by.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -72,6 +73,11 @@ export function loadBooks(ws: Workspace): Books {
   }
   const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, ledger), BOOKS_SCHEMA, BOOKS_MIGRATIONS, ledger, (d) => structuredClone(d));
   const books = { ...current, schema: BOOKS_SCHEMA } as unknown as Books;
+  for (const e of books.journalEntries) {
+    if (!('by' in e) || parseBookedBy(e.by)) continue;
+    console.error(`${e.id}: «by» ${JSON.stringify(e.by)} reads as none of its kinds; the entry shows what its origin says.`);
+    delete e.by;
+  }
   onDisk.set(books, files);
   const report = checkSeals(ws, books);
   seals.set(books, report);

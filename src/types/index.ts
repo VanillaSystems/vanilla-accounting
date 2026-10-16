@@ -158,6 +158,14 @@ export interface JournalEntry {
   /** The id of the company's rule that booked it (src/booking/rules.ts): Firma › Regeln counts how often each applied. */
   rule?: string;
   /**
+   * Who decided the booking as it stands, and so who wrote its `reason`: a company rule, a check of
+   * the app's code, the AI (which model), or a person (by hand, an answer, the AI sidebar on their
+   * wish; `was` holds the booking fields before their change). Parsed at the books boundary
+   * (src/books/booked-by.ts). Absent: an entry booked before the field existed; the booking page
+   * then says what `origin` says.
+   */
+  by?: BookedBy;
+  /**
    * The receipts linked to the payment when the classifier booked it. A receipt linked later is
    * evidence the booking never saw (its VAT above all): the next classify books it again
    * (src/accounting/classify-force.ts entriesWithoutTheirReceipts). Absent: booked before this
@@ -165,6 +173,20 @@ export interface JournalEntry {
    */
   receipts?: string[];
 }
+
+/** The app's checks that set a booking's code themselves (src/accounting/sales-without-vat.ts saleCodeOf: a sale's VAT code). */
+export const CODE_CHECKS = ['saleCode'] as const;
+export type CodeCheck = typeof CODE_CHECKS[number];
+
+/** The booking fields a person's change keeps the old values of. */
+export type BookingFields = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount'>>;
+
+/** Who decided a booking (JournalEntry.by). */
+export type BookedBy =
+  | { kind: 'rule'; rule: string }
+  | { kind: 'code'; check: CodeCheck }
+  | { kind: 'model'; model: string }
+  | { kind: 'person'; at: string; was?: BookingFields };
 
 /** A VAT quarter, e.g. "2026-Q2". */
 export type QuarterKey = `${number}-Q${1 | 2 | 3 | 4}`;

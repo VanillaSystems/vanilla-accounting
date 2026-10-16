@@ -63,7 +63,7 @@ const bankAccounts: LedgerBankAccount[] = [
 const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '', bankAccounts };
 
 test('a foreign entry carries the ESTV daily sell rate of the payment date, not the flat rate', () => {
-  const ctx = { fx, receiptDate: undefined, receipts: [], bankAccount: '1023', lock };
+  const ctx = { fx, receiptDate: undefined, receipts: [], bankAccount: '1023', lock, by: { kind: 'model', model: 'sonnet' } as const };
   const [eur] = entriesFor(tx({ ref: 'E', currency: 'EUR' }), [expense(50)], ctx);
   const [usd] = entriesFor(tx({ ref: 'U', currency: 'USD' }), [expense(50)], { ...ctx, bankAccount: '1024' });
   assert.deepEqual([eur.exchangeCurrency, eur.exchangeRate], ['EUR', EUR_2026_08_14]);
@@ -78,7 +78,7 @@ test('a Stripe payout books its 1093 entries on the order date and adds the payo
     { accountDebit: '1093', accountCredit: '3200', amount: 100, vatCode: 'V81', description: 'Shopify, Umsatz' },
     { accountDebit: '6580', accountCredit: '1093', amount: 5, vatCode: '', description: 'Stripe, Gebühr' },
   ];
-  const entries = entriesFor(payout, llm, { fx, receiptDate: '2026-08-02', receipts: [], bankAccount: '1023', lock });
+  const entries = entriesFor(payout, llm, { fx, receiptDate: '2026-08-02', receipts: [], bankAccount: '1023', lock, by: { kind: 'model', model: 'sonnet' } });
   assert.deepEqual(
     entries.map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.description]),
     [
@@ -93,10 +93,10 @@ test('a Stripe payout books its 1093 entries on the order date and adds the payo
 test('no entry is ever dated in a closed period', () => {
   const payout = tx({ ref: 'P', direction: 'CRDT', amount: 95, date: '2026-07-03' });
   const llm: ClassifyEntry[] = [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }];
-  const entries = entriesFor(payout, llm, { fx, receiptDate: '2026-06-28', receipts: [], bankAccount: '1021', lock });
+  const entries = entriesFor(payout, llm, { fx, receiptDate: '2026-06-28', receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } });
   assert.deepEqual(entries.map((e) => e.date), ['2026-07-03', '2026-07-03']);
   assert.throws(
-    () => entriesFor(tx({ ref: 'C', date: '2026-06-30' }), [expense(5)], { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock }),
+    () => entriesFor(tx({ ref: 'C', date: '2026-06-30' }), [expense(5)], { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } }),
     ClosedPeriodError,
   );
 });
@@ -208,7 +208,7 @@ test('UI re-classify books through the classifier: daily rate, VAT facts, origin
       entries.map(({ id, ...e }) => e),
       [{
         transactionRef: 'W1', date: '2026-08-14', accountDebit: '6570', accountCredit: '1023', amount: 50, vatCode: 'I81',
-        description: 'Stub, Aufwand', exchangeCurrency: 'EUR', exchangeRate: EUR_2026_08_14, origin: 'classify', receipts: ['rw'],
+        description: 'Stub, Aufwand', exchangeCurrency: 'EUR', exchangeRate: EUR_2026_08_14, origin: 'classify', receipts: ['rw'], by: { kind: 'model', model: 'sonnet' },
       }],
     );
     assert.match(readFileSync(promptLog, 'utf8'), /VAT facts: Swiss MWST CHE-123\.456\.789/);

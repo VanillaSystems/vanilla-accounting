@@ -5,6 +5,7 @@ import { patchBody, stringField, updateBooks, withBooks, RequestError } from '..
 import { learnFromCorrection } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, deleteEntry, setEntry } from '../edits.js';
+import { parseBookedBy } from '../../books/booked-by.js';
 
 export const router = Router();
 
@@ -13,11 +14,22 @@ function amountField(b: Record<string, unknown>): number {
   return b.amount;
 }
 
+type Origin = NonNullable<JournalEntry['origin']>;
+const ORIGINS: readonly Origin[] = ['manual', 'classify', 'invoice', 'year-close'];
+
+/** A change by hand. `origin`, `reason` and `by` come only from its undo, which puts the booking back as it was (null: it had none). */
 router.patch('/api/journal-entries/:id', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount', 'receipts']);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount', 'receipts', 'origin', 'reason', 'by']);
   const set = b as EntrySet;
   if ('amount' in b) set.amount = amountField(b);
   if ('receipts' in b && !(Array.isArray(b.receipts) && b.receipts.every((id) => typeof id === 'string'))) throw new RequestError(400, 'receipts muss eine Liste von Beleg-Ids sein.');
+  if ('origin' in b && b.origin !== null && !ORIGINS.includes(b.origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
+  if ('reason' in b && b.reason !== null && typeof b.reason !== 'string') throw new RequestError(400, 'reason ist ein Text.');
+  if ('by' in b && b.by !== null) {
+    const by = parseBookedBy(b.by);
+    if (!by) throw new RequestError(400, 'by: rule, code, model oder person.');
+    set.by = by;
+  }
   const ref = updateBooks((books) => {
     setEntry(books, req.params.id, set);
     return books.journalEntries.find((e) => e.id === req.params.id)!.transactionRef;
@@ -26,8 +38,6 @@ router.patch('/api/journal-entries/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-type Origin = NonNullable<JournalEntry['origin']>;
-const ORIGINS: readonly Origin[] = ['manual', 'classify', 'invoice', 'year-close'];
 
 /** A new entry booked by hand (src/server/edits.ts addEntry). `id`, the exchange fields and `origin` let an undo put a deleted entry back as it was. */
 router.post('/api/journal-entries', (req, res) => {

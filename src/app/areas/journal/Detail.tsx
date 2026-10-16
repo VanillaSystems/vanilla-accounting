@@ -23,6 +23,9 @@ import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain, codeText } from '../codes/vat-card.js';
 import { whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
+import { bookedByText, changesText, reasonText, type Say } from './by.js';
+
+const say: Say = (key, vars) => t(key, vars as never);
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
@@ -147,14 +150,15 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             </Sec>
           )}
           <EntryForm {...props} edit={edit} />
-          <Sec k="herkunft" val={t(`journal.origin.${e.origin ?? 'other'}`)}>
+          <Sec k="herkunft" val={e.by ? t(`journal.by.${e.by.kind}`) : t(`journal.origin.${e.origin ?? 'other'}`)}>
             <dl className="kv">
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
-              <dt>{t('journal.booked')}</dt><dd>{t(`journal.originText.${e.origin ?? 'other'}`)}</dd>
-              {seen || e.reason ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
+              <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} /></dd>
+              {seen || e.reason || e.by?.kind === 'person' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
                 {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
-                {e.reason && <div className="m">{t('journal.why.ai', { text: e.reason })}</div>}
+                {e.reason && <div className="m">{reasonText(e, e.reason, say)}</div>}
+                {e.by?.kind === 'person' && e.by.was && <div className="m">{t('journal.why.person', { changes: changesText(e, e.by.was, say) })}</div>}
               </dd></> : null}
               {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} nav={nav} /></dd></> : null}
             </dl>
@@ -170,6 +174,13 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
       </div>
       {asking && <KeepHers hers={hers} onKeep={() => setAsking(false)} onRebook={() => rebook(true)} />}
     </div>
+  );
+}
+
+/** Who decided the entry, and for a rule the way to Firma › Regeln. */
+function BookedByText({ e, nav }: { e: JournalEntry; nav: Props['nav'] }) {
+  return (
+    <>{bookedByText(e, say)}{e.by?.kind === 'rule' && <> · <button type="button" className="golink" data-testid="to-rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('area.company')} › {t('company.rules')}</button></>}</>
   );
 }
 

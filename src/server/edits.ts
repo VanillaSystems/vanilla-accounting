@@ -12,7 +12,7 @@ import { baseCurrency, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount } from '../accounting/vat-codes.js';
-import type { JournalEntry, Receipt } from '../types/index.js';
+import type { BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -118,6 +118,9 @@ export function relinked(books: Books, changes: readonly BookChange[]): { paymen
   return { payments, ...(file ? { file } : {}) };
 }
 
+/** The fields that make a booking what it is: a person who changes one of them decided it (JournalEntry.by). */
+const BOOKING_FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const;
+
 export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   const e = entryOf(books, id);
   assertOpen(books, [e.date, set.date], 'editEntry');
@@ -130,9 +133,15 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   if (set.vatCode !== undefined) { before.vatCode = e.vatCode ?? ''; e.vatCode = set.vatCode || undefined; }
   if (set.description !== undefined) { before.description = e.description ?? ''; e.description = set.description || undefined; }
   if (set.amount !== undefined) { before.amount = e.amount; e.amount = set.amount; }
-  // The classifier's reason explains the booking it made; once its accounts, code or amount change, it no longer does.
+  // The reason explains the booking as its author made it; once a person changes its accounts, code or amount, she decided it.
+  const changed = BOOKING_FIELDS.filter((k) => set[k] !== undefined);
   if (set.reason !== undefined) { if (set.reason) e.reason = set.reason; else delete e.reason; }
-  else if (e.reason && (['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const).some((k) => k in set)) { before.reason = e.reason; delete e.reason; }
+  else if (e.reason && changed.length) { before.reason = e.reason; delete e.reason; }
+  if (set.by !== undefined) { if (set.by) e.by = set.by; else delete e.by; }
+  else if (changed.length) {
+    before.by = e.by ?? null;
+    e.by = { kind: 'person', at: new Date().toISOString(), was: Object.fromEntries(changed.map((k) => [k, before[k]])) as BookingFields };
+  }
   if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
   if (set.receipts !== undefined) {
     const unknown = set.receipts.find((id) => !books.receipts.some((r) => r.id === id));

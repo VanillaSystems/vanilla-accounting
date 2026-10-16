@@ -12,7 +12,7 @@ import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
-import type { BankTransaction, JournalEntry } from '../types/index.js';
+import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
@@ -28,6 +28,8 @@ import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 export const BATCH_SIZE = 10;
 export const CONCURRENCY = 3;
 const CALL_TIMEOUT_MS = 360_000;
+/** The model that books what no rule decides; its entries name it (JournalEntry.by). */
+const CLASSIFY_MODEL = 'sonnet';
 
 export interface EntryContext {
   fx: FxResolver;
@@ -37,8 +39,10 @@ export interface EntryContext {
   receipts: string[];
   bankAccount: string;
   lock: PeriodLock;
-  /** The model's reason in words, stamped on the entries. */
+  /** The reason in words, stamped on the entries. */
   reason?: string;
+  /** Who decided the entries, and wrote the reason: the model or a rule. */
+  by: BookedBy;
 }
 
 /**
@@ -49,14 +53,14 @@ export interface EntryContext {
  * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
  * in a closed period: then the payment date, because nothing new is ever dated there.
  */
-export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason }: EntryContext): JournalEntry[] {
+export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const orderDate = receiptDate && !lock.isClosed(receiptDate) ? receiptDate : tx.date;
   const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>): JournalEntry =>
-    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(reason && { reason }) });
+    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(reason && { reason }), by });
 
   const entries = llmEntries.map((e) => {
     let accountDebit = e.accountDebit || (tx.direction === 'CRDT' ? bankAccount : '');
@@ -278,7 +282,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const code = lines[0].vat;
   // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
-  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}${zero}` })
+  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}${zero}`, by: { kind: 'rule', rule: placed.rule.id } })
     .map((e) => ({ ...e, rule: placed.rule.id }));
 }
 
@@ -324,7 +328,7 @@ function withSaleCodes(tx: BankTransaction, entries: JournalEntry[], documents: 
     const decided = saleCodeOf(e.vatCode, e.accountCredit, tx, documents, vatRegistered);
     if (!decided) return e;
     const { vatCode: _, ...rest } = e;
-    return { ...rest, ...(decided.code ? { vatCode: decided.code } : {}), reason: saleCodeReason(decided, tx.currency) };
+    return { ...rest, ...(decided.code ? { vatCode: decided.code } : {}), reason: saleCodeReason(decided, tx.currency), by: { kind: 'code', check: 'saleCode' } };
   });
 }
 
@@ -396,7 +400,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
       const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context, examples);
-      const raw = await ask(prompt, { step: 'booking.guide.yaml#classify', model: 'sonnet', timeoutMs: CALL_TIMEOUT_MS });
+      const raw = await ask(prompt, { step: 'booking.guide.yaml#classify', model: CLASSIFY_MODEL, timeoutMs: CALL_TIMEOUT_MS });
       const result = parseBatchClassifyResult(raw);
       if (!result) {
         log(`  [Batch ${batchNum}/${batches.length}]  could not parse response`);
@@ -415,7 +419,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const bankAccount = bankAccountFor(tx, context.bankAccounts);
         const said = result[tx.ref].reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
-        const entries = withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason }), mapped, context.vatRegistered ?? true);
+        const entries = withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL } }), mapped, context.vatRegistered ?? true);
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
