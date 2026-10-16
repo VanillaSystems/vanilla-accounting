@@ -212,7 +212,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
             <p className="m chlead">{t('changes.sinceLead')}</p>
             {view.books.files ? (
               <>
-                <div className="group"><span>{t('changes.fromRuns')}</span></div>
+                {view.books.runs.length || !view.books.hand.length ? <div className="group"><span>{t('changes.fromRuns')}</span></div> : null}
                 <div className="chraw">
                   {view.books.runs.map((r) => (
                     <button key={r.run} type="button" className="chrawrow" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} })}>
