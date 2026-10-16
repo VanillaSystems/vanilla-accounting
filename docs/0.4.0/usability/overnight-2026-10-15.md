@@ -149,3 +149,10 @@ file records every decision a person might have made differently, newest last.
     - Medium: drop-held duplicates vanish (r6h-23); «Löschen» deletes at once and not in Änderungen (r6h-28); mailbox connect not atomic (r6h-25); drop dialog cut off with the sidebar open (r6h-30).
     - The tester's GUI launcher passed the Claude token in `open --env` argv and `open` echoed it once into a tool output (no evidence file has it). Ken told to rotate it. The harness fix is in fix/huber6.
     - Fix round huber6 started.
+33. Merged firmtypes3; tests 1009 pass, real-books golden master 18/18.
+    - A return for a period still running is refused (`periodRunning`), and the MWST page shows «läuft noch bis …». The year's last period (Q4/H2) can now be filed: its XML is archived beside the seals, and the year close seals it and sets closedThrough. Before, that run always got stuck. This affects the real books' Q4 2026 filing, so check it at the year end.
+    - Activity code asked in setup; a missing one withholds «Freigegeben» with a task. The portal-by-hand promise was dropped: it would leave no as-filed record for the 0535 and the year close.
+    - One typed `Refused {code, params}` for every run, step and command refusal, rendered in four languages; a test forbids internal names in those texts.
+    - AI prompt: a registration dated inside the year rules from that date. The threshold texts are hedged («in der Regel ab 1.1.; die Verfügung der ESTV nennt das Datum»).
+    - Perioden und Siegel shows one card for the year of a firm without returns; H1 leads with the filed figure, today's figure beside it.
+    - Open for Ken: the 0535 for net rate; the threshold wording; no portal-by-hand path; a net-rate firm still sees the receipt's Swiss-VAT fields.
