@@ -304,11 +304,13 @@ export function answerQuestion(id: string, { by, answer }: { by: string; answer:
 }
 
 /**
- * The bookings the withdrawn payer rule `rule` made in the open period go back to being the app's
- * guess (r9n-22): a sale at the proposal (saleCodeOf's reasoning), on the revenue account the
- * answer had moved the money from (`revenue`), or the rule's own account when that is revenue;
- * each payment is then asked about, as the intake would. A booking a person changed since is
- * hers and keeps its accounts; nothing keeps a reason naming the rule that is gone.
+ * The bookings the withdrawn payer rule `rule` made in the open period are no longer the rule's
+ * (r9n-22). One it booked as a sale stays that sale, with its code, as the person taught it
+ * (corner-4); nothing keeps a reason naming the rule that is gone. One it moved off revenue
+ * («kein Umsatz»: the owner's account) goes back to being the app's guess: a sale at the proposal
+ * (saleCodeOf's reasoning), on the revenue account the answer had moved the money from
+ * (`revenue`), and the payment is then asked about, as the intake would. A booking a person
+ * changed since is hers and keeps its accounts.
  */
 function revertRuleBookings(b: Books, rule: string, revenue: string | undefined): void {
   const lock = periodLock(b);
@@ -317,7 +319,7 @@ function revertRuleBookings(b: Books, rule: string, revenue: string | undefined)
     delete e.rule;
     const tx = b.transactions.find((t) => t.ref === e.transactionRef);
     const bank = tx && tx.bank !== 'manual' ? bankAccountFor(tx, WS.bankAccounts) : undefined;
-    const account = chart().typeOf(e.accountCredit) === 'revenue' ? e.accountCredit : revenue;
+    const account = chart().typeOf(e.accountCredit) === 'revenue' ? undefined : revenue;
     if (!tx || e.origin === 'manual' || e.accountDebit !== bank || !account || isVatAmountCode(e.vatCode)) { if (e.reason?.startsWith('Regel:')) delete e.reason; continue; }
     const proposal = saleProposal(tx);
     const decided = { code: saleVatCode(proposal.choice) ?? undefined, why: proposal.why };
