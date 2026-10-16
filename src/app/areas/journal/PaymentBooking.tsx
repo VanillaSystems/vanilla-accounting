@@ -4,7 +4,7 @@
  * and text per line, on the payment's date. It opens with what rules decide (bookingDraft), the
  * lines must add up to the payment, and ↵ books them through the API as a person's entries.
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Index, JournalEntry } from '../../../types/index.js';
 import { formDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
@@ -84,6 +84,9 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
 function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, draft }: Props & { accounts: readonly LedgerBankAccount[]; draft: BookingDraft }) {
   const [rows, setRows] = useState<Row[]>(() => draft.lines.map((init, key) => ({ key, init })));
   const [, redraw] = useState(0);
+  // The lines follow the draft (the payment's own prefill, a receipt linked meanwhile) until the person typed (r9k-7).
+  const touched = useRef(false);
+  useEffect(() => { if (!touched.current) setRows(draft.lines.map((init, key) => ({ key, init }))); }, [draft]);
   const [err, setErr] = useState('');
   const form = useRef<HTMLFormElement | null>(null);
   const busy = useRef(false);
@@ -145,7 +148,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
 
   return (
     <form ref={setForm} className={`form pbook${narrow ? ' narrow' : ''}`} autoComplete="off" aria-label={t('journal.byHand.title')} data-testid="payment-booking"
-      onKeyDown={onKeyDown} onInput={() => redraw((n) => n + 1)} onSubmit={(e) => { e.preventDefault(); void book(); }}>
+      onKeyDown={onKeyDown} onInput={() => { touched.current = true; redraw((n) => n + 1); }} onSubmit={(e) => { e.preventDefault(); void book(); }}>
       <div className="pbh">
         <b>{t('journal.byHand.title')}</b>
         <span className="m">{t('journal.byHand.lead', { date: formatDate(draft.date), currency: draft.currency })}</span>

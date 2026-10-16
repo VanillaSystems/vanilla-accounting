@@ -106,7 +106,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
       <div className="satz" role="table" aria-label={t('journal.satz')}>
         <div role="row"><span className="k">{t('journal.field.accountDebit')}</span><span className="mono n">{e.accountDebit || '–'}</span><span className="nm">{acName[e.accountDebit] ?? (e.accountDebit ? '' : t('journal.noCounter'))}</span></div>
         <div role="row"><span className="k">{t('journal.field.accountCredit')}</span><span className="mono n">{e.accountCredit || '–'}</span><span className="nm">{acName[e.accountCredit] ?? (e.accountCredit ? '' : t('journal.noCounter'))}</span></div>
-        <div role="row">
+        {(e.vatCode || firmCodes().length > 0) && <div role="row">
           <span className="k">{t('journal.field.vatCode')}</span>
           <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} title={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
           <span className="nm">
@@ -114,7 +114,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               ? <>{found?.negative && <span className="m">{t('journal.reversed')} · </span>}{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
               : t('journal.noVat')}
           </span>
-        </div>
+        </div>}
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
       </div>
 

@@ -26,6 +26,9 @@ const words = ((key: string, vars: Record<string, string>) => (t as (k: string, 
 const money = (n: number) => fmt(n).replace(/\.00$/, '');
 
 function origin(r: RuleRow): string {
+  // «decision 2026-01-12» of the demo's own rules in words, not as the file writes it (r9k-13).
+  const decision = r.source && /^decision (\d{4}-\d{2}-\d{2})$/.exec(r.source);
+  if (decision) return t('rules.from.decision', { date: formatDate(decision[1]) });
   if (r.origin === 'other') return r.source ? t('rules.from.other', { source: r.source }) : t('rules.from.unknown');
   return t(`rules.from.${r.origin}`);
 }

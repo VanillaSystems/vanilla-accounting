@@ -12,6 +12,7 @@ import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
+import { vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
@@ -106,8 +107,9 @@ export function errorText(e: unknown): string {
     case 'alreadyBack': return t('error.alreadyBack');
     case 'statement': {
       const { reason, detail = '', unknown, problem, closed } = b.params;
-      if (reason === 'duplicate') return t('error.statement.duplicate', { detail });
-      if (reason === 'filedPayments') return closed ? t('error.statement.filedPayments', { n: closed.n, through: formatDate(closed.through), from: formatDate(dayAfter(closed.through)), refs: closed.refs.slice(0, 5).join(', ') }) : b.error;
+      if (reason === 'duplicate') return t('error.statement.duplicate', { detail: detail.split('/').pop() ?? detail });
+      // A firm that files no return has closed periods, not filed ones (r9k-9).
+      if (reason === 'filedPayments') return closed ? t(vatSetup().registered ? 'error.statement.filedPayments' : 'error.statement.closedPayments', { n: closed.n, through: formatDate(closed.through), from: formatDate(dayAfter(closed.through)), refs: closed.refs.slice(0, 5).join(', ') }) : b.error;
       if (reason === 'account') return problem ? statementProblemText(problem) : unknown ? t('error.statement.unknownAccount', unknown) : t('error.statement.account');
       return t(`error.statement.${reason}`);
     }

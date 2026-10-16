@@ -30,6 +30,8 @@ export interface CamtStatement {
   bankName?: string;
   /** Acct/Ownr/Nm: the account holder, as the bank names them. */
   ownerName?: string;
+  /** Stmt/FrToDt: the days the bank says the statement covers (r9k-10); absent when the bank leaves it out. */
+  period?: { from: string; to: string };
   node: Node;
 }
 
@@ -59,9 +61,17 @@ export function readCamt(xml: string): { message: CamtMessage; statements: CamtS
       currency: String(node.Acct?.Ccy ?? node.Ntry?.[0]?.Amt?.['@_Ccy'] ?? node.Bal?.[0]?.Amt?.['@_Ccy'] ?? 'CHF'),
       ...(node.Acct?.Svcr?.FinInstnId?.Nm ? { bankName: String(node.Acct.Svcr.FinInstnId.Nm).trim() } : {}),
       ...(node.Acct?.Ownr?.Nm ? { ownerName: String(node.Acct.Ownr.Nm).trim() } : {}),
+      ...(periodOf(node.FrToDt) ? { period: periodOf(node.FrToDt) } : {}),
       node,
     })),
   };
+}
+
+/** Stmt/FrToDt as two days, when both are there and in order. */
+function periodOf(frToDt: Node | undefined): { from: string; to: string } | undefined {
+  const from = String(frToDt?.FrDtTm ?? frToDt?.FrDt ?? '').slice(0, 10);
+  const to = String(frToDt?.ToDtTm ?? frToDt?.ToDt ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to) && from <= to ? { from, to } : undefined;
 }
 
 function getAmt(amtEl: any): { amount: number; currency: string } {
@@ -211,8 +221,9 @@ export function assignUniqueRefs(transactions: BankTransaction[]): BankTransacti
 }
 
 /**
- * The days a camt.053 covers and the balances it states. Its opening (OPBD) is the balance at the
- * start of its date: the close of the day before when the bank booked on that date, else the
+ * The days a camt.053 covers and the balances it states. The days are the bank's own (FrToDt) when
+ * it names them (r9k-10), else read off the balances and bookings. Its opening (OPBD) is the balance
+ * at the start of its date: the close of the day before when the bank booked on that date, else the
  * close of that date itself (with nothing booked that day the two are the same amount).
  */
 export function statementSpan(camts: CamtStatement[], account: { account: string; bank: string; currency: string; statements: StatementKind }, filename: string): { from: string; to: string; balances: StatementClosingBalance[] } | null {
@@ -223,8 +234,9 @@ export function statementSpan(camts: CamtStatement[], account: { account: string
   const closing = stated.filter((b) => b.type === 'CLBD').sort(byDate).at(-1);
   const days = [...booked].sort();
   const openedOn = opening && (booked.has(opening.date) ? shiftDays(opening.date, -1) : opening.date);
-  const from = openedOn ? shiftDays(openedOn, 1) : days[0];
-  const to = closing?.date ?? days.at(-1);
+  const periods = camts.flatMap((c) => (c.period ? [c.period] : []));
+  const from = periods.map((p) => p.from).sort()[0] ?? (openedOn ? shiftDays(openedOn, 1) : days[0]);
+  const to = periods.map((p) => p.to).sort().at(-1) ?? closing?.date ?? days.at(-1);
   if (!from || !to || to < from) return null;
   const balance = (date: string, amount: number): StatementClosingBalance =>
     ({ account: account.account, bank: account.bank, currency: account.currency, date, amount, source: 'camt', sourceFile: filename });

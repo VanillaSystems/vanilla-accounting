@@ -14,7 +14,8 @@ import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
-import type { Route } from './route.js';
+import type { Location, Route } from './route.js';
+import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
 import { chfOf, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor } from '../areas/receipts/view.js';
@@ -181,7 +182,7 @@ function ReceiptDetails({ id, books, go }: { id: string; books: Index; go(route:
 }
 
 /** A taken file: where it is, its quick details, the way to its page, and «Rückgängig». */
-function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSession; books: Index; go(route: Route): void; refresh(): void }) {
+function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSession; books: Index; go(route: Route, date?: string): void; refresh(): void }) {
   const { view } = useAutomation();
   const { rates } = useFx();
   const [open, setOpen] = useState(false);
@@ -207,7 +208,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
           <span className="dacts">
-            {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id })}>{t('drop.openReceipt')}</button> : null}
+            {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} title={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
         </div>
@@ -222,7 +223,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   );
 }
 
-export function DropDialog({ onGo, books, refresh }: { onGo(route: Route): void; books: Index; refresh(): void }) {
+export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void; books: Index; refresh(): void }) {
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<Tab>('all');
@@ -236,7 +237,8 @@ export function DropDialog({ onGo, books, refresh }: { onGo(route: Route): void;
   const finished = states.filter((x) => x.kind !== 'working').length;
   const pct = taken.length ? Math.round((finished / taken.length) * 100) : 0;
   const waits = !working && states.some((x) => x.kind === 'waits');
-  const go = (route: Route) => { closeDrop(); onGo(route); };
+  // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
+  const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   return (
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={closeDrop} />

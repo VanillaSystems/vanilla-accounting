@@ -35,7 +35,8 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
     if (!open) return;
     if (e.key === 'ArrowDown') move(active + 1);
     else if (e.key === 'ArrowUp') move(active - 1);
-    else if (e.key === 'Enter' && matches[active]) pick(matches[active].account.number);
+    // ↵ with the list open commits the pick and never reaches the form: a stray ↵ books nothing half typed (r9k-7).
+    else if (e.key === 'Enter') { if (matches[active]) pick(matches[active].account.number); else setOpen(false); }
     else if (e.key === 'Escape') setOpen(false);
     else return;
     e.preventDefault();

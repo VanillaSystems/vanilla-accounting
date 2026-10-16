@@ -12,5 +12,8 @@ export function recognizeCamt(bytes: Buffer): { facts: StatementFacts } | undefi
   const iban = /<IBAN>([^<]+)<\/IBAN>/.exec(xml)?.[1];
   const dates = [...xml.matchAll(/<(?:BookgDt|ValDt)>\s*<Dt>(\d{4}-\d{2}-\d{2})<\/Dt>/g)].map((m) => m[1]).sort();
   const entries = (xml.match(/<Ntry>/g) ?? []).length;
-  return { facts: { ...(iban ? { iban } : {}), ...(dates.length ? { from: dates[0], to: dates.at(-1) } : {}), entries } };
+  // The bank's own period when it names one (FrToDt), else the first and last booking (r9k-10).
+  const span = /<FrToDt>\s*<FrDtTm>(\d{4}-\d{2}-\d{2})[^<]*<\/FrDtTm>\s*<ToDtTm>(\d{4}-\d{2}-\d{2})[^<]*<\/ToDtTm>/.exec(xml);
+  const period = span ? { from: span[1], to: span[2] } : dates.length ? { from: dates[0], to: dates.at(-1) } : {};
+  return { facts: { ...(iban ? { iban } : {}), ...period, entries } };
 }

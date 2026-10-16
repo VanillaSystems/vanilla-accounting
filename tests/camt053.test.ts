@@ -197,3 +197,23 @@ test('a single payment without remittance text keeps its counterparty even when 
   <NtryDtls><TxDtls><Refs><AcctSvcrRef>MR-1</AcctSvcrRef></Refs><RltdPties><Cdtr><Nm>Marco Rossi</Nm></Cdtr></RltdPties></TxDtls></NtryDtls><AddtlNtryInf>Belastung Marco Rossi</AddtlNtryInf></Ntry>`));
   assert.deepEqual([debit.description, debit.counterparty], ['Belastung Marco Rossi', 'Marco Rossi']);
 });
+
+test('r9k-10: the statement\'s days are the bank\'s own (FrToDt) when it names them, not a day off the first booking; without FrToDt the balances and bookings decide', async () => {
+  const { statementSpan } = await import('../src/providers/camt053/camt053.js');
+  const { recognizeCamt } = await import('../src/providers/camt053/recognize.js');
+  const stmt = (frToDt: string) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt><Id>B</Id>${frToDt}
+<Acct><Id><IBAN>CH6580808000000000001</IBAN></Id><Ccy>CHF</Ccy></Acct>
+<Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">100.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-10</Dt></Dt></Bal>
+<Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">55.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-16</Dt></Dt></Bal>
+<Ntry><Amt Ccy="CHF">45.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-11</Dt></BookgDt><AcctSvcrRef>1</AcctSvcrRef></Ntry>
+</Stmt></BkToCstmrStmt></Document>`;
+  const account = { account: '1021', bank: 'Raiffeisen', currency: 'CHF', statements: 'camt053' as const };
+  const withPeriod = stmt('<FrToDt><FrDtTm>2026-10-10T00:00:00</FrDtTm><ToDtTm>2026-10-16T23:59:59</ToDtTm></FrToDt>');
+  const span = statementSpan(readCamt(withPeriod).statements, account, 'b.xml')!;
+  assert.deepEqual([span.from, span.to], ['2026-10-10', '2026-10-16'], 'the bank\'s period');
+  assert.deepEqual(span.balances.map((b) => [b.date, b.amount]), [['2026-10-10', 100], ['2026-10-16', 55]], 'the balances as stated');
+  assert.deepEqual(recognizeCamt(Buffer.from(withPeriod))!.facts, { iban: 'CH6580808000000000001', from: '2026-10-10', to: '2026-10-16', entries: 1 }, 'the drop dialog says the same days');
+  const without = statementSpan(readCamt(stmt('')).statements, account, 'b.xml')!;
+  assert.deepEqual([without.from, without.to], ['2026-10-11', '2026-10-16'], 'without FrToDt the opening balance of the 10th is the close of the 10th: the statement starts on the 11th');
+  assert.deepEqual(recognizeCamt(Buffer.from(stmt('')))!.facts, { iban: 'CH6580808000000000001', from: '2026-10-11', to: '2026-10-11', entries: 1 });
+});
