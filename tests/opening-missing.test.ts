@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { missingOpenings } from '../src/accounting/opening-balance.js';
+import { bookDiffParts, missingOpenings } from '../src/accounting/opening-balance.js';
 import type { BankTransaction, Index } from '../src/types/index.js';
 
 const ACCOUNTS = [
@@ -33,4 +33,11 @@ test('nothing is missing once an opening is entered, without a statement balance
   assert.deepEqual(missingOpenings(books({ config: { openingBalances: { 2025: { 1020: 100 } } } }), ACCOUNTS, '2026'), []);
   const balanced = books({ statementBalances: [{ account: '1020', bank: 'Raiffeisen', currency: 'CHF', date: '2026-09-30', amount: -18016.30, source: 'camt', sourceFile: 'q3.xml' }] });
   assert.deepEqual(missingOpenings(balanced, ACCOUNTS, '2026'), [], 'the bank started at zero: nothing to open');
+});
+
+test('Kontoauszüge splits the books\' gap to the bank into the missing opening balance and what a payment explains (r4c-33)', () => {
+  const missing = { account: '1020', label: 'Raiffeisen CHF', year: '2026', amount: 18420.15 };
+  assert.deepEqual(bookDiffParts(-18331.15, missing), { opening: missing, rest: 89 });
+  assert.deepEqual(bookDiffParts(-18420.15, missing), { opening: missing, rest: 0 }, 'all of it the opening: no payment is blamed');
+  assert.deepEqual(bookDiffParts(-89, undefined), { rest: -89 });
 });

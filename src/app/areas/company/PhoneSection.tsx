@@ -13,6 +13,7 @@ import type { Nav } from '../index.js';
 export function PhoneSection({ nav }: { nav: Nav }) {
   const [info, setInfo] = useState<PhoneInfo>();
   const [busy, setBusy] = useState(false);
+  const [renewing, setRenewing] = useState(false);
   useEffect(() => { if (desktop) api.desktop.phone().then(setInfo, (e) => nav.toast(errorText(e))); }, []);
   if (!desktop) return <p className="m">{t('phone.notDesktop')}</p>;
   if (!info) return <p className="m">{t('changes.loading')}</p>;
@@ -30,7 +31,7 @@ export function PhoneSection({ nav }: { nav: Nav }) {
   };
   const [first, ...others] = info.addresses;
   return (
-    <>
+    <div className="phone">
       <p>{t('phone.intro')}</p>
       <dl className="kv2 wide">
         <dt>{t('phone.state')}</dt>
@@ -54,10 +55,19 @@ export function PhoneSection({ nav }: { nav: Nav }) {
         </div>
       ) : null}
       {info.on ? <p className="m">{t('phone.offWhy')}</p> : null}
-      <p>
-        <button type="button" className="btn" disabled={busy} onClick={() => act(api.desktop.renewPhone, t('phone.renewed'))}>{t('phone.renew')}</button>{' '}
-        <span className="m">{t('phone.renewWhy')}</span>
-      </p>
-    </>
+      {/* A new code locks out every phone paired so far: asked once more before (r4c-39). */}
+      {renewing ? (
+        <p className="phonerenew" role="alertdialog" aria-label={t('phone.renew')}>
+          <span>{t('phone.renewAsk')}</span>{' '}
+          <button type="button" className="btn primary" autoFocus disabled={busy} onClick={() => { setRenewing(false); void act(api.desktop.renewPhone, t('phone.renewed')); }}>{t('phone.renewYes')}</button>{' '}
+          <button type="button" className="btn ghost" onClick={() => setRenewing(false)}>{t('common.cancel')}</button>
+        </p>
+      ) : (
+        <p>
+          <button type="button" className="btn" disabled={busy} onClick={() => setRenewing(true)}>{t('phone.renew')}</button>{' '}
+          <span className="m">{t('phone.renewWhy')}</span>
+        </p>
+      )}
+    </div>
   );
 }

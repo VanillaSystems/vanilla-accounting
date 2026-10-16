@@ -29,6 +29,7 @@ import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
 import { intakeAdd } from '../receipts/intake.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { QuestionsOn } from '../../questions/Questions.js';
+import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -49,6 +50,26 @@ const Amount = ({ tx }: { tx: BankTransaction }) => {
   const n = signed(tx);
   return n > 0 ? <span className="inc">+{fmt(n)}</span> : <>{fmt(-n)}</>;
 };
+
+/**
+ * The books off the bank's closing balance: a missing opening balance is named as on the Bilanz,
+ * with the way to enter it, and only what it leaves unexplained is blamed on a payment (r4c-33).
+ */
+function BookDiff({ books, nav, diff, s }: Props & { diff: number; s: Statement }) {
+  const ws = useWorkspace();
+  const { opening: missing, rest } = bookDiffParts(diff, ws ? missingOpenings(books, ws.bankAccounts, s.to.slice(0, 4)).find((m) => m.account === s.account.account) : undefined);
+  return (
+    <div className="status">
+      {missing ? (
+        <span className="notice warn" style={{ margin: 0 }} data-testid="opening-missing">{I.dot}
+          {t('reports.openingMissing', { account: `${missing.account} ${missing.label}`, year: missing.year, amount: fmt(missing.amount) })}{' '}
+          <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>
+        </span>
+      ) : null}
+      {rest ? <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.bookDiff', { diff: fmt(rest) })}</span> : null}
+    </div>
+  );
+}
 
 function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const { b, s, route, query, nav, canEdit } = props;
@@ -100,9 +121,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.checkDiff', { diff: fmt(c!.diff) })}</span>
         )}
       </div>
-      {c?.bookDiff ? (
-        <div className="status"><span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.bookDiff', { diff: fmt(c.bookDiff) })}</span></div>
-      ) : null}
+      {c?.bookDiff ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
 
       <div className="body">
         <div className="desk">

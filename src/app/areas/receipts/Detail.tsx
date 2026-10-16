@@ -440,8 +440,11 @@ function Quick({ src, file }: { src: string; file: string }) {
   );
 }
 
-function ConfirmDelete({ v, nav }: Props & { v: ReceiptView }) {
+function ConfirmDelete({ v, l, nav }: Props & { v: ReceiptView; l: Ledger }) {
   const close = () => setUi({ overlay: null });
+  // What happens to its payment: booked again without it, or a person's booking kept as it is (r4c-32).
+  const entries = v.links.flatMap((ref) => l.entriesByRef.get(ref) ?? []);
+  const text = !v.links.length ? 'receipts.deleteTextAlone' : entries.length && entries.every((e) => e.origin === 'manual') ? 'receipts.deleteTextKept' : 'receipts.deleteText';
   async function run() {
     close();
     const i = listed.ids.indexOf(v.r.id);
@@ -453,7 +456,7 @@ function ConfirmDelete({ v, nav }: Props & { v: ReceiptView }) {
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 40%, transparent)' }} onClick={close} />
       <div className="palette confirm" role="alertdialog" aria-label={t('receipts.deleteTitle')}>
         <h2>{t('receipts.deleteTitle')}</h2>
-        <p>{t('receipts.deleteText')}</p>
+        <p>{t(text)}</p>
         <div className="file">{v.r.filename}</div>
         <div className="acts">
           <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')} <span className="k">{t('receipts.escKey')}</span></button>

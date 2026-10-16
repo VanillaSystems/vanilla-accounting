@@ -117,3 +117,12 @@ export function missingOpenings(
     return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held) }];
   });
 }
+
+/**
+ * How far the books are off a bank account's closing balance (`diff`, books less bank), split into
+ * the missing opening balance and the rest, which a payment not or wrongly booked explains (r4c-33).
+ */
+export function bookDiffParts(diff: number, missing: MissingOpening | undefined): { opening?: MissingOpening; rest: number } {
+  if (!missing) return { rest: diff };
+  return { opening: missing, rest: fromRappen(toRappen(diff) + toRappen(missing.amount)) };
+}

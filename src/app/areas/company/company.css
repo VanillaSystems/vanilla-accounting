@@ -28,3 +28,12 @@
 .rulelist .rule { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .rulelist .rule .ruleline { font-weight: 600; }
 .rulelist .rule.off .ruleline, .rulelist .rule.note .ruleline { color: var(--muted); font-weight: 500; }
+
+/* Firma › Handy keeps readable in a narrow column (the AI sidebar open): the labels go above the values, the QR code above its words (r4c-39). */
+.phone { container-type: inline-size; }
+.phone .kv2 dd { overflow-wrap: anywhere; }
+@container (max-width: 560px) {
+  .phone .kv2 { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  .phone .kv2 dd { margin-bottom: 8px; }
+  .phone .phonepair { flex-direction: column; }
+}

@@ -93,7 +93,13 @@ router.get('/api/receipts/:id', (req, res) => {
  * what the books held of it, so a restore («Rückgängig» in the toast) puts both back. The same
  * file dropped and deleted again is another deletion; only the latest one can come back.
  */
-interface Trashed { deletedAt: string; receipt: Receipt; mappings: Mapping[]; file: string; /** The entries the deletion took with it (a record from before this field has none). */ entries?: JournalEntry[] }
+interface Trashed {
+  deletedAt: string; receipt: Receipt; mappings: Mapping[]; file: string;
+  /** The entries the deletion took with it (a record from before this field has none). */
+  entries?: JournalEntry[];
+  /** The entries it kept (a person's) that named the receipt as seen: the restore names it there again. */
+  named?: string[];
+}
 const TRASH_DAYS = 30;
 const TRASH = () => join(WS.paths.data, 'trash');
 const ID = /^[\w-]+$/;
@@ -127,7 +133,10 @@ router.delete('/api/receipts/:id', async (req, res) => {
     const mappings = books.mappings.filter((m) => m.receiptId === id);
     const had = books.journalEntries;
     const again = removeReceipt(books, id);
-    const trashed: Trashed = { deletedAt: new Date().toISOString(), receipt, mappings, file: relative(WS.paths.root, pdfPath), entries: had.filter((e) => !books.journalEntries.includes(e)) };
+    // A booking kept (a person's) no longer names the receipt that left the books (r4c-32).
+    const named = books.journalEntries.filter((e) => e.receipts?.includes(id));
+    for (const e of named) e.receipts = e.receipts!.filter((r) => r !== id);
+    const trashed: Trashed = { deletedAt: new Date().toISOString(), receipt, mappings, file: relative(WS.paths.root, pdfPath), entries: had.filter((e) => !books.journalEntries.includes(e)), ...(named.length ? { named: named.map((e) => e.id) } : {}) };
     return { trashed, pdfPath, again };
   });
   emptyOldTrash();
@@ -173,6 +182,7 @@ router.post('/api/receipts/:id/restore', async (req, res) => {
     books.journalEntries = books.journalEntries.filter((e) => !stale.has(e));
     const bare = new Set([...linked].filter((ref) => !books.journalEntries.some((e) => e.transactionRef === ref)));
     books.journalEntries.push(...(t.entries ?? []).filter((e) => bare.has(e.transactionRef)));
+    for (const e of books.journalEntries) if (t.named?.includes(e.id) && e.receipts && !e.receipts.includes(id)) e.receipts = [...e.receipts, id];
     return [...linked].some((ref) => !books.journalEntries.some((e) => e.transactionRef === ref));
   });
   if (existsSync(from)) { mkdirSync(dirname(to), { recursive: true }); renameSync(from, to); }

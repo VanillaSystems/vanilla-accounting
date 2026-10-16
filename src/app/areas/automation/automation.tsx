@@ -3,7 +3,7 @@
  * runs and files; the process map; the queue and the tasks. Everything comes from the declarations
  * and the stored runs (GET /api/automation); nothing here is a list of its own.
  */
-import { Fragment, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -629,16 +629,28 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     const inputs = [...form.querySelectorAll<HTMLInputElement>('input')];
     (inputs.find((i) => !i.value) ?? inputs[0])?.focus();
   };
+  // A payment booked elsewhere meanwhile (on its receipt, in Buchungen) settles the task that waited for its booking (r4c-30).
+  const bookedMeanwhile = (task: Task) => task.item.kind === 'transaction' && task.outcomes.includes('booked') && (books.journalEntries ?? []).some((e) => e.transactionRef === task.item.id);
+  const settled = useRef(new Set<string>());
+  useEffect(() => {
+    if (!canEdit) return;
+    for (const task of view.tasks) {
+      if (!bookedMeanwhile(task) || settled.current.has(task.run)) continue;
+      settled.current.add(task.run);
+      send(task, 'booked');
+    }
+  });
+  const tasks = view.tasks.filter((task) => !bookedMeanwhile(task));
   // A payment nobody booked waits for the person even when no run asked about it (corner-9).
-  const inTasks = new Set(view.tasks.map(unbooked).filter(Boolean));
+  const inTasks = new Set(tasks.map(unbooked).filter(Boolean));
   const waiting = unbookedPayments(books).filter((p) => !inTasks.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence);
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
-      {view.tasks.length ? (
+      {tasks.length ? (
         <div className="wftasks">
-          {view.tasks.map((task) => {
+          {tasks.map((task) => {
             const w = view.workflows.find((x) => x.id === task.workflow);
             const pay = canEdit ? unbooked(task) : undefined;
             return (

@@ -94,3 +94,19 @@ test('a hand booking made meanwhile stays; the deleted entry of that payment is 
     await done();
   }
 });
+
+test('deleting the receipt of a hand-corrected booking keeps the booking and drops the receipt from it; «Rückgängig» names it again (r4c-32)', async () => {
+  const { api, receipt, rest, onL, done } = await setUp();
+  try {
+    const [booked] = await onL();
+    assert.equal((await api.send('PATCH', `/api/journal-entries/${booked.id}`, { accountDebit: '6510' })).status, 200);
+    assert.equal((await api.send('DELETE', `/api/receipts/${receipt.id}`)).status, 200);
+    await rest();
+    assert.deepEqual((await onL()).map((e) => [e.id, e.origin, e.receipts]), [[booked.id, 'manual', []]], 'kept, without the deleted receipt');
+    assert.equal((await api.send('POST', `/api/receipts/${receipt.id}/restore`)).status, 200);
+    await rest();
+    assert.deepEqual((await onL()).map((e) => [e.id, e.receipts]), [[booked.id, [receipt.id]]]);
+  } finally {
+    await done();
+  }
+});

@@ -11,6 +11,7 @@ import { localToday, parsePeriod, periodContaining, type Period } from '../../..
 import type { Location } from '../../shell/route.js';
 import { setUi } from './state.js';
 import { put, reloadInvoices } from './data.js';
+import { inOrder } from '../../lib/in-order.js';
 import { customerChange, routeId } from './model.js';
 import { invoicing } from '../../../engines/index.js';
 import { desktop } from '../../desktop/bridge.js';
@@ -47,12 +48,15 @@ export async function newDraft(nav: Nav, customer: Pick<Customer, 'id' | 'name'>
 export const newDraftFor = (nav: Nav, c: Pick<Customer, 'id' | 'name' | 'language' | 'address'>) =>
   newDraft(nav, c, { lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
 
-/** A draft changed on the sheet: shown at once, saved behind it. */
+const draftSaves = inOrder();
+
+/** A draft changed on the sheet: shown at once, saved behind it, one save after the other; only the last answer is shown. */
 export async function saveDraft(nav: Nav, draft: Draft, patch: DraftChange): Promise<void> {
   const local = { ...draft } as Draft & Record<string, unknown>;
   for (const [k, v] of Object.entries(patch)) { if (v === null) delete local[k]; else local[k] = v; }
   put({ invoice: local });
-  const saved = await run(nav, api.patchDraft(draft.id, patch));
+  const { result: saved, latest } = await draftSaves(draft.id, () => run(nav, api.patchDraft(draft.id, patch)));
+  if (!latest) return;
   if (saved) put({ invoice: saved });
   else void reloadInvoices();
 }
