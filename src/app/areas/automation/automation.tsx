@@ -31,6 +31,10 @@ import { questionsNow, useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
+import { EvidenceTasks, PeriodIssues } from './Issues.js';
+import { journalOf } from '../journal/model.js';
+import { localToday, parsePeriod } from '../../../accounting/periods.js';
+import { periodName } from '../../lib/period-label.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -604,6 +608,12 @@ function MapPage({ view, map, nav }: { view: AutomationView; map: 'phases' | 'ev
   );
 }
 
+/** Under the return to review: what is still open in its period, each a link; it does not block (r4c-38). */
+function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: Index; nav: Nav; canEdit: boolean }) {
+  const p = parsePeriod(ret.period, localToday());
+  return p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null;
+}
+
 function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; nav: Nav; run?: string; books: Index; canEdit: boolean }) {
   const q = useQuestions();
   const asked = forMe(q.questions, q.me).length;
@@ -622,6 +632,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   // A payment nobody booked waits for the person even when no run asked about it (corner-9).
   const inTasks = new Set(view.tasks.map(unbooked).filter(Boolean));
   const waiting = unbookedPayments(books).filter((p) => !inTasks.has(p.ref));
+  const evidence = journalOf(books).views.some((v) => v.evidence);
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
@@ -636,6 +647,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item, task.reads)}</p> : null}
                 {Object.entries(task.reads ?? {}).filter(([k]) => !tx(task.title).includes(`{${k}}`)).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
+                {task.reads?.return ? <ReturnIssues ret={task.reads.return as PeriodReturn} books={books} nav={nav} canEdit={canEdit} /> : null}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
@@ -646,7 +658,8 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             );
           })}
         </div>
-      ) : asked || waiting.length ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      ) : asked || waiting.length || evidence ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
       {waiting.length > 0 && (
         <section className="wfunbooked" data-testid="unbooked-payments">
           <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>

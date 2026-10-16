@@ -192,7 +192,7 @@ export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
 }
 
 /** The click: the proposed code, and for a receipt that shows VAT the receipts the entry now records as seen. */
-const patchOf = (c: EvidenceCheck) => (c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code });
+export const patchOf = (c: EvidenceCheck) => (c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code });
 
 /** Book from this entry: its Gegenbuchung, a copy, and for an accrual its reversal on the next 1.1. (treuhaender-27). */
 function EntryActions(props: Props & { v: EntryView; j: Journal }) {
