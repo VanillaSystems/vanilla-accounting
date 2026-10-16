@@ -361,3 +361,39 @@ test('a camt.053 of an account the books lack names its bank and asks; «Nein, p
     await api.stop();
   }
 });
+
+// 2 x 2 pixels, red (tests/image-pdf.test.ts).
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGP4z8DwHwYBAB7FA/+WnI5aAAAAAElFTkSuQmCC', 'base64');
+
+test('r8k-9: a file that is no PDF inside waits in quarantine with its reason; a photo\'s row follows its conversion to PDF, and «Rückgängig» takes the converted receipt out', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, runOf, rest, books } = SESSION(api);
+    const inbox = () => (existsSync(join(api.root, 'beleg-import')) ? readdirSync(join(api.root, 'beleg-import')).sort() : []);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=a.pdf`, Buffer.from('%PDF'));
+    const broken = s.rows[0];
+    assert.deepEqual([broken.state, broken.reason], ['quarantine', 'unreadable']);
+    assert.ok(broken.quarantined && existsSync(join(api.root, 'data/quarantine', broken.quarantined)), 'it lies in quarantine');
+    assert.equal(readFileSync(join(api.root, 'data/quarantine', `${broken.quarantined}.reason.txt`), 'utf8').trim(), 'unreadable');
+    assert.deepEqual(inbox(), [], 'nothing of it in the inbox');
+
+    s = await post(`/api/drop/${s.id}/files?name=IMG_2031.png`, PNG);
+    const photo = s.rows[1];
+    assert.equal(photo.state, 'taken');
+    await rest();
+    const made = (await books()).receipts.find((r) => r.filename === 'IMG_2031.pdf');
+    assert.ok(made, 'the photo became a PDF receipt');
+    assert.notEqual(made.id, photo.id, 'under the id of its PDF bytes');
+    assert.deepEqual((await runOf(photo.run!)).arrived?.find((a) => a.file === 'IMG_2031.png'), { kind: 'receipt', file: 'IMG_2031.png', id: made.id, inbox: 'IMG_2031.pdf' }, 'the run\'s arrival follows the conversion, so the row ends as the receipt it became');
+    assert.deepEqual(inbox(), [], 'the photo is read and archived');
+
+    s = await post(`/api/drop/${s.id}/rows/${photo.key}`, { kind: 'undo' });
+    assert.equal(s.rows[1].state, 'undone');
+    assert.equal((await books()).receipts.some((r) => r.id === made.id), false, 'the converted receipt left the books');
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
