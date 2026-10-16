@@ -235,7 +235,11 @@ export interface SetupData {
     byClass: Record<string, { type: AccountType; line: string }> & { otherwise: { type: AccountType; line: string } };
   };
   owner: Record<string, { account: string; label: string }> & { otherwise: { account: string; label: string } };
-  answers: { payouts: string[]; imports: string[] };
+  answers: {
+    /** «Auszahlungen eines Zahlungsanbieters: ja»: the accounts added, and the firm's own payout split when no rule names the provider. */
+    payouts: { accounts: string[]; sales: Record<string, string> & { otherwise: string }; fees: { account: string; vat: string } };
+    imports: string[];
+  };
 }
 
 /**

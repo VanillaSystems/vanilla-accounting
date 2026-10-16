@@ -1,4 +1,4 @@
-import type { BankTransaction, VatRateGroup, ReceiptLine } from "../types/index.js";
+import type { BankTransaction, PayoutFacts, VatRateGroup, ReceiptLine } from "../types/index.js";
 import { vat } from "../engines/index.js";
 import type { VatSetup } from "../workspace/vat-setup.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
@@ -7,6 +7,8 @@ export interface MatchResult {
   suggestedFilename: string;
   /** The short title a list shows (TITLE_RULES): parsed into { vendor, what } when both are there. */
   title?: { vendor: string; what: string };
+  /** A payout report's figures (PAYOUT_RULES), kept only when they add up. */
+  payout?: PayoutFacts;
   matchedTransactionRefs: string[];
   date: string;
   description: string;
@@ -21,6 +23,19 @@ export const TITLE_RULES = `two parts, in German.
 - "w": what it is, 1 to 3 German words, the essence only. No amounts, no dates, no invoice numbers, no VAT info, no parentheses. E.g. "Benzin", "Zoll", "Fracht", "Monatsabo", "Autowäsche", "Leere Datei" (a blank capture). For a sale the order number, e.g. "#1132". For a bank statement the month and currency, e.g. "Kontoauszug USD Feb".`;
 
 /** A model's {v, w}, kept only when both are short text. */
+/** The figures a payout report states; the model gives them once, at the match step, and the booking step books every linked payout by them (src/booking/classify.ts). */
+export const PAYOUT_RULES = `only for the payout report of a card terminal or payment provider (SumUp, TWINT, Stripe, Payrexx, Worldline): "sales" (the card sales before any refund), "refunds", "fees" (the provider's) and "paidOut" (what reached the bank), each a positive number, so that sales − refunds − fees = paidOut; a monthly report gives its totals for the whole month. Leave "payout" out for any other document.`;
+
+/** The report's figures when they are four finite, non-negative numbers that add up (to the Rappen); anything else is no fact. */
+export function parsePayoutFacts(x: unknown): PayoutFacts | undefined {
+  const o = x as Record<string, unknown> | undefined;
+  if (!o || typeof o !== 'object') return undefined;
+  const n = (k: string) => (typeof o[k] === 'number' && Number.isFinite(o[k]) && (o[k] as number) >= 0 ? (o[k] as number) : undefined);
+  const [sales, refunds, fees, paidOut] = [n('sales'), n('refunds') ?? 0, n('fees') ?? 0, n('paidOut')];
+  if (sales === undefined || paidOut === undefined) return undefined;
+  return Math.abs(sales - refunds - fees - paidOut) < 0.05 ? { sales, refunds, fees, paidOut } : undefined;
+}
+
 export function parseTitle(x: unknown): { vendor: string; what: string } | undefined {
   const o = x as { v?: unknown; w?: unknown } | undefined;
   const v = typeof o?.v === 'string' ? o.v.trim() : '', w = typeof o?.w === 'string' ? o.w.trim() : '';
@@ -85,10 +100,13 @@ Return ONLY a valid JSON object with these fields:
   "amount": 85.40,
   "currency": "CHF",
   "confidence": 0.95,
-  "title": { "v": "Coop Pronto", "w": "Benzin" }
+  "title": { "v": "Coop Pronto", "w": "Benzin" },
+  "payout": { "sales": 1480.00, "refunds": 40.00, "fees": 27.65, "paidOut": 1412.35 }
 }
 
 Rules for title: ${TITLE_RULES}
+
+Rules for payout: ${PAYOUT_RULES}
 
 Rules for suggestedFilename: YYYYMMDD prefix, lowercase, hyphens instead of spaces, no special chars, end with .pdf.
 
@@ -504,8 +522,10 @@ export function parseMatchResult(raw: string): MatchResult | null {
     return null;
   }
   const title = parseTitle((parsed as { title?: unknown }).title);
+  const payout = parsePayoutFacts((parsed as { payout?: unknown }).payout);
   delete parsed.title;
-  return title ? { ...parsed, title } : parsed;
+  delete parsed.payout;
+  return { ...parsed, ...(title ? { title } : {}), ...(payout ? { payout } : {}) };
 }
 
 /**

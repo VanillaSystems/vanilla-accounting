@@ -66,7 +66,7 @@ export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
 export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   const { sells, legalForm, payouts, imports } = input.answers;
   const { answers, bankAccounts } = ch().setup;
-  const extra = new Set([...(payouts === 'yes' ? answers.payouts : []), ...(imports === 'yes' ? answers.imports : [])]);
+  const extra = new Set([...(payouts === 'yes' ? answers.payouts.accounts : []), ...(imports === 'yes' ? answers.imports : [])]);
   const base = chartFor(chart, sells, legalForm);
   const byNumber = new Map(base.map((a) => [a.number, a]));
   for (const a of chartFor(chart, 'both', legalForm)) if (extra.has(a.number)) byNumber.set(a.number, a);

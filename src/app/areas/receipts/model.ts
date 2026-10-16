@@ -231,9 +231,9 @@ export const readsAsPayout = (r: Pick<Receipt, 'description' | 'extractedText' |
  * The way the receipt's money went: `in` for a credit note (its amount below zero), a sale, or a
  * payout report (its kind, else its words: r9k-4), `out` for a supplier invoice; undefined without an amount.
  */
-function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extractedText' | 'title'>): 'in' | 'out' | undefined {
+function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extractedText' | 'title' | 'payout'>): 'in' | 'out' | undefined {
   if (r.amount == null || r.amount === 0) return undefined;
-  if (r.amount < 0 || r.kind === 'sales-record') return 'in';
+  if (r.amount < 0 || r.kind === 'sales-record' || r.payout) return 'in';
   return r.kind === undefined && readsAsPayout(r) ? 'in' : 'out';
 }
 

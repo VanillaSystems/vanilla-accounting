@@ -16,10 +16,11 @@ import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js'
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { baseCurrency, chart, filing } from '../engines/index.js';
+import { baseCurrency, chart, filing, setup } from '../engines/index.js';
+import { roundCHF, toRappen } from '../accounting/rappen.js';
 import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
-import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
+import { saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
@@ -154,6 +155,23 @@ export interface ClassifyContext extends ClassifyPromptContext {
   vat?: VatSetup;
   /** The accounts that hold money (moneyAccounts): a transfer between two carries no VAT code. */
   moneyAccounts?: ReadonlySet<string>;
+  /** The firm's own payout split (payoutDefault) for a payout report no rule names the provider of. */
+  payout?: RuleBooking;
+}
+
+/**
+ * The payout booking of a firm that answered «Auszahlungen eines Zahlungsanbieters: ja» at setup
+ * (modules/ch/setup.yaml answers.payouts), for a payout report no rule names the provider of
+ * (r10f-29): the gross sales on the revenue account of what the firm sells at its sale code, the
+ * fees on the account the answer added at its code where the form takes one, both from the chart.
+ */
+export function payoutDefault(ws: Pick<Workspace, 'profile'>, chart: readonly string[]): RuleBooking | undefined {
+  if (ws.profile?.payouts !== 'yes') return undefined;
+  const { sales, fees } = setup().answers.payouts;
+  const has = new Set(chart);
+  const account = (ws.profile.sells && sales[ws.profile.sells]) || sales.otherwise;
+  if (!has.has(account) || !has.has(fees.account)) return undefined;
+  return { account, vat: saleVatCode('saleDomestic'), fees: { account: fees.account, vat: formTakes(fees.vat) ? fees.vat : '' } };
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -230,6 +248,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     ownerAccount: ownerAccount(ws).split(' ')[0],
     vat: ws.company.vat,
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
+    ...((p) => (p ? { payout: p } : {}))(payoutDefault(ws, [...chartNames(chartOfAccounts).keys()])),
   };
 }
 
@@ -334,6 +353,37 @@ export function payoutLines(entries: readonly PayoutRead[], bankAccount: string,
         : { accountDebit: fees.account, accountCredit: bankAccount, amount, vatCode: fees.vat, description: e.description });
   }
   return out;
+}
+
+/**
+ * A payout booked from its report's figures, in code (r10f-29): the report linked to `tx`
+ * (Receipt.payout, read once at the match step) covers every payout it is linked to; when those
+ * add up to what it paid out, each payout's sales are its own amount, and the last one (by date)
+ * carries the report's refunds and fees on top, so the sales of all of them add up to the report's.
+ * Undefined when no linked report has figures or the payouts do not add up: the model reads it.
+ */
+export function payoutFromReport(books: Books, tx: BankTransaction, booking: RuleBooking & { fees: NonNullable<RuleBooking['fees']> }, context: ClassifyContext, fx: FxResolver, by: BookedBy, reason: string): JournalEntry[] | undefined {
+  const mapped = mappedReceipts(books, tx);
+  const report = mapped.find((r) => r.payout);
+  if (!report?.payout) return undefined;
+  const facts = report.payout;
+  const refs = new Set(books.mappings.filter((m) => m.receiptId === report.id).map((m) => m.transactionRef));
+  const payouts = books.transactions.filter((t) => refs.has(t.ref) && t.direction === 'CRDT' && t.currency === tx.currency).sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
+  if (!payouts.length || toRappen(payouts.reduce((s, t) => s + Math.abs(t.amount), 0)) !== toRappen(facts.paidOut)) return undefined;
+  const last = payouts[payouts.length - 1].ref === tx.ref;
+  const name = merchantOf(tx.description);
+  const read: PayoutRead[] = [
+    { accountDebit: '', accountCredit: '', amount: last ? roundCHF(Math.abs(tx.amount) + facts.refunds + facts.fees) : Math.abs(tx.amount), description: name, kind: 'sale' },
+    ...(last && facts.refunds > 0 ? [{ accountDebit: '', accountCredit: '', amount: facts.refunds, description: `${name}, Rückerstattungen`, kind: 'refund' as const }] : []),
+    ...(last && facts.fees > 0 ? [{ accountDebit: '', accountCredit: '', amount: facts.fees, description: `${name}, Gebühren`, kind: 'fee' as const }] : []),
+  ];
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const lines = payoutLines(read, bankAccount, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue')!;
+  const money = (n: number) => n.toFixed(2);
+  const said = wordsIn('de').t('rules.say.payoutReport', { file: report.filename, sales: money(facts.sales), refunds: money(facts.refunds), fees: money(facts.fees), paidOut: money(facts.paidOut), n: payouts.length });
+  const lock = periodLock(books);
+  const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
+  return entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by, reason: `${reason}${said}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
 }
 
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
@@ -454,6 +504,19 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   for (const tx of txs) {
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
+    // A payout whose report's figures are read (Receipt.payout) is booked from them in code, by the rule naming the provider, else by the firm's own split (r10f-29).
+    const split = then?.kind === 'book' && then.booking.fees ? then.booking : !placed && context.payout?.fees ? context.payout : undefined;
+    if (split?.fees) {
+      const by: BookedBy = placed ? { kind: 'rule', rule: placed.rule.id } : { kind: 'code', check: 'payoutReport' };
+      const reason = placed ? `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}; ` : '';
+      const read = payoutFromReport(books, tx, { ...split, fees: split.fees }, context, fx, by, reason);
+      if (read) {
+        books.journalEntries.push(...(placed ? read.map((e) => ({ ...e, rule: placed.rule.id })) : read));
+        log(`  ${tx.ref}  → payout report${placed ? ` (rule ${placed.rule.id})` : ''}`);
+        outcome.classified.push(tx.ref);
+        continue;
+      }
+    }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book' && then.booking.fees && mappedReceipts(books, tx).length) {
       // The payout report's figures need reading: the model reads them, the rule books them.

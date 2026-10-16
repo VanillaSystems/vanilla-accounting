@@ -68,7 +68,12 @@ export interface Receipt {
    * is made (golden rule 1); the receipt says so, and its tax is a correction in the open quarter.
    */
   filedPayment?: string;
+  /** A payout report's figures, read once at the match step: the booking step splits every payout it is linked to by them, in code (r10f-29). */
+  payout?: PayoutFacts;
 }
+
+/** What a card terminal's or payment provider's report states, all positive: sales − refunds − fees = paidOut. */
+export interface PayoutFacts { sales: number; refunds: number; fees: number; paidOut: number }
 
 export interface ReceiptTitle { vendor: string; what: string }
 
@@ -176,7 +181,7 @@ export interface JournalEntry {
 }
 
 /** The app's checks that set a booking's code themselves (src/accounting/sales-without-vat.ts saleCodeOf: a sale's VAT code). */
-export const CODE_CHECKS = ['saleCode'] as const;
+export const CODE_CHECKS = ['saleCode', 'payoutReport'] as const;
 export type CodeCheck = typeof CODE_CHECKS[number];
 
 /** The booking fields a person's change keeps the old values of. */

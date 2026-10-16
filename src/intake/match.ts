@@ -276,7 +276,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     let twin: string | undefined;
     const dated = dateOf(answer.date, receipt);
     const target = archive(receipt, datedName(normalizeFilename(answer.suggestedFilename), dated.date), (r, index) => {
-      Object.assign(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
+      Object.assign(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}), ...(answer.payout ? { payout: answer.payout } : {}) });
       if (dated.dateSource) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
