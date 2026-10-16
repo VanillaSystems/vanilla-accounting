@@ -64,6 +64,8 @@ export interface ManifestPatch {
   vat?: VatSetup;
   banks?: BankPatch[];
   addBank?: NewBank;
+  /** A bank account taken out again (Firma › Bankkonten › «Entfernen», the undo of an add); the API refuses one the books use (r9k-1). */
+  removeBank?: { bank: string; currency: string };
   invoicing?: InvoicingPatch;
   outgoingMail?: MailPatch | null;
 }
@@ -111,7 +113,14 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     doc.setIn(['company', 'vat'], node);
   }
   const seq = doc.get('bankAccounts');
-  if ((patch.banks?.length || patch.addBank) && !isSeq(seq)) throw new WorkspaceError(`${path}: bankAccounts must be a list`);
+  if ((patch.banks?.length || patch.addBank || patch.removeBank) && !isSeq(seq)) throw new WorkspaceError(`${path}: bankAccounts must be a list`);
+  if (patch.removeBank && isSeq(seq)) {
+    const r = patch.removeBank;
+    if (r.bank === 'manual') throw new WorkspaceError('bankAccounts: the owner\'s private account (manual) is not a bank account to remove');
+    const i = seq.items.findIndex((item) => isMap(item) && item.get('bank') === r.bank && item.get('currency') === r.currency);
+    if (i < 0) throw new WorkspaceError(`bankAccounts: no account ${r.bank} ${r.currency}`);
+    seq.items.splice(i, 1);
+  }
   for (const b of patch.banks ?? []) {
     const i = isSeq(seq) ? seq.items.findIndex((item) => isMap(item) && item.get('bank') === b.bank && item.get('currency') === b.currency) : -1;
     if (i < 0) throw new WorkspaceError(`bankAccounts: no account ${b.bank} ${b.currency}`);

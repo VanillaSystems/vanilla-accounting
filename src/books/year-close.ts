@@ -94,7 +94,8 @@ export function yearCloseOf(ws: Workspace, year: string, rates: EstvRates = rate
     filed: filedReturnsOf(ws, year),
     seals: sealsOf(books),
     legalForm: ws.company.legalForm,
-    doctor: workspaceChecks(ws).flatMap((r) => (r.status === 'fail' ? [r.label] : [])),
+    // A failure with a code is said by the checklist in the person's words (bankNotInChart, r9k-1), not as doctor's English line.
+    doctor: workspaceChecks(ws).flatMap((r) => (r.status === 'fail' && !r.code ? [r.label] : [])),
     rates,
     state: readState(ws, year),
     receivables: receivablesOf(ws, year, rates, books),

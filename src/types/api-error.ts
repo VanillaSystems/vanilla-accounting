@@ -79,6 +79,8 @@ export type ApiRefusal =
   | { code: 'mailSourceField'; params: { field: 'address' | 'host' | 'account' } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
   | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' } }
+  /** Firma › Bankkonten › «Entfernen» (or the undo of an add) while statements, bookings or invoices use the account (r9k-1). */
+  | { code: 'bankInUse'; params: { account: string; label: string; statements: number; entries: number; invoices: number } }
   /** The secret store (the Mac's keychain) could not take a password: nothing else was written. */
   | { code: 'secretStore' }
   /** An invoicing refusal met through the AI sidebar (src/server/workspace-edits.ts): which rule, and what is missing. */
@@ -124,7 +126,13 @@ export type ClassifyRefusal =
  * month, or a camt.053 already read (detail: that file).
  */
 /** A statement's account the manifest lacks: its IBAN and currency, and the bank's name when the statement gives it. */
-export interface UnknownAccount { iban: string; currency: string; bankName?: string }
+export interface UnknownAccount {
+  iban: string;
+  currency: string;
+  bankName?: string;
+  /** The account holder the statement names (camt Acct/Ownr/Nm): the owner sees whose account it is (r9k-1). */
+  owner?: string;
+}
 
 /**
  * Why a statement lands on no account, for the UI to say in the person's words (and the drop

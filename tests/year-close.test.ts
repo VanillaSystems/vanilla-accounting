@@ -379,3 +379,10 @@ test('a payment that names an open invoice without being linked to it blocks the
   assert.deepEqual(close.blockers, [{ code: 'undecided', templates: ['receivables'] }, { code: 'paymentsUnlinked', payments: unlinked }]);
   assert.deepEqual(yearClose(input(b, { receivables: { ...receivables, unlinked: undefined }, chart: [...CHART, '1100'] })).blockers, [{ code: 'undecided', templates: ['receivables'] }], 'linked: only the decision is open');
 });
+
+test('r9k-1: a bank account whose ledger account the chart lacks is a typed problem of the checklist (said in the person\'s language), not doctor\'s English line', () => {
+  const close = yearClose(input(books(), { bankAccounts: [...BANKS, { bank: 'Raiffeisen 2', currency: 'CHF', account: '1022', label: 'Coiffure Nachbar GmbH', statements: 'camt053' }] }));
+  const doctor = close.checks.find((c) => c.id === 'doctor')!;
+  assert.deepEqual(doctor.problems, [{ code: 'bankNotInChart', account: '1022', label: 'Coiffure Nachbar GmbH' }]);
+  assert.equal(doctor.status, 'fail');
+});

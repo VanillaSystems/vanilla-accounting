@@ -13,6 +13,7 @@ const PROBLEM_TEXT: { [C in Problem['code']]: (p: Extract<Problem, { code: C }>)
   statementGap: (p) => `${p.account} ${p.label}: no statement covers ${p.from} to ${p.to}: import it`,
   unbooked: (p) => `${p.count} transaction(s) of the year have no entry (${p.refs.join(', ')}${p.count > p.refs.length ? ', …' : ''}): npm run classify`,
   doctor: (p) => `npm run doctor: ${p.label}`,
+  bankNotInChart: (p) => `the bank account ${p.label} books on ${p.account}, which is not in accounts.json: add it under Firma › Kontenplan (or master-data/accounts.json)`,
   noRate: (p) => `the ESTV rate of 31.12. for ${p.currency} is not published yet: npm run fetch-rates once it is`,
   fxToBook: (p) => `${p.account}: a Kursdifferenz of CHF ${chf(p.difference)} is not booked yet (npm run year:close books it)`,
   yearLocked: () => 'the books are closed through 31.12. already, so the Kursdifferenz can no longer be dated 31.12.',

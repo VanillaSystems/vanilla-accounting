@@ -510,6 +510,8 @@ export type Problem =
   | { code: 'outsideStatements'; account: string; amount: number }
   /** Payments naming an open invoice without being linked to it: the Debitoren would count their revenue twice (r9c-3). */
   | { code: 'paymentsUnlinked'; payments: UnlinkedPayment[] }
+  /** A bank account of the manifest books on a ledger account the chart lacks (r9k-1). */
+  | { code: 'bankNotInChart'; account: string; label: string }
   | { code: 'noRate'; currency: string }
   | { code: 'fxToBook'; account: string; difference: number }
   | { code: 'yearLocked' }
@@ -607,7 +609,10 @@ function preconditions(input: YearCloseInput): Check[] {
   const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && state(t.ref) !== 'booked' && state(t.ref.split('~')[0]) !== 'booked').map((t) => t.ref);
   const unbooked: Problem[] = unbookedRefs.length ? [{ code: 'unbooked', count: unbookedRefs.length, refs: unbookedRefs.slice(0, 8) }] : [];
 
-  const doctor = input.doctor.map((label): Problem => ({ code: 'doctor', label }));
+  // A bank account whose ledger account the chart lacks, in the person's words (r9k-1): the chart's numbers against the manifest's accounts.
+  const chart = new Set(input.chart);
+  const notInChart = input.bankAccounts.filter((b) => !chart.has(b.account)).map((b): Problem => ({ code: 'bankNotInChart', account: b.account, label: b.label }));
+  const doctor = [...notInChart, ...input.doctor.map((label): Problem => ({ code: 'doctor', label }))];
   const plausible = plausibility(books, year);
 
   return [

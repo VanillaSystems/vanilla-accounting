@@ -10,7 +10,9 @@ import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
-import { accountName, setAccountName } from '../../workspace/accounts-write.js';
+import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
+import { readBankStatements } from '../../workspace/bank-statements.js';
+import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import { assertPlaced } from '../edits.js';
 import { account, setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
@@ -98,6 +100,45 @@ function bankPatch(raw: unknown): BankPatch {
 function newBank(raw: unknown): NewBank {
   const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban']);
   return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account: stringField(b, 'account'), label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined };
+}
+
+/**
+ * The bank account to take out (r9k-1), refused while the books use it: statements read into it,
+ * bookings on its ledger account or payments on it, invoices paid to it. The refusal counts them, so
+ * the page says what to clear first.
+ */
+function removedBank(raw: unknown): NonNullable<ManifestPatch['removeBank']> {
+  const b = patchBody(raw, ['bank', 'currency']);
+  const r = { bank: stringField(b, 'bank'), currency: stringField(b, 'currency') };
+  const bank = WS.bankAccounts.find((a) => a.bank === r.bank && a.currency === r.currency);
+  if (!bank || bank.bank === 'manual') return r;
+  const books = readBooks();
+  const statements = readBankStatements(WS).filter((f) => f.status === 'read' && f.account.bank === bank.bank && f.account.currency === bank.currency).length;
+  const entries = books.journalEntries.filter((e) => e.accountDebit === bank.account || e.accountCredit === bank.account).length
+    + books.transactions.filter((t) => t.bank === bank.bank && t.currency === bank.currency).length;
+  const invoices = Object.values(WS.invoicing?.payTo ?? {}).filter((to) => to?.account === bank.account).length;
+  if (statements || entries || invoices) {
+    throw new RequestError(400, `Das Bankkonto ${bank.label} (${bank.account}) wird gebraucht: ${statements} Auszüge, ${entries} Buchungen oder Zahlungen, ${invoices} Rechnungskonten. Erst diese entfernen.`,
+      { code: 'bankInUse', params: { account: bank.account, label: bank.label, statements, entries, invoices } });
+  }
+  return r;
+}
+
+/**
+ * The chart beside the bank accounts (r9k-1): a new bank account's ledger account joins the chart
+ * under the bank's label when the chart lacks it, so the year close never blocks on it; a removed
+ * bank account takes its ledger account along only when that account was made with it (its name
+ * is still the bank's label), no booking is on it and no other bank account uses it.
+ */
+function chartWithBanks(patch: ManifestPatch, before: readonly LedgerBankAccount[]): void {
+  const a = patch.addBank;
+  if (a && accountName(WS, a.account.trim()) === undefined) checked(() => setAccountName(WS, a.account.trim(), a.label));
+  const r = patch.removeBank;
+  const gone = r && before.find((b) => b.bank === r.bank && b.currency === r.currency);
+  if (!gone) return;
+  const books = readBooks();
+  const used = books.journalEntries.some((e) => e.accountDebit === gone.account || e.accountCredit === gone.account) || WS.bankAccounts.some((b) => b.account === gone.account);
+  if (!used && accountName(WS, gone.account) === gone.label) removeAccount(WS, gone.account);
 }
 
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
@@ -205,20 +246,24 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
  * A new payment term also goes to every customer who had the old one.
  */
 router.patch('/api/workspace', (req, res) => {
-  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing', 'outgoingMail', 'vat']);
+  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'removeBank', 'invoicing', 'outgoingMail', 'vat']);
   if (b.banks !== undefined && !Array.isArray(b.banks)) throw new RequestError(400, 'banks: eine Liste erwartet.');
   const patch: ManifestPatch = {
     ...(b.vat === undefined ? {} : { vat: vatPatch(b.vat) }),
     ...(b.company === undefined ? {} : { company: profilePatch(b.company) }),
     ...(b.banks === undefined ? {} : { banks: (b.banks as unknown[]).map(bankPatch) }),
     ...(b.addBank === undefined ? {} : { addBank: newBank(b.addBank) }),
+    ...(b.removeBank === undefined ? {} : { removeBank: removedBank(b.removeBank) }),
     ...(b.invoicing === undefined ? {} : { invoicing: invoicingPatch(b.invoicing) }),
     ...(b.outgoingMail === undefined ? {} : { outgoingMail: mailPatch(b.outgoingMail) }),
   };
   const terms = WS.invoicing?.paymentTermsDays;
+  const banksBefore = WS.bankAccounts;
   checked(() => patchManifest(WS.paths.manifest, patch));
   const days = patch.invoicing?.paymentTermsDays;
   if (days !== undefined && terms !== undefined) setCustomerTerms(WS, (c) => (c.paymentTermsDays === terms ? days : undefined));
+  reopenWorkspace();
+  chartWithBanks(patch, banksBefore);
   reopenWorkspace();
   res.json(companyInfo(WS, readBooks()));
 });

@@ -361,6 +361,9 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   }
   const balance = (account: string) => ws.statementBalances.find((s) => s.account === account);
   const goBank = () => nav.go({ route: { area: 'bank' }, query: {} });
+  // «Entfernen» takes an account out again; the toast's «Rückgängig» adds it back as it was (r9k-1). The API refuses one the books use.
+  const remove = (b: CompanyInfo['bankAccounts'][number]) => patch(nav, { removeBank: { bank: b.bank, currency: b.currency } }, t('company.bankRemoved', { label: b.label }),
+    { addBank: { bank: b.bank, currency: b.currency, account: b.account, label: b.label, ...(b.iban ? { iban: b.iban } : {}) } });
   return (
     <>
       <form onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape' && edit) { e.stopPropagation(); setEdit(false); } }}>
@@ -374,7 +377,7 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 <span className="mono">{b.account}</span>
                 <input aria-label={t('company.field.label')} value={f[k].label} onChange={(e) => setF({ ...f, [k]: { ...f[k], label: e.target.value } })} />
                 <input aria-label={t('company.iban')} className="mono" value={f[k].iban} disabled={b.bank === 'manual'} onChange={(e) => setF({ ...f, [k]: { ...f[k], iban: e.target.value } })} />
-                <span className="r m">{b.bank} {b.currency}</span>
+                <span className="r m">{b.bank} {b.currency}{b.bank !== 'manual' && <> <button type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} title={t('company.removeBankTip')} onClick={() => void remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</button></>}</span>
               </div>
             ) : (
               <div key={k} className="fr go" role="link" tabIndex={0} data-bank={b.account} onClick={goBank} onKeyDown={(e) => { if (e.key === 'Enter') goBank(); }}>
@@ -418,7 +421,8 @@ function AddBank({ nav, draft, banks, onDone }: { nav: Nav; draft?: BankDraft; b
   const valid = !!f.bank.trim() && /^[A-Za-z]{3}$/.test(f.currency.trim()) && /^\d{4}$/.test(f.account.trim()) && !!f.label.trim();
   async function save(e: FormEvent) {
     e.preventDefault();
-    if (valid && await patch(nav, { addBank: { ...f, iban: f.iban.trim() || undefined } }, t('company.bankAdded', { label: f.label.trim() }))) onDone();
+    // The toast's «Rückgängig» takes the account out again (r9k-1); the API refuses once the books use it.
+    if (valid && await patch(nav, { addBank: { ...f, iban: f.iban.trim() || undefined } }, t('company.bankAdded', { label: f.label.trim() }), { removeBank: { bank: f.bank.trim(), currency: f.currency.trim().toUpperCase() } })) onDone();
   }
   return (
     <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>

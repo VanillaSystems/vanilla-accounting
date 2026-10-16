@@ -10,14 +10,17 @@ import { bankKind, parseIban } from './banks.js';
 import { readBankStatements, type StatementFile } from './bank-statements.js';
 import { APP_FOLDER, LAYOUT, REPOSITORY_ROOT, YEAR_FOLDER, filesOfPart, partDirs, yearPaths, yearsOf, type Workspace, type WorkspacePaths } from './workspace.js';
 
+/** A failure the year close says in the person's words instead of this English line (src/accounting/year-close.ts Problem). */
+export type FailCode = 'bankNotInChart';
+
 export type Result =
   | { status: 'ok'; label: string }
   | { status: 'warn'; label: string; note: string }
-  | { status: 'fail'; label: string; fix: string };
+  | { status: 'fail'; label: string; fix: string; code?: FailCode };
 
 export const ok = (label: string): Result => ({ status: 'ok', label });
 export const warn = (label: string, note: string): Result => ({ status: 'warn', label, note });
-export const fail = (label: string, fix: string): Result => ({ status: 'fail', label, fix });
+export const fail = (label: string, fix: string, code?: FailCode): Result => ({ status: 'fail', label, fix, ...(code ? { code } : {}) });
 
 /** The checks of the workspace itself; `npm run year:close` requires them clean. */
 export function workspaceChecks(ws: Workspace): Result[] {
@@ -51,7 +54,7 @@ export function workspaceChecks(ws: Workspace): Result[] {
   const statements = readBankStatements(ws);
   for (const b of ws.bankAccounts) {
     const label = `${b.bank} ${b.currency} books on ${b.account}`;
-    if (!numbers.has(b.account)) { results.push(fail(`${label}, which is not in accounts.json`, `Add { "number": "${b.account}", "name": "${b.label}" } to master-data/accounts.json, or fix the account in belege.workspace.yaml.`)); continue; }
+    if (!numbers.has(b.account)) { results.push(fail(`${label}, which is not in accounts.json`, `Add { "number": "${b.account}", "name": "${b.label}" } to master-data/accounts.json, or fix the account in belege.workspace.yaml.`, 'bankNotInChart')); continue; }
     const years = yearsOf(ws.paths);
     if (b.statements && !b.iban && years.length && !partDirs(ws.paths, 'statements').some((d) => existsSync(join(d, b.bank)))) {
       const dir = join(yearPaths(ws.paths, years.at(-1)!).statements, b.bank);

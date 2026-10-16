@@ -28,6 +28,8 @@ export interface CamtStatement {
   currency: string;
   /** Acct/Svcr/FinInstnId/Nm: the bank that keeps the account, as it names itself. */
   bankName?: string;
+  /** Acct/Ownr/Nm: the account holder, as the bank names them. */
+  ownerName?: string;
   node: Node;
 }
 
@@ -56,6 +58,7 @@ export function readCamt(xml: string): { message: CamtMessage; statements: CamtS
       ...(node.Acct?.Id?.IBAN ? { iban: String(node.Acct.Id.IBAN) } : {}),
       currency: String(node.Acct?.Ccy ?? node.Ntry?.[0]?.Amt?.['@_Ccy'] ?? node.Bal?.[0]?.Amt?.['@_Ccy'] ?? 'CHF'),
       ...(node.Acct?.Svcr?.FinInstnId?.Nm ? { bankName: String(node.Acct.Svcr.FinInstnId.Nm).trim() } : {}),
+      ...(node.Acct?.Ownr?.Nm ? { ownerName: String(node.Acct.Ownr.Nm).trim() } : {}),
       node,
     })),
   };

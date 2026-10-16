@@ -121,6 +121,11 @@ export function errorText(e: unknown): string {
     case 'oneSided': return t('error.oneSided', b.params);
     case 'codeSign': return t(b.params.expected.startsWith('-') ? 'error.codeSign.back' : 'error.codeSign.out', b.params);
     case 'accountInUse': return t('error.accountInUse', { account: b.params.account, n: b.params.entries });
+    case 'bankInUse': return t('error.bankInUse', { label: b.params.label, account: b.params.account, uses: [
+      b.params.statements && t('error.bankInUse.statements', { n: b.params.statements }),
+      b.params.entries && t('error.bankInUse.entries', { n: b.params.entries }),
+      b.params.invoices && t('error.bankInUse.invoices', { n: b.params.invoices }),
+    ].filter(Boolean).join(', ') });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
     case 'gone': return t(`error.gone.${b.params.what}`);

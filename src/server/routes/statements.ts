@@ -62,8 +62,8 @@ function wordsOf(p: StatementProblem): string {
   }
 }
 
-const refusedAccount = (p: StatementProblem, unknown?: UnknownAccount, bankName?: string): RequestError =>
-  new RequestError(400, wordsOf(p), { code: 'statement', params: { reason: 'account', detail: wordsOf(p), problem: p, ...(unknown ? { unknown: { ...unknown, ...(bankName ? { bankName } : {}) } } : {}) } });
+const refusedAccount = (p: StatementProblem, unknown?: UnknownAccount, bankName?: string, owner?: string): RequestError =>
+  new RequestError(400, wordsOf(p), { code: 'statement', params: { reason: 'account', detail: wordsOf(p), problem: p, ...(unknown ? { unknown: { ...unknown, ...(bankName ? { bankName } : {}), ...(owner ? { owner } : {}) } } : {}) } });
 
 function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Placed {
   let camt: ReturnType<typeof readCamt>;
@@ -77,7 +77,7 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   let iban: string | undefined;
   for (const statement of camt.statements) {
     const match = accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
-    if ('problem' in match) throw refusedAccount(match.refusal, match.unknown, statement.bankName);
+    if ('problem' in match) throw refusedAccount(match.refusal, match.unknown, statement.bankName, statement.ownerName);
     const found = match.account;
     if (account && account.bank !== found.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
     account = found;
@@ -89,7 +89,7 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
       if (first?.status === 'read') {
         const valid = parseIban(stated);
         const unknown = valid ? { iban: valid, currency: statement.currency } : undefined;
-        throw refusedAccount({ kind: 'twoAccounts', currency: found.currency, bank: found.bank, ibans: [compactIban(first.statement.iban!), stated], ...(valid ? { iban: valid } : {}) }, unknown, statement.bankName);
+        throw refusedAccount({ kind: 'twoAccounts', currency: found.currency, bank: found.bank, ibans: [compactIban(first.statement.iban!), stated], ...(valid ? { iban: valid } : {}) }, unknown, statement.bankName, statement.ownerName);
       }
     }
     const balances = parseStatementBalances(statement, found.bank, filename);
