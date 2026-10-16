@@ -128,6 +128,8 @@ vanilla-accounting/
       filings/          VAT returns, seals, year-close.json
       invoices/         PDFs of issued invoices, sent/
       expected/         the figures test:books compares against
+      runs.jsonl        the run log (src/workflows/runlog.ts)
+      questions.jsonl   questions between the people who keep the books (src/questions/model.ts)
     2027/
       …
 ```

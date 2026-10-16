@@ -838,11 +838,11 @@ answers there; the answer stays on the item; the AI (the owner's) may book from 
 
 **What goes wrong.**
 
-**F1. There is no question on an item.** `not supported yet`
-- Noticed: she writes an e-mail.
-- By hand: the receipt's Notiz.
-- By wish: none.
-- Learns: nothing yet.
+**F1. There is no question on an item.** `untested (built: views.md, "Questions between the people who keep the books")`
+- Noticed: «Frage stellen» on the payment, receipt or booking; the owner's Aufgaben «Fragen an dich».
+- By hand: «privat» / «geschäftlich» or a few words; «Zurücknehmen».
+- By wish: the sidebar's change `question`.
+- Learns: «privat» / «geschäftlich» becomes a precedent of `booking.guide.yaml#private`.
 
 **F2. The owner answers late.** `not supported yet`
 - Noticed: open questions per quarter.
@@ -850,11 +850,11 @@ answers there; the answer stays on the item; the AI (the owner's) may book from 
 - By wish: none.
 - Learns: nothing.
 
-**Automation target.** Code: the thread. AI: books from the answer. Person: answers.
+**Automation target.** Code: the thread, and «privat» booked from the answer. AI: asks when it cannot decide. Person: answers.
 
-**Test.** When built: sandbox (Monika) and VM (Sandra) on the same books.
+**Test.** Sandbox (Monika) and VM (Sandra) on the same books.
 
-**Status.** not supported yet
+**Status.** untested
 
 ### TH-29 The owner and she change the same books
 

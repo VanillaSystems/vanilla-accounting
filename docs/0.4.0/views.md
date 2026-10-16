@@ -173,6 +173,43 @@ vorbereiten»; a rule the app cannot carry out is named with its reason and cann
 ([saving.md](saving.md), "One click for a rule"). **Firma › Regeln** lists every rule of the
 company, linked from Automatisierung.
 
+## Questions between the people who keep the books
+
+The accountant and the owner ask each other what only the other knows, on the item itself:
+«Wofür ist dieser Beleg?», «Privat oder geschäftlich?», «Welches Projekt?». There is no server
+and no e-mail; the questions travel with the books folder (git, a shared folder), so each sees
+the other's when they next open the books.
+
+- **Where they are kept.** `transactional-data/<year>/questions.jsonl` (`LAYOUT`), one event per
+  line, appended and never rewritten: `asked` (on a payment, receipt or booking, by whom, to whom,
+  the text, the choices `private` / `business`), `answered` (a choice or a few words, with what
+  the app did), `undone` (the answer's bookings taken back, open again), `closed` (`done` by the
+  asker, or `withdrawn`). A question is the fold of its lines (src/questions/model.ts); a line
+  goes to the year it is written in, or the first open year after it. API: `GET /api/questions`,
+  `POST /api/questions`, `…/:id/answer`, `…/:id/undo`, `…/:id/close`.
+- **Asking.** «Frage stellen» on a payment (Kontoauszüge), a receipt (Belege) and a booking
+  (Buchungen): «Ich bin» (the viewer's name, kept in this browser; the owner's by default),
+  «An» (a name from the books' people or a new one), the question, and whether the answer is
+  «privat» or «geschäftlich». A booking also shows the questions on its payment and receipts, a
+  payment those on its receipts and bookings.
+- **Where the other person looks.** Automatisierung › Aufgaben lists «Fragen an dich» (open
+  questions put to the viewer, or put to nobody and asked by someone else) and «Deine offenen
+  Fragen» (the viewer's own until they mark them «Erledigt»). The dock's badge, the Aufgaben row
+  and the status corner count the questions waiting for the viewer.
+- **Answering.** One click for «privat» or «geschäftlich», or a few words and ↵. The asker sees
+  «beantwortet» with the answer and what the app did.
+- **An answer that decides acts, code first.** «privat» on a payment books it on the owner's
+  account without a VAT code, as the sidebar and the booking by hand do: an unbooked payment gets
+  one booking against its bank, a booked one has its expense side moved and its code removed (a
+  booking that is not bank against expense is not guessed at). «privat» or «geschäftlich» is kept
+  as a precedent of the booking guide's `private` step in `knowledge/rules/booking.guide.yaml`,
+  with `match.tx` (the payment's counterparty) and `choice`; the next such question about the same
+  counterparty is answered by it at once, and booked. A filed quarter, a receipt with no or several
+  payments, an answer in words: the app books nothing and the asker decides. «Zurücknehmen» takes
+  the bookings and the precedent back and opens the question again.
+- **The AI asks too.** A change `question` of the sidebar's block puts a question to the owner
+  (or the person it names) when the AI cannot decide; its card's «Rückgängig» withdraws it.
+
 ## Status, top right
 
 There is no title bar (as in the 0.3 Mac app). The top-right corner holds the AI toggle (⌘J) and one status
@@ -181,7 +218,7 @@ indicator for all workflows; search is in the top bar (⌘K):
 | State | Shows |
 |---|---|
 | something runs | a spinner and "2 laufen" |
-| nothing runs, something waits for a person | an amber dot and "3 für dich" |
+| nothing runs, something waits for a person (a task or a question to the viewer) | an amber dot and "3 für dich" |
 | all quiet | nothing |
 
 A click opens a panel below it that updates while it is open: each running run with its bar and

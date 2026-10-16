@@ -121,6 +121,10 @@ A run that cannot go on by itself is in one of three states, and each has its ow
   «Frag: <the rule's question>» with the booking the app would make (the rule's own, else the
   model's); **Übernehmen** books it, **Selbst buchen** closes the task for a booking by hand. The
   workflow reads no guide, so it needs no switching on.
+- **A question is not a task.** What one person asks another about an item (views.md,
+  "Questions between the people who keep the books") waits in Aufgaben beside the tasks, but no
+  run waits for it. Planned: the person step «Bewegung von Hand buchen» carries such a question,
+  so the booking that cannot decide asks the owner instead of guessing.
 
 Mockup: screen 5 of [mockups/workflows.html](mockups/workflows.html).
 
