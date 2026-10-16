@@ -45,6 +45,8 @@ export type ApiRefusal =
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }
   | { code: 'oneSided'; params: { account: string } }
+  /** The same account on both sides without a VAT code books nothing (src/server/edits.ts assertTwoSides); a VAT-only correction may (M81-2 shapes). */
+  | { code: 'sameAccount'; params: { account: string } }
   /** A code whose sign contradicts the line's direction (src/server/edits.ts assertCodeSign): M81 on a credit note, -V81 on a sale; `expected` is the code the line takes. */
   | { code: 'codeSign'; params: { code: string; expected: string } }
   | { code: 'accountInUse'; params: { account: string; entries: number } }

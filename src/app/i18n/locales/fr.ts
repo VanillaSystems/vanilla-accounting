@@ -3155,5 +3155,9 @@ export default {
   'changes.receiptEditTip': 'Les champs tels qu’ils étaient au dernier enregistrement',
   'changes.outlayUndoTip': 'Retirer le paiement privé avec son écriture et son lien',
   'changes.outlayBlocked': 'comptabilisé à la main : reprendre d’abord cette écriture',
+    'error.sameAccount': 'Débit et crédit sont le même compte {account} : l’écriture ne déplace rien. Une vente se comptabilise caisse ou banque / chiffre d’affaires, un achat charge / caisse ou banque.',
+    'journal.warn.cashNegative': 'La caisse {account} serait négative le {date} : CHF {balance}. L’argent liquide ne peut pas passer sous zéro : débit et crédit inversés, ou une recette en espèces manque.',
+    'journal.warn.swappedSale': 'Chiffre d’affaires {accountDebit} au débit, {accountCredit} au crédit : ainsi ne s’écrit qu’un remboursement au client. Une vente se comptabilise {accountCredit} / {accountDebit}.',
+    'yearClose.check.bookingsPlausible': 'Aucune caisse négative, aucune vente aux côtés inversés',
   },
 } satisfies Locale;

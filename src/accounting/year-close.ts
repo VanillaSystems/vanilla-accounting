@@ -15,6 +15,7 @@ import type { LegalForm } from '../workspace/setup.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
 import { chfAmount, computeBalances } from './ledger.js';
+import { plausibility, type Plausibility } from './booking-warnings.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
@@ -471,12 +472,14 @@ export type Problem =
   | { code: 'fxToBook'; account: string; difference: number }
   | { code: 'yearLocked' }
   | { code: 'undecided'; templates: string[] }
-  | { code: 'unbalanced'; residual: number };
+  | { code: 'unbalanced'; residual: number }
+  /** Hints of the bookings' plausibility (src/accounting/booking-warnings.ts): named, never blocking (r8k-8). */
+  | Plausibility;
 
 export type CheckStatus = 'ok' | 'fail' | 'warn';
 
 export interface Check {
-  id: 'q4Filed' | 'quartersSealed' | 'bankReconciled' | 'statementsComplete' | 'allBooked' | 'doctor';
+  id: 'q4Filed' | 'quartersSealed' | 'bankReconciled' | 'statementsComplete' | 'allBooked' | 'doctor' | 'bookingsPlausible';
   status: CheckStatus;
   problems: Problem[];
 }
@@ -562,6 +565,7 @@ function preconditions(input: YearCloseInput): Check[] {
   const unbooked: Problem[] = unbookedRefs.length ? [{ code: 'unbooked', count: unbookedRefs.length, refs: unbookedRefs.slice(0, 8) }] : [];
 
   const doctor = input.doctor.map((label): Problem => ({ code: 'doctor', label }));
+  const plausible = plausibility(books, year);
 
   return [
     ...(files ? [{ id: 'q4Filed' as const, status: status(filed), problems: filed }] : []),
@@ -570,6 +574,7 @@ function preconditions(input: YearCloseInput): Check[] {
     { id: 'statementsComplete', status: status(gaps), problems: gaps },
     { id: 'allBooked', status: status(unbooked), problems: unbooked },
     { id: 'doctor', status: status(doctor), problems: doctor },
+    { id: 'bookingsPlausible', status: status(plausible, 'warn'), problems: plausible },
   ];
 }
 
@@ -632,7 +637,8 @@ export function yearClose(input: YearCloseInput): YearClose {
     return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }) };
   });
 
-  const blockers: Problem[] = checks.flatMap((c) => c.problems);
+  // A hint (status warn) is named, never a blocker.
+  const blockers: Problem[] = checks.filter((c) => c.status === 'fail').flatMap((c) => c.problems);
   for (const r of reval) {
     if (r.status === 'no-rate') blockers.push({ code: 'noRate', currency: r.currency });
     else if (r.status === 'to-book') blockers.push(locked ? { code: 'yearLocked' } : { code: 'fxToBook', account: r.account, difference: roundCHF(r.difference - r.booked) });

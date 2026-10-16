@@ -43,6 +43,7 @@ const CHECK_TITLE: Record<YearClose['checks'][number]['id'], string> = {
   statementsComplete: 'Statements cover the whole year',
   allBooked: 'Every transaction of the year is booked',
   doctor: 'npm run doctor finds nothing to fix',
+  bookingsPlausible: 'No cash account below zero, no sale with its sides swapped',
 };
 
 const mark = (s: 'ok' | 'fail' | 'warn') => (s === 'ok' ? '✓' : s === 'warn' ? '!' : '✗');

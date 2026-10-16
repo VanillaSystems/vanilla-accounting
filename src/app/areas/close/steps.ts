@@ -61,6 +61,8 @@ export function problemText(p: ShownProblem, year: string): string {
     case 'fxToBook': return tx('yearClose.problem.fxToBook', { account: p.account, difference: signed(p.difference) });
     case 'undecided': return tx('yearClose.problem.undecided', { templates: p.templates.map((id) => tx(`yearClose.template.${id}`)).join(', ') });
     case 'unbalanced': return tx('yearClose.problem.unbalanced', { residual: fmt(p.residual) });
+    case 'cashNegative': return t('journal.warn.cashNegative', { account: p.account, date: formatDate(p.date), balance: fmt(p.balance) });
+    case 'swappedSale': return t('journal.warn.swappedSale', { accountDebit: p.accountDebit, accountCredit: p.accountCredit });
     default: return tx(`yearClose.problem.${p.code}`, p as unknown as Record<string, string>);
   }
 }

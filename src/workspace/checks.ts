@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { loadBooks, OldLayoutError, sealsOf, type Books } from '../books/store.js';
+import { plausibility } from '../accounting/booking-warnings.js';
 import { bankKind, parseIban } from './banks.js';
 import { readBankStatements, type StatementFile } from './bank-statements.js';
 import { APP_FOLDER, LAYOUT, REPOSITORY_ROOT, YEAR_FOLDER, filesOfPart, partDirs, yearPaths, yearsOf, type Workspace, type WorkspacePaths } from './workspace.js';
@@ -29,7 +30,7 @@ export function workspaceChecks(ws: Workspace): Result[] {
 
   try {
     const books = loadBooks(ws);
-    results.push(ok(`The books read (schema ${books.schema}, years ${yearsOf(ws.paths).join(', ') || 'none yet'})`), ...sealChecks(books));
+    results.push(ok(`The books read (schema ${books.schema}, years ${yearsOf(ws.paths).join(', ') || 'none yet'})`), ...sealChecks(books), ...plausibilityChecks(books));
   } catch (e) {
     results.push(e instanceof OldLayoutError
       ? fail('The books are in the layout before 0.4.0', 'npm run update moves them into vanilla-accounting/ and splits them by year.')
@@ -117,6 +118,14 @@ export function layoutChecks(paths: WorkspacePaths): Result[] {
 }
 
 /** The seals of the filed quarters (src/books/seal.ts): broken is a problem, missing a note. */
+/** Bookings that look wrong (r8k-8): a cash account below zero, a sale with its sides swapped. Hints, never failures. */
+function plausibilityChecks(books: Books): Result[] {
+  const years = [...new Set(books.journalEntries.map((e) => e.date.slice(0, 4)))].sort();
+  return years.flatMap((year) => plausibility(books, year)).map((p) => p.code === 'cashNegative'
+    ? warn(`Cash account ${p.account} is below zero on ${p.date}: CHF ${p.balance.toFixed(2)} (entry ${p.entry})`, 'cash cannot fall under nothing: a booking has Soll and Haben swapped, or a receipt of cash is not booked')
+    : warn(`Entry ${p.entry} of ${p.date} books ${p.accountDebit} / ${p.accountCredit}`, 'revenue in the debit against cash or bank is a sale with its sides swapped, unless it is a refund to the customer (minus code)'));
+}
+
 function sealChecks(books: Books): Result[] {
   const { checks, unsealed } = sealsOf(books);
   const intact = checks.filter((c) => c.status === 'intact').map((c) => c.quarter);

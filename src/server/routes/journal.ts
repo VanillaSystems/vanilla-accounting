@@ -9,6 +9,8 @@ import { addEntry, deleteEntry, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
+import { bookingWarnings } from '../../accounting/booking-warnings.js';
+import type { Books } from '../../books/store.js';
 
 export const router = Router();
 
@@ -33,12 +35,13 @@ router.patch('/api/journal-entries/:id', (req, res) => {
     if (!by) throw new RequestError(400, 'by: rule, code, model oder person.');
     set.by = by;
   }
-  const ref = updateBooks((books) => {
+  const { ref, warnings } = updateBooks((books) => {
     setEntry(books, req.params.id, set);
-    return books.journalEntries.find((e) => e.id === req.params.id)!.transactionRef;
+    const e = books.journalEntries.find((x) => x.id === req.params.id)!;
+    return { ref: e.transactionRef, warnings: bookingWarnings(books, e) };
   });
   if ('vatCode' in set) learnFromCorrection([ref]);
-  res.json({ ok: true });
+  res.json({ ok: true, warnings });
 });
 
 
@@ -90,9 +93,12 @@ router.post('/api/journal-entries', (req, res) => {
       ...(id ? {} : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
     });
     if (original && corrects) books.config.correctionCases = [...(books.config.correctionCases ?? []), correctionCaseFor(original, entry, (correction ?? 'vat') as CorrectionKind, corrects)];
-    return { entry };
+    return withWarnings(books, entry);
   });
 });
+
+/** The saved booking with what code can say against it (r8k-8): a warning, never a refusal. */
+const withWarnings = (books: Books, entry: JournalEntry) => ({ entry, warnings: bookingWarnings(books, entry) });
 
 /**
  * Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as

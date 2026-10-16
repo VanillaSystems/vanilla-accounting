@@ -3155,5 +3155,9 @@ export default {
   'changes.receiptEditTip': 'The fields as they were at the last save',
   'changes.outlayUndoTip': 'Remove the private payment with its booking and link',
   'changes.outlayBlocked': 'booked by hand: take that booking back first',
+    'error.sameAccount': 'Debit and credit are the same account {account}: the booking moves nothing. A sale is booked cash or bank / revenue, a purchase expense / cash or bank.',
+    'journal.warn.cashNegative': 'Cash account {account} would be below zero on {date}: CHF {balance}. Cash cannot fall under nothing: debit and credit swapped, or a cash receipt is missing.',
+    'journal.warn.swappedSale': 'Revenue {accountDebit} in the debit, {accountCredit} in the credit: only a refund to the customer is booked so. A sale is booked {accountCredit} / {accountDebit}.',
+    'yearClose.check.bookingsPlausible': 'No cash account below zero, no sale with its sides swapped',
   },
 } satisfies Locale;

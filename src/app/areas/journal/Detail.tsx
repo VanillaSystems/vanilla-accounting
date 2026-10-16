@@ -28,6 +28,7 @@ import { bookedByText, changesText, reasonText, type Say } from './by.js';
 const say: Say = (key, vars) => t(key, vars as never);
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
+import { bookingWarnings } from '../../../accounting/booking-warnings.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
 import { createEntry, inputOf, reclassify, saveEntry, type Field } from './actions.js';
@@ -114,6 +115,12 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         </div>
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
       </div>
+
+      {bookingWarnings(props.books, e).map((w) => (
+        <p key={w.code} className="warnline" data-testid="booking-warning">
+          {I.dot}{w.code === 'cashNegative' ? t('journal.warn.cashNegative', { account: w.account, date: formatDate(w.date), balance: fmt(w.balance) }) : t('journal.warn.swappedSale', { accountDebit: w.accountDebit, accountCredit: w.accountCredit })}
+        </p>
+      ))}
 
       {canEdit && <EntryActions {...props} />}
 
@@ -326,6 +333,8 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     const unknown = [next.accountDebit, next.accountCredit].find((n) => n && !accounts[n]);
     if (unknown) return fail(t('journal.errAccount', { account: unknown }));
     if (!next.accountDebit && !next.accountCredit) return fail(t('journal.errNoAccount'));
+    // Both sides on one account moves nothing (the API refuses it too, r8k-8): the form waits until the other side is typed.
+    if (next.accountDebit && next.accountDebit === next.accountCredit && !next.vatCode) return fail(t('error.sameAccount', { account: next.accountDebit }));
     const vatCode = vatCodeOf(next.vatCode, next.accountDebit, next.accountCredit);
     if (!vatCode) return fail(parseRate(next.vatCode) ? t('journal.errVatRate', { rate: next.vatCode }) : t('journal.errVat', { code: next.vatCode }));
     if (!next.amount) return fail(t('journal.errAmount'));

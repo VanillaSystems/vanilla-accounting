@@ -130,6 +130,7 @@ export function errorText(e: unknown): string {
     case 'unknownCustomer': return t('error.unknownCustomer');
     case 'amountZero': return t('error.amountZero');
     case 'noAccount': return t('error.noAccount');
+    case 'sameAccount': return t('error.sameAccount', b.params);
     case 'unknownVatCode': return t('error.unknownVatCode', b.params);
     case 'codeNotTaken': return t(b.params.method === 'none' ? 'error.codeNotTaken.none' : 'error.codeNotTaken.netRate', { code: b.params.code });
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }

@@ -3152,6 +3152,10 @@ export const messages = {
   'changes.receiptEditTip': 'Die Felder wieder so, wie sie beim letzten Speichern waren',
   'changes.outlayUndoTip': 'Die private Zahlung samt Buchung und Verknüpfung entfernen',
   'changes.outlayBlocked': 'von Hand gebucht: zuerst diese Buchung zurücknehmen',
+  'error.sameAccount': 'Soll und Haben sind dasselbe Konto {account}: die Buchung bewegt nichts. Ein Verkauf wird Kasse oder Bank / Umsatz gebucht, ein Einkauf Aufwand / Kasse oder Bank.',
+  'journal.warn.cashNegative': 'Kasse {account} wäre am {date} im Minus: CHF {balance}. Bargeld kann nicht unter null fallen: Soll und Haben vertauscht, oder eine Bareinnahme fehlt.',
+  'journal.warn.swappedSale': 'Umsatz {accountDebit} im Soll, {accountCredit} im Haben: so steht nur eine Rückerstattung an den Kunden. Ein Verkauf wird {accountCredit} / {accountDebit} gebucht.',
+  'yearClose.check.bookingsPlausible': 'Keine Kasse im Minus, kein Verkauf mit vertauschten Seiten',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

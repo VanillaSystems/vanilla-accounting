@@ -211,6 +211,15 @@ export function assertCodeSign(code: string | undefined, accountDebit: string | 
   throw new RequestError(400, why, { code: 'codeSign', params: { code: code!, expected } });
 }
 
+/**
+ * Soll and Haben on the same account without a VAT code move nothing: refused (r8k-8). With a code
+ * it is a VAT-only correction (src/accounting/correction.ts), which keeps both sides on one account.
+ */
+export function assertTwoSides(accountDebit: string | undefined, accountCredit: string | undefined, vatCode: string | undefined): void {
+  if (!accountDebit || accountDebit !== accountCredit || vatCode) return;
+  throw new RequestError(400, `Soll und Haben sind dasselbe Konto ${accountDebit}: die Buchung bewegt nichts. Ein Verkauf wird Kasse oder Bank / Umsatz gebucht, ein Einkauf Aufwand / Kasse oder Bank.`, { code: 'sameAccount', params: { account: accountDebit } });
+}
+
 export function setEntry(books: Books, id: string, set: EntrySet, author: Author = BY_HAND): BookChange {
   // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only, with a code the form takes.
   // The firm's rule comes before the entry's lookup: a block that first changed the receipt's facts has unbooked the entry
@@ -240,6 +249,7 @@ export function setEntry(books: Books, id: string, set: EntrySet, author: Author
     e.by = byOf(author, moved.length ? Object.fromEntries(moved.map((k) => [k, before[k]])) as BookingFields : undefined, before.by ?? undefined);
   }
   if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
+  if (set.origin === undefined) assertTwoSides(e.accountDebit, e.accountCredit, e.vatCode);
   if (set.receipts !== undefined) {
     const unknown = set.receipts.find((id) => !books.receipts.some((r) => r.id === id));
     if (unknown) throw new RequestError(400, `receipts: Beleg ${unknown} gibt es nicht.`);
@@ -263,6 +273,8 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   const { corrects, date } = rest;
   if (corrects && !isFilingKey(corrects, filing().length)) throw new RequestError(400, `corrects: ${filing().length === 'half' ? 'YYYY-Hn' : 'YYYY-Qn'}.`);
   assertOpen(books, [date], 'newEntry');
+  // An undo (it carries `id`) puts back what was booked; a new booking moves something.
+  if (!id) assertTwoSides(rest.accountDebit, rest.accountCredit, rest.vatCode);
   const closed = books.config.closedThrough;
   if (corrects && !(closed && parsePeriod(corrects, date)!.to <= closed)) throw new RequestError(400, `corrects: ${corrects} ist nicht eingereicht.`);
   if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
@@ -297,6 +309,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     assertCodeTaken(l.vatCode);
     if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
     assertPlaced(l.accountDebit, l.accountCredit);
+    assertTwoSides(l.accountDebit, l.accountCredit, l.vatCode);
     assertCodeSign(l.vatCode, l.accountDebit, l.accountCredit);
   }
   const off = offSide(books, ref, lines, accounts);

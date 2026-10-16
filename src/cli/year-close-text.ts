@@ -18,6 +18,8 @@ const PROBLEM_TEXT: { [C in Problem['code']]: (p: Extract<Problem, { code: C }>)
   yearLocked: () => 'the books are closed through 31.12. already, so the Kursdifferenz can no longer be dated 31.12.',
   undecided: (p) => `guided year-end entries not yet booked or marked not needed: ${p.templates.join(', ')} (--done or --na)`,
   unbalanced: (p) => `Aktiven and Passiven differ by CHF ${chf(p.residual)}: see the causes; never book the difference away`,
+  cashNegative: (p) => `cash account ${p.account} is below zero on ${p.date} (CHF ${chf(p.balance)}, entry ${p.entry}): cash cannot fall under nothing; a booking has its sides swapped or a receipt of cash is missing`,
+  swappedSale: (p) => `entry ${p.entry} of ${p.date} books ${p.accountDebit} / ${p.accountCredit}: revenue in the debit against cash or bank is a swapped sale, unless it is a refund to the customer (minus code)`,
 };
 
 export const problemText = (p: Problem): string => (PROBLEM_TEXT[p.code] as (p: Problem) => string)(p);

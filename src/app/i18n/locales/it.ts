@@ -3155,5 +3155,9 @@ export default {
   'changes.receiptEditTip': 'I campi come erano all’ultimo salvataggio',
   'changes.outlayUndoTip': 'Rimuovere il pagamento privato con la sua registrazione e il collegamento',
   'changes.outlayBlocked': 'registrato a mano: prima ritirare questa registrazione',
+    'error.sameAccount': 'Dare e Avere sono lo stesso conto {account}: la registrazione non sposta nulla. Una vendita si registra cassa o banca / ricavi, un acquisto costo / cassa o banca.',
+    'journal.warn.cashNegative': 'La cassa {account} sarebbe in negativo il {date}: CHF {balance}. Il contante non può scendere sotto zero: Dare e Avere invertiti, o manca un incasso in contanti.',
+    'journal.warn.swappedSale': 'Ricavi {accountDebit} in Dare, {accountCredit} in Avere: così si registra solo un rimborso al cliente. Una vendita si registra {accountCredit} / {accountDebit}.',
+    'yearClose.check.bookingsPlausible': 'Nessuna cassa in negativo, nessuna vendita con i lati invertiti',
   },
 } satisfies Locale;
