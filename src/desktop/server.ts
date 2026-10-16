@@ -13,6 +13,7 @@ import express from 'express';
 import { isAppPath } from '../server/app-paths.js';
 import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, usePhoneToken } from '../server/phone.js';
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
+import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 import type { DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
@@ -86,7 +87,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
 
   const known = (root: string): KnownBooks => {
     const demo = resolve(root) === resolve(opts.demoRoot);
-    try { return { root, name: workspaceAt(root).company.name, demo }; } catch { return { root, demo }; }
+    // A look at the name, never workspaceAt: that would switch the engines to these books' setup while other books are open.
+    try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch { return { root, demo }; }
   };
 
   async function openBooks(root: string): Promise<KnownBooks> {

@@ -18,7 +18,7 @@ function yearOf(param: string | undefined): string {
   return param!;
 }
 
-/** A YearCloseRefused is the user's to fix (409); anything else is the error handler's. */
+/** A YearCloseRefused is the user's to fix (409); anything else is the error handler's. Every route awaits it: a rejection nobody awaits leaves the request hanging (r5f-23). */
 async function answer(res: Response, run: () => unknown): Promise<void> {
   try {
     res.json(await run());
@@ -28,28 +28,28 @@ async function answer(res: Response, run: () => unknown): Promise<void> {
   }
 }
 
-router.get('/api/year-close/:year', (req, res) => {
+router.get('/api/year-close/:year', async (req, res) => {
   const year = yearOf(req.params.year);
-  answer(res, () => {
+  await answer(res, () => {
     const close = yearCloseOf(WS, year);
     return { ...close, opening: close.closed ? openingFor(WS, year) : undefined };
   });
 });
 
-router.post('/api/year-close/:year/revaluation', (req, res) => {
+router.post('/api/year-close/:year/revaluation', async (req, res) => {
   const year = yearOf(req.params.year);
-  answer(res, () => ({ entries: bookRevaluation(WS, year) }));
+  await answer(res, () => ({ entries: bookRevaluation(WS, year) }));
 });
 
-router.put('/api/year-close/:year/templates/:id', (req, res) => {
+router.put('/api/year-close/:year/templates/:id', async (req, res) => {
   const year = yearOf(req.params.year);
   const b = patchBody(req.body, ['state']);
   const state = b.state === null ? null : stringField(b, 'state');
   if (state !== null && state !== 'done' && state !== 'na') throw new RequestError(400, 'state: done, na oder null.');
-  answer(res, () => markTemplate(WS, year, req.params.id, state as TemplateState | null));
+  await answer(res, () => markTemplate(WS, year, req.params.id, state as TemplateState | null));
 });
 
-router.post('/api/year-close/:year/entries', (req, res) => {
+router.post('/api/year-close/:year/entries', async (req, res) => {
   yearOf(req.params.year);
   const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'template']);
   const date = stringField(b, 'date');
@@ -64,7 +64,7 @@ router.post('/api/year-close/:year/entries', (req, res) => {
   const vatCode = b.vatCode === undefined ? '' : stringField(b, 'vatCode').trim();
   const template = b.template === undefined ? undefined : stringField(b, 'template');
   assertOpen(readBooks(), [date], 'newTransaction');
-  answer(res, () => ({ entry: bookEntry(WS, { date, accountDebit, accountCredit, amount, vatCode: vatCode || undefined, description }, template) }));
+  await answer(res, () => ({ entry: bookEntry(WS, { date, accountDebit, accountCredit, amount, vatCode: vatCode || undefined, description }, template) }));
 });
 
 router.post('/api/year-close/:year/close', async (req, res) => {
