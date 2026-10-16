@@ -220,7 +220,7 @@ export interface Candidate {
 }
 
 const DAY = 864e5;
-const CENT = 0.005;
+const HALF_RAPPEN = 0.005;
 
 /** The way the receipt's money went: `in` for a credit note (its amount below zero) or a sale, `out` for an invoice; undefined without an amount. */
 function moneyWay(r: Pick<Receipt, 'amount' | 'kind'>): 'in' | 'out' | undefined {
@@ -254,8 +254,8 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
       if (!words.every((w) => h.includes(w))) continue;
     }
     const otherCurrency = tx.currency !== cur;
-    const part = r.amount == null || otherCurrency ? undefined : (tx.parts ?? []).find((p) => p.currency === cur && Math.abs(Math.abs(p.amount) - Math.abs(r.amount!)) < CENT);
-    const sameAmount = !!part || (r.amount != null && !otherCurrency && Math.abs(Math.abs(tx.amount) - Math.abs(r.amount)) < CENT);
+    const part = r.amount == null || otherCurrency ? undefined : (tx.parts ?? []).find((p) => p.currency === cur && Math.abs(Math.abs(p.amount) - Math.abs(r.amount!)) < HALF_RAPPEN);
+    const sameAmount = !!part || (r.amount != null && !otherCurrency && Math.abs(Math.abs(tx.amount) - Math.abs(r.amount)) < HALF_RAPPEN);
     const days = v.date ? Math.round((Date.parse(tx.date) - Date.parse(v.date)) / DAY) : undefined;
     const want = r.amount == null ? undefined : Math.abs(toChf(r.amount, cur, tx.date));
     const dAmt = part ? 0 : want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
