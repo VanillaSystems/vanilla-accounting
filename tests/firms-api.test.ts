@@ -82,7 +82,7 @@ test('not registered: a sidebar block that sets a receipt\'s VAT facts and then 
   const api = await startApi(FIXTURE, { PATH: `${join(process.cwd(), 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_CHANGES: file }, { manifestOf: join(APP_ROOT, 'demo-coiffeur', APP_FOLDER) });
   servers.push(api);
   writeFileSync(file, JSON.stringify([
-    { kind: 'receipt', id: 'rk', set: { vat: { hasSwissVat: true, vatId: 'CHE-000.000.000 MWST', vatSummary: [{ ratePercent: 8.1, net: 370.03, vat: 29.97, gross: 400 }] } } },
+    { kind: 'receipt', id: 'rk', set: { vat: { hasSwissVat: true, vatId: 'CHE-123.456.789 MWST', vatSummary: [{ ratePercent: 8.1, net: 370.03, vat: 29.97, gross: 400 }] } } },
     { kind: 'entry', id: 'e-doc', set: { vatCode: 'M81' } },
   ]));
   const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: JSON.stringify({ text: 'Bitte mit M81', language: 'de', context: [{ kind: 'entry', id: 'e-doc', label: 'Verkauf' }] }) });

@@ -8,6 +8,7 @@
  */
 import type { AreaId, CompanySection } from '../app/shell/route.js';
 import { PRESETS } from '../export/model.js';
+import { filing } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import type { Change } from '../types/assistant.js';
 import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type Choice } from '../questions/model.js';
@@ -75,7 +76,9 @@ function questionCards(t: T): string {
 /** The map as the prompt gives it, the names in the person's language. */
 export function appMap(language: string): string {
   const { t } = wordsIn(language);
-  const presets = PRESETS.map((p) => `«${t(`export.preset.${p.id}` as 'export.title')}» (preset "${p.id}": ${t(`export.preset.${p.id}Note` as 'export.title')})`).join(', ');
+  // A preset's note names the firm's filing period («Quartal», «Semester», r6f-29).
+  const period = t(filing().length === 'half' ? 'period.word.half' : 'period.word.quarter');
+  const presets = PRESETS.map((p) => `«${t(`export.preset.${p.id}` as 'export.title')}» (preset "${p.id}": ${t(`export.preset.${p.id}Note` as 'export.title').replace('{period}', period)})`).join(', ');
   return [
     'The app, as the person sees it: its places by the names on screen, what a person does there, and which changes of your block do the same. Point the person only to these places, by these names; anything else the app does not have.',
     ...(Object.entries(AREA_PLACES) as Array<[AreaId, Place]>).flatMap(([id, p]) => [
