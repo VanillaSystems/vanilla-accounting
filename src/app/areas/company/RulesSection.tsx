@@ -322,18 +322,18 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
  * the correction teaches, drafted on the click and then shown on its card with the payments it
  * would book differently; «Behalten» keeps it. Nothing while the booking is still the rule's.
  */
-export function CorrectionOffer({ ref, onRules }: { ref: string; onRules?(): void }) {
+export function CorrectionOffer({ payment, onRules }: { payment: string; onRules?(): void }) {
   const [offer, setOffer] = useState<CorrectionOfferView | null>(null);
   const [path, setPath] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
     let live = true;
-    const load = () => { api.correctionOffer(ref).then((x) => { if (live) setOffer(x.offer); }, () => { if (live) setOffer(null); }); };
+    const load = () => { api.correctionOffer(payment).then((x) => { if (live) setOffer(x.offer); }, () => { if (live) setOffer(null); }); };
     load();
     const off = onBooksChanged(load);
     return () => { live = false; off(); };
-  }, [ref]);
+  }, [payment]);
   if (path) return <RuleDraft path={path} onRules={onRules} title={t('rules.correction.title')} />;
   if (!offer) return null;
   const draft = () => {

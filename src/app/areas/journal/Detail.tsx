@@ -183,7 +183,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
               <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} />
-                {e.by?.kind === 'person' && e.by.was && !edit ? <CorrectionOffer ref={e.transactionRef} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
+                {e.by?.kind === 'person' && e.by.was && !edit ? <CorrectionOffer payment={e.transactionRef} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
               </dd>
               {seen || e.reason || e.by?.kind === 'person' || e.by?.kind === 'assistant' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
                 {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
