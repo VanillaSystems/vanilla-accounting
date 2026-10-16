@@ -185,8 +185,8 @@ function EntryActions(props: Props & { v: EntryView; j: Journal }) {
 
 /** One thing the classifier saw: a receipt with the VAT facts that set the code, or no receipt at all. */
 function WhyLine({ w, nav }: { w: WhySeen; nav: Props['nav'] }) {
-  if (w.kind === 'noReceipt') return <div>{t('journal.why.noReceipt')}</div>;
-  const facts = w.vat === 'none' ? t('journal.why.vatNone')
+  if (w.kind === 'noReceipt') return <div>{t(w.sale ? 'journal.why.noInvoice' : 'journal.why.noReceipt')}</div>;
+  const facts = w.vat === 'none' ? t(w.sale ? 'journal.why.vatNoneSale' : 'journal.why.vatNone')
     : w.vat === 'unread' ? t('journal.why.vatUnread')
       : t(w.vat.vatId ? 'journal.why.vatId' : 'journal.why.vat', { rate: String(w.vat.rate), tax: fmt(w.vat.tax), id: w.vat.vatId ?? '' });
   return (

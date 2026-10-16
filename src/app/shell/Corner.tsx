@@ -58,7 +58,7 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
           ))}
           {asked.map((x) => (
             <button key={x.id} type="button" className="cprow" onClick={() => go({ area: 'automation', view: 'tasks' })}>
-              <span className="amber" aria-hidden="true" /><b>{t('questions.cornerRow', { by: x.origin === 'assistant' ? t('questions.ai') : x.by, text: x.text })}</b>
+              <span className="amber" aria-hidden="true" /><b>{x.origin === 'booking' ? t('questions.cornerRowApp', { text: x.text }) : t('questions.cornerRow', { by: x.origin === 'assistant' ? t('questions.ai') : x.by, text: x.text })}</b>
             </button>
           ))}
           {!running.length && !view.tasks.length && !asked.length ? <p className="m">{t('corner.nothing')}</p> : null}

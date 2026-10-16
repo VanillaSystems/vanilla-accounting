@@ -14,6 +14,7 @@ import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import type { Books } from '../src/books/store.js';
 import type { ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
+import { whySeen } from '../src/app/areas/journal/model.js';
 import './support/jurisdiction.js';
 
 const fx = loadFxResolver();
@@ -113,4 +114,11 @@ test('books not registered for VAT book a sale without a VAT code, whatever the 
     [{ id: 'r-inv', ref: 'INV', hasSwissVat: true, extractedText: 'Rechnung, MWST 8.1 %' }], false);
   assert.deepEqual([codes(booked.get('KELLER')), codes(booked.get('INV'))], [[''], ['']]);
   assert.match(booked.get('KELLER')![0].reason!, /nicht MWST-pflichtig/);
+});
+
+test('the entry says a sale without an invoice was coded by its payment, never «no receipt, no input tax»', async () => {
+  const [keller] = (await book([pay('KELLER', 4860)], { KELLER: [sale(4860)] })).get('KELLER')!;
+  assert.deepEqual(whySeen(keller, []), [{ kind: 'noReceipt', sale: true }]);
+  const expense: JournalEntry = { ...keller, accountDebit: '6570', accountCredit: '1020', vatCode: 'I0' };
+  assert.deepEqual(whySeen(expense, []), [{ kind: 'noReceipt', sale: false }]);
 });

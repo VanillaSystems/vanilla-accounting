@@ -8,6 +8,7 @@ import type { Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
+import { chart } from '../../../engines/index.js';
 
 export interface EntryView {
   e: JournalEntry;
@@ -108,16 +109,18 @@ export function byMonth(rows: readonly EntryView[]): Array<[string, EntryView[]]
 
 /**
  * Why the classifier booked an entry, from what it saw: each receipt linked when it booked, with the
- * VAT facts that set the code, or none (no receipt, no input tax). Undefined for another writer's
- * entry, or one booked before entries recorded their receipts. The model's words are `e.reason`.
+ * VAT facts that set the code, or none (no receipt: no input tax on a purchase; on a sale the
+ * payment set the code). Undefined for another writer's entry, or one booked before entries
+ * recorded their receipts. The model's words are `e.reason`. `sale`: the entry books revenue.
  */
 export type WhySeen =
-  | { kind: 'receipt'; id: string; name: string; date?: string; vat: { rate: number; tax: number; vatId?: string } | 'none' | 'unread' }
-  | { kind: 'noReceipt' };
+  | { kind: 'receipt'; id: string; name: string; date?: string; vat: { rate: number; tax: number; vatId?: string } | 'none' | 'unread'; sale: boolean }
+  | { kind: 'noReceipt'; sale: boolean };
 
 export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[] | undefined {
   if (e.origin !== 'classify' || !e.receipts) return undefined;
-  if (!e.receipts.length) return [{ kind: 'noReceipt' }];
+  const sale = chart().typeOf(e.accountCredit) === 'revenue';
+  if (!e.receipts.length) return [{ kind: 'noReceipt', sale }];
   return e.receipts.flatMap((id): WhySeen[] => {
     const r = receipts.find((x) => x.id === id);
     if (!r) return [];
@@ -125,7 +128,7 @@ export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[
     const vat = r.hasSwissVat === false ? 'none' as const
       : group ? { rate: group.ratePercent, tax: group.vat, ...(r.vatId && { vatId: r.vatId }) }
         : 'unread' as const;
-    return [{ kind: 'receipt', id, name: r.description || r.filename, ...(r.date && { date: r.date }), vat }];
+    return [{ kind: 'receipt', id, name: r.description || r.filename, ...(r.date && { date: r.date }), vat, sale }];
   });
 }
 
