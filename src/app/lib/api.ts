@@ -97,6 +97,7 @@ export function errorText(e: unknown): string {
     case 'setAside': return t('error.setAside', b.params);
     case 'unknownAccount': return t('error.unknownAccount', b.params);
     case 'oneSided': return t('error.oneSided', b.params);
+    case 'codeSign': return t(b.params.expected.startsWith('-') ? 'error.codeSign.back' : 'error.codeSign.out', b.params);
     case 'accountInUse': return t('error.accountInUse', { account: b.params.account, n: b.params.entries });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');

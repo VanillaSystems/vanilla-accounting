@@ -2517,6 +2517,8 @@ export default {
     'error.setAside': '{receipt} is set aside as a duplicate or «not a receipt» and is not linked.',
     'error.unknownAccount': 'Account {account} is not in the chart: add the account first.',
     'error.oneSided': 'Debit and credit both belong there. To correct only the VAT: {account} on both sides with the code turned, the bank stays.',
+    'error.codeSign.back': 'The code {code} does not fit this entry: money comes back here (a credit note, a refund), so the code carries the minus: {expected}. With {code} the tax would be added instead of deducted.',
+    'error.codeSign.out': 'The code {code} does not fit this entry: money goes out here (a purchase) or turnover comes in (a sale), so the code stands without a minus: {expected}.',
     'error.accountInUse': { one: 'Account {account} has one entry: it stays in the chart.', other: 'Account {account} has {n} entries: it stays in the chart.' },
     'assistant.kind.entry': 'Entry',
     'assistant.kind.payment': 'Payment',

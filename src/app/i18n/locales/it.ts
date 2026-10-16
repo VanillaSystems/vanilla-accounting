@@ -2517,6 +2517,8 @@ export default {
     'error.setAside': '{receipt} è messo da parte come doppione o «non un giustificativo» e non viene collegato.',
     'error.unknownAccount': 'Il conto {account} non esiste nel piano dei conti: creare prima il conto.',
     'error.oneSided': 'Dare e avere sono entrambi necessari. Per correggere solo l’IVA: {account} su entrambi i lati con il codice invertito, la banca resta.',
+    'error.codeSign.back': 'Il codice {code} non si addice a questa registrazione: qui il denaro torna (una nota di credito, un rimborso), il codice porta il meno: {expected}. Con {code} l’imposta verrebbe aggiunta invece che dedotta.',
+    'error.codeSign.out': 'Il codice {code} non si addice a questa registrazione: qui il denaro esce (un acquisto) o entra un ricavo (una vendita), il codice sta senza meno: {expected}.',
     'error.accountInUse': { one: 'Il conto {account} ha una registrazione: resta nel piano dei conti.', other: 'Il conto {account} ha {n} registrazioni: resta nel piano dei conti.' },
     'assistant.kind.entry': 'Registrazione',
     'assistant.kind.payment': 'Pagamento',

@@ -2517,6 +2517,8 @@ export default {
     'error.setAside': '{receipt} est mis de côté comme doublon ou «pas un justificatif» et n’est pas lié.',
     'error.unknownAccount': 'Le compte {account} n’existe pas dans le plan comptable : créer d’abord le compte.',
     'error.oneSided': 'Le débit et le crédit sont tous deux nécessaires. Pour corriger seulement la TVA : {account} des deux côtés avec le code inversé, la banque reste.',
+    'error.codeSign.back': 'Le code {code} ne convient pas à cette écriture : ici l’argent revient (une note de crédit, un remboursement), le code porte le moins : {expected}. Avec {code}, l’impôt serait ajouté au lieu d’être déduit.',
+    'error.codeSign.out': 'Le code {code} ne convient pas à cette écriture : ici l’argent sort (un achat) ou le chiffre d’affaires entre (une vente), le code s’écrit sans moins : {expected}.',
     'error.accountInUse': { one: 'Le compte {account} a une écriture : il reste dans le plan comptable.', other: 'Le compte {account} a {n} écritures : il reste dans le plan comptable.' },
     'assistant.kind.entry': 'Écriture',
     'assistant.kind.payment': 'Paiement',

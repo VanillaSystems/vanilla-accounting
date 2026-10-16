@@ -41,6 +41,8 @@ export type ApiRefusal =
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }
   | { code: 'oneSided'; params: { account: string } }
+  /** A code whose sign contradicts the line's direction (src/server/edits.ts assertCodeSign): M81 on a credit note, -V81 on a sale; `expected` is the code the line takes. */
+  | { code: 'codeSign'; params: { code: string; expected: string } }
   | { code: 'accountInUse'; params: { account: string; entries: number } }
   /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
   | { code: 'personsBooking'; params: { entries: number } }

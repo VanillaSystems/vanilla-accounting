@@ -2514,6 +2514,8 @@ export const messages = {
   'error.setAside': '{receipt} ist als Doppel oder «kein Beleg» beiseitegelegt und wird nicht verknüpft.',
   'error.unknownAccount': 'Konto {account} gibt es im Kontenplan nicht: zuerst das Konto anlegen.',
   'error.oneSided': 'Soll und Haben gehören beide hin. Nur die MWST korrigieren: {account} auf beiden Seiten mit dem umgekehrten Code, die Bank bleibt.',
+  'error.codeSign.back': 'Der Code {code} passt nicht zu dieser Buchung: hier kommt Geld zurück (eine Gutschrift, eine Rückerstattung), der Code trägt das Minus: {expected}. Mit {code} würde die Steuer dazugezählt statt abgezogen.',
+  'error.codeSign.out': 'Der Code {code} passt nicht zu dieser Buchung: hier geht Geld hinaus (ein Einkauf) oder kommt Umsatz herein (ein Verkauf), der Code steht ohne Minus: {expected}.',
   'error.accountInUse': { one: 'Konto {account} hat eine Buchung: es bleibt im Kontenplan.', other: 'Konto {account} hat {n} Buchungen: es bleibt im Kontenplan.' },
   'assistant.kind.entry': 'Buchung',
   'assistant.kind.payment': 'Zahlung',

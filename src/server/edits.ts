@@ -8,7 +8,7 @@ import { periodLock, type Books } from '../books/store.js';
 import { isManualRef, nextManualRef } from '../books/refs.js';
 import { isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
-import { baseCurrency, filing } from '../engines/index.js';
+import { baseCurrency, chart, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
@@ -181,6 +181,35 @@ export function assertCodeTaken(code: string | undefined): void {
   throw new RequestError(400, why, { code: 'codeNotTaken', params: { code, method } });
 }
 
+/**
+ * The sign a code must carry on this line, when the accounts say so (r7h-22): a purchase code (M,
+ * I) on a line that credits an expense is a refund or a supplier's credit note and carries the
+ * minus (-M81); a sales code (V) on a line that debits revenue is a customer refund (-V81). The
+ * plain code there would claim input tax on money received, or declare turnover on money paid out.
+ * Undefined when the accounts give no direction: a correction on one account, a VAT-only leg
+ * (M81-2), Bezugsteuer, an export code, two balance-sheet accounts.
+ */
+export function codeSignFor(code: string | undefined, accountDebit: string | undefined, accountCredit: string | undefined): string | undefined {
+  const m = /^(-?)([MIV])(\d+)$/.exec(code ?? '');
+  if (!m || !accountDebit || !accountCredit || accountDebit === accountCredit) return undefined;
+  const side = m[2] === 'V' ? 'revenue' : 'expense';
+  const debit = chart().typeOf(accountDebit) === side;
+  const credit = chart().typeOf(accountCredit) === side;
+  if (debit === credit) return undefined;
+  const back = m[2] === 'V' ? debit : credit;
+  return `${back ? '-' : ''}${m[2]}${m[3]}`;
+}
+
+export function assertCodeSign(code: string | undefined, accountDebit: string | undefined, accountCredit: string | undefined): void {
+  const expected = codeSignFor(code, accountDebit, accountCredit);
+  if (!expected || expected === code) return;
+  const back = expected.startsWith('-');
+  const why = back
+    ? `Der Code ${code} passt nicht zu dieser Buchung: hier kommt Geld zurück (eine Gutschrift, eine Rückerstattung), der Code trägt das Minus: ${expected}. Mit ${code} würde die Steuer dazugezählt statt abgezogen.`
+    : `Der Code ${code} passt nicht zu dieser Buchung: hier geht Geld hinaus (ein Einkauf) oder kommt Umsatz herein (ein Verkauf), der Code steht ohne Minus: ${expected}.`;
+  throw new RequestError(400, why, { code: 'codeSign', params: { code: code!, expected } });
+}
+
 export function setEntry(books: Books, id: string, set: EntrySet, author: Author = BY_HAND): BookChange {
   // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only, with a code the form takes.
   // The firm's rule comes before the entry's lookup: a block that first changed the receipt's facts has unbooked the entry
@@ -195,6 +224,7 @@ export function setEntry(books: Books, id: string, set: EntrySet, author: Author
   if (set.accountDebit !== undefined) { before.accountDebit = e.accountDebit; e.accountDebit = set.accountDebit; }
   if (set.accountCredit !== undefined) { before.accountCredit = e.accountCredit; e.accountCredit = set.accountCredit; }
   if (set.vatCode !== undefined) { before.vatCode = e.vatCode ?? ''; e.vatCode = set.vatCode || undefined; }
+  if (set.origin === undefined && (set.vatCode !== undefined || set.accountDebit !== undefined || set.accountCredit !== undefined)) assertCodeSign(e.vatCode, e.accountDebit, e.accountCredit);
   if (set.description !== undefined) { before.description = e.description ?? ''; e.description = set.description || undefined; }
   if (set.amount !== undefined) { before.amount = e.amount; e.amount = set.amount; }
   // The reason explains the booking as its author made it; once a person changes its accounts, code or amount, she decided it.
@@ -236,7 +266,7 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   if (corrects && !(closed && parsePeriod(corrects, date)!.to <= closed)) throw new RequestError(400, `corrects: ${corrects} ist nicht eingereicht.`);
   if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
   // An undo (`id`) puts back what was booked; anything new goes on placed accounts only, with a code the form takes.
-  if (!id) { assertPlaced(rest.accountDebit, rest.accountCredit); assertCodeTaken(rest.vatCode); }
+  if (!id) { assertPlaced(rest.accountDebit, rest.accountCredit); assertCodeTaken(rest.vatCode); assertCodeSign(rest.vatCode, rest.accountDebit, rest.accountCredit); }
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
     if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
@@ -266,6 +296,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     assertCodeTaken(l.vatCode);
     if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
     assertPlaced(l.accountDebit, l.accountCredit);
+    assertCodeSign(l.vatCode, l.accountDebit, l.accountCredit);
   }
   const off = offSide(books, ref, lines, accounts);
   if (off) throw unbalanced(off);
