@@ -166,6 +166,15 @@ test('refusals: each precondition names what is missing', () => {
   assert.ok(close.blockers.some((p) => p.code === 'undecided'));
 });
 
+test('a cash account below zero and a swapped-looking sale are hints of the checklist (r8k-8): named, never blocking', () => {
+  const b = books();
+  b.journalEntries.push(e('swap', '2026-10-16', '3400', '1000', 520));
+  const close = yearClose(input(b));
+  const check = close.checks.find((c) => c.id === 'bookingsPlausible')!;
+  assert.deepEqual([check.status, check.problems.map((p) => p.code)], ['warn', ['swappedSale', 'cashNegative']]);
+  assert.equal(close.blockers.some((p) => p.code === 'swappedSale' || p.code === 'cashNegative'), false, 'a hint never blocks the close');
+});
+
 test('opening 2027 = closing 2026: balance-sheet accounts carried, P&L zero, the result in 2970, EUR 1500 at CHF 1395', () => {
   const b = books();
   applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
