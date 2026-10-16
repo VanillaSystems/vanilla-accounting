@@ -1357,7 +1357,7 @@ export default {
     'invoice.missing.sender.name': 'il nome dell’azienda (Azienda › Azienda)',
     'invoice.missing.sender.address': 'l’indirizzo dell’azienda (Azienda › Azienda)',
     'invoice.missing.sender.uid': 'il numero IVA dell’azienda',
-    'invoice.missing.payTo': 'dove pagano i clienti: il conto bancario per questa valuta (Azienda › Layout delle fatture › Configurare le fatture)',
+    'invoice.missing.payTo': 'il conto bancario su cui i clienti pagano in questa valuta (Azienda › Layout delle fatture › Configurare le fatture)',
     'invoice.missing.customer': 'il cliente',
     'invoice.missing.customer.name': 'il nome del cliente',
     'invoice.missing.customer.address': 'l’indirizzo del cliente',

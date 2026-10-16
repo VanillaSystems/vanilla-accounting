@@ -1357,7 +1357,7 @@ export default {
     'invoice.missing.sender.name': 'the company’s name (Company › Company)',
     'invoice.missing.sender.address': 'the company’s address (Company › Company)',
     'invoice.missing.sender.uid': 'the company’s VAT number',
-    'invoice.missing.payTo': 'where customers pay: the bank account for this currency (Company › Invoice layout › Set up invoices)',
+    'invoice.missing.payTo': 'the bank account customers pay to in this currency (Company › Invoice layout › Set up invoices)',
     'invoice.missing.customer': 'the customer',
     'invoice.missing.customer.name': 'the customer’s name',
     'invoice.missing.customer.address': 'the customer’s address',

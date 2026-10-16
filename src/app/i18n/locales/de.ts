@@ -1354,7 +1354,7 @@ export const messages = {
   'invoice.missing.sender.name': 'der Name der Firma (Firma › Firma)',
   'invoice.missing.sender.address': 'die Adresse der Firma (Firma › Firma)',
   'invoice.missing.sender.uid': 'die MWST-Nummer der Firma',
-  'invoice.missing.payTo': 'wohin die Kunden zahlen: das Bankkonto für diese Währung (Firma › Rechnungslayout › Rechnungen einrichten)',
+  'invoice.missing.payTo': 'das Bankkonto, auf das die Kunden in dieser Währung zahlen (Firma › Rechnungslayout › Rechnungen einrichten)',
   'invoice.missing.customer': 'der Kunde',
   'invoice.missing.customer.name': 'der Name des Kunden',
   'invoice.missing.customer.address': 'die Adresse des Kunden',

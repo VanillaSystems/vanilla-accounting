@@ -1357,7 +1357,7 @@ export default {
     'invoice.missing.sender.name': 'le nom de l’entreprise (Entreprise › Entreprise)',
     'invoice.missing.sender.address': 'l’adresse de l’entreprise (Entreprise › Entreprise)',
     'invoice.missing.sender.uid': 'le numéro TVA de l’entreprise',
-    'invoice.missing.payTo': 'où les clients paient : le compte bancaire pour cette monnaie (Entreprise › Mise en page des factures › Configurer les factures)',
+    'invoice.missing.payTo': 'le compte bancaire sur lequel les clients paient dans cette monnaie (Entreprise › Mise en page des factures › Configurer les factures)',
     'invoice.missing.customer': 'le client',
     'invoice.missing.customer.name': 'le nom du client',
     'invoice.missing.customer.address': 'l’adresse du client',
