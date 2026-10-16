@@ -26,6 +26,8 @@ import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, type Cor
 import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
 import { baseCurrency, chargesVat, chart, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
+import { chfAmount } from '../../../accounting/ledger.js';
+import type { JournalEntry } from '../../../types/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -67,6 +69,7 @@ export function NewEntry(props: Props) {
   // A VAT correction of a purchase without input tax whose receipt shows Swiss VAT claims it (r4c-37).
   const rate = corrected ? receiptRateOf(books, corrected, s.overlay.correcting?.from) : undefined;
   const claim = as === 'vat' && corrected && d.vatCode && d.vatCode === claimCode(corrected, d.accountDebit ?? '', rate) ? d.vatCode : undefined;
+  const fx = !tx && d.exchangeCurrency && d.exchangeRate ? { currency: d.exchangeCurrency, rate: d.exchangeRate } : undefined;
   const taxOf = (code: string | undefined) => (corrected && code ? fmt(Math.abs(vat().vatLine({ ...corrected, id: '', transactionRef: '', date: d.date ?? '', vatCode: code })?.tax ?? 0)) : '');
 
   /** The private code goes into the VAT field while the field is empty or holds the one put there before. */
@@ -138,6 +141,8 @@ export function NewEntry(props: Props) {
     close();
     const input: JournalEntryInput = {
       date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }),
+      // A correction or reversal of a foreign-currency entry keeps its currency and rate: the amount typed is in that currency (r9c-1).
+      ...(fx && { exchangeCurrency: fx.currency, exchangeRate: fx.rate }),
       ...(d.corrects && corrected && as && { correctsEntry: corrected.id, correction: as }),
     };
     const entry = reverseIt
@@ -178,7 +183,9 @@ export function NewEntry(props: Props) {
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} title={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
-            <label>{t('journal.amountIn', { currency: tx?.currency ?? baseCurrency() })}<input className="mono" name="amount" defaultValue={d.amount ? fmt(d.amount) : ''} style={{ textAlign: 'right' }} autoFocus={!!round} /></label>
+            <label>{t('journal.amountIn', { currency: tx?.currency ?? fx?.currency ?? baseCurrency() })}<input className="mono" name="amount" defaultValue={d.amount ? fmt(d.amount) : ''} style={{ textAlign: 'right' }} autoFocus={!!round} />
+              {fx && now.amount ? <span className="m" data-testid="fx-line">{t('journal.fxLine', { chf: fmt(chfAmount({ amount: now.amount, exchangeCurrency: fx.currency, exchangeRate: fx.rate } as JournalEntry)), rate: String(fx.rate) })}</span> : null}
+            </label>
           </div>
           <div className="two">
             <AccountField name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />

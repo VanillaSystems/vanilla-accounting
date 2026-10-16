@@ -181,3 +181,16 @@ test('r8k-10: a private outlay for a receipt dated in a filed quarter corrects t
   const [e] = entriesFor(outlay, [{ accountDebit: '6500', accountCredit: '', amount: 12.5, vatCode: 'I0', description: 'Kiosk' }], { fx, receiptDate: '2026-06-20', receipts: ['k'], bankAccount: '2451', lock, by: { kind: 'model', model: 'stub' }, corrects: '2026-Q2' });
   assert.deepEqual([e.date, e.corrects, e.accountCredit], ['2026-07-01', '2026-Q2', '2451'], 'the classifier stamps the correction too');
 });
+
+test('a correction of a foreign-currency entry carries its currency and rate: the 0535 takes back exactly the input tax claimed (r9c-1)', () => {
+  const software: JournalEntry = { id: 'sw', transactionRef: 'WISE-1', date: '2026-05-04', accountDebit: '6570', accountCredit: '1021', amount: 32.43, vatCode: 'I81', exchangeCurrency: 'EUR', exchangeRate: 0.93222, description: 'Beispiel Software' };
+  assert.equal(tax(software), 2.27, 'claimed on CHF 30.23, not on the EUR figure');
+  const d = correctionOf(software, 'vat', '2026-10-16', 'Korrektur', isBank);
+  assert.deepEqual([d.exchangeCurrency, d.exchangeRate, d.amount], ['EUR', 0.93222, 32.43], 'the amount stays the EUR figure, with the rate it was booked at');
+  assert.equal(tax(entry(d)), -2.27, 'the 0535 reverses 2.27, not 2.43');
+  const storno = correctionOf(software, 'storno', '2026-10-16', 'Storno', isBank);
+  assert.deepEqual([storno.exchangeCurrency, storno.exchangeRate], ['EUR', 0.93222]);
+  const moved = correctionOf(software, 'account', '2026-10-16', 'Konto', isBank);
+  assert.deepEqual([moved.exchangeCurrency, moved.exchangeRate], ['EUR', 0.93222], 'the account moved: the CHF value moves with it');
+  assert.equal(correctionOf(natel, 'vat', '2026-10-16', 'K', isBank).exchangeCurrency, undefined, 'a CHF entry carries no currency');
+});

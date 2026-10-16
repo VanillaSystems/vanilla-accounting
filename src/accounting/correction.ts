@@ -6,14 +6,15 @@
  */
 import type { BankTransaction, CorrectionCase, JournalEntry, Receipt } from '../types/index.js';
 import { chart, vat, yearEnd } from '../engines/index.js';
-import { reversalOf, turned, type Draft } from './reversal.js';
+import { reversalOf, sameMoney, turned, type Draft, type Money } from './reversal.js';
 import { codeForRate } from './vat-codes.js';
+import { chfAmount } from './ledger.js';
 import { filingKeyOf, type FilingLength } from './periods.js';
 
 /** What was wrong: the VAT code, the account (expense or revenue), or the whole entry. */
 export type CorrectionKind = 'vat' | 'account' | 'storno';
 
-type Corrected = Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'vatCode'>;
+type Corrected = Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode'> & Money;
 
 /** The kinds an entry offers, the first the form starts with: a VAT code to take back first. */
 export const correctionKinds = (e: Corrected): CorrectionKind[] => (e.vatCode ? ['vat', 'account', 'storno'] : ['account', 'storno']);
@@ -88,20 +89,23 @@ export function accountCorrectionCode(e: Corrected, to: string, isPrivate: (acco
  * - `account`: the amount moved from the old account to a new one, left blank for the person; the
  *   VAT stays as declared (onto the private account: accountCorrectionCode).
  * - `storno`: the entry the other way round, bank side included.
+ * A foreign-currency entry's correction keeps its currency and rate (sameMoney): the tax taken
+ * back is the tax on the CHF value as booked, not on the foreign figure read as CHF (r9c-1).
  */
 export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, description: string, isBank: (account: string) => boolean, receiptRate?: number): Draft {
   const own = ownSide(e, isBank);
   const account = e[own];
   if (kind === 'storno' || (kind === 'vat' && (!e.accountDebit || !e.accountCredit))) return reversalOf(e, date, description);
   const claim = kind === 'vat' ? claimCode(e, account, receiptRate) : undefined;
-  if (claim) return { date, accountDebit: account, accountCredit: account, amount: e.amount, vatCode: claim, description };
+  const money = sameMoney(e);
+  if (claim) return { date, accountDebit: account, accountCredit: account, ...money, vatCode: claim, description };
   if (kind === 'vat') {
     const vatCode = turned(e.vatCode);
-    return { date, accountDebit: account, accountCredit: account, amount: e.amount, ...(vatCode && { vatCode }), description };
+    return { date, accountDebit: account, accountCredit: account, ...money, ...(vatCode && { vatCode }), description };
   }
   return own === 'accountDebit'
-    ? { date, accountDebit: '', accountCredit: account, amount: e.amount, description }
-    : { date, accountDebit: account, accountCredit: '', amount: e.amount, description };
+    ? { date, accountDebit: '', accountCredit: account, ...money, description }
+    : { date, accountDebit: account, accountCredit: '', ...money, description };
 }
 
 /**
@@ -121,7 +125,8 @@ export function correctsFor(tx: Pick<BankTransaction, 'source'>, receipts: Reado
 export const banksMoved = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit'>, isBank: (account: string) => boolean): string[] =>
   e.accountDebit === e.accountCredit ? [] : [e.accountDebit, e.accountCredit].filter((a) => !!a && isBank(a));
 
-const line = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'vatCode'>) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} ${e.amount.toFixed(2)}`;
+const line = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate'>) =>
+  `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} ${e.exchangeCurrency && e.exchangeRate ? `${e.exchangeCurrency} ${e.amount.toFixed(2)} = CHF ${chfAmount(e as JournalEntry).toFixed(2)}` : e.amount.toFixed(2)}`;
 const day = (iso: string) => iso.split('-').reverse().join('.');
 
 const KIND_TITLE: Record<CorrectionKind, string> = { vat: 'Steuercode korrigiert', account: 'Konto korrigiert', storno: 'Buchung storniert' };
