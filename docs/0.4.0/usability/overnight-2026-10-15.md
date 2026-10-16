@@ -167,3 +167,4 @@ file records every decision a person might have made differently, newest last.
     - Harness: `vm.sh app` starts the app in the VM's GUI session through a LaunchAgent, so the keychain works; the token is on no command line.
     - Started fix/composer (KI sidebar toggle, history button, VS Code-style composer with «+» context picker), as Ken asked.
     - Open for Ken: mailbox connect updates vs refuses a second time; partial deletions by the AI; r6h-33 credit note without PDF (M0 vs -M81); refresh the huber-q3 snapshot (it has rc.174); the token is still readable with `ps -E` by the same user.
+36. Merged composer (KI sidebar: arrow toggle, «Verlauf» button with «Vergangene Gespräche» list, one-field composer with «+» picker for this page, Beleg, Buchung, Zahlung, Ablauf/Lauf, and a round send arrow). No file from disk: the API takes references only. Tests 1021 pass, golden master 18/18. Building rc for round 7.
