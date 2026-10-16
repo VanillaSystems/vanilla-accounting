@@ -6,7 +6,7 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import type { Index, JournalEntry } from '../../../types/index.js';
-import { bookingDraft, restOf, type BookingDraft, type BookingLine, type DraftLine } from '../../../accounting/manual-booking.js';
+import { bookingDraft, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
@@ -17,7 +17,7 @@ import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { AccountField } from './AccountField.js';
 import { VatCodeList } from './Detail.js';
-import { bookPayment } from './actions.js';
+import { attachEntries, bookPayment } from './actions.js';
 
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) && s.trim() ? n : null; };
 const FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const;
@@ -34,7 +34,43 @@ type Props = {
 export function PaymentBooking(props: Props) {
   const ws = useWorkspace();
   const draft = useMemo(() => ws && bookingDraft(props.books, props.payment, ws.bankAccounts), [ws, props.books, props.payment]);
-  return ws && draft ? <BookingForm {...props} accounts={ws.bankAccounts} draft={draft} /> : null;
+  const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
+  if (!ws || !draft) return null;
+  return (
+    <>
+      {typed.length ? <Unattached {...props} typed={typed} /> : null}
+      <BookingForm {...props} accounts={ws.bankAccounts} draft={draft} />
+    </>
+  );
+}
+
+/**
+ * Bookings typed in Buchungen without a payment that add up to this one (treuhaender-22): tied to
+ * it with one click, the payment counts as booked and no later run books it a second time.
+ */
+function Unattached({ nav, payment, typed, onBooked }: Props & { typed: UnattachedBooking[] }) {
+  const busy = useRef(false);
+  async function attach(own: string) {
+    if (busy.current) return;
+    busy.current = true;
+    const before = await attachEntries(nav, payment, own);
+    busy.current = false;
+    if (before) onBooked?.(before.map((e) => ({ ...e, transactionRef: payment })));
+  }
+  return (
+    <div className="pbo" data-testid="unattached">
+      <b>{t('journal.unattached.title', { n: typed.length })}</b>
+      {typed.map((u) => (
+        <div key={u.ref} className="pbor" data-ref={u.ref}>
+          <span className="mono">{u.ref}</span>
+          <span className="mono">{formatDate(u.entries[0].date)}</span>
+          <span>{u.entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} · ${fmt(e.amount)}`).join(' + ')}</span>
+          <span className="m">{u.entries.map((e) => e.description).filter(Boolean).join(' · ')}</span>
+          <button type="button" className="btn" onClick={() => void attach(u.ref)}>{t('journal.unattached.attach', { ref: u.ref })}</button>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, draft }: Props & { accounts: readonly LedgerBankAccount[]; draft: BookingDraft }) {

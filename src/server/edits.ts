@@ -5,7 +5,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
-import { nextManualRef } from '../books/refs.js';
+import { isManualRef, nextManualRef } from '../books/refs.js';
 import { isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, filing } from '../engines/index.js';
@@ -131,8 +131,6 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   return { kind: 'entry', id, set: before };
 }
 
-/** A ref of its own (M2026-004) needs no transaction: a manual entry stands alone. */
-const MANUAL_REF = /^M\d{4}-\d{3,}$/;
 
 /**
  * A new booking, dated in the open period. Without `transactionRef` it gets the next free
@@ -149,7 +147,7 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
-    if (!dates.length && !MANUAL_REF.test(transactionRef)) throw new RequestError(404, 'Transaction not found');
+    if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found');
     assertOpen(books, dates, 'newEntry');
   }
   const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
@@ -186,6 +184,29 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   }));
   books.journalEntries.push(...entries);
   return entries;
+}
+
+/**
+ * A person's booking typed without its payment (Buchungen › N, ref M2026-004) tied to the payment
+ * it books (manual-booking.ts unattachedFor): its entries take the payment's ref and date (cash
+ * basis) and record the receipts linked now, so the payment counts as booked and no run books it
+ * again. Refused when the payment is booked already, the ref is no such booking, or its entries do
+ * not add up to what the bank paid. Returns the entries as they were, for the undo.
+ */
+export function attachEntries(books: Books, ref: string, own: string, accounts: readonly LedgerBankAccount[]): JournalEntry[] {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) throw new RequestError(404, 'Transaction not found');
+  assertOpen(books, refDates(books, ref), 'newEntry');
+  if (books.journalEntries.some((e) => e.transactionRef === ref)) throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
+  const entries = books.journalEntries.filter((e) => e.transactionRef === own);
+  if (!isManualRef(own) || !entries.length || books.transactions.some((t) => t.ref === own) || books.mappings.some((m) => m.transactionRef === own)) throw new RequestError(404, `${own} ist keine Buchung ohne Zahlung.`);
+  assertOpen(books, entries.map((e) => e.date), 'editEntry');
+  const off = paymentSides({ transactions: books.transactions, journalEntries: entries.map((e) => ({ ...e, transactionRef: ref })) }, ref, accounts).find((s) => s.booked !== s.paid);
+  if (off) throw unbalanced(off);
+  const before = entries.map((e) => ({ ...e }));
+  const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
+  for (const e of entries) Object.assign(e, { transactionRef: ref, date: tx.date, receipts, origin: 'manual' });
+  return before;
 }
 
 /** Deletes a booking of the open period; returns it as it was. */

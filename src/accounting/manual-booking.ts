@@ -8,6 +8,7 @@ import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
 import { codeForRate } from './vat-codes.js';
 import { fromRappen, toRappen } from './rappen.js';
+import { isManualRef } from '../books/refs.js';
 
 /** One line of the booking, in the payment's currency. */
 export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string }
@@ -99,4 +100,34 @@ export const offSide = (books: Pick<Index, 'transactions'>, ref: string, lines: 
 export function restOf(books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): number {
   const [side] = sidesWith(books, ref, lines, accounts);
   return side ? fromRappen((side.paid < 0 ? -1 : 1) * (toRappen(side.paid) - toRappen(side.booked))) : 0;
+}
+
+/** A person's booking made without a payment (Buchungen › N): its own ref and its entries. */
+export interface Unattached { ref: string; entries: JournalEntry[]; days: number }
+
+const dayDiff = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
+
+/**
+ * Bookings typed in Buchungen without their payment that may be this unbooked payment's: entries
+ * under a ref of their own (no transaction, no receipt linked to it) that move the payment's bank
+ * account by exactly what the bank paid, dated within `days` of it. Nearest first. Tying one to the
+ * payment marks the payment booked, so a later run does not book it twice.
+ */
+export function unattachedFor(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings'>, ref: string, accounts: readonly LedgerBankAccount[], days = 10): Unattached[] {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  const entries = books.journalEntries ?? [];
+  if (!tx || entries.some((e) => e.transactionRef === ref)) return [];
+  const own = new Set([...books.transactions.map((t) => t.ref), ...books.mappings.map((m) => m.transactionRef)]);
+  const groups = new Map<string, JournalEntry[]>();
+  for (const e of entries) {
+    if (!isManualRef(e.transactionRef) || own.has(e.transactionRef)) continue;
+    groups.set(e.transactionRef, [...(groups.get(e.transactionRef) ?? []), e]);
+  }
+  return [...groups].flatMap(([own, es]): Unattached[] => {
+    if (es.some((e) => e.corrects || e.origin === 'year-close' || (e.exchangeCurrency && e.exchangeCurrency !== tx.currency))) return [];
+    const near = Math.max(...es.map((e) => dayDiff(e.date, tx.date)));
+    const sides = paymentSides({ transactions: books.transactions, journalEntries: es.map((e) => ({ ...e, transactionRef: ref })) }, ref, accounts);
+    if (near > days || !sides.length || sides.some((s) => s.booked !== s.paid)) return [];
+    return [{ ref: own, entries: es, days: near }];
+  }).sort((a, b) => a.days - b.days || a.ref.localeCompare(b.ref));
 }

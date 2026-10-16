@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { TransactionPatch } from '../../types/index.js';
 import { nextManualRef } from '../../books/refs.js';
 import { assertOpen, refDates, withBooks, RequestError, patchBody, stringField, WS } from '../books.js';
-import { bookPayment } from '../edits.js';
+import { attachEntries, bookPayment } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import type { BookingLine } from '../../accounting/manual-booking.js';
 
@@ -92,6 +92,13 @@ function bookingLine(raw: unknown): BookingLine {
   const vatCode = text('vatCode');
   return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description') };
 }
+
+/** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were, for the undo. */
+router.post('/api/transactions/:ref/attach', (req, res) => {
+  const own = (req.body as { ref?: unknown })?.ref;
+  if (typeof own !== 'string' || !own) throw new RequestError(400, 'ref: die Buchung ohne Zahlung (M2026-004).');
+  return withBooks(res, (books) => ({ before: attachEntries(books, req.params.ref, own, WS.bankAccounts) }));
+});
 
 /** A payment booked by hand, in one or more lines that add up to it (src/server/edits.ts bookPayment). */
 router.post('/api/transactions/:ref/entries', (req, res) => {

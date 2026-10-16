@@ -1,5 +1,8 @@
 import type { Index } from '../types/index.js';
 
+/** A ref of its own (M2026-004): a manual transaction's, or an entry's that has no payment. */
+export const isManualRef = (ref: string): boolean => /^M\d{4}-\d{3,}$/.test(ref);
+
 /**
  * The next free M<year>-NNN, the ref of a manual transaction (an Auslage) or of an entry with no
  * transaction behind it (an Eigenverbrauch rebooking, a year-end accrual). A ref is taken when a

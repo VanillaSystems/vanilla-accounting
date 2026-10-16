@@ -123,3 +123,22 @@ export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[
   });
 }
 
+
+/**
+ * The payments a new entry in Buchungen › N may book (treuhaender-22): not booked yet, not filed,
+ * not zero, whose date, amount, text, counterparty, bank or ref hold every word typed. Those of the
+ * typed amount first, then newest first.
+ */
+export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, q: string, amount?: number): BankTransaction[] {
+  const closed = books.config?.closedThrough;
+  const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const same = (t: BankTransaction) => amount !== undefined && Math.abs(t.amount - Math.abs(amount)) < 0.005;
+  return books.transactions
+    .filter((t) => !booked.has(t.ref) && t.amount !== 0 && !(closed && t.date <= closed))
+    .filter((t) => {
+      const h = [formatDate(t.date), t.date, fmt(t.amount), t.amount.toFixed(2), t.description, t.counterparty, t.reference, t.bank, t.currency, t.ref].join(' ').toLowerCase();
+      return words.every((w) => h.includes(w));
+    })
+    .sort((a, b) => Number(same(b)) - Number(same(a)) || b.date.localeCompare(a.date) || a.ref.localeCompare(b.ref));
+}

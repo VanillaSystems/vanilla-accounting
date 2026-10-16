@@ -165,6 +165,9 @@ export const api = {
   bookPayment: (ref: string, lines: BookingLine[]) =>
     request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines }).then((r) => r.entries),
 
+  attachEntries: (ref: string, own: string) =>
+    request<{ before: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }).then((r) => r.before),
+
   addMapping: (link: Link) => request<Ok>('POST', '/api/mapping/add', link),
   removeMapping: (link: Link) => request<Ok>('POST', '/api/mapping/remove', link),
 

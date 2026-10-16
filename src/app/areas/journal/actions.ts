@@ -70,3 +70,10 @@ export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[]) =>
   run(nav, () => api.bookPayment(ref, lines), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { ref })), async (entries) => {
     for (const e of entries) await api.deleteJournalEntry(e.id);
   });
+
+/** A booking typed without its payment tied to it (src/server/edits.ts attachEntries); undo puts its entries back as they were. */
+export const attachEntries = (nav: Nav, ref: string, own: string) =>
+  run(nav, () => api.attachEntries(ref, own), () => t('journal.attached', { own, ref }), async (before) => {
+    for (const e of before) await api.deleteJournalEntry(e.id);
+    for (const e of before) await api.createJournalEntry(inputOf(e));
+  });

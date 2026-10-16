@@ -72,3 +72,17 @@
 .form.pbook.narrow .pbl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .form.pbook.narrow .pbl .pbt { grid-column: 1 / -1; }
 .form.pbook.narrow .pbl .rm { grid-column: 1 / -1; grid-row: auto; justify-self: end; margin-top: 0; }
+
+/* Bookings typed without their payment that add up to it (PaymentBooking.tsx Unattached). */
+.pbo { max-width: 640px; margin: 8px 0 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); font-size: 13px; display: grid; gap: 6px; }
+.pbo .pbor { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.pbo .pbor .m { color: var(--muted); font-size: 12px; }
+.pbo .pbor .btn { margin-left: auto; }
+
+/* The payment a new entry books (PaymentField.tsx). */
+.form .payf .acl { width: 100%; }
+.form .payf.picked { display: flex; gap: 8px 10px; align-items: baseline; font-size: 12.5px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.form .payf.picked .lbl { color: var(--muted); }
+.form .payf.picked .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.form .payf.picked .rm { color: var(--muted); font-size: 15px; line-height: 1; }
+.form .payf.picked .rm:hover { color: var(--ink); }
