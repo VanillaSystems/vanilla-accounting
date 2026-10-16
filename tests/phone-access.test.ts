@@ -126,3 +126,27 @@ test('the token is compared whole', () => {
   assert.equal(tokenMatches('abc', 'abc'), true);
   for (const given of [undefined, '', 'ab', 'abcd', 'ABC']) assert.equal(tokenMatches(given, 'abc'), false, String(given));
 });
+
+test('the LAN listener hands the books nothing but the phone paths: every other path, method or spelling is refused before the books see it (corner-45)', async () => {
+  const { phoneApp } = await import('../src/server/phone.js');
+  const reached: string[] = [];
+  const lanApp = phoneApp((req, res) => { reached.push(`${req.method} ${req.path}`); res.json({ ok: true }); }, () => 'tok');
+  const s = await listen(lanApp, '127.0.0.1', undefined);
+  const at = (path: string, init: RequestInit = {}, token?: string) =>
+    fetch(`http://127.0.0.1:${portOf(s)}${path}`, { ...init, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  try {
+    for (const [method, path] of [['GET', '/books.json'], ['GET', '/api/journal-entries'], ['POST', '/api/journal-entries'], ['PATCH', '/api/receipts/x'], ['GET', '/api/workspace'],
+      ['GET', '/api/desktop/phone'], ['POST', '/api/desktop/phone'], ['GET', '/'], ['GET', '/API/STATUS'], ['GET', '/api/status/'], ['GET', '/api/status/../workspace'], ['GET', '/scan/../books.json'],
+      ['DELETE', '/api/upload'], ['PUT', '/api/upload'], ['GET', '/api/upload'], ['POST', '/api/status'], ['GET', '/api/assistant']] as const) {
+      assert.equal((await at(path, { method }, 'tok')).status, 404, `${method} ${path}`);
+    }
+    assert.equal((await at('/api/status')).status, 401, 'no token');
+    assert.equal((await at('/api/upload', { method: 'POST', body: 'x' }, 'other')).status, 401, 'another token');
+    assert.deepEqual(reached, [], 'the books saw none of it');
+    assert.equal((await at('/api/status', {}, 'tok')).status, 200);
+    assert.equal((await at('/scan')).status, 200, 'the page needs no token');
+    assert.deepEqual(reached, ['GET /api/status', 'GET /scan']);
+  } finally {
+    s.close();
+  }
+});
