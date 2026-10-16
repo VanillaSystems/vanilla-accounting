@@ -302,14 +302,18 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
 
   const field = (name: Field) => form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
 
-  // The form keeps what is typed while a field is left: a saved entry only rewrites the fields not being edited.
-  useEffect(() => {
-    if (wrong.current) return;
+  /** The fields as the books hold the booking; the field being edited is left alone unless `force` (a refused save puts the booked value back, r8h-27). */
+  const reset = (force = false) => {
     const values: Record<Field, string> = { accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '' };
     for (const [name, value] of Object.entries(values) as [Field, string][]) {
       const el = field(name);
-      if (el && el !== document.activeElement && el.value !== value) el.value = value;
+      if (el && (force || el !== document.activeElement) && el.value !== value) el.value = value;
     }
+  };
+  // The form keeps what is typed while a field is left: a saved entry only rewrites the fields not being edited.
+  useEffect(() => {
+    if (wrong.current) return;
+    reset();
   }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description]);
 
   function fail(message: string) { wrong.current = true; setErr(message); setNote(''); nav.dismissToast(); }
@@ -335,7 +339,8 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     const el = field('amount'); if (el) el.value = fmt(next.amount);
     const changed = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as Field[]).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
     if (!changed.length) return;
-    saveEntry(nav, e, Object.fromEntries(changed.map((k) => [k, next[k]])), changed);
+    // Refused (a held period, a code against the money's direction): the field shows the booked value again, not the refused one.
+    void saveEntry(nav, e, Object.fromEntries(changed.map((k) => [k, next[k]])), changed).then((saved) => { if (!saved) reset(true); });
   }
 
   return (
