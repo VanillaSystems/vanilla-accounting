@@ -7,7 +7,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import type { EntryTemplate, TemplateState } from '../../../accounting/year-close.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
 import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
-import { filing } from '../../../engines/index.js';
+import { filing, withoutInputTax } from '../../../engines/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, errorText, type YearCloseView, type YearEndEntryInput } from '../../lib/api.js';
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
@@ -167,7 +167,7 @@ function Entries({ d, nav, canEdit }: StepProps) {
         {d.templates.map((tp) => (
           <div key={tp.id} data-template={tp.id}>
             <div className={`ye${tp.state ? ' done' : ''}`}>
-              <span className="cx"><b>{tx(`yearClose.template.${tp.id}`)}</b><span>{tx(`yearClose.templateHint.${tp.id}`)}</span></span>
+              <span className="cx"><b>{tx(`yearClose.template.${tp.id}`)}</b><span>{tp.id === 'privateUse' && withoutInputTax() ? t('yearClose.templateHint.privateUseNoInputTax') : tx(`yearClose.templateHint.${tp.id}`)}</span></span>
               <span className="mono acc">{tp.amount !== undefined ? `${fmt(tp.amount)} · ` : ''}{accountsOf(tp)}</span>
               {tp.state ? (
                 <>

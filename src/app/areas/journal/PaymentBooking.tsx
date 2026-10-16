@@ -8,7 +8,8 @@ import { useMemo, useRef, useState } from 'react';
 import type { Index, JournalEntry } from '../../../types/index.js';
 import { bookingDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
-import { parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
+import { formTakes, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
+import { withoutInputTax } from '../../../engines/index.js';
 import { codeText } from '../codes/vat-card.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -115,6 +116,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       if (unknown) return t('journal.errAccount', { account: unknown });
       if (!raw.accountDebit && !raw.accountCredit) return t('journal.errNoAccount');
       if (!vat) return parseRate(raw.vatCode) ? t('journal.errVatRate', { rate: raw.vatCode }) : t('journal.errVat', { code: raw.vatCode });
+      if (vat.code && !formTakes(vat.code)) return t(`journal.errVatNotTaken.${withoutInputTax() ?? 'none'}`, { code: vat.code });
       if ((!raw.accountDebit || !raw.accountCredit) && !isVatAmountCode(vat.code)) return t('journal.byHand.errLegs', { n: i + 1 });
       if (!parseAmount(raw.amount)) return t('journal.errAmount');
       if (!raw.description) return t('journal.errText');

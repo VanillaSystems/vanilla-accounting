@@ -16,10 +16,10 @@ import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js'
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { baseCurrency, chart, vat, vatSetup } from '../engines/index.js';
-import { EFFECTIVE_QUARTERLY, methodOf, type VatSetup } from '../workspace/vat-setup.js';
+import { baseCurrency, chart } from '../engines/index.js';
+import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
-import { lookupVatCode } from '../accounting/vat-codes.js';
+import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
@@ -385,10 +385,7 @@ function withSaleCodes(tx: BankTransaction, entries: JournalEntry[], documents: 
  * everything gross, one on the net tax rate method its purchases. On the effective method the
  * model's code stands as written, so a person sees a code the engine does not know.
  */
-function permittedCode(code: string | undefined): string | undefined {
-  if (!code) return undefined;
-  return methodOf(vatSetup()) === 'effective' || vat().codes.parse(code) ? code : undefined;
-}
+const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
 
 export interface ClassifyDeps {
   /** Absent: no model; what no rule decides is left in `unasked`. */

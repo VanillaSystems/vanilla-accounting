@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { localToday, parsePeriod, parseSwissDate } from '../../../accounting/periods.js';
-import { lookupVatCode } from '../../../accounting/vat-codes.js';
+import { formTakes, lookupVatCode } from '../../../accounting/vat-codes.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { periodName } from '../../lib/period-label.js';
@@ -24,7 +24,7 @@ import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
 import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
 import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
-import { baseCurrency, chart, vat } from '../../../engines/index.js';
+import { baseCurrency, chart, vat, withoutInputTax } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -61,6 +61,8 @@ export function NewEntry(props: Props) {
   // An account correction onto the owner's private account takes the input tax back with it (r4t-7).
   const privateTo = as === 'account' && corrected ? [sides.accountDebit, sides.accountCredit].find(isPrivateAccount) : undefined;
   const privateCode = privateTo && corrected ? accountCorrectionCode(corrected, privateTo, isPrivateAccount) : undefined;
+  // A firm without input tax has none to take back or claim: its correction carries no such code, and the form says why.
+  const noInputTax = withoutInputTax();
   // A VAT correction of a purchase without input tax whose receipt shows Swiss VAT claims it (r4c-37).
   const rate = corrected ? receiptRateOf(books, corrected, s.overlay.correcting?.from) : undefined;
   const claim = as === 'vat' && corrected && d.vatCode && d.vatCode === claimCode(corrected, d.accountDebit ?? '', rate) ? d.vatCode : undefined;
@@ -118,6 +120,7 @@ export function NewEntry(props: Props) {
       : [dr, cr].find((n) => n && !chart().isPlaced(n)) ? t('error.accountOutsideStatements', { account: [dr, cr].find((n) => n && !chart().isPlaced(n))!, classes: chart().placedClasses })
       : !dr && !cr ? t('journal.errNoAccount')
       : vat && !lookupVatCode(vat) ? t('journal.errVat', { code: vat })
+      : vat && !formTakes(vat) ? t(`journal.errVatNotTaken.${noInputTax ?? 'none'}`, { code: vat })
       : !amount ? t('journal.errAmount')
       : !text ? t('journal.errText')
       : '';
@@ -151,7 +154,7 @@ export function NewEntry(props: Props) {
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 40%, transparent)' }} onClick={close} />
       <div className="palette jnew" role="dialog" aria-label={filed ? t('journal.correctionTitle') : t('journal.addTitle')}>
         <div className="ctx">
-          <div><span className="lbl">{filed ? t('journal.correctionTitle') : t('journal.addTitle')}</span>{filed ? t('journal.correctionHint', { filed: periodName(filed) }) : t('journal.addHint')}</div>
+          <div><span className="lbl">{filed ? t('journal.correctionTitle') : t('journal.addTitle')}</span>{filed ? t(noInputTax === 'none' ? 'journal.correctionHintUnregistered' : 'journal.correctionHint', { filed: periodName(filed) }) : t('journal.addHint')}</div>
           {corrected && as && (
             <div className="jcorr">
               <span className="seg" role="tablist" aria-label={t('journal.correctionLead')}>
@@ -162,7 +165,8 @@ export function NewEntry(props: Props) {
               </span>
               <p className="m" data-testid="correction-how">{claim
                 ? t('journal.correctionHow.claim', { rate: String(rate), code: claim, tax: taxOf(claim), was: corrected.vatCode ?? '' })
-                : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '' })}</p>
+                : as === 'account' && noInputTax ? t(`journal.correctionHowNoInputTax.${noInputTax}`)
+                  : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '' })}</p>
             </div>
           )}
         </div>
@@ -191,6 +195,11 @@ export function NewEntry(props: Props) {
           {privateCode && (
             <div className="notice" data-testid="correction-private">
               {t('journal.correctionPrivate', { account: `${privateTo} ${accounts[privateTo!] ?? ''}`.trim(), tax: taxOf(corrected!.vatCode), was: corrected!.vatCode ?? '', code: privateCode })}
+            </div>
+          )}
+          {privateTo && noInputTax && (
+            <div className="notice" data-testid="correction-no-input-tax">
+              {t(`journal.correctionPrivateNoInputTax.${noInputTax}`, { account: `${privateTo} ${accounts[privateTo] ?? ''}`.trim() })}
             </div>
           )}
           {moved.length > 0 && (

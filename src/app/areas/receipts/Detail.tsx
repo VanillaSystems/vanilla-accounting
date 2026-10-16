@@ -5,7 +5,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import type { BankTransaction, InboxFile, Receipt } from '../../../types/index.js';
-import { parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
+import { filingKeyOf, parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
 import { sources, api } from '../../lib/api.js';
@@ -28,7 +28,7 @@ import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { Paper } from './Paper.js';
 import { I } from './icons.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, filing, withoutInputTax } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -69,10 +69,10 @@ function PendingDetail({ file, nav }: { file: InboxFile; nav: Props['nav'] }) {
   );
 }
 
-/** The quarter a locked receipt belongs to: that of its first payment or entry in a filed quarter. */
-function lockedQuarter(v: ReceiptView, l: Ledger): string {
+/** The period a locked receipt belongs to: that of its first payment or entry in a filed period. */
+function lockedPeriod(v: ReceiptView, l: Ledger): string {
   const dates = v.links.flatMap((ref) => [l.txByRef.get(ref)?.date, ...(l.entriesByRef.get(ref) ?? []).map((e) => e.date)]);
-  return quarterName(dates.find((x) => x && l.closedThrough && x <= l.closedThrough) ?? l.closedThrough ?? '');
+  return filedPeriodName(dates.find((x) => x && l.closedThrough && x <= l.closedThrough) ?? l.closedThrough ?? '');
 }
 
 /** The receipt pays a payment of a filed quarter: no link is made; its tax is a correction in the open quarter, booked from that payment's entry. */
@@ -81,18 +81,21 @@ function FiledPaymentNotice({ l, nav, books, canEdit, payment, open, receipt }: 
   const entry = l.entriesByRef.get(payment)?.[0];
   if (!tx) return null;
   const go = entry ? at({ area: 'journal', id: entry.id }, entry.date) : at({ area: 'bank', payment }, tx.date);
+  // A firm without input tax has none to enter: the receipt only says where its payment is.
+  const noInputTax = withoutInputTax();
+  const said = { date: formatDate(tx.date), period: filedPeriodName(tx.date), open };
   return (
     <div className="notice" data-testid="filed-payment">
-      {ICONS.lock}<span>{t('receipts.filedPaymentNotice', { date: formatDate(tx.date), period: quarterName(tx.date), open })}</span>
+      {ICONS.lock}<span>{noInputTax ? t(`receipts.filedPaymentNoInputTax.${noInputTax}`, said) : t('receipts.filedPaymentNotice', said)}</span>
       <a href="#" onClick={(e) => { e.preventDefault(); nav.go(go); }}>{t('receipts.filedPaymentOpen')}</a>
-      {canEdit && entry && open && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment, receipt); }}>{t('receipts.correctIn', { period: open })}</a>}
+      {canEdit && entry && open && !noInputTax && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment, receipt); }}>{t('receipts.correctIn', { period: open })}</a>}
     </div>
   );
 }
 
-/** The name of the quarter a date lies in. */
-function quarterName(d: string): string {
-  const p = parsePeriod(`${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}`, localToday());
+/** The name of the filing period a date lies in: its quarter, or its half year on the net tax rate method. */
+function filedPeriodName(d: string): string {
+  const p = parsePeriod(filingKeyOf(d, filing().length), localToday());
   return p ? periodName(p) : d;
 }
 
@@ -140,7 +143,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       )}
       {v.locked && (
         <div className="notice">
-          {ICONS.lock}<span>{t('receipts.lockedNotice', { period: lockedQuarter(v, l) })}</span>
+          {ICONS.lock}<span>{t('receipts.lockedNotice', { period: lockedPeriod(v, l) })}</span>
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: open ? periodName(open) : '' })}</a>
         </div>
       )}

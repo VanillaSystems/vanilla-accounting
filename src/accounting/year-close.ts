@@ -17,6 +17,7 @@ import { chfAmount, computeBalances } from './ledger.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
+import { formTakes } from './vat-codes.js';
 import { chart, filing, vat, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
@@ -347,8 +348,9 @@ export interface EntryTemplate {
   amount?: number;
 }
 
-/** The jurisdiction's guided year-end entries (modules/ch/year-end.yaml). */
-export const yearEndTemplates = (): EntryTemplate[] => yearEndData().templates.map((t) => ({ ...t }));
+/** The jurisdiction's guided year-end entries (modules/ch/year-end.yaml), each without a VAT code the firm's form does not take (K81-B of a firm without input tax). */
+export const yearEndTemplates = (): EntryTemplate[] =>
+  yearEndData().templates.map(({ vatCode, ...t }) => ({ ...t, ...(vatCode && formTakes(vatCode) && { vatCode }) }));
 
 /**
  * The profit allocation after the shareholders' resolution, dated in the new year: reserves,

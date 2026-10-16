@@ -37,6 +37,15 @@ export function filingMethod(): VatMethod {
   return method;
 }
 
+/**
+ * Why the firm claims no input tax: it is not registered (`none`), or it is on the net tax rate
+ * method, whose rate on the turnover stands for it; undefined on the effective method.
+ */
+export function withoutInputTax(): 'none' | 'net-rate' | undefined {
+  const method = methodOf(vatSetup());
+  return method === 'effective' ? undefined : method;
+}
+
 /** The open workspace's chart: what an account is. */
 export const chart = (): ChartEngine => loaded().chart;
 

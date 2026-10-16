@@ -8,7 +8,8 @@
  * (vatCodes.kind.<kind>.*), so the app, docs/vat-codes.md and the CLI explain a code alike.
  */
 import { BANANA_VAT_CODES, VAT_CODE_EXAMPLES, type VatCodeExample } from './vat-codes.source.js';
-import { chart, statements, vat } from '../engines/index.js';
+import { chart, statements, vat, vatSetup } from '../engines/index.js';
+import { methodOf } from '../workspace/vat-setup.js';
 import { inGroup } from '../engines/chart.js';
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
 
@@ -144,6 +145,13 @@ export function lookupVatCode(code: string): { entry: VatCodeEntry; negative: bo
   const entry = catalogue!.byCode.get(unsigned) ?? describe(unsigned);
   return entry ? { entry, negative } : null;
 }
+
+/**
+ * Whether the firm's form takes `code`. On the effective method every code as written (a person
+ * sees a code the engine does not know); a firm not registered takes none, one on the net tax rate
+ * method only its own (F1, B81, V0 …), never an input-tax code such as I81 or K81-B.
+ */
+export const formTakes = (code: string): boolean => methodOf(vatSetup()) === 'effective' || !!vat().codes.parse(code);
 
 /** A rate as a person types it: «8.1», «8,1», «8.1 %», «-8.1» (a refund). */
 export function parseRate(text: string): { rate: number; negative: boolean } | null {
