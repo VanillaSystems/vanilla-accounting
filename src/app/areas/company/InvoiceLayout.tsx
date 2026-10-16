@@ -22,6 +22,7 @@ import { bookOf } from '../invoices/model.js';
 import { contextOf, screenOf } from '../invoices/sheets.js';
 import { Sheet } from '../invoices/Sheet.js';
 import '../invoices/invoices.css';
+import { invoiceRates } from '../../../engines/index.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
@@ -143,7 +144,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
     const sample: Draft = {
       id: 'sample', createdAt: '', origin: 'manual', deleted: false, status: 'draft', comments: [], kind: 'invoice',
       customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang,
-      lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: 8.1 }],
+      lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: invoiceRates()[0] }],
       intro: texts.intro, closing: texts.closing,
     };
     const ctx = contextOf(ws);

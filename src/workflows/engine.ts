@@ -22,6 +22,11 @@ import {
 import { listRuns, saveRun } from './store.js';
 import { appendLine, lineFor, type RunLogLine } from './runlog.js';
 
+/** What a dry run or a replay records for an effect it cannot check on a copy (a seal, a filing): nothing was written. */
+export const SKIPPED = 'skipped: a dry run or a replay writes no seal and no filing';
+/** The outcome of such a step: not the action's `ok`, so a replay never reads like a filing. */
+export const SKIPPED_OUTCOME = 'skipped';
+
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
 
 export interface EngineDeps {
@@ -230,11 +235,11 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         return move(run, { status: 'queued', at: step.id, since: now(), reason: 'busy' });
       }
     }
-    // An effect the engine holds no handle for (a seal, a filing) cannot be checked on a copy: a dry run or a replay skips the step and says so.
+    // An effect the engine holds no handle for (a seal, a filing) cannot be checked on a copy: a dry run or a replay skips the step, its outcome says `skipped`, never the action's ok (r5f-19), and the run goes on as if the first outcome had come.
     const unchecked = step.effects.filter((e) => e !== 'ledger.book' && e !== 'books.write' && e !== 'runs.start');
     if (run.mode !== 'live' && unchecked.length) {
-      record.effects.push(...unchecked.map((effect) => ({ effect, key: `${w.id}:${run.item.id}:${step.id}`, applied: false, wrote: {}, would: 'skipped: not run in a dry run' })));
-      const done = { ...run, steps: [...run.steps, { ...record, outcome: action.outcomes[0], finishedAt: now() }] };
+      record.effects.push(...unchecked.map((effect) => ({ effect, key: `${w.id}:${run.item.id}:${step.id}`, applied: false, wrote: {}, would: SKIPPED })));
+      const done = { ...run, steps: [...run.steps, { ...record, outcome: SKIPPED_OUTCOME, finishedAt: now() }] };
       const target = step.outcomes[action.outcomes[0]];
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }

@@ -22,11 +22,18 @@ export function bankAccountFor(tx: Pick<BankTransaction, 'bank' | 'currency'>, a
 
 /** The owner's private account, number and name: the manifest's `manual` account, else the jurisdiction's for the legal form (a current account, the private account of an Einzelfirma). */
 export function ownerAccount(ws: Pick<Workspace, 'bankAccounts' | 'company'>): string {
+  const { account, label } = ownerAccountOf(ws);
+  return `${account} ${label}`;
+}
+
+/** The owner's account alone: the manual bank account's, else the legal form's default (setup.yaml). */
+export const ownerAccountNumber = (ws: Pick<Workspace, 'bankAccounts' | 'company'>): string => ownerAccountOf(ws).account;
+
+function ownerAccountOf(ws: Pick<Workspace, 'bankAccounts' | 'company'>): { account: string; label: string } {
   const manual = ws.bankAccounts.find((a) => a.bank === 'manual');
-  if (manual) return `${manual.account} ${manual.label}`;
+  if (manual) return { account: manual.account, label: manual.label };
   const { owner } = setup();
-  const o = (ws.company.legalForm && owner[ws.company.legalForm]) || owner.otherwise;
-  return `${o.account} ${o.label}`;
+  return (ws.company.legalForm && owner[ws.company.legalForm]) || owner.otherwise;
 }
 
 /** What a statement says about its account, and the folder under bank-statements/ it was found in. */

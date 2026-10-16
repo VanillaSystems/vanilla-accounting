@@ -13,7 +13,7 @@ import { setUi } from './state.js';
 import { put, reloadInvoices } from './data.js';
 import { inOrder } from '../../lib/in-order.js';
 import { customerChange, routeId } from './model.js';
-import { invoicing } from '../../../engines/index.js';
+import { invoiceRates, invoicing } from '../../../engines/index.js';
 import { desktop } from '../../desktop/bridge.js';
 
 export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: 'list' as const, id: routeId(inv) });
@@ -23,7 +23,7 @@ export const invoiceAt = (inv: Invoice, current?: Period): Location =>
   ({ route: invoicePath(inv), query: inv.status === 'draft' && current ? { period: current } : { period: parsePeriod(periodContaining(inv.date, current), localToday()) ?? undefined } });
 
 /** The line a new draft starts with, its text ready to be typed over; no unit until one is picked (a discount has none). */
-export const firstLine = (zero: boolean): InvoiceLine => ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoicing().rates[0] });
+export const firstLine = (zero: boolean): InvoiceLine => ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoiceRates()[0] });
 
 async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
   try {

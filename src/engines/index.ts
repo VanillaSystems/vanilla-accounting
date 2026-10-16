@@ -52,6 +52,12 @@ export const chart = (): ChartEngine => loaded().chart;
 /** What an invoice may charge. */
 export const invoicing = (): Jurisdiction['invoicing'] => loaded().source.invoicing;
 
+/** Whether the firm's invoices carry VAT at all: a firm not registered prints none (what it shows, it owes). */
+export const chargesVat = (): boolean => vatSetup().registered;
+
+/** The rates an invoice line may take: the jurisdiction's for a registered firm, 0 alone for one not registered. */
+export const invoiceRates = (): readonly number[] => (chargesVat() ? invoicing().rates : [0]);
+
 /** The jurisdiction's year close: its accounts, entry forms and withholding tax. */
 export const yearEnd = (): Jurisdiction['yearEnd'] => loaded().source.yearEnd;
 

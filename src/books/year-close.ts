@@ -28,6 +28,7 @@ import { filingKeyOf } from '../accounting/periods.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn } from '../invoices/rules.js';
 import { workspaceChecks } from '../workspace/checks.js';
+import { ownerAccountNumber } from '../accounting/bank-accounts.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './refs.js';
@@ -87,6 +88,7 @@ export function yearCloseOf(ws: Workspace, year: string, rates: EstvRates = rate
     bankBalances: bankBalances(ws, books),
     filed: filedReturnsOf(ws, year),
     seals: sealsOf(books),
+    owner: ownerAccountNumber(ws),
     doctor: workspaceChecks(ws).flatMap((r) => (r.status === 'fail' ? [r.label] : [])),
     rates,
     state: readState(ws, year),

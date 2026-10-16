@@ -17,7 +17,7 @@ export interface InvoiceTexts {
   refund: (amount: string) => string; offset: (amount: string) => string; stillOpen: (no: string, amount: string) => string;
   stamp: string; cancelledOn: (date: string, reason: string) => string; cancelNotice: (no: string, date: string) => string;
   exemption: Record<Exemption, string>;
-  page: (k: number, n: number) => string; cut: string; bank: string; vatNo: string; payment: string; iban: string; reference: string;
+  page: (k: number, n: number) => string; cut: string; bank: string; vatNo: string; uidNo: string; payment: string; iban: string; reference: string;
   units: Record<Unit, string>;
 }
 
@@ -43,7 +43,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       abroad: 'Leistung im Ausland, nicht der Schweizer MWST unterstellt (Art. 8 Abs. 1 MWSTG).',
       export: 'Ausfuhr, von der Steuer befreit (Art. 23 Abs. 2 Ziff. 1 MWSTG).',
     },
-    page: (k, n) => `Seite ${k} von ${n}`, cut: 'Vor der Einzahlung abzutrennen', bank: 'Bank', vatNo: 'MWST-Nr.', payment: 'Zahlung', iban: 'IBAN', reference: 'Referenz',
+    page: (k, n) => `Seite ${k} von ${n}`, cut: 'Vor der Einzahlung abzutrennen', bank: 'Bank', vatNo: 'MWST-Nr.', uidNo: 'UID', payment: 'Zahlung', iban: 'IBAN', reference: 'Referenz',
     units: { h: 'h', day: 'Tag', pcs: 'Stk.', flat: 'pauschal', km: 'km' },
   },
   fr: {
@@ -67,7 +67,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       abroad: 'Prestation à l’étranger, non soumise à la TVA suisse (art. 8, al. 1 LTVA).',
       export: 'Exportation, exonérée de la TVA (art. 23, al. 2, ch. 1 LTVA).',
     },
-    page: (k, n) => `Page ${k} sur ${n}`, cut: 'A détacher avant le versement', bank: 'Banque', vatNo: 'N° TVA', payment: 'Paiement', iban: 'IBAN', reference: 'Référence',
+    page: (k, n) => `Page ${k} sur ${n}`, cut: 'A détacher avant le versement', bank: 'Banque', vatNo: 'N° TVA', uidNo: 'IDE', payment: 'Paiement', iban: 'IBAN', reference: 'Référence',
     units: { h: 'h', day: 'jour', pcs: 'pce', flat: 'forfait', km: 'km' },
   },
   it: {
@@ -91,7 +91,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       abroad: 'Prestazione all’estero, non soggetta all’IVA svizzera (art. 8 cpv. 1 LIVA).',
       export: 'Esportazione, esente dall’imposta (art. 23 cpv. 2 n. 1 LIVA).',
     },
-    page: (k, n) => `Pagina ${k} di ${n}`, cut: 'Da staccare prima del versamento', bank: 'Banca', vatNo: 'N. IVA', payment: 'Pagamento', iban: 'IBAN', reference: 'Riferimento',
+    page: (k, n) => `Pagina ${k} di ${n}`, cut: 'Da staccare prima del versamento', bank: 'Banca', vatNo: 'N. IVA', uidNo: 'IDI', payment: 'Pagamento', iban: 'IBAN', reference: 'Riferimento',
     units: { h: 'h', day: 'giorno', pcs: 'pz.', flat: 'forfait', km: 'km' },
   },
   en: {
@@ -116,7 +116,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       abroad: 'Service supplied abroad, not subject to Swiss VAT (Art. 8 para. 1 VAT Act).',
       export: 'Export of goods, exempt from Swiss VAT (Art. 23 para. 2 no. 1 VAT Act).',
     },
-    page: (k, n) => `Page ${k} of ${n}`, cut: 'Separate before paying in', bank: 'Bank', vatNo: 'VAT no.', payment: 'Payment', iban: 'IBAN', reference: 'Reference',
+    page: (k, n) => `Page ${k} of ${n}`, cut: 'Separate before paying in', bank: 'Bank', vatNo: 'VAT no.', uidNo: 'UID', payment: 'Payment', iban: 'IBAN', reference: 'Reference',
     units: { h: 'h', day: 'day', pcs: 'pcs', flat: 'flat rate', km: 'km' },
   },
 };

@@ -24,7 +24,7 @@ import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, w
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
-import { invoicing } from '../engines/index.js';
+import { invoiceRates, invoicing } from '../engines/index.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -84,7 +84,7 @@ function parseLines(v: unknown): InvoiceLine[] {
     const l = (raw ?? {}) as Record<string, unknown>;
     if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`, [{ field: 'line.text', line: i }]);
     if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
-    if (!invoicing().rates.includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoicing().rates.join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
+    if (!invoiceRates().includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
     if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
     if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
     return {

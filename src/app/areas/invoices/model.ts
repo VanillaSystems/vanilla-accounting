@@ -9,7 +9,7 @@ import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, openAmount, totals } from '../../../invoices/rules.js';
 import type { InvoiceList } from '../../lib/api.js';
 import type { InvoiceStatus } from '../../shell/route.js';
-import { baseCurrency, invoicing } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, invoiceRates, invoicing } from '../../../engines/index.js';
 
 /** What a row and its group say: an issued invoice is open or overdue until paid; a credit note and a cancelled invoice are their own groups. */
 export type RowState = 'overdue' | 'open' | 'draft' | 'paid' | 'credit' | 'cancelled';
@@ -112,5 +112,5 @@ export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: { id: 
   const abroad = c.address.country !== 'CH' && c.address.country !== 'LI';
   if (abroad) return { customerId: c.id, language: c.language, lines: inv.lines.map((l) => ({ ...l, vatRate: 0 })), exemption: 'abroad', ...(['DE', 'FR', 'IT', 'AT'].includes(c.address.country) ? { currency: 'EUR' } : {}) };
   const allZero = inv.lines.length > 0 && inv.lines.every((l) => l.vatRate === 0);
-  return { customerId: c.id, language: c.language, ...(allZero ? { lines: inv.lines.map((l) => ({ ...l, vatRate: invoicing().rates[0] })), exemption: null, currency: 'CHF' } : {}) };
+  return { customerId: c.id, language: c.language, ...(allZero && chargesVat() ? { lines: inv.lines.map((l) => ({ ...l, vatRate: invoiceRates()[0] })), exemption: null, currency: 'CHF' } : {}) };
 }

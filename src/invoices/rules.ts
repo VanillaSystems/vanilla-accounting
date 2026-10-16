@@ -9,7 +9,7 @@ import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
-import { invoicing, vat, vatSetup } from '../engines/index.js';
+import { chargesVat, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
 import { referenceFor } from '../providers/qr-bill/reference.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────
@@ -158,9 +158,10 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
   draft.lines.forEach((l, line) => {
     if (!l.text.trim()) out.push({ field: 'line.text', line });
     if (!Number.isFinite(l.quantity) || l.quantity === 0 || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
-    if (!invoicing().rates.includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
+    if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
   });
-  if (draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
+  // A firm not registered charges no VAT: a line at 0 % needs no reason.
+  if (chargesVat() && draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
   if (draft.kind === 'credit-note') {
     const target = ctx.invoices.find((i) => i.id === draft.creditFor && !i.deleted);
     if (!target || target.status !== 'issued' || target.kind !== 'invoice' || target.cancelled) out.push({ field: 'credit.invoice' });

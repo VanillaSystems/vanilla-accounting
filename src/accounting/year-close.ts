@@ -18,7 +18,7 @@ import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
 import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
 import { formTakes } from './vat-codes.js';
-import { chart, filing, vat, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
+import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -349,8 +349,16 @@ export interface EntryTemplate {
 }
 
 /** The jurisdiction's guided year-end entries (modules/ch/year-end.yaml), each without a VAT code the firm's form does not take (K81-B of a firm without input tax). */
-export const yearEndTemplates = (): EntryTemplate[] =>
-  yearEndData().templates.map(({ vatCode, ...t }) => ({ ...t, ...(vatCode && formTakes(vatCode) && { vatCode }) }));
+/**
+ * The jurisdiction's templates for this firm: a code only when its form takes one, and the
+ * jurisdiction's default owner account (setup.yaml, the GmbH's 2451) replaced by this firm's own
+ * (`owner`: 2850 on an Einzelfirma), so the private-use entry debits the right account.
+ */
+export const yearEndTemplates = (owner?: string): EntryTemplate[] => {
+  const standIn = setup().owner.otherwise.account;
+  const own = (account: string) => (owner && account === standIn ? owner : account);
+  return yearEndData().templates.map(({ vatCode, ...t }) => ({ ...t, accountDebit: own(t.accountDebit), accountCredit: own(t.accountCredit), ...(vatCode && formTakes(vatCode) && { vatCode }) }));
+};
 
 /**
  * The profit allocation after the shareholders' resolution, dated in the new year: reserves,
@@ -481,6 +489,8 @@ export interface YearCloseInput {
   bankBalances: readonly BankBalance[];
   filed: readonly ReturnFigures[];
   seals: SealReport;
+  /** The owner's account of this firm (2850 on an Einzelfirma, 2451 on a GmbH): the private-use entry debits it. */
+  owner?: string;
   /** The failed checks of `npm run doctor` for the workspace. */
   doctor: readonly string[];
   rates: EstvRates;
@@ -516,7 +526,9 @@ function preconditions(input: YearCloseInput): Check[] {
   const periods = quartersOf(year);
   const q4 = periods[periods.length - 1];
 
-  const filed = input.filed.some((f) => f.period === q4) ? [] : [{ code: 'q4NotFiled' as const, quarter: q4 }];
+  // A firm not registered for VAT files no return: nothing to file, and its periods close with the year (the close seals the whole year).
+  const files = vatSetup().registered;
+  const filed = !files || input.filed.some((f) => f.period === q4) ? [] : [{ code: 'q4NotFiled' as const, quarter: q4 }];
 
   const sealProblems: Problem[] = [];
   for (const c of seals.checks) if (c.status === 'broken') sealProblems.push({ code: 'sealBroken', quarter: c.quarter, problem: c.problem });
@@ -524,7 +536,7 @@ function preconditions(input: YearCloseInput): Check[] {
   const dates = [...books.transactions.map((t) => t.date), ...books.journalEntries.map((e) => e.date)];
   // Books that never filed start with the quarter of their first payment: before it there is nothing to file.
   const start = closedThrough ? undefined : booksOpenPeriod(books, yearEnd(year), filing().length).from;
-  for (const q of periods.slice(0, -1)) {
+  for (const q of files ? periods.slice(0, -1) : []) {
     const { from, to } = derivePeriod(q)!;
     if (start && to < start) continue;
     if (!closedThrough || closedThrough < to) sealProblems.push({ code: 'notClosed', quarter: q });
@@ -545,7 +557,7 @@ function preconditions(input: YearCloseInput): Check[] {
   const doctor = input.doctor.map((label): Problem => ({ code: 'doctor', label }));
 
   return [
-    { id: 'q4Filed', status: status(filed), problems: filed },
+    ...(files ? [{ id: 'q4Filed' as const, status: status(filed), problems: filed }] : []),
     { id: 'quartersSealed', status: status(sealProblems), problems: sealProblems },
     { id: 'bankReconciled', status: status(bankProblems), problems: bankProblems },
     { id: 'statementsComplete', status: status(gaps), problems: gaps },
@@ -607,7 +619,7 @@ export function yearClose(input: YearCloseInput): YearClose {
   const proposed = receivables.invoices.length
     ? [{ ...receivablesTemplate(), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
-  const templates = [...yearEndTemplates(), ...proposed].map((t) => {
+  const templates = [...yearEndTemplates(input.owner), ...proposed].map((t) => {
     const booked = bookedFor(books.journalEntries, year, t);
     return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }) };
   });

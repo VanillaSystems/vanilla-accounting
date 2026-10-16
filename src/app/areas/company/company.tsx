@@ -31,7 +31,7 @@ import { SourcesSection } from './SourcesSection.js';
 import { PhoneSection } from './PhoneSection.js';
 import { desktop } from '../../desktop/bridge.js';
 import { RulesSection } from './RulesSection.js';
-import { baseCurrency, chart, filing } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, chart, filing } from '../../../engines/index.js';
 import { openingLock } from '../../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../../accounting/year-close.js';
 import { AccountField } from '../journal/AccountField.js';
@@ -198,7 +198,7 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
       <dl className="kv2 wide">
         <Kv k={t('company.field.name')}>{c.name}</Kv>
         <Kv k={t('company.field.uid')}><span className="mono">{c.uid}</span></Kv>
-        <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: c.uid })}</span></Kv>
+        {chargesVat() && <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: c.uid })}</span></Kv>}
         <Kv k={t('company.field.owner')}>{c.owner}</Kv>
         <Kv k={t('company.field.business')}>{c.business ?? <span className="m">{t('company.notSet')}</span>}</Kv>
         <Kv k={t('company.address')} note={!c.address && canEdit && !edit ? <button type="button" className="quiet2" onClick={begin}>{t('company.add')}</button> : undefined}>

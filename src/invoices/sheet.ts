@@ -15,7 +15,7 @@ import { UNITS, type Address, type CustomerFields, type Exemption, type InvoiceC
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
 import { lineAmount, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
-import { invoicing } from '../engines/index.js';
+import { chargesVat, invoiceRates, invoicing } from '../engines/index.js';
 
 /** Everything a sheet shows, whatever document it is: a draft, an issued invoice, a credit note, a reminder, a cancellation notice. */
 export interface SheetData {
@@ -138,7 +138,8 @@ export function sheetBlocks(d: SheetData): Block[] {
   const draft = ed?.scope === 'draft';
   const n = (x: number) => formatAmount(x, d.language);
   const t = totals(d.lines);
-  const vatColumn = show.vatColumn || draft;
+  // A firm that charges no VAT prints no rate column, no VAT line and no net total (what an invoice shows, the firm owes).
+  const vatColumn = (show.vatColumn || draft) && chargesVat();
   const cols: Array<[string, string]> = [['d', L.desc], ...(show.quantity ? [['q', L.qty], ['p', L.price]] as Array<[string, string]> : []), ...(vatColumn ? [['v', L.vat]] as Array<[string, string]> : []), ['a', `${L.amount} ${d.currency}`]];
   const colgroup = `<colgroup>${cols.map(([k]) => `<col class="c${k}">`).join('')}</colgroup>`;
   const B: Block[] = [];
@@ -165,7 +166,7 @@ export function sheetBlocks(d: SheetData): Block[] {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
         qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
         price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, invoicing().rates.map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
+        rate: pick(`l:${k}:vatRate`, invoiceRates().map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
         remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
       }
       : { text: esc(l.text), qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %`, remove: '' };
@@ -178,7 +179,8 @@ export function sheetBlocks(d: SheetData): Block[] {
     d.due.fee ? `<div><span>${L.fee}</span><span>${n(d.due.fee)}</span></div>` : '',
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
-  B.push({ html: `<div class="sum"><div><span>${L.net}</span><span>${n(t.net)}</span></div>${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${due}</div>` });
+  const net = chargesVat() ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';
+  B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${due}</div>` });
   if (d.kind === 'credit-note' && d.credit) {
     const c = d.credit, credit = -t.gross, open = Math.round((c.gross - c.paid) * 100) / 100;
     const back = Math.max(0, Math.round((credit - open) * 100) / 100), A = (x: number) => `${d.currency} ${n(x)}`;
@@ -227,10 +229,11 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const n = pages.length + (qrOwnPage ? 1 : 0);
   const title = `${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}`;
   const s = d.sender;
-  const uid = `${esc(s.uid)} ${L.vatSuffix}`;
+  const uid = chargesVat() ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
+  const uidLabel = chargesVat() ? L.vatNo : L.uidNo;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
   const footer = (k: number, qrHere = false) => show.footer && !qrHere
-    ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${L.vatNo}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
+    ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${uidLabel}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
     : n > 1 ? `<div class="foot bare"><span class="pno">${L.page(k, n)}</span></div>` : '';
   const style = `--ivf:${FONT_STACK[layout.font]};--iva:${layout.accent};--lh:${LOGO_MM[layout.logoSize]}mm`;
   const sheet = (cls: string, inner: string) => `<div class="a4 ${cls}" style="${style}" lang="${d.language}">${inner}</div>`;
