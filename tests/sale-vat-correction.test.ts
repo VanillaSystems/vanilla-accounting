@@ -12,11 +12,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { startApi, type ApiServer } from './support/api-server.js';
-import { loadBooks, moduleActor } from '../src/books/store.js';
+import { loadBooks, moduleActor, saveBooks } from '../src/books/store.js';
 import { classifyStep } from '../src/intake/classify.js';
 import { runIntake, storePort } from '../src/intake/pipeline.js';
 import { readQuestions } from '../src/questions/store.js';
 import type { AssistantEvent } from '../src/types/assistant.js';
+import type { Question } from '../src/questions/model.js';
 import './support/jurisdiction.js';
 
 const REPO = process.cwd();
@@ -27,7 +28,7 @@ let api: ApiServer;
 before(async () => {
   api = await startApi('tests/fixtures/sale-vat-index.json', {
     PATH: `${join(REPO, 'tests/support/stub-bin')}:${process.env.PATH}`,
-    CLAUDE_STUB_CLASSIFY: JSON.stringify({ 'S-CH': V0('S-CH', 1081), 'S-EU': V0('S-EU', 500), 'S-GEN': V0('S-GEN', 200) }),
+    CLAUDE_STUB_CLASSIFY: JSON.stringify({ 'S-CH': V0('S-CH', 1081), 'S-EU': V0('S-EU', 500), 'S-GEN': V0('S-GEN', 200), 'S-NEW': V0('S-NEW', 300) }),
     CLAUDE_STUB_CHANGES: changes,
   });
   appendFileSync(join(api.ws.paths.history, 'prior-year.Konten.txt'), '1023\tWise EUR\n3400\tDienstleistungsertrag\n');
@@ -82,11 +83,60 @@ test('a wish that fixes a generic payer\'s sale answers its question without a r
   assert.deepEqual([e.vatCode, e.origin], ['V81', 'classify'], 'no rule, and still the proposal, never V0');
 });
 
-test('«Zurücknehmen» on an answer from a correction drops the rule and keeps the booking', async () => {
+test('«Zurücknehmen» on an answer from a correction drops the rule and keeps the booking, no longer held by the rule', async () => {
   const [q] = questionOn('S-EU');
+  assert.ok(entriesOf('S-EU')[0].rule, 'booked by the rule before');
   const r = await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER });
   assert.equal(r.status, 200, String(r.json.error));
   assert.equal(questionOn('S-EU')[0].status, 'open');
   assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false);
-  assert.deepEqual(entriesOf('S-EU').map((e) => e.vatCode), ['V0-E']);
+  assert.deepEqual(entriesOf('S-EU').map((e) => [e.vatCode, e.rule]), [['V0-E', undefined]]);
+});
+
+test('then «mit MWST» books the payment at the normal rate and keeps a rule (r4c-28)', async () => {
+  const [q] = questionOn('S-EU');
+  const r = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'saleDomestic' });
+  assert.equal(r.status, 200, String(r.json.error));
+  const acted = (r.json as unknown as Question).answer?.acted as { booked: string[]; vatCode: string; rule?: string };
+  assert.deepEqual([acted.booked, acted.vatCode, acted.rule], [entriesOf('S-EU').map((e) => e.id), 'V81', `sale-${q.id}`]);
+  assert.equal(acted.booked.length, 1);
+  assert.deepEqual(entriesOf('S-EU').map((e) => e.vatCode), ['V81']);
+});
+
+test('a payment with no revenue booking the app may set is refused in words, not answered «0 Buchungen»', async () => {
+  const b = loadBooks(api.ws);
+  b.transactions.push({ ref: 'S-NONE', bank: 'Raiffeisen', date: '2026-08-20', amount: 90, currency: 'CHF', direction: 'CRDT', description: 'Rückzahlung', counterparty: 'Beispiel Kunde AG', counterpartyIban: 'CH0000762011623852957' });
+  b.journalEntries.push({ id: 'e-none', transactionRef: 'S-NONE', date: '2026-08-20', accountDebit: '1021', accountCredit: '2451', amount: 90, description: 'Rückzahlung', origin: 'manual' });
+  saveBooks(api.ws, b);
+  const id = 'q-inj-none';
+  appendFileSync(join(api.root, 'transactional-data/2026/questions.jsonl'), `${JSON.stringify({ v: 1, event: 'asked', id, at: new Date().toISOString(), by: 'app', to: OWNER, origin: 'booking', topic: 'saleVat', on: { kind: 'payment', id: 'S-NONE' }, text: '?', choices: ['saleDomestic', 'saleAbroad', 'notSale'] })}\n`);
+  const r = await api.send('POST', `/api/questions/${id}/answer`, { by: OWNER, choice: 'saleDomestic' });
+  assert.deepEqual((r.json as unknown as Question).answer?.acted, { refused: 'noSaleEntry', detail: 'Rückzahlung' });
+});
+
+test('her V0 on a payer at home is asked back, not taken as «Ausland»; her answer then keeps the rule from her booking (r4c-35)', async () => {
+  const b = loadBooks(api.ws);
+  b.transactions.push({ ref: 'S-HOME', bank: 'Raiffeisen', date: '2026-08-21', amount: 3274.4, currency: 'CHF', direction: 'CRDT', description: 'Malerarbeiten', counterparty: 'Hans Muster', counterpartyIban: 'CH5604835012345678009' });
+  b.journalEntries.push({ id: 'e-home', transactionRef: 'S-HOME', date: '2026-08-21', accountDebit: '1021', accountCredit: '3400', amount: 3274.4, vatCode: 'V81', description: 'Kundenzahlung Hans Muster', origin: 'classify' });
+  saveBooks(api.ws, b);
+  const r = await api.send('PATCH', '/api/journal-entries/e-home', { vatCode: 'V0' });
+  assert.equal(r.status, 200, String(r.json.error));
+  const [q] = questionOn('S-HOME');
+  assert.equal(q.status, 'open', 'asked, not answered');
+  assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false, 'no export rule guessed');
+  const a = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'saleAbroad' });
+  const acted = (a.json as unknown as Question).answer?.acted as { booked: string[]; vatCode: string; rule?: string };
+  assert.deepEqual([acted.booked, acted.vatCode, acted.rule], [['e-home'], 'V0', `sale-${q.id}`]);
+  assert.deepEqual(rules().find((x) => x.id === `sale-${q.id}`)?.then, { account: '3400', vat: 'V0' });
+});
+
+test('«Neu klassifizieren» of a sale without an invoice asks its question at once, as the booking\'s reason says (r4c-36)', async () => {
+  const b = loadBooks(api.ws);
+  b.transactions.push({ ref: 'S-NEW', bank: 'Raiffeisen', date: '2026-08-22', amount: 300, currency: 'CHF', direction: 'CRDT', description: 'Reparatur', counterparty: 'Neukunde Beispiel GmbH' });
+  saveBooks(api.ws, b);
+  assert.equal(questionOn('S-NEW').length, 0);
+  const r = await api.send('POST', '/api/journal-entries/classify/S-NEW', {});
+  assert.equal(r.status, 200, String(r.json.error));
+  assert.match(entriesOf('S-NEW')[0].reason ?? '', /Aufgaben/);
+  assert.deepEqual(questionOn('S-NEW').map((q) => q.status), ['open']);
 });

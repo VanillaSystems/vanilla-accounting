@@ -9,7 +9,7 @@ import { chfAmount } from '../../../accounting/index.js';
 import { evidenceCheck, type EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
-import { chart } from '../../../engines/index.js';
+import { chart, vat } from '../../../engines/index.js';
 
 export interface EntryView {
   e: JournalEntry;
@@ -119,12 +119,13 @@ export function byMonth(rows: readonly EntryView[]): Array<[string, EntryView[]]
  */
 export type WhySeen =
   | { kind: 'receipt'; id: string; name: string; date?: string; vat: { rate: number; tax: number; vatId?: string } | 'none' | 'unread'; sale: boolean }
-  | { kind: 'noReceipt'; sale: boolean };
+  | { kind: 'noReceipt'; sale: boolean; untaxed?: string };
 
 export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[] | undefined {
   if (e.origin !== 'classify' || !e.receipts) return undefined;
   const sale = chart().typeOf(e.accountCredit) === 'revenue';
-  if (!e.receipts.length) return [{ kind: 'noReceipt', sale }];
+  // A sale booked without output tax (an export code, an answer's or a rule's V0) says so, not that it carries VAT (r4c-35).
+  if (!e.receipts.length) return [{ kind: 'noReceipt', sale, ...(sale && !((vat().codes.parse(e.vatCode ?? '')?.rate ?? 0) > 0) ? { untaxed: e.vatCode ?? '' } : {}) }];
   return e.receipts.flatMap((id): WhySeen[] => {
     const r = receipts.find((x) => x.id === id);
     if (!r) return [];

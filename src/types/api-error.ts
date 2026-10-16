@@ -2,6 +2,7 @@ import type { AuditSnapshot } from '../audit/sources.js';
 import type { MailRefusal } from '../invoices/mail.js';
 import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
+import type { SaleGone } from '../questions/model.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -31,6 +32,7 @@ export type ApiRefusal =
   /** An AI sidebar answer (src/server/edits.ts applyAnswer, src/server/workspace-edits.ts): it would take back an earlier answer's change, link a receipt set aside, book on an account the chart lacks, or take back an account bookings use. */
   /** Someone answered the question first (the books folder is shared). */
   | { code: 'questionAnswered' }
+  | { code: 'questionGone'; params: { why: SaleGone } }
   | { code: 'takesBack' }
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }

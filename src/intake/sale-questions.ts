@@ -7,11 +7,11 @@
  * until it is answered.
  */
 import { randomBytes } from 'node:crypto';
-import { saleProposal, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
+import { saleProposal, saleQuestionGone, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
 import type { BankTransaction, Index } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
-import { SALE_CHOICES, type Question, type QuestionLine } from '../questions/model.js';
+import { SALE_CHOICES, type Question, type QuestionLine, type SaleGone } from '../questions/model.js';
 
 /** Who asks a question the app asks by itself (the UI says «die App»). */
 export const APP_ASKER = 'app';
@@ -30,9 +30,11 @@ export function saleQuestionLine(ws: Pick<Workspace, 'company'>, tx: BankTransac
 
 /**
  * Asks about every sale without an invoice that has no question yet; a payment asked about once (open,
- * answered or withdrawn) is never asked again. Returns the questions it asked.
+ * answered or withdrawn) is never asked again. First closes the questions whose reason went away.
+ * Returns the questions it asked.
  */
 export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'config'>, at = new Date().toISOString()): Question[] {
+  closeGoneSaleQuestions(ws, books, at);
   const sales = salesWithoutInvoice(books, ws.company.vat.registered);
   if (!sales.length) return [];
   const asked = new Set(readQuestions(ws).filter((q) => q.topic === 'saleVat').map((q) => q.on.id));
@@ -45,4 +47,21 @@ export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, boo
   }
   const qs = readQuestions(ws);
   return ids.map((id) => qs.find((q) => q.id === id)!);
+}
+
+type QuestionBooks = Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'config'>;
+
+/** The app's open questions about sales whose reason went away, and why (src/accounting/sales-without-vat.ts saleQuestionGone). */
+export function goneSaleQuestions(questions: readonly Question[], books: QuestionBooks): Array<{ q: Question; why: SaleGone }> {
+  return questions.flatMap((q) => {
+    const why = q.topic === 'saleVat' && q.status === 'open' ? saleQuestionGone(books, q.on.id) : undefined;
+    return why ? [{ q, why }] : [];
+  });
+}
+
+/** Closes the app's questions whose reason went away, saying why, so no one is asked what the books settled. Returns how many. */
+export function closeGoneSaleQuestions(ws: Pick<Workspace, 'paths'>, books: QuestionBooks, at = new Date().toISOString()): number {
+  const gone = goneSaleQuestions(readQuestions(ws), books);
+  for (const { q, why } of gone) appendQuestionLine(ws, { v: 1, event: 'closed', id: q.id, at, by: APP_ASKER, how: 'withdrawn', why }, books.config?.closedThrough);
+  return gone.length;
 }

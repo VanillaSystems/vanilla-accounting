@@ -15,11 +15,16 @@ import type { Nav } from '../areas/index.js';
 import type { Location } from '../shell/route.js';
 import type { Index } from '../../types/index.js';
 import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
-import { normalRate } from '../../accounting/sales-without-vat.js';
+import { domesticSale, normalRate, saleChoiceOf, saleProposal } from '../../accounting/sales-without-vat.js';
 import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
 
-const choiceText = (c: Choice) => (c === 'saleDomestic' ? t('questions.choice.saleDomestic', { rate: String(normalRate()) }) : t(`questions.choice.${c}` as 'questions.choice.private'));
+/** «mit MWST (8.1 %)»; on the net tax rate method the firm's code and approved rate, which the answer books. */
+function saleDomesticText(): string {
+  const d = domesticSale();
+  return d?.net ? t('questions.choice.saleDomesticNet', { code: d.code, rate: String(d.rate) }) : t('questions.choice.saleDomestic', { rate: String(d?.rate ?? normalRate()) });
+}
+const choiceText = (c: Choice) => (c === 'saleDomestic' ? saleDomesticText() : t(`questions.choice.${c}` as 'questions.choice.private'));
 const when = (iso: string) => formatDate(iso.slice(0, 10));
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const asker = (q: Question) => (q.origin === 'assistant' ? t('questions.ai') : q.origin === 'booking' ? t('questions.app') : q.by);
@@ -35,6 +40,21 @@ function bookedNow(q: Question, books: Index): string {
   const codes = [...new Set((books.journalEntries ?? []).filter((e) => e.transactionRef === q.on.id && chart().typeOf(e.accountCredit) === 'revenue').map((e) => e.vatCode || t('journal.noVat')))];
   return codes.length ? t('questions.sale.bookedNow', { code: codes.join(', ') }) : '';
 }
+
+/**
+ * A person's own export code on the payment of a payer at home, which the app asked back instead
+ * of taking it as «Ausland» (r4c-35): the code, else undefined.
+ */
+function herZeroAtHome(q: Question, books: Index): string | undefined {
+  const tx = q.topic === 'saleVat' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
+  if (!tx || saleProposal(tx).choice !== 'saleDomestic') return undefined;
+  const sales = (books.journalEntries ?? []).filter((e) => e.transactionRef === tx.ref && chart().typeOf(e.accountCredit) === 'revenue');
+  const codes = [...new Set(sales.map((e) => e.vatCode ?? ''))];
+  return sales.length && sales.every((e) => e.origin === 'manual') && codes.length === 1 && saleChoiceOf(codes[0]) === 'saleAbroad' ? codes[0] : undefined;
+}
+
+/** What the app said instead of acting on an answer, in the viewer's words. */
+const notActedText = (a: { refused: string; detail?: string }) => t(`questions.notActed.${a.refused}` as 'questions.notActed.refused', { detail: a.detail ?? '' });
 
 /** Runs a command; a refusal is said in the toast. */
 async function run(nav: Nav, p: Promise<unknown>, done?: string): Promise<boolean> {
@@ -61,7 +81,7 @@ export function IAm() {
 function Acted({ q, owner }: { q: Question; owner: string }) {
   const a = q.answer?.acted;
   if (!a) return null;
-  if ('refused' in a) return <p className="qnote warn">{t(`questions.notActed.${a.refused}` as 'questions.notActed.refused', { detail: a.detail ?? '' })}</p>;
+  if ('refused' in a) return <p className="qnote warn">{notActedText(a)}</p>;
   if ('vatCode' in a) {
     const sale = [
       a.marked ? t('questions.sale.marked') : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
@@ -82,7 +102,17 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
   const mine = same(q.by, me);
   const owner = view?.owner ?? '';
   const item = showItem ? itemOf(books, q.on) : undefined;
-  const answer = (a: Parameters<typeof answerQuestion>[1]) => run(nav, answerQuestion(q.id, a), t('questions.answeredToast'));
+  // A refused answer is said in the toast: on Aufgaben the card leaves the open list with it.
+  const answer = async (a: Parameters<typeof answerQuestion>[1]) => {
+    try {
+      const done = await answerQuestion(q.id, a);
+      const acted = done.answer?.acted;
+      nav.refresh();
+      nav.toast(acted && 'refused' in acted ? notActedText(acted) : t('questions.answeredToast'));
+      return true;
+    } catch (e) { nav.toast(errorText(e)); nav.refresh(); return false; }
+  };
+  const zero = q.status === 'open' ? herZeroAtHome(q, books) : undefined;
   return (
     <div className={`qcard ${q.status}`} data-question={q.id}>
       <div className="qhead">
@@ -94,11 +124,12 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
       {q.status === 'open' ? (
         <>
           {q.choices.includes('private') && !mine ? <p className="qnote">{t('questions.privateDoes', { account: owner })}</p> : null}
-          {q.proposal ? <p className="qnote" data-testid="sale-proposal">{t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {bookedNow(q, books)} {t('questions.sale.does')}</p> : null}
+          {zero ? <p className="qnote warn" data-testid="sale-zero-home">{t('questions.sale.zeroAtHome', { code: zero })}</p> : null}
+          {q.proposal && !zero ? <p className="qnote" data-testid="sale-proposal">{t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {bookedNow(q, books)} {t('questions.sale.does')}</p> : null}
           {canEdit ? (
             <div className="qacts">
               {mine ? null : <>
-                {q.choices.map((c) => <button key={c} type="button" className={c === q.proposal?.choice ? 'btn primary' : 'btn'} data-choice={c} onClick={() => void answer({ choice: c })}>{choiceText(c)}{c === q.proposal?.choice ? ` · ${t('questions.proposed')}` : ''}</button>)}
+                {q.choices.map((c) => { const proposed = !zero && c === q.proposal?.choice; return <button key={c} type="button" className={proposed ? 'btn primary' : 'btn'} data-choice={c} onClick={() => void answer({ choice: c })}>{choiceText(c)}{proposed ? ` · ${t('questions.proposed')}` : ''}</button>; })}
                 <input className="qinput" value={text} placeholder={t('questions.answerPlaceholder')} aria-label={t('questions.answerPlaceholder')} onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) void answer({ text: text.trim() }).then((ok) => ok && setText('')); }} />
                 <button type="button" className="btn ghost" disabled={!text.trim()} onClick={() => void answer({ text: text.trim() }).then((ok) => ok && setText(''))}>{t('questions.reply')}</button>
@@ -162,9 +193,11 @@ export function QuestionsOn({ on, also = [], nav, canEdit, books }: { on: Questi
   const { questions } = useQuestions();
   const [asking, setAsking] = useState(false);
   const here = [on, ...also].flatMap((x) => onTarget(questions, x));
-  if (!here.length && !canEdit) return null;
+  const gone = [on, ...also].flatMap((x) => questions.filter((q) => q.status === 'closed' && q.closed?.why && q.on.kind === x.kind && q.on.id === x.id));
+  if (!here.length && !gone.length && !canEdit) return null;
   return (
     <div className="qblock" data-testid="questions-on">
+      {gone.map((q) => <p key={q.id} className="qnote" data-testid="question-gone">{t(`questions.gone.${q.closed!.why!}` as 'questions.gone.closed')}</p>)}
       {here.map((q) => <QuestionCard key={q.id} q={q} nav={nav} canEdit={canEdit} books={books} showItem={q.on.kind !== on.kind || q.on.id !== on.id} />)}
       {canEdit ? (asking ? <AskForm on={on} nav={nav} onDone={() => setAsking(false)} /> : (
         <button type="button" className="golink qaskbtn" title={t('questions.askTip')} onClick={() => setAsking(true)}>{t('questions.ask')}</button>

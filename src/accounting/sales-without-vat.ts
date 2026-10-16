@@ -12,7 +12,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
 import { baseCurrency, chart, invoicing, vat } from '../engines/index.js';
 import { ibanKey } from '../knowledge/payer.js';
-import type { SaleChoice, SaleProposal, SaleWhy } from '../questions/model.js';
+import type { SaleChoice, SaleGone, SaleProposal, SaleWhy } from '../questions/model.js';
 import { methodOf, type VatSetup } from '../workspace/vat-setup.js';
 
 export interface SaleWithoutVat {
@@ -43,6 +43,21 @@ export function salesWithoutInvoice(books: SaleBooks, vatRegistered: boolean): S
     .map((payment) => ({ payment, entries: entries.get(payment.ref)! }));
 }
 
+/**
+ * Why the app's question about the sale `ref` needs no answer any more: the payment is gone, its
+ * quarter is filed (a correction in the open one books what is missing), or a receipt or an
+ * invoice decides its VAT now (r4c-29). Undefined: the question still stands.
+ */
+export function saleQuestionGone(books: SaleBooks, ref: string): SaleGone | undefined {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) return 'noPayment';
+  const closed = books.config?.closedThrough;
+  if (closed && tx.date <= closed) return 'closed';
+  if (books.mappings.some((m) => m.transactionRef === ref)) return 'hasReceipt';
+  if ((books.journalEntries ?? []).some((e) => e.transactionRef === ref && e.origin === 'invoice')) return 'hasInvoice';
+  return undefined;
+}
+
 /** Of those, the ones booked as revenue at a zero code or none: the output tax the return leaves out until the owner answers. */
 export function salesWithoutVat(books: SaleBooks, vatRegistered: boolean): SaleWithoutVat[] {
   return salesWithoutInvoice(books, vatRegistered)
@@ -71,6 +86,16 @@ export function saleVatCode(choice: SaleChoice): string | null {
     case 'saleAbroad': return vat().codes.deductedIn(invoicing().exemptions.export) ?? null;
     case 'notSale': return null;
   }
+}
+
+/**
+ * The code and rate an answer «mit MWST» books: the normal rate, or on the net tax rate method the
+ * firm's first approved rate (`net`), so the question names what it books. Undefined: no code.
+ */
+export function domesticSale(): { code: string; rate: number; net: boolean } | undefined {
+  const code = saleVatCode('saleDomestic');
+  if (!code) return undefined;
+  return { code, rate: vat().codes.parse(code)?.rate ?? normalRate(), net: code !== vat().codes.saleAt(normalRate()) };
 }
 
 /** The choice a sale's code stands for: turnover at a rate, or under an invoice line's exemption; any other code says neither. */

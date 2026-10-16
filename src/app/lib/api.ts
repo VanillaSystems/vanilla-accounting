@@ -91,6 +91,7 @@ export function errorText(e: unknown): string {
       return t(`error.statement.${reason}`);
     }
     case 'questionAnswered': return t('error.questionAnswered');
+    case 'questionGone': return t(`questions.gone.${b.params.why}`);
     case 'takesBack': return t('error.takesBack');
     case 'setAside': return t('error.setAside', b.params);
     case 'unknownAccount': return t('error.unknownAccount', b.params);

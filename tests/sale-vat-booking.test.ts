@@ -152,4 +152,5 @@ test('the entry says a sale without an invoice was coded by its payment, never Â
   assert.deepEqual(whySeen(keller, []), [{ kind: 'noReceipt', sale: true }]);
   const expense: JournalEntry = { ...keller, accountDebit: '6570', accountCredit: '1020', vatCode: 'I0' };
   assert.deepEqual(whySeen(expense, []), [{ kind: 'noReceipt', sale: false }]);
+  assert.deepEqual(whySeen({ ...keller, vatCode: 'V0', rule: 'sale-q-x' }, []), [{ kind: 'noReceipt', sale: true, untaxed: 'V0' }], 'a sale at V0 says it carries no domestic tax (r4c-35)');
 });

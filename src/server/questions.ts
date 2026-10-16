@@ -14,13 +14,13 @@ import { randomBytes } from 'node:crypto';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { isVatAmountCode } from '../accounting/validate.js';
-import { ClosedPeriodError, type Books } from '../books/store.js';
+import { ClosedPeriodError, periodLock, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
-import { saleQuestionLine } from '../intake/sale-questions.js';
+import { APP_ASKER, saleQuestionLine } from '../intake/sale-questions.js';
 import { chart } from '../engines/index.js';
 import { dropPrecedent, dropRule, keepPrecedent, keepRule, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
-import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget } from '../questions/model.js';
-import { saleChoiceOf, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
+import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget, type SaleGone } from '../questions/model.js';
+import { saleChoiceOf, saleProposal, saleQuestionGone, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
 import { payerKey } from '../knowledge/payer.js';
 import { parseRule } from '../booking/rules.js';
 import { ruleFactsOf } from '../saving/rules.js';
@@ -130,15 +130,22 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
 /**
  * The sale `tx` as the owner said: its revenue entries at the normal rate or the export code
  * (booked by hand from now on, origin manual), or the payment marked as needing no receipt, its
- * booking kept. A payment with a receipt or an invoice is the document's to decide, never changed.
+ * booking kept. The entries are the classifier's; a payment whose revenue a person booked by hand
+ * (her correction, asked back, r4c-35) takes hers. A payment with a receipt or an invoice is the
+ * document's to decide, never changed; one with no revenue entry to set is refused, not answered
+ * with nothing booked (r4c-28).
  */
 function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string } {
   if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
   const own = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   if (own.some((e) => e.origin === 'invoice')) throw new Unclear('hasInvoice', tx.description);
   assertOpen(books, [tx.date, ...own.map((e) => e.date)], 'editEntry');
-  const entries = salesWithoutInvoice({ ...books, transactions: [tx] }, true)[0]?.entries ?? [];
+  const sales = own.filter((e) => !e.corrects && chart().typeOf(e.accountCredit) === 'revenue');
+  const hers = sales.length && sales.every((e) => e.origin === 'manual') ? sales : [];
+  const classified = salesWithoutInvoice({ ...books, transactions: [tx] }, true)[0]?.entries ?? [];
+  const entries = classified.length ? classified : hers;
   const account = entries[0]?.accountCredit;
+  if (!entries.length && choice !== 'notSale') throw new Unclear('noSaleEntry', tx.description);
   if (choice === 'notSale') {
     tx.noReceiptNeeded = true;
     return { booked: [], undo: [], vatCode: '', marked: true, ...(account ? { account } : {}) };
@@ -243,10 +250,23 @@ export function openQuestionOn(on: QuestionTarget): Question | undefined {
     && ((q.on.kind === on.kind && q.on.id === on.id) || (!!ref && paymentRef(books, q.on) === ref)));
 }
 
+const GONE: Record<SaleGone, string> = {
+  noPayment: 'Die Zahlung gibt es nicht mehr: die Frage ist geschlossen.',
+  closed: 'Das Quartal der Zahlung ist eingereicht: die Frage ist geschlossen. Fehlt die MWST, bucht eine Korrektur in der offenen Periode sie nach.',
+  hasReceipt: 'Die Zahlung hat jetzt einen Beleg, er entscheidet die MWST: die Frage ist geschlossen.',
+  hasInvoice: 'Die Zahlung ist aus einer Rechnung gebucht, die entscheidet die MWST: die Frage ist geschlossen.',
+};
+
 export function answerQuestion(id: string, { by, answer }: { by: string; answer: Answer }, from?: string): Question {
   const q = find(id);
   if (q.status !== 'open') throw new RequestError(409, 'Diese Frage ist schon beantwortet.', { code: 'questionAnswered' });
   if ('choice' in answer && !q.choices.includes(answer.choice)) throw new RequestError(400, `Diese Frage hat die Wahl ${answer.choice} nicht.`);
+  // The app's question whose reason went away is closed, and the person told why, not answered with nothing done (r4c-29).
+  const gone = q.topic === 'saleVat' ? saleQuestionGone(readBooks(), q.on.id) : undefined;
+  if (gone) {
+    append({ v: 1, event: 'closed', id, at: now(), by: APP_ASKER, how: 'withdrawn', why: gone });
+    throw new RequestError(409, GONE[gone], { code: 'questionGone', params: { why: gone } });
+  }
   const at = now();
   const acted = act(q, answer, by, at, from);
   append({ v: 1, event: 'answered', id, at, by, answer, ...(acted ? { acted } : {}), ...(from ? { from } : {}) });
@@ -261,6 +281,11 @@ export function undoAnswer(id: string, by: string): Question {
   if (acted && 'undo' in acted && acted.undo.length) updateBooks((b) => { for (const c of [...acted.undo].reverse()) applyChange(b, c); });
   if (acted && 'precedent' in acted && acted.precedent) dropPrecedent(WS, acted.precedent);
   if (acted && 'rule' in acted && acted.rule) dropRule(WS, acted.rule);
+  // A booking the withdrawn rule made is the app's guess again, so the next answer books it (r4c-28).
+  if (acted && 'rule' in acted && acted.rule) {
+    const rule = acted.rule;
+    updateBooks((b) => { const lock = periodLock(b); for (const e of b.journalEntries) if (e.rule === rule && !lock.isClosed(e.date)) delete e.rule; });
+  }
   if (acted && 'marked' in acted && acted.marked && q.on.kind === 'payment') {
     updateBooks((b) => { const tx = b.transactions.find((t) => t.ref === q.on.id); if (tx) { assertOpen(b, [tx.date], 'editTransaction'); delete tx.noReceiptNeeded; } });
   }
@@ -284,7 +309,9 @@ export function closeQuestion(id: string, by: string, how: 'done' | 'withdrawn')
  * payment, and «Neu klassifizieren» of this one, are booked as she set. The question is asked
  * first when the app had not asked it yet. A question answered or closed before, a code that says
  * neither a rate nor an exemption, and a payment with a receipt or an invoice are left alone; the
- * answer's «Zurücknehmen» drops the rule and keeps her booking. Returns the questions it answered.
+ * answer's «Zurücknehmen» drops the rule and keeps her booking. Her export code on a payer at home
+ * answers nothing: the question stays open and asks whether it was an export or no sale (r4c-35).
+ * Returns the questions it answered.
  */
 export function learnFromCorrection(refs: Iterable<string>, by: string = WS.company.owner): Question[] {
   if (!WS.company.vat) return [];
@@ -312,6 +339,8 @@ export function learnFromCorrection(refs: Iterable<string>, by: string = WS.comp
       append(line);
       q = find(line.id);
     }
+    // A zero code on a payer at home is an export or no sale at all: asked back once, not taken as «Ausland» (r4c-35).
+    if (choice === 'saleAbroad' && saleProposal(tx).choice === 'saleDomestic') continue;
     const rule = keepSaleRule(q, choice, tx, hers[0].accountCredit, codes[0], at);
     const acted: Acted = { booked: [], undo: [], vatCode: codes[0], correction: true, ...(rule ? { rule } : {}) };
     append({ v: 1, event: 'answered', id: q.id, at, by, answer: { choice }, acted });

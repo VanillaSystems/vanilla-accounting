@@ -18,6 +18,7 @@ import { loadChart } from '../src/workspace/chart.js';
 import { patchManifestText } from '../src/workspace/manifest-write.js';
 import { asQuarter, closesTheYear, nextQuarter, periodKeyOf, sealFile } from '../src/books/seal.js';
 import { entriesForReturn } from '../src/accounting/declarations.js';
+import { domesticSale } from '../src/accounting/sales-without-vat.js';
 import { booksOpenPeriod, isFilingKey } from '../src/accounting/periods.js';
 import { parseFiledReturn } from '../src/accounting/filed-return.js';
 import { ech0217Xml } from '../src/providers/ech0217/xml.js';
@@ -190,5 +191,15 @@ test('the electronic return of a net-rate firm names each rate by its activity c
 
   setJurisdiction(ch, { ...NET_RATE, rates: [{ rate: 4.5 }] });
   assert.throws(() => ech0217Xml({ ...input, rateRows: vat().rateRows }), /activity code of this rate is missing/);
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
+test('the sale question names what «mit MWST» books for each kind of firm: the normal rate, the firm\'s net rate and code, or nothing', () => {
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  assert.deepEqual(domesticSale(), { code: 'V81', rate: 8.1, net: false });
+  setJurisdiction(ch, NET_RATE);
+  assert.deepEqual(domesticSale(), { code: 'F1', rate: 4.5, net: true });
+  setJurisdiction(ch, NOT_REGISTERED);
+  assert.equal(domesticSale(), undefined);
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
 });

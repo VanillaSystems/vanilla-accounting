@@ -50,8 +50,12 @@ export type Answer = { choice: Choice } | { text: string };
 export type QuestionOrigin = 'person' | 'assistant' | 'booking';
 
 /** Why the app did not act on an answer: then the asker decides. */
-export const NOT_ACTED = ['closed', 'noPayment', 'severalPayments', 'paidPrivately', 'notBankExpense', 'hasReceipt', 'hasInvoice', 'refused'] as const;
+export const NOT_ACTED = ['closed', 'noPayment', 'severalPayments', 'paidPrivately', 'notBankExpense', 'hasReceipt', 'hasInvoice', 'noSaleEntry', 'refused'] as const;
 export type NotActed = (typeof NOT_ACTED)[number];
+
+/** Why the app's question about a sale needs no answer any more: its payment is gone, filed, or a document decides it now. */
+export const SALE_GONE = ['noPayment', 'closed', 'hasReceipt', 'hasInvoice'] as const;
+export type SaleGone = (typeof SALE_GONE)[number];
 
 /**
  * What the app did with an answer: the bookings it wrote or changed, with the changes that take
@@ -74,7 +78,8 @@ export type QuestionLine =
   | LineBase & { event: 'answered'; answer: Answer; acted?: Acted; from?: string }
   /** The answer's bookings taken back: the question is open again. */
   | LineBase & { event: 'undone' }
-  | LineBase & { event: 'closed'; how: 'done' | 'withdrawn' };
+  /** `why`: the app closed its own question because its reason went away. */
+  | LineBase & { event: 'closed'; how: 'done' | 'withdrawn'; why?: SaleGone };
 
 export type QuestionStatus = 'open' | 'answered' | 'closed';
 
@@ -91,7 +96,7 @@ export interface Question {
   askedAt: string;
   status: QuestionStatus;
   answer?: { by: string; at: string; answer: Answer; acted?: Acted; from?: string };
-  closed?: { by: string; at: string; how: 'done' | 'withdrawn' };
+  closed?: { by: string; at: string; how: 'done' | 'withdrawn'; why?: SaleGone };
 }
 
 /** GET /api/questions: every question, the names to pick from, the owner's account («2451 Kontokorrent …»), which «privat» books on. */
@@ -110,7 +115,7 @@ export function fold(lines: readonly QuestionLine[]): Question[] {
     switch (l.event) {
       case 'answered': q.status = 'answered'; q.answer = { by: l.by, at: l.at, answer: l.answer, ...(l.acted ? { acted: l.acted } : {}), ...(l.from ? { from: l.from } : {}) }; break;
       case 'undone': q.status = 'open'; delete q.answer; break;
-      case 'closed': q.status = 'closed'; q.closed = { by: l.by, at: l.at, how: l.how }; break;
+      case 'closed': q.status = 'closed'; q.closed = { by: l.by, at: l.at, how: l.how, ...(l.why ? { why: l.why } : {}) }; break;
     }
   }
   return [...byId.values()];
@@ -163,7 +168,10 @@ export function parseLine(raw: unknown): QuestionLine | undefined {
       return { v: 1, event: 'answered', id: l.id, at: l.at, by: l.by, answer, ...(l.acted ? { acted: l.acted as Acted } : {}), ...(typeof l.from === 'string' ? { from: l.from } : {}) };
     }
     case 'undone': return { v: 1, event: 'undone', id: l.id, at: l.at, by: l.by };
-    case 'closed': return l.how === 'done' || l.how === 'withdrawn' ? { v: 1, event: 'closed', id: l.id, at: l.at, by: l.by, how: l.how } : undefined;
+    case 'closed': {
+      const why = SALE_GONE.find((w) => w === l.why);
+      return l.how === 'done' || l.how === 'withdrawn' ? { v: 1, event: 'closed', id: l.id, at: l.at, by: l.by, how: l.how, ...(why ? { why } : {}) } : undefined;
+    }
     default: return undefined;
   }
 }

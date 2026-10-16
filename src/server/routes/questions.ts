@@ -8,10 +8,11 @@
  *   POST /api/questions/:id/close       { by, how: done | withdrawn }
  */
 import { Router } from 'express';
-import { RequestError, WS } from '../books.js';
+import { RequestError, WS, readBooks } from '../books.js';
 import { ownerAccount } from '../../accounting/bank-accounts.js';
 import { readQuestions } from '../../questions/store.js';
-import { peopleOf, type QuestionsView } from '../../questions/model.js';
+import { peopleOf, type Question, type QuestionsView } from '../../questions/model.js';
+import { APP_ASKER, closeGoneSaleQuestions, goneSaleQuestions } from '../../intake/sale-questions.js';
 import { answerQuestion, askQuestion, closeQuestion, parseAnswer, parseAsk, undoAnswer } from '../questions.js';
 
 export const router = Router();
@@ -22,8 +23,22 @@ const by = (body: unknown): string => {
   return v.trim();
 };
 
-router.get('/api/questions', (_req, res) => {
+/**
+ * The questions as they stand: the app's question about a sale whose reason went away (a receipt
+ * linked, the quarter filed) is closed first, saying why; in read-only mode it only shows closed.
+ */
+function current(): Question[] {
   const questions = readQuestions(WS);
+  if (!questions.some((q) => q.topic === 'saleVat' && q.status === 'open')) return questions;
+  const books = readBooks();
+  if (process.env.READONLY !== '1') return closeGoneSaleQuestions(WS, books) ? readQuestions(WS) : questions;
+  const at = new Date().toISOString();
+  const gone = new Map(goneSaleQuestions(questions, books).map(({ q, why }) => [q.id, why]));
+  return questions.map((q) => (gone.has(q.id) ? { ...q, status: 'closed' as const, closed: { by: APP_ASKER, at, how: 'withdrawn' as const, why: gone.get(q.id)! } } : q));
+}
+
+router.get('/api/questions', (_req, res) => {
+  const questions = current();
   res.json({ questions, people: peopleOf(WS.company.owner, questions), owner: ownerAccount(WS) } satisfies QuestionsView);
 });
 

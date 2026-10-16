@@ -122,7 +122,7 @@ test('the payer\'s next payment is booked by the rule in code, without a questio
   assert.deepEqual(pending(), ['N-GEN']);
 });
 
-test('a filed quarter is never asked about nor changed; a payment with a receipt is never changed', async () => {
+test('a filed quarter is never asked about nor changed; a payment with a receipt is never changed: the question is closed, saying why (r4c-29)', async () => {
   const filed = { tx: books().transactions.find((t) => t.ref === 'S-OLD'), entries: entriesOf('S-OLD') };
   const inject = (ref: string) => {
     const id = `q-inj-${ref}`;
@@ -130,11 +130,18 @@ test('a filed quarter is never asked about nor changed; a payment with a receipt
     return id;
   };
   assert.equal(saleQuestions().some((q) => q.on.id === 'S-OLD' || q.on.id === 'S-DOC'), false, 'not asked');
-  const old = await api.send('POST', `/api/questions/${inject('S-OLD')}/answer`, { by: OWNER, choice: 'saleDomestic' });
-  assert.equal((old.json as unknown as Question).answer?.acted && 'refused' in (old.json as unknown as Question).answer!.acted! ? ((old.json as unknown as Question).answer!.acted as { refused: string }).refused : undefined, 'closed');
+  const oldId = inject('S-OLD');
+  const old = await api.send('POST', `/api/questions/${oldId}/answer`, { by: OWNER, choice: 'saleDomestic' });
+  assert.equal(old.status, 409);
+  assert.deepEqual([old.json.code, (old.json.params as { why: string }).why], ['questionGone', 'closed']);
+  assert.match(String(old.json.error), /eingereicht/);
+  assert.deepEqual(saleQuestions().find((q) => q.id === oldId)?.closed?.why, 'closed', 'closed, saying why');
   assert.deepEqual({ tx: books().transactions.find((t) => t.ref === 'S-OLD'), entries: entriesOf('S-OLD') }, filed, 'the filed quarter stays as filed');
-  const doc = await api.send('POST', `/api/questions/${inject('S-DOC')}/answer`, { by: OWNER, choice: 'notSale' });
-  assert.deepEqual(((doc.json as unknown as Question).answer?.acted as { refused?: string }).refused, 'hasReceipt');
+  const docId = inject('S-DOC');
+  const listed = (await api.send('GET', '/api/questions')).json as unknown as { questions: Question[] };
+  assert.deepEqual([listed.questions.find((q) => q.id === docId)?.status, listed.questions.find((q) => q.id === docId)?.closed?.why], ['closed', 'hasReceipt'], 'closed when the list is read, before anyone answers');
+  const doc = await api.send('POST', `/api/questions/${docId}/answer`, { by: OWNER, choice: 'notSale' });
+  assert.equal(doc.status, 409, 'a closed question takes no answer');
   assert.equal(books().transactions.find((t) => t.ref === 'S-DOC')?.noReceiptNeeded, undefined);
   assert.equal(entriesOf('S-DOC')[0].vatCode, 'V0');
   assert.equal(classifyRules().filter((r) => String(r.id).startsWith('sale-q-inj')).length, 0, 'a refused answer keeps no rule');
