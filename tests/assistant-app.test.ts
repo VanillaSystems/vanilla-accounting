@@ -58,8 +58,16 @@ async function sidebar(t: { after(fn: () => unknown): void }) {
     const events = (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
     if (!fresh || !conversation) conversation = (events[0] as { id: string }).id;
     const made = (events.find((e) => e.type === 'changes') as Extract<AssistantEvent, { type: 'changes' }> | undefined)?.changes ?? [];
+    const held = (events.find((e) => e.type === 'held') as Extract<AssistantEvent, { type: 'held' }> | undefined)?.held;
     const refused = events.find((e) => e.type === 'refused') as Extract<AssistantEvent, { type: 'refused' }> | undefined;
-    return { made, refused, refusal: refused?.refusal as ApiRefusal | undefined };
+    return { made, held, refused, refusal: refused?.refusal as ApiRefusal | undefined };
+  };
+  /** «Übernehmen» (true) or «Verwerfen» on the last held answer of the conversation. */
+  const settle = async (take: boolean) => {
+    const c = await get<{ turns: Array<{ held?: unknown }> }>(`/api/assistant/${conversation}`);
+    const turn = c.turns.map((x, i) => (x.held ? i : -1)).filter((i) => i >= 0).at(-1);
+    const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant/${conversation}/held/${turn}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: JSON.stringify({ take, language: 'de' }) });
+    return { status: res.status, json: await res.json() as unknown };
   };
   const undo = async (m: MadeChange) => {
     const res = await fetch(`http://127.0.0.1:${api.port}/api/assistant/${conversation}/changes/${m.id}/undo`, { method: 'POST', headers: { Connection: 'close' } });
@@ -75,7 +83,7 @@ async function sidebar(t: { after(fn: () => unknown): void }) {
   };
   /** The system prompt of each answer so far. */
   const prompts = () => readFileSync(join(log, 'args.txt'), 'utf8').trim().split('\n').map((l) => { const a = JSON.parse(l) as string[]; return a[a.indexOf('--append-system-prompt') + 1]; });
-  return { api, answer, undo, send, get, books, chart, invoices, manifest, rest, prompts };
+  return { api, answer, settle, undo, send, get, books, chart, invoices, manifest, rest, prompts };
 }
 
 /** An entry of the open quarter, alone on its payment, with an input-tax code on an operating account. */
@@ -161,6 +169,30 @@ test('a receipt set aside as a duplicate loses its links and its payment is book
   const closed = await s.answer([{ kind: 'receiptKind', id: filed.id, as: 'noise' }]);
   assert.equal(closed.refusal?.code, 'periodClosed');
   assert.deepEqual(linksOf(await s.books(), filed.id), linksOf(demo, filed.id));
+});
+
+test('the AI deletes a payment\'s bookings as a person does with «Löschen»: a payment left without any booking is unbooked, not off balance; several deletions are held on the card (r5h-36)', async (t) => {
+  const s = await sidebar(t);
+  const open = demo.journalEntries.filter((e) => e.date > closedThrough && e.origin !== 'manual' && !e.corrects && demo.transactions.some((tx) => tx.ref === e.transactionRef));
+  const byRef = new Map<string, typeof open>();
+  for (const e of open) byRef.set(e.transactionRef, [...(byRef.get(e.transactionRef) ?? []), e]);
+  const [a, b] = [...byRef.values()].filter((es) => es.length === 1).slice(0, 2);
+  assert.ok(a && b, 'two open payments with one booking each');
+  const one = await s.answer([{ kind: 'deleteEntry', id: a[0].id }]);
+  assert.equal(one.refused, undefined, one.refused?.message);
+  assert.equal((await s.books()).journalEntries!.some((e) => e.id === a[0].id), false, 'one booking goes at once, with its undo');
+  assert.equal((await s.undo(one.made[0])).status, 200);
+  assert.equal((await s.books()).journalEntries!.some((e) => e.id === a[0].id), true);
+
+  const several = await s.answer([...a, ...b].map((e) => ({ kind: 'deleteEntry', id: e.id })));
+  assert.equal(several.refused, undefined, several.refused?.message);
+  assert.ok(several.held, 'more than one deletion is held for «Übernehmen»');
+  assert.ok(several.held!.why.includes('deletes'));
+  assert.deepEqual(several.held!.rows.map((r) => r.entry).sort(), [...a, ...b].map((e) => e.id).sort());
+  assert.equal((await s.books()).journalEntries!.filter((e) => [...a, ...b].some((x) => x.id === e.id)).length, a.length + b.length, 'held: nothing deleted yet');
+  const taken = await s.settle(true);
+  assert.equal(taken.status, 200, JSON.stringify(taken.json));
+  assert.equal((await s.books()).journalEntries!.filter((e) => [...a, ...b].some((x) => x.id === e.id)).length, 0, '«Übernehmen» deletes them all');
 });
 
 test('an earlier answer\'s change is not taken back by a later one: its own «Rückgängig» does that', async (t) => {
