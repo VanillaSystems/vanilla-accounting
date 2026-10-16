@@ -10,7 +10,7 @@ import { WorkspaceError } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
-import { setAccountName } from '../../workspace/accounts-write.js';
+import { AccountRefusal, setAccountName } from '../../workspace/accounts-write.js';
 import { setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
 import { changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
@@ -24,6 +24,7 @@ function checked<T>(run: () => T): T {
   try {
     return run();
   } catch (e) {
+    if (e instanceof AccountRefusal) throw new RequestError(400, e.message, e.refusal);
     if (e instanceof WorkspaceError) throw new RequestError(400, e.message);
     throw e;
   }

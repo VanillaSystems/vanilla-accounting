@@ -69,7 +69,9 @@ export type ApiRefusal =
   /** The VAT setup (registration, method, period, a rate) holds for whole years: the open year already has entries. */
   | { code: 'vatMethodHeld'; params: { year: string; entries: number } }
   /** A question of the AI sidebar offering answers no question card has (src/questions/model.ts questionChoices). */
-  | { code: 'questionChoices' };
+  | { code: 'questionChoices' }
+  /** An account the chart places on neither statement (a closing class such as 9xxx): refused for a new account and for a booking. */
+  | { code: 'accountOutsideStatements'; params: { account: string; classes: string } };
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):

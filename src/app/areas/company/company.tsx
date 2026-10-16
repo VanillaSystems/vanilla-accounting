@@ -432,6 +432,8 @@ function Accounts({ books, nav, canEdit }: Props) {
   const open = (a: string) => nav.go({ route: { area: 'reports', report: a < '3' ? 'balance' : 'income', account: a }, query: { period: parsePeriod(year, localToday())! } });
   const [f, setF] = useState({ number: '', name: '' });
   const exists = f.number in names;
+  // A new account the statements cannot show is refused before it is sent (x07); the server refuses it too.
+  const unplaced = !exists && /^\d{4}$/.test(f.number) && !chart().isPlaced(f.number);
   async function save(e: FormEvent) {
     e.preventDefault();
     const before = names[f.number];
@@ -455,8 +457,10 @@ function Accounts({ books, nav, canEdit }: Props) {
           <label>{t('yearClose.colAccount')}<input className="mono" inputMode="numeric" value={f.number} onChange={(e) => { const number = e.target.value.trim(); setF({ number, name: names[number] ?? (f.number in names ? '' : f.name) }); }} /></label>
           <label className="wide">{t('company.accountName')}<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           <div className="acts">
-            <button type="submit" className="btn" disabled={!/^\d{4}$/.test(f.number) || !f.name.trim() || f.name.trim() === names[f.number]}>{exists ? t('company.rename') : t('company.addAccount')}</button>
-            <span className="m">{t('company.accountsHint')}</span>
+            <button type="submit" className="btn" disabled={unplaced || !/^\d{4}$/.test(f.number) || !f.name.trim() || f.name.trim() === names[f.number]}>{exists ? t('company.rename') : t('company.addAccount')}</button>
+            {unplaced
+              ? <span className="m warn" role="alert" data-testid="account-unplaced">{t('error.accountOutsideStatements', { account: f.number, classes: chart().placedClasses })}</span>
+              : <span className="m">{t('company.accountsHint')}</span>}
           </div>
         </form>
       )}

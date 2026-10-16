@@ -143,6 +143,9 @@ test('what a rule cannot carry out is refused, each with its reason', () => {
   assert.equal(why({ id: 'a', when: { counterparty: 'nobody' }, then: { ask: 'Wofür?' } }), 'counterparty');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { ask: '' } }), 'question');
   assert.equal(why({ id: 'a', when: { amount: { over: 500 }, direction: 'out' }, then: { ask: 'Wofür?', account: '2451', vat: 'none' } }), 'ok');
+  const anyAccount: RuleFacts = { ...facts, account: () => true };
+  const r = parseRule({ id: 'a', when: { text: 'x' }, then: { account: '9999', vat: 'I81' } }, anyAccount);
+  assert.deepEqual(r.ok ? 'ok' : r.refusal, { code: 'unplaced', params: { account: '9999', classes: '1–8' } }, 'an account of the chart neither statement shows (x07)');
 });
 
 test('a rule reads in one plain line', () => {

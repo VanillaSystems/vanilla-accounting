@@ -269,6 +269,29 @@ test('an account the chart cannot take is refused in plain words: four digits, a
   assert.deepEqual((await s.answer([{ kind: 'account', number: '6599', name: ' ' }])).refusal, { code: 'accountName', params: { account: '6599' } });
 });
 
+test('an account neither statement shows is refused by every path, with the classes to use instead (x07)', async (t) => {
+  const s = await sidebar(t);
+  const refusal = { code: 'accountOutsideStatements', params: { account: '9999', classes: '1–8' } };
+  const chart = s.chart();
+  const asked = await s.answer([{ kind: 'account', number: '9999', name: 'Diverses' }, { kind: 'entry', id: operating.id, set: { accountDebit: '9999' } }]);
+  assert.deepEqual(asked.refusal, refusal, 'the sidebar: the account and the move onto it');
+  assert.match(asked.refused!.message, /weder in die Bilanz noch in die Erfolgsrechnung.*Klassen 1–8.*6xxx/);
+  const call = async (method: string, path: string, body: unknown) => {
+    const res = await fetch(`http://127.0.0.1:${s.api.port}${path}`, { method, headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: JSON.stringify(body) });
+    return { status: res.status, json: await res.json() as { code?: string; params?: unknown } };
+  };
+  const firma = await call('PUT', '/api/accounts/9999', { name: 'Diverses' });
+  assert.deepEqual([firma.status, firma.json.code, firma.json.params], [400, refusal.code, refusal.params], 'Firma › Kontenplan');
+  assert.deepEqual(s.chart(), chart, 'the chart is unchanged');
+  const existing = await call('PATCH', `/api/journal-entries/${operating.id}`, { accountDebit: '9100' });
+  assert.deepEqual([existing.status, existing.json.code], [400, refusal.code], 'a hand edit onto a closing account of the chart');
+  const typed = await call('POST', '/api/journal-entries', { date: operating.date, accountDebit: '9100', accountCredit: '1020', amount: 10, description: 'Eröffnung' });
+  assert.deepEqual([typed.status, typed.json.code], [400, refusal.code], 'a new entry by hand');
+  assert.equal((await s.books()).journalEntries!.find((e) => e.id === operating.id)!.accountDebit, operating.accountDebit, 'the books are unchanged');
+  const renamed = await call('PUT', '/api/accounts/6570', { name: 'Informatik' });
+  assert.equal(renamed.status, 200, 'an account the statements show is still added or renamed');
+});
+
 test('the Treuhänder-Paket of a quarter is packed and downloaded from the card', { skip: !findBrowser() && 'no Chromium browser for the PDFs' }, async (t) => {
   const s = await sidebar(t);
   const { made, refused } = await s.answer([{ kind: 'export', preset: 'treuhand', period: '2026-Q3' }]);

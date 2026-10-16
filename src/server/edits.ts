@@ -20,6 +20,7 @@ import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
+import { outsideStatements } from '../workspace/accounts-write.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -121,8 +122,18 @@ export function relinked(books: Books, changes: readonly BookChange[]): { paymen
 /** The fields that make a booking what it is: a person who changes one of them decided it (JournalEntry.by). */
 const BOOKING_FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const;
 
+/** A booking goes only on accounts the Bilanz or the Erfolgsrechnung shows (x07): 400 in plain words otherwise. */
+export function assertPlaced(...accounts: Array<string | undefined>): void {
+  for (const a of accounts) {
+    const refused = a ? outsideStatements(a) : undefined;
+    if (refused) throw new RequestError(400, refused.message, refused.refusal);
+  }
+}
+
 export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   const e = entryOf(books, id);
+  // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only.
+  if (set.origin === undefined) assertPlaced(set.accountDebit, set.accountCredit);
   assertOpen(books, [e.date, set.date], 'editEntry');
   if (e.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
   if (set.amount !== undefined && (!Number.isFinite(set.amount) || set.amount === 0)) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });
@@ -169,6 +180,8 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   const closed = books.config.closedThrough;
   if (corrects && !(closed && parsePeriod(corrects, date)!.to <= closed)) throw new RequestError(400, `corrects: ${corrects} ist nicht eingereicht.`);
   if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
+  // An undo (`id`) puts back what was booked; anything new goes on placed accounts only.
+  if (!id) assertPlaced(rest.accountDebit, rest.accountCredit);
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
     if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
@@ -196,6 +209,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.', { code: 'noDescription' });
     if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `Den Steuercode ${l.vatCode} gibt es nicht.`, { code: 'unknownVatCode', params: { code: l.vatCode } });
     if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
+    assertPlaced(l.accountDebit, l.accountCredit);
   }
   const off = offSide(books, ref, lines, accounts);
   if (off) throw unbalanced(off);

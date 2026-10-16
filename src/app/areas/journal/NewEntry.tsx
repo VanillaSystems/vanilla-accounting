@@ -24,7 +24,7 @@ import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
 import { banksMoved, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
 import { correct, isBankAccount, journalFor } from './commands.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, chart } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -96,6 +96,7 @@ export function NewEntry(props: Props) {
     const problem = !date && !tx ? t('journal.errDate')
       : !tx && closed && date! <= closed ? t('journal.errFiledDate', { date: formatDate(closed) })
       : [dr, cr].find((n) => n && !accounts[n]) ? t('journal.errAccount', { account: [dr, cr].find((n) => n && !accounts[n])! })
+      : [dr, cr].find((n) => n && !chart().isPlaced(n)) ? t('error.accountOutsideStatements', { account: [dr, cr].find((n) => n && !chart().isPlaced(n))!, classes: chart().placedClasses })
       : !dr && !cr ? t('journal.errNoAccount')
       : vat && !lookupVatCode(vat) ? t('journal.errVat', { code: vat })
       : !amount ? t('journal.errAmount')

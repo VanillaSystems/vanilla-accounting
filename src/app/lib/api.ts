@@ -112,6 +112,7 @@ export function errorText(e: unknown): string {
       private: t('questions.choice.private'), business: t('questions.choice.business'), saleDomestic: t('questions.choice.saleDomestic', { rate: String(normalRate()) }),
       saleAbroad: t('questions.choice.saleAbroad'), notSale: t('questions.choice.notSale'),
     });
+    case 'accountOutsideStatements': return t('error.accountOutsideStatements', b.params);
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'setup': return setupText(b.params);

@@ -28,6 +28,7 @@
  */
 import type { BankTransaction } from '../types/index.js';
 import { ibanKey, isGenericText, isPayer } from '../knowledge/payer.js';
+import { chart } from '../engines/index.js';
 
 export const RULE_STEP = 'booking.guide.yaml#classify';
 /** The step's id inside knowledge/rules/booking.guide.yaml. */
@@ -73,6 +74,8 @@ export type RuleRefusal =
   | { code: 'outcome' }
   | { code: 'question' }
   | { code: 'account'; params: { account: string } }
+  /** An account the Bilanz and the Erfolgsrechnung do not show (a closing class such as 9xxx). */
+  | { code: 'unplaced'; params: { account: string; classes: string } }
   | { code: 'vat'; params: { vat: string } }
   | { code: 'pattern'; params: { text: string } }
   | { code: 'amount' }
@@ -153,6 +156,7 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
   if (t.account !== undefined || t.vat !== undefined) {
     const account = text(t.account);
     if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.account ?? '') } });
+    if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
     const v = text(t.vat);
     if (!v) return no({ code: 'vat', params: { vat: '' } });
     if (v.toLowerCase() !== 'none' && !facts.vat(v)) return no({ code: 'vat', params: { vat: v } });
@@ -168,6 +172,7 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     if (!booking || booking.private || t.ask !== undefined || !isMap(t.fees)) return no({ code: 'fees' });
     const account = text(t.fees.account);
     if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.fees.account ?? '') } });
+    if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
     const v = text(t.fees.vat);
     if (!v || !facts.vat(v)) return no({ code: 'vat', params: { vat: v ?? '' } });
     booking.fees = { account, vat: v };
