@@ -263,6 +263,19 @@ test('a split booked with the zero code (no receipt that time) offers the rate c
   assert.deepEqual(shareOffer(ws, loadBooks(ws), ref)?.booking, { account: '6513', vat: 'I81', private: 50 });
 });
 
+test('an uneven half with the odd cent on the business side still offers the half', async () => {
+  const { ws } = await company();
+  const books = loadBooks(ws);
+  const ref = books.transactions.find((t) => t.description === 'Rechnung Post CH September 2026')!.ref;
+  update(books, PERSON, (b) => {
+    const e = b.journalEntries.find((x) => x.transactionRef === ref)!;
+    e.amount = 108.88;
+    b.journalEntries.push({ id: 'p', transactionRef: ref, date: e.date, accountDebit: '2451', accountCredit: '1021', amount: 108.87, origin: 'manual' });
+  });
+  saveBooks(ws, books);
+  assert.equal(shareOffer(ws, loadBooks(ws), ref)?.percent, 50);
+});
+
 test('a payment booked in one piece offers no share rule', async () => {
   const { ws } = await company();
   const books = loadBooks(ws);

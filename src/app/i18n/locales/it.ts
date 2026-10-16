@@ -2598,7 +2598,7 @@ export default {
     'rules.draft.added': 'Nuova',
     'rules.draft.changed': 'Modificata',
     'rules.draft.removed': 'Rimuovere',
-    'rules.draft.was': 'la regola {line}',
+    'rules.draft.was': 'prima: {line}',
     'rules.draft.becomes': 'ora:',
     'rules.draft.others': 'e come l’app riconosce {name}',
     'rules.draft.broken': 'Così le regole non si caricano: {why}',

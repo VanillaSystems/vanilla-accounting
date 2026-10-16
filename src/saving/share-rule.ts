@@ -51,7 +51,7 @@ function ruleCode(code: string | undefined): string | null {
 /**
  * The share rule `ref`'s bookings show, when they are a split: two bookings against the bank, one
  * on the owner's account without VAT, adding up to what the bank paid, at a whole percent the rule
- * books again to the cent. None when a rule already books it that way.
+ * books again (to the cent, but for the odd cent of an uneven half). None when a rule already books it that way.
  */
 export function shareOffer(ws: Workspace, books: Books, ref: string, context: ClassifyContext = loadClassifyContext(ws)): ShareOffer | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
@@ -69,7 +69,8 @@ export function shareOffer(ws: Workspace, books: Books, ref: string, context: Cl
   const booking: RuleBooking = { account, vat: ruleCode(biz.vatCode), private: percent };
   if (percent <= 0 || percent >= 100) return undefined;
   const lines = ruleBookingLines(tx, booking, mappedReceipts(books, tx).some((r) => r.hasSwissVat), owner);
-  if (lines[1]?.amount !== own.amount) return undefined;
+  // A whole percent: the rule books the split again, give or take the odd cent of an uneven half.
+  if (!lines[1] || Math.abs(Math.round(lines[1].amount * 100) - Math.round(own.amount * 100)) > 1) return undefined;
   const fx = loadFxResolver();
   const ruled = ruleOfPayment(books, tx, context, fx)?.rule.then;
   if (ruled?.kind === 'book' && ruled.booking.private === percent && ruled.booking.account === account) return undefined;

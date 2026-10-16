@@ -2595,7 +2595,7 @@ export const messages = {
   'rules.draft.added': 'Neu',
   'rules.draft.changed': 'Geändert',
   'rules.draft.removed': 'Entfernen',
-  'rules.draft.was': 'die Regel {line}',
+  'rules.draft.was': 'vorher: {line}',
   'rules.draft.becomes': 'neu:',
   'rules.draft.others': 'und wie die App {name} erkennt',
   'rules.draft.broken': 'So lassen sich die Regeln nicht laden: {why}',

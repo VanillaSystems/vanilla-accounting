@@ -2598,7 +2598,7 @@ export default {
     'rules.draft.added': 'New',
     'rules.draft.changed': 'Changed',
     'rules.draft.removed': 'Remove',
-    'rules.draft.was': 'the rule {line}',
+    'rules.draft.was': 'before: {line}',
     'rules.draft.becomes': 'now:',
     'rules.draft.others': 'and how the app recognises {name}',
     'rules.draft.broken': 'The rules do not load like this: {why}',
