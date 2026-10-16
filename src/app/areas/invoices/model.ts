@@ -4,7 +4,7 @@
  * the rules the API and the PDF use.
  */
 import type { Period } from '../../../accounting/periods.js';
-import type { Customer, Draft, Invoice, InvoiceBook, SentDocument } from '../../../invoices/model.js';
+import type { Customer, Draft, Invoice, InvoiceBook, Issued, SentDocument } from '../../../invoices/model.js';
 import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, openAmount, totals } from '../../../invoices/rules.js';
 import type { InvoiceList } from '../../lib/api.js';
@@ -30,9 +30,9 @@ export const wasSent = (sent: readonly SentDocument[], inv: Invoice): boolean =>
  * The last document issued in the draft's year with a later date: the draft would take the next
  * number with an earlier date, and the numbers would no longer follow the dates.
  */
-export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'>): Invoice | undefined {
+export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'>): Issued | undefined {
   return invoices
-    .filter((i) => i.status === 'issued' && !i.deleted && i.number.startsWith(`${draft.date.slice(0, 4)}-`) && i.date > draft.date)
+    .filter((i): i is Issued => i.status === 'issued' && !i.deleted && i.number.startsWith(`${draft.date.slice(0, 4)}-`) && i.date > draft.date)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
 }
 

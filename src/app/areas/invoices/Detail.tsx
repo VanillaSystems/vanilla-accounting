@@ -158,7 +158,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit }: DetailProps & { s
     return (
       <div className="status">
         <span className="notice">{t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span>
-        {later?.status === 'issued' && <div className="notice warn" role="note">{I.dot}<span>{t('invoices.dateBeforeLast', { number: later.number, date: formatDate(later.date) })}</span></div>}
+        {later && <div className="notice warn" role="note">{I.dot}<span>{t('invoices.dateBeforeLast', { number: later.number, date: formatDate(later.date) })}</span></div>}
       </div>
     );
   }
