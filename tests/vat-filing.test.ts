@@ -18,7 +18,8 @@ import { APP_ROOT, workspaceAt, yearPaths, type Workspace } from '../src/workspa
 import { openEngine, SKIPPED } from '../src/workflows/engine.js';
 import { filedXml, filingXml, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
 import { loadWorkflows } from '../src/workflows/load.js';
-import { taskOf } from '../src/workflows/model.js';
+import { summaryOf, taskOf } from '../src/workflows/model.js';
+import { filedReturnsOf } from '../src/workspace/reads.js';
 import { returnSummary } from '../src/app/areas/automation/filing-summary.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -131,4 +132,46 @@ test('the person\'s tasks carry what they check: the review the return in words,
   await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'filed' });
   await engine.idle();
   assert.equal(filingXml(ws, Q), filedXml(ws, Q), 'then the filed one');
+});
+
+test('a period that has not ended cannot be prepared: the run stops before it computes, says until when the period runs and from when it can be filed, and writes nothing (r6f-33)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2026-10-16T08:00:00.000Z' });
+  const r = await engine.start('vat-filing', { kind: 'period', id: '2026-Q4' }, { kind: 'manual' });
+  assert.ok(r.ok, JSON.stringify(r));
+  await engine.idle();
+  const run = engine.run(r.run!)!;
+  assert.equal(run.state.status, 'stuck');
+  const why = { code: 'periodRunning', params: { period: '2026-Q4', ends: '2026-12-31', from: '2027-01-01' } };
+  assert.deepEqual(run.state.status === 'stuck' ? run.state.why : undefined, why, 'the refusal in a code the screens have words for');
+  assert.deepEqual(summaryOf(run).why, why, 'the list of runs carries it too');
+  assert.deepEqual(run.steps.map((s) => [s.step, s.output, s.why]), [['compute', undefined, why]], 'no figures computed');
+  assert.equal(filingXml(ws, '2026-Q4'), undefined, 'no XML written');
+
+  const ended = await engine.start('vat-filing', { kind: 'period', id: '2026-Q3' }, { kind: 'manual' });
+  await engine.idle();
+  const q3 = engine.run(ended.ok ? ended.run! : '')!;
+  assert.deepEqual([q3.state.status, 'at' in q3.state ? q3.state.at : ''], ['waiting', 'review'], 'a period that ended on 30.9. is prepared on 16.10.');
+});
+
+test('the year\'s last period is filed like any other, but the year close seals it: the run archives the filed XML and ends without closing or sealing (r6f-33)', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
+  const file = async (key: string) => {
+    const r = await engine.start('vat-filing', { kind: 'period', id: key }, { kind: 'manual' });
+    assert.ok(r.ok, JSON.stringify(r));
+    await engine.idle();
+    for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: r.run!, outcome }); await engine.idle(); }
+    return engine.run(r.run!)!;
+  };
+  for (const key of ['2026-Q2', '2026-Q3']) assert.equal((await file(key)).state.status, 'done', key);
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30');
+
+  const q4 = await file('2026-Q4');
+  assert.equal(q4.state.status, 'done', JSON.stringify(q4.state));
+  assert.ok(existsSync(filedXml(ws, '2026-Q4')), 'the filed XML lies beside the seals, where the year close and the 0535 read it');
+  assert.ok(filedReturnsOf(ws, '2026').some((f) => f.period === '2026-Q4'), 'the year close finds the fourth quarter filed');
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30', 'the year close moves the line to 31.12., after the year-end entries');
+  assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q4.json')), false, 'no seal before the year-end entries');
+  assert.equal(q4.steps.at(-1)!.outcome, 'ok');
 });

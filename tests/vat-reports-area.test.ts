@@ -39,6 +39,9 @@ test('a filed quarter is filed; an open one is due 60 days after its end; a year
   assert.deepEqual(vatReturn(books, '2026-Q3', '2026-10-11').state, { kind: 'open', due: '2026-11-29', overdue: false });
   assert.deepEqual(vatReturn(books, '2026-Q3', '2026-12-01').state, { kind: 'open', due: '2026-11-29', overdue: true });
   assert.equal(vatReturn(books, '2026', '2026-10-11').state.kind, 'overview');
+  assert.deepEqual(vatReturn(books, '2026-Q4', '2026-10-11').state, { kind: 'running', ends: '2026-12-31', from: '2027-01-01' }, 'a quarter still running is no return yet (r6f-33)');
+  assert.deepEqual(vatReturn(books, '2026-Q4', '2026-12-31').state, { kind: 'running', ends: '2026-12-31', from: '2027-01-01' }, 'on its last day too');
+  assert.equal(vatReturn(books, '2026-Q4', '2027-01-01').state.kind, 'open', 'from the day after');
 });
 
 test('a correction dated in Q3 is declared in the quarter it corrects, not in its own', () => {
