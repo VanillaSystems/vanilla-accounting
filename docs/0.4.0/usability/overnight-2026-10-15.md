@@ -104,3 +104,14 @@ file records every decision a person might have made differently, newest last.
     - Cause of the blocker: every inbox run merged the bank statements again and stripped reference, counterparty and parts from closed rows. The rows were sealed with those fields, so the first filing made every later run fail. Ken's real books would have hit it at their next filing: their open rows carry references. Closed rows are now kept verbatim.
     - Found at the merge: the new by-hand questions (asked without a model) were being closed by any rules change. Fixed, so only a question a rule asked closes.
     - Open: who wrote a reason (rule or code shown as Claude); a SumUp rule that splits sales from fees; the invoice address refusal still technical; Kontoauszüge pay bar overflow; corner-11 run counts (a runs-table redesign); corner-5.
+26. Round 4 (build rc.229).
+    - Corner cases: 20 of 27 fixed, the blocker gone, phone pairing works end to end.
+    - Wishes: 16 of 24 right, 7 of 8 new ones right, 0 pretended.
+    - Monika without AI: all her round-2 use cases pass.
+    - Merged: polish (who decided a booking, a payout rule with fees, plain refusals) and firmtypes (firms not VAT-registered, and firms on the net tax rate with half-yearly returns: one typed VatSetup, demo-coiffeur, demo-schreinerei). Tests 914 pass, golden master 18/18.
+    - New rounds running: honesty2, safety, filedsale.
+    - Open for Ken:
+      - decision 3 (net Bilanz/ER), raised again by the Treuhänderin;
+      - check the net-rate form's box numbers 323/333 against the real ESTV form 0553 before a net-rate firm files (taken from Banana's code list, because the PDF was not reachable);
+      - whether the filing period stays a free choice per method;
+      - whether to hide the MWST entry for a firm not registered (kept for now, with the threshold watch).
