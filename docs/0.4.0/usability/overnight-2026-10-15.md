@@ -63,3 +63,10 @@ file records every decision a person might have made differently, newest last.
     test folders) and left about as many -approvals folders in the temp dir. Tests now keep their
     own folders. The existing leftovers are NOT deleted: they sit in Ken's real app folder next
     to his own runs; to sort out together.
+16. Invoices merged: sheet selects save; a payment naming an invoice number, or a refund naming a
+    credit note, is matched and booked from the invoice (V81 / -V81) in code; «Ausstellen» says
+    what is missing with links; service period; open invoices of earlier quarters stay listed.
+17. The sidebar knows the whole app (merged): a map of every area generated from the app's own
+    lists; it creates invoice drafts, sets payment terms and texts, adds accounts, sets a receipt
+    aside as duplicate, packs the Treuhänder-Paket, starts the booking; the VAT family follows the
+    account; it refuses to silently take back an earlier change.
