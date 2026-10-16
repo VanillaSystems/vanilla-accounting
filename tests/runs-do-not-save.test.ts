@@ -103,5 +103,5 @@ test('a direct edit waits too', async () => {
   update(books, PERSON, (b) => { b.journalEntries.push({ id: 'p1', transactionRef: 'p', date: '2026-09-21', accountDebit: '6500', accountCredit: '1020', amount: 3, origin: 'manual' }); });
   saveBooks(ws, books);
   assert.equal(git('log', '--format=%s'), 'Workspace set up');
-  assert.deepEqual(await changesView(ws).then((v) => v.books), { files: 1, runs: [], hand: [] });
+  assert.deepEqual(await changesView(ws).then((v) => v.books), { files: 1, runs: [], hand: [], receipts: [] });
 });
