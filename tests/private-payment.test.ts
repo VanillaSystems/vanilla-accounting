@@ -79,3 +79,27 @@ test('a receipt without date or amount cannot be paid privately: 400, in words',
   assert.match(String(json.error), /Datum und Betrag/);
   assert.equal(loadBooks(api.ws).mappings.some((m) => m.receiptId === bare), false, 'nothing written');
 });
+
+test('r8k-10: a receipt dated in the filed period is paid privately as a correction in the open one: the payment on the first open day, naming the receipt\'s date, its booking by hand with corrects', async () => {
+  const LATE = '%PDF-1.4 Kiosk Quittung 20.06.';
+  const late = createHash('sha256').update(LATE).digest('hex').slice(0, 16);
+  const books = loadBooks(api.ws);
+  books.receipts.push({ id: late, filename: 'kiosk.pdf', originalFilename: 'kiosk.pdf', extractedText: 'Kiosk Quittung', extractionMethod: 'pdftotext', fileSize: LATE.length, indexedAt: '2026-08-01T08:00:00Z', location: 'archived', date: '2026-06-20', amount: 12.5, currency: 'CHF', description: 'Kiosk, Zeitung' } as Receipt);
+  saveBooks(api.ws, books);
+  writeFileSync(join(api.root, 'transactional-data/2026/receipts', 'kiosk.pdf'), LATE);
+  const { status, json } = await api.send('POST', `/api/receipts/${late}/private-payment`);
+  assert.equal(status, 200, JSON.stringify(json));
+  assert.deepEqual([json.date, json.corrects], ['2026-07-01', '2026-Q2'], 'the first open day, correcting the filed quarter');
+  const ref = json.ref as string;
+  const after = loadBooks(api.ws);
+  const tx = after.transactions.find((t) => t.ref === ref)!;
+  assert.deepEqual([tx.source, tx.date, tx.amount, tx.direction], ['manual', '2026-07-01', 12.5, 'DBIT']);
+  assert.match(tx.description, /20\.06\.2026/, 'the payment names the receipt\'s day');
+  assert.deepEqual(after.mappings.filter((m) => m.receiptId === late), [{ transactionRef: ref, receiptId: late }]);
+  assert.ok(after.receipts.find((r) => r.id === late)!.date === '2026-06-20', 'the receipt keeps its date');
+
+  const booked = await api.send('POST', `/api/transactions/${ref}/entries`, { lines: [{ accountDebit: '6500', accountCredit: '2451', amount: 12.5, description: 'Kiosk, Zeitung' }] });
+  assert.equal(booked.status, 200, JSON.stringify(booked.json));
+  const entries = loadBooks(api.ws).journalEntries.filter((e) => e.transactionRef === ref);
+  assert.deepEqual(entries.map((e) => [e.date, e.corrects]), [['2026-07-01', '2026-Q2']], 'booked in the open period, declared on the 0535 of Q2');
+});

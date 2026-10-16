@@ -10,7 +10,7 @@ import { accountCorrectionCode, banksMoved, correctionKinds, correctionOf, corre
 import { entriesForReturn } from '../src/accounting/declarations.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import { filing, vat } from '../src/engines/index.js';
-import type { JournalEntry, Receipt } from '../src/types/index.js';
+import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
 import type { BookChange } from '../src/types/assistant.js';
 import { changesIn } from '../src/assistant/changes.js';
 import { applyAnswer } from '../src/server/edits.js';
@@ -164,4 +164,20 @@ test('a correction booked by hand gets its case (r8c-6): the 0535 explains it, n
   } finally {
     await api.stop();
   }
+});
+
+test('r8k-10: a private outlay for a receipt dated in a filed quarter corrects that quarter; a bank payment never does', async () => {
+  const { correctsFor } = await import('../src/accounting/correction.js');
+  const { entriesFor } = await import('../src/booking/classify.js');
+  const { periodLock } = await import('../src/books/store.js');
+  const lock = periodLock({ config: { closedThrough: '2026-06-30' } });
+  const kiosk = { id: 'k', date: '2026-06-20' } as Receipt;
+  const outlay: BankTransaction = { ref: 'M2026-002', bank: 'manual', source: 'manual', date: '2026-07-01', amount: 12.5, currency: 'CHF', direction: 'DBIT', description: 'Kiosk' };
+  const byBank: BankTransaction = { ...outlay, bank: 'Raiffeisen', source: undefined };
+  assert.equal(correctsFor(outlay, [kiosk], lock.isClosed, 'quarter'), '2026-Q2');
+  assert.equal(correctsFor(byBank, [kiosk], lock.isClosed, 'quarter'), undefined, 'a March invoice paid by bank in July is a July booking, no correction');
+  assert.equal(correctsFor(outlay, [{ id: 'j', date: '2026-07-01' } as Receipt], lock.isClosed, 'quarter'), undefined, 'a receipt of the open period corrects nothing');
+  const fx = { daily: () => undefined, flat: () => undefined } as unknown as Parameters<typeof entriesFor>[2]['fx'];
+  const [e] = entriesFor(outlay, [{ accountDebit: '6500', accountCredit: '', amount: 12.5, vatCode: 'I0', description: 'Kiosk' }], { fx, receiptDate: '2026-06-20', receipts: ['k'], bankAccount: '2451', lock, by: { kind: 'model', model: 'stub' }, corrects: '2026-Q2' });
+  assert.deepEqual([e.date, e.corrects, e.accountCredit], ['2026-07-01', '2026-Q2', '2451'], 'the classifier stamps the correction too');
 });
