@@ -19,6 +19,9 @@ import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 import { RECEIPT, SESSION, bookedWithReceipt } from './support/inbox-run.js';
 import { textPdf } from './support/text-pdf.js';
+import { duplicatesIn } from '../src/intake/duplicates.js';
+import type { Receipt } from '../src/types/index.js';
+import { documents } from '../src/engines/index.js';
 
 configure({ useWebWorkers: false });
 
@@ -139,6 +142,37 @@ test('by their words and facts: a newsletter waits in quarantine until «doch ei
   }
 });
 
+
+test('closing the dialog loses nothing: an unanswered possible duplicate goes in, and Belege asks about the pair; a locked ZIP waits in quarantine (r6h-23)', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, rest, books } = SESSION(api);
+    const inbox = () => (existsSync(join(api.root, 'beleg-import')) ? readdirSync(join(api.root, 'beleg-import')).sort() : []);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=Invoice-2026-01 (1).pdf`, Buffer.concat([readFileSync(RECEIPT), Buffer.from('\n% downloaded again\n')]));
+    s = await post(`/api/drop/${s.id}/files?name=Belege.zip`, await zipOf([['r.pdf', await invoicePdf('Z-1', 'Pinsel')]], { password: PASSWORD }));
+    const [copy, locked] = s.rows;
+    assert.deepEqual([copy.state, copy.reason, locked.state], ['duplicate', 'possible-duplicate', 'locked']);
+    assert.deepEqual(inbox(), []);
+    const closed = await api.fetch(`/api/drop/${s.id}`, { method: 'DELETE' });
+    assert.equal(closed.status, 200);
+    assert.equal(existsSync(join(api.root, 'data/drop', s.id)), false, 'the session is gone');
+    assert.deepEqual(inbox(), ['Invoice-2026-01 (1).pdf'], 'the possible duplicate went in: the run asks, not the closed dialog');
+    const held = readdirSync(join(api.root, 'data/quarantine')).filter((f) => f.endsWith('.zip'));
+    assert.deepEqual(held, ['Belege.zip'], 'the locked ZIP waits in quarantine');
+    await rest();
+    const b = await books() as unknown as { receipts: Receipt[]; mappings: Array<{ receiptId: string }> };
+    const original = b.receipts.find((r) => r.filename === '20260105-example-cloud-invoice-2026-01.pdf')!;
+    assert.ok(b.receipts.some((r) => r.id === copy.id), 'in the books');
+    assert.equal(b.mappings.some((m) => m.receiptId === copy.id), false, 'not linked before the person answers');
+    const twins = duplicatesIn(b.receipts, new Set(b.mappings.map((m) => m.receiptId)), documents());
+    assert.ok(twins.get(copy.id)?.of === original.id || twins.get(original.id)?.of === copy.id, `Aufgaben lists the pair as a possible duplicate: ${JSON.stringify([...twins])}`);
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
 
 test('each file tells its run what it is: a statement by its bank, account and days, a receipt by its id', async () => {
   const api = await startApi('demo');
