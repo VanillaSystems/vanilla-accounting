@@ -99,5 +99,8 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .ruledraft ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ruledraft .rk { color: var(--muted); font-size: 12px; }
 .ruledraft b { font-weight: 600; }
+.rulepreview { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
+.rulepreview ul { gap: 2px; font-size: 12px; }
+.rulepreview li { overflow-wrap: anywhere; }
 .ruledraft.done { flex-direction: row; align-items: center; gap: 10px; color: var(--muted); }
 .ruleacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

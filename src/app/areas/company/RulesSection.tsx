@@ -8,7 +8,9 @@ import { t } from '../../i18n/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import type { RuleRow } from '../../../booking/rule-book.js';
-import type { RuleWords } from '../../../booking/rules.js';
+import type { RuleNames, RuleWords } from '../../../booking/rules.js';
+import type { RuleLine } from '../../../booking/classify.js';
+import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
 import type { DraftView, RulesView } from '../../../saving/rules.js';
 import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
@@ -76,7 +78,40 @@ export function RulesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
   );
 }
 
-type Done = 'kept' | 'discarded';
+type Done = 'kept' | 'removedDone' | 'discarded';
+
+/** A booking line as the card names it: account and name, VAT code, amount. */
+const lineText = (l: RuleLine, names: RuleNames) => [names.account(l.account) ? `${l.account} ${names.account(l.account)}` : l.account, l.vat, fmt(l.amount)].filter(Boolean).join(' · ');
+
+function PaymentLine({ p, names }: { p: PreviewPayment; names: RuleNames }) {
+  const would = p.would.lines.map((l) => lineText(l, names)).join(' + ');
+  return (
+    <li>
+      <span className="m">{formatDate(p.date)} · {p.currency} {fmt(p.amount)}</span> {p.text}
+      {' → '}
+      <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : would}</b>
+      <span className="m">{' · '}{p.decidedBy ? t('rules.preview.otherFirst') : p.now.length ? t('rules.preview.now', { booking: p.now.map((l) => lineText(l, names)).join(' + ') }) : t('rules.preview.unbooked')}</span>
+    </li>
+  );
+}
+
+/** What one drafted rule would do on this year's payments, and the rules it meets there. */
+function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
+  return (
+    <div className="rulepreview" data-preview={p.key}>
+      <span className="m">{p.matches ? t('rules.preview.matches', { n: p.matches, year: p.year }) : t('rules.preview.none', { year: p.year })}</span>
+      {p.examples.length ? <ul>{p.examples.map((x) => <PaymentLine key={x.ref} p={x} names={names} />)}</ul> : null}
+      {p.matches > p.examples.length ? <span className="m">{t('rules.preview.more', { n: p.matches - p.examples.length })}</span> : null}
+      {p.overlaps.map((o) => (
+        <span key={`${o.row.file}#${o.row.step}#${o.row.id}`} className="warnline">
+          {t('rules.preview.overlap', { n: o.shared, line: lineOf(o.row, names, words) })}
+          {o.theirs ? ` ${t('rules.preview.theirs', { n: o.theirs })}` : ''}
+        </span>
+      ))}
+      {p.loneWords.length ? <span className="warnline">{t('rules.preview.wide', { words: p.loneWords.map((w) => `«${w}»`).join(', ') })}</span> : null}
+    </div>
+  );
+}
 
 /**
  * The card of one drafted rules file: each added, changed or removed rule in one plain line, then
@@ -92,8 +127,8 @@ export function RuleDraft({ path, nav, onRules }: { path: string; nav?: Nav; onR
   if (done) {
     return (
       <div className="ruledraft done" data-draft={path}>
-        <span>{t(done === 'kept' ? 'rules.draft.kept' : 'rules.draft.discarded')}</span>
-        {done === 'kept' && onRules ? <button type="button" className="linkbtn" onClick={onRules}>{t('rules.draft.toRules')}</button> : null}
+        <span>{t(`rules.draft.${done}`)}</span>
+        {done !== 'discarded' && onRules ? <button type="button" className="linkbtn" onClick={onRules}>{t('rules.draft.toRules')}</button> : null}
       </div>
     );
   }
@@ -105,8 +140,8 @@ export function RuleDraft({ path, nav, onRules }: { path: string; nav?: Nav; onR
     setBusy(true);
     setError(undefined);
     try {
-      const r = await api.draftCommand(kind === 'keep' ? { kind, path, basis: d.basis } : { kind, path });
-      if (r.ok) setDone(kind === 'keep' ? 'kept' : 'discarded');
+      const r = await api.draftCommand(kind === 'keep' ? { kind, path, basis: d.basis, confirm: d.confirm } : { kind, path });
+      if (r.ok) setDone(kind === 'discard' ? 'discarded' : onlyRemoval ? 'removedDone' : 'kept');
       else setError('message' in r ? r.message : t('rules.draft.gone'));
     } catch (e) {
       setError(errorText(e));
@@ -120,15 +155,21 @@ export function RuleDraft({ path, nav, onRules }: { path: string; nav?: Nav; onR
       <span className="m">{t('rules.draft.title')}</span>
       <ul>
         {d.added.map((r) => <li key={`a${r.step}${r.id}`}><span className="rk">{t('rules.draft.added')}</span> <b>{say(r)}</b></li>)}
-        {d.changed.map((r) => <li key={`c${r.step}${r.id}`}><span className="rk">{t('rules.draft.changed')}</span> <b>{say(r)}</b></li>)}
+        {d.changed.map((r, i) => (
+          <li key={`c${r.step}${r.id}`}>
+            <span className="rk">{t('rules.draft.changed')}</span> {t('rules.draft.was', { line: say(d.before[i]) })}
+            <br /><span className="rk">{t('rules.draft.becomes')}</span> <b>{say(r)}</b>
+          </li>
+        ))}
         {d.removed.map((r) => <li key={`r${r.step}${r.id}`}><span className="rk">{t('rules.draft.removed')}</span> <b>{say(r)}</b></li>)}
       </ul>
+      {d.preview.map((p) => <Preview key={p.key} p={p} names={names} />)}
       {d.others && business ? <span className="m">{t('rules.draft.others', { name: names.business(business) ?? business })}</span> : null}
       {d.broken ? <span className="warnline">{t('rules.draft.broken', { why: d.broken })}</span> : null}
       {d.refused.map((r) => <span key={`x${r.id}`} className="warnline">{t('rules.draft.refused', { id: r.id || '?', why: refusalText(r) })}</span>)}
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts">
-        {d.keepable ? <button type="button" className="btn primary" disabled={busy} onClick={() => void go('keep')}>{t(onlyRemoval ? 'rules.draft.remove' : 'rules.draft.keep')}</button> : null}
+        {d.keepable ? <button type="button" className="btn primary" disabled={busy} onClick={() => void go('keep')}>{t(onlyRemoval ? 'rules.draft.remove' : d.confirm ? 'rules.draft.keepAnyway' : 'rules.draft.keep')}</button> : null}
         <button type="button" className="btn ghost" disabled={busy} onClick={() => void go('discard')}>{t('rules.draft.discard')}</button>
         {nav && !d.keepable ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes', commit: 'draft', file: path }, query: {} })}>{t('rules.draft.diff')}</button> : null}
       </span>

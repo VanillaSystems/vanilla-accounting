@@ -94,5 +94,5 @@ router.post('/api/rules/draft', async (req, res) => {
   if (!c || typeof c.path !== 'string' || (c.kind !== 'keep' && c.kind !== 'discard')) throw new RequestError(400, 'Unbekannter Befehl.');
   if (c.kind === 'discard') { res.json({ ok: discardDraft(WS, c.path) }); return; }
   if (typeof c.basis !== 'string') throw new RequestError(400, 'basis erwartet.');
-  res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis)));
+  res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true)));
 });

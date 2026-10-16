@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { draftDir } from '../src/saving/changes.js';
+import { loadBooks } from '../src/books/store.js';
 import { draftRules, keepDraft, ruleCommand } from '../src/saving/rules.js';
 import { openSaving, type Ask } from '../src/saving/saving.js';
 import type { RulesView } from '../src/saving/rules.js';
@@ -157,4 +158,59 @@ test('Firma › Regeln over the API: every rule of the workspace in plain words,
   } finally {
     await api.stop();
   }
+});
+
+const RECHNUNG = `      - id: rechnung-it
+        when: { text: "Rechnung" }
+        then: { account: "6570", vat: I81 }
+        source: wish 2026-10-16
+`;
+
+test('the card shows what a drafted rule would do: the payments of the open year it matches, newest first, each with its booking and today\'s (wishes3-2)', async () => {
+  const { ws } = await company();
+  draft(ws, GUIDE, BEFORE + RECHNUNG);
+  const d = draftRules(ws, GUIDE)!;
+  const books = loadBooks(ws);
+  const expected = books.transactions.filter((t) => t.date.startsWith('2026') && /rechnung/i.test(`${t.description} ${t.counterparty ?? ''}`)).sort((a, b) => b.date.localeCompare(a.date));
+  assert.ok(expected.length > 5, 'the demo has more such payments than the card names');
+  const [p] = d.preview;
+  assert.deepEqual([p.key, p.year, p.matches, p.examples.map((x) => x.ref)], ['booking.guide.yaml#classify#rechnung-it', '2026', expected.length, expected.slice(0, 5).map((t) => t.ref)]);
+  const first = expected[0];
+  const swiss = books.mappings.some((m) => m.transactionRef === first.ref && books.receipts.find((r) => r.id === m.receiptId)?.hasSwissVat);
+  assert.deepEqual(p.examples[0].would, { kind: 'book', lines: [{ account: '6570', vat: `${first.direction === 'CRDT' ? '-' : ''}${swiss ? 'I81' : 'I0'}`, amount: first.amount }] });
+  assert.deepEqual(p.examples[0].now.map((l) => l.account).sort(), books.journalEntries.filter((e) => e.transactionRef === first.ref).map((e) => (e.accountDebit === '1021' ? e.accountCredit : e.accountDebit)).sort());
+});
+
+test('a rule resting on a single word is kept only once the person confirms it on its card; «Speichern» refuses it (wishes3-2)', async () => {
+  const { ws } = await company();
+  draft(ws, GUIDE, BEFORE + RECHNUNG);
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual([d.wide.map((r) => r.id), d.confirm, d.preview[0].loneWords], [['rechnung-it'], true, ['Rechnung']]);
+  const refused = await keepDraft(ws, GUIDE, d.basis);
+  assert.deepEqual([refused.ok, (refused as { refusal: string }).refusal], [false, 'wide']);
+  assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE, 'nothing kept without the confirmation');
+  assert.equal((await keepDraft(ws, GUIDE, d.basis, true)).ok, true);
+  assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE + RECHNUNG);
+});
+
+test('a rule anchored by an amount or a business asks no confirmation', async () => {
+  const { ws } = await company();
+  draft(ws, GUIDE, BEFORE + CASH);
+  assert.deepEqual([draftRules(ws, GUIDE)!.wide, draftRules(ws, GUIDE)!.confirm], [[], false]);
+});
+
+test('a draft that changes another rule shows it as it was and as it would be, and names the rules it meets on the same payments (wishes3-4)', async () => {
+  const { ws } = await company();
+  draft(ws, GUIDE, BEFORE.replace('"Tankstelle"', '"Pronto"') + `      - id: coop
+        when: { text: "Coop", direction: out }
+        then: { account: "4210", vat: I81 }
+        source: wish 2026-10-16
+`);
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual([d.added.map((r) => r.id), d.changed.map((r) => r.rule?.when.text), d.before.map((r) => r.rule?.when.text)], [['coop'], ['Pronto'], ['Tankstelle']]);
+  const coop = d.preview.find((p) => p.key.endsWith('#coop'))!;
+  const n = loadBooks(ws).transactions.filter((t) => t.date.startsWith('2026') && t.direction === 'DBIT' && /coop/i.test(t.description)).length;
+  assert.ok(n > 0);
+  assert.deepEqual(coop.overlaps.map((o) => [o.row.id, o.shared, o.theirs]), [['fuel', n, n]], 'the earlier rule of the file decides those payments');
+  assert.ok(coop.examples.every((x) => x.decidedBy === 'fuel'));
 });

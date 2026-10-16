@@ -302,7 +302,7 @@ export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
 }
 
 /** The receipts linked to a payment; a copy a person marked as such never claims its input tax a second time. */
-function mappedReceipts(books: Books, tx: BankTransaction) {
+export function mappedReceipts(books: Books, tx: BankTransaction) {
   return books.mappings
     .filter((m) => m.transactionRef === tx.ref)
     .map((m) => books.receipts.find((r) => r.id === m.receiptId))

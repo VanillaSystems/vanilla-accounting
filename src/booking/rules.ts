@@ -201,6 +201,18 @@ export function holds({ rule, business }: PlacedRule, p: PaymentFacts): boolean 
 }
 
 /**
+ * The single words a rule rests on when nothing else anchors it: a general rule (not in a
+ * business's file) without a business, payer or amount whose text pattern has an alternative of
+ * one word («Werbung»). Such a word also stands in bills nobody meant (wishes3-2), so keeping the
+ * rule asks the person to look at the payments it matches first. Empty: the rule is anchored.
+ */
+export function loneWords({ rule, business }: PlacedRule): string[] {
+  const w = rule.when;
+  if (business || w.counterparty || w.payer || w.amount || !w.text) return [];
+  return w.text.split('|').map((x) => x.trim()).filter((x) => /^[\p{L}\p{N}.&'-]+$/u.test(x));
+}
+
+/**
  * The rule that decides a payment: of the rules switched on that hold, a question first (asking
  * is the safe outcome when two rules meet), then a business's own rule, then the company's
  * general ones, each in file order.
