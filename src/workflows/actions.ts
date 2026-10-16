@@ -113,13 +113,13 @@ export const ACTIONS: Record<string, Action> = {
     outcomes: ['decided', 'undecided'],
     effects: [],
     ai: true,
+    // Code first: a rule books without the model; without one and without a model the step says why it waits (r4c-34).
     async run(input, _effects, { ws, ask }) {
-      if (!ask) return { outcome: 'undecided' };
       const scratch = structuredClone(books(input));
       const before = scratch.journalEntries.length;
-      const { failed } = await classifyTransactions(scratch, [tx(input)], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
-      if (failed.length) return { outcome: 'undecided' };
-      return { outcome: 'decided', output: { entries: scratch.journalEntries.slice(before) } };
+      const { classified, failed, unasked } = await classifyTransactions(scratch, [tx(input)], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+      if (!failed.length && classified.length) return { outcome: 'decided', output: { entries: scratch.journalEntries.slice(before) } };
+      return { outcome: 'undecided', output: { why: unasked.length ? 'noModel' : failed.length ? 'failed' : 'asked' } };
     },
   },
 

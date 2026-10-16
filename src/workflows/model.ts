@@ -425,6 +425,25 @@ export function summaryOf(run: Run, w?: WorkflowDecl, now = new Date().toISOStri
 
 export interface RunDetail extends RunSummary { steps: StepRecord[] }
 
+/**
+ * What a run a person started came to, for the words under its button (r4c-34): booked, waiting at
+ * a person's step (`noModel`: no rule decided and no model was there to ask), stopped, or still going.
+ */
+export type RunResult =
+  | { kind: 'done'; entries: number }
+  | { kind: 'waiting'; step: Text | string; noModel: boolean }
+  | { kind: 'stuck'; error: string }
+  | { kind: 'running' };
+
+export function runResult(w: WorkflowDecl, r: Pick<RunDetail, 'status' | 'at' | 'error' | 'digest' | 'steps'>): RunResult {
+  switch (r.status) {
+    case 'done': return { kind: 'done', entries: r.digest.entries };
+    case 'waiting': return { kind: 'waiting', step: (r.at && stepOf(w, r.at)?.label) || r.at || '', noModel: r.steps.some((s) => s.output?.why === 'noModel') };
+    case 'stuck': return { kind: 'stuck', error: r.error ?? '' };
+    default: return { kind: 'running' };
+  }
+}
+
 /** A task: a waiting run seen from the person it waits for. Never stored on its own. */
 export interface Task {
   run: string;

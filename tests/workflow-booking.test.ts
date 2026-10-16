@@ -17,7 +17,7 @@ import type { JournalEntry } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { checkWorkflow, loadWorkflow } from '../src/workflows/load.js';
 import { openEngine, type Ask as EngineAsk } from '../src/workflows/engine.js';
-import type { Run } from '../src/workflows/model.js';
+import { runResult, type Run } from '../src/workflows/model.js';
 import { listRuns, saveRun } from '../src/workflows/store.js';
 import { DEMO_ROOT, booksOnDisk } from './support/workspace.js';
 
@@ -148,4 +148,16 @@ test('without a model the run waits for a person and books nothing', async () =>
   } finally {
     rmSync(ws.paths.root, { recursive: true, force: true });
   }
+});
+
+test('without a model and without a rule the run waits for a person and says why; the button says it in words (r4c-34)', async () => {
+  const { ws, refs } = prepared();
+  const run = await runOnce(ws, refs[0]);
+  assert.deepEqual([run.state.status, run.state.status === 'waiting' ? run.state.at : ''], ['waiting', 'manual'], JSON.stringify(run.state) + JSON.stringify(run.steps.map((s) => s.error)));
+  assert.deepEqual(run.steps.find((s) => s.step === 'classify')?.output, { why: 'noModel' });
+  const detail = { ...run, status: 'waiting' as const, at: 'manual', digest: { files: [], receipts: 0, links: 0, entries: 0, poorScans: [] } };
+  const waiting = runResult(workflow, detail);
+  assert.deepEqual(waiting.kind === 'waiting' && [waiting.noModel, typeof waiting.step === 'string' ? waiting.step : waiting.step.de], [true, 'Von Hand buchen']);
+  assert.deepEqual(runResult(workflow, { ...detail, status: 'done', digest: { ...detail.digest, entries: 2 } }), { kind: 'done', entries: 2 });
+  rmSync(ws.paths.root, { recursive: true, force: true });
 });

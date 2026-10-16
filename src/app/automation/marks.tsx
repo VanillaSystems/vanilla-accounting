@@ -5,18 +5,55 @@
  * button, and removing the workflow removes the button.
  */
 import { language, t } from '../i18n/index.js';
-import { buttonsFor, hasAi, stepOf, textIn, type ItemFact, type ItemKind } from '../../workflows/model.js';
+import { buttonsFor, hasAi, runResult, stepOf, textIn, type ItemFact, type ItemKind, type RunDetail, type WorkflowDecl } from '../../workflows/model.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import type { Nav } from '../areas/index.js';
+import { api, errorText } from '../lib/api.js';
 import { automationCommand, useAutomation } from './store.js';
 
 const OPEN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
+const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
+
+/** The run once it rests (done, waiting for a person, stuck), or as it is after about 20 s. */
+async function rested(id: string): Promise<RunDetail> {
+  for (let i = 0; ; i++) {
+    const r = await api.automationRun(id);
+    if (RESTING.has(r.status) || i >= 40) return r;
+    await new Promise((res) => setTimeout(res, 500));
+  }
+}
+
+/** What a run started by a button did, in one line (r4c-34): booked, waiting for whom and why, or stuck. */
+function runResultText(w: WorkflowDecl, r: RunDetail): string {
+  const workflow = textIn(w.label, language());
+  const res = runResult(w, r);
+  switch (res.kind) {
+    case 'done': return t('marks.done', { workflow, n: res.entries });
+    case 'waiting': {
+      const step = typeof res.step === 'string' ? res.step : textIn(res.step, language());
+      return t(res.noModel ? 'marks.waitsNoModel' : 'marks.waits', { workflow, step });
+    }
+    case 'stuck': return t('marks.stuck', { workflow, error: res.error });
+    case 'running': return t('marks.started', { workflow });
+  }
+}
 
 export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean }) {
   const { view } = useAutomation();
   if (!view) return null;
   const buttons = buttonsFor(view.workflows, kind, facts).filter((b) => b.runnable);
   if (!buttons.length) return null;
+  // The button says what came of it, not only that something started: a run without the AI may only wait for a person.
+  async function start(workflow: WorkflowDecl) {
+    try {
+      const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
+      if (!r.ok) { nav.toast(t('marks.refused', { workflow: textIn(workflow.label, language()), why: r.detail ?? r.refusal })); return; }
+      if (!r.run) return;
+      nav.toast(t('marks.started', { workflow: textIn(workflow.label, language()) }));
+      nav.toast(runResultText(workflow, await rested(r.run)));
+      nav.refresh();
+    } catch (e) { nav.toast(errorText(e)); }
+  }
   return (
     <span className="wfbuttons">
       {buttons.map(({ workflow, label, ai }) => {
@@ -30,7 +67,7 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
         }
         return (
           <button key={workflow.id} type="button" className="btn" disabled={!canEdit} title={ai ? t('automation.ai') : undefined}
-            onClick={() => void automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } }).then((r) => nav.toast(r.ok ? t('marks.started', { workflow: textIn(workflow.label, language()) }) : r.detail ?? r.refusal))}>
+            onClick={() => void start(workflow)}>
             {ai ? <BotIcon /> : null}{textIn(label, language())}
           </button>
         );
