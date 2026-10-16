@@ -17,7 +17,9 @@ export type Line =
   | { kind: 'receipt'; a: Extract<Arrival, { kind: 'receipt' }>; receipt?: Index['receipts'][number]; payments: Index['transactions']; entries: number }
   | { kind: 'refused'; a: Extract<Arrival, { kind: 'refused' }> }
   | { kind: 'file'; name: string }
-  | { kind: 'poorScan'; file: string; receipt?: Index['receipts'][number] };
+  | { kind: 'poorScan'; file: string; receipt?: Index['receipts'][number] }
+  /** Removed from the inbox: the same bytes as `of`, which the books or the inbox hold already. */
+  | { kind: 'copy'; file: string; of: string; receipt?: Index['receipts'][number] };
 
 /** The bank's closing balance against the books on the same day, in the account's currency. */
 export type Balance = { kind: 'none' } | { kind: 'matches'; date: string } | { kind: 'differs'; date: string; diff: number };
@@ -36,10 +38,14 @@ const withoutVatOf = (a: Extract<Arrival, { kind: 'statement' }>, sales: SaleWit
   p.bank === a.bank && p.currency === a.currency && p.date >= (a.from ?? `${a.to.slice(0, 7)}-01`) && p.date <= a.to);
 
 export function linesOf(r: RunSummary, books: Index, vatRegistered: boolean): Line[] {
-  const poor = (r.digest.poorScans ?? []).map((file): Line => ({ kind: 'poorScan', file, receipt: books.receipts.find((x) => x.filename === file) }));
-  if (!r.arrived?.length) return [...r.digest.files.map((name): Line => ({ kind: 'file', name })), ...poor];
+  const poor = [
+    ...(r.digest.poorScans ?? []).map((file): Line => ({ kind: 'poorScan', file, receipt: books.receipts.find((x) => x.filename === file) })),
+    ...(r.digest.copies ?? []).map(({ file, of }): Line => ({ kind: 'copy', file, of, receipt: books.receipts.find((x) => x.filename === of || x.originalFilename === of) })),
+  ];
+  const copied = new Set((r.digest.copies ?? []).map((c) => c.file));
+  if (!r.arrived?.length) return [...r.digest.files.filter((name) => !copied.has(name)).map((name): Line => ({ kind: 'file', name })), ...poor];
   const sales = r.arrived.some((a) => a.kind === 'statement') ? salesWithoutVat(books, vatRegistered) : [];
-  return [...r.arrived.map((a): Line => {
+  return [...r.arrived.filter((a) => !(a.kind === 'receipt' && copied.has(a.file))).map((a): Line => {
     if (a.kind === 'statement') {
       const balance = balanceOf(a, books);
       const opening = balance.kind === 'differs' ? openingOffer(books, a) : undefined;
@@ -65,6 +71,6 @@ export function standOf(r: RunSummary, lines: Line[]): Stand {
   if (r.status === 'discarded') return 'discarded';
   if (r.reviewed) return 'reviewed';
   if (lines.some((l) => isIssue(l, true))) return 'check';
-  if (!r.arrived?.length && !r.digest.files.length && !r.digest.poorScans?.length && !r.digest.receipts && !r.digest.links && !r.digest.entries) return 'idle';
+  if (!r.arrived?.length && !r.digest.files.length && !r.digest.poorScans?.length && !r.digest.copies?.length && !r.digest.receipts && !r.digest.links && !r.digest.entries) return 'idle';
   return 'ok';
 }

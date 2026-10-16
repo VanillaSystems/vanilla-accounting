@@ -15,6 +15,8 @@ import type { IntakeNote, StepRun } from './pipeline.js';
 import { baseCurrency, documents } from '../engines/index.js';
 import { textFacts } from '../parsers/receipt-text.js';
 import { twinFinder } from './duplicates.js';
+import { capturedDay } from './captured.js';
+import { isIsoDate } from '../accounting/periods.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -50,6 +52,21 @@ function normalizeFilename(raw: string): string {
   return name || 'receipt.pdf';
 }
 
+/**
+ * The day a receipt is dated by: the one the model read off it when that is a day, else the day
+ * the phone took it (from the inbox name, src/intake/captured.ts), marked so. "" or 0000-00-00 is
+ * no date.
+ */
+function dateOf(read: string | undefined, r: Receipt): Pick<Receipt, 'date' | 'dateSource'> {
+  if (read && isIsoDate(read)) return { date: read };
+  const captured = capturedDay(r.originalFilename ?? r.filename);
+  return captured ? { date: captured, dateSource: 'captured' } : {};
+}
+
+/** A name the model dated 00000000 (it found no date) takes the receipt's date, or none. */
+const datedName = (name: string, date: string | undefined) =>
+  name.replace(/^0{8}(?=[-_.])/, date ? date.replace(/-/g, '') : '').replace(/^[-_]+/, '') || 'receipt.pdf';
+
 /** `desiredName`, or with -2, -3, … when a year folder already holds that name. */
 function resolveCollision(desiredName: string, taken: (name: string) => boolean): string {
   if (!taken(desiredName)) return desiredName;
@@ -64,7 +81,7 @@ function factsOf(r: Receipt): { date?: string; amount?: number; currency?: strin
   const text = textFacts(r.extractedText ?? '');
   const groups = r.vatSummary ?? [];
   const gross = groups.length && groups.every((g) => g.gross != null) ? groups.reduce((sum, g) => sum + g.gross!, 0) : undefined;
-  return { date: r.date ?? guessDate(r.filename) ?? text.date, amount: r.amount ?? gross ?? text.amount, currency: r.currency ?? text.currency };
+  return { date: r.date || guessDate(r.filename) || text.date, amount: r.amount ?? gross ?? text.amount, currency: r.currency ?? text.currency };
 }
 
 const squash = (s: string) => s.toUpperCase().replace(/[\s\-/]/g, '');
@@ -154,7 +171,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   // ── Move needsVisionReview receipts without a model ────────────────────────
   if (visionNeeded.length > 0) log(`Moving ${visionNeeded.length} receipt(s) that need vision review to receipts/ (unlinked)...\n`);
   for (const receipt of visionNeeded) {
-    const target = archive(receipt, receipt.filename, () => {});
+    const target = archive(receipt, receipt.filename, (r) => { if (!r.date) Object.assign(r, dateOf(undefined, r)); });
     progress(++completed, total);
     log(target ? `  moved (needsVisionReview): ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
@@ -202,8 +219,10 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const sure = answer.confidence >= MAPPING_THRESHOLD && (answer.matchedTransactionRefs?.length ?? 0) > 0;
     let linked: string[] = [];
     let twin: string | undefined;
-    const target = archive(receipt, normalizeFilename(answer.suggestedFilename), (r, index) => {
-      Object.assign(r, { date: answer.date, description: answer.description, amount: answer.amount, currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
+    const dated = dateOf(answer.date, receipt);
+    const target = archive(receipt, datedName(normalizeFilename(answer.suggestedFilename), dated.date), (r, index) => {
+      Object.assign(r, { date: dated.date, description: answer.description, amount: answer.amount, currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) });
+      if (dated.dateSource) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
       const t = twinFinder(index.receipts, documents()).find(r);

@@ -77,13 +77,14 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
   const views = books.receipts.map((r): ReceiptView => {
     const links = linksOf.get(r.id) ?? [];
     const fileDate = FILE_DATE.exec(r.filename);
-    const date = r.date ?? (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
+    // "" is no date (an old answer of the model): the receipt is undated and needs you.
+    const date = r.date || (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
     const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
     const none = NON_RECEIPT_KINDS.includes(r.kind)
       || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
-    return { r, date, day: date ?? (r.indexedAt.slice(0, 10) || undefined), vendor, desc, links, paid, none, locked: links.some(refClosed), ...(twin ? { twin } : {}) };
+    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, locked: links.some(refClosed), ...(twin ? { twin } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
 }
@@ -122,10 +123,11 @@ export interface Visible {
 }
 
 export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undefined, q: string | undefined): Visible {
-  // A period shows its own receipts and those of its payments; the working period also what from before it still needs you.
+  // A period shows its own receipts and those of its payments; the working period also what from
+  // before it still needs you, and every open receipt without a date, whenever it was read.
   const working = period.from <= l.openFrom && l.openFrom <= period.to;
   const within = (d: string) => d >= period.from && d <= period.to;
-  const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (working && v.day < period.from && needsYou(v, l))));
+  const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (working && (v.day < period.from || !v.date) && needsYou(v, l))));
   const receipts = pool.filter((v) => !v.none);
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const match = (v: ReceiptView) => { const h = haystack(v); return words.every((w) => h.includes(w)); };

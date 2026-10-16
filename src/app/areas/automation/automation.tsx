@@ -417,7 +417,7 @@ function XmlFile({ x }: { x: PreparedXml }) {
 }
 
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
-type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'poorScan'; files: string[] } | { code: 'error'; detail: string };
+type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'poorScan'; files: string[] } | { code: 'sameBytes'; files: Array<{ file: string; of: string }> } | { code: 'error'; detail: string };
 function noteText(n: StepNote): string {
   switch (n.code) {
     case 'noModel': return t('automation.note.noModel', { n: n.waiting });
@@ -425,6 +425,7 @@ function noteText(n: StepNote): string {
     case 'unmatched': return t('automation.note.unmatched', { n: n.files.length, files: n.files.join(', ') });
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });
     case 'poorScan': return t('automation.note.poorScan', { n: n.files.length, files: n.files.join(', ') });
+    case 'sameBytes': return t('automation.note.sameBytes', { n: n.files.length, files: n.files.map((f) => `${f.file} = ${f.of}`).join(', ') });
     case 'error': return n.detail;
   }
 }

@@ -7,13 +7,14 @@
  *
  * PNG/JPG files dropped into beleg-import/ are wrapped into a PDF (src/parsers/image-pdf.ts)
  * first; the original image is deleted. iCloud placeholders and files that are no PDF yet are skipped. A
- * file in beleg-import/ with the SHA-256 of an archived receipt is skipped with a warning.
+ * file in beleg-import/ with the SHA-256 of a receipt or of another inbox file is removed, with a note.
  */
 import { closeSync, openSync, readSync, readdirSync, readFileSync, statSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
+import { smallerPdf } from '../parsers/smaller.js';
 import { pdfText } from '../parsers/pdf-text.js';
 import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
@@ -99,7 +100,8 @@ async function convertImagesToPdf(dir: string, log: (line: string) => void): Pro
       continue;
     }
     try {
-      writeFileSync(pdfPath, await imageToPdf(readFileSync(imgPath), f));
+      // A photo is an own capture: made smaller before it gets its id.
+      writeFileSync(pdfPath, await smallerPdf(await imageToPdf(readFileSync(imgPath), f)));
       unlinkSync(imgPath);
       log(`  converted ${f} -> ${basename(pdfPath)}`);
     } catch (e: any) {
@@ -179,13 +181,18 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
 
   const files: Array<FoundFile & { id: string }> = [];
   const seen = new Map<string, string>();
+  // A file in the inbox with the bytes of one the books or the inbox hold already (a phone's
+  // retry, the same scan sent twice) is that file: it leaves the inbox, and the run says so.
+  const sameBytes: Array<{ file: string; of: string }> = [];
   for (const f of [...archivedFiles, ...stagedFiles]) {
     const id = idOf(f.filepath);
     const first = seen.get(id);
     if (first) {
-      log(f.location === 'staged' && archivedFiles.some((a) => a.filename === first)
-        ? `  warn: ${f.filename} in beleg-import/ duplicates an archived receipt — skipping`
-        : `  DUPE  ${f.filename} (same content as ${first})`);
+      if (f.location === 'staged') {
+        unlinkSync(f.filepath);
+        sameBytes.push({ file: f.filename, of: first });
+        log(`  ${f.filename} in beleg-import/ has the same bytes as ${first}: removed`);
+      } else log(`  DUPE  ${f.filename} (same content as ${first})`);
       continue;
     }
     seen.set(id, f.filename);
@@ -290,6 +297,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const kept = brokenClosedLinks.length + vanishedClosedTransactions.length;
   if (kept) notes.push({ code: 'filedKept', count: kept });
   if (waitingForModel) notes.push({ code: 'noModel', waiting: waitingForModel });
+  if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
   return { notes };
 };
 

@@ -37,6 +37,8 @@ export interface Receipt {
   location: 'staged' | 'archived';
   // set during match step
   date?: string;
+  /** The receipt shows no date: `date` is the day the phone took it (the upload's X-Captured-At). A person's date clears it. */
+  dateSource?: 'captured';
   description?: string;
   amount?: number;
   currency?: string;

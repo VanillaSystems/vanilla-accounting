@@ -88,9 +88,10 @@ function outText(r: RunSummary, lines: Line[]): [string, string] {
   const ok = st.filter((l) => l.balance.kind === 'matches').length;
   const off = st.filter((l) => l.balance.kind === 'differs').length;
   const poor = r.digest.poorScans?.length ?? 0;
+  const copies = r.digest.copies?.length ?? 0;
   const noOpening = st.some((l) => l.opening);
   const noVat = st.reduce((n, l) => n + l.withoutVat.length, 0);
-  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', noOpening ? t('runs.out.noOpening') : '', noVat ? t('runs.out.noVat', { n: noVat }) : '', poor ? t('runs.out.poorScan', { n: poor }) : ''].filter(Boolean).join(', ');
+  const small = [ok ? t('runs.out.balOk', { n: ok }) : '', off ? t('runs.out.balOff', { n: off }) : '', noOpening ? t('runs.out.noOpening') : '', noVat ? t('runs.out.noVat', { n: noVat }) : '', poor ? t('runs.out.poorScan', { n: poor }) : '', copies ? t('runs.out.copies', { n: copies }) : ''].filter(Boolean).join(', ');
   return [head || t('runs.out.nothing'), small];
 }
 
@@ -101,6 +102,14 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
         <td className="what"><span className="rk">{t('runs.kind.receipt')}</span><span className="mono">{l.file}</span></td>
         <td className="res"><span className="warn-t">{t('runs.line.poorScan')}</span></td>
         <td className="st"><span className="rpill check">{t('runs.st.check')}</span>{l.receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: l.receipt!.id })}>{t('runs.view')}</button> : null}</td></tr>
+    );
+  }
+  if (l.kind === 'copy') {
+    return (
+      <tr className="rline"><td /><td />
+        <td className="what"><span className="rk">{t('runs.kind.receipt')}</span><span className="mono">{l.file}</span></td>
+        <td className="res">{t('runs.line.copy', { of: l.of })}</td>
+        <td className="st">{l.receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: l.receipt!.id })}>{t('runs.view')}</button> : null}</td></tr>
     );
   }
   if (l.kind === 'file') {

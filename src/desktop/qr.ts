@@ -1,8 +1,8 @@
 /**
- * A QR code as SVG, for the phone's pairing (Firma › Handy). The encoder is the one swissqrbill
- * ships for the QR-bill (Nayuki's qrcodegen, MIT); its package exports only the bill, so the file
- * is required beside the export it lies next to. Dark modules on white: a code is paper, in both
- * themes, as a scanner expects it.
+ * A QR code as SVG, for the phone's pairing (Firma › Handy). The encoder is the one inside the
+ * package that draws the invoice's payment part (Nayuki's qrcodegen, MIT); the package exports
+ * only its own drawing, so the file is required beside the export it lies next to. Dark modules
+ * on white: a code is paper, in both themes, as a scanner expects it.
  */
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';

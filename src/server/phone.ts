@@ -41,7 +41,7 @@ export function usePhoneToken(get: () => string | undefined): void { configured 
 export const phoneToken = (): string | undefined => configured();
 
 const refuseToken = (res: express.Response) =>
-  res.status(401).json({ error: 'Dieses Handy ist nicht gekoppelt: den Code am Mac neu scannen.', code: 'phoneToken' } satisfies ApiErrorBody);
+  res.setHeader('Connection', 'close').status(401).json({ error: 'Dieses Handy ist nicht gekoppelt: den Code am Mac neu scannen.', code: 'phoneToken' } satisfies ApiErrorBody);
 
 /**
  * For the API: a request from another device to a path that needs the token is refused without
@@ -65,9 +65,11 @@ export function phoneApp(books: express.RequestHandler, token: () => string | un
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     const route = PHONE_ROUTES.find((r) => r.path === req.path && (r.method === req.method || (r.method === 'GET' && req.method === 'HEAD')));
-    if (!route) { res.status(404).json({ error: 'Not found' }); return; }
+    if (!route) { res.setHeader('Connection', 'close').status(404).json({ error: 'Not found' }); return; }
     const t = token();
     if (route.token && (!t || !tokenMatches(bearer(req), t))) { refuseToken(res); return; }
+    // No connection is kept open: switched off, the listener is gone at once, with nothing left to reuse.
+    res.setHeader('Connection', 'close');
     books(req, res, next);
   });
   return app;

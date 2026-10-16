@@ -334,6 +334,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
       >
         <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} style={{ fontSize: 12 }} /></label>
         <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={t('receipts.datePlaceholder')} readOnly={!edit} /></label>
+        {r.dateSource === 'captured' && <div className="fhint">{t('receipts.dateCaptured')}</div>}
         <div className="two">
           <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
           <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>

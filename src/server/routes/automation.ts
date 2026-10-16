@@ -148,7 +148,11 @@ export async function bookAgain(file: string): Promise<void> {
   if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
 }
 
-/** Inbox files a run was started for: a file no step can read starts no second run on its own. */
+/**
+ * Inbox files a run was started for: a file no step can read starts no second run on its own.
+ * One that left the inbox is forgotten, so the same bytes arriving again (a phone's retry) start
+ * a run, whose read step removes them.
+ */
 const attempted = new Set<string>();
 /** Files the drop dialog put into the inbox and handed to a run itself. */
 export const handedOver = (ids: string[]) => { for (const id of ids) attempted.add(id); };
@@ -159,7 +163,9 @@ export const handedOver = (ids: string[]) => { for (const id of ids) attempted.a
  * and another once it rests if more files came meanwhile.
  */
 export async function outsideArrivals(): Promise<void> {
-  const files = inboxFiles({ photos: true }).filter((f) => !attempted.has(f.id));
+  const present = inboxFiles({ photos: true });
+  for (const id of attempted) if (!present.some((f) => f.id === id)) attempted.delete(id);
+  const files = present.filter((f) => !attempted.has(f.id));
   if (!files.length) return;
   const e = engine();
   for (const w of e.declarations().workflows) {

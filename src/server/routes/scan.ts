@@ -6,6 +6,8 @@ import { RequestError, WS, readBooks } from '../books.js';
 import type { InboxFile } from '../../types/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload.js';
+import { capturedStem } from '../../intake/captured.js';
+import { smallerPdf } from '../../parsers/smaller.js';
 
 export const router = Router();
 
@@ -28,7 +30,7 @@ router.get('/scan/manifest.json', (_req, res) => {
   });
 });
 
-router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit: '50mb' }), (req, res) => {
+router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit: '50mb' }), async (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     res.status(400).json({ error: 'No PDF or photo (JPG, PNG, HEIC) received' }); return;
   }
@@ -36,17 +38,18 @@ router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit
   mkdirSync(WS.paths.inbox, { recursive: true });
   const capturedAtHeader = req.headers['x-captured-at'] as string | undefined;
   const ts = capturedAtHeader ? new Date(capturedAtHeader) : new Date();
-  const date = isNaN(ts.getTime()) ? new Date() : ts;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const stamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  const stamp = capturedStem(isNaN(ts.getTime()) ? new Date() : ts);
+  // The phone's own scan: made smaller before its id (a photo is, once the read step wraps it).
+  // Before the name is chosen: from there to the write nothing waits, so two uploads never take one name.
+  const bytes = ext === 'pdf' ? await smallerPdf(req.body) : req.body;
   // Several files dropped at once share their second: none may overwrite another.
   // A photo's PDF takes the photo's name, so no two files may share a name before the extension.
   const stems = new Set(readdirSync(WS.paths.inbox).map((f) => f.replace(/\.[^.]+$/, '')));
   let name = stamp;
   for (let n = 2; stems.has(name); n++) name = `${stamp}-${n}`;
   const filename = `${name}.${ext}`;
-  writeFileSync(join(WS.paths.inbox, filename), req.body);
-  console.log(`  scan upload: ${filename} (${req.body.length} bytes)`);
+  writeFileSync(join(WS.paths.inbox, filename), bytes);
+  console.log(`  scan upload: ${filename} (${req.body.length} bytes${bytes.length < req.body.length ? `, made smaller to ${bytes.length}` : ''})`);
   res.json({ ok: true, filename });
 });
 

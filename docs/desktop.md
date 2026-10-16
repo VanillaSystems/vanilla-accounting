@@ -16,7 +16,7 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 | claude CLI | `src/desktop/claude.ts` | Found through the person's login shell (an app from the Finder gets PATH `/usr/bin:/bin`) before the window opens; only its path is taken (`CLAUDE_BIN`), and the inbox job uses it. Without it, model features answer with what to install (`noClaude`), the inbox job does the steps that need no model, and everything else works. |
 | Passwords | `src/secrets/sealed-store.ts` | The SMTP password, sealed by Electron's `safeStorage` (its key is the keychain item "vanilla-accounting Safe Storage") into `secrets.json` in the user data folder, per books. Firma › E-Mail-Versand saves it there; under `npm start` it stays in `.env`. |
 | What is packed | `desktop/not-packed.cjs` | puppeteer-core, the canvas binary pdf.js would load, and the mail client of receipt collection (imapflow, mailparser) stay out, with every package only they need. The engine imports them only dynamically or from CLI code the bundle does not reach; `tools/desktop/build.mjs` fails when the bundle imports one at start. |
-| Photos | `src/parsers/image-pdf.ts` | A JPG, PNG or HEIC in the inbox becomes a one-page PDF, turned upright by its EXIF orientation; HEIC is decoded by `/usr/bin/sips`. |
+| Photos | `src/parsers/image-pdf.ts`, `src/parsers/smaller.ts` | A JPG, PNG or HEIC in the inbox becomes a one-page PDF, turned upright by its EXIF orientation; HEIC is decoded by `/usr/bin/sips`. An own photo or the phone's scan is made smaller before it gets its id: each large JPEG in it is scaled to 3000 pixels on its long side at quality 75, by `sips` as well; a received PDF, a signed or encrypted one stays byte for byte. |
 
 ## Receipts from the phone
 
@@ -36,6 +36,13 @@ switched it on in Firma › Handy (off by default, and off again with one click)
 | QR code | `http://<address>:<port>/scan#token=<token>`: the Mac's first Wi-Fi or Ethernet address. The token is in the fragment, which a browser never sends; the scan page keeps it in the phone's local storage and removes it from the address. The receipt app keeps it in the iOS Keychain (this device only). |
 | Storage | `desktop.json` in the user data folder, written readable by the user only (0600). Whoever can read it can already read the books. |
 | Network | Plain HTTP on the local network: someone on the same Wi-Fi who reads the traffic could see the token and upload into the inbox, never read the books. An uploaded file goes through the inbox's checks like any drop (the same bytes, a copy by its facts). |
+
+What the inbox does with a phone's file: the background run reads it as it arrives. The same
+bytes sent twice (a retry) leave the inbox, and the run says «schon da»; a scan of a receipt the
+books hold already (other bytes, the same facts) is linked to nothing, and Belege asks «möglicher
+Doppelbeleg» (`src/intake/duplicates.ts`). A till receipt without a printed date takes the day
+the phone took it (`X-Captured-At`, carried in the inbox name, `src/intake/captured.ts`), and its
+detail says so.
 
 macOS may ask once whether «Vanilla Accounting» may accept incoming connections; the access only
 works after «Erlauben». Under `npm start` the server listens on every interface as before; with

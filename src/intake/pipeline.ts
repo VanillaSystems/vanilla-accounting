@@ -26,6 +26,8 @@ export type IntakeNote =
   | { code: 'filedKept'; count: number }
   /** Receipts whose text is too poor to read: flagged for a vision read, out of the runs until then. */
   | { code: 'poorScan'; files: string[] }
+  /** Inbox files with the bytes of a file the books or the inbox hold (`of`): removed from the inbox. */
+  | { code: 'sameBytes'; files: Array<{ file: string; of: string }> }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -177,6 +179,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'unmatched': return `⛔ ${n.files.length} bank statement(s) belong to no bank account; nothing was written:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;
       case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
+      case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

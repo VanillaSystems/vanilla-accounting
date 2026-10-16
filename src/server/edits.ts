@@ -37,7 +37,7 @@ export function setReceipt(books: Books, id: string, set: ReceiptSet): BookChang
   const r = receiptOf(books, id);
   assertOpen(books, receiptDates(books, id), 'editReceipt');
   const before: ReceiptSet = {};
-  if ('date' in set) { before.date = r.date ?? null; r.date = set.date ?? undefined; }
+  if ('date' in set) { before.date = r.date ?? null; r.date = set.date || undefined; delete r.dateSource; }
   if ('amount' in set) { before.amount = r.amount ?? null; before.currency = r.currency; r.amount = set.amount ?? undefined; }
   if ('currency' in set) { before.currency = r.currency; r.currency = set.currency; }
   if ('description' in set) { before.description = r.description ?? ''; r.description = set.description || undefined; }
