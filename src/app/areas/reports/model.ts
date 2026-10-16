@@ -10,7 +10,7 @@ import {
 } from '../../../accounting/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import { computeBalances } from '../../../accounting/ledger.js';
-import { differenceCauses, type DifferenceCause } from '../../../accounting/year-close.js';
+import { differenceCauses, vatPostings, type DifferenceCause } from '../../../accounting/year-close.js';
 import type { Report } from '../../shell/route.js';
 import { chart } from '../../../engines/index.js';
 
@@ -36,9 +36,37 @@ export type Block =
 
 export type SumTitle = 'grossProfit' | 'operatingResult' | 'netResult' | 'totalAssets' | 'totalLiabilities';
 
+/** The VAT the shown entries carry inside their gross amounts (docs/year-end.md: split off at the year close, not before). */
+export interface VatInFigures {
+  /** Sales tax the codes owe. */
+  owed: number;
+  /** Input tax the codes deduct. */
+  input: number;
+  /** owed − input: what the figures hold that the ESTV gets. */
+  net: number;
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const VAT_MARK = 'vat';
+
+/**
+ * What the entries of `from`..`to` hold as VAT, by their codes, as the year close posts it
+ * (vatPostings): undefined when no entry carries a code (a firm not registered, a period without
+ * VAT). The Erfolgsrechnung's result and the Bilanz's accounts are gross by this amount (r8c-2).
+ */
+export function vatInFigures(entries: readonly JournalEntry[], from: string, to: string): VatInFigures | undefined {
+  const postings = vatPostings(entries.filter((e) => e.date >= from && e.date <= to), VAT_MARK);
+  if (!postings.length) return undefined;
+  const owed = r2(postings.filter((p) => p.accountCredit === VAT_MARK).reduce((s, p) => s + p.amount, 0));
+  const input = r2(postings.filter((p) => p.accountDebit === VAT_MARK).reduce((s, p) => s + p.amount, 0));
+  return { owed, input, net: r2(owed - input) };
+}
+
 export interface ReportView {
   blocks: Block[];
   headline: { label: 'result' | 'balanceTotal' | 'balanced' | 'difference'; value: number };
+  /** Erfolgsrechnung: the period's VAT inside the figures; Bilanz: the year's up to its day. Absent when the entries carry no code. */
+  vat?: VatInFigures;
   /** Bilanz: the day it shows, and the gap when assets and liabilities differ. */
   asOf?: string;
   gap?: { value: number; liabilities: number; causes: DifferenceCause[] };
@@ -63,6 +91,7 @@ export function reportView(report: Report, books: Index, period: Period, names: 
         group(s.otherIncome), group(s.otherExpenses), { kind: 'sum', title: 'netResult', value: s.netResult, strong: true },
       ],
       headline: { label: 'result', value: s.netResult },
+      vat: vatInFigures(entries, period.from, period.to),
     };
   }
   if (report === 'balance') {
@@ -85,6 +114,7 @@ export function reportView(report: Report, books: Index, period: Period, names: 
         { kind: 'head', title: 'liabilities' }, ...groups(b.liabilities), { kind: 'sum', title: 'totalLiabilities', value: b.totalLiabilities, strong: true },
       ],
       headline: { label: 'balanceTotal', value: b.totalAssets },
+      vat: vatInFigures(entries, `${year}-01-01`, period.to),
       asOf: period.to,
       gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, causes: differenceCauses(opening, booked, balances, Object.keys(names)) },
     };
@@ -104,7 +134,7 @@ export function reportView(report: Report, books: Index, period: Period, names: 
   };
 }
 
-const round = (n: number) => Math.round(n * 100) / 100;
+const round = r2;
 
 /** The accounts a search finds: number and name contain every word. */
 export function matches(q: string, account: string, names: Record<string, string>, none: string): boolean {

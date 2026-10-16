@@ -136,6 +136,11 @@ function List(props: Props) {
         <span>{t(HEADLINE[view.headline.label])}</span>
         <b className="mono"><small>CHF</small>{fmt(view.headline.value)}</b>
       </div>
+      {view.vat && (
+        <p className="m rvat" data-testid="vat-note" data-net={view.vat.net}>
+          {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.net), owed: fmt(view.vat.owed), input: fmt(view.vat.input) })}
+        </p>
+      )}
       {view.gap && (
         <div className="notice warn rgap">
           <span className="dot" aria-hidden="true" />

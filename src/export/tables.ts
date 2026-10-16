@@ -22,6 +22,8 @@ export interface Table {
   styles: RowStyle[];
   /** The columns that hold amounts: right-aligned, two decimals. */
   money: number[];
+  /** A line under the title: the Bilanz and Erfolgsrechnung say that their figures hold the VAT not yet settled (r8c-2). */
+  note?: string;
 }
 
 export interface Words {
@@ -41,8 +43,9 @@ export interface TableContext {
   account?: string;
 }
 
-const table = (head: string[], money: number[]) => ({ head, rows: [] as Cell[][], styles: [] as RowStyle[], money });
+const table = (head: string[], money: number[]): Table => ({ head, rows: [], styles: [], money });
 const r2 = (n: number) => Math.round(n * 100) / 100;
+const fmt2 = (n: number) => r2(n).toFixed(2);
 
 const REPORT_SUM: Record<string, Key> = {
   grossProfit: 'income.grossProfit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
@@ -74,6 +77,12 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
         for (const r of b.rows) { out.rows.push([group, r.account, accName(r.account), r.value]); out.styles.push(undefined); }
         if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value]); out.styles.push(undefined); }
         if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total]); out.styles.push('total'); }
+      }
+      if (view.vat) {
+        const vars = { net: fmt2(view.vat.net), owed: fmt2(view.vat.owed), input: fmt2(view.vat.input) };
+        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', view.vat.net]);
+        out.styles.push('open');
+        out.note = t(id === 'income' ? 'reports.vatMetaIncome' : 'reports.vatMetaBalance', vars);
       }
       return out;
     }

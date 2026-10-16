@@ -166,8 +166,9 @@ See [audit-export.md](audit-export.md).
 
 ## The balance sheet tab and the year-end
 
-The Bilanz and Erfolgsrechnung tabs show your entries as booked, VAT included. The year-end
-close and the opening split the VAT off by code, as Banana does. So for a VAT-registered
+The Bilanz and Erfolgsrechnung tabs show your entries as booked, VAT included, and say so under
+the result, with the VAT the shown figures hold (owed, input tax, net); the exported PDFs and
+CSVs carry the same line. The year-end close and the opening split the VAT off by code, as Banana does. So for a VAT-registered
 company the Bilanz tab on 31.12. differs from the opening balances on 1.1. in the VAT account
 (2201), in assets bought with input tax, and in the result. Abschluss's closing
 balance sheet is the one that carries over.

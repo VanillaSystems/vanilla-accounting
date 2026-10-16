@@ -11,7 +11,8 @@ import { computeIncomeStatement } from '../src/accounting/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { filedDiff, formAmount, shownZiffern, vatKeyOf, vatReturn } from '../src/app/areas/vat/model.js';
 import { headline } from '../src/app/areas/vat/model.js';
-import { NO_ACCOUNT, accountsOf, filterBlocks, ledgerOf, reportView, searchReport } from '../src/app/areas/reports/model.js';
+import { NO_ACCOUNT, accountsOf, filterBlocks, ledgerOf, reportView, searchReport, vatInFigures } from '../src/app/areas/reports/model.js';
+import { tableOf } from '../src/export/tables.js';
 
 const p = (token: string) => parsePeriod(token, '2026-10-11')!;
 const je = (id: string, date: string, dr: string, cr: string, amount: number, x: Partial<JournalEntry> = {}): JournalEntry =>
@@ -129,4 +130,24 @@ test('an account\'s ledger: opening, newest first, each entry with its counter a
   assert.deepEqual(l.rows.map((r) => [r.entryId, r.other]), [['paper', '6500'], ['sale', '3200']]);
   assert.equal(l.closing, Math.round((1000 - 54.05 + 1081 - 108.1) * 100) / 100);
   assert.deepEqual([l.debit, l.credit], [1081, 108.1]);
+});
+
+test('Bilanz & ER say that their figures hold the VAT not yet settled, with the period\'s VAT beside the result; the exports carry the same note (r8c-2)', () => {
+  // August: a sale of 1081 gross (81 owed), paper for 108.10 gross (8.10 input tax).
+  assert.deepEqual(vatInFigures(books.journalEntries!, '2026-08-01', '2026-08-31'), { owed: 81, input: 8.1, net: 72.9 });
+  assert.equal(vatInFigures(books.journalEntries!, '2026-01-01', '2026-01-31'), undefined, 'no coded entry: no note');
+  const income = reportView('income', books, p('2026-08'), names, false);
+  assert.deepEqual(income.vat, { owed: 81, input: 8.1, net: 72.9 });
+  assert.equal(income.headline.value, 1081 - 108.1, 'the figures themselves do not change');
+  const balance = reportView('balance', books, p('2026-08'), names, false);
+  assert.deepEqual(balance.vat, { owed: 81, input: 12.15, net: 68.85 }, 'the Bilanz carries the whole year\'s VAT up to its day');
+  assert.equal(reportView('trial', books, p('2026-08'), names, false).vat, undefined);
+  const words = { t: (key: string, vars?: Record<string, string | number>) => `${key}${vars ? ' ' + JSON.stringify(vars) : ''}`, accountingName: (g: string) => g };
+  const tb = tableOf('income', { books, period: p('2026-08'), names, words: words as never, filed: {}, filingLength: 'quarter' });
+  const note = tb.rows.find((r) => String(r[0]).startsWith('reports.vatRow'));
+  assert.ok(note, 'the exported Erfolgsrechnung has the VAT row');
+  assert.equal(note![3], 72.9);
+  assert.match(tb.note ?? '', /reports\.vatMeta/);
+  const trial = tableOf('trial', { books, period: p('2026-08'), names, words: words as never, filed: {}, filingLength: 'quarter' });
+  assert.equal(trial.note, undefined);
 });

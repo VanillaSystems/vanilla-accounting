@@ -209,7 +209,7 @@ export async function buildBundle(ws: Workspace, books: Index, names: Record<str
       }
       if (f === 'pdf') {
         const sheet = id === 'journal' ? journalSheet(tb, w) : tb;
-        const meta = `${company} · ${span} · CHF${id === 'balance' ? ` · ${t('balance.asOf', { date: date(range.to) })}` : ''}`;
+        const meta = `${company} · ${span} · CHF${id === 'balance' ? ` · ${t('balance.asOf', { date: date(range.to) })}` : ''}${tb.note ? ` · ${tb.note}` : ''}`;
         files.push({ path: `${base}.pdf`, data: await opts.print(reportHtml(id, sheet, title, meta, `${company} · ${title} ·`, fonts), now) });
       }
     }

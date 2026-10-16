@@ -32,3 +32,6 @@
 .ledger .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ledger .r { text-align: right; }
 .ledger .lr.open { color: var(--muted); font-style: italic; }
+
+/* Under the result: the figures hold the VAT not yet settled, and how much (r8c-2). */
+.rvat { margin: -8px 0 18px; font-size: 12.5px; line-height: 1.45; }
