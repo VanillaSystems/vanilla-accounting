@@ -57,7 +57,7 @@ an answer, or type another one.
 |---|---|
 | Consultant / services GmbH | You sell your work: consulting, software, design. The owner is employed by the company. |
 | Webshop / goods GmbH | You sell goods, often online, and import some of them. |
-| Freelancer, not registered for VAT | Not supported yet. The wizard explains and stops. |
+| Freelancer, not registered for VAT | An Einzelfirma below the registration threshold: purchases and sales booked gross, no VAT codes, no return. |
 | Custom | You answer every question yourself. |
 
 Then the wizard asks for the company name, the folder for the books, the UID (from
@@ -68,12 +68,19 @@ words on what the company does. Then these questions, in this order:
    money taken out is booked on 2850 Privat. Day-to-day bookkeeping and VAT work. The year-end
    (AHV on the profit, the tax return) is not covered.
 2. **Registered for VAT (MWST)?** Registration is mandatory from CHF 100,000 turnover a year.
-   Books without VAT are not supported yet. If you answer no, the wizard stops.
-3. **VAT method.** Effective (you pay the VAT you charged minus the input tax on your costs).
-   The Saldosteuersatz method is not supported yet. If you choose it, the wizard stops.
+   If you answer no, the next three questions are skipped: every purchase and sale is booked
+   gross without VAT codes, there is no return, and the MWST page watches the calendar year's
+   turnover against the threshold.
+3. **VAT method.** Effective (you pay the VAT you charged minus the input tax on your costs), or
+   Saldosteuersatz (a flat rate the ESTV approved for you on your gross turnover, no input tax).
+   On the Saldosteuersatz the wizard then asks for the approved rate(s), one or two
+   (`--net-rate 4.5:Schreinerei`); the ESTV's five-character activity code of a rate can be
+   added later under Firma › MWST, the electronic return needs it.
 4. **VAT basis.** Vereinnahmt (cash): VAT is due when the money moves. Vereinbart (invoice) is
    not supported yet, because Vanilla Accounting books from the bank statement and keeps no open invoices.
-5. **VAT reporting period.** Quarterly. Half-yearly and monthly returns are not supported yet.
+5. **VAT reporting period.** Quarterly (the effective method's default) or half-yearly (the
+   Saldosteuersatz's). Monthly returns are not supported yet. The method, the period and the
+   rate hold for whole years: a change is possible on 1 January, in a year without entries.
 6. **Fiscal year.** The calendar year. Another fiscal year is not supported yet.
 7. **Starting point.** A new company starts with empty books. If you switch from other
    bookkeeping, bring your opening balances of 1 January: `npm run import-opening` reads them
@@ -336,8 +343,10 @@ again; `invoices.json` holds the customers, the invoices and what was sent.
 
 ## Limits
 
-- **VAT:** effective method, cash basis, quarterly returns only. No Saldosteuersatz, no
-  vereinbarte Entgelte, no books without VAT, no fiscal year other than the calendar year.
+- **VAT:** cash basis; the effective method by quarter, the Saldosteuersatz by half year
+  (form 0553 as the app models it: the approved rates on the gross turnover and Bezugsteuer;
+  the credits of the forms 1050/1055 are not kept), or books without VAT. No vereinbarte
+  Entgelte, no monthly returns, no fiscal year other than the calendar year.
 - **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement.
 - **Invoicing:** invoices, credit notes, reminders and cancellations are written in the app and

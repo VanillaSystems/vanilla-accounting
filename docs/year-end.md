@@ -1,7 +1,7 @@
 # The year-end, step by step
 
-After the fourth quarter you close the year and open the next one. This page is for you, the
-owner. It says when to start, what Vanilla Accounting checks and books for you, what your
+After the fourth quarter (the second half year, for a firm on the Saldosteuersatz) you close the
+year and open the next one. This page is for you, the owner. It says when to start, what Vanilla Accounting checks and books for you, what your
 Treuhänder (accountant) does, and what goes to an auditor.
 
 The examples close 2026 and open 2027. Put in your own year.

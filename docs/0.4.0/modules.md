@@ -117,6 +117,8 @@ modules/ch/                          shipped with the app
   tax-codes.yaml                     code grammar; each code → the return boxes it feeds
   rates.yaml                         8.1 / 2.6 / 3.8 with validity dates, and the superseded rates
   return.yaml                        the VAT return: boxes (Ziffern), sums as formulas, form 0535
+  return-net-rate.yaml               the net tax rate method's return (form 0553): its codes, the firm's rate rows
+  registration.yaml                  the turnover from which a firm must register
   chart.yaml                         KMU chart: account type, normal side, statement line, roles
   statements.yaml                    balance sheet and income statement sections
   periods.yaml                       VAT period (quarter), fiscal year

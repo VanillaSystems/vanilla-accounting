@@ -18,6 +18,9 @@ The folder `vanilla-accounting/` of one company's repository, holding its data: 
 ## Profile
 How the company works, as `npm run init` asked it: legal form and VAT setup on `company`, the rest (what it sells, employees, private payments, payouts) in the manifest's `profile` block. The questions, their supported answers and why the others stop are one table, `src/workspace/setup.ts`. The profile picks the accounts of the chart a workspace starts from (`reference/charts/ch-kmu.yaml`, each account with a `type` and its `line` in the balance sheet or income statement per OR 959a/959b).
 
+## VAT setup
+The kind of firm the books belong to, one typed value (`VatSetup`, `src/workspace/vat-setup.ts`) on `company.vat`: **not registered** (every entry gross, no codes, no return), **effective method** (input tax per receipt, form 0550, quarterly), or **net tax rate method** (Saldosteuersatz: one or two approved rates on the gross turnover, no input tax, form 0553, half-yearly). Parsed once at the manifest boundary and handed to the engines with the jurisdiction; `vatSetup()`, `filing()` and `vat()` answer for it everywhere. A **filing period** is a quarter or a half year accordingly (`QuarterKey`, seals, `corrects`). The setup holds for whole years.
+
 ## Year folder
 `transactional-data/<year>/` of the workspace: one fiscal year's `books/` (entries, transactions, mappings, receipts, statements and balances as JSON Lines), `receipts/`, `bank-statements/<bank>/`, `filings/`, `invoices/` and `expected/`. A record and its file lie in the year of the entry that books it; a closed year's folder is never written again.
 
