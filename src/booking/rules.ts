@@ -18,7 +18,10 @@
  * counterparty text as a key, src/knowledge/payer.ts: what an answered question keeps), text (a
  * pattern over the payment's text), direction (in, out), amount ({ over, under }, in the books'
  * currency) and account (the bank account that paid); all must hold. `then.private` (a percent)
- * books that share on the owner's account without VAT and the rest as the rule says. A rule whose `when` and
+ * books that share on the owner's account without VAT and the rest as the rule says. `then.fees`
+ * ({ account, vat }) books a card terminal's or payment provider's payout as what it is: the gross
+ * sales on `account` with `vat` and the provider's fees on fees.account with fees.vat, the figures
+ * read from the payout report linked to it (src/booking/classify.ts payoutLines). A rule whose `when` and
  * `then` are sentences is a note for
  * the AI and people: it loads and shows, but nothing carries it out, so a new one is refused when
  * it is kept (src/saving/rules.ts).
@@ -43,8 +46,10 @@ export interface RuleWhen {
  * A booking a rule makes or proposes; `vat` null: no VAT code (a private share, a transfer).
  * `private`: this percent of the payment is the owner's, on the owner's account without VAT; the
  * rest goes on `account` with `vat` («das Natel ist zur Hälfte privat»: private 50).
+ * `fees`: the payment is a payout of sales less a provider's fees («bei SumUp immer so»): the sales
+ * on `account` with `vat`, the fees on fees.account with fees.vat, as the payout report states them.
  */
-export interface RuleBooking { account: string; vat: string | null; private?: number }
+export interface RuleBooking { account: string; vat: string | null; private?: number; fees?: { account: string; vat: string } }
 
 export type RuleThen =
   | { kind: 'book'; booking: RuleBooking }
@@ -72,6 +77,7 @@ export type RuleRefusal =
   | { code: 'pattern'; params: { text: string } }
   | { code: 'amount' }
   | { code: 'share'; params: { share: string } }
+  | { code: 'fees' }
   | { code: 'direction'; params: { direction: string } }
   | { code: 'counterparty'; params: { counterparty: string } }
   | { code: 'payer'; params: { payer: string } };
@@ -86,7 +92,7 @@ export interface RuleFacts {
 }
 
 const WHEN_KEYS = new Set(['counterparty', 'payer', 'text', 'direction', 'amount', 'account']);
-const THEN_KEYS = new Set(['account', 'vat', 'ask', 'private']);
+const THEN_KEYS = new Set(['account', 'vat', 'ask', 'private', 'fees']);
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
 
@@ -156,6 +162,15 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     const share = typeof t.private === 'number' ? t.private : Number(String(t.private).replace(/\s*%$/, ''));
     if (!booking || !Number.isFinite(share) || share <= 0 || share >= 100) return no({ code: 'share', params: { share: String(t.private) } });
     booking.private = share;
+  }
+  if (t.fees !== undefined) {
+    // A payout's split: the sales and the fees of one payout, never with a private share, never only proposed.
+    if (!booking || booking.private || t.ask !== undefined || !isMap(t.fees)) return no({ code: 'fees' });
+    const account = text(t.fees.account);
+    if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.fees.account ?? '') } });
+    const v = text(t.fees.vat);
+    if (!v || !facts.vat(v)) return no({ code: 'vat', params: { vat: v ?? '' } });
+    booking.fees = { account, vat: v };
   }
   let then: RuleThen;
   if (t.ask !== undefined) {
@@ -241,6 +256,7 @@ export interface RuleWordVars {
   'rules.say.book': { account: string; vat: string };
   'rules.say.bookNoVat': { account: string };
   'rules.say.private': { percent: string };
+  'rules.say.fees': { account: string; vat: string };
   'rules.say.ask': { question: string };
   'rules.say.askWith': { question: string; booking: string };
 }
@@ -264,6 +280,7 @@ const accountWords = (n: string, names: RuleNames) => { const name = names.accou
 
 export function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
   const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
+  if (b.fees) return `${main}${w('rules.say.fees', { account: accountWords(b.fees.account, names), vat: b.fees.vat })}`;
   return b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main;
 }
 

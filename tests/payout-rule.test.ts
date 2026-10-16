@@ -1,0 +1,141 @@
+/**
+ * «bei SumUp immer so» (corner-39): a rule books a card terminal's payout as gross sales at the
+ * firm's rate and the provider's fees apart (`then.fees`), the figures read from the payout report
+ * linked to it; without the report the whole payout is sales until the report is linked.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
+import { parseRule, ruleWords, type RuleFacts } from '../src/booking/rules.js';
+import { loadFxResolver } from '../src/accounting/fx-rates.js';
+import type { Books } from '../src/books/store.js';
+import { draftDir } from '../src/saving/changes.js';
+import { draftRules } from '../src/saving/rules.js';
+import { initRepository } from '../src/workspace/git.js';
+import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { wordsIn } from '../src/export/texts.js';
+import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
+import { DEMO_ROOT } from './support/workspace.js';
+import './support/jurisdiction.js';
+
+const GUIDE = 'knowledge/rules/booking.guide.yaml';
+const SUMUP = `      - id: sumup-umsatz
+        when: { text: "SumUp" }
+        then: { account: "3400", vat: V81, fees: { account: "6840", vat: I0 } }
+        source: wish 2026-10-16
+`;
+const RULES = `process: booking\nsteps:\n  classify:\n    rules:\n${SUMUP}`;
+/** What the model drafted in corner-39: a rule in English sentences, which nothing carries out. */
+const PROSE = `process: booking\nsteps:\n  classify:\n    rules:\n      - id: sumup-umsatz-mwst
+        when: a SumUp payout report is linked to an incoming SumUp payment
+        then: the turnover is booked gross with the standard VAT rate, the fees apart without VAT
+        source: wish 2026-10-16
+`;
+
+function company(rules = RULES): Workspace {
+  const dir = mkdtempSync(join(tmpdir(), 'payout-rule-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  mkdirSync(join(dir, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(dir, GUIDE), rules);
+  return workspaceAt(dir);
+}
+
+const payout = (ref: string): BankTransaction =>
+  ({ ref, bank: 'Raiffeisen', date: '2026-08-14', amount: 1412.35, currency: 'CHF', direction: 'CRDT', description: 'SumUp Payments Ltd SumUp Auszahlung PO-88213' });
+
+function booksOf(txs: BankTransaction[], report?: string): Books {
+  const receipts = report ? [{ id: 'po', filename: 'po.pdf', extractedText: 'SumUp Auszahlungsbericht PO-88213: Kartenzahlungen 1480.00, Rückerstattung -40.00, Gebühren -27.65' } as Receipt] : [];
+  return {
+    transactions: txs, receipts, mappings: report ? [{ transactionRef: report, receiptId: 'po' }] : [],
+    bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' },
+  } as unknown as Books;
+}
+
+/** The model reads the report as corner-38 saw it: sales at V0, the refund and the fees apart. */
+const reading: NonNullable<ClassifyDeps['ask']> = async (prompt) => {
+  const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
+  return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, {
+    reason: 'ohne MWST-Angabe gilt V0',
+    entries: [
+      { accountDebit: '', accountCredit: '3200', amount: 1480, vatCode: 'V0', description: 'SumUp Kartenzahlungen' },
+      { accountDebit: '3200', accountCredit: '', amount: 40, vatCode: 'V0', description: 'SumUp Rückerstattung' },
+      { accountDebit: '6800', accountCredit: '', amount: 27.65, vatCode: 'I81', description: 'SumUp Gebühren' },
+    ],
+  }])));
+};
+
+const lines = (books: Books, ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref)
+  .map((e: JournalEntry) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
+
+test('a payout rule parses, says itself in plain words, and is refused with a private share, as a question or without the fees\' code', () => {
+  const facts: RuleFacts = { account: () => true, vat: (c) => ['V81', 'I0'].includes(c), counterparty: () => true };
+  const r = parseRule({ id: 's', when: { text: 'SumUp' }, then: { account: '3400', vat: 'V81', fees: { account: '6840', vat: 'I0' } } }, facts);
+  assert.ok(r.ok);
+  assert.deepEqual(r.rule.then, { kind: 'book', booking: { account: '3400', vat: 'V81', fees: { account: '6840', vat: 'I0' } } });
+  const names = { account: (n: string) => ({ 3400: 'Dienstleistungsertrag', 6840: 'Bankspesen' } as Record<string, string>)[n], business: () => undefined, money: (n: number) => `CHF ${n}` };
+  assert.equal(ruleWords({ rule: r.rule }, names, wordsIn('de').t as never).line,
+    'Text enthält «SumUp» → Konto 3400 Dienstleistungsertrag, MWST V81, die Gebühren laut Auszahlungsbericht auf Konto 6840 Bankspesen, MWST I0');
+
+  const why = (then: Record<string, unknown>) => { const p = parseRule({ id: 's', when: { text: 'SumUp' }, then }, facts); return p.ok ? 'ok' : p.refusal.code; };
+  assert.equal(why({ account: '3400', vat: 'V81', private: 50, fees: { account: '6840', vat: 'I0' } }), 'fees');
+  assert.equal(why({ ask: 'Wie?', account: '3400', vat: 'V81', fees: { account: '6840', vat: 'I0' } }), 'fees');
+  assert.equal(why({ fees: { account: '6840', vat: 'I0' } }), 'fees', 'the sales\' account and code first');
+  assert.equal(why({ account: '3400', vat: 'V81', fees: { account: '6840' } }), 'vat');
+  assert.equal(why({ account: '3400', vat: 'V81', fees: '6840' }), 'fees');
+});
+
+test('with its report linked, the payout is booked gross at the rule\'s rate, the refund at its minus and the fees apart, in the reading\'s figures', async () => {
+  const ws = company();
+  const books = booksOf([payout('PO')], 'PO');
+  const out = await classifyTransactions(books, books.transactions, { ask: reading, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual([out.classified, out.failed], [['PO'], []]);
+  assert.deepEqual(lines(books, 'PO'), [
+    ['1021', '3400', 1480, 'V81'],
+    ['3400', '1021', 40, '-V81'],
+    ['6840', '1021', 27.65, 'I0'],
+  ]);
+  const [sale] = books.journalEntries;
+  assert.deepEqual([sale.by, sale.rule], [{ kind: 'rule', rule: 'sumup-umsatz' }, 'sumup-umsatz']);
+  assert.match(sale.reason!, /^Regel: .*; die Beträge hat Claude aus dem Auszahlungsbericht gelesen$/);
+});
+
+test('without its report the whole payout is sales at the rule\'s rate, in code; with the report and no model the payout waits', async () => {
+  const ws = company();
+  const alone = booksOf([payout('PO')]);
+  const out = await classifyTransactions(alone, alone.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(out.classified, ['PO']);
+  assert.deepEqual(lines(alone, 'PO'), [['1021', '3400', 1412.35, 'V81']]);
+  assert.match(alone.journalEntries[0].reason!, /bis der Bericht verknüpft ist$/);
+  assert.deepEqual(alone.journalEntries[0].receipts, [], 'a report linked later books it again');
+
+  const withReport = booksOf([payout('PO')], 'PO');
+  const waits = await classifyTransactions(withReport, withReport.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual([waits.classified, waits.unasked, withReport.journalEntries], [[], ['PO'], []]);
+});
+
+test('a reading that is no payout is refused, the payment stays unbooked', async () => {
+  const ws = company();
+  const books = booksOf([payout('PO')], 'PO');
+  const offBank: ClassifyDeps['ask'] = async () => JSON.stringify({ PO: { entries: [{ accountDebit: '1093', accountCredit: '3400', amount: 1412.35, vatCode: 'V81', description: 'x' }] } });
+  const out = await classifyTransactions(books, books.transactions, { ask: offBank, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual([out.classified, out.failed.map((f) => f.ref), books.journalEntries], [[], ['PO'], []]);
+});
+
+test('corner-39: the AI\'s «immer so» in sentences cannot be kept; the same wish as a payout rule can, and its card speaks German', async () => {
+  const repo = mkdtempSync(join(tmpdir(), 'payout-keep-'));
+  cpSync(DEMO_ROOT, join(repo, APP_FOLDER), { recursive: true });
+  await initRepository(repo, 'Workspace set up');
+  const ws = workspaceAt(join(repo, APP_FOLDER));
+  const draft = (text: string) => { mkdirSync(dirname(join(draftDir(ws), GUIDE)), { recursive: true }); writeFileSync(join(draftDir(ws), GUIDE), text); };
+
+  draft(PROSE);
+  const prose = draftRules(ws, GUIDE)!;
+  assert.deepEqual([prose.refused.map((r) => r.kind), prose.keepable], [['note'], false]);
+
+  draft(RULES);
+  const rule = draftRules(ws, GUIDE)!;
+  assert.deepEqual([rule.added.map((r) => r.id), rule.refused, rule.keepable], [['sumup-umsatz'], [], true]);
+});

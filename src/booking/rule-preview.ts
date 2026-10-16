@@ -8,9 +8,10 @@ import { bankAccountFor } from '../accounting/bank-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction } from '../types/index.js';
-import { mappedReceipts, paymentFacts, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
+import { mappedReceipts, paymentFacts, payoutLines, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
+import { chart } from '../engines/index.js';
 import type { RuleRow } from './rule-book.js';
-import { holds, loneWords, ruleFor, type PlacedRule } from './rules.js';
+import { holds, loneWords, ruleFor, type PlacedRule, type RuleBooking } from './rules.js';
 
 /** How many matching payments the card names one by one; the rest it counts. */
 export const PREVIEW_EXAMPLES = 5;
@@ -76,6 +77,20 @@ function bookedNow(books: Books, tx: BankTransaction, bank: string): RuleLine[] 
 }
 
 /**
+ * What a rule's booking books for `tx`. A payout rule with its report linked keeps the figures the
+ * payment is booked with today and puts them on its accounts and codes (payoutLines); without a
+ * report, or not booked yet, it books as without one: the whole payout on its account.
+ */
+function wouldBook(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): RuleLine[] {
+  const mapped = mappedReceipts(books, tx);
+  const bank = bankAccountFor(tx, context.bankAccounts);
+  const today = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+  const split = booking.fees && mapped.length && today.length ? payoutLines(today, bank, booking, (a) => chart().typeOf(a) === 'revenue') : undefined;
+  if (split) return split.map((e) => ({ account: e.accountDebit === bank ? e.accountCredit : e.accountDebit, ...(e.vatCode ? { vat: e.vatCode } : {}), amount: e.amount }));
+  return ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount);
+}
+
+/**
  * The preview of each rule in `targets` against the books' payments of the open year, with
  * `rules` (every rule of the books, the draft applied) deciding who wins a payment.
  */
@@ -105,7 +120,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       }
       if (examples.length >= PREVIEW_EXAMPLES) continue;
       const t = target.placed.rule.then;
-      const lines = t.booking ? ruleBookingLines(tx, t.booking, mappedReceipts(books, tx).some((r) => r.hasSwissVat), context.ownerAccount) : [];
+      const lines = t.booking ? wouldBook(books, tx, t.booking, context) : [];
       examples.push({
         ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction,
         text: [tx.description, tx.counterparty && !tx.description.includes(tx.counterparty) ? tx.counterparty : ''].filter(Boolean).join(' · '),
