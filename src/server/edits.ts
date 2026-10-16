@@ -1,7 +1,7 @@
 /**
  * The changes a person makes to the books by hand, in one place for the routes and the AI sidebar
  * (src/assistant/): each refuses a filed quarter as the write door would, and returns the change
- * that undoes it.
+ * that undoes it. Who made it (Author) is what the booking records as its `by`.
  */
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
@@ -13,7 +13,7 @@ import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { withoutInputTax } from '../engines/index.js';
-import type { BookingFields, JournalEntry, Receipt } from '../types/index.js';
+import type { BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -122,6 +122,25 @@ export function relinked(books: Books, changes: readonly BookChange[]): { paymen
 /** The fields that make a booking what it is: a person who changes one of them decided it (JournalEntry.by). */
 const BOOKING_FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const;
 
+/**
+ * Who makes a change to the books: a person by hand, or the AI sidebar on a person's wish, in one
+ * of its conversations. Decided where the sidebar's changes are applied (applyAnswer); every
+ * other caller is a person.
+ */
+export type Author = { kind: 'person' } | { kind: 'assistant'; conversation: string };
+export const BY_HAND: Author = { kind: 'person' };
+
+/**
+ * The `by` a change by `author` gives a booking. The AI changing what the AI changed before keeps
+ * the fields as they were before the AI touched them: the booking's `was` stays the decision of
+ * whoever booked it first (the rule card judges a draft against it, src/booking/rule-preview.ts).
+ */
+export function byOf(author: Author, was: BookingFields | undefined, prior: BookedBy | undefined, at = new Date().toISOString()): BookedBy {
+  if (author.kind === 'person') return { kind: 'person', at, ...(was ? { was } : {}) };
+  const kept = prior?.kind === 'assistant' && prior.was ? { ...was, ...prior.was } : was;
+  return { kind: 'assistant', at, conversation: author.conversation, ...(kept && Object.keys(kept).length ? { was: kept } : {}) };
+}
+
 /** A booking goes only on accounts the Bilanz or the Erfolgsrechnung shows (x07): 400 in plain words otherwise. */
 export function assertPlaced(...accounts: Array<string | undefined>): void {
   for (const a of accounts) {
@@ -144,7 +163,7 @@ export function assertCodeTaken(code: string | undefined): void {
   throw new RequestError(400, why, { code: 'codeNotTaken', params: { code, method } });
 }
 
-export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
+export function setEntry(books: Books, id: string, set: EntrySet, author: Author = BY_HAND): BookChange {
   const e = entryOf(books, id);
   // An undo (it carries `origin`) puts back what was booked; a change goes on placed accounts only, with a code the form takes.
   if (set.origin === undefined) { assertPlaced(set.accountDebit, set.accountCredit); assertCodeTaken(set.vatCode); }
@@ -165,7 +184,9 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   if (set.by !== undefined) { if (set.by) e.by = set.by; else delete e.by; }
   else if (changed.length) {
     before.by = e.by ?? null;
-    e.by = { kind: 'person', at: new Date().toISOString(), was: Object.fromEntries(changed.map((k) => [k, before[k]])) as BookingFields };
+    // `was` names only what changed: a code set to what it was already is a decision, not a change.
+    const moved = changed.filter((k) => (before[k] ?? '') !== (e[k] ?? ''));
+    e.by = byOf(author, moved.length ? Object.fromEntries(moved.map((k) => [k, before[k]])) as BookingFields : undefined, before.by ?? undefined);
   }
   if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
   if (set.receipts !== undefined) {
@@ -282,15 +303,15 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   return entry;
 }
 
-/** One change; its undo, or nothing when it changed nothing (a link that was there already). */
-export function applyChange(books: Books, c: BookChange): BookChange | undefined {
+/** One change by `author`; its undo, or nothing when it changed nothing (a link that was there already). */
+export function applyChange(books: Books, c: BookChange, author: Author = BY_HAND): BookChange | undefined {
   switch (c.kind) {
     case 'receipt': return setReceipt(books, c.id, c.set);
     case 'link': return link(books, c.receipt, c.payment);
     case 'unlink': return unlink(books, c.receipt, c.payment);
-    case 'entry': return setEntry(books, c.id, c.set);
-    // A new booking (not one an undo puts back, which keeps its id and author) is the person's decision.
-    case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry.id ? c.entry : { ...c.entry, by: { kind: 'person', at: new Date().toISOString() } }).id };
+    case 'entry': return setEntry(books, c.id, c.set, author);
+    // A new booking (not one an undo puts back, which keeps its id and author) is its author's decision.
+    case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry.id ? c.entry : { ...c.entry, by: byOf(author, undefined, undefined) }).id };
     case 'deleteEntry': return { kind: 'newEntry', entry: deleteEntry(books, c.id) };
     case 'receiptKind': return setReceiptKind(books, c);
   }
@@ -320,6 +341,8 @@ export interface AnswerContext {
   chart: ReadonlySet<string>;
   /** The changes earlier answers of the conversation made and that stand. */
   earlier: readonly MadeChange[];
+  /** The conversation: the bookings it changes record the AI, on the person's wish, as their author. */
+  conversation: string;
 }
 
 /** The fields a change sets, without who set them. */
@@ -341,8 +364,8 @@ function takesBack(c: BookChange, earlier: readonly MadeChange[]): MadeChange | 
 }
 
 /**
- * An answer of the AI sidebar (src/server/routes/assistant.ts): its changes as a person's, all or
- * none, and refusals more than a person's edits get. A booking of a payment it dates keeps the
+ * An answer of the AI sidebar (src/server/routes/assistant.ts): its changes on the person's wish,
+ * recorded as the AI's (Author), all or none, and refusals more than a person's edits get. A booking of a payment it dates keeps the
  * payment's date (cash basis, src/accounting/payment-entries.ts), and a payment whose bank-side
  * sum it changes still adds up to what the bank paid. A booking goes only on an account of the
  * chart (one the same answer adds counts: it is added first). A purchase code follows the
@@ -373,7 +396,7 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
       change = { ...asked, entry: { ...entry, ...(to ? { vatCode: to } : {}) } };
     }
     const was = asked.kind === 'entry' ? books.journalEntries.find((e) => e.id === asked.id)?.vatCode ?? '' : undefined;
-    const undo = applyChange(books, change);
+    const undo = applyChange(books, change, { kind: 'assistant', conversation: ctx.conversation });
     if (asked.kind === 'entry' && undo?.kind === 'entry' && ['accountDebit', 'accountCredit', 'vatCode'].some((k) => k in asked.set)) {
       const e = entryOf(books, asked.id);
       const to = codeOnAccount(e.vatCode, e.accountDebit, e.accountCredit);

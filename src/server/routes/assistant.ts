@@ -10,12 +10,13 @@ import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { Router, type Response } from 'express';
 import { RequestError, WS, readBooks, refusalOf, reopenWorkspace, updateBooks } from '../books.js';
-import { listConversations, readConversation, RefusedChanges, sendMessage, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
+import { listConversations, readConversation, RefusedChanges, sendMessage, settleHeld, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
 import { isActionChange, isBookChange, isWorkspaceChange, type ActionChange, type AssistantEvent, type AssistantSend, type BookChange, type ContextRef, type MadeChange } from '../../types/assistant.js';
 import type { Books } from '../../books/store.js';
 import { applyAnswer, applyChange, relinked, unbookedPayments } from '../edits.js';
 import { applyWorkspaceChange } from '../workspace-edits.js';
-import { learnFromCorrection } from '../questions.js';
+import { learnFromCorrection, undoAnswer } from '../questions.js';
+import { heldRows, holdReasons, withoutProof } from '../../assistant/held.js';
 import { appMap } from '../app-map.js';
 import { automationView, bookAgain, engine } from './automation.js';
 import { openWork } from '../open-work.js';
@@ -130,22 +131,43 @@ async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 
  * All of an answer's changes, or none: the chart, the invoicing settings and the invoice drafts
  * first (so a booking may use an account the same answer adds), then the books in one write; a
  * refusal of the books takes the others back. The actions (an export, booking again) run last,
- * on the books as the answer left them.
+ * on the books as the answer left them. With `hold`, the changes to the books are tried on a copy
+ * first: an answer that rebooks rather than fixes one booking (src/assistant/held.ts) changes
+ * nothing and comes back as the rows of its card.
  */
-const apply: ApplyChanges = async (changes, earlier, language) => {
+const apply: ApplyChanges = async (changes, earlier, language, { conversation, hold }) => {
   const outside: Array<Omit<MadeChange, 'id'>> = [];
   let after = () => {};
   let books: Array<Omit<MadeChange, 'id'>> = [];
+  const asked = changes.filter(isBookChange);
+  const chart = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
+  if (hold && asked.length) {
+    const added = changes.flatMap((c) => (c.kind === 'account' && c.name !== null ? [c.number] : []));
+    const before = readBooks();
+    const trial = readBooks();
+    try {
+      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation });
+    } catch (e) {
+      throw new RefusedChanges((e as Error).message, refusalOf(e));
+    }
+    const rows = heldRows(before, trial);
+    const why = holdReasons(rows);
+    if (why.length) return { held: { why, rows } };
+  }
   try {
     for (const c of changes.filter(isWorkspaceChange)) {
       outside.push({ change: c, ...applyWorkspaceChange(WS, readBooks(), c) });
       if (c.kind === 'invoicing') reopenWorkspace();
     }
-    const asked = changes.filter(isBookChange);
     if (asked.length) {
-      const chart = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
+      const now = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
       books = updateBooks((b) => {
-        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart, earlier });
+        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation });
+        for (const m of made) {
+          const id = m.change.kind === 'entry' ? m.change.id : m.undo?.kind === 'deleteEntry' ? m.undo.id : undefined;
+          const e = id ? b.journalEntries.find((x) => x.id === id) : undefined;
+          if (e && withoutProof(b, e)) m.note = { ...m.note, noReceipt: true };
+        }
         after = bookedAgain(b, bookChanges(made));
         return made;
       });
@@ -160,11 +182,30 @@ const apply: ApplyChanges = async (changes, earlier, language) => {
     throw new RefusedChanges((e as Error).message, refusalOf(e));
   }
   after();
-  learnFromCorrection(books.flatMap((m) => (m.payment ? [m.payment] : [])));
+  // A sale's code set on the wish answers the app's question about it; the change's undo opens it again.
+  for (const q of learnFromCorrection(books.flatMap((m) => (m.payment ? [m.payment] : [])))) {
+    const m = books.find((x) => x.payment === q.on.id);
+    if (m) m.answered = [...(m.answered ?? []), q.id];
+  }
   const actions: Array<Omit<MadeChange, 'id'>> = [];
   for (const c of changes.filter(isActionChange)) actions.push({ change: c, ...(await run(c, language)) });
-  return [...outside, ...books, ...actions].map((m) => ({ id: randomUUID().slice(0, 8), ...m }));
+  return { made: [...outside, ...books, ...actions].map((m) => ({ id: randomUUID().slice(0, 8), ...m })) };
 };
+
+/** «Übernehmen» or «Verwerfen» on an answer's held changes (src/assistant/conversations.ts settleHeld): the turn as it is now. */
+router.post('/api/assistant/:id/held/:turn', async (req, res) => {
+  const { take, language } = (req.body ?? {}) as { take?: unknown; language?: unknown };
+  if (typeof take !== 'boolean') throw new RequestError(400, 'take: true (Übernehmen) oder false (Verwerfen).');
+  let turn;
+  try {
+    turn = await settleHeld(WS, req.params.id, Number(req.params.turn), take, typeof language === 'string' ? language : 'de', apply);
+  } catch (e) {
+    if (e instanceof RefusedChanges) throw new RequestError(400, e.message, e.refusal);
+    throw e;
+  }
+  if (!turn) throw new RequestError(404, 'Diese Antwort hält keine Änderungen.');
+  res.json(turn);
+});
 
 /** An export an answer made, from data/exports/. */
 router.get('/api/assistant/exports/:file', (req, res) => {
@@ -193,5 +234,9 @@ router.post('/api/assistant/:id/changes/:change/undo', (req, res) => {
   });
   if (!made) throw new RequestError(404, 'Diese Änderung gibt es nicht.');
   after();
+  // The question a change answered is open again: the change it was answered by is gone.
+  for (const id of made.flatMap((m) => m.answered ?? [])) {
+    try { undoAnswer(id, WS.company.owner); } catch (e) { if (!(e instanceof RequestError)) throw e; }
+  }
   res.json(made);
 });

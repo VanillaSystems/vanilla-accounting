@@ -224,12 +224,12 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                 </div>
                 {view.books.hand.length ? (
                   <>
-                    <div className="group"><span>{t('changes.byHand')}</span></div>
+                    <div className="group"><span>{t(view.books.hand.some((h) => h.ai) ? 'changes.byHandAndAi' : 'changes.byHand')}</span></div>
                     <div className="chraw" data-testid="hand-edits">
                       {view.books.hand.map((h) => (
                         <div key={h.id} className="chrawrow" data-hand={h.id}>
                           <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: h.id }, h.date))}>
-                            <span className="chwho">{PERSON}</span>{h.text} · {t(h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
+                            <span className="chwho">{h.ai ? <BotIcon /> : PERSON}</span>{h.text} · {t(h.ai ? (h.saved ? 'changes.aiChanged' : 'changes.aiBooked') : h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
                           </button>
                           <button type="button" className="quiet2" title={t(h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
                         </div>

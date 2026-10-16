@@ -151,3 +151,30 @@ test('«Neu klassifizieren» of a sale without an invoice asks its question at o
   assert.match(entriesOf('S-NEW')[0].reason ?? '', /Aufgaben/);
   assert.deepEqual(questionOn('S-NEW').map((q) => q.status), ['open']);
 });
+
+test('«Rückgängig» on the wish that answered a sale\'s question opens the question again, and the booking records the AI as its author (r5h-35, r5h-31)', async () => {
+  const b = loadBooks(api.ws);
+  b.transactions.push({ ref: 'S-UNDO', bank: 'Raiffeisen', date: '2026-08-23', amount: 540, currency: 'CHF', direction: 'CRDT', description: 'Malerarbeiten Küche', counterparty: 'Familie Beispiel' });
+  b.journalEntries.push({ id: 'e-undo', transactionRef: 'S-UNDO', date: '2026-08-23', accountDebit: '1021', accountCredit: '3400', amount: 540, vatCode: 'V0', description: 'Familie Beispiel, Küche', origin: 'classify' });
+  saveBooks(api.ws, b);
+  writeFileSync(changes, JSON.stringify([{ kind: 'entry', id: 'e-undo', set: { vatCode: 'V81' } }]));
+  const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'die küche war mit 8.1 % mwst', language: 'de', context: [] }) });
+  const events = (await res.text()).trim().split('\n').map((l) => JSON.parse(l) as AssistantEvent);
+  const conversation = (events[0] as { id: string }).id;
+  const made = (events.find((e) => e.type === 'changes') as Extract<AssistantEvent, { type: 'changes' }>).changes;
+  const [q] = questionOn('S-UNDO');
+  assert.equal(q.status, 'answered');
+  assert.deepEqual(made[0].answered, [q.id], 'the change knows the question it answered');
+  const by = entriesOf('S-UNDO')[0].by;
+  assert.deepEqual(by && { ...by, at: '' }, { kind: 'assistant', at: '', conversation, was: { vatCode: 'V0' } }, 'the AI, on her wish, not «von Hand»');
+
+  const undone = await api.send('POST', `/api/assistant/${conversation}/changes/${made[0].id}/undo`);
+  assert.equal(undone.status, 200, String(undone.json.error));
+  assert.deepEqual(entriesOf('S-UNDO').map((e) => [e.vatCode, e.origin, e.by]), [['V0', 'classify', undefined]]);
+  assert.equal(questionOn('S-UNDO')[0].status, 'open', 'the question is open again');
+  assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false, 'and its rule is gone');
+
+  const r = await api.send('PATCH', '/api/journal-entries/e-undo', { vatCode: 'V81' });
+  assert.equal(r.status, 200, String(r.json.error));
+  assert.equal(entriesOf('S-UNDO')[0].by?.kind, 'person', 'her own edit afterwards is hers');
+});

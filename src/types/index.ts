@@ -159,8 +159,9 @@ export interface JournalEntry {
   rule?: string;
   /**
    * Who decided the booking as it stands, and so who wrote its `reason`: a company rule, a check of
-   * the app's code, the AI (which model), or a person (by hand, an answer, the AI sidebar on their
-   * wish; `was` holds the booking fields before their change). Parsed at the books boundary
+   * the app's code, the AI (which model), a person (by hand, an answer to a question), or the AI
+   * sidebar on a person's wish (`assistant`, with its conversation); `was` holds the booking fields
+   * before the change. Parsed at the books boundary
    * (src/books/booked-by.ts). Absent: an entry booked before the field existed; the booking page
    * then says what `origin` says.
    */
@@ -186,7 +187,9 @@ export type BookedBy =
   | { kind: 'rule'; rule: string }
   | { kind: 'code'; check: CodeCheck }
   | { kind: 'model'; model: string }
-  | { kind: 'person'; at: string; was?: BookingFields };
+  | { kind: 'person'; at: string; was?: BookingFields }
+  /** The AI sidebar, in conversation `conversation`, on the person's wish; `was`: the fields as they were before the AI changed them. */
+  | { kind: 'assistant'; at: string; conversation: string; was?: BookingFields };
 
 /** A filing period: a quarter ("2026-Q2") for a firm filing quarterly, a half year ("2026-H1") for one filing half-yearly. */
 export type QuarterKey = `${number}-Q${1 | 2 | 3 | 4}` | `${number}-H${1 | 2}`;

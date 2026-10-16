@@ -83,6 +83,12 @@ export async function openConversation(id: string): Promise<void> {
   } catch (e) { set({ error: errorText(e) }); }
 }
 
+/** A booking the AI changed opens the conversation it was changed in (Buchungen › Erfasst › «Gespräch öffnen»). */
+export async function showConversation(id: string): Promise<void> {
+  set({ open: true });
+  await openConversation(id);
+}
+
 export function stopAnswer(): void { stop?.abort(); }
 
 type Ai = Extract<Turn, { role: 'ai' }>;
@@ -98,6 +104,7 @@ function apply(e: AssistantEvent): void {
     case 'tool': withAi((t) => ({ ...t, tools: [...t.tools, { name: e.name, detail: e.detail, ...(e.denied ? { denied: true } : {}) }] })); break;
     case 'error': withAi((t) => ({ ...t, error: e.message, done: true })); break;
     case 'changes': withAi((t) => ({ ...t, changes: e.changes })); booksChanged(); break;
+    case 'held': withAi((t) => ({ ...t, held: e.held })); break;
     case 'refused': withAi((t) => ({ ...t, text: '', withdrawn: t.text, refused: e.message, ...(e.refusal ? { refusal: e.refusal } : {}) })); break;
     case 'replace': withAi((t) => ({ ...t, text: e.text })); break;
     case 'done': withAi((t) => ({ ...t, done: true })); break;
@@ -151,4 +158,24 @@ export async function undoChange(change: MadeChange): Promise<void> {
     set({ turns: state.turns.map((t) => (t.role === 'ai' && t.changes?.some((c) => undone.has(c.id)) ? { ...t, changes: t.changes.map((c) => (undone.has(c.id) ? { ...c, undone: true } : c)) } : t)) });
     booksChanged();
   } catch (e) { set({ error: errorText(e) }); }
+}
+
+/** «Übernehmen» (`take`) or «Verwerfen» on the changes the app held for the answer at `turn`. */
+export async function settleHeld(turn: number, take: boolean): Promise<void> {
+  const id = state.conversation;
+  if (!id) return;
+  try {
+    const settled = await api.assistantHeld(id, turn, take, language());
+    if (state.conversation === id) set({ turns: state.turns.map((x, i) => (i === turn ? settled : x)) });
+    if (take) booksChanged();
+  } catch (e) { set({ error: errorText(e) }); }
+}
+
+/** «Alle rückgängig» on the changes a held answer made once taken: each that stands, newest first. */
+export async function undoAll(turn: number): Promise<void> {
+  const of = () => { const t = state.turns[turn]; return t?.role === 'ai' ? t.changes ?? [] : []; };
+  for (const id of of().map((c) => c.id).reverse()) {
+    const c = of().find((x) => x.id === id);
+    if (c && !c.undone && c.undo) await undoChange(c);
+  }
 }

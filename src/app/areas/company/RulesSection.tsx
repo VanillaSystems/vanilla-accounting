@@ -15,6 +15,7 @@ import type { DraftView, RulesView } from '../../../saving/rules.js';
 import type { ShareOffer } from '../../../saving/share-rule.js';
 import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
+import { onBooksChanged } from '../../assistant/store.js';
 
 const words = ((key: string, vars: Record<string, string>) => (t as (k: string, v: Record<string, string>) => string)(key, vars)) as RuleWords;
 const money = (n: number) => fmt(n).replace(/\.00$/, '');
@@ -95,6 +96,7 @@ function PaymentLine({ p, names }: { p: PreviewPayment; names: RuleNames }) {
       {' → '}
       <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : would}</b>
       <span className="m">{' · '}{p.decidedBy ? t('rules.preview.otherFirst') : p.now.length ? t('rules.preview.now', { booking: p.now.map((l) => lineText(l, names)).join(' + ') }) : t('rules.preview.unbooked')}</span>
+      {p.beforeAi && !p.decidedBy ? <span className="m" data-testid="before-ai">{' · '}{t('rules.preview.beforeAi', { booking: p.beforeAi.map((l) => lineText(l, names)).join(' + ') })}</span> : null}
     </li>
   );
 }
@@ -133,7 +135,12 @@ export function RuleDraft({ path, nav, onRules }: { path: string; nav?: Nav; onR
   const [done, setDone] = useState<Done>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  useEffect(() => { api.draftRules(path).then(setD, () => setD(null)); }, [path]);
+  useEffect(() => {
+    const load = () => { api.draftRules(path).then(setD, () => setD(null)); };
+    load();
+    // An answer's changes taken or undone change what the card's payments are booked on today.
+    return onBooksChanged(load);
+  }, [path]);
   if (done) {
     return (
       <div className="ruledraft done" data-draft={path}>

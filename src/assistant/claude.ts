@@ -24,6 +24,7 @@ import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
 import { wordsIn } from '../export/texts.js';
+import { FEW_PAYMENTS } from './held.js';
 import { TEXTS } from '../invoices/texts.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
@@ -85,6 +86,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
     'A wish that says how a supplier\'s or a payer\'s payments are in general («Rechnungen von X sind Material», «X immer auf 6510») is about the next ones too: change the bookings it names and draft the rule in the same answer.',
     'A rule you draft must be one the app carries out (the app\'s AGENTS.md, "Rules the app carries out"): `when` and `then` are maps, never sentences, which the app refuses to keep. A card terminal\'s or payment provider\'s payout split into sales and fees («bei SumUp immer so») is `then: { account, vat, fees: { account, vat } }`. Write its `why` in the person\'s language.',
     `A rule you draft (a file under knowledge/) shows as a card under your answer, and its one click is the only thing the person does: «${t('rules.draft.keep')}» keeps it, «${t('rules.draft.discard')}» drops it, and a rule you take out asks «${t('rules.draft.remove')}». Until that click nothing of it applies: say you drafted it and name that click, never that it is set, removed or in effect, and no other step. The card lists this year's payments the rule would have hit, each with how it is booked today; keeping the rule changes none of them. A draft that is not a rule (a workflow) takes effect when the person presses «${t('changes.save')}» under ${t('area.changes')}.`,
+    `A block that fixes one payment's bookings is applied at once. A block that rebooks the bookings of several payments that are booked on different accounts today (or of more than ${FEW_PAYMENTS} payments), deletes more than one booking, or sets a VAT rate code on a booking whose payment has no receipt showing Swiss VAT is not applied: the app shows it to the person as one card, booking by booking, as it is and as it would be, and makes it only when they press «${t('assistant.held.take')}». Write such an answer as a proposal: what would change and why, what speaks against a part of it (a booking of another kind, a receipt that shows no Swiss VAT), and that nothing changes before «${t('assistant.held.take')}»; never that it is done.`,
     'Before the block, say in one or two plain sentences what you changed. Never mention to the person files or paths, JSON, ids, git or commits, nor the app\'s inner names (config fields such as closedThrough, the kinds and fields of the block, codes of a refusal, web addresses such as /vat): name a place only as the map names it, and a thing in the words the app shows.',
     `Answer in ${LANGUAGES[language] ?? 'German'}, short and plain, addressing the person informally as the app does (du, tu).`,
   ].join('\n');

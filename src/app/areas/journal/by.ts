@@ -1,6 +1,6 @@
 /**
  * Who decided a booking, in words (JournalEntry.by): a company rule, a check of the app's code, the
- * AI, or a person. An entry from before the field says what its `origin` says. `say` is the
+ * AI, a person, or the AI sidebar on a person's wish. An entry from before the field says what its `origin` says. `say` is the
  * dictionary (t in the app, wordsIn(lang).t in Node).
  */
 import type { BookingFields, JournalEntry } from '../../../types/index.js';
@@ -18,6 +18,7 @@ export function bookedByText(e: JournalEntry, say: Say): string {
     case 'code': return say('journal.byText.code', { check: say(`journal.check.${by.check}`) });
     case 'model': return say('journal.byText.model', { model: by.model });
     case 'person': return say('journal.byText.person', { date: formatDate(by.at.slice(0, 10)) });
+    case 'assistant': return say('journal.byText.assistant', { date: formatDate(by.at.slice(0, 10)) });
   }
 }
 
@@ -28,7 +29,7 @@ export function reasonText(e: JournalEntry, reason: string, say: Say): string {
   return say('journal.why.ai', { text: reason });
 }
 
-/** What a person changed, field by field: the code V0 → V81. */
+/** What a person, or the AI on her wish, changed, field by field: the code V0 → V81. */
 export function changesText(e: JournalEntry, was: BookingFields, say: Say): string {
   const shown = (k: keyof BookingFields, v: string | number | undefined) => (k === 'amount' && typeof v === 'number' ? fmt(v) : String(v || '–'));
   return (Object.keys(was) as Array<keyof BookingFields>)

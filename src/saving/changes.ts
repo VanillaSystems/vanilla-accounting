@@ -89,8 +89,9 @@ export async function booksChange(ws: Ws): Promise<BooksChange> {
 const entriesIn = (text: string, file: string) => new Map((fromJsonl(text, file) as JournalEntry[]).map((e) => [e.id, e]));
 
 /**
- * The bookings a person changed or booked by hand since the last save: those whose `by` names a
- * person and that differ from the last save, each with the booking as that save holds it.
+ * The bookings a person changed or booked by hand, or the AI sidebar on her wish, since the last
+ * save: those whose `by` names a person or the AI sidebar and that differ from the last save, each
+ * with the booking as that save holds it.
  */
 export async function handEdits(ws: Ws): Promise<HandEdit[]> {
   const repo = await repositoryAt(ws.paths.repository);
@@ -101,10 +102,10 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
     const now = entriesIn(read(path), path);
     const saved = entriesIn(await headBlob(repo, relative(repo, path)), path);
     for (const e of now.values()) {
-      if (e.by?.kind !== 'person') continue;
+      if (e.by?.kind !== 'person' && e.by?.kind !== 'assistant') continue;
       const was = saved.get(e.id);
       if (was && JSON.stringify(was) === JSON.stringify(e)) continue;
-      out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(was ? { saved: was } : {}) });
+      out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(e.by.kind === 'assistant' ? { ai: true } : {}), ...(was ? { saved: was } : {}) });
     }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));

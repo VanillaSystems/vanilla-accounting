@@ -3,8 +3,10 @@
  * not over it, so the page keeps its keys. ⌘J, the bot button in the top bar, or «Mit KI ändern…»
  * on an object open it. What the page shows goes with a message as a chip; @ adds a workflow or a
  * run. It does what the person asks: changes to the books, the chart, the invoicing settings and
- * invoice drafts show as cards, each with «Rückgängig» and a link to what it changed; an export
- * shows its file to download; changes to how the app works wait in Änderungen.
+ * invoice drafts show as cards, each with «Rückgängig» and a link to what it changed; an answer
+ * that rebooks the books rather than fixing one booking waits on one card, booking by booking,
+ * for «Übernehmen»; an export shows its file to download; changes to how the app works wait in
+ * Änderungen.
  */
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.js';
@@ -13,7 +15,7 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import { automationNow } from '../automation/store.js';
 import { language } from '../i18n/index.js';
 import { textIn } from '../../workflows/model.js';
-import type { ContextRef, EntrySet, InvoicingSet, MadeChange } from '../../types/assistant.js';
+import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange } from '../../types/assistant.js';
 import { ApiError, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
@@ -26,7 +28,7 @@ import { api } from '../lib/api.js';
 import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
 import { questionText } from '../questions/Questions.js';
 import {
-  addContext, closeAssistant, newConversation, openConversation, removeContext, sendMessage, showConversations, stopAnswer, undoChange, useAssistant, wroteDraft,
+  addContext, closeAssistant, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
 
 interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void }
@@ -79,11 +81,11 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     case 'unlink': return { text: t('assistant.c.unlink', { name: receipt(c.receipt), payment: payment(c.payment) }), go: { area: 'receipts', id: c.receipt } };
     case 'receiptKind': return { text: t(`assistant.c.kind.${c.as ?? 'none'}` as 'assistant.c.kind.none', { name: receipt(c.id) }), go: { area: 'receipts', id: c.id } };
     case 'entry': {
-      const what = [entryWhat(c.set), note?.vatFollowed && t('assistant.c.vatFollowed', note.vatFollowed)].filter(Boolean).join(' · ');
+      const what = [entryWhat(c.set), note?.vatFollowed && t('assistant.c.vatFollowed', note.vatFollowed), note?.noReceipt && t('assistant.c.noReceipt')].filter(Boolean).join(' · ');
       return { text: t('assistant.c.entry', { name: books.journalEntries?.find((x) => x.id === c.id)?.description || c.id, what }), go: { area: 'journal', id: c.id } };
     }
     case 'newEntry': {
-      const what = [entryWhat(c.entry, false), note?.vatFollowed && t('assistant.c.vatFollowed', note.vatFollowed)].filter(Boolean).join(' · ');
+      const what = [entryWhat(c.entry, false), note?.vatFollowed && t('assistant.c.vatFollowed', note.vatFollowed), note?.noReceipt && t('assistant.c.noReceipt')].filter(Boolean).join(' · ');
       return { text: t('assistant.c.newEntry', { name: c.entry.description ?? '', what }), ...(undo?.kind === 'deleteEntry' ? { go: { area: 'journal', id: undo.id } as Route } : {}) };
     }
     case 'deleteEntry': {
@@ -131,6 +133,68 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
         );
       })}
     </ul>
+  );
+}
+
+const HELD_FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const;
+const heldField = (l: HeldLine, k: (typeof HELD_FIELDS)[number]) => (k === 'accountDebit' ? t('assistant.c.debit', { account: l.accountDebit || '–' })
+  : k === 'accountCredit' ? t('assistant.c.credit', { account: l.accountCredit || '–' }) : k === 'vatCode' ? t('assistant.c.code', { code: l.vatCode || '–' }) : fmt(l.amount));
+
+/** A held booking as it is → as it would be: the fields that change, and its amount when that stays. */
+function heldChange(before: HeldLine | undefined, after: HeldLine | undefined): { was: string; now: string; amount?: string } {
+  if (!before || !after) {
+    const l = (before ?? after)!;
+    const all = HELD_FIELDS.map((k) => heldField(l, k)).join(' · ');
+    return before ? { was: all, now: t('assistant.held.deleted') } : { was: t('assistant.held.new'), now: all };
+  }
+  const moved = HELD_FIELDS.filter((k) => (before[k] ?? '') !== (after[k] ?? ''));
+  return {
+    was: moved.map((k) => heldField(before, k)).join(' · '),
+    now: moved.map((k) => heldField(after, k)).join(' · '),
+    ...(moved.includes('amount') ? {} : { amount: fmt(after.amount) }),
+  };
+}
+
+/**
+ * The changes the app held for an answer (src/assistant/held.ts): why, each booking as it is → as it
+ * would be, the answer's other changes, and one «Übernehmen» or «Verwerfen». Taken, the changes
+ * show below as any answer's, each with its «Rückgängig», and «Alle rückgängig» takes them all back.
+ */
+function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; turn: number; standing: number; books: Index; onGo(route: Route): void }) {
+  const [busy, setBusy] = useState(false);
+  const payments = new Set(held.rows.filter((r) => r.before).map((r) => r.ref)).size;
+  const deleted = held.rows.filter((r) => r.before && !r.after).length;
+  const different = new Set(held.rows.filter((r) => r.before).map((r) => `${r.before!.accountDebit}/${r.before!.accountCredit}`)).size > 1;
+  const why = held.why.map((w) => (w === 'payments' ? t(different ? 'assistant.held.payments' : 'assistant.held.many', { n: payments }) : w === 'deletes' ? t('assistant.held.deletes', { n: deleted }) : t('assistant.held.rateWithoutReceipt')));
+  const others = held.changes.filter((c) => !isBookChange(c)).map((c, i) => describe({ id: String(i), change: c }, books).text);
+  const settle = (take: boolean) => { setBusy(true); void settleHeld(turn, take).finally(() => setBusy(false)); };
+  return (
+    <div className={`ruledraft aiheld ${held.status}`} data-testid="held" data-status={held.status}>
+      <b>{t('assistant.held.title', { n: held.rows.length })}</b>
+      {held.status === 'held' ? <span className="m">{t('assistant.held.lead')}</span> : null}
+      {why.map((w) => <span key={w} className="warnline">{w}</span>)}
+      <ul>
+        {held.rows.map((r) => (
+          <li key={r.entry} data-entry={r.entry}>
+            <button type="button" className="linkbtn" disabled={!(held.status === 'taken' ? r.after : r.before)} onClick={() => onGo({ area: 'journal', id: r.entry })}>{formatDate(r.date)} · {r.text}</button>
+            {(() => { const c = heldChange(r.before, r.after); return <span><span className="m">{c.was}</span>{' → '}<b>{c.now}</b>{c.amount ? <span className="m"> · {c.amount}</span> : null}</span>; })()}
+            {r.noReceipt ? <span className="warnline" data-testid="no-receipt">{t('assistant.c.noReceipt')}</span> : null}
+          </li>
+        ))}
+        {others.map((o) => <li key={o}>{o}</li>)}
+      </ul>
+      {held.status === 'held' ? (
+        <span className="ruleacts">
+          <button type="button" className="btn primary" disabled={busy} onClick={() => settle(true)}>{t('assistant.held.take')}</button>
+          <button type="button" className="btn ghost" disabled={busy} onClick={() => settle(false)}>{t('assistant.held.drop')}</button>
+        </span>
+      ) : held.status === 'taken' ? (
+        <span className="ruleacts">
+          <span className="m">{t('assistant.held.taken')}</span>
+          {standing ? <button type="button" className="linkbtn" onClick={() => void undoAll(turn)}>{t('assistant.held.undoAll')}</button> : null}
+        </span>
+      ) : <span className="m">{t('assistant.held.dropped')}</span>}
+    </div>
   );
 }
 
@@ -233,6 +297,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                     </details>
                   ) : null}
                   {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
+                  {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
                   {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
                   {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
                   {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}

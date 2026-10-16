@@ -65,7 +65,7 @@ test('the AI turns that storno into a VAT-only correction: the same account on b
     receipts: [], transactions: [], mappings: [], bankStatements: [],
     journalEntries: [natel, structuredClone(storno)], config: { closedThrough: '2026-09-30' },
   });
-  const ctx = { bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen' }], chart: new Set(['1020', '6510']), earlier: [] };
+  const ctx = { bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen' }], chart: new Set(['1020', '6510']), earlier: [], conversation: 'c' };
   for (const set of ['{"accountDebit":"6510"}', '{"accountDebit":6510,"accountCredit":6510}', '{"accountDebit":"6510","accountCredit":"6510","vatCode":"-I81"}']) {
     const b = books();
     applyAnswer(b, asked('[{"kind":"entry","id":"corr","set":' + set + '}]'), ctx);
@@ -81,7 +81,7 @@ test('the AI turns that storno into a VAT-only correction: the same account on b
 
 test('a side left empty is refused with the way that works: the account on both sides', () => {
   const b = { receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: [natel, { ...entry(correctionOf(natel, 'storno', '2026-10-16', 'K', isBank)), origin: 'manual' as const }], config: { closedThrough: '2026-09-30' } };
-  const ctx = { bankAccounts: [], chart: new Set<string>(), earlier: [] };
+  const ctx = { bankAccounts: [], chart: new Set<string>(), earlier: [], conversation: 'c' };
   assert.throws(() => applyAnswer(b, asked('[{"kind":"entry","id":"corr","set":{"accountDebit":"6510","accountCredit":""}}]'), ctx), /6510\/6510/);
 });
 

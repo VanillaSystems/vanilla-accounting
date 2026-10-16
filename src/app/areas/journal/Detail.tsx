@@ -33,6 +33,7 @@ import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
 import { reclassify, saveEntry, type Field } from './actions.js';
 import { RunLink } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
+import { showConversation } from '../../assistant/store.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
@@ -156,10 +157,10 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
               <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} /></dd>
-              {seen || e.reason || e.by?.kind === 'person' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
+              {seen || e.reason || e.by?.kind === 'person' || e.by?.kind === 'assistant' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
                 {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
                 {e.reason && <div className="m">{reasonText(e, e.reason, say)}</div>}
-                {e.by?.kind === 'person' && e.by.was && <div className="m">{t('journal.why.person', { changes: changesText(e, e.by.was, say) })}</div>}
+                {(e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was && <div className="m">{t(`journal.why.${e.by.kind}`, { changes: changesText(e, e.by.was, say) })}</div>}
               </dd></> : null}
               {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} nav={nav} /></dd></> : null}
             </dl>
@@ -181,7 +182,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
 /** Who decided the entry, and for a rule the way to Firma › Regeln. */
 function BookedByText({ e, nav }: { e: JournalEntry; nav: Props['nav'] }) {
   return (
-    <>{bookedByText(e, say)}{e.by?.kind === 'rule' && <> · <button type="button" className="golink" data-testid="to-rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('area.company')} › {t('company.rules')}</button></>}</>
+    <>{bookedByText(e, say)}{e.by?.kind === 'rule' && <> · <button type="button" className="golink" data-testid="to-rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('area.company')} › {t('company.rules')}</button></>}
+      {e.by?.kind === 'assistant' && <> · <button type="button" className="golink" data-testid="to-conversation" onClick={() => void showConversation((e.by as { conversation: string }).conversation)}>{t('journal.toConversation')}</button></>}</>
   );
 }
 

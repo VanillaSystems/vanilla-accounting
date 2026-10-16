@@ -28,6 +28,8 @@ export interface PreviewPayment {
   would: { kind: 'book'; lines: RuleLine[] } | { kind: 'ask'; question: string; lines: RuleLine[] };
   /** Its bookings today, the side opposite the bank (empty: not booked). */
   now: RuleLine[];
+  /** Its bookings before the AI sidebar changed them, when it did: what the person or the app had decided. */
+  beforeAi?: RuleLine[];
   /** Another rule that decides this payment before the drafted one: its id. */
   decidedBy?: string;
 }
@@ -42,9 +44,10 @@ export interface RuleOverlap {
 }
 
 /**
- * The payments a rule holds for that are booked today on other accounts than its own: on two or
- * more of them, or on the owner's private account, the rule would book over decisions (a cash
- * withdrawal, a private purchase, a restaurant), so keeping it asks for «Trotzdem behalten» (x02).
+ * The payments a rule holds for that are booked on other accounts than its own, as decided before
+ * the AI sidebar changed them: on two or more of them, or on the owner's private account, the rule
+ * would book over decisions (a cash withdrawal, a private purchase, a restaurant), so keeping it
+ * asks for «Trotzdem behalten» (x02).
  */
 export interface RuleSpread {
   /** The other accounts, as booked today, in the order first met. */
@@ -83,13 +86,20 @@ export function openYear(books: Pick<Books, 'config' | 'transactions'>): string 
   return books.transactions.map((t) => t.date).sort().at(-1)?.slice(0, 4) ?? String(new Date().getFullYear());
 }
 
-/** A payment's bookings today, the side opposite its bank account. */
-function bookedNow(books: Books, tx: BankTransaction, bank: string): RuleLine[] {
-  return books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((e) => ({
-    account: e.accountDebit === bank ? e.accountCredit : e.accountDebit,
-    ...(e.vatCode ? { vat: e.vatCode } : {}),
-    amount: e.amount,
-  }));
+/**
+ * A payment's bookings today, the side opposite its bank account; with `decided`, each booking the
+ * AI sidebar changed as it was before (JournalEntry.by `was`): a wish that rebooked the payments
+ * first must not hide the decisions its rule would book over (x02).
+ */
+function bookedNow(books: Books, tx: BankTransaction, bank: string, decided = false): RuleLine[] {
+  return books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((now) => {
+    const e = decided && now.by?.kind === 'assistant' && now.by.was ? { ...now, ...now.by.was } : now;
+    return {
+      account: e.accountDebit === bank ? e.accountCredit : e.accountDebit,
+      ...(e.vatCode ? { vat: e.vatCode } : {}),
+      amount: e.amount,
+    };
+  });
 }
 
 /**
@@ -128,15 +138,19 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       const decider = ruleFor(placed, p);
       const deciderRow = decider && pool[placed.indexOf(decider)].row;
       const lines = t.booking ? wouldBook(books, tx, t.booking, context) : [];
+      const bank = bankAccountFor(tx, context.bankAccounts);
+      const now = bookedNow(books, tx, bank);
+      const decided = bookedNow(books, tx, bank, true);
       return {
         ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction,
         text: [tx.description, tx.counterparty && !tx.description.includes(tx.counterparty) ? tx.counterparty : ''].filter(Boolean).join(' · '),
         would: t.kind === 'book' ? { kind: 'book', lines } : { kind: 'ask', question: t.question, lines },
-        now: bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts)),
+        now,
+        ...(JSON.stringify(decided) !== JSON.stringify(now) ? { beforeAi: decided } : {}),
         ...(deciderRow && ruleKey(deciderRow) !== key ? { decidedBy: deciderRow.id } : {}),
       };
     };
-    // The accounts the rule books on: today's booking on any other is a decision it would overrule.
+    // The accounts the rule books on: a booking on any other, as decided before the AI moved it, is a decision it would overrule.
     const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : []), ...(t.booking.fees ? [t.booking.fees.account] : [])] : []);
     const others: string[] = [];
     const elsewhere: BankTransaction[] = [];
@@ -152,7 +166,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       }
       // An ask rule asks first: it overrules nobody.
       if (t.kind === 'book') {
-        const off = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts)).map((l) => l.account).filter((a) => a && !own.has(a));
+        const off = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts), true).map((l) => l.account).filter((a) => a && !own.has(a));
         if (off.length) elsewhere.push(tx);
         for (const a of off) if (!others.includes(a)) others.push(a);
       }

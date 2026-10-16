@@ -27,6 +27,11 @@ export function parseBookedBy(v: unknown): BookedBy | undefined {
       const was = fieldsOf(v.was);
       return { kind: 'person', at: v.at, ...(was ? { was } : {}) };
     }
+    case 'assistant': {
+      if (!isText(v.at) || !isText(v.conversation)) return undefined;
+      const was = fieldsOf(v.was);
+      return { kind: 'assistant', at: v.at, conversation: v.conversation, ...(was ? { was } : {}) };
+    }
     default: return undefined;
   }
 }

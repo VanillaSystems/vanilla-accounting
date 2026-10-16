@@ -105,13 +105,44 @@ export interface ChangeNote {
   question?: { id: string; to?: string; answered?: string; open?: Pick<Question, 'on' | 'text' | 'by' | 'topic'> };
   /** An action that did not run: why (`noBrowser`, or the error's text). */
   failed?: string;
+  /** The booking now claims input tax at a rate that no receipt of its payment shows. */
+  noReceipt?: boolean;
 }
+
+/** Why the app holds an answer's changes for the person's «Übernehmen» (src/assistant/held.ts). */
+export type HoldReason = 'payments' | 'deletes' | 'rateWithoutReceipt';
+
+/** A booking's lines as a held card shows them. */
+export interface HeldLine { accountDebit: string; accountCredit: string; vatCode?: string; amount: number }
+
+/** One booking a held answer changes: as it is (`before`, absent for a new one) and as it would be (`after`, absent when deleted). */
+export interface HeldRow {
+  entry: string;
+  ref: string;
+  date: string;
+  text: string;
+  before?: HeldLine;
+  after?: HeldLine;
+  /** It would claim input tax at a rate that no receipt of its payment shows. */
+  noReceipt?: boolean;
+}
+
+/**
+ * An answer's changes that rebook the books rather than fix one booking: nothing of them is made
+ * until the person presses «Übernehmen» on their card, which lists each booking before → after.
+ * `taken`: made (the turn's `changes` then holds them, each with its undo); `dropped`: discarded.
+ */
+export interface HeldChanges { changes: Change[]; why: HoldReason[]; rows: HeldRow[]; status: 'held' | 'taken' | 'dropped' }
 
 /**
  * A change an answer made, with what undoes it (none for an action). `payment`: the payment whose
  * bookings it changed; its changes are undone together, so they keep adding up.
  */
-export interface MadeChange { id: string; change: Change; undo?: Change; payment?: string; note?: ChangeNote; undone?: boolean }
+export interface MadeChange {
+  id: string; change: Change; undo?: Change; payment?: string; note?: ChangeNote; undone?: boolean;
+  /** The questions the change answered (a sale's VAT code set on the person's wish): its undo opens them again. */
+  answered?: string[];
+}
 
 /** POST /api/assistant. Without `conversation` a new one starts. */
 export interface AssistantSend {
@@ -128,6 +159,8 @@ export type Turn =
   | { role: 'me'; text: string; at: string; context: ContextRef[] }
   | {
     role: 'ai'; text: string; at: string; tools: ToolUse[]; changes?: MadeChange[]; refused?: string; refusal?: ApiRefusal; error?: string; done: boolean;
+    /** Changes the app holds for the person's «Übernehmen» instead of making them (HeldChanges). */
+    held?: HeldChanges;
     /** What the answer said before the app refused its changes; `text` is then what it says now that nothing was changed. */
     withdrawn?: string;
   };
@@ -153,6 +186,8 @@ export type AssistantEvent =
   | { type: 'tool'; name: string; detail: string; denied?: boolean }
   /** The changes the answer made to the books, all of them or, with `refused`, none. */
   | { type: 'changes'; changes: MadeChange[] }
+  /** The answer's changes, held for the person's «Übernehmen»: nothing is made yet. */
+  | { type: 'held'; held: HeldChanges }
   /** `refusal`: its code, so the UI says why in the person's language. */
   | { type: 'refused'; message: string; refusal?: ApiRefusal }
   /** The answer's text, whole, in place of what streamed: after a refusal, what was not done and why. */

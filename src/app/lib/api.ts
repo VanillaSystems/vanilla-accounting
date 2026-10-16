@@ -24,7 +24,7 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
-import type { Conversation, ConversationSummary, MadeChange } from '../../types/assistant.js';
+import type { Conversation, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
 import type { DropAction, DropSession } from '../../types/drop.js';
 import type { SourceRow } from '../../platform/sources/model.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
@@ -224,6 +224,7 @@ export const api = {
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
   assistantUndo: (id: string, change: string) => request<MadeChange[]>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
+  assistantHeld: (id: string, turn: number, take: boolean, language: string) => request<Extract<Turn, { role: 'ai' }>>('POST', `/api/assistant/${encodeURIComponent(id)}/held/${turn}`, { take, language }),
   sources: () => request<SourceRow[]>('GET', '/api/sources'),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),

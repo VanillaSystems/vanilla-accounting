@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { ApiRefusal } from '../types/api-error.js';
-import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationSummary, MadeChange, Turn } from '../types/assistant.js';
+import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationSummary, HeldChanges, MadeChange, Turn } from '../types/assistant.js';
 import { ChangesError, changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
@@ -42,9 +42,16 @@ export function listConversations(ws: Pick<Workspace, 'paths'>): ConversationSum
 /**
  * Applies all the changes, or none and throws why (a RefusedChanges, or a ChangesError). `earlier`:
  * the changes the conversation's answers made before and that stand, which an answer never takes
- * back on its own; `language`: the person's, for what an action writes (an export's files).
+ * back on its own; `language`: the person's, for what an action writes (an export's files);
+ * `conversation`: whose changes they are. With `hold`, changes that rebook the books rather than
+ * fix one booking are not made: their rows come back for the card (src/assistant/held.ts).
  */
-export type ApplyChanges = (changes: Change[], earlier: MadeChange[], language: string) => Promise<MadeChange[]>;
+export type ApplyChanges = (changes: Change[], earlier: MadeChange[], language: string, how: { conversation: string; hold: boolean }) => Promise<Applied>;
+export type Applied = { made: MadeChange[] } | { held: Pick<HeldChanges, 'why' | 'rows'> };
+
+/** The changes the conversation's answers made and that stand, but those of `except`. */
+const standing = (c: Conversation, except?: Turn): MadeChange[] =>
+  c.turns.flatMap((t) => (t.role === 'ai' && t !== except ? (t.changes ?? []).filter((m) => !m.undone) : []));
 
 /** Why the books refused an answer's changes: the API's words, and its code for the UI's. */
 export class RefusedChanges extends Error {
@@ -67,7 +74,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   c.at = at;
   store(ws, c);
   onEvent({ type: 'conversation', id: c.id });
-  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), waiting]);
+  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(last?.role === 'ai' && last.held ? [heldNote(last.held.status)] : []), waiting]);
   let done: AssistantEvent | undefined;
   await callClaude({
     ws, send, map, session: c.session, prompt, signal,
@@ -87,9 +94,14 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
     try {
       const asked = changesIn(said);
       if (asked.length) {
-        const earlier = c.turns.flatMap((t) => (t.role === 'ai' && t !== ai ? (t.changes ?? []).filter((m) => !m.undone) : []));
-        ai.changes = await apply(asked, earlier, send.language);
-        onEvent({ type: 'changes', changes: ai.changes });
+        const applied = await apply(asked, standing(c, ai), send.language, { conversation: c.id, hold: true });
+        if ('held' in applied) {
+          ai.held = { changes: asked, ...applied.held, status: 'held' };
+          onEvent({ type: 'held', held: ai.held });
+        } else {
+          ai.changes = applied.made;
+          onEvent({ type: 'changes', changes: ai.changes });
+        }
       }
     } catch (e) {
       ai.refused = (e as Error).message;
@@ -103,6 +115,32 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   if (done) onEvent(done);
   ai.done = true;
   store(ws, c);
+}
+
+/** What the next message tells the model about the changes of its last answer the app held for the person (HeldChanges). */
+export const heldNote = (status: HeldChanges['status']): string => ({
+  held: 'The app did not make the changes of your previous answer: they rebook more than one booking fix, so the app shows them to the person as a proposal, booking by booking, and makes them only when the person presses «Übernehmen». The person has not decided yet; nothing of them is in the books.',
+  taken: 'The person pressed «Übernehmen» on the changes of your previous answer: they are made now, each with its «Rückgängig».',
+  dropped: 'The person discarded the changes of your previous answer («Verwerfen»): nothing of them was made.',
+})[status];
+
+/**
+ * «Übernehmen» (`take`) or «Verwerfen» on the changes the app held for an answer (`turn`: its
+ * index): taken, they are made as one answer's changes, all or none, refused as any answer is;
+ * discarded, nothing changes. Once settled, the card stays as it was settled. Returns the turn.
+ */
+export async function settleHeld(ws: Pick<Workspace, 'paths'>, id: string, turn: number, take: boolean, language: string, apply: ApplyChanges): Promise<Extract<Turn, { role: 'ai' }> | undefined> {
+  const c = readConversation(ws, id);
+  const ai = c?.turns[turn];
+  if (!c || ai?.role !== 'ai' || !ai.held) return undefined;
+  if (ai.held.status !== 'held') return ai;
+  if (take) {
+    const applied = await apply(ai.held.changes, standing(c, ai), language, { conversation: c.id, hold: false });
+    if ('made' in applied) ai.changes = applied.made;
+  }
+  ai.held.status = take ? 'taken' : 'dropped';
+  store(ws, c);
+  return ai;
 }
 
 /** Around the answer the app refused, in the call that says it again. */
