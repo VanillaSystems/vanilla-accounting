@@ -71,6 +71,8 @@ export type ApiRefusal =
   | { code: 'invoice'; params: { refusal: InvoiceRefusal; missing?: Missing[] } }
   /** A change a person can meet that the books refuse: invoicing not set up, a customer the invoices lack, a booking of 0, without an account, a VAT code or text, an account number or name the chart cannot take. */
   | { code: 'invoicingNotSetUp' }
+  /** Firma › Rechnungslayout › Zahlungskonten: the account named is no bank account of that currency. */
+  | { code: 'payToAccount'; params: { currency: string } }
   | { code: 'unknownCustomer' }
   | { code: 'amountZero' }
   | { code: 'noAccount' }

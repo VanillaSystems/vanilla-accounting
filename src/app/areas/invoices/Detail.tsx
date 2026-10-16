@@ -320,7 +320,7 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
         </div>
         <div className="lkr"><span>{t('invoices.currency')}</span>
           <span className="seg2" role="radiogroup" aria-label={t('invoices.currency')}>
-            {(['CHF', 'EUR'] as const).map((c) => <button key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || (c === 'EUR' && !ws.invoicing?.payTo.EUR)} onClick={() => void saveDraft(nav, inv, { currency: c })}>{c}</button>)}
+            {(['CHF', 'EUR'] as const).map((c) => <button key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} title={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => void saveDraft(nav, inv, { currency: c })}>{c}</button>)}
           </span>
         </div>
       </div>

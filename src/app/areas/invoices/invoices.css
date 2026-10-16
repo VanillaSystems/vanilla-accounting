@@ -55,6 +55,7 @@
 .isend .lkr textarea, .idlg .ibody .lkr textarea { font: 12.5px "Instrument Sans"; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; resize: vertical; }
 .lkr { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: center; }
 .lkr.top { align-items: start; }
+.lkpay { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .lkpay select { max-width: 100%; }
 .lkr > span:first-child { color: var(--muted); }
 .lkr select, .lkr textarea, .lkr > input { font: 12.5px "Instrument Sans"; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
 .lkr input.mono { font-family: "Geist Mono"; }

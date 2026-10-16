@@ -5,7 +5,7 @@
  * was issued with.
  */
 import { useMemo, useState } from 'react';
-import { INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
+import { INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
 import { builtInTexts } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -113,6 +113,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
             </span>
           </div>
         </div>
+        <PayTo ws={ws} nav={nav} canEdit={canEdit} />
         <div className="lkf" key={`greet-${lang}`}>
           <label className="lkr"><span>{t('invoiceLayout.salutation')}</span><input name="salutation" defaultValue={texts.salutation} placeholder={t('invoiceLayout.salutationHint')} disabled={!canEdit} onBlur={(e) => saveText('salutation', e.target.value.trim())} /></label>
         </div>
@@ -127,6 +128,60 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
         {load.state === 'ready' && <Preview ws={ws} layout={layout} lang={lang} texts={texts} guide={guide} canEdit={canEdit} onText={saveText} />}
         <p className="m ivhint">{t('invoiceLayout.daysHint', { days: DAYS })}{changed > 0 && <> · {t('invoiceLayout.nChanged', { n: changed })}{canEdit && <> · <button type="button" className="quiet2" onClick={resetTexts}>{t('invoiceLayout.reset')}</button></>}</>}</p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Firma › Rechnungslayout › Zahlungskonten: per currency, the bank account customers pay to, set
+ * after the first setup too (r8c-1: an EUR invoice needs payTo.EUR). An account without an IBAN
+ * takes it here, in the same change, as the setup does.
+ */
+function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
+  const banks = ws.bankAccounts.filter((a) => a.bank !== 'manual');
+  const [pending, setPending] = useState<Partial<Record<InvoiceCurrency, string>>>({});
+  const [ibans, setIbans] = useState<Partial<Record<InvoiceCurrency, string>>>({});
+  async function set(currency: InvoiceCurrency, account: string, iban?: string) {
+    const bank = banks.find((a) => a.account === account);
+    try {
+      await api.patchWorkspace({ ...(iban && bank ? { banks: [{ bank: bank.bank, currency, iban }] } : {}), invoicing: { payTo: { [currency]: account ? { account } : null } } });
+      reloadWorkspace();
+      setPending({ ...pending, [currency]: undefined });
+      nav.toast(account ? t('invoiceLayout.payToSet', { currency, account: `${account} ${bank?.label ?? ''}`.trim() }) : t('invoiceLayout.payToCleared', { currency }));
+    } catch (e) { nav.toast(errorText(e)); }
+  }
+  return (
+    <div className="lkf" data-testid="pay-to">
+      <div className="lkr"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
+      {INVOICE_CURRENCIES.map((c) => {
+        const own = banks.filter((a) => a.currency === c);
+        const current = ws.invoicing?.payTo[c]?.account ?? '';
+        const picked = pending[c] ?? current;
+        const bank = own.find((a) => a.account === picked);
+        const needsIban = !!bank && !bank.iban;
+        return (
+          <label className="lkr" key={c} data-currency={c}><span>{t('invoiceLayout.payToIn', { currency: c })}</span>
+            {own.length === 0 ? <span className="m">{t('invoiceLayout.payToNoBank', { currency: c })}</span> : (
+              <span className="lkpay">
+                <select value={picked} disabled={!canEdit} onChange={(e) => {
+                  const account = e.target.value;
+                  if (!account || own.find((a) => a.account === account)?.iban) void set(c, account);
+                  else setPending({ ...pending, [c]: account });
+                }}>
+                  <option value="">{t('invoiceLayout.payToNone')}</option>
+                  {own.map((a) => <option key={a.account} value={a.account}>{a.account} {a.label}{a.iban ? ` · ${a.iban}` : ''}</option>)}
+                </select>
+                {needsIban && (
+                  <>
+                    <input className="mono wide" value={ibans[c] ?? ''} placeholder={t('invoiceLayout.ibanExample')} aria-label={t('invoiceLayout.iban')} disabled={!canEdit} onChange={(e) => setIbans({ ...ibans, [c]: e.target.value })} />
+                    <button type="button" className="btn" disabled={!canEdit || !ibans[c]?.trim()} onClick={() => void set(c, picked, ibans[c]!.trim())}>{t('common.save')}</button>
+                  </>
+                )}
+              </span>
+            )}
+          </label>
+        );
+      })}
     </div>
   );
 }

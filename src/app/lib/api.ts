@@ -105,6 +105,7 @@ export function errorText(e: unknown): string {
     case 'secretStore': return t('error.secretStore');
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
     case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
+    case 'payToAccount': return t('error.payToAccount', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
     case 'amountZero': return t('error.amountZero');
     case 'noAccount': return t('error.noAccount');

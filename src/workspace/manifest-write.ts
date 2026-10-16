@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
+import type { Address, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
 import { parseIban } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -48,6 +48,8 @@ export interface InvoicingPatch {
   setup?: { currency: string; account: string; revenueAccount: string; paymentTermsDays: number };
   /** The payment term a new customer starts with; each customer keeps their own. */
   paymentTermsDays?: number;
+  /** The bank account customers pay to, per currency (its IBAN may come in the same change, as `banks`); null drops the currency. */
+  payTo?: Partial<Record<InvoiceCurrency, { account: string } | null>>;
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
   texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
 }
@@ -127,6 +129,16 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     }
     if (!isMap(doc.get('invoicing'))) throw new WorkspaceError(`${path} has no invoicing block: add one (payTo, revenueAccount) before the layout`);
     if (inv.paymentTermsDays !== undefined) doc.setIn(['invoicing', 'paymentTermsDays'], inv.paymentTermsDays);
+    for (const [currency, to] of Object.entries(inv.payTo ?? {})) {
+      if (to === null) doc.deleteIn(['invoicing', 'payTo', currency]);
+      else if (to) {
+        const node = doc.createNode({ account: to.account }) as YAMLMap;
+        // Like its neighbours: one-line `{ account: "1021" }` when the other currencies are.
+        const sibling = (doc.getIn(['invoicing', 'payTo']) as YAMLMap | undefined)?.items.map((i) => i.value).find(isMap);
+        node.flow = !sibling || !!sibling.flow;
+        doc.setIn(['invoicing', 'payTo', currency], node);
+      }
+    }
     const { show, ...layout } = inv.layout ?? {};
     for (const [key, value] of Object.entries(layout)) set(doc, ['invoicing', 'layout', key], value);
     for (const [key, value] of Object.entries(show ?? {})) doc.setIn(['invoicing', 'layout', 'show', key], value);

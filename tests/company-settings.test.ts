@@ -170,6 +170,23 @@ test('API: a logo upload is stored by its checksum and becomes the layout\'s log
   }
 });
 
+test('Rechnungslayout › Zahlungskonten: the account customers pay to in a second currency is set after setup; null removes it; an account without IBAN or of another currency is refused (r8c-1)', () => {
+  const withWise = INVOICING.replace('  - { bank: manual,', '  - { bank: Wise, currency: EUR, account: "1023", label: Wise, statements: camt053, iban: BE29967000000164 }\n  - { bank: Wise, currency: USD, account: "1024", label: Wise USD, statements: camt053 }\n  - { bank: manual,');
+  const { text, manifest } = patchManifestText(withWise, { invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml');
+  assert.deepEqual(manifest.invoicing!.payTo.EUR, { account: '1023', iban: 'BE29967000000164', bank: 'Wise' });
+  assert.deepEqual(manifest.invoicing!.payTo.CHF?.account, '1021', 'the CHF account stays');
+  assert.deepEqual((parse(text) as { invoicing: { payTo: unknown } }).invoicing.payTo, { CHF: { account: '1021' }, EUR: { account: '1023' } });
+  const removed = patchManifestText(text, { invoicing: { payTo: { EUR: null } } }, 'm.yaml');
+  assert.equal(removed.manifest.invoicing!.payTo.EUR, undefined);
+  assert.throws(() => patchManifestText(withWise, { invoicing: { payTo: { EUR: { account: '1021' } } } }, 'm.yaml'), /must be a EUR account/);
+  assert.throws(() => patchManifestText(withWise, { invoicing: { payTo: { USD: { account: '1024' } } } as never }, 'm.yaml'), /CHF or EUR/);
+  // The IBAN may come in the same change, as at setup.
+  const noIban = withWise.replace(', iban: BE29967000000164', '');
+  assert.throws(() => patchManifestText(noIban, { invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml'), /needs its iban/);
+  const both = patchManifestText(noIban, { banks: [{ bank: 'Wise', currency: 'EUR', iban: 'BE29 9670 0000 0164' }], invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml');
+  assert.equal(both.manifest.invoicing!.payTo.EUR?.iban, 'BE29967000000164');
+});
+
 test('Rechnungen einrichten: setup writes an invoicing block the reader takes, with the layout in the same change; a second setup is refused', () => {
   const setup = { currency: 'CHF', account: '1021', revenueAccount: '3400', paymentTermsDays: 30 };
   const { text } = patchManifestText(MANIFEST, { invoicing: { setup, layout: { font: 'Inter' } } }, 'm.yaml');

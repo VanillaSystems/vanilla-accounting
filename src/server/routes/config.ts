@@ -9,7 +9,7 @@ import { companyInfo } from '../../books/company.js';
 import { WorkspaceError } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
-import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
+import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { assertPlaced } from '../edits.js';
 import { setCustomerTerms } from '../workspace-edits.js';
@@ -89,8 +89,19 @@ function newBank(raw: unknown): NewBank {
 
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo']);
   const out: InvoicingPatch = {};
+  if (b.payTo !== undefined) {
+    const payTo = patchBody(b.payTo, INVOICE_CURRENCIES);
+    out.payTo = Object.fromEntries(Object.entries(payTo).map(([currency, v]) => {
+      if (v === null) return [currency, null];
+      const account = stringField(patchBody(v, ['account']), 'account');
+      // The IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
+      const bank = WS.bankAccounts.find((a) => a.account === account && a.bank !== 'manual' && a.currency === currency);
+      if (!bank) throw new RequestError(400, `Das Konto, auf das Kunden in ${currency} zahlen, muss ein Bankkonto in ${currency} sein.`, { code: 'payToAccount', params: { currency } });
+      return [currency, { account }];
+    }));
+  }
   if (b.paymentTermsDays !== undefined) {
     if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 1 || (b.paymentTermsDays as number) > 120) throw new RequestError(400, 'Zahlungsfrist: 1 bis 120 Tage.');
     out.paymentTermsDays = b.paymentTermsDays as number;
