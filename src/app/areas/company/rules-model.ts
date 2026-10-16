@@ -10,7 +10,7 @@ import type { RulesView } from '../../../saving/rules.js';
 export interface RuleLine {
   key: string;
   row: RuleRow;
-  /** The rule in one line: «Swisscom → Konto 6510 Telefon, MWST I81»; a note as written. */
+  /** The rule in one line: «Swisscom → Konto 6510 Telefon» with its VAT code; a note as written. */
   line: string;
   /** The app carries it out (a rule switched off too); a note or a broken rule it does not. */
   acts: boolean;

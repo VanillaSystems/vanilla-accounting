@@ -32,6 +32,20 @@ Processes (read first for any quarter work):
 - Before executing a step that has `with: { guide: ... }`, read that guide section. Decide by its rules, then its precedents. If neither covers the case, take the step's new_case exit — do not guess and do not ask in chat without recording the answer.
 - Every human answer goes back into the guide in the same session (new-case.flow.yaml). Run `npm run check-processes` after editing any flow or guide.
 
+Rules the app carries out (src/booking/rules.ts, docs/0.4.0/saving.md "One click for a rule"):
+- A wish about how payments are booked («buch Swisscom immer auf Telefon», «frag mich bei Barbezügen über 500 Franken») becomes a rule the app executes, never a sentence nothing acts on. Write it in the step `classify` of `knowledge/rules/booking.guide.yaml`, or, for one business, in its file under `steps: booking.guide.yaml#classify` (no `when` needed there). `then` is a map:
+  ```yaml
+  - id: swisscom-telefon                     # in knowledge/suppliers/swisscom.yaml
+    then: { account: "6510", vat: I81 }      # book: this account; the rate only with Swiss VAT on the receipt
+    source: wish 2026-10-15
+  - id: barbezug-gross                       # in knowledge/rules/booking.guide.yaml
+    when: { text: "Bargeldbezug|Bancomat", direction: out, amount: { over: 500 } }
+    then: { ask: "Wofür war der Barbezug?", account: "2451", vat: none }   # ask first; account and vat: the proposal
+    source: wish 2026-10-15
+  ```
+  `when` takes `counterparty` (a business's file id), `text` (a pattern over the payment's text), `direction` (`in`, `out`), `amount` (`over`, `under`, in the books' currency), `account` (the bank account that paid). `vat: none` books without a VAT code. `off: true` switches a rule off. `source:` starts with `wish <date>` for a wish, `correction <date>` for a person's correction.
+- The person keeps a rule with «Behalten» on its card; a rule the app cannot carry out is refused there. Firma › Regeln lists every rule. To remove one, draft the file without it: the card asks «Ja, entfernen».
+
 Special cases:
 
 - camt053 contains transactions, where some of them are grouped. they have child transactions. A Sammelzahlung with several parts stays one transaction (tests/camt053.test.ts).

@@ -81,6 +81,39 @@ reads what the changes mean, which a checkbox list cannot. When two changes cann
 cleanly, the AI keeps them in one save and says why. It never asks a person to judge half a
 hunk.
 
+## One click for a rule
+
+A rule is what the mission promises a person keeps with one click: «the AI turns a wish into a
+rule, shows it plainly, and the person keeps it with one click». The app can say a rule itself,
+from its structure (src/booking/rules.ts), so a rule needs no AI to prepare its save.
+
+- **What a rule is.** A rule in the step `classify` of `knowledge/rules/booking.guide.yaml`, or in
+  a business's file under `steps: booking.guide.yaml#classify`, whose `then` is a map: `{ account,
+  vat }` books the payment there (the VAT code's rate only with Swiss VAT on a linked receipt, else
+  its zero code), `{ ask, account?, vat? }` asks the person first. `when` takes `counterparty`,
+  `text` (a pattern over the payment's text), `direction` (in, out), `amount` (`over`, `under`, in
+  the books' currency) and `account` (the bank account that paid); a business's own rule needs no
+  `when`. The format and an example are in AGENTS.md, "Rules the app carries out".
+- **The app carries it out, in code.** The inbox's booking step decides a payment by its rule
+  before any model call; the entry carries the rule's id (`rule`) and says it in its reason. A
+  payment a rule asks about is not booked: a task «Frag: …» waits in Automatisierung
+  ([workflows.md](workflows.md), "A rule can ask").
+- **Behalten.** When the sidebar's answer drafted a rules file, its card lists each rule added,
+  changed or removed in one plain line, with **Behalten** (**Ja, entfernen** for a removal) and
+  **Verwerfen**. Behalten saves exactly that draft file, as the person saw it, as one save of its
+  own; Änderungen shows the same card for a drafted rules file. A removal the person asked for is
+  confirmed with that button, never by typing a confirmation.
+- **Refused when kept.** A rule the app cannot carry out (one written as sentences, an account
+  the chart lacks, a VAT code it does not know, a field it does not read) is refused by Behalten
+  and by Speichern alike, with the reason, and the file stays as it was. Rules written as
+  sentences before this (in business files, by Claude Code) still load: they show as notes for
+  the AI and decide nothing.
+- **Firma › Regeln** lists every rule of the company in plain words (notes as written), where it
+  came from (`source: wish …`, `correction …`, the app, or its source as written), and how many
+  payments it booked. **Ausschalten** (`off: true`) and **Löschen** change the file in place,
+  its comments kept, and save at once; the toast's **Rückgängig** puts the file back as it was,
+  unless it changed since.
+
 ## Large changes, and items that fail
 
 An import of 500 invoices is one run, and one prepared save.

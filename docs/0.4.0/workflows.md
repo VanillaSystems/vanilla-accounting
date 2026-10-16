@@ -115,6 +115,12 @@ A run that cannot go on by itself is in one of three states, and each has its ow
   goes on from there for that item only.
 - **Before it breaks.** A source can report when its session expires; a task appears days
   before the login fails.
+- **A rule can ask.** A company rule whose `then` is `{ ask: "…" }` (src/booking/rules.ts) holds a
+  matching payment: the inbox run does not book it and starts the workflow `ask` for it
+  (workflows/ask/, through the effect `runs.start`, one open question per payment). Its task is
+  «Frag: <the rule's question>» with the booking the app would make (the rule's own, else the
+  model's); **Übernehmen** books it, **Selbst buchen** closes the task for a booking by hand. The
+  workflow reads no guide, so it needs no switching on.
 
 Mockup: screen 5 of [mockups/workflows.html](mockups/workflows.html).
 
@@ -176,7 +182,9 @@ through the same check and switch-on (`docs/0.4.0/modules.md`, "Checks before a 
 The route follows the kind of change: a label or a schedule applies at once; a rule, a rate or an
 account that changes figures waits for a person to switch it on; new code goes to whoever
 maintains the workflow. The approval is stored outside the workspace, so an AI editing the
-workspace cannot approve its own change (decisions.md, D6).
+workspace cannot approve its own change (decisions.md, D6). A rule kept with **Behalten** in the
+sidebar or switched off or deleted in Firma › Regeln is a person's click: a workflow that ran
+switched on before it runs switched on after it (src/server/routes/rules.ts).
 
 Where runs are stored (Git, beside the books, or a local store outside the workspace) is open:
 [decisions.md](decisions.md), D3.

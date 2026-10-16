@@ -165,7 +165,13 @@ one booking of a payment takes back the answer's other changes on that payment w
 bookings add up again. A vague wish («mach alles richtig») gets a short question back with what
 the AI would do; it never takes back an earlier change or a person's own correction without
 naming it. A change to how the app works (rules, workflows, knowledge) lands under Änderungen,
-unsaved ([saving.md](saving.md)).
+unsaved ([saving.md](saving.md)). A rule is the exception that makes the mission's «keeps it
+with one click» true: when the answer drafted a rule, its card shows the rule in one plain line
+(«Swisscom → Konto 6510 Telefon, MWST I81»), with **Behalten** and **Verwerfen** (a removal:
+**Ja, entfernen**). Behalten saves that one draft at once, without the AI step «Speichern
+vorbereiten»; a rule the app cannot carry out is named with its reason and cannot be kept
+([saving.md](saving.md), "One click for a rule"). **Firma › Regeln** lists every rule of the
+company, linked from Automatisierung.
 
 ## Status, top right
 

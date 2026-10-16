@@ -176,12 +176,14 @@ const KNOWLEDGE_TEMPLATES: [string, string][] = [
   ['knowledge/rules/_example.guide.yaml', `# Your company's rules for one process, next to the app's processes/<process>.guide.yaml.
 # Name the file like the app's guide (booking.guide.yaml) and use its step ids.
 #
+# A rule whose then is a map is carried out by the app (AGENTS.md, "Rules the app carries out"):
+#
 # steps:
 #   classify:
 #     rules:
 #       - id: own-coffee
-#         when: coffee for the office
-#         then: 6500 Büromaterial, I81 when the receipt shows Swiss MWST
+#         when: { text: "Kaffee Bar" }
+#         then: { account: "6500", vat: I81 }
 #         source: decision 2026-01-15, owner
 #     precedents: []
 `],
