@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index } from '../src/types/index.js';
-import { badgeCount, bankOf, payText, unbookedPayments, type Account } from '../src/app/areas/bank/model.js';
+import { badgeCount, bankOf, payText, troubled, unbookedPayments, type Account } from '../src/app/areas/bank/model.js';
 import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
 
@@ -210,4 +210,45 @@ test('an entry that moves the bank without a statement line is found; a payment\
   const b = bankOf(books({ journalEntries: [...books().journalEntries!, ...extra] }), ACCOUNTS, '2026-12-31');
   assert.deepEqual(b.strays('2026-01-01', '2026-12-31').map((e) => e.id), ['storno']);
   assert.deepEqual(b.strays('2026-07-01', '2026-09-30'), [], 'only the period asked for');
+});
+
+test('r10c-2: two statements that share a day each list only the payments their file holds (`refs`) and their own balances; the one that starts later is listed first and gives the account\'s balance', () => {
+  const bal = (date: string, amount: number, sourceFile: string) => ({ account: '1021', bank: 'Raiffeisen', currency: 'CHF', date, amount, source: 'camt' as const, sourceFile });
+  const b = bankOf(books({
+    transactions: [tx('B1', '2026-10-12', 100), tx('B2', '2026-10-16', -45), tx('C1', '2026-10-16', 500)],
+    bankStatements: [
+      { bank: 'Raiffeisen', filename: 'raiB.xml', fromDate: '2026-10-11', toDate: '2026-10-16', currency: 'CHF', refs: ['B1', 'B2'] },
+      { bank: 'Raiffeisen', filename: 'raiC.xml', fromDate: '2026-10-16', toDate: '2026-10-16', currency: 'CHF', refs: ['C1'] },
+    ],
+    statementBalances: [bal('2026-10-10', 1000, 'raiB.xml'), bal('2026-10-16', 1055, 'raiB.xml'), bal('2026-10-15', 1055, 'raiC.xml'), bal('2026-10-16', 1555, 'raiC.xml')],
+    journalEntries: [],
+    config: { closedThrough: '2026-09-30', openingBalances: { 2026: { 1021: 1000 } } },
+  }), ACCOUNTS, '2026-10-20');
+  const [second, first] = b.statements('2026-10-01', '2026-10-31').filter((s) => s.file);
+  assert.deepEqual([first.key, second.key], ['1021-2026-10-11', '1021-2026-10-16'], 'the statement that starts later comes first');
+  assert.deepEqual(b.payments(first).map((t) => t.ref), ['B2', 'B1']);
+  assert.deepEqual(b.payments(second).map((t) => t.ref), ['C1']);
+  const c1 = b.check(first), c2 = b.check(second);
+  assert.deepEqual([c1.open, c1.inc, c1.out, c1.close, c1.n, c1.diff, c1.ok], [1000, 100, 45, 1055, 2, 0, true]);
+  assert.deepEqual([c2.open, c2.inc, c2.out, c2.close, c2.n, c2.diff, c2.ok], [1055, 500, 0, 1555, 1, 0, true]);
+  assert.equal(b.statementOf(b.txByRef.get('C1')!)?.key, second.key);
+  assert.equal(b.statementOf(b.txByRef.get('B2')!)?.key, first.key);
+});
+
+test('r10h-7: statements whose balances do not chain name the days between them as a missing statement, and are counted as a problem, not «Salden stimmen»', () => {
+  const bal = (date: string, amount: number, sourceFile: string) => ({ account: '1021', bank: 'Raiffeisen', currency: 'CHF', date, amount, source: 'camt' as const, sourceFile });
+  const b = bankOf(books({
+    transactions: [tx('O1', '2026-10-03', -100), tx('P1', '2026-10-17', -50)],
+    bankStatements: [
+      { bank: 'Raiffeisen', filename: 'okt.xml', fromDate: '2026-10-01', toDate: '2026-10-14', currency: 'CHF', refs: ['O1'] },
+      { bank: 'Raiffeisen', filename: 'okt2.xml', fromDate: '2026-10-16', toDate: '2026-10-20', currency: 'CHF', refs: ['P1'] },
+    ],
+    statementBalances: [bal('2026-09-30', 1000, 'okt.xml'), bal('2026-10-14', 900, 'okt.xml'), bal('2026-10-15', 403.85, 'okt2.xml'), bal('2026-10-20', 353.85, 'okt2.xml')],
+    journalEntries: [],
+    config: { closedThrough: '2026-09-30', openingBalances: { 2026: { 1021: 1000 } } },
+  }), ACCOUNTS, '2026-10-25');
+  const [later, earlier] = b.statements('2026-10-01', '2026-10-31').filter((s) => s.file);
+  assert.equal(b.check(earlier).gap, undefined);
+  assert.deepEqual(b.check(later).gap, { from: '2026-10-15', to: '2026-10-15', bank: 900, open: 403.85, diff: -496.15 }, 'the bank moved 496.15 between the statements without a statement');
+  assert.deepEqual([b.check(later).ok, troubled(b, later), troubled(b, earlier)], [true, true, false], 'the later statement itself adds up, yet it is a problem');
 });

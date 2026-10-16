@@ -58,6 +58,7 @@ test('the next export repeats the last days: the shared payments stay the same t
     assert.deepEqual(after.transactions.find((t) => t.ref === '91000000003')?.parts?.map((p) => p.amount), [512.5, 200, 100], 'the collective payment stays one transaction with its parts');
     assert.deepEqual(after.journalEntries?.map((e) => [e.transactionRef, e.accountDebit]), [['91000000002', '6000']], 'the hand booking still points at its payment');
     assert.deepEqual(after.bankStatements.map((s) => [s.filename, s.fromDate, s.toDate]), [['a.xml', '2026-10-01', '2026-10-15'], ['b.xml', '2026-10-10', '2026-10-16']]);
+    assert.deepEqual(after.bankStatements.map((s) => s.refs), [first.map((e) => e.ref), overlap.map((e) => e.ref)], 'each statement names the payments its file holds, with the refs the books carry (r10c-2)');
 
     const again = await api.fetch('/api/statements?name=b.xml', { method: 'POST', body: B });
     assert.equal(again.status, 409, 'the same file again is refused as read already');
