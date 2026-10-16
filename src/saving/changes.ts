@@ -310,7 +310,8 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
     const saved = entriesIn(await headBlob(repo, relative(repo, path)), path);
     for (const e of now.values()) {
       if ((e.by?.kind !== 'person' && e.by?.kind !== 'assistant') || e.date <= closedThrough) continue;
-      const was = saved.get(e.id);
+      // A booking the app made and a person changed before any save holds it is an edit too (r10k-2): its undo puts the app's booking back, from what the change kept of it.
+      const was = saved.get(e.id) ?? beforeHandChange(e);
       if (was && JSON.stringify(was) === JSON.stringify(e)) continue;
       const answer = answered.get(e.id);
       out.push({ id: e.id, ref: e.transactionRef, date: e.date, text: e.description ?? e.transactionRef, at: e.by.at, ...(e.by.kind === 'assistant' ? { ai: true } : {}), ...(was ? { saved: was } : {}), ...(answer ? { answer } : {}) });
@@ -327,6 +328,20 @@ export async function handEdits(ws: Ws): Promise<HandEdit[]> {
     }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/**
+ * The booking as it stood before a person's (or the AI's) change, when no save holds it: the fields
+ * the change kept (`by.was`) put back, the rule it names as its author again (its reason the change
+ * dropped), the app's origin. Undefined for a booking made by hand (nothing was before it).
+ */
+function beforeHandChange(e: JournalEntry): JournalEntry | undefined {
+  if ((e.by?.kind !== 'person' && e.by?.kind !== 'assistant') || !e.by.was) return undefined;
+  const { by: _by, reason: _reason, ...rest } = e;
+  const back: JournalEntry = { ...rest, ...e.by.was, origin: 'classify' };
+  if (back.vatCode === '') delete back.vatCode;
+  if (e.rule) back.by = { kind: 'rule', rule: e.rule };
+  return back;
 }
 
 /** The books as they are now, as one fingerprint: their own files' content and the names of the receipts and statements beside them. */
