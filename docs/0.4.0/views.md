@@ -120,7 +120,12 @@ keyed by the app's own lists (the areas, `COMPANY_SECTIONS`, the export presets)
 section does not compile without its line, and tests/assistant-app-map.test.ts checks every area
 folder is one of them (wishes test 2026-10-15: the sidebar said the app writes no invoices, has no
 payment term and no export package, while Rechnungen, Firma › Rechnungslayout and Exportieren
-exist). It never points to a place outside the map.
+exist). It never points to a place outside the map. Each message also tells it what waits for
+the person now (src/server/open-work.ts): the open questions, the workflows' tasks, the payments
+without a booking, the bookings whose VAT code contradicts their receipts, the receipts that may
+be a copy of another, and the bookings of the period filed last that contradicted their receipts
+and were not settled before filing (they wait for a correction in the open period; Aufgaben lists
+them too). Persona round 5, w08: «nichts sonst offen» while «M81 ohne Beleg» was open.
 
 **What it changes.** The AI never writes these files: it names the changes at the end of its
 answer, and the app checks them and makes them all, or none and says why in the person's language
@@ -150,6 +155,46 @@ in the answer as a card with **Zeigen** (it opens what changed) and **Rückgäng
   into data/exports/, the card names the file and downloads it. Nothing to undo.
 - **Booking again** («buch alles neu»): the inbox run books every open payment without a booking,
   as it does on its own; the AI never relinks by hand for that. Nothing to undo.
+
+**A fix is made, a rebooking waits for «Übernehmen».** Before the app makes an answer's changes
+to the books it tries them on a copy and compares the bookings (src/assistant/held.ts). A fix of one
+payment's bookings, its split parts included, is made at once, each change with its Rückgängig.
+An answer is held instead, and nothing of it is made, when it
+
+- changes the bookings of several payments that are booked on different accounts today, or of
+  more than three payments;
+- deletes more than one booking;
+- sets a VAT rate code (M81, I81) on a booking whose payment has no receipt that shows Swiss VAT.
+
+It then shows as one card: why («Bucht 6 Zahlungen um, die heute verschieden gebucht sind»), each
+booking as it is → as it would be (accounts, code, amount), «kein Beleg mit MWST: Vorsteuer ohne
+Nachweis» on a booking that would claim input tax without proof, the answer's other changes (an
+account to add), and **Übernehmen** and **Verwerfen**. «Übernehmen» makes them all as one answer,
+refused as any answer is; their cards follow with their Rückgängig, and «Alle rückgängig» takes
+them all back. «Verwerfen» makes none. The card stays as it was settled, with the conversation;
+the next message tells the model whether the person took the changes or not. Persona round 5,
+x02: «alles wo karte 5412 steht ist geschäftlich material, immer auf 4000» had moved seven
+bookings of four kinds (a ladder booked as an asset, a restaurant meal, two fuel payments, a
+purchase without a receipt now on M81) before the person saw any of them.
+
+A direct change that leaves a booking with a rate code and no receipt showing Swiss VAT says so on
+its card too.
+
+**Who changed it.** A booking the sidebar changes or adds records the AI as its author (`by:
+{ kind: "assistant", conversation, was }`): Buchungen › Herkunft says «KI», «Erfasst: von der KI
+geändert am …, auf deinen Wunsch» with «Gespräch öffnen», and «Warum» lists what it changed; a
+person's later edit makes the booking hers again. Änderungen lists these bookings beside the
+person's own («von der KI geändert»). When the AI changes a booking it changed before, `was` keeps
+the fields as first decided.
+
+**A rule card judges on the decisions, not on the AI's moves.** A rule the same answer drafted
+is checked for width (src/booking/rule-preview.ts) against each booking as it was before the AI
+changed it (its `was`); the card shows «vor der KI: 6200» beside «heute: 4000», so a wish that
+first rebooks the payments cannot make its own rule look narrow.
+
+**«Rückgängig» takes back what the change answered.** A change of a sale's VAT code answers the
+app's question about that payment (src/server/questions.ts learnFromCorrection); its undo opens the
+question again and drops the payer's rule it kept.
 
 It refuses an answer that
 
