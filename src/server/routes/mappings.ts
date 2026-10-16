@@ -4,7 +4,7 @@ import { assertNotSecondPayment, link, relinked, unlink } from '../edits.js';
 import type { BookChange } from '../../types/assistant.js';
 import { bookAgain, engine } from './automation.js';
 import { closeAsksWithoutRule } from '../../workflows/held.js';
-import { hasReplaced, recordReplaced, takeReplaced } from '../link-history.js';
+import { recordReplaced, takeReplaced } from '../link-history.js';
 import { periodLock, type Books } from '../../books/store.js';
 import { modelReady } from '../../llm/ask.js';
 
@@ -35,15 +35,16 @@ function restoreReplaced(books: Books, payment: string, receipt: string): boolea
  * linked now, and a payout that waited for this report as a question stops waiting (r5h-12). The
  * bookings a link replaces are kept, and «Lösen» puts them back as they were (r8h-21). A second
  * bank payment of another payee for a receipt that has one needs `confirm` (assertNotSecondPayment).
- * Without a model on this Mac, a booked payment keeps its booking and the link (or its removal) is
- * the whole change (`kept` names it): a booking is never taken away for a rebooking nobody can make
- * (r8f-41). «Lösen» still puts a replaced booking back, which needs no model.
+ * Without a model on this Mac, a booked payment keeps its booking and the link is the whole change
+ * (`kept` names it): a booking that saw no receipt claims nothing too much, and it is never taken
+ * away for a rebooking nobody can make (r8f-41). An unlink still takes the booking that claimed the
+ * receipt's VAT away, and the payment waits as a task (tests/relink-no-model.test.ts).
  */
 async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: true; again: string[]; kept?: string[] }> {
   const { receiptId: receipt, transactionRef: payment, confirm } = linkBody(body);
   const change: BookChange = { kind, receipt, payment };
-  const booked = readBooks().journalEntries.some((e) => e.transactionRef === payment);
-  const keep = booked && !(kind === 'unlink' && hasReplaced(WS, payment, receipt)) && !(await modelReady());
+  const booked = kind === 'link' && readBooks().journalEntries.some((e) => e.transactionRef === payment);
+  const keep = booked && !(await modelReady());
   const { payments, file } = updateBooks((books) => {
     if (kind === 'link') {
       if (!confirm) assertNotSecondPayment(books, receipt, payment);
@@ -56,7 +57,6 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
       return out;
     }
     unlink(books, receipt, payment);
-    if (keep) return { payments: [] };
     const out = relinked(books, [change]);
     return restoreReplaced(books, payment, receipt) ? { ...out, payments: out.payments.filter((p) => p !== payment) } : out;
   });

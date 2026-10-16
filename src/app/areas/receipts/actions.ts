@@ -55,12 +55,9 @@ export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, fro
   correct(books, entry, correctionKinds(entry)[0], from);
 }
 
-/** The undo puts a link back that the person had: a second payment of the receipt included. Without a model the booking stays (`kept`), and the toast says so. */
-export function unlinkPayment(nav: Nav, v: ReceiptView, ref: string, what: string) {
-  let kept = false;
-  return run(nav, async () => { kept = !!(await api.removeMapping(pair(v.r.id, ref))).kept?.length; }, () => t(kept ? 'receipts.unlinkedKept' : 'receipts.unlinked', { what }),
-    () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
-}
+/** The undo puts a link back that the person had: a second payment of the receipt included. */
+export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
+  run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
 
 /**
  * Paid privately or in cash: one write makes the owner's payment on the receipt's date and amount

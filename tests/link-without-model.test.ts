@@ -2,7 +2,9 @@
  * «Zuordnen» of a receipt to a payment that is booked already, on a Mac without Claude (r8f-41):
  * the booking stays and the answer says so (`kept`), instead of the booking going and the rebooking
  * waiting for a model that is not there. The undo («Lösen») takes the link back and leaves the
- * booking. A payment without a booking is booked again as before (its run holds at the hand step).
+ * booking, which saw no receipt. A payment without a booking is booked again as before (its run
+ * holds at the hand step), and so is one whose booking claimed a receipt now unlinked
+ * (tests/relink-no-model.test.ts).
  * On the real API server, whose `claude` is tests/support/no-model-bin.
  */
 import { test, before, after } from 'node:test';
@@ -21,7 +23,7 @@ function books(): Fixture {
   const f = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture;
   const entry: JournalEntry = { id: 'jo', transactionRef: 'O1', date: '2026-08-10', accountDebit: '6500', accountCredit: '1021', amount: 20, description: 'Bank August', vatCode: 'I0', origin: 'classify', receipts: [], by: { kind: 'model', model: 'sonnet' }, reason: 'ohne Beleg: kein Vorsteuerabzug' };
   const receipt: Receipt = { id: 'rv', filename: 'august.pdf', originalFilename: 'august.pdf', extractedText: 'Rechnung August MWST 8.1%', extractionMethod: 'pdftotext', fileSize: 10, indexedAt: '2026-08-11T08:00:00Z', location: 'archived', date: '2026-08-10', amount: 20, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 18.5, vat: 1.5, gross: 20 }] };
-  return { ...f, journalEntries: f.journalEntries.map((e) => (e.id === 'jo' ? entry : e)), receipts: [...f.receipts, receipt] };
+  return { ...f, journalEntries: f.journalEntries.map((e) => (e.id === 'jo' ? entry : e)), receipts: [...f.receipts, receipt], mappings: f.mappings.filter((m) => m.transactionRef !== 'O1') };
 }
 
 before(async () => { api = await startApi(FIXTURE); });
@@ -45,7 +47,7 @@ test('r8f-41: without a model, linking a receipt to a booked payment keeps the b
   assert.deepEqual(after1.links.map((m) => m.by), ['human'], 'the link is there, as made by hand (Änderungen lists it)');
 
   const loose = await api.send('POST', '/api/mapping/remove', { receiptId: 'rv', transactionRef: 'O1' });
-  assert.deepEqual(loose.json, { ok: true, again: [], kept: ['O1'] }, 'the undo takes the link back and keeps the booking too: the payment has another receipt the booking never saw, which a model would rebook');
+  assert.deepEqual(loose.json, { ok: true, again: [] }, 'the undo takes the link back; the booking, which saw no receipt, fits the payment as before');
   const after2 = await onO1();
   assert.deepEqual(after2.entries, before, 'the undo leaves the booking');
   assert.deepEqual(after2.links, []);
