@@ -7,6 +7,7 @@ import { closeAsksWithoutRule } from '../../workflows/held.js';
 import { recordReplaced, takeReplaced } from '../link-history.js';
 import { periodLock, type Books } from '../../books/store.js';
 import { modelReady } from '../../llm/ask.js';
+import { archiveReceipt } from '../../books/archive.js';
 
 export const router = Router();
 
@@ -38,7 +39,8 @@ function restoreReplaced(books: Books, payment: string, receipt: string): boolea
  * Without a model on this Mac, a booked payment keeps its booking and the link is the whole change
  * (`kept` names it): a booking that saw no receipt claims nothing too much, and it is never taken
  * away for a rebooking nobody can make (r8f-41). An unlink still takes the booking that claimed the
- * receipt's VAT away, and the payment waits as a task (tests/relink-no-model.test.ts).
+ * receipt's VAT away, and the payment waits as a task (tests/relink-no-model.test.ts). A receipt
+ * still in beleg-import/ is archived by the link, as the model's match step would archive it (r9n-26).
  */
 async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: true; again: string[]; kept?: string[] }> {
   const { receiptId: receipt, transactionRef: payment, confirm } = linkBody(body);
@@ -50,6 +52,8 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
       if (!confirm) assertNotSecondPayment(books, receipt, payment);
       const had = books.journalEntries.filter((e) => e.transactionRef === payment);
       link(books, receipt, payment);
+      const r = books.receipts.find((x) => x.id === receipt);
+      if (r) archiveReceipt(WS, books, r);
       if (keep) return { payments: [] };
       const out = relinked(books, [change]);
       const gone = had.filter((e) => !books.journalEntries.includes(e));

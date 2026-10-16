@@ -5,12 +5,12 @@
  *   into receipts/ and linked when the model is at least 80 % sure
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
-import { existsSync, mkdirSync, renameSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/prompts.js';
 import type { BankTransaction, Receipt } from '../types/index.js';
-import { periodLock, receiptHome, type Books } from '../books/store.js';
-import { findFile } from '../workspace/workspace.js';
+import { periodLock, type Books } from '../books/store.js';
+import { archiveReceipt } from '../books/archive.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
 import { baseCurrency, documents } from '../engines/index.js';
 import { textFacts } from '../parsers/receipt-text.js';
@@ -66,15 +66,6 @@ function dateOf(read: string | undefined, r: Receipt): Pick<Receipt, 'date' | 'd
 /** A name the model dated 00000000 (it found no date) takes the receipt's date, or none. */
 const datedName = (name: string, date: string | undefined) =>
   name.replace(/^0{8}(?=[-_.])/, date ? date.replace(/-/g, '') : '').replace(/^[-_]+/, '') || 'receipt.pdf';
-
-/** `desiredName`, or with -2, -3, … when a year folder already holds that name. */
-function resolveCollision(desiredName: string, taken: (name: string) => boolean): string {
-  if (!taken(desiredName)) return desiredName;
-  const base = desiredName.replace(/\.pdf$/i, '');
-  let i = 2;
-  while (taken(`${base}-${i}.pdf`)) i++;
-  return `${base}-${i}.pdf`;
-}
 
 /** What a receipt says before the model reads it: its date and total as stored, from the file name, the VAT block or the text. */
 function factsOf(r: Receipt): { date?: string; amount?: number; currency?: string } {
@@ -227,15 +218,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
    */
   const archive = (receipt: Receipt, desired: string, change: (r: Receipt, books: Books) => void): string | undefined => books.update((index) => {
     const r = index.receipts.find((x) => x.id === receipt.id);
-    const srcPath = join(IMPORT_DIR, receipt.filename);
-    if (!r || r.location !== 'staged' || r.filename !== receipt.filename || !existsSync(srcPath)) return undefined;
-    const target = resolveCollision(desired, (name) => !!findFile(ws.paths, 'receipts', name));
+    if (!r || r.location !== 'staged' || r.filename !== receipt.filename || !existsSync(join(IMPORT_DIR, receipt.filename))) return undefined;
     change(r, index);
-    Object.assign(r, { filename: target, location: 'archived' });
-    const home = receiptHome(ws, index, r);
-    mkdirSync(home, { recursive: true });
-    renameSync(srcPath, join(home, target));
-    return target;
+    return archiveReceipt(ws, index, r, desired);
   });
 
   // ── Move needsVisionReview receipts without a model ────────────────────────
