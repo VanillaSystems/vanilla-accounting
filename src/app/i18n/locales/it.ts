@@ -3161,6 +3161,11 @@ export default {
     'yearClose.check.bookingsPlausible': 'Nessuna cassa in negativo, nessuna vendita con i lati invertiti',
     // r8k-5/9/10 r8h-21
     'receipts.whyPart': 'parte {amount} a {who}',
+    'receipts.hasPaymentAlready': 'Questo giustificativo ha già un pagamento: {what}. Collegarne un secondo solo se è stato pagato in due pagamenti.',
+    'receipts.secondPaymentAsk': 'Collegare il secondo pagamento {what}? ↵ conferma',
+    'receipts.pickFirst': 'scegliere una riga',
+    'receipts.confirmVerb': 'confermare',
+    'error.secondPayment': 'Il giustificativo ha già il pagamento {payment}. Un secondo pagamento a un’altra controparte lo pagherebbe due volte: collegarlo solo se è stato davvero pagato in due pagamenti.',
     'drop.p.noPayment': 'ancora nessun pagamento adatto: collegarlo sotto Giustificativi',
   },
 } satisfies Locale;

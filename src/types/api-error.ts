@@ -31,6 +31,8 @@ export type ApiRefusal =
   | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }
   /** «Privat oder bar bezahlt» on a receipt a payment already pays (src/server/edits.ts privatePayment). */
   | { code: 'receiptPaid'; params: { receipt: string; payment: string } }
+  /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
+  | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
   /** Cash basis: a booking of a payment keeps the payment's date (src/server/edits.ts applyAnswer). */
   | { code: 'paymentDate'; params: { date: string } }

@@ -3161,6 +3161,11 @@ export default {
     'yearClose.check.bookingsPlausible': 'Aucune caisse négative, aucune vente aux côtés inversés',
     // r8k-5/9/10 r8h-21
     'receipts.whyPart': 'part {amount} à {who}',
+    'receipts.hasPaymentAlready': 'Ce justificatif a déjà un paiement : {what}. N’en lier un deuxième que s’il a été payé en deux fois.',
+    'receipts.secondPaymentAsk': 'Lier le deuxième paiement {what} ? ↵ confirme',
+    'receipts.pickFirst': 'choisir une ligne',
+    'receipts.confirmVerb': 'confirmer',
+    'error.secondPayment': 'Le justificatif a déjà le paiement {payment}. Un deuxième paiement à un autre destinataire le paierait deux fois : ne le lier que s’il a vraiment été payé en deux fois.',
     'drop.p.noPayment': 'pas encore de paiement correspondant : à lier sous Justificatifs',
   },
 } satisfies Locale;

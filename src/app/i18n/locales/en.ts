@@ -3161,6 +3161,11 @@ export default {
     'yearClose.check.bookingsPlausible': 'No cash account below zero, no sale with its sides swapped',
     // r8k-5/9/10 r8h-21
     'receipts.whyPart': 'part {amount} to {who}',
+    'receipts.hasPaymentAlready': 'This receipt already has a payment: {what}. Link a second one only if it was paid in two payments.',
+    'receipts.secondPaymentAsk': 'Link the second payment {what}? ↵ confirms',
+    'receipts.pickFirst': 'pick a row',
+    'receipts.confirmVerb': 'confirm',
+    'error.secondPayment': 'The receipt already has the payment {payment}. A second payment to another payee would pay it twice: link it only if it really was paid in two payments.',
     'drop.p.noPayment': 'no fitting payment yet: link it under Receipts',
   },
 } satisfies Locale;

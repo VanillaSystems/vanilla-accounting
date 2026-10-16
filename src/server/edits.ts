@@ -13,7 +13,7 @@ import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { withoutInputTax } from '../engines/index.js';
-import type { BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
+import type { BankTransaction, BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -21,6 +21,7 @@ import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
+import { nameWords } from '../intake/match.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -83,6 +84,26 @@ export function unbookedPayments(books: Books, receipts: readonly string[]): str
   const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
   const refs = new Set(books.mappings.filter((m) => receipts.includes(m.receiptId)).map((m) => m.transactionRef));
   return books.transactions.filter((t) => refs.has(t.ref) && !booked.has(t.ref) && !lock.isClosed(t.date)).map((t) => t.ref);
+}
+
+/** Two payments go to the same payee: the same IBAN, or a word that names who was paid in both (src/intake/match.ts nameWords). */
+const samePayee = (a: BankTransaction, b: BankTransaction): boolean =>
+  (!!a.counterpartyIban && a.counterpartyIban === b.counterpartyIban) || nameWords(a).some((w) => nameWords(b).includes(w));
+
+/**
+ * A receipt a bank payment already pays takes a second bank payment of another payee only when the
+ * person confirms (r8h-21: a stray key linked an AHV payment to a paid supplier invoice). Two
+ * payments to the same payee (an invoice paid in two parts) pass; a private outlay is refused by
+ * privatePayment already.
+ */
+export function assertNotSecondPayment(books: Books, receipt: string, payment: string): void {
+  const next = books.transactions.find((t) => t.ref === payment);
+  if (!next) return;
+  const other = books.mappings.filter((m) => m.receiptId === receipt && m.transactionRef !== payment)
+    .map((m) => books.transactions.find((t) => t.ref === m.transactionRef))
+    .find((t): t is BankTransaction => !!t && t.bank !== 'manual' && !samePayee(t, next));
+  if (!other) return;
+  throw new RequestError(409, `Der Beleg hat schon die Zahlung ${other.ref} vom ${day(other.date)} (${other.description}). Eine zweite Zahlung an eine andere Stelle würde ihn doppelt bezahlen: nur verknüpfen, wenn er wirklich in zwei Zahlungen bezahlt wurde.`, { code: 'secondPayment', params: { receipt, payment: other.ref } });
 }
 
 export function link(books: Books, receipt: string, payment: string): BookChange | undefined {

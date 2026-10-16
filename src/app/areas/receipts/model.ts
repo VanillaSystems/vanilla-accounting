@@ -277,6 +277,23 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
 /** A best fit: the amount fits (the same, a Skonto, an exact part) and the money goes the receipt's way. */
 const isBest = (c: Candidate) => !!c.fit && c.fit.kind !== 'off' && !c.wrongWay;
 
+/** What a key does in the link dialog's list: picks a row, chooses the picked one, closes; undefined for a key the search takes. */
+export type LinkKey = { kind: 'pick'; idx: number } | { kind: 'choose'; idx: number } | { kind: 'close' };
+
+/**
+ * The link dialog's keys over `count` rows, `idx` the row picked so far (undefined: none). ↓ and ↑
+ * pick, wrapping; ↵ chooses the picked row, and with none picked only picks the first: a stray ↵
+ * links nothing (r8h-21, r7h-23). Esc closes.
+ */
+export function linkKey(idx: number | undefined, key: string, count: number): LinkKey | undefined {
+  if (!count) return key === 'Escape' ? { kind: 'close' } : undefined;
+  if (key === 'ArrowDown') return { kind: 'pick', idx: idx === undefined ? 0 : (idx + 1) % count };
+  if (key === 'ArrowUp') return { kind: 'pick', idx: idx === undefined ? count - 1 : (idx - 1 + count) % count };
+  if (key === 'Enter') return idx === undefined ? { kind: 'pick', idx: 0 } : { kind: 'choose', idx: Math.min(idx, count - 1) };
+  if (key === 'Escape') return { kind: 'close' };
+  return undefined;
+}
+
 /**
  * The payment to offer with one key: the only open payment of exactly this amount, in this
  * currency, within a month of the receipt, that has no receipt yet.

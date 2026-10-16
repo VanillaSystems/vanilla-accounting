@@ -85,6 +85,7 @@ export function errorText(e: unknown): string {
     case 'hasEntries': return t('error.hasEntries');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
+    case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'yearClose': return t('error.yearClose');
     case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
@@ -183,7 +184,8 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser', missing?: Missin
 }
 
 type Ok = { ok: true };
-type Link = { receiptId: string; transactionRef: string };
+/** `confirm`: a second bank payment of another payee for a receipt that has one, confirmed (r8h-21). */
+type Link = { receiptId: string; transactionRef: string; confirm?: true };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };

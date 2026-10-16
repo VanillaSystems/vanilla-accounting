@@ -3158,6 +3158,11 @@ export const messages = {
   'yearClose.check.bookingsPlausible': 'Keine Kasse im Minus, kein Verkauf mit vertauschten Seiten',
   // r8k-5/9/10 r8h-21
   'receipts.whyPart': 'Teil {amount} an {who}',
+  'receipts.hasPaymentAlready': 'Dieser Beleg hat schon eine Zahlung: {what}. Eine zweite nur verknüpfen, wenn er in zwei Zahlungen bezahlt wurde.',
+  'receipts.secondPaymentAsk': 'Zweite Zahlung {what} verknüpfen? ↵ bestätigt',
+  'receipts.pickFirst': 'Zeile wählen',
+  'receipts.confirmVerb': 'bestätigen',
+  'error.secondPayment': 'Der Beleg hat schon die Zahlung {payment}. Eine zweite Zahlung an eine andere Stelle würde ihn doppelt bezahlen: nur verknüpfen, wenn er wirklich in zwei Zahlungen bezahlt wurde.',
   'drop.p.noPayment': 'noch keine passende Zahlung: unter Belege verknüpfen',
 } as const;
 
