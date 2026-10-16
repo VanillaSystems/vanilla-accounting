@@ -21,13 +21,28 @@
 .rows.je .row.cont::before { content: ''; position: absolute; left: 92px; top: -50%; height: 100%; width: 7px; border-left: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2); border-bottom-left-radius: 5px; transform: translateY(-1px); }
 .rows.je .row.cont > .t { padding-left: 14px; }
 .rows.je .row > .t { min-width: 0; overflow: hidden; }
-/* A narrow list (a 1024 px window with the KI sidebar open): the amount stays whole, the currency column and the wide gaps go (r7h-28). */
+/* A narrow list (a 1280 px window with the KI sidebar open): the currency column goes with its track, so the amount keeps a track of its own, and the wide gaps go (r7h-28, r8h-7). */
 @container (max-width: 400px) {
-  .rows.je { grid-template-columns: 76px minmax(0, 1fr) auto auto auto 0 auto; }
+  .rows.je { grid-template-columns: 76px minmax(0, 1fr) auto auto auto auto; }
   .rows.je .cu { display: none; }
+  .rows.je .group .n { grid-column: 6; }
   .rows.je .cr, .rows.je .vc, .rows.je .group .cap, .rows.je .group .cap.vh { padding-left: 8px; }
-  .rows.je .row > .t { padding-right: 6px; }
+  .rows.je .row > .t { padding-left: 6px; padding-right: 6px; }
   .rows.je .row.cont::before { left: 80px; }
+}
+/* Narrower still (a 1024 px window with the sidebar open): two lines a booking, date, text and amount above, Soll and Haben under the text, the code under the amount (r8h-7). */
+@container (max-width: 300px) {
+  .rows.je { grid-template-columns: 76px auto auto 1fr; }
+  .rows.je .row { grid-template-rows: auto auto; row-gap: 2px; }
+  .rows.je .row > .d { grid-area: 1 / 1; }
+  .rows.je .row > .t { grid-area: 1 / 2 / 2 / 4; padding-left: 6px; }
+  .rows.je .row > .a { grid-area: 1 / 4; }
+  .rows.je .row > .dr { grid-area: 2 / 2; padding-left: 6px; }
+  .rows.je .row > .cr { grid-area: 2 / 3; }
+  .rows.je .row > .vc { grid-area: 2 / 4; justify-self: end; padding-left: 0; }
+  .rows.je .group .gl { grid-column: 1 / 4; }
+  .rows.je .group .cap { display: none; }
+  .rows.je .group .n { grid-column: 4; }
 }
 
 .satz { margin-top: 14px; display: grid; gap: 2px; max-width: 640px; font-size: 13px; }
