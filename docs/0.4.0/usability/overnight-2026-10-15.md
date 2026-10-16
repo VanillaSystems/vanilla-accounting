@@ -80,3 +80,11 @@ file records every decision a person might have made differently, newest last.
     6510» only worked because the model guessed. Rules with a structured «then» are now applied in
     code before any model call (also without Claude); free-text rules (all 88 of the real books)
     stay notes for the model, so the real books' bookings do not change.
+20. Accountant tools merged: opening balances typed in Firma › Eröffnung (2970 the plug; the Bilanz
+    names the real cause of a difference); a manual entry books its payment, and an entry typed
+    without one can be attached to it; accruals reverse on 1.1. with the entry; Gegenbuchung and
+    Kopieren on every entry; the Abschluss checklist ticks entries booked in Buchungen; a journal
+    filter by origin; the journal as PDF in the Treuhänder-Paket.
+21. Question channel (accountant ↔ owner): built; held back until an answered «privat» becomes a
+    precedent only on a specific key (VAT number, vendor), never a generic bank text like «Karte
+    … Einkauf», which would book every card purchase as private.
