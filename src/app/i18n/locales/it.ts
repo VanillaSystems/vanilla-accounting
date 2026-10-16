@@ -2513,6 +2513,7 @@ export default {
     'assistant.empty': 'Di’ con parole tue cosa vuoi: «Questo giustificativo è di Farbmix, 28.6.2026, 1243.55 con IVA», «Collegalo al pagamento del 3 luglio», «Perché questa registrazione è così?». L’IA lo fa subito; ogni modifica si può annullare.',
     'assistant.placeholder': 'Cosa deve fare l’IA? (+ per un riferimento, @ per un processo o un’esecuzione)',
     'assistant.undo': 'Annulla',
+    'assistant.applied': { one: 'Fatto: 1 modifica, con «Annulla».', other: 'Fatto: {n} modifiche, ognuna con «Annulla».' },
     'assistant.undone': 'annullato',
     'assistant.details': 'Dettagli',
     'assistant.refused': 'Non modificato: {why}',

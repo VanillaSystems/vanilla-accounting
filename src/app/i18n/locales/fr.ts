@@ -2513,6 +2513,7 @@ export default {
     'assistant.empty': 'Dis avec tes mots ce que tu veux : «Ce justificatif est de Farbmix, 28.6.2026, 1243.55 avec TVA», «Relie-le au paiement du 3 juillet», «Pourquoi cette écriture est-elle ainsi ?». L’IA le fait aussitôt ; chaque modification peut être annulée.',
     'assistant.placeholder': 'Que doit faire l’IA ? (+ pour une référence, @ pour un processus ou une exécution)',
     'assistant.undo': 'Annuler',
+    'assistant.applied': { one: 'Fait : 1 modification, avec « Annuler ».', other: 'Fait : {n} modifications, chacune avec « Annuler ».' },
     'assistant.undone': 'annulé',
     'assistant.details': 'Détails',
     'assistant.refused': 'Pas modifié : {why}',

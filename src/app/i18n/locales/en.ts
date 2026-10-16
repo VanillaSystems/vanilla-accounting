@@ -2513,6 +2513,7 @@ export default {
     'assistant.empty': 'Say what you want in your own words: «This receipt is from Farbmix, 28.6.2026, 1243.55 with VAT», «Link it to the payment of 3 July», «Why is this booking like this?». The AI does it at once; every change can be taken back.',
     'assistant.placeholder': 'What should the AI do? (+ for a reference, @ for a workflow or run)',
     'assistant.undo': 'Undo',
+    'assistant.applied': { one: 'Done: 1 change, with «Undo».', other: 'Done: {n} changes, each with «Undo».' },
     'assistant.undone': 'taken back',
     'assistant.details': 'Details',
     'assistant.refused': 'Not changed: {why}',

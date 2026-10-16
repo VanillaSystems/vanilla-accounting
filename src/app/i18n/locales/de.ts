@@ -2510,6 +2510,7 @@ export const messages = {
   'assistant.empty': 'Sag in deinen Worten, was du willst: «Dieser Beleg ist von Farbmix, 28.6.2026, 1243.55 mit MWST», «Verknüpf ihn mit der Zahlung vom 3. Juli», «Warum ist diese Buchung so?». Die KI macht es gleich; jede Änderung lässt sich zurücknehmen.',
   'assistant.placeholder': 'Was soll die KI tun? (+ für einen Verweis, @ für einen Ablauf oder Lauf)',
   'assistant.undo': 'Rückgängig',
+  'assistant.applied': { one: 'Gemacht: 1 Änderung, mit «Rückgängig».', other: 'Gemacht: {n} Änderungen, je mit «Rückgängig».' },
   'assistant.undone': 'zurückgenommen',
   'assistant.details': 'Details',
   'assistant.refused': 'Nicht geändert: {why}',

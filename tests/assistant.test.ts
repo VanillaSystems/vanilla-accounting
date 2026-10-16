@@ -134,8 +134,8 @@ test('the changes an answer asks for are made at once, each undone on its own; o
     const vat = { hasSwissVat: true, vatId: 'CHE-123.456.789', vatSummary: [{ ratePercent: 8.1, net: 100, vat: 8.1, gross: 108.1 }] };
     writeFileSync(changes, JSON.stringify([{ kind: 'receipt', id: open.id, set: { date: '2026-06-28', amount: 108.1, currency: 'CHF', vat } }]));
     const events = await post({ text: 'Bitte richtig eintragen', language: 'de', context: [{ kind: 'receipt', id: open.id, label: 'Beleg' }] });
-    assert.deepEqual(events.slice(-2).map((e) => e.type), ['changes', 'done'], 'the changes come before done');
-    const made = (events.at(-2) as Extract<AssistantEvent, { type: 'changes' }>).changes;
+    assert.deepEqual(events.slice(-3).map((e) => e.type), ['changes', 'replace', 'done'], 'the changes, then the app\'s line on what it made (r8f-47), come before done');
+    const made = (events.at(-3) as Extract<AssistantEvent, { type: 'changes' }>).changes;
     assert.equal(made.length, 1);
     await rest();
     const after = (await books()).receipts.find((r) => r.id === open.id)!;

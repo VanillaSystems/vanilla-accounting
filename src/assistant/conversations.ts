@@ -12,6 +12,7 @@ import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationS
 import { ChangesError, changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
+import { wordsIn } from '../export/texts.js';
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const dir = (ws: Pick<Workspace, 'paths'>) => join(ws.paths.data, 'assistant');
@@ -101,6 +102,9 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
         } else {
           ai.changes = applied.made;
           onEvent({ type: 'changes', changes: ai.changes });
+          // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer.
+          ai.text = `${ai.text.trimEnd()}\n\n${wordsIn(send.language).t('assistant.applied', { n: applied.made.length })}`;
+          onEvent({ type: 'replace', text: ai.text });
         }
       }
     } catch (e) {

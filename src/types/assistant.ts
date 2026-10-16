@@ -190,7 +190,7 @@ export type AssistantEvent =
   | { type: 'held'; held: HeldChanges }
   /** `refusal`: its code, so the UI says why in the person's language. */
   | { type: 'refused'; message: string; refusal?: ApiRefusal }
-  /** The answer's text, whole, in place of what streamed: after a refusal, what was not done and why. */
+  /** The answer's text, whole, in place of what streamed: after a refusal, what was not done and why; after changes made, with the app's line on what it made. */
   | { type: 'replace'; text: string }
   | { type: 'done'; session?: string; isError: boolean }
   | { type: 'error'; message: string };
