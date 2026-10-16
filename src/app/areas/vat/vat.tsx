@@ -20,7 +20,7 @@ import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import {
-  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
+  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, ratesRoundedApart, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
 import { correctionDiff, signed, useReturn, zifferLabel, headline } from './view.js';
@@ -128,6 +128,7 @@ function Return(props: Props) {
         {head.corrected ? <span className="m" data-testid="corrected-now">{t(head.corrected.kind === 'credit' ? 'vat.nowCredit' : 'vat.nowToPay', { amount: fmt(head.corrected.amount), diff: signed(head.corrected.diff) })}</span> : null}
         {head.rounding ? <span className="m" data-testid="rounding-note">{t('vat.headRounding', { ziffern: fmt(head.rounding.ziffern) })}</span> : null}
       </button>
+      {ratesRoundedApart(v) ? <p className="m" data-testid="rate-rounding-note">{t('vat.rateRounding')}</p> : null}
       <div className="rows vz" role="listbox" aria-label={t('vat.ziffern')}>
         {SECTIONS.map((s) => {
           const ns = rows.filter((n) => sectionOf(Number(n)) === s);

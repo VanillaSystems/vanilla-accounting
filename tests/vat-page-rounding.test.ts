@@ -12,7 +12,8 @@ import { setJurisdiction, vat } from '../src/engines/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import type { VatSetup } from '../src/workspace/vat-setup.js';
 import type { Index, JournalEntry } from '../src/types/index.js';
-import { amountOf, headline, rateOf, vatReturn } from '../src/app/areas/vat/model.js';
+import { readFileSync } from 'node:fs';
+import { amountOf, headline, ratesRoundedApart, rateOf, vatReturn } from '../src/app/areas/vat/model.js';
 
 const { jurisdiction } = loadJurisdiction(APP_ROOT, 'ch');
 const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] };
@@ -42,4 +43,16 @@ test('the MWST page of a filing period shows the tax on each rate\'s total and t
   } finally {
     setJurisdiction(jurisdiction);
   }
+});
+
+test('the MWST page notes when the rate rows, each rounded, add up a Rappen off the rounded total; it moves no figure', () => {
+  const sale = (id: string, amount: number, vatCode: string): JournalEntry => je(id, '2026-08-03', '1020', '3000', amount, { vatCode });
+  const off: Index = { ...books, config: { closedThrough: '2026-03-31' }, journalEntries: [sale('a', 100, 'V81'), sale('b', 100, 'V26')] };
+  const even: Index = { ...off, journalEntries: [sale('a', 1081, 'V81'), sale('b', 1026, 'V26')] };
+  const v = vatReturn(off, '2026-Q3', '2026-10-16');
+  assert.equal(ratesRoundedApart(v), true, '7.49 + 2.53 = 10.02, the total 10.0271 rounds to 10.03');
+  assert.equal(amountOf(v, '399'), 10.03, 'the total is the return\'s');
+  assert.equal(ratesRoundedApart(vatReturn(even, '2026-Q3', '2026-10-16')), false, 'rows that add up: no note');
+  assert.equal(ratesRoundedApart(vatReturn(off, '2026', '2026-10-16')), false, 'a year files nothing');
+  for (const l of ['de', 'en', 'fr', 'it']) assert.match(readFileSync(`src/app/i18n/locales/${l}.ts`, 'utf8'), /'vat\.rateRounding'/);
 });

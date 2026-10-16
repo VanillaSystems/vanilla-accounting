@@ -8,7 +8,7 @@ import { entriesForReturn } from '../../../accounting/index.js';
 import { chfAmount } from '../../../accounting/ledger.js';
 import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
 import { chart, vat, filing, registration } from '../../../engines/index.js';
-import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
+import { taxOfRow, type ReturnFigures, type VatLine, type VatReport } from '../../../engines/return.js';
 import type { BoxId, Formula, ReturnData } from '../../../core/modules/schema.js';
 
 /** The four parts of the return, as the form groups its Ziffern. */
@@ -231,4 +231,15 @@ export function correctionBoxes(form: ReturnData): { turnover: string[]; turnove
     settlement: derived('500', '510'),
     otherFlows: ['900', '910'],
   };
+}
+
+/**
+ * True when the rate rows' taxes, each rounded, add up to a Rappen more or less than the rounded total
+ * (src/engines/return.ts: the return rounds the total of the unrounded rows once). A period that files
+ * nothing (a half year, a year) rounds nothing.
+ */
+export function ratesRoundedApart(v: VatReturn): boolean {
+  if (v.state.kind === 'overview') return false;
+  const taxes = v.report.rates.map((r) => taxOfRow(r.row, formAmount(v, r.row.ziffer)) * 100);
+  return Math.round(taxes.reduce((s, x) => s + x, 0)) !== taxes.reduce((s, x) => s + Math.round(x), 0);
 }
