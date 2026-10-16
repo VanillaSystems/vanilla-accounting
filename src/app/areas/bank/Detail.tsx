@@ -171,7 +171,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
 /** The chosen payment in one line: its receipt, its entry, what is missing; a hint while none is chosen. */
 function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean; onClear(): void }) {
   const { b, tx, nav, canEdit, closed, onClear } = props;
-  const vatRegistered = !!useWorkspace()?.company.vat;
+  const vatRegistered = useWorkspace()?.company.vat.registered ?? true;
   if (!tx) return <span className="payhint">{t('bank.payHint')}</span>;
   const receipts = b.receiptsOf(tx.ref);
   const entry = b.entriesOf(tx.ref)[0];

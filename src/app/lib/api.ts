@@ -112,6 +112,7 @@ export function errorText(e: unknown): string {
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
+    case 'vatMethodHeld': return t('error.vatMethodHeld', { year: b.params.year, n: b.params.entries, next: String(Number(b.params.year) + 1) });
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
       return b.params.reason ? `${closed} ${t(`error.closed.${b.params.reason}`)}` : closed;
@@ -123,7 +124,9 @@ export function errorText(e: unknown): string {
 /** Why a new workspace was refused, as the start screen says it (src/workspace/create.ts). */
 export function setupText(r: SetupRefusal): string {
   switch (r.reason) {
-    case 'unsupported': return r.question === 'preset' ? t('desktop.q.preset.freelancer.unsupported') : tData(`desktop.q.${r.question}.${r.value}.unsupported`);
+    case 'unsupported': return r.question === 'preset' ? tData(`desktop.q.preset.${r.value}`) : tData(`desktop.q.${r.question}.${r.value}.unsupported`);
+    case 'missing': return t('desktop.setup.missing', { question: tData(`desktop.q.${r.question}.ask`) });
+    case 'netRates': return t('desktop.setup.netRates', { detail: r.detail });
     case 'required': return t(`desktop.setup.required.${r.field}`);
     case 'uid': case 'language': case 'preset': return t(`desktop.setup.${r.reason}`, { detail: r.detail });
     case 'noBank': return t('desktop.setup.noBank');

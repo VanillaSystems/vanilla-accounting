@@ -188,8 +188,8 @@ export type BookedBy =
   | { kind: 'model'; model: string }
   | { kind: 'person'; at: string; was?: BookingFields };
 
-/** A VAT quarter, e.g. "2026-Q2". */
-export type QuarterKey = `${number}-Q${1 | 2 | 3 | 4}`;
+/** A filing period: a quarter ("2026-Q2") for a firm filing quarterly, a half year ("2026-H1") for one filing half-yearly. */
+export type QuarterKey = `${number}-Q${1 | 2 | 3 | 4}` | `${number}-H${1 | 2}`;
 
 export interface AccountingConfig {
   closedThrough?: string;

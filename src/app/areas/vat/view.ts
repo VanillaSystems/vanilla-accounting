@@ -12,6 +12,7 @@ import type { ReturnFigures } from '../../../engines/return.js';
 /** A Ziffer's short name in the list and the detail heading. */
 export function zifferLabel(v: VatReturn, n: string): string {
   const r = rateOf(v, n);
+  if (r?.row.kind === 'net-rate') return t('vat.nNetRate', { name: r.row.name, rate: r.row.rate });
   if (r) return t(r.row.kind === 'supply' ? 'vat.nSupply' : 'vat.nAcquisition', { rate: r.row.rate });
   return t(`vat.n${n}` as 'vat.n200');
 }

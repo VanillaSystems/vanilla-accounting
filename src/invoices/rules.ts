@@ -9,7 +9,7 @@ import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
-import { invoicing, vat } from '../engines/index.js';
+import { invoicing, vat, vatSetup } from '../engines/index.js';
 import { referenceFor } from '../providers/qr-bill/reference.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────
@@ -321,9 +321,13 @@ export function allocate(inv: Issued, invoices: readonly Invoice[], amount: numb
   return { amount: fromRappen(toInvoice), fee: fromRappen(fee), surplus: fromRappen(pay - toInvoice - fee) };
 }
 
-/** The VAT code a rate books revenue with (cash basis: when the money arrives). */
-export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined): string {
-  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate);
+/**
+ * The VAT code a rate books revenue with (cash basis: when the money arrives): the rate's sale
+ * code, the firm's first net rate on the net tax rate method, none for a firm not registered.
+ */
+export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined): string | undefined {
+  if (!vatSetup().registered) return undefined;
+  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate) ?? vat().codes.netRateCode(1);
   if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}`);
   return code;
 }
@@ -332,7 +336,7 @@ export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined):
  * The revenue a payment of `amount` books, split like the invoice's total over its accounts and
  * rates, so a part payment books the same mix as the whole. The parts add up to `amount` exactly.
  */
-export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string; amount: number }> {
+export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string | undefined; amount: number }> {
   const groups = new Map<string, { account: string; rate: VatRate; gross: number }>();
   for (const [rate, lines] of groupBy(inv.lines, (l) => l.vatRate)) {
     const rt = totals(lines);

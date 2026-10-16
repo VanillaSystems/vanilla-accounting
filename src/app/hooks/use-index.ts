@@ -19,7 +19,7 @@ export function useIndex() {
       api.modules(),
     ]).then(([json, accounts, modules]) => {
       setAccounts(accounts);
-      setJurisdiction(modules.effective);
+      setJurisdiction(modules.effective, modules.vat);
       setData(json);
       setLoading(false);
     }).catch((e: Error) => {

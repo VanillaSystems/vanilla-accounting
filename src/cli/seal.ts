@@ -17,28 +17,29 @@
  * says the year-end entries are booked already.
  */
 import { loadBooks, saveBooks } from '../books/store.js';
-import { asQuarter, checkSeals, quarterOf, writeSeal } from '../books/seal.js';
-import { derivePeriod } from '../accounting/periods.js';
+import { asQuarter, checkSeals, closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
+import { addDays, derivePeriod } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const args = process.argv.slice(2);
-const quarter = asQuarter(args.find((a) => !a.startsWith('--')) ?? '');
+const ws = openWorkspace();
+const quarter = asQuarter(args.find((a) => !a.startsWith('--')) ?? '', ws.filingLength);
 if (!quarter) {
-  console.error('Usage: npm run seal -- <YYYY-Qn> [--close]   e.g. npm run seal -- 2026-Q3 --close');
+  const half = ws.filingLength === 'half';
+  console.error(`Usage: npm run seal -- <${half ? 'YYYY-Hn' : 'YYYY-Qn'}> [--close]   e.g. npm run seal -- ${half ? '2026-H1' : '2026-Q3'} --close`);
   process.exit(2);
 }
-const ws = openWorkspace();
 const books = loadBooks(ws);
 const end = derivePeriod(quarter)!.to;
 const closedThrough = books.config.closedThrough;
 
 if (args.includes('--close') && (!closedThrough || closedThrough < end)) {
-  const next = closedThrough ? quarterOf(new Date(Date.parse(closedThrough) + 86_400_000).toISOString().slice(0, 10)) : quarter;
+  const next = closedThrough ? periodKeyOf(addDays(closedThrough, 1), ws.filingLength) : quarter;
   if (next !== quarter) {
-    console.error(`The books are closed through ${closedThrough}; the next quarter to close is ${next}, not ${quarter}.`);
+    console.error(`The books are closed through ${closedThrough}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${quarter}.`);
     process.exit(1);
   }
-  if (quarter.endsWith('Q4') && !args.includes('--force')) {
+  if (closesTheYear(quarter) && !args.includes('--force')) {
     console.error(`${quarter} closes with the year: npm run year:close -- ${quarter.slice(0, 4)} books the Kursdifferenz and the other year-end entries on 31.12. first, then closes and seals it (docs/year-end.md).\nClosing it now leaves nothing to date 31.12. Add --force if the year-end entries are booked already.`);
     process.exit(1);
   }
@@ -56,5 +57,5 @@ try {
   process.exit(1);
 }
 const { unsealed } = checkSeals(ws, books);
-if (unsealed.length) console.log(`Closed quarters without a seal: ${unsealed.join(', ')} (npm run seal -- <quarter> for each)`);
+if (unsealed.length) console.log(`Closed ${ws.filingLength === 'half' ? 'half years' : 'quarters'} without a seal: ${unsealed.join(', ')} (npm run seal -- <period> for each)`);
 console.log('Commit the workspace now (books.json and filings/), so the filed state is on record.');

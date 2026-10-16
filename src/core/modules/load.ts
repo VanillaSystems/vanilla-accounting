@@ -7,10 +7,11 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import type { ChartData, DocumentsData, InvoicingData, Jurisdiction, SetupData, PeriodsData, StatementsData, YearEndData, ModuleManifest, RatesData, ReturnData, TaxCodesData } from './schema.js';
+import type { ChartData, DocumentsData, InvoicingData, Jurisdiction, SetupData, PeriodsData, StatementsData, YearEndData, ModuleManifest, RatesData, ReturnData, TaxCodesData, NetRateReturnData, RegistrationData } from './schema.js';
 import { checkJurisdiction, type ModuleProblem } from './check.js';
+import type { VatSetup } from '../../workspace/vat-setup.js';
 
-const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', chart: 'chart.yaml', periods: 'periods.yaml', statements: 'statements.yaml', yearEnd: 'year-end.yaml', invoicing: 'invoicing.yaml', setup: 'setup.yaml', documents: 'documents.yaml' } as const;
+const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', vatReturnNetRate: 'return-net-rate.yaml', registration: 'registration.yaml', chart: 'chart.yaml', periods: 'periods.yaml', statements: 'statements.yaml', yearEnd: 'year-end.yaml', invoicing: 'invoicing.yaml', setup: 'setup.yaml', documents: 'documents.yaml' } as const;
 
 /** Merges an overlay onto a shipped value: maps key by key, `null` (YAML `~`) removes a key, anything else replaces. */
 export function mergeOverlay<T>(shipped: T, overlay: unknown): T {
@@ -62,6 +63,8 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
     rates: part<RatesData>(FILES.rates, 'rates'),
     taxCodes: part<TaxCodesData>(FILES.taxCodes, 'taxCodes'),
     vatReturn: part<ReturnData>(FILES.vatReturn, 'vatReturn'),
+    ...optional('vatReturnNetRate', part<NetRateReturnData | undefined>(FILES.vatReturnNetRate, 'vatReturnNetRate')),
+    ...optional('registration', part<RegistrationData | undefined>(FILES.registration, 'registration')),
     chart: part<ChartData>(FILES.chart, 'chart'),
     periods: part<PeriodsData>(FILES.periods, 'periods'),
     statements: part<StatementsData>(FILES.statements, 'statements'),
@@ -79,13 +82,18 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
   };
 }
 
-/** A workspace's jurisdiction as the app serves it (/modules.json) and the engines use it. */
+/** A part a jurisdiction may lack (no file shipped or overlaid): left out rather than set to undefined. */
+const optional = <K extends string, T>(key: K, value: T | undefined): Partial<Record<K, T>> => (value === undefined ? {} : ({ [key]: value } as Record<K, T>));
+
+/** A workspace's jurisdiction as the app serves it (/modules.json) and the engines use it, with the firm's VAT setup the engines compute for. */
 export interface WorkspaceModules extends LoadedJurisdiction {
   /** What the engines compute with: the workspace's overlay when it has no problems, else the shipped module. */
   effective: Jurisdiction;
+  /** The firm's VAT setup (its manifest), so the browser's engines compute as the server's do. */
+  vat: VatSetup;
 }
 
-export function workspaceModules(appRoot: string, workspaceRoot: string, id = 'ch'): WorkspaceModules {
+export function workspaceModules(appRoot: string, workspaceRoot: string, vat: VatSetup, id = 'ch'): WorkspaceModules {
   const loaded = loadJurisdiction(appRoot, id, workspaceRoot);
-  return { ...loaded, effective: loaded.problems.length ? loadJurisdiction(appRoot, id).jurisdiction : loaded.jurisdiction };
+  return { ...loaded, effective: loaded.problems.length ? loadJurisdiction(appRoot, id).jurisdiction : loaded.jurisdiction, vat };
 }

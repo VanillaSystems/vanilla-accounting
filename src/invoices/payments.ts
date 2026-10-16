@@ -169,7 +169,7 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
   const text = `${word} ${inv.number} ${inv.customer.name}`;
   const legs = [
     ...revenueSplit(inv, a.amount, ctx.revenueAccount),
-    ...(a.fee ? [{ account: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, vatCode: undefined }] : []),
+    ...(a.fee ? [{ account: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, vatCode: undefined, fee: true }] : []),
   ];
   const entries: JournalEntry[] = legs.map((l) => ({
     id: idSource.bytes(8).toString('hex'),
@@ -179,7 +179,7 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
     accountCredit: refund ? bank : l.account,
     amount: l.amount,
     ...(l.vatCode ? { vatCode: refund ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
-    description: l.vatCode ? text : `${text}, ${TEXTS.de.fee}`,
+    description: 'fee' in l ? `${text}, ${TEXTS.de.fee}` : text,
     ...(rate !== undefined ? { exchangeCurrency: tx.currency, exchangeRate: rate } : {}),
     origin: 'invoice',
   }));

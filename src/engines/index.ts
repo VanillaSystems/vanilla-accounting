@@ -1,16 +1,22 @@
 /**
- * The jurisdiction the open workspace uses, as engines. Node sets it when a workspace opens
- * (src/workspace/workspace.ts), the browser when /modules.json arrives (src/app/hooks/use-index.ts),
- * so the CLI, the server and the UI compute the same figures from the same data.
+ * The jurisdiction the open workspace uses, as engines, computed for the firm's VAT setup. Node
+ * sets both when a workspace opens (src/workspace/workspace.ts), the browser when /modules.json
+ * arrives (src/app/hooks/use-index.ts), so the CLI, the server and the UI compute the same
+ * figures from the same data for the same kind of firm.
  */
 import type { Jurisdiction } from '../core/modules/schema.js';
+import { EFFECTIVE_QUARTERLY, filingLengthOf, methodOf, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
 import { returnEngine, type ReturnEngine } from './return.js';
 
-let current: { source: Jurisdiction; vat: ReturnEngine; chart: ChartEngine } | undefined;
+let current: { source: Jurisdiction; setup?: VatSetup; vat: ReturnEngine; chart: ChartEngine } | undefined;
 
-export function setJurisdiction(j: Jurisdiction): void {
-  if (current?.source !== j) current = { source: j, vat: returnEngine(j), chart: chartEngine(j.chart) };
+/**
+ * Computes with `j` for a firm set up as `setup`. Without a setup (a test, a tool without a
+ * workspace) the engines take the jurisdiction as it ships: its effective form and its own period.
+ */
+export function setJurisdiction(j: Jurisdiction, setup?: VatSetup): void {
+  if (current?.source !== j || current.setup !== setup) current = { source: j, setup, vat: returnEngine(j, setup), chart: chartEngine(j.chart) };
 }
 
 function loaded() {
@@ -18,8 +24,18 @@ function loaded() {
   return current;
 }
 
-/** The VAT engine of the open workspace's jurisdiction. */
+/** The VAT engine of the open workspace's jurisdiction, for the firm's method. */
 export const vat = (): ReturnEngine => loaded().vat;
+
+/** The firm's VAT setup: registered or not, its method and its filing period (src/workspace/vat-setup.ts); the effective method where no firm is open. */
+export const vatSetup = (): VatSetup => loaded().setup ?? EFFECTIVE_QUARTERLY;
+
+/** The method the firm's return is written in; a firm that is not registered has none to write. */
+export function filingMethod(): VatMethod {
+  const method = methodOf(vatSetup());
+  if (method === 'none') throw new Error('the firm is not registered for VAT: there is no return to write');
+  return method;
+}
 
 /** The open workspace's chart: what an account is. */
 export const chart = (): ChartEngine => loaded().chart;
@@ -33,8 +49,17 @@ export const yearEnd = (): Jurisdiction['yearEnd'] => loaded().source.yearEnd;
 /** The open workspace's statement layout. */
 export const statements = (): Jurisdiction['statements'] => loaded().source.statements;
 
-/** The length of one VAT return and when its tax is due. */
-export const filing = (): Jurisdiction['periods']['vat'] => loaded().source.periods.vat;
+/**
+ * The length of one filing period and when its tax is due: the firm's period when it files
+ * returns, else the jurisdiction's default as the bookkeeping period a firm closes by.
+ */
+export const filing = (): Jurisdiction['periods']['vat'] => {
+  const { source, setup } = loaded();
+  return setup ? { length: filingLengthOf(setup, source.periods.vat.length), dueDays: source.periods.vat.dueDays } : source.periods.vat;
+};
+
+/** When a firm must register for VAT; undefined for a jurisdiction that states no threshold. */
+export const registration = (): Jurisdiction['registration'] => loaded().source.registration;
 
 /** The currency the books are kept in: every amount without an exchange currency is in it. */
 export const baseCurrency = (): string => loaded().source.manifest.baseCurrency;

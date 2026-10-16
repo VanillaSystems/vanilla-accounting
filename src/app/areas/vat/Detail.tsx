@@ -13,16 +13,23 @@ import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
-import { FORM_0535, SUMS, byCode, correctedPeriod, filedDiff, formAmount, rateOf, type VatReturn } from './model.js';
+import { FORM_0535, byCode, correctedPeriod, filedDiff, formAmount, rateOf, sumsOf, type VatReturn } from './model.js';
 import { effectLines, formSections } from './form0535.js';
 import { CodeLink, Go, codeName, entryAt } from './links.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
-import { vat } from '../../../engines/index.js';
+import { vat, vatSetup } from '../../../engines/index.js';
+import { methodOf } from '../../../workspace/vat-setup.js';
 import type { ReturnFigures } from '../../../engines/return.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
 export function Detail(props: Props) {
+  const setup = useWorkspace()?.company.vat;
+  if (setup && !setup.registered) return <div className="detail-empty"><div>{t('vat.notRegistered')}</div></div>;
+  return <ReturnDetail {...props} />;
+}
+
+function ReturnDetail(props: Props) {
   const { route } = props;
   const { v, filed } = useReturn(props);
   if (route.ziffer === FORM_0535) {
@@ -36,8 +43,9 @@ export function Detail(props: Props) {
 /** What a Ziffer is, in one sentence. */
 function explanation(v: VatReturn, n: string): string {
   const r = rateOf(v, n);
+  if (r?.row.kind === 'net-rate') return t('vat.xNetRate');
   if (r) return t(r.row.kind === 'supply' ? 'vat.xSupply' : 'vat.xAcquisition', { rate: r.row.rate });
-  if (n in SUMS || n === '200') return t(`vat.x${n}` as 'vat.x289');
+  if (n in sumsOf() || n === '200') return t(`vat.x${n}` as 'vat.x289');
   return t(`vat.z${n}` as 'vat.z200');
 }
 
@@ -47,10 +55,13 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
   const adjustments = v.adjustments.filter((a) => a.ziffer === n);
   const was = filedDiff(v, filed, n);
   const now = formAmount(v, n);
-  const corrections = n in SUMS ? v.corrections.length : lines.filter((l) => l.entry.corrects).length;
+  const sums = sumsOf();
+  const corrections = n in sums ? v.corrections.length : lines.filter((l) => l.entry.corrects).length;
   const select = (x: string) => nav.select({ area: 'vat', ziffer: x });
   const supply = r?.row.kind === 'supply';
-  const gross = Number(n) < 300 || supply;
+  // A net-rate row declares gross turnover like a supply row; only Bezugsteuer is declared net.
+  const turnover = r !== undefined && r.row.kind !== 'acquisition';
+  const gross = Number(n) < 300 || turnover;
 
   return (
     <div className="detail-in" key={`${v.key}:${n}`}>
@@ -61,7 +72,7 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
       <div className="facts">
         {r && (
           <>
-            <span title={t(supply ? 'vat.turnoverGrossTip' : 'vat.acquisitionNetTip')}>{t(supply ? 'vat.factTurnover' : 'vat.factAcquisition', { amount: fmt(supply ? r.base + r.tax : r.base) })}</span>
+            <span title={t(turnover ? 'vat.turnoverGrossTip' : 'vat.acquisitionNetTip')}>{t(turnover ? 'vat.factTurnover' : 'vat.factAcquisition', { amount: fmt(supply ? r.base + r.tax : r.base) })}</span>
             <span>{t('vat.factRate', { rate: r.row.rate })}</span>
             <span>{t('vat.factTax', { amount: fmt(r.tax) })}</span>
           </>
@@ -80,13 +91,13 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
           </span>
         </div>
       )}
-      {n in SUMS ? (
+      {n in sums ? (
         <div className="formula">
-          {SUMS[n].map((part) => {
+          {sums[n].map((part) => {
             const minus = part.startsWith('-');
             const x = part.replace('-', '');
             const a = formAmount(v, x);
-            if (SUMS[n].length > 4 && !a) return null;
+            if (sums[n].length > 4 && !a) return null;
             return (
               <button key={x} type="button" onClick={() => select(x)}>
                 <span className="op">{minus ? '−' : '+'}</span><span className="mono zn">{x}</span><span>{zifferLabel(v, x)}</span><span className="mono">{fmt(rateOf(v, x)?.tax ?? a)}</span>
@@ -155,7 +166,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
   return (
     <div className="detail-in f0535" key={`0535:${v.key}`}>
       <div className="head">
-        <h2 className="who">{t('form0535.title')}<small>{t('vat.form0535Of', { period: periodName(v.period) })}</small></h2>
+        <h2 className="who">{t(methodOf(vatSetup()) === 'net-rate' ? 'form0535.titleNetRate' : 'form0535.title')}<small>{t('vat.form0535Of', { period: periodName(v.period) })}</small></h2>
         <div className="amount"><small>CHF</small>{signed(diff)}</div>
       </div>
       <div className="facts">

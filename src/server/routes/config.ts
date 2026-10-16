@@ -13,6 +13,9 @@ import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/mo
 import { setAccountName } from '../../workspace/accounts-write.js';
 import { setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
+import { changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
+import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
+import { filing } from '../../engines/index.js';
 
 export const router = Router();
 
@@ -121,6 +124,23 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
   return out;
 }
 
+/**
+ * The VAT setup as the Firma page sends it, checked as the manifest's reader checks it. The
+ * method rule: registration, method, period and a rate's percent hold for whole years, so a change
+ * is refused while the open year holds entries (a label or an activity code may change any time).
+ */
+function vatPatch(raw: unknown): VatSetup {
+  const next = parseVatSetup(raw, (msg) => { throw new RequestError(400, msg); });
+  if (!changesMethod(WS.company.vat, next)) return next;
+  const books = readBooks();
+  const year = booksOpenPeriod(books, localToday(), filing().length).from.slice(0, 4);
+  const entries = (books.journalEntries ?? []).filter((e) => e.date.startsWith(year)).length;
+  if (entries) {
+    throw new RequestError(400, `Die MWST-Einstellung gilt für das ganze Jahr: ${year} hat schon ${entries} Buchungen. Der Wechsel ist auf den 1.1.${Number(year) + 1} möglich, nach dem Jahresabschluss.`, { code: 'vatMethodHeld', params: { year, entries } });
+  }
+  return next;
+}
+
 /** The outgoing mailbox; the manifest's reader checks the values. A password is refused: it never goes into the workspace. */
 function mailPatch(raw: unknown): MailPatch | null {
   if (raw === null) return null;
@@ -157,9 +177,10 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
  * A new payment term also goes to every customer who had the old one.
  */
 router.patch('/api/workspace', (req, res) => {
-  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing', 'outgoingMail']);
+  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing', 'outgoingMail', 'vat']);
   if (b.banks !== undefined && !Array.isArray(b.banks)) throw new RequestError(400, 'banks: eine Liste erwartet.');
   const patch: ManifestPatch = {
+    ...(b.vat === undefined ? {} : { vat: vatPatch(b.vat) }),
     ...(b.company === undefined ? {} : { company: profilePatch(b.company) }),
     ...(b.banks === undefined ? {} : { banks: (b.banks as unknown[]).map(bankPatch) }),
     ...(b.addBank === undefined ? {} : { addBank: newBank(b.addBank) }),

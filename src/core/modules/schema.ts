@@ -27,8 +27,11 @@ export interface ModuleManifest {
 /** A rate row of section II of the return: the turnover (or, for Bezugsteuer, the acquisition) at one rate. */
 export interface RateRow {
   rate: number;
-  /** Supplies are declared gross and their tax is computed from it; an acquisition is declared net. */
-  kind: 'supply' | 'acquisition';
+  /**
+   * Supplies are declared gross and their tax is taken out of it; an acquisition is declared net;
+   * a net-rate row (the net tax rate method) is declared gross and its tax is the rate on the gross.
+   */
+  kind: 'supply' | 'acquisition' | 'net-rate';
   /** The tax code that books into this row. */
   code: string;
   /** The rate's name on the form. */
@@ -70,6 +73,12 @@ export interface CodePattern {
   correction: Record<string, BoxId>;
 }
 
+/** A sale at the firm's n-th approved net tax rate, booked gross: the rate is the firm's, the tax the rate on the gross. */
+export interface NetRateCodeMeaning {
+  netRate: 1 | 2;
+  revenue: BoxId;
+}
+
 /** tax-codes.yaml */
 export interface TaxCodesData {
   /** The prefix that makes a code a refund or reversal of the code after it. */
@@ -78,6 +87,8 @@ export interface TaxCodesData {
   amountSuffix: { families: string[]; net: string; tax: string };
   /** Every code with a fixed meaning, in catalogue order. */
   codes: Record<string, CodeMeaning>;
+  /** The codes of the net tax rate method, whose rate is the firm's (return-net-rate.yaml takes them). */
+  netRateCodes?: Record<string, NetRateCodeMeaning>;
   patterns: CodePattern[];
   /** The input-tax box a purchase's tax goes to: by the income section of its account (material and goods), else `otherwise`. */
   purchaseBoxes: { costOfGoods: BoxId; otherwise: BoxId };
@@ -98,6 +109,13 @@ export type Formula =
 
 /** return.yaml */
 export interface ReturnData {
+  /** The authority's number of the form (0550, 0553), for the UI. */
+  form?: string;
+  /**
+   * The codes this form takes; absent: every code whose boxes it all has. A box a listed code
+   * names that the form lacks is left out (B81 on the net-rate form: its acquisition, no deduction).
+   */
+  codes?: string[];
   /** The box that collects the gross amount of every revenue and deduction code. */
   turnoverBox: BoxId;
   turnoverLabel: string;
@@ -112,6 +130,19 @@ export interface ReturnData {
   /** The derived boxes that are the amount to pay and the credit. */
   payable: BoxId;
   credit: BoxId;
+}
+
+/** return-net-rate.yaml: the net tax rate method's form, with a rate row per approved rate of the firm. */
+export interface NetRateReturnData extends ReturnData {
+  codes: string[];
+  /** The rows of the firm's first and second approved rate, by box; a firm with one rate has no second row. */
+  netRateRows: Record<BoxId, { netRate: 1 | 2; code: string; name: string }>;
+}
+
+/** registration.yaml: when a firm must register for VAT. */
+export interface RegistrationData {
+  /** Turnover of a calendar year, in the base currency, from which registration is mandatory. */
+  turnoverThreshold: number;
 }
 
 import type { FilingLength } from '../../accounting/periods.js';
@@ -210,6 +241,10 @@ export interface Jurisdiction {
   rates: RatesData;
   taxCodes: TaxCodesData;
   vatReturn: ReturnData;
+  /** Absent in a jurisdiction without a net tax rate method: a workspace on it then does not open. */
+  vatReturnNetRate?: NetRateReturnData;
+  /** Absent: the MWST page of a firm that is not registered names no threshold. */
+  registration?: RegistrationData;
   chart: ChartData;
   periods: PeriodsData;
   statements: StatementsData;

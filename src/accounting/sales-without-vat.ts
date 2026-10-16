@@ -13,6 +13,7 @@ import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/ind
 import { baseCurrency, chart, invoicing, vat } from '../engines/index.js';
 import { ibanKey } from '../knowledge/payer.js';
 import type { SaleChoice, SaleProposal, SaleWhy } from '../questions/model.js';
+import { methodOf, type VatSetup } from '../workspace/vat-setup.js';
 
 export interface SaleWithoutVat {
   payment: BankTransaction;
@@ -63,10 +64,10 @@ export function saleProposal(tx: Pick<BankTransaction, 'currency' | 'counterpart
 /** The normal rate a domestic sale is booked at (the first rate an invoice line offers). */
 export const normalRate = (): number => invoicing().rates[0];
 
-/** The VAT code an answer books the sale with; null: no VAT code (not a sale). */
+/** The VAT code an answer books the sale with: the normal rate's, or the firm's first net rate; null: no VAT code (not a sale, or a firm without codes). */
 export function saleVatCode(choice: SaleChoice): string | null {
   switch (choice) {
-    case 'saleDomestic': return vat().codes.saleAt(normalRate()) ?? null;
+    case 'saleDomestic': return vat().codes.saleAt(normalRate()) ?? vat().codes.netRateCode(1) ?? null;
     case 'saleAbroad': return vat().codes.deductedIn(invoicing().exemptions.export) ?? null;
     case 'notSale': return null;
   }
@@ -85,7 +86,7 @@ export function saleChoiceOf(code: string | undefined): SaleChoice | undefined {
  * for VAT, the invoice says the service is supplied abroad, or (no document) the payment's
  * currency and IBAN.
  */
-export type SaleCodeWhy = 'unregistered' | 'placeAbroad' | SaleWhy;
+export type SaleCodeWhy = 'unregistered' | 'netRate' | 'placeAbroad' | SaleWhy;
 export interface SaleCode { code: string | undefined; why: SaleCodeWhy }
 
 type SaleDocument = Pick<Receipt, 'hasSwissVat' | 'extractedText'>;
@@ -99,7 +100,9 @@ const mentions = (text: string, words: readonly string[]) =>
  * undefined when the model's code stands. A sale line is one on a revenue account whose code books
  * turnover at a rate or under an invoice line's exemption; a refund, a code that says the money is
  * no consideration, or none at all stays the model's. In this order:
- * - Books not registered for VAT charge none: no code.
+ * - Books not registered for VAT charge none: no code, on every revenue line.
+ * - On the net tax rate method a code of the firm's form stands (F1, F2, V0, V0-E); any other
+ *   (the model's V81) is replaced: abroad by the document, else the first approved rate.
  * - A document that shows the jurisdiction's VAT decides (the model read its rate).
  * - A document without it that says the service is supplied abroad (invoicing.yaml placeAbroad):
  *   the abroad code, not the export code, which is for goods.
@@ -107,14 +110,17 @@ const mentions = (text: string, words: readonly string[]) =>
  * - No document: the proposal (saleProposal), so a domestic customer is never booked at zero for
  *   want of a paper; the owner confirms it once (src/intake/sale-questions.ts).
  */
-export function saleCodeOf(proposed: string | undefined, accountCredit: string, tx: Pick<BankTransaction, 'direction' | 'currency' | 'counterpartyIban'>, documents: readonly SaleDocument[], vatRegistered: boolean): SaleCode | undefined {
-  if (tx.direction !== 'CRDT' || chart().typeOf(accountCredit) !== 'revenue' || !saleChoiceOf(proposed)) return undefined;
-  if (!vatRegistered) return { code: undefined, why: 'unregistered' };
-  if (documents.some((d) => d.hasSwissVat)) return undefined;
+export function saleCodeOf(proposed: string | undefined, accountCredit: string, tx: Pick<BankTransaction, 'direction' | 'currency' | 'counterpartyIban'>, documents: readonly SaleDocument[], setup: VatSetup): SaleCode | undefined {
+  if (tx.direction !== 'CRDT' || chart().typeOf(accountCredit) !== 'revenue') return undefined;
+  if (!setup.registered) return { code: undefined, why: 'unregistered' };
+  const net = methodOf(setup) === 'net-rate';
+  // A code that is no sale choice stands, unless this firm's form does not take it (the model's V81 on the net tax rate method).
+  if (!saleChoiceOf(proposed) && !(net && !(proposed && vat().codes.parse(proposed)))) return undefined;
+  const domestic = (): SaleCode => ({ code: saleVatCode('saleDomestic') ?? undefined, why: 'netRate' });
+  if (documents.some((d) => d.hasSwissVat)) return net ? domestic() : undefined;
   if (documents.length) {
-    return documents.some((d) => mentions(d.extractedText ?? '', invoicing().placeAbroad))
-      ? { code: vat().codes.deductedIn(invoicing().exemptions.abroad), why: 'placeAbroad' }
-      : undefined;
+    if (documents.some((d) => mentions(d.extractedText ?? '', invoicing().placeAbroad))) return { code: vat().codes.deductedIn(invoicing().exemptions.abroad), why: 'placeAbroad' };
+    return net ? domestic() : undefined;
   }
   const p = saleProposal(tx);
   return { code: saleVatCode(p.choice) ?? undefined, why: p.why };
@@ -125,6 +131,7 @@ export function saleCodeReason({ code, why }: SaleCode, currency: string): strin
   const asked = 'Vorschlag der App, die Frage dazu steht unter Aufgaben.';
   switch (why) {
     case 'unregistered': return 'Die Firma ist nicht steuerpflichtig: Umsatz ohne Steuercode.';
+    case 'netRate': return `Saldosteuersatz: Umsatz brutto mit ${code}, die Steuer ist der bewilligte Satz auf dem Umsatz.`;
     case 'placeAbroad': return `Die Rechnung nennt den Leistungsort im Ausland und keine Inlandsteuer: Leistung im Ausland, ${code}.`;
     case 'domesticIban': return `Kundenzahlung ohne Rechnung, ${currency} von einem Konto im Inland (${invoicing().territory.join(', ')}): Inlandumsatz mit ${code}. ${asked}`;
     case 'domesticCurrency': return `Kundenzahlung ohne Rechnung in ${currency}, die Bank nennt kein Konto im Ausland: Inlandumsatz mit ${code}. ${asked}`;

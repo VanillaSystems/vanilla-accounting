@@ -14,7 +14,7 @@ import { APP_ROOT, type Company, type Uid } from '../src/workspace/workspace.js'
 const j = (...parts: string[]) => parts.join('');
 const company: Company = {
   name: 'Beispiel Velo GmbH', uid: j('CHE-', '987.654.321') as Uid, owner: 'Petra Beispiel',
-  vat: { method: 'effective', reporting: 'received' },
+  vat: { registered: true, method: 'effective', reporting: 'received', period: 'quarterly' },
 };
 const IBAN = j('CH93', '00762011623852957');
 const sources: SecretSources = {

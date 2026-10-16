@@ -1,5 +1,6 @@
 import type { BankTransaction, VatRateGroup, ReceiptLine } from "../types/index.js";
 import { vat } from "../engines/index.js";
+import type { VatSetup } from "../workspace/vat-setup.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
 
 export interface MatchResult {
@@ -255,17 +256,36 @@ export function formatVatFacts(r: ReceiptInput): string | null {
   return `VAT facts: Swiss MWST${r.vatId ? ` ${r.vatId}` : ''} — ${parts.join('; ')}`;
 }
 
-/** What every classify prompt says about the company: its name, chart, prior-year entries, VAT codes. */
+/** What every classify prompt says about the company: its name, chart, prior-year entries, VAT codes, and the firm's VAT setup (absent: the effective method). */
 export interface ClassifyPromptContext {
   companyName: string;
   chartOfAccounts: string;
   historicEntries: string;
   vatCodes: string;
+  vat?: VatSetup;
+}
+
+/** The VAT part of the prompt: the full code reference for the effective method; what the other kinds of firm book instead (code enforces it either way). */
+function vatSection(vatCodes: string, setup: VatSetup | undefined): string {
+  if (setup && !setup.registered) {
+    return `## VAT
+The company is NOT registered for VAT. Leave "vatCode" empty ("") on EVERY row and book every amount gross, whatever a receipt shows. Ignore the VAT code rules below.`;
+  }
+  if (setup?.registered && setup.method === 'net-rate') {
+    const rates = setup.rates.map((r, i) => `F${i + 1} = ${r.rate} %${r.label ? ` (${r.label})` : ''}`).join(', ');
+    return `## VAT (net tax rate method, Saldosteuersatz)
+The company files with approved flat rates on its gross turnover: ${rates}. Rules for THIS company, which replace the I/M/V rules below:
+- A PURCHASE (expense, material, investment) carries NO VAT code (""), whatever the receipt shows: there is no input tax.
+- A SALE on a revenue account carries ${setup.rates.length > 1 ? 'F1 or F2 (the approved rate that fits the activity)' : 'F1'} with the GROSS amount; an export of goods V0; a service supplied abroad V0-E.
+- Bezugsteuer on a service from abroad: B81.`;
+  }
+  return `## VAT Codes Reference
+${vatCodes}`;
 }
 
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
-  { companyName, chartOfAccounts, historicEntries, vatCodes }: ClassifyPromptContext,
+  { companyName, chartOfAccounts, historicEntries, vatCodes, vat: setup }: ClassifyPromptContext,
   cases: readonly BookingCase[] = [],
 ): string {
   const txSections = transactions.map(({ tx, receipts }, i) => {
@@ -299,8 +319,7 @@ ${txSections}
 ## Chart of Accounts
 ${chartOfAccounts}
 
-## VAT Codes Reference
-${vatCodes}
+${vatSection(vatCodes, setup)}
 
 ## Historic Journal Entry Examples (prior year)
 ${historicEntries}

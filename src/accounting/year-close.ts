@@ -16,8 +16,8 @@ import type { EstvRate, EstvRates } from './fx-conversion.js';
 import { chfAmount, computeBalances } from './ledger.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
-import { booksOpenPeriod, derivePeriod } from './periods.js';
-import { chart, vat, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
+import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
+import { chart, filing, vat, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -27,7 +27,8 @@ export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBa
 
 const yearEnd = (year: string) => `${year}-12-31`;
 const inYear = (year: string) => (date: string | undefined) => !!date && date >= `${year}-01-01` && date <= yearEnd(year);
-const quartersOf = (year: string): QuarterKey[] => [1, 2, 3, 4].map((n) => `${year}-Q${n}` as QuarterKey);
+/** The year's filing periods of the firm's length: its four quarters, or its two half years. */
+const quartersOf = (year: string): QuarterKey[] => [...new Set([1, 4, 7, 10].map((m) => filingKeyOf(`${year}-${String(m).padStart(2, '0')}-01`, filing().length)))] as QuarterKey[];
 
 // ─── Accounts by role ────────────────────────────────────────────────────────
 
@@ -326,8 +327,8 @@ export function vatCheck(books: Books, year: string, filed: readonly ReturnFigur
     const filedPayable = asFiled ? roundCHF((asFiled.ziffern['500'] ?? 0) - (asFiled.ziffern['510'] ?? 0)) : undefined;
     return { quarter, filed: filedPayable, books: fromBooks, correction: roundCHF(fromBooks - (filedPayable ?? 0)) };
   });
-  // Every return filed in the year is paid in the year; the fourth quarter, and any quarter not filed yet, is still owed.
-  const expected = roundCHF(quarters.reduce((s, q, i) => s + (i === 3 || q.filed === undefined ? q.books : 0), 0));
+  // Every return filed in the year is paid in the year; the last period, and any period not filed yet, is still owed.
+  const expected = roundCHF(quarters.reduce((s, q, i) => s + (i === quarters.length - 1 || q.filed === undefined ? q.books : 0), 0));
   const rounding = roundCHF(booked - quarters.reduce((s, q) => s + q.books, 0));
   return { quarters, opening, booked, paid, owed, expected, rounding, unexplained: roundCHF(owed - expected - rounding) };
 }
@@ -510,7 +511,8 @@ const status = (problems: readonly Problem[], failing: CheckStatus = 'fail'): Ch
 function preconditions(input: YearCloseInput): Check[] {
   const { year, books, seals } = input;
   const closedThrough = books.config.closedThrough;
-  const [q1, q2, q3, q4] = quartersOf(year);
+  const periods = quartersOf(year);
+  const q4 = periods[periods.length - 1];
 
   const filed = input.filed.some((f) => f.period === q4) ? [] : [{ code: 'q4NotFiled' as const, quarter: q4 }];
 
@@ -519,8 +521,8 @@ function preconditions(input: YearCloseInput): Check[] {
   const sealed = new Set(seals.checks.filter((c) => c.status === 'intact').map((c) => c.quarter));
   const dates = [...books.transactions.map((t) => t.date), ...books.journalEntries.map((e) => e.date)];
   // Books that never filed start with the quarter of their first payment: before it there is nothing to file.
-  const start = closedThrough ? undefined : booksOpenPeriod(books, yearEnd(year), 'quarter').from;
-  for (const q of [q1, q2, q3]) {
+  const start = closedThrough ? undefined : booksOpenPeriod(books, yearEnd(year), filing().length).from;
+  for (const q of periods.slice(0, -1)) {
     const { from, to } = derivePeriod(q)!;
     if (start && to < start) continue;
     if (!closedThrough || closedThrough < to) sealProblems.push({ code: 'notClosed', quarter: q });

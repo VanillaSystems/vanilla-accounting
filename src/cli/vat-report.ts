@@ -10,9 +10,9 @@
  */
 import type { Index } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
-import { derivePeriod } from '../accounting/periods.js';
+import { derivePeriod, filingKeyOf, isFilingKey } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
-import { vat } from '../engines/index.js';
+import { filing, vat } from '../engines/index.js';
 import type { VatLine } from '../engines/return.js';
 
 // Which per-entry value is the one that sums to the Ziffer's reported amount.
@@ -39,7 +39,7 @@ function printPeriod(label: string, index: Index, from: string, to: string, deta
   console.log('='.repeat(72));
   if (periodLock(index).isClosed(to)) {
     console.log(`  EINGEREICHT — set in stone. The return as filed is in filings/${from.slice(0, 4)}/;`);
-    if (/-Q\d$/.test(label)) {
+    if (isFilingKey(label, filing().length)) {
       console.log('  The figures below are recomputed from today\'s books, including entries tagged');
       console.log(`  corrects: "${label}", so they are what its Korrekturabrechnung (form 0535) declares.`);
     } else {
@@ -77,12 +77,11 @@ function main() {
   const args = process.argv.slice(2);
   const detail = args.includes('--detail');
   const periodArg = args.find(a => !a.startsWith('--'));
-  const now = new Date();
-  const curYear = now.getUTCFullYear();
-  const curQ = Math.floor(now.getUTCMonth() / 3) + 1;
-  const keys = periodArg
-    ? [periodArg]
-    : [...Array(curQ).keys()].map((i) => `${curYear}-Q${i + 1}`).concat(`${curYear}-H1`);
+  const today = new Date().toISOString().slice(0, 10);
+  const curYear = today.slice(0, 4);
+  // Every filing period of the year so far, and the first half year as a sum where the firm files quarterly.
+  const soFar = [...new Set([1, 4, 7, 10].map((m) => `${curYear}-${String(m).padStart(2, '0')}-01`).filter((d) => d <= today).map((d) => filingKeyOf(d, filing().length)))];
+  const keys = periodArg ? [periodArg] : soFar.concat(filing().length === 'quarter' ? [`${curYear}-H1`] : []);
   for (const key of keys) {
     const p = derivePeriod(key);
     if (!p) {

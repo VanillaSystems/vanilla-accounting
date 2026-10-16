@@ -14,6 +14,11 @@ import { pathToFileURL } from 'node:url';
 import { loadCases } from '../../src/knowledge/cases.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
 import type { Messages } from '../../src/app/i18n/types.js';
+import { loadJurisdiction } from '../../src/core/modules/load.js';
+import { setJurisdiction } from '../../src/engines/index.js';
+
+// The catalogue is the shipped jurisdiction's, for a firm on the effective method.
+setJurisdiction(loadJurisdiction(APP_ROOT, 'ch').jurisdiction);
 
 export const SOURCE_FILE = join(APP_ROOT, 'src/accounting/vat-codes.source.ts');
 export const DOCS_FILE = join(APP_ROOT, 'docs/vat-codes.md');

@@ -24,6 +24,7 @@ import {
   type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState,
 } from '../accounting/year-close.js';
 import { roundCHF } from '../accounting/rappen.js';
+import { filingKeyOf } from '../accounting/periods.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn } from '../invoices/rules.js';
 import { workspaceChecks } from '../workspace/checks.js';
@@ -184,7 +185,7 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
     books.config.closedThrough = end;
     saveBooks(ws, books);
   }
-  const q4 = `${year}-Q4` as QuarterKey;
+  const q4 = filingKeyOf(end, ws.filingLength) as QuarterKey;
   const seal = writeSeal(ws, books, q4, today);
   const state = readState(ws, year);
   if (!state.closedAt) writeState(ws, { ...state, closedAt: today });

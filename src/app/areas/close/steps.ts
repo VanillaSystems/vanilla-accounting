@@ -6,6 +6,8 @@ import type { Problem, YearClose } from '../../../accounting/year-close.js';
 import type { YearCloseView } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
+import { filingKeyOf } from '../../../accounting/periods.js';
+import { filing } from '../../../engines/index.js';
 
 export const STEPS = ['q4', 'checks', 'entries', 'close', 'open', 'profit', 'handover'] as const;
 export type Step = (typeof STEPS)[number];
@@ -16,10 +18,13 @@ export const stepGone = (s: string | undefined): boolean => s !== undefined && !
 
 export const GROUPS = [['close.groupBefore', ['q4', 'checks', 'entries']], ['close.groupClose', ['close', 'open']], ['close.groupAfter', ['profit', 'handover']]] as const;
 
+/** The year's last filing period as the form names it: Q4, or H2 for a firm filing half-yearly. */
+export const lastPeriodOf = (year: string): string => filingKeyOf(`${year}-12-31`, filing().length).slice(5);
+
 export function stepLabel(step: Step, year: string): string {
   const next = String(+year + 1);
   switch (step) {
-    case 'q4': return t('close.step.q4');
+    case 'q4': return t('close.step.q4', { period: lastPeriodOf(year) });
     case 'checks': return t('close.step.checks');
     case 'entries': return t('close.step.entries');
     case 'close': return t('close.step.close', { year });

@@ -65,7 +65,9 @@ export type ApiRefusal =
   | { code: 'unknownVatCode'; params: { code: string } }
   | { code: 'noDescription' }
   | { code: 'accountNumber'; params: { account: string } }
-  | { code: 'accountName'; params: { account: string } };
+  | { code: 'accountName'; params: { account: string } }
+  /** The VAT setup (registration, method, period, a rate) holds for whole years: the open year already has entries. */
+  | { code: 'vatMethodHeld'; params: { year: string; entries: number } };
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):

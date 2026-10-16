@@ -20,7 +20,7 @@ import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import {
-  FORM_0535, SECTIONS, SUMS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, vatKeyOf, vatReturn,
+  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
@@ -28,7 +28,7 @@ import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
 import type { ReturnFigures } from '../../../engines/return.js';
-import { filing } from '../../../engines/index.js';
+import { baseCurrency, filing, registration } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -40,7 +40,41 @@ const readAll = () => { try { return localStorage.getItem(ALL_KEY) === '1'; } ca
 /** The list as last shown, in ↑↓ order, and the return behind it: the keys act on it. */
 const listed: { ids: string[]; v?: VatReturn } = { ids: [] };
 
+/** The return of a registered firm; a firm not registered sees that it files none, and its turnover against the threshold. */
 function List(props: Props) {
+  const setup = useWorkspace()?.company.vat;
+  return setup && !setup.registered ? <NotRegistered {...props} /> : <Return {...props} />;
+}
+
+function NotRegistered({ period, books, canEdit }: Props) {
+  const threshold = registration()?.turnoverThreshold;
+  const year = period.kind === 'all' ? localToday().slice(0, 4) : period.from.slice(0, 4);
+  const turnover = yearTurnover(books.journalEntries ?? [], year);
+  const passed = threshold !== undefined && turnover >= threshold;
+  const money = (n: number) => `${baseCurrency()} ${fmt(n)}`;
+  return (
+    <div className="page">
+      <ListHead period={period} books={books} canEdit={canEdit} />
+      <div className="counts vst"><span>{t('vat.stateNone')}</span></div>
+      <div className="notice vnovat" data-testid="not-registered">
+        <span className="dot" aria-hidden="true" />
+        <span>{t('vat.notRegisteredText', { threshold: threshold === undefined ? '' : money(threshold) })}</span>
+      </div>
+      <div className={`vresult${passed ? ' bad' : ''}`} data-testid="year-turnover">
+        <span>{t('vat.turnoverYear', { year })}</span>
+        <b className="mono"><small>{baseCurrency()}</small>{fmt(turnover)}</b>
+      </div>
+      {threshold !== undefined && (
+        <p className={passed ? 'notice warn' : 'm'} data-testid="threshold">
+          {passed && <span className="dot" aria-hidden="true" />}
+          <span>{t(passed ? 'vat.thresholdPassed' : 'vat.thresholdOk', { threshold: money(threshold) })}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Return(props: Props) {
   const { route, period, books, nav, canEdit } = props;
   const { v, filed, key } = useReturn({ books, period });
   const [all, setAll] = useState(readAll);
@@ -115,7 +149,7 @@ function List(props: Props) {
 
 /** The period's customer payments booked without output tax for want of an invoice, each a link to the payment. */
 function SalesWithoutVat({ books, period, nav }: { books: Index; period: Period; nav: Nav }) {
-  const sales = salesWithoutVat(books, !!useWorkspace()?.company.vat).filter((s) => inPeriod(period, s.payment.date));
+  const sales = salesWithoutVat(books, useWorkspace()?.company.vat.registered ?? true).filter((s) => inPeriod(period, s.payment.date));
   if (!sales.length) return null;
   return (
     <div className="notice warn vnovat" data-testid="sales-without-vat">
@@ -133,7 +167,7 @@ function SalesWithoutVat({ books, period, nav }: { books: Index; period: Period;
 function ZifferRow({ v, n, filed, sel, onSelect }: { v: VatReturn; n: string; filed?: ReturnFigures; sel: boolean; onSelect(n: string): void }) {
   const r = rateOf(v, n);
   const was = filedDiff(v, filed, n);
-  const sum = n in SUMS;
+  const sum = n in sumsOf();
   return (
     <div className={`row${sel ? ' sel' : ''}${sum ? ' sum' : ''}${amountOf(v, n) || sum ? '' : ' zero'}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-z={n} onClick={() => onSelect(n)}>
       <span className="d mono">{n}</span>

@@ -6,6 +6,7 @@
  */
 import type { JournalEntry, QuarterKey, VatAdjustment } from '../types/index.js';
 import type { BoxId, Formula, Jurisdiction, RateRow, ReturnData } from '../core/modules/schema.js';
+import { filingLengthOf, methodOf, netRatesOf, type VatSetup } from '../workspace/vat-setup.js';
 import { derivePeriod } from '../accounting/periods.js';
 import { entriesForReturn, reportRange } from '../accounting/declarations.js';
 import { fromRappen, roundCHF, toRappen } from '../accounting/rappen.js';
@@ -13,9 +14,10 @@ import { chfAmount } from '../accounting/ledger.js';
 import { formulaRefs } from '../core/modules/check.js';
 import { taxCodeEngine, type TaxCodeEngine, type TaxCodeInfo } from './tax-codes.js';
 
-/** A rate row with the box it declares. */
+/** A rate row with the box it declares; a net-rate row carries the authority's activity code of the firm's rate when it is known. */
 export interface RateRowAt extends RateRow {
   ziffer: BoxId;
+  activityId?: string;
 }
 
 /** One journal entry's contribution to a box. */
@@ -69,15 +71,30 @@ export interface ReturnEngine {
   figures(entries: JournalEntry[], period: QuarterKey, adjustments: VatAdjustment[]): ReturnFigures & { payable: number };
 }
 
-/** The tax on a rate row's declared amount, full precision: a supply is gross, an acquisition net. */
+/** The tax on a rate row's declared amount, full precision: a supply is gross and holds its tax; an acquisition is net and a net-rate row gross, the rate on top of either. */
 export const taxOfRow = (row: RateRow, amount: number) => (row.kind === 'supply' ? amount * row.rate / (100 + row.rate) : amount * row.rate / 100);
 
-const rateLabel = (row: RateRow) => `${row.kind === 'supply' ? 'Leistungen' : 'Bezugsteuer'} ${row.rate}%`;
+const rateLabel = (row: RateRow) => (row.kind === 'net-rate' ? `${row.name} ${row.rate}%` : `${row.kind === 'supply' ? 'Leistungen' : 'Bezugsteuer'} ${row.rate}%`);
 
-export function returnEngine(j: Jurisdiction): ReturnEngine {
-  const r = j.vatReturn;
-  const codes = taxCodeEngine(j.taxCodes, r.turnoverBox);
-  const rateRows: RateRowAt[] = r.rateOrder.map((z) => ({ ziffer: z, ...j.rates.rows[z] }));
+/** The engine for a firm set up as `setup`: its form (the effective one, or the net tax rate method's), its codes, its rate rows (the firm's approved net rates among them). */
+export function returnEngine(j: Jurisdiction, setup?: VatSetup): ReturnEngine {
+  const method = setup ? methodOf(setup) : 'effective';
+  const netRate = method === 'net-rate';
+  if (netRate && !j.vatReturnNetRate) throw new Error(`the jurisdiction ${j.manifest.id} has no return for the net tax rate method (return-net-rate.yaml)`);
+  // A firm that is not registered knows no code at all: its form takes none, every entry is gross.
+  const r: ReturnData = netRate ? j.vatReturnNetRate! : method === 'none' ? { ...j.vatReturn, codes: [] } : j.vatReturn;
+  const rates = setup ? netRatesOf(setup) : [];
+  const codes = taxCodeEngine(j.taxCodes, r, rates);
+  // The firm's filing period decides which entries a return declares (a correction is declared in the period it corrects).
+  const length = setup ? filingLengthOf(setup, j.periods.vat.length) : j.periods.vat.length;
+  const rateRows: RateRowAt[] = r.rateOrder.flatMap((z): RateRowAt[] => {
+    if (j.rates.rows[z]) return [{ ziffer: z, ...j.rates.rows[z] }];
+    const own = netRate ? j.vatReturnNetRate!.netRateRows[z] : undefined;
+    const approved = own && rates[own.netRate - 1];
+    return own && approved
+      ? [{ ziffer: z, rate: approved.rate, kind: 'net-rate', code: own.code, name: approved.label ? `${own.name} (${approved.label})` : own.name, ...(approved.activityId ? { activityId: approved.activityId } : {}) }]
+      : [];
+  });
   const deductionBoxes = Object.keys(r.deductions);
   const inputTaxBoxes = Object.entries(r.inputTax);
   const derivedOrder = topoOrder(r.derived);
@@ -100,7 +117,7 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
 
   function adjustmentsFor(adjustments: VatAdjustment[], entries: JournalEntry[], periodKey: string): VatAdjustment[] {
     const { from, to } = reportRange(periodKey);
-    const declared = new Set(entriesForReturn(entries, periodKey, j.periods.vat.length).map((e) => e.id));
+    const declared = new Set(entriesForReturn(entries, periodKey, length).map((e) => e.id));
     return adjustments.filter((a) => {
       const p = derivePeriod(a.period);
       if (!p) throw new Error(`vatAdjustments ${a.id}: unknown period "${a.period}"`);
@@ -113,7 +130,7 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
   }
 
   function entryLines(entries: JournalEntry[], periodKey: string, out: Record<BoxId, VatLine[]> = {}) {
-    for (const entry of entriesForReturn(entries, periodKey, j.periods.vat.length)) {
+    for (const entry of entriesForReturn(entries, periodKey, length)) {
       const line = vatLine(entry);
       if (!line) continue;
       for (const z of codes.sourceBoxes(codes.parse(line.code)!)) (out[z] ??= []).push(line);
@@ -140,7 +157,7 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
     const value: Record<BoxId, number> = {
       [r.turnoverBox]: (ls[r.turnoverBox] ?? []).reduce((s, l) => s + toRappen(l.gross), 0),
       ...Object.fromEntries(deductionBoxes.map((z) => [z, sum(z, 'gross')])),
-      ...Object.fromEntries(rates.map((x) => [x.row.ziffer, x.row.kind === 'supply' ? x.base : x.tax])),
+      ...Object.fromEntries(rates.map((x) => [x.row.ziffer, x.row.kind === 'acquisition' ? x.tax : x.base])),
       ...Object.fromEntries(inputTaxBoxes.map(([z]) => [z, sum(z, 'tax')])),
     };
     const owed = rates.reduce((s, x) => s + x.tax, 0);
@@ -148,7 +165,7 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
 
     const label = (z: BoxId) =>
       z === r.turnoverBox ? r.turnoverLabel
-        : r.deductions[z]?.label ?? r.inputTax[z]?.label ?? r.derived[z]?.label ?? rateLabel(j.rates.rows[z]);
+        : r.deductions[z]?.label ?? r.inputTax[z]?.label ?? r.derived[z]?.label ?? rateLabel(rateRows.find((row) => row.ziffer === z)!);
     const ziffern = Object.keys(value).sort((a, b) => Number(a) - Number(b)).map((z) => ({ number: z, label: label(z), amount: fromRappen(value[z]) }));
     return {
       ziffern,
@@ -185,21 +202,23 @@ export function returnEngine(j: Jurisdiction): ReturnEngine {
     return complete(period, declared);
   }
 
-  const domestic = new Set(rateRows.map((row) => row.rate));
+  // The jurisdiction's statutory rates, whatever form the firm files: a receipt's 8.1 % is domestic for a net-rate firm too.
+  const domestic = new Set(Object.values(j.rates.rows).map((row) => row.rate));
   return { codes, form: r, rateRows, isDomesticRate: (rate) => domestic.has(rate), vatLine, adjustmentsFor, lines, report, complete, figures };
 }
 
-/** The tax in an entry's amount, in rappen; the amount is gross unless the code says net or tax. */
+/** The tax in an entry's amount, in rappen; the amount is gross unless the code says net or tax; a net-rate code's tax is the rate on the gross. */
 function taxOf(amount: number, info: TaxCodeInfo): number {
   if (info.rate === 0) return 0;
+  if (info.flatOnGross) return Math.round(amount * info.rate / 100);
   if (info.amountIs === 'tax') return amount;
   if (info.amountIs === 'net') return Math.round(amount * info.rate / 100);
   return amount - Math.round(amount * 100 / (100 + info.rate));
 }
 
-/** The taxable base (net) in an entry's amount, in rappen. */
+/** The taxable base in an entry's amount, in rappen: net, or the gross itself under a net-rate code. */
 function baseOf(amount: number, info: TaxCodeInfo): number {
-  if (info.rate === 0) return amount;
+  if (info.rate === 0 || info.flatOnGross) return amount;
   if (info.amountIs === 'tax') return Math.round(amount * 100 / info.rate);
   if (info.amountIs === 'net') return amount;
   return Math.round(amount * 100 / (100 + info.rate));

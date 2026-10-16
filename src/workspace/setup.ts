@@ -2,8 +2,10 @@
  * The questions `npm run init` asks, as data: their order, the plain explanation of each, the
  * answers the engine supports, and why it stops on the others. A preset prefills the answers.
  * The wizard (src/cli/init.ts), the manifest reader and the getting-started guide all read this
- * table, so a newly supported answer is one edit here.
+ * table, so a newly supported answer is one edit here. A question with `when` is asked only when
+ * an earlier answer calls for it: the VAT method, basis and period only of a registered firm.
  */
+import { VAT_PERIODS, asNetRates, type NetRate, type VatPeriod, type VatSetup } from './vat-setup.js';
 
 export const LEGAL_FORMS = ['GmbH', 'AG', 'Einzelfirma'] as const;
 export type LegalForm = (typeof LEGAL_FORMS)[number];
@@ -19,6 +21,8 @@ export interface Option {
   caveat?: string;
 }
 
+type Given = Readonly<Record<string, string | readonly string[] | undefined>>;
+
 interface QuestionSpec {
   ask: string;
   /** One line, in plain words: why the answer matters. */
@@ -26,7 +30,11 @@ interface QuestionSpec {
   options: readonly Option[];
   /** Several answers allowed (comma separated); none is a valid answer. */
   multi?: boolean;
+  /** Asked only when the answers so far say so; otherwise the answer is absent. */
+  when?: (answers: Given) => boolean;
 }
+
+const registered = (a: Given) => a.vatRegistered === 'yes';
 
 export const QUESTIONS = {
   legalForm: {
@@ -48,24 +56,26 @@ export const QUESTIONS = {
       { value: 'yes', label: 'yes, I have a MWST number' },
       {
         value: 'no', label: 'no',
-        unsupported: 'Books without VAT are not supported yet: today every entry carries a VAT code and the app files a VAT return each quarter. This mode is planned; until then Vanilla Accounting is not the right tool for a company that is not registered.',
+        caveat: 'Purchases and sales are booked gross, without VAT codes, and there is no VAT return. The MWST page watches the turnover of the calendar year against the registration threshold.',
       },
     ],
   },
   vatMethod: {
     ask: 'VAT method',
     why: 'Effective: you pay the VAT you charged minus the input tax on your costs. Saldosteuersatz: a flat rate on turnover, no input tax.',
+    when: registered,
     options: [
       { value: 'effective', label: 'effektive Methode' },
       {
-        value: 'saldo', label: 'Saldosteuersatz',
-        unsupported: 'The Saldosteuersatz method is not supported yet: the return the app writes is the effective one (input tax per receipt). If you switch to the effective method with the ESTV, rerun npm run init.',
+        value: 'net-rate', label: 'Saldosteuersatz',
+        caveat: 'Sales are booked gross with the approved rate (one or two, as the ESTV allowed them), purchases gross without input tax; the return is form 0553, half-yearly. The wizard asks for the rate(s) next.',
       },
     ],
   },
   basis: {
     ask: 'VAT basis',
     why: 'Vereinnahmt: VAT is due when the money moves (bank statement). Vereinbart: when you send or receive the invoice.',
+    when: registered,
     options: [
       { value: 'received', label: 'vereinnahmt (cash)' },
       {
@@ -76,11 +86,12 @@ export const QUESTIONS = {
   },
   period: {
     ask: 'VAT reporting period',
-    why: 'How often you file the MWST return. On the effective method that is quarterly unless the ESTV allowed otherwise.',
+    why: 'How often you file the MWST return. Quarterly on the effective method, half-yearly on the Saldosteuersatz, unless the ESTV allowed otherwise.',
+    when: registered,
     options: [
       { value: 'quarterly', label: 'quarterly' },
-      { value: 'half-yearly', label: 'half-yearly', unsupported: 'Half-yearly returns are not supported yet: the eCH-0217 export writes quarters only.' },
-      { value: 'monthly', label: 'monthly', unsupported: 'Monthly returns are not supported yet: the eCH-0217 export writes quarters only.' },
+      { value: 'half-yearly', label: 'half-yearly' },
+      { value: 'monthly', label: 'monthly', unsupported: 'Monthly returns are not supported yet: the return and its export cover quarters and half years.' },
     ],
   },
   fiscalYear: {
@@ -153,13 +164,27 @@ type ValueOf<K extends QuestionKey> = (typeof QUESTIONS)[K]['options'][number]['
 type SupportedValueOf<K extends QuestionKey> = Exclude<(typeof QUESTIONS)[K]['options'][number], { unsupported: string }>['value'];
 type IsMulti<K extends QuestionKey> = (typeof QUESTIONS)[K] extends { multi: true } ? true : false;
 
-/** An answer as given: any option, supported or not. */
-export type Answers = { [K in QuestionKey]: IsMulti<K> extends true ? ValueOf<K>[] : ValueOf<K> };
+/** The questions whose answers make the VAT setup (Company.vat), not the profile. */
+export const VAT_QUESTIONS = ['vatRegistered', 'vatMethod', 'basis', 'period'] as const;
+export type VatQuestionKey = (typeof VAT_QUESTIONS)[number];
+/** The VAT questions a firm that is not registered is never asked: absent in its answers. */
+type ConditionalKey = Exclude<VatQuestionKey, 'vatRegistered'>;
+
+type Value<K extends QuestionKey, V> = IsMulti<K> extends true ? V[] : V;
+
+/** An answer as given: any option, supported or not; a question not asked has none. */
+export type Answers = { [K in Exclude<QuestionKey, ConditionalKey>]: Value<K, ValueOf<K>> } & { [K in ConditionalKey]?: Value<K, ValueOf<K>> };
 /** An answer the engine runs on: what the manifest stores. */
-export type SupportedAnswers = { [K in QuestionKey]: IsMulti<K> extends true ? SupportedValueOf<K>[] : SupportedValueOf<K> };
+export type SupportedAnswers = { [K in Exclude<QuestionKey, ConditionalKey>]: Value<K, SupportedValueOf<K>> } & { [K in ConditionalKey]?: Value<K, SupportedValueOf<K>> };
 
 /** The order the wizard asks in. */
 export const QUESTION_ORDER = Object.keys(QUESTIONS) as QuestionKey[];
+
+/** Whether `key` is asked, given the answers so far. */
+export function asked(key: QuestionKey, answers: Given): boolean {
+  const q: QuestionSpec = QUESTIONS[key];
+  return q.when === undefined || q.when(answers);
+}
 
 export const PRESETS = {
   consultant: {
@@ -187,8 +212,12 @@ export const PRESETS = {
     },
   },
   freelancer: {
-    label: 'Freelancer, not registered for VAT (not supported yet)',
-    answers: { legalForm: 'Einzelfirma', vatRegistered: 'no' },
+    label: 'Freelancer, not registered for VAT',
+    answers: {
+      legalForm: 'Einzelfirma', vatRegistered: 'no',
+      fiscalYear: 'calendar', start: 'new', sells: 'services', foreignCustomers: 'no', imports: 'no',
+      employees: 'none', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
+    },
   },
   custom: { label: 'Custom: answer every question', answers: {} },
 } as const satisfies Record<string, { label: string; answers: Partial<Answers> }>;
@@ -202,11 +231,12 @@ export function optionOf(key: QuestionKey, value: string): Option | undefined {
 
 /**
  * The first unsupported answer, in question order, with its explanation; undefined when the
- * engine supports every answer.
+ * engine supports every answer. A question not asked has no answer to judge.
  */
-export function firstUnsupported(answers: Answers): { key: QuestionKey; option: Option } | undefined {
+export function firstUnsupported(answers: Partial<Answers>): { key: QuestionKey; option: Option } | undefined {
   for (const key of QUESTION_ORDER) {
-    const values: string[] = ([] as string[]).concat(answers[key]);
+    if (!asked(key, answers)) continue;
+    const values: string[] = ([] as string[]).concat(answers[key] ?? []);
     for (const v of values) {
       const option = optionOf(key, v);
       if (option?.unsupported) return { key, option };
@@ -215,6 +245,26 @@ export function firstUnsupported(answers: Answers): { key: QuestionKey; option: 
   return undefined;
 }
 
+/** The first question asked but not answered, in question order. */
+export function firstMissing(answers: Partial<Answers>): QuestionKey | undefined {
+  return QUESTION_ORDER.find((key) => asked(key, answers) && !('multi' in QUESTIONS[key]) && answers[key] === undefined);
+}
+
 export function isSupported(answers: Answers): answers is Answers & SupportedAnswers {
-  return firstUnsupported(answers) === undefined;
+  return firstUnsupported(answers) === undefined && firstMissing(answers) === undefined;
+}
+
+/**
+ * The VAT setup the answers describe; `rates` are the approved net rates, asked besides the
+ * questions when the method is the net tax rate. Null when the rates are missing or too many.
+ */
+export function vatSetupOf(answers: Pick<SupportedAnswers, VatQuestionKey>, rates: readonly NetRate[] = []): VatSetup | null {
+  if (answers.vatRegistered === 'no') return { registered: false };
+  const period = (answers.period ?? 'quarterly') as VatPeriod;
+  if (!VAT_PERIODS.includes(period)) return null;
+  if (answers.vatMethod === 'net-rate') {
+    const approved = asNetRates(rates);
+    return approved && { registered: true, method: 'net-rate', reporting: 'received', period, rates: approved };
+  }
+  return { registered: true, method: 'effective', reporting: 'received', period };
 }

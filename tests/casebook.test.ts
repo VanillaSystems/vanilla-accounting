@@ -44,7 +44,10 @@ test('every case fits the prompt budget', () => {
   for (const c of cases) assert.ok(caseTokens(c) <= CASE_TOKEN_LIMIT, `${c.id}: ~${caseTokens(c)} tokens`);
 });
 
-for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').at(-2)}, each case adds exactly its declared Ziffern to its quarter`, () => {
+// The cases are examples of the effective method: a demo of another kind of firm books none of them.
+const EFFECTIVE_DEMOS = DEMO_ROOTS.filter((d) => { const v = workspaceAt(d).company.vat; return v.registered && v.method === 'effective'; });
+workspaceAt(DEMO_ROOT);
+for (const demo of EFFECTIVE_DEMOS) test(`booked into the books of ${demo.split('/').at(-2)}, each case adds exactly its declared Ziffern to its quarter`, () => {
   const dir = mkdtempSync(join(tmpdir(), 'belege-casebook-'));
   cpSync(demo, dir, { recursive: true });
   const books = loadBooks(workspaceAt(dir));

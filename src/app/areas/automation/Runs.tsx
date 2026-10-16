@@ -181,7 +181,7 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [shown, setShown] = useState(30);
   const go = (route: Route) => nav.go({ route, query: {} });
-  const vatRegistered = !!useWorkspace()?.company.vat;
+  const vatRegistered = useWorkspace()?.company.vat.registered ?? true;
   const rows = view.runs.filter((r) => r.mode === 'live').map((r) => { const lines = linesOf(r, books, vatRegistered); return { r, lines, stand: standOf(r, lines) }; });
   const counts = Object.fromEntries(FILTERS.map((f) => [f, rows.filter((x) => inFilter(f, x.stand)).length])) as Record<Filter, number>;
   const visible = rows.filter((x) => inFilter(filter, x.stand));

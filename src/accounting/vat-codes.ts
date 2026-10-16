@@ -166,8 +166,10 @@ export function codeForRate(rate: number, accountDebit: string, accountCredit: s
     const boxes = vat().codes.purchaseBoxes;
     return vat().codes.purchaseAt(rate, inGroup(statements().income.costOfGoods)(account) ? boxes.costOfGoods : boxes.otherwise);
   };
-  if (type(accountCredit) === 'revenue') return signed(vat().codes.saleAt(rate), false);
-  if (type(accountDebit) === 'revenue') return signed(vat().codes.saleAt(rate), true);
+  // A sale at a statutory rate, or, on the net tax rate method, at one of the firm's approved rates.
+  const saleAt = (r: number) => vat().codes.saleAt(r) ?? vat().rateRows.find((row) => row.kind === 'net-rate' && row.rate === r)?.code;
+  if (type(accountCredit) === 'revenue') return signed(saleAt(rate), false);
+  if (type(accountDebit) === 'revenue') return signed(saleAt(rate), true);
   if (type(accountDebit) === 'expense') return signed(purchase(accountDebit), false);
   if (type(accountCredit) === 'expense') return signed(purchase(accountCredit), true);
   if (type(accountDebit) === 'asset') return signed(purchase(accountDebit), false);

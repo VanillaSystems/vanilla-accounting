@@ -1,0 +1,5 @@
+# When a firm must register for VAT (MWSTG Art. 10 Abs. 2 lit. a): turnover from taxable supplies
+# of a calendar year, in the base currency. A firm that is not registered watches its turnover
+# against it on the MWST page.
+
+turnoverThreshold: 100e3   # CHF 100'000

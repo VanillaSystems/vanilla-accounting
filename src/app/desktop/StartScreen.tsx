@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
@@ -25,9 +25,17 @@ interface Form {
   /** Empty: the folder follows the name (booksHome/<name>). */
   root: string;
   answers: Partial<Answers>;
+  /** The approved net tax rates as typed: [percent, label] each, the second row optional. */
+  netRates: [string, string][];
   banks: BankRow[];
   exportTo: string;
 }
+
+const NO_RATES: [string, string][] = [['', ''], ['', '']];
+const rateOf = (text: string): number | undefined => {
+  const n = Number(text.trim().replace(',', '.').replace(/\s*%$/, ''));
+  return text.trim() && n > 0 && n < 100 ? n : undefined;
+};
 
 const NEW_BANK: BankRow = { bank: '', currency: 'CHF', account: '', iban: '' };
 const BANK_NAMES = Object.keys(BANKS);
@@ -119,31 +127,33 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
 }) {
   const [f, setF] = useState<Form>(() => ({
     preset: 'consultant', name: '', uid: '', owner: '', business: '', language: 'de', root: '',
-    answers: { ...PRESETS.consultant.answers }, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
+    answers: { ...PRESETS.consultant.answers }, netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
   }));
   const [checked, setChecked] = useState(false);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const setBank = (i: number, patch: Partial<BankRow>) => set('banks', f.banks.map((b, j) => (j === i ? { ...b, ...patch } : b)));
 
   const root = f.root || (info ? `${info.booksHome}/${t('desktop.folderName', { name: f.name.trim() || t('desktop.folderDefault') }).replace(/[/:]/g, '-')}` : '');
-  const complete = QUESTION_ORDER.every((k) => 'multi' in QUESTIONS[k] || f.answers[k] !== undefined);
+  const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
+  const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
+  const complete = questions.every((k) => 'multi' in QUESTIONS[k] || f.answers[k] !== undefined);
   const stop = complete ? firstUnsupported(f.answers as Answers) : undefined;
-  const presetStop = f.preset === 'freelancer';
   const errors = useMemo(() => {
     const uid = parseUid(f.uid);
     return {
       name: !f.name.trim() ? t('desktop.setup.required.name') : '',
       uid: 'error' in uid ? t('desktop.setup.uid', { detail: f.uid }) : '',
       owner: !f.owner.trim() ? t('desktop.setup.required.owner') : '',
+      netRate: netRate && rateOf(f.netRates[0][0]) === undefined ? t('desktop.netRateMissing') : '',
       banks: f.banks.map((b) => (!b.bank.trim() ? t('desktop.setup.bankName') : b.iban.trim() && !parseIban(b.iban) ? t('desktop.setup.iban', { bank: b.bank, detail: b.iban }) : '')),
       bankField: f.banks.map((b) => (!b.bank.trim() ? 'bank' : 'iban')),
     };
-  }, [f]);
+  }, [f, netRate]);
   const problems = [
-    errors.name && t('desktop.name'), errors.uid && t('desktop.uid'), errors.owner && t('desktop.owner'),
+    errors.name && t('desktop.name'), errors.uid && t('desktop.uid'), errors.owner && t('desktop.owner'), errors.netRate && t('desktop.netRates'),
     ...f.banks.map((b, i) => errors.banks[i] && `${t('desktop.iban')} ${b.bank || i + 1}`),
   ].filter(Boolean);
-  const invalid = !!(errors.name || errors.uid || errors.owner || errors.banks.some(Boolean) || f.banks.length === 0);
+  const invalid = !!(errors.name || errors.uid || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
 
   const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? x.answers : { ...PRESETS[preset].answers } }));
   const pick = (key: QuestionKey, value: string) => setF((x) => {
@@ -166,12 +176,14 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
       });
       return;
     }
-    if (stop || presetStop) return;
+    if (stop) return;
+    const netRates = netRate ? f.netRates.flatMap(([percent, label]) => (rateOf(percent) === undefined ? [] : [{ rate: rateOf(percent)!, ...(label.trim() ? { label: label.trim() } : {}) }])) : [];
     onCreate({
       root, preset: f.preset, name: f.name, uid: f.uid, owner: f.owner, business: f.business, language: f.language,
-      answers: f.answers as Answers, banks: f.banks, exportTo: f.exportTo,
+      answers: f.answers as Answers, netRates, banks: f.banks, exportTo: f.exportTo,
     });
   };
+  const setRate = (i: 0 | 1, part: 0 | 1, value: string) => set('netRates', f.netRates.map((r, j) => (j === i ? (part === 0 ? [value, r[1]] : [r[0], value]) : r)) as [string, string][]);
   const err = (text: string) => (checked && text ? <em>{text}</em> : null);
 
   return (
@@ -186,7 +198,6 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
               <button key={p} type="button" role="radio" aria-checked={f.preset === p} className={f.preset === p ? 'on' : ''} onClick={() => choosePreset(p)}>{tData(`desktop.q.preset.${p}`)}</button>
             ))}
           </div>
-          {presetStop && <p className="st-stop">{t('desktop.q.preset.freelancer.unsupported')}</p>}
         </section>
 
         <section className="st-grid">
@@ -220,7 +231,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
 
         <section>
           <h2>{t('desktop.questions')}</h2>
-          {QUESTION_ORDER.map((key) => {
+          {questions.map((key) => {
             const chosen = answerList(f.answers, key);
             const notes = chosen.map((v) => optionOf(key, v)).filter((o) => o?.unsupported || o?.caveat);
             return (
@@ -236,6 +247,17 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
                 {notes.map((o) => (
                   <p key={o!.value} className={o!.unsupported ? 'st-stop' : 'st-note'}>{tData(`desktop.q.${key}.${o!.value}.${o!.unsupported ? 'unsupported' : 'caveat'}`)}</p>
                 ))}
+                {key === 'vatMethod' && netRate && (
+                  <div className={`st-rates${checked && errors.netRate ? ' err' : ''}`} data-q="netRates">
+                    <div className="st-qhd"><b>{t('desktop.netRates')}</b><span>{t('desktop.netRateHint')}</span></div>
+                    {([0, 1] as const).map((i) => (
+                      <div key={i} className="st-row">
+                        <label className="cf"><span>{t(i === 0 ? 'desktop.netRate1' : 'desktop.netRate2')}{i === 0 && err(errors.netRate)}</span><input name={`netRate${i + 1}`} className="mono" value={f.netRates[i][0]} onChange={(e) => setRate(i, 0, e.target.value)} /></label>
+                        <label className="cf"><span>{t('desktop.netRateLabel')}</span><input name={`netRateLabel${i + 1}`} value={f.netRates[i][1]} placeholder={t('desktop.optional')} onChange={(e) => setRate(i, 1, e.target.value)} /></label>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -269,7 +291,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
         {checked && !complete && <p className="warnline">{t('desktop.answerAll')}</p>}
         <div className="st-foot">
           <button type="button" className="btn ghost" onClick={onCancel}>{t('common.cancel')}</button>
-          <button type="submit" className="btn primary" data-act="create" disabled={busy || !!stop || presetStop}>{t('desktop.create')}</button>
+          <button type="submit" className="btn primary" data-act="create" disabled={busy || !!stop}>{t('desktop.create')}</button>
         </div>
       </form>
     </div>

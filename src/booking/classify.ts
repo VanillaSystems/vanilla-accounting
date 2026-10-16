@@ -16,7 +16,8 @@ import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js'
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { baseCurrency, chart } from '../engines/index.js';
+import { baseCurrency, chart, vat, vatSetup } from '../engines/index.js';
+import { EFFECTIVE_QUARTERLY, methodOf, type VatSetup } from '../workspace/vat-setup.js';
 import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -75,7 +76,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: e.vatCode || undefined,
+      vatCode: permittedCode(e.vatCode),
       description: e.description || tx.description,
     });
   });
@@ -130,8 +131,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   counterparties?: readonly Counterparty[];
   /** The owner's private account (its number): where a rule's private share goes. */
   ownerAccount?: string;
-  /** Whether the books charge VAT on their sales; absent: registered, the only setup a workspace loads with (src/workspace/manifest.ts). */
-  vatRegistered?: boolean;
+  /** The firm's VAT setup (src/workspace/vat-setup.ts): which codes its bookings may carry; absent: the effective method. */
+  vat?: VatSetup;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -201,7 +202,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
     ownerAccount: ownerAccount(ws).split(' ')[0],
-    vatRegistered: !!ws.company.vat,
+    vat: ws.company.vat,
   };
 }
 
@@ -344,15 +345,26 @@ export function mappedReceipts(books: Books, tx: BankTransaction) {
  * The model's sale lines with the code that code decides (src/accounting/sales-without-vat.ts
  * saleCodeOf): a customer payment without an invoice gets the app's proposal, never a zero code for
  * want of a paper; an invoice that places its service abroad the abroad code; books not registered
- * for VAT no code. Such a line's reason says why, in place of the model's.
+ * for VAT no code; a firm on the net tax rate method its approved rate's code. Such a line's reason
+ * says why, in place of the model's.
  */
-function withSaleCodes(tx: BankTransaction, entries: JournalEntry[], documents: ReturnType<typeof mappedReceipts>, vatRegistered: boolean): JournalEntry[] {
+function withSaleCodes(tx: BankTransaction, entries: JournalEntry[], documents: ReturnType<typeof mappedReceipts>, setup: VatSetup): JournalEntry[] {
   return entries.map((e) => {
-    const decided = saleCodeOf(e.vatCode, e.accountCredit, tx, documents, vatRegistered);
+    const decided = saleCodeOf(e.vatCode, e.accountCredit, tx, documents, setup);
     if (!decided) return e;
     const { vatCode: _, ...rest } = e;
     return { ...rest, ...(decided.code ? { vatCode: decided.code } : {}), reason: saleCodeReason(decided, tx.currency), by: { kind: 'code', check: 'saleCode' } };
   });
+}
+
+/**
+ * A code the firm's form does not take is left off the entry: a firm not registered for VAT books
+ * everything gross, one on the net tax rate method its purchases. On the effective method the
+ * model's code stands as written, so a person sees a code the engine does not know.
+ */
+function permittedCode(code: string | undefined): string | undefined {
+  if (!code) return undefined;
+  return methodOf(vatSetup()) === 'effective' || vat().codes.parse(code) ? code : undefined;
 }
 
 export interface ClassifyDeps {
@@ -460,7 +472,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
           continue;
         }
-        const entries = read ?? withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL } }), mapped, context.vatRegistered ?? true);
+        const entries = read ?? withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY);
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

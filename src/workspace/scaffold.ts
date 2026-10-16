@@ -8,7 +8,8 @@ import { dirname, join, relative } from 'node:path';
 import { stringify } from 'yaml';
 import { bankKind, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
-import type { Preset, SupportedAnswers } from './setup.js';
+import { VAT_QUESTIONS, type Preset, type SupportedAnswers } from './setup.js';
+import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
@@ -34,6 +35,8 @@ export interface InitInput {
   language?: string;
   preset: Preset;
   answers: SupportedAnswers;
+  /** What the VAT answers (and the approved net rates) came to: company.vat of the manifest. */
+  vat: VatSetup;
   banks: { bank: string; currency: string; account: string; iban?: Iban }[];
   exportTo?: string;
 }
@@ -78,8 +81,9 @@ export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
 }
 
 function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): string {
-  const { legalForm, vatRegistered: _r, vatMethod: _m, basis: _b, period: _p, ...answers } = input.answers;
-  const profile: WorkspaceProfile = { preset: input.preset, ...answers, ...(input.exportTo ? { exportTo: input.exportTo } : {}) };
+  const { legalForm } = input.answers;
+  const answers = Object.fromEntries(Object.entries(input.answers).filter(([k]) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)));
+  const profile = { preset: input.preset, ...answers, ...(input.exportTo ? { exportTo: input.exportTo } : {}) } as WorkspaceProfile;
   const doc = {
     schema: WORKSPACE_SCHEMA,
     company: {
@@ -89,7 +93,7 @@ function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): stri
       ...(input.business ? { business: input.business } : {}),
       ...(input.language ? { language: input.language } : {}),
       legalForm,
-      vat: { registered: true, method: 'effective', reporting: 'received', period: 'quarterly' },
+      vat: vatSetupYaml(input.vat),
     },
     profile,
     bankAccounts,

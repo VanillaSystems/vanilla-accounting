@@ -8,7 +8,8 @@ import { join, resolve } from 'node:path';
 import { loadChart } from './chart.js';
 import { bankKind, parseIban } from './banks.js';
 import { applyPlan, planWorkspace, suggestAccount, type InitInput } from './scaffold.js';
-import { PRESET_NAMES, firstUnsupported, type Answers, type Preset, type QuestionKey } from './setup.js';
+import { PRESET_NAMES, QUESTIONS, firstMissing, firstUnsupported, optionOf, vatSetupOf, type Answers, type Preset, type QuestionKey, type SupportedAnswers } from './setup.js';
+import { parseNetRates, type NetRate, type VatSetup } from './vat-setup.js';
 import { parseUid } from './uid.js';
 import { initRepository } from './git.js';
 import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from './workspace.js';
@@ -19,6 +20,9 @@ import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from './workspace.js
  */
 export type SetupRefusal =
   | { reason: 'unsupported'; question: QuestionKey | 'preset'; value: string }
+  | { reason: 'missing'; question: QuestionKey }
+  /** The net tax rate method needs its approved rate(s): what is wrong with the ones given. */
+  | { reason: 'netRates'; detail: string }
   | { reason: 'required'; field: 'name' | 'owner' | 'root' }
   | { reason: 'uid' | 'language' | 'preset'; detail: string }
   | { reason: 'iban' | 'currency' | 'account' | 'accountTwice' | 'bankTwice'; bank: string; detail: string }
@@ -66,13 +70,33 @@ export function checkPreset(raw: string): Preset {
   return preset;
 }
 
-export function checkAnswers(answers: Answers): InitInput['answers'] {
+/** The answers the engine runs on, and the VAT setup they make with the approved net rates (`netRates`, the net tax rate method only). */
+export function checkAnswers(answers: Answers, netRates: readonly NetRate[] = []): { answers: SupportedAnswers; vat: VatSetup } {
   const stop = firstUnsupported(answers);
   if (stop) {
     throw new SetupError(stop.option.unsupported!, { reason: 'unsupported', question: stop.key, value: stop.option.value });
   }
-  return answers as InitInput['answers'];
+  const missing = firstMissing(answers) ?? firstUnknown(answers);
+  if (missing) throw new SetupError(`${QUESTIONS[missing].ask}: an answer is needed (--${flagOf(missing)}: ${QUESTIONS[missing].options.map((o) => o.value).join(', ')}).`, { reason: 'missing', question: missing });
+  const supported = answers as SupportedAnswers;
+  if (supported.vatRegistered === 'yes' && supported.vatMethod === 'net-rate') {
+    const rates = parseNetRates(netRates.length ? netRates : undefined, (msg) => { throw new SetupError(`The net tax rate method needs its approved rate(s), --net-rate <percent>[:<label>], one or two: ${msg}.`, { reason: 'netRates', detail: msg }); });
+    return { answers: supported, vat: vatSetupOf(supported, rates)! };
+  }
+  if (netRates.length) throw new SetupError('Net tax rates belong to the net tax rate method only.', { reason: 'netRates', detail: 'method' });
+  return { answers: supported, vat: vatSetupOf(supported)! };
 }
+
+/** The first asked question whose answer is none of its options (a form sent a value the table does not have). */
+function firstUnknown(answers: Answers): QuestionKey | undefined {
+  return (Object.keys(QUESTIONS) as QuestionKey[]).find((key) => {
+    const given = answers[key];
+    return given !== undefined && ([] as string[]).concat(given).some((v) => !optionOf(key, v));
+  });
+}
+
+/** The wizard's flag of a question: --vat-method, --period. */
+export const flagOf = (key: QuestionKey): string => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
 export interface SetupRequest {
   /** The company's repository; created when missing. The books go into its vanilla-accounting/. */
@@ -84,6 +108,8 @@ export interface SetupRequest {
   business?: string;
   language?: string;
   answers: Answers;
+  /** The approved net tax rate(s), when the VAT method is the net tax rate. */
+  netRates?: NetRate[];
   banks: BankSpec[];
   exportTo?: string;
 }
@@ -120,7 +146,7 @@ export async function createWorkspace(req: SetupRequest): Promise<Created> {
   const language = req.language || 'de';
   if (!languages.includes(language)) throw new SetupError(`--language must be one of ${languages.join(', ')}.`, { reason: 'language', detail: language });
   const preset = checkPreset(req.preset);
-  const answers = checkAnswers(req.answers);
+  const { answers, vat } = checkAnswers(req.answers, req.netRates ?? []);
   const banks = req.banks.reduce<Bank[]>((list, spec) => [...list, checkBank(spec, list)], []);
   if (banks.length === 0) {
     throw new SetupError('At least one bank account is needed: --bank <bank>:<currency>[:<ledger account>], e.g. --bank UBS:CHF.', { reason: 'noBank' });
@@ -129,7 +155,7 @@ export async function createWorkspace(req: SetupRequest): Promise<Created> {
   const exportTo = req.exportTo?.trim();
   const input: InitInput = {
     name, uid: parsed.uid, owner, ...(business ? { business } : {}), ...(language !== 'de' ? { language } : {}),
-    preset, answers, banks, ...(exportTo ? { exportTo } : {}),
+    preset, answers, vat, banks, ...(exportTo ? { exportTo } : {}),
   };
   const applied = applyPlan(root, planWorkspace(input, loadChart(), root, APP_ROOT));
   workspaceAt(root);

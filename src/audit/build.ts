@@ -38,7 +38,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion() };
 
   write(EXPORT_FILES.books(), books);
-  write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root));
+  write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root, ws.company.vat));
   write(EXPORT_FILES.status(), { ok: true, readonly: true, snapshot } satisfies ApiStatus);
   write(EXPORT_FILES.accounts(), accountsOf(ws));
   write(EXPORT_FILES.workspace(), companyInfo(ws, books));

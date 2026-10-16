@@ -15,8 +15,8 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import type { BankTransaction, JournalEntry, QuarterKey, Receipt } from '../types/index.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { loadChart } from '../workspace/chart.js';
-import { vat, baseCurrency, filing } from '../engines/index.js';
-import { isFilingKey } from '../accounting/periods.js';
+import { vat, baseCurrency } from '../engines/index.js';
+import { derivePeriod } from '../accounting/periods.js';
 
 export const CASES_DIR = join(APP_ROOT, 'examples', 'cases');
 /** The KMU accounts the casebook books on (Kontenrahmen KMU), number → name. */
@@ -136,7 +136,9 @@ function parseCase(raw: unknown, file: string): BookingCase {
   const lines = (r.lines as Record<string, unknown>[]).map((l, i): CaseLine => {
     const at = `lines[${i}]`;
     const corrects = l.corrects;
-    if (corrects !== undefined && !(typeof corrects === 'string' && isFilingKey(corrects, filing().length))) fail(`${at}.corrects must be YYYY-Qn`);
+    // A case is an example for any kind of firm: it may correct a quarter or a half year.
+    const kind = typeof corrects === 'string' ? derivePeriod(corrects)?.kind : undefined;
+    if (corrects !== undefined && kind !== 'quarter' && kind !== 'half') fail(`${at}.corrects must be a filing period (YYYY-Qn or YYYY-Hn)`);
     if ((l.currency === undefined) !== (l.rate === undefined)) fail(`${at}: currency and rate go together`);
     return {
       debit: account(l.debit ?? '', `${at}.debit`) as string,

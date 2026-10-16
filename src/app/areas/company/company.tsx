@@ -20,6 +20,7 @@ import { addDays, localToday, booksOpenPeriod, parsePeriod } from '../../../acco
 import type { Address } from '../../../invoices/model.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { ManifestPatch } from '../../../workspace/manifest-write.js';
+import { asNetRates, netRatesOf, type NetRate, type VatMethod, type VatPeriod, type VatSetup } from '../../../workspace/vat-setup.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
@@ -73,7 +74,7 @@ function List({ route, books, nav }: Props) {
   const opening = books.config?.openingBalances?.[bookYear(books)];
   const side: Partial<Record<CompanySection, string>> = {
     profile: ws?.company.uid,
-    vat: t('company.vatEffective'),
+    vat: ws ? vatSide(ws.company.vat) : undefined,
     banks: ws ? String(ws.bankAccounts.filter((b) => b.bank !== 'manual').length) : undefined,
     'invoice-layout': ws?.invoicing?.layout.font,
     mail: ws?.outgoingMail?.host,
@@ -219,21 +220,109 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   );
 }
 
-function Vat({ ws, nav }: Props & { ws: CompanyInfo }) {
+/** The kind of firm in a word, for the section list. */
+const vatSide = (v: VatSetup) => t(!v.registered ? 'company.vatNotRegistered' : v.method === 'net-rate' ? 'company.vatNetRate' : 'company.vatEffective');
+
+interface RateRow { rate: string; label: string; activityId: string }
+interface VatForm { registered: boolean; method: VatMethod; period: VatPeriod; rates: [RateRow, RateRow] }
+
+/** The form's setup, or null while a rate is missing or no percent. */
+function setupOf(f: VatForm): VatSetup | null {
+  if (!f.registered) return { registered: false };
+  if (f.method === 'effective') return { registered: true, method: 'effective', reporting: 'received', period: f.period };
+  const rates = f.rates.filter((r) => r.rate.trim()).map((r): NetRate => {
+    const rate = Number(r.rate.trim().replace(',', '.').replace(/\s*%$/, ''));
+    return { rate, ...(r.label.trim() ? { label: r.label.trim() } : {}), ...(r.activityId.trim() ? { activityId: r.activityId.trim().toUpperCase() } : {}) };
+  });
+  const approved = asNetRates(rates);
+  if (!approved || rates.some((r) => !(r.rate > 0 && r.rate < 100))) return null;
+  return { registered: true, method: 'net-rate', reporting: 'received', period: f.period, rates: approved };
+}
+
+/**
+ * The Firma page's VAT section: the firm's VAT setup, shown and changed as one block. Registration, method, period
+ * and a rate's percent hold for whole years; the API refuses a change while the open year has
+ * entries (error vatMethodHeld), a label or an activity code it takes any time.
+ */
+function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
+  const v = ws.company.vat;
+  const [edit, setEdit] = useState(false);
+  const was = (): VatForm => {
+    const rates = netRatesOf(v);
+    const row = (i: number): RateRow => ({ rate: rates[i] ? String(rates[i].rate) : '', label: rates[i]?.label ?? '', activityId: rates[i]?.activityId ?? '' });
+    return { registered: v.registered, method: v.registered ? v.method : 'effective', period: v.registered ? v.period : 'quarterly', rates: [row(0), row(1)] };
+  };
+  const [f, setF] = useState<VatForm>(was);
+  const next = setupOf(f);
+  const setRate = (i: 0 | 1, patch: Partial<RateRow>) => setF({ ...f, rates: f.rates.map((r, j) => (j === i ? { ...r, ...patch } : r)) as [RateRow, RateRow] });
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!next) return;
+    if (JSON.stringify(next) === JSON.stringify(v)) { setEdit(false); return; }
+    if (await patch(nav, { vat: next }, t('company.vatSaved'), { vat: v })) setEdit(false);
+  }
+  const half = v.registered && v.period === 'half-yearly';
   return (
     <>
       <dl className="kv2 wide">
-        <Kv k={t('company.vatMethod')} note={t('company.vatForm')}>{t('company.vatMethodEffective')}</Kv>
-        <Kv k={t('company.vatBasis')}>{t('company.vatReceived')}</Kv>
-        <Kv k={t('company.vatPeriod')} note={t('company.vatDue')}>{t('company.vatQuarterly')}</Kv>
-        <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: ws.company.uid })}</span></Kv>
-        <Kv k={t('company.filed')}>{ws.filed.length ? ws.filed.map((q) => <span key={q} className="mono" style={{ display: 'block' }}>{q}</span>) : <span className="m">{t('company.noneFiled')}</span>}</Kv>
+        <Kv k={t('company.vatRegistered')}>{t(v.registered ? 'company.yes' : 'company.no')}</Kv>
+        {v.registered && (
+          <>
+            <Kv k={t('company.vatMethod')} note={t(v.method === 'net-rate' ? 'company.vatFormNetRate' : 'company.vatForm')}>{t(v.method === 'net-rate' ? 'company.vatNetRate' : 'company.vatMethodEffective')}</Kv>
+            {v.method === 'net-rate' && (
+              <Kv k={t('company.vatRates')}>
+                {v.rates.map((r, i) => (
+                  <span key={i} style={{ display: 'block' }}>
+                    <span className="mono">{r.rate} %</span>{r.label ? ` ${r.label}` : ''}
+                    {' '}<span className="m">{r.activityId ? t('company.vatActivity', { id: r.activityId }) : t('company.vatActivityMissing')}</span>
+                  </span>
+                ))}
+              </Kv>
+            )}
+            <Kv k={t('company.vatBasis')}>{t('company.vatReceived')}</Kv>
+            <Kv k={t('company.vatPeriod')} note={t(half ? 'company.vatDueHalf' : 'company.vatDue')}>{t(half ? 'company.vatHalfYearly' : 'company.vatQuarterly')}</Kv>
+            <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: ws.company.uid })}</span></Kv>
+            <Kv k={t('company.filed')}>{ws.filed.length ? ws.filed.map((q) => <span key={q} className="mono" style={{ display: 'block' }}>{q}</span>) : <span className="m">{t('company.noneFiled')}</span>}</Kv>
+          </>
+        )}
       </dl>
+      {edit ? (
+        <form className="form inline" data-testid="vat-form" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
+          <label className="wide"><input type="checkbox" name="registered" checked={f.registered} onChange={(e) => setF({ ...f, registered: e.target.checked })} /> {t('company.vatEditRegistered')}</label>
+          {f.registered && (
+            <>
+              <label>{t('company.vatMethod')}
+                <select name="method" value={f.method} onChange={(e) => setF({ ...f, method: e.target.value as VatMethod, period: e.target.value === 'net-rate' ? 'half-yearly' : 'quarterly' })}>
+                  <option value="effective">{t('company.vatMethodEffective')}</option>
+                  <option value="net-rate">{t('company.vatNetRate')}</option>
+                </select>
+              </label>
+              <label>{t('company.vatPeriod')}
+                <select name="period" value={f.period} onChange={(e) => setF({ ...f, period: e.target.value as VatPeriod })}>
+                  <option value="quarterly">{t('company.vatQuarterly')}</option>
+                  <option value="half-yearly">{t('company.vatHalfYearly')}</option>
+                </select>
+              </label>
+              {f.method === 'net-rate' && ([0, 1] as const).map((i) => (
+                <Fragment key={i}>
+                  <label>{t(i === 0 ? 'company.vatRate1' : 'company.vatRate2')}<input name={`rate${i + 1}`} className="mono" value={f.rates[i].rate} onChange={(e) => setRate(i, { rate: e.target.value })} /></label>
+                  <label>{t('company.vatRateLabel')}<input name={`label${i + 1}`} value={f.rates[i].label} onChange={(e) => setRate(i, { label: e.target.value })} /></label>
+                  <label>{t('company.vatActivityId')}<input name={`activity${i + 1}`} className="mono" maxLength={5} value={f.rates[i].activityId} onChange={(e) => setRate(i, { activityId: e.target.value })} /></label>
+                </Fragment>
+              ))}
+            </>
+          )}
+          <div className="acts">
+            <button type="submit" className="btn primary" disabled={!next}>{t('common.save')}</button>
+            <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>
+          </div>
+        </form>
+      ) : canEdit && <div className="fedit"><button type="button" className="btn" onClick={() => { setF(was()); setEdit(true); }}>{I.edit}{t('company.edit')}</button></div>}
       <p>
         <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'vat' }, query: {} })}>{t('company.toVat')}</button>{'  '}
-        <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('company.toCodes')}</button>
+        {v.registered && <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('company.toCodes')}</button>}
       </p>
-      <p className="m src-note">{t('company.vatOnly')}</p>
+      <p className="m src-note">{t('company.vatRule')}</p>
     </>
   );
 }

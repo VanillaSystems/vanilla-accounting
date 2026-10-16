@@ -106,3 +106,13 @@ patterns:
       A: "410"
       B: "415"
       C: "420"
+# The net tax rate method (return-net-rate.yaml): a sale at the firm's first or second approved
+# rate, booked gross; the tax is the rate on the gross amount. The rate itself is the firm's
+# (company.vat.rates of its manifest), so no rate stands here.
+netRateCodes:
+  F1:
+    netRate: 1
+    revenue: "323"
+  F2:
+    netRate: 2
+    revenue: "333"

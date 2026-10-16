@@ -11,6 +11,7 @@ import { writeAtomic } from '../invoices/store.js';
 import type { Address, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
 import { parseIban } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
+import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
 import { WorkspaceError } from './workspace.js';
 
@@ -56,6 +57,8 @@ export type MailPatch = { [K in keyof OutgoingMail]?: OutgoingMail[K] | null };
 
 export interface ManifestPatch {
   company?: ProfilePatch;
+  /** The Firma page's VAT section: the whole VAT setup, written as one block (the API checks the method rule before). */
+  vat?: VatSetup;
   banks?: BankPatch[];
   addBank?: NewBank;
   invoicing?: InvoicingPatch;
@@ -90,6 +93,12 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
       if (!isMap(doc.getIn(['company', 'address']))) doc.setIn(['company', 'address'], doc.createNode({}));
       for (const key of ADDRESS_KEYS) set(doc, ['company', 'address', key], c.address[key] === undefined ? null : String(c.address[key]).trim());
     }
+  }
+  if (patch.vat) {
+    const node = doc.createNode(vatSetupYaml(patch.vat)) as YAMLMap;
+    const was = doc.getIn(['company', 'vat']);
+    node.flow = !isMap(was) || !!was.flow;
+    doc.setIn(['company', 'vat'], node);
   }
   const seq = doc.get('bankAccounts');
   if ((patch.banks?.length || patch.addBank) && !isSeq(seq)) throw new WorkspaceError(`${path}: bankAccounts must be a list`);

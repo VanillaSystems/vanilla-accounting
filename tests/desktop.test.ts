@@ -81,8 +81,13 @@ test('Demo: a copy in the user data folder opens; another workspace is created, 
   const receipt = (await call('GET', '/books.json')).json.receipts.find((r: { location?: string }) => r.location === 'archived').filename;
   assert.equal((await call('GET', `/receipts/${encodeURIComponent(receipt)}`)).status, 200);
 
-  const unsupported = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, vatMethod: 'saldo' } });
-  assert.deepEqual([unsupported.status, unsupported.json.code, unsupported.json.params], [400, 'setup', { reason: 'unsupported', question: 'vatMethod', value: 'saldo' }]);
+  const unsupported = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, basis: 'agreed' } });
+  assert.deepEqual([unsupported.status, unsupported.json.code, unsupported.json.params], [400, 'setup', { reason: 'unsupported', question: 'basis', value: 'agreed' }]);
+  assert.ok(!existsSync(join(home, 'Saldo')), 'a refused setup writes nothing');
+  const noRate = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, vatMethod: 'net-rate', period: 'half-yearly' } });
+  assert.deepEqual([noRate.status, noRate.json.code, noRate.json.params.reason], [400, 'setup', 'netRates']);
+  const unknown = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, vatMethod: 'saldo' } });
+  assert.deepEqual([unknown.status, unknown.json.params], [400, { reason: 'missing', question: 'vatMethod' }]);
   assert.ok(!existsSync(join(home, 'Saldo')), 'a refused setup writes nothing');
   const badIban = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Iban'), banks: [{ bank: 'UBS', currency: 'CHF', iban: 'CH00 0000' }] });
   assert.equal(badIban.json.params.reason, 'iban');

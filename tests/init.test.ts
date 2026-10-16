@@ -148,6 +148,30 @@ test('init keeps a VANILLA_WORKSPACE that points elsewhere unless told to replac
   rmSync(base, { recursive: true, force: true });
 });
 
+test('a freelancer not registered for VAT and a firm on the net tax rate method are set up; the net rate is asked for', () => {
+  const base = tmp();
+  const envFile = join(base, 'app.env');
+  const salon = cli('init.ts', ['--preset', 'freelancer', '--dir', join(base, 'salon'), '--name', 'Salon Beispiel', '--uid', 'CHE-153.004.184', '--owner', 'Bella Beispiel', '--bank', 'UBS:CHF', '--app-env', envFile, '--yes']);
+  assert.equal(salon.code, 0, salon.out);
+  assert.match(salon.out, /booked gross, without VAT codes/);
+  const salonWs = workspaceAt(join(base, 'salon'));
+  assert.deepEqual(salonWs.company.vat, { registered: false });
+  assert.equal(salonWs.filingLength, 'quarter');
+  assert.match(readFileSync(salonWs.paths.manifest, 'utf8'), /vat:\n\s+registered: false\n/);
+
+  const noRate = cli('init.ts', [...consultant(join(base, 'a'), envFile), '--vat-method', 'net-rate', '--period', 'half-yearly']);
+  assert.equal(noRate.code, 1);
+  assert.match(noRate.out, /--net-rate/);
+  assert.ok(!existsSync(join(base, 'a')), 'nothing written without the rate');
+
+  const schreinerei = cli('init.ts', [...consultant(join(base, 'b'), envFile), '--vat-method', 'net-rate', '--period', 'half-yearly', '--net-rate', '4.5:Schreinerei']);
+  assert.equal(schreinerei.code, 0, schreinerei.out);
+  const ws = workspaceAt(join(base, 'b'));
+  assert.deepEqual(ws.company.vat, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] });
+  assert.equal(ws.filingLength, 'half');
+  rmSync(base, { recursive: true, force: true });
+});
+
 test('init takes an IBAN per bank and refuses one with wrong check digits', () => {
   const base = tmp();
   const withIban = cli('init.ts', consultant(join(base, 'a'), join(base, 'app.env'), '--bank', `PostFinance:CHF::${testIban('09000000000000002').replace(/(.{4})(?!$)/g, '$1 ')}`));
@@ -164,8 +188,6 @@ test('init takes an IBAN per bank and refuses one with wrong check digits', () =
 test('an answer the app does not support yet stops with its explanation and writes nothing', () => {
   const base = tmp();
   const cases: [string[], RegExp][] = [
-    [['--preset', 'freelancer'], /Books without VAT are not supported yet/],
-    [['--vat-method', 'saldo'], /Saldosteuersatz method is not supported yet/],
     [['--basis', 'agreed'], /Vereinbarte Entgelte are not supported yet/],
     [['--period', 'monthly'], /Monthly returns are not supported yet/],
     [['--fiscal-year', 'other'], /calendar year is not supported yet/],

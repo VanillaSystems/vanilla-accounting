@@ -1,0 +1,82 @@
+# The MWST return of the net tax rate method (Saldosteuersatz, ESTV form 0553; eCH-0217
+# simpleTaxRateMethod from 2025), keyed by Ziffer. Section I is form 0550's. Section II declares
+# the gross turnover per approved rate; the tax is the rate on the gross turnover, not taken out
+# of it (eCH-0217 6.2.5). There is no section III: the net rate stands for the input tax, and
+# Bezugsteuer (383) is owed at the statutory rate without a deduction.
+#
+# Which codes this form takes; a box a code names that the form lacks is left out, so B81
+# declares its acquisition in 383 and deducts nothing.
+#
+# Modelled from eCH-0217 v2.0.0 and Banana's code list (F1/F2 → 200 and 323/333), the paper form
+# not at hand: the box numbers 323/333 of the two rates, the absence of 470/471 (credits of the
+# forms 1050/1055, not kept here) and of 415 (corrections on real estate) are the uncertain parts.
+
+form: "0553"
+turnoverBox: "200"
+turnoverLabel: Gesamtumsatz
+codes: [F1, F2, V0, V0-E, V0-T, V0-N, V0-D, B81, B77]
+rateOrder:
+  - "323"
+  - "333"
+  - "383"
+  - "382"
+# The firm's approved rates, one row each; a firm with one rate has no second row.
+netRateRows:
+  "323":
+    netRate: 1
+    code: F1
+    name: 1. Saldosteuersatz
+  "333":
+    netRate: 2
+    code: F2
+    name: 2. Saldosteuersatz
+deductions:
+  "220":
+    label: Steuerbefreite Leistungen (Exporte)
+    element: suppliesToForeignCountries
+  "221":
+    label: Leistungen im Ausland
+    element: suppliesAbroad
+  "225":
+    label: Übertragungen im Meldeverfahren
+    element: transferNotificationProcedure
+  "230":
+    label: Nicht steuerbare Leistungen
+    element: suppliesExemptFromTax
+  "235":
+    label: Entgeltsminderungen
+    element: reductionOfConsideration
+  "280":
+    label: Diverse Abzüge
+inputTax: {}
+derived:
+  "289":
+    label: Total Abzüge
+    formula:
+      sum:
+        - "220"
+        - "221"
+        - "225"
+        - "230"
+        - "235"
+        - "280"
+  "299":
+    label: Steuerbarer Umsatz
+    formula:
+      minus:
+        - "200"
+        - "289"
+  "399":
+    label: Total geschuldete Steuer
+    formula:
+      taxOfRows: true
+  "500":
+    label: Zu bezahlender Betrag
+    formula:
+      positive: "399"
+  "510":
+    label: Guthaben
+    formula:
+      sum: []
+payable: "500"
+credit: "510"

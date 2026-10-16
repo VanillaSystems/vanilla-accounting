@@ -30,7 +30,7 @@ export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' 
 
 function filedQuarters(ws: Workspace): QuarterKey[] {
   return partDirs(ws.paths, 'filings').flatMap((dir) => readdirSync(dir)
-    .map((f) => /^mwst-ech0217-(\d{4}-Q[1-4])\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
+    .map((f) => /^mwst-ech0217-(\d{4}-(?:Q[1-4]|H[12]))\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
     .filter((q): q is QuarterKey => !!q)).sort();
 }
 

@@ -31,7 +31,8 @@ test('Wise: a midnight DtTm is the close of the previous day', () => {
 });
 
 test('every statement: opening balance plus parsed movements equals closing balance', () => {
-  const dirs = [FIXTURES, ...DEMO_ROOTS.flatMap((root) => ['Raiffeisen', 'Wise'].map((bank) => join(root, 'transactional-data/2026/bank-statements', bank)))];
+  // Every bank folder of every demo: a demo with one bank account has one folder.
+  const dirs = [FIXTURES, ...DEMO_ROOTS.flatMap((root) => { const at = join(root, 'transactional-data/2026/bank-statements'); return readdirSync(at).map((bank) => join(at, bank)); })];
   const files = dirs.flatMap((dir) => readdirSync(dir).filter((f) => f.endsWith('.xml')).map((f) => join(dir, f)));
   assert.ok(files.length >= 17, `${files.length} statement files`);
   for (const file of files) {

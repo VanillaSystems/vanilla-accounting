@@ -55,6 +55,8 @@ test('every code the engine knows by name, and every K code of a Swiss rate, has
 test('every code the demo books and the casebook use is explained, minus codes by their plain code', () => {
   const used = new Set<string>();
   for (const root of DEMO_ROOTS) for (const e of loadBooks(workspaceAt(root)).journalEntries ?? []) if (e.vatCode) used.add(e.vatCode);
+  // Opening each demo set the engines to its kind of firm; the catalogue below is the effective method's.
+  workspaceAt(DEMO_ROOTS[0]);
   for (const c of loadCases()) for (const l of c.lines) if (l.vatCode) used.add(l.vatCode);
   assert.ok(used.has('V81') && used.has('-I81'), [...used].join(' '));
   for (const code of used) {

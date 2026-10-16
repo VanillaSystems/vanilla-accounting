@@ -20,7 +20,7 @@ import type { AreaProps, Nav } from '../index.js';
 import { closeYear as yearOfPage, useYearClose } from './data.js';
 import { useShellUi } from '../../shell/ui.js';
 import { configOf } from '../export/state.js';
-import { STEPS, stepGone, causeText, checkRows, closeBlockers, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
+import { STEPS, stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -77,7 +77,7 @@ function Q4({ d, nav, books }: StepProps) {
   const start = books.config?.closedThrough ? undefined : booksOpenPeriod(books, today, filing().length).from;
   return (
     <>
-      <p className="lead">{t('close.q4Lead')}</p>
+      <p className="lead">{t('close.q4Lead', { period: lastPeriodOf(d.year) })}</p>
       <div className="qgrid">
         {d.vat.quarters.map((q) => {
           const range = parsePeriod(q.quarter, today)!;

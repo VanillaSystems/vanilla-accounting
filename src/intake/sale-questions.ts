@@ -33,7 +33,7 @@ export function saleQuestionLine(ws: Pick<Workspace, 'company'>, tx: BankTransac
  * answered or withdrawn) is never asked again. Returns the questions it asked.
  */
 export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'config'>, at = new Date().toISOString()): Question[] {
-  const sales = salesWithoutInvoice(books, !!ws.company.vat);
+  const sales = salesWithoutInvoice(books, ws.company.vat.registered);
   if (!sales.length) return [];
   const asked = new Set(readQuestions(ws).filter((q) => q.topic === 'saleVat').map((q) => q.on.id));
   const ids: string[] = [];

@@ -5,24 +5,44 @@
  */
 import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../types/index.js';
 import { entriesForReturn } from '../../../accounting/index.js';
+import { chfAmount } from '../../../accounting/ledger.js';
 import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
-import { vat, filing } from '../../../engines/index.js';
+import { chart, vat, filing } from '../../../engines/index.js';
 import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
+import type { BoxId, Formula } from '../../../core/modules/schema.js';
 
 /** The four parts of the return, as the form groups its Ziffern. */
 export const SECTIONS = ['turnover', 'tax', 'input', 'result'] as const;
 export type Section = typeof SECTIONS[number];
 export const sectionOf = (n: number): Section => (n < 300 ? 'turnover' : n < 400 ? 'tax' : n < 500 ? 'input' : 'result');
 
-/** The derived Ziffern and the ones they are made of; a minus subtracts. */
-export const SUMS: Record<string, string[]> = {
-  289: ['220', '221', '225', '230', '235', '280'],
-  299: ['200', '-289'],
-  399: ['302', '303', '312', '313', '342', '343', '382', '383'],
-  479: ['400', '405', '410', '-415', '-420'],
-  500: ['399', '-479'],
-  510: ['479', '-399'],
-};
+let sums: { form: unknown; parts: Record<string, string[]> } | undefined;
+
+/** The derived Ziffern of the firm's form and the ones each is made of (from its formula); a minus subtracts. */
+export function sumsOf(): Record<string, string[]> {
+  const form = vat().form;
+  if (sums?.form !== form) {
+    const parts = (f: Formula | BoxId): string[] => typeof f === 'string' ? [f]
+      : 'sum' in f ? f.sum
+        : 'minus' in f ? [f.minus[0], `-${f.minus[1]}`]
+          : 'positive' in f ? parts(f.positive)
+            : 'signed' in f ? Object.entries(f.signed).map(([z, s]) => (s < 0 ? `-${z}` : z))
+              : [...form.rateOrder].sort((a, b) => Number(a) - Number(b));
+    sums = { form, parts: Object.fromEntries(Object.entries(form.derived).map(([z, d]) => [z, parts(d.formula)])) };
+  }
+  return sums.parts;
+}
+
+/** The gross turnover a firm not registered for VAT made in a calendar year: what its revenue accounts took in, in the books' currency. */
+export function yearTurnover(entries: readonly JournalEntry[], year: string): number {
+  let rappen = 0;
+  for (const e of entries) {
+    if (!e.date.startsWith(year)) continue;
+    if (chart().typeOf(e.accountCredit) === 'revenue') rappen += Math.round(chfAmount(e) * 100);
+    if (chart().typeOf(e.accountDebit) === 'revenue') rappen -= Math.round(chfAmount(e) * 100);
+  }
+  return rappen / 100;
+}
 
 /** The pseudo-Ziffer of a filed quarter's Korrekturabrechnung (form 0535) in the list and the link. */
 export const FORM_0535 = '0535';
@@ -104,7 +124,7 @@ export function filedDiff(v: VatReturn, filed: ReturnFigures | undefined, n: str
 export function shownZiffern(v: VatReturn, filed: ReturnFigures | undefined, all: boolean): string[] {
   return v.report.ziffern.map((z) => z.number).filter((n) =>
     all || n === '200' || amountOf(v, n) !== 0 || !!filed?.ziffern[n]
-    || (n in SUMS && (n === '500' ? v.report.toPay > 0 : n === '510' ? v.report.credit > 0 : true)));
+    || (n in sumsOf() && (n === '500' ? v.report.toPay > 0 : n === '510' ? v.report.credit > 0 : true)));
 }
 
 /** The result row: Guthaben when the ESTV pays, else the amount to pay. */

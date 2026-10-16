@@ -164,7 +164,7 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
 export function addEntry(books: Books, input: NewEntry): JournalEntry {
   const { id, transactionRef, ...rest } = input;
   const { corrects, date } = rest;
-  if (corrects && !isFilingKey(corrects, filing().length)) throw new RequestError(400, 'corrects: YYYY-Qn.');
+  if (corrects && !isFilingKey(corrects, filing().length)) throw new RequestError(400, `corrects: ${filing().length === 'half' ? 'YYYY-Hn' : 'YYYY-Qn'}.`);
   assertOpen(books, [date], 'newEntry');
   const closed = books.config.closedThrough;
   if (corrects && !(closed && parsePeriod(corrects, date)!.to <= closed)) throw new RequestError(400, `corrects: ${corrects} ist nicht eingereicht.`);

@@ -9,7 +9,7 @@ import type { QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
-import { vat, filing } from '../engines/index.js';
+import { vat, filing, filingMethod } from '../engines/index.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 
 const ws = openWorkspace();
@@ -22,7 +22,7 @@ function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
   const { ziffern, payable } = vat().figures(entries, periodKey, adjustments);
   const { xml, warnings } = ech0217Xml({
     uid: ws.company.uid, organisationName: ws.company.name, period: { key: periodKey, from, to },
-    ziffern, payable, form: vat().form, rateRows: vat().rateRows,
+    ziffern, payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(),
     generationTime: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
   });
   for (const w of warnings) console.error(`⚠ ${periodKey}: ${w}`);
@@ -33,7 +33,8 @@ function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
 const key = process.argv[2] ?? '';
 const isQuarterKey = (k: string): k is QuarterKey => isFilingKey(k, filing().length);
 if (!isQuarterKey(key)) {
-  console.error(`Usage: npm run vat-xml -- <YYYY-Qn> [out.xml]   (e.g. 2026-Q3; got "${key}")`);
+  const half = filing().length === 'half';
+  console.error(`Usage: npm run vat-xml -- <${half ? 'YYYY-Hn' : 'YYYY-Qn'}> [out.xml]   (e.g. ${half ? '2026-H2' : '2026-Q3'}; got "${key}")`);
   process.exit(1);
 }
 // Golden rule 1 (AGENTS.md): a filed return is set in stone and is never regenerated.

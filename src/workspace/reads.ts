@@ -25,7 +25,7 @@ export function filedReturnsOf(ws: Workspace, year: string): ReturnFigures[] {
   const dir = yearPaths(ws.paths, year).filings;
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => /^mwst-ech0217-\d{4}-Q[1-4]\.xml$/.test(f))
+    .filter((f) => /^mwst-ech0217-\d{4}-(?:Q[1-4]|H[12])\.xml$/.test(f))
     .sort()
     .map((f) => parseFiledReturn(readFileSync(join(dir, f), 'utf8')));
 }

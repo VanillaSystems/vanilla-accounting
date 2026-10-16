@@ -15,20 +15,22 @@ import { reconcileCases, caseEffect } from '../src/accounting/correction-cases.j
 import { goldenSet } from './support/golden.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 import { vat } from '../src/engines/index.js';
+import { filingKeyOf } from '../src/accounting/periods.js';
 
 const { ws, books, expect: golden } = goldenSet();
 const entries = books.journalEntries;
 const adjustments = books.config.vatAdjustments;
 
-const quarterOf = (date: string) => `${date.slice(0, 4)}-Q${Math.ceil(Number(date.slice(5, 7)) / 3)}` as QuarterKey;
+// The firm's filing periods: quarters, or half years for a firm on the net tax rate method.
+const quarterOf = (date: string) => filingKeyOf(date, ws.filingLength) as QuarterKey;
 const QUARTERS = [...new Set(entries.map((e) => quarterOf(e.date)))].sort();
 const FILED = QUARTERS.filter((q) => q <= quarterOf(books.config.closedThrough));
 const OPEN = QUARTERS.at(-1)!;
 const YEAR = OPEN.slice(0, 4);
-const REPORT_KEYS = [...QUARTERS, `${YEAR}-H1`, YEAR];
+const REPORT_KEYS = [...new Set([...QUARTERS, `${YEAR}-H1`, YEAR])];
 const filedXml = (q: QuarterKey) => readFileSync(join(yearPaths(ws.paths, q.slice(0, 4)).filings, `mwst-ech0217-${q}.xml`), 'utf8');
 
-test('the frozen books span one year with a filed and an open quarter', () => {
+test('the frozen books span one year with a filed and an open period', () => {
   assert.ok(QUARTERS.every((q) => q.startsWith(YEAR)), `one year: ${QUARTERS.join(', ')}`);
   assert.ok(FILED.length > 0 && !FILED.includes(OPEN), `filed ${FILED.join(', ')}, open ${OPEN}`);
 });

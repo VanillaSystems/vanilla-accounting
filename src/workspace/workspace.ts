@@ -11,8 +11,10 @@ import { homedir } from 'node:os';
 import { parseEnv } from 'node:util';
 import { readManifest } from './manifest.js';
 import { workspaceModules } from '../core/modules/load.js';
-import { setJurisdiction } from '../engines/index.js';
-import type { LegalForm, Preset, QuestionKey, SupportedAnswers } from './setup.js';
+import { filing, setJurisdiction } from '../engines/index.js';
+import type { FilingLength } from '../accounting/periods.js';
+import type { LegalForm, Preset, QuestionKey, SupportedAnswers, VatQuestionKey } from './setup.js';
+import type { VatSetup } from './vat-setup.js';
 import type { Iban, StatementKind } from './banks.js';
 import type { Address, InvoicingSettings, OutgoingMail } from '../invoices/model.js';
 
@@ -37,12 +39,12 @@ export interface Company {
   language?: string;
   /** Where the company is: printed on its invoices as sender (Art. 26 MWSTG). */
   address?: Address;
-  /** Registered, effective method, cash basis, quarterly: the only setup the engine supports. */
-  vat: { method: 'effective'; reporting: 'received' };
+  /** Not registered, or registered on the effective or the net tax rate method, with its filing period (src/workspace/vat-setup.ts). */
+  vat: VatSetup;
 }
 
 /** The questions of the company's VAT setup live on Company.vat; the rest of the answers here. */
-export type ProfileKey = Exclude<QuestionKey, 'legalForm' | 'vatRegistered' | 'vatMethod' | 'basis' | 'period'>;
+export type ProfileKey = Exclude<QuestionKey, 'legalForm' | VatQuestionKey>;
 
 /** How the company works, as `npm run init` asked it (src/workspace/setup.ts): context for doctor and agents. */
 export type WorkspaceProfile = Pick<SupportedAnswers, ProfileKey> & {
@@ -151,6 +153,8 @@ export interface YearPaths {
 
 export interface Workspace {
   readonly company: Company;
+  /** How long one filing period of these books is (the firm's, else the jurisdiction's): what the seals and the year close count by. */
+  readonly filingLength: FilingLength;
   readonly bankAccounts: readonly LedgerBankAccount[];
   /** Absent in a workspace set up before `npm run init` existed. */
   readonly profile?: WorkspaceProfile;
@@ -244,11 +248,12 @@ export function appFolderIn(dir: string): string | undefined {
   return undefined;
 }
 
-/** The workspace whose manifest is in `root`; from now on the engines compute with its jurisdiction (modules/ch with its overlay). */
+/** The workspace whose manifest is in `root`; from now on the engines compute with its jurisdiction (modules/ch with its overlay) and its VAT setup. */
 export function workspaceAt(root: string): Workspace {
   const paths = workspacePaths(appFolderIn(resolve(root)) ?? resolve(root));
-  setJurisdiction(workspaceModules(APP_ROOT, paths.root).effective);
-  return { ...readManifest(paths.manifest), paths };
+  const manifest = readManifest(paths.manifest);
+  setJurisdiction(workspaceModules(APP_ROOT, paths.root, manifest.company.vat).effective, manifest.company.vat);
+  return { ...manifest, filingLength: filing().length, paths };
 }
 
 /**

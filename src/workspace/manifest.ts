@@ -7,14 +7,15 @@ import { parseDocument } from 'yaml';
 import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
 import { WorkspaceError, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
 import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
-import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
+import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
+import { parseVatSetup } from './vat-setup.js';
 import {
   DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, OWN_TEXTS,
   type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail,
 } from '../invoices/model.js';
 import { isQrIban } from '../providers/qr-bill/reference.js';
 
-const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatRegistered', 'vatMethod', 'basis', 'period'].includes(k)) as ProfileKey[];
+const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)) as ProfileKey[];
 
 export type Manifest = { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail };
 
@@ -40,10 +41,7 @@ export function parseManifest(source: string, path: string): Manifest {
   const text = (v: unknown, where: string): string => (typeof v === 'string' && v.trim() ? v : fail(`${where} must be a non-empty text`));
   const uid = text(c.uid, 'company.uid');
   if (!/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(uid)) fail(`company.uid "${uid}" must look like CHE-###.###.###`);
-  const vat = (c.vat ?? {}) as Record<string, unknown>;
-  if (vat.method !== 'effective' || vat.reporting !== 'received' || (vat.registered ?? true) !== true || (vat.period ?? 'quarterly') !== 'quarterly') {
-    fail('company.vat must be { registered: true, method: effective, reporting: received, period: quarterly }: the only VAT setup the engine supports');
-  }
+  const vat = parseVatSetup(c.vat, fail);
   if (c.language !== undefined && !appLanguages().includes(c.language as string)) fail(`company.language must be one of ${appLanguages().join(', ')}`);
   if (c.legalForm !== undefined && !LEGAL_FORMS.includes(c.legalForm as LegalForm)) fail(`company.legalForm must be one of ${LEGAL_FORMS.join(', ')}`);
   const company: Company = {
@@ -54,7 +52,7 @@ export function parseManifest(source: string, path: string): Manifest {
     ...(c.legalForm === undefined ? {} : { legalForm: c.legalForm as LegalForm }),
     ...(c.language === undefined ? {} : { language: c.language as string }),
     ...(c.address === undefined ? {} : { address: readAddress(c.address, 'company.address', fail) }),
-    vat: { method: 'effective', reporting: 'received' },
+    vat,
   };
 
   if (!Array.isArray(raw.bankAccounts) || raw.bankAccounts.length === 0) fail('bankAccounts must list at least one account');

@@ -14,7 +14,7 @@ router.get('/books.json', (_req, res) => {
   res.json(loadBooks(WS));
 });
 router.get('/modules.json', (_req, res) => {
-  res.json(workspaceModules(APP_ROOT, WS.paths.root));
+  res.json(workspaceModules(APP_ROOT, WS.paths.root, WS.company.vat));
 });
 /** A receipt or statement file of the books open now, from whichever year folder holds it. */
 function yearFile(part: 'receipts' | 'statements'): express.RequestHandler {

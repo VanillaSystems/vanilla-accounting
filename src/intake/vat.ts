@@ -16,6 +16,7 @@ import { creditSigned } from './match.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { periodLock, type Books } from '../books/store.js';
+import { vatSetup } from '../engines/index.js';
 import type { Receipt } from '../types/index.js';
 import { hasVatIndicator, textFacts } from '../parsers/receipt-text.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
@@ -54,6 +55,10 @@ export const vatCandidates = (books: Books, force = false): Receipt[] =>
 
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
+    if (!vatSetup().registered) {
+      log('The firm is not registered for VAT: no VAT facts are read off its receipts.');
+      return { notes: [] };
+    }
     const candidates = vatCandidates(books.read(), force);
     if (candidates.length === 0) {
       log('All receipts already have VAT facts extracted (use --force to redo).');
