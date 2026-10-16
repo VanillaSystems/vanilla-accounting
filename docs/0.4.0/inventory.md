@@ -14,7 +14,7 @@ and the providers.
 | split | 58 | 26 |
 | infrastructure | 30 | 4 |
 | workflow | 17 | 0 |
-| view | 211 | 59 |
+| view | 212 | 59 |
 
 Layers are assigned by path prefix, most specific first:
 
