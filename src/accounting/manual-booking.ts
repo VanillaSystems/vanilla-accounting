@@ -6,7 +6,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
-import { codeForRate, lookupVatCode } from './vat-codes.js';
+import { codeForRate, formTakes, lookupVatCode } from './vat-codes.js';
 import { withoutInputTax } from '../engines/index.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { isManualRef } from '../books/refs.js';
@@ -65,7 +65,18 @@ function precedentOf(books: Books, tx: BankTransaction, bank: NonNullable<Bookin
   const hit = (books.journalEntries ?? [])
     .filter((e) => e.transactionRef !== tx.ref && e.origin !== 'year-close' && bankAccounts.has(e[bank.side]) && e[other] && !bankAccounts.has(e[other]) && isSame(e.transactionRef))
     .sort((a, b) => b.date.localeCompare(a.date))[0];
-  return hit && { account: hit[other], entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date } };
+  return hit && { account: hit[other], vatCode: hit.vatCode, entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date } };
+}
+
+/**
+ * The code the app books for a payment without a receipt, from the vendor's last booking (r4c-5):
+ * its code, but the zero code where that claimed input tax (no receipt, no input tax); nothing
+ * where the firm's form takes no such code.
+ */
+function withoutReceipt(code: string | undefined): string {
+  if (!code || !lookupVatCode(code)) return '';
+  const zero = inputTaxWithoutReceipt(code) ?? code;
+  return formTakes(zero) ? zero : '';
 }
 
 /**
@@ -87,7 +98,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const line = (amount: number, rate?: number): DraftLine => {
     const accountDebit = bank?.side === 'accountDebit' ? bank.account : precedent?.account ?? '';
     const accountCredit = bank?.side === 'accountCredit' ? bank.account : precedent?.account ?? '';
-    const vat = rate === undefined ? '' : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
+    const vat = rate === undefined ? (receipts.length ? '' : withoutReceipt(precedent?.vatCode)) : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
     return { accountDebit, accountCredit, amount, vat, description: text };
   };
   const groups = receipts.length === 1 && receipts[0].currency === tx.currency ? vatRates(receipts[0]) : [];

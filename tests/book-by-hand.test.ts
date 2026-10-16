@@ -167,3 +167,23 @@ test('the hand form warns when a code would deduct input tax no receipt shows, a
   assert.equal(inputTaxWithoutReceipt('M26-2'), 'M0');
   for (const code of ['I0', 'M0', 'V81', '-I81', 'B81-1', '', undefined, 'XYZ']) assert.equal(inputTaxWithoutReceipt(code), undefined, String(code));
 });
+
+test('without a receipt the draft prefills the code the app would book: the vendor\'s last code, its zero code where that claimed input tax (r4c-5, r5h-6)', () => {
+  const books = {
+    transactions: [
+      { ref: 'S9', bank: 'Raiffeisen', date: '2026-09-15', amount: 89, currency: 'CHF', direction: 'DBIT' as const, description: 'Rechnung September Natel', counterparty: 'Swisscom (Schweiz) AG' },
+      { ref: 'S8', bank: 'Raiffeisen', date: '2026-08-15', amount: 89, currency: 'CHF', direction: 'DBIT' as const, description: 'Rechnung August Natel', counterparty: 'Swisscom (Schweiz) AG' },
+      { ref: 'P2', bank: 'Raiffeisen', date: '2026-09-20', amount: 30, currency: 'CHF', direction: 'DBIT' as const, description: 'Parkhaus Wil', counterparty: 'Parkhaus Wil AG' },
+      { ref: 'P1', bank: 'Raiffeisen', date: '2026-08-20', amount: 30, currency: 'CHF', direction: 'DBIT' as const, description: 'Parkhaus Wil', counterparty: 'Parkhaus Wil AG' },
+    ],
+    receipts: [],
+    mappings: [],
+    journalEntries: [
+      { id: 'j8', transactionRef: 'S8', date: '2026-08-15', accountDebit: '6510', accountCredit: '1020', amount: 89, vatCode: 'I81' },
+      { id: 'p1', transactionRef: 'P1', date: '2026-08-20', accountDebit: '6200', accountCredit: '1020', amount: 30, vatCode: 'I0' },
+    ],
+  };
+  const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen CHF' }];
+  assert.equal(bookingDraft(books, 'S9', accounts)!.lines[0].vat, 'I0', 'August had a receipt with 8.1 %; September has none');
+  assert.equal(bookingDraft(books, 'P2', accounts)!.lines[0].vat, 'I0');
+});
