@@ -9,7 +9,7 @@
  *
  * A bank is <bank>:<currency>[:<ledger account>[:<IBAN>]]; the IBAN routes its statements to the
  * account (without it, the folder bank-statements/<bank>/ does). On the net tax rate method
- * (--vat-method net-rate) each approved rate is --net-rate <percent>[:<label>], one or two.
+ * (--vat-method net-rate) each approved rate is --net-rate <percent>[:<label>[:<activity code>]], one or two.
  *
  * Rerun on a finished workspace changes nothing. Exit code 2: an answer the app does not support yet.
  */
@@ -108,18 +108,18 @@ async function askAnswers(preset: Preset): Promise<{ answers: Answers; netRates:
   return { answers: answers as Answers, netRates };
 }
 
-/** The approved net tax rate(s): --net-rate <percent>[:<label>], or typed one per line, Enter on an empty line after the first. */
+/** The approved net tax rate(s): --net-rate <percent>[:<label>[:<activity code>]], or typed one per line, Enter on an empty line after the first. */
 async function askNetRates(): Promise<NetRate[]> {
   const parse = (spec: string): NetRate => {
-    const [percent, label] = spec.split(':').map((s) => s.trim());
+    const [percent, label, activityId] = spec.split(':').map((s) => s.trim());
     const rate = Number(percent.replace(',', '.').replace(/\s*%$/, ''));
-    if (!(rate > 0 && rate < 100)) throw new Stop(`--net-rate "${spec}": the rate is a percent above 0 and below 100, e.g. 4.5 or 4.5:Schreinerei.`);
-    return { rate, ...(label ? { label } : {}) };
+    if (!(rate > 0 && rate < 100)) throw new Stop(`--net-rate "${spec}": the rate is a percent above 0 and below 100, e.g. 4.5, 4.5:Schreinerei or 4.5:Schreinerei:41050.`);
+    return { rate, ...(label ? { label } : {}), ...(activityId ? { activityId: activityId.toUpperCase() } : {}) };
   };
   if (Array.isArray(flags['net-rate'])) return flags['net-rate'].map(parse);
   if (!interactive) throw new Stop('Missing --net-rate <percent>[:<label>]: the rate(s) the ESTV approved for the Saldosteuersatz method, one or two.');
   const rates: NetRate[] = [];
-  console.log('\n    The approved Saldosteuersatz in percent (a label after a colon, e.g. 4.5:Schreinerei). A second one on the next line; Enter on an empty line when done.');
+  console.log('\n    The approved Saldosteuersatz in percent, a label and the ESTV\'s activity code after colons (e.g. 4.5:Schreinerei:41050; the code is on the ESTV\'s ruling and names the rate in the electronic return). A second one on the next line; Enter on an empty line when done.');
   for (;;) {
     const typed = (await rl!.question(`    Rate ${rates.length + 1} > `)).trim();
     if (!typed) { if (rates.length) return rates; console.log('    At least one rate is needed.'); continue; }

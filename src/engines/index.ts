@@ -55,6 +55,15 @@ export const invoicing = (): Jurisdiction['invoicing'] => loaded().source.invoic
 /** Whether the firm's invoices carry VAT at all: a firm not registered prints none (what it shows, it owes). */
 export const chargesVat = (): boolean => vatSetup().registered;
 
+/**
+ * The firm's net tax rates whose activity code of the tax authority is missing, among those a
+ * return has turnover on (by box): the electronic return names each rate by that code, so without
+ * it the return's file cannot be written (r6f-22). Named by the rate's label, else its percent.
+ */
+export const ratesWithoutActivityId = (figures: Record<string, number>): string[] => vat().rateRows
+  .filter((row) => row.kind === 'net-rate' && !row.activityId && (figures[row.ziffer] ?? 0) !== 0)
+  .map((row) => row.name ?? `${row.rate} %`);
+
 /** The rates an invoice line may take: the jurisdiction's for a registered firm, 0 alone for one not registered. */
 export const invoiceRates = (): readonly number[] => (chargesVat() ? invoicing().rates : [0]);
 

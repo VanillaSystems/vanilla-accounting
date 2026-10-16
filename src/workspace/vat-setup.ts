@@ -19,8 +19,8 @@ export type VatPeriod = (typeof VAT_PERIODS)[number];
 
 /**
  * One net tax rate the tax authority approved for the firm: the percent of the gross turnover it
- * owes. `activityId` is the authority's five-digit code of the activity, which the electronic
- * return names from 2025 on; without it the return's figures are typed into the portal by hand.
+ * owes. `activityId` is the authority's five-character code of the activity, which the electronic
+ * return names each rate by; without it the return's XML cannot be written (the review task says so).
  */
 export interface NetRate {
   rate: number;

@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 44 | 22 |
+| core | 45 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
 | split | 63 | 26 |
 | infrastructure | 32 | 4 |
 | workflow | 19 | 0 |
-| view | 221 | 59 |
+| view | 222 | 59 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -180,8 +180,8 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 29, MWST 194, ESTV 21, Ziffer 46, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
-| `src/app/i18n/locales/en.ts` | CHF 29, MWST 4, ESTV 20, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
+| `src/app/i18n/locales/de.ts` | CHF 29, MWST 196, ESTV 26, Ziffer 47, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
+| `src/app/i18n/locales/en.ts` | CHF 29, MWST 4, ESTV 18, form 0535 1, UID 1, camt.053 14, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 29, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 29, MWST 1, form 0535 1, UID 1, camt.053 14, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 1 |
@@ -192,7 +192,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/fetch-estv-rates.ts` | CHF 3, MWST 2, ESTV 6 |
 | `src/cli/import-board.ts` | UID 3, camt.053 1 |
 | `src/cli/import-opening-balances.ts` | CHF 13 |
-| `src/cli/init.ts` | CHF 4, ESTV 1 |
+| `src/cli/init.ts` | CHF 4, ESTV 2 |
 | `src/cli/rebook-shopify-orders.ts` | CHF 5, MWST 3, ESTV 2, tax code 4 |
 | `src/cli/reconcile-balances.ts` | camt.053 3 |
 | `src/cli/restamp-fx-rates.ts` | CHF 2, ESTV 3 |

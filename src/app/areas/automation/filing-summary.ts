@@ -4,7 +4,8 @@
  * area's (automation.tsx); the boxes come from the jurisdiction's form.
  */
 import type { PeriodReturn } from '../../../workflows/filing.js';
-import { vat } from '../../../engines/index.js';
+import { ratesWithoutActivityId, vat } from '../../../engines/index.js';
+import type { Task } from '../../../workflows/model.js';
 
 export interface ReturnSummary {
   period: string;
@@ -22,6 +23,18 @@ export function returnSummary(ret: PeriodReturn): ReturnSummary {
     .sort(([a], [b]) => Number(a) - Number(b) || a.localeCompare(b))
     .map(([box, amount]) => ({ box, amount }));
   return { period: ret.period, due, boxes };
+}
+
+/**
+ * What the review of a return cannot let through yet: the net tax rates without the authority's
+ * activity code, which the XML step would refuse (r6f-22). The task shows it where the person
+ * decides and withholds that outcome; undefined when nothing stands in the way.
+ */
+export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>): { rates: string[]; outcome: 'approved' } | undefined {
+  if (task.workflow !== 'vat-filing' || task.step !== 'review') return undefined;
+  const ret = task.reads?.return as PeriodReturn | undefined;
+  const rates = ret ? ratesWithoutActivityId(ret.figures) : [];
+  return rates.length ? { rates, outcome: 'approved' } : undefined;
 }
 
 /** The file name of a path, either separator. */

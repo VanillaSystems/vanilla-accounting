@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
 import { loadBooks, periodLock, saveBooks } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
-import { filing, filingMethod, vat } from '../engines/index.js';
+import { filing, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 import type { QuarterKey } from '../types/index.js';
 import { refuse } from '../types/refusal.js';
@@ -44,13 +44,6 @@ export function filingXml(ws: Workspace, key: string): string | undefined {
   return [filedXml(ws, key), preparedXml(ws, key)].find((p) => existsSync(p));
 }
 
-/** The firm's net tax rates whose activity code is missing, among those the return has turnover on: the XML cannot name them. */
-export function ratesWithoutActivityId(figures: Record<string, number>): string[] {
-  return vat().rateRows
-    .filter((row) => row.kind === 'net-rate' && !row.activityId && (figures[row.ziffer] ?? 0) !== 0)
-    .map((row) => row.name ?? `${row.rate} %`);
-}
-
 export const FILING_ACTIONS: Record<string, Action> = {
   'accounting.tax.vat-return': {
     outcomes: ['ok'],
@@ -74,7 +67,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
     run(input, _fx, { ws }) {
       const ret = input.return as PeriodReturn;
       const missing = ratesWithoutActivityId(ret.figures);
-      if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (Firma › MWST), so the XML cannot name it`);
+      if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (the company's VAT section), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({
         uid: ws.company.uid, organisationName: ws.company.name, period: { key: ret.period, from: ret.from, to: ret.to },
         ziffern: ret.figures as Parameters<typeof ech0217Xml>[0]['ziffern'], payable: ret.payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(),

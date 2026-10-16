@@ -25,13 +25,15 @@ interface Form {
   /** Empty: the folder follows the name (booksHome/<name>). */
   root: string;
   answers: Partial<Answers>;
-  /** The approved net tax rates as typed: [percent, label] each, the second row optional. */
-  netRates: [string, string][];
+  /** The approved net tax rates as typed: [percent, label, activity code] each, the second row optional. */
+  netRates: [string, string, string][];
   banks: BankRow[];
   exportTo: string;
 }
 
-const NO_RATES: [string, string][] = [['', ''], ['', '']];
+const NO_RATES: [string, string, string][] = [['', '', ''], ['', '', '']];
+/** The tax authority's activity code as the manifest takes it (src/workspace/vat-setup.ts). */
+const ACTIVITY_ID = /^[A-Z0-9]{5}$/;
 const rateOf = (text: string): number | undefined => {
   const n = Number(text.trim().replace(',', '.').replace(/\s*%$/, ''));
   return text.trim() && n > 0 && n < 100 ? n : undefined;
@@ -144,7 +146,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
       name: !f.name.trim() ? t('desktop.setup.required.name') : '',
       uid: 'error' in uid ? t('desktop.setup.uid', { detail: f.uid }) : '',
       owner: !f.owner.trim() ? t('desktop.setup.required.owner') : '',
-      netRate: netRate && rateOf(f.netRates[0][0]) === undefined ? t('desktop.netRateMissing') : '',
+      netRate: netRate && rateOf(f.netRates[0][0]) === undefined ? t('desktop.netRateMissing') : netRate && f.netRates.some((r) => r[2].trim() && !ACTIVITY_ID.test(r[2].trim().toUpperCase())) ? t('desktop.activityIdInvalid') : '',
       banks: f.banks.map((b) => (!b.bank.trim() ? t('desktop.setup.bankName') : b.iban.trim() && !parseIban(b.iban) ? t('desktop.setup.iban', { bank: b.bank, detail: b.iban }) : '')),
       bankField: f.banks.map((b) => (!b.bank.trim() ? 'bank' : 'iban')),
     };
@@ -177,13 +179,13 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
       return;
     }
     if (stop) return;
-    const netRates = netRate ? f.netRates.flatMap(([percent, label]) => (rateOf(percent) === undefined ? [] : [{ rate: rateOf(percent)!, ...(label.trim() ? { label: label.trim() } : {}) }])) : [];
+    const netRates = netRate ? f.netRates.flatMap(([percent, label, activityId]) => (rateOf(percent) === undefined ? [] : [{ rate: rateOf(percent)!, ...(label.trim() ? { label: label.trim() } : {}), ...(activityId.trim() ? { activityId: activityId.trim().toUpperCase() } : {}) }])) : [];
     onCreate({
       root, preset: f.preset, name: f.name, uid: f.uid, owner: f.owner, business: f.business, language: f.language,
       answers: f.answers as Answers, netRates, banks: f.banks, exportTo: f.exportTo,
     });
   };
-  const setRate = (i: 0 | 1, part: 0 | 1, value: string) => set('netRates', f.netRates.map((r, j) => (j === i ? (part === 0 ? [value, r[1]] : [r[0], value]) : r)) as [string, string][]);
+  const setRate = (i: 0 | 1, part: 0 | 1 | 2, value: string) => set('netRates', f.netRates.map((r, j) => (j === i ? r.map((x, k) => (k === part ? value : x)) : r)) as [string, string, string][]);
   const err = (text: string) => (checked && text ? <em>{text}</em> : null);
 
   return (
@@ -254,6 +256,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
                       <div key={i} className="st-row">
                         <label className="cf"><span>{t(i === 0 ? 'desktop.netRate1' : 'desktop.netRate2')}{i === 0 && err(errors.netRate)}</span><input name={`netRate${i + 1}`} className="mono" value={f.netRates[i][0]} onChange={(e) => setRate(i, 0, e.target.value)} /></label>
                         <label className="cf"><span>{t('desktop.netRateLabel')}</span><input name={`netRateLabel${i + 1}`} value={f.netRates[i][1]} placeholder={t('desktop.optional')} onChange={(e) => setRate(i, 1, e.target.value)} /></label>
+                        <label className="cf"><span>{t('desktop.netRateActivityId')}</span><input name={`netRateActivity${i + 1}`} className="mono" maxLength={5} value={f.netRates[i][2]} placeholder={t('desktop.optional')} onChange={(e) => setRate(i, 2, e.target.value)} /></label>
                       </div>
                     ))}
                   </div>
