@@ -107,7 +107,8 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const line = (amount: number, rate?: number): DraftLine => {
     const accountDebit = bank?.side === 'accountDebit' ? bank.account : precedent?.account ?? '';
     const accountCredit = bank?.side === 'accountCredit' ? bank.account : precedent?.account ?? '';
-    const vat = rate === undefined ? (receipts.length ? '' : withoutReceipt(precedent?.vatCode)) : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
+    // A firm without input tax has no code for a receipt's rate (r8f-50): the field stays empty instead of a rate nothing resolves.
+    const vat = rate === undefined ? (receipts.length ? '' : withoutReceipt(precedent?.vatCode)) : withoutInputTax() ? '' : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
     return { accountDebit, accountCredit, amount, vat, description: text };
   };
   const groups = receipts.length === 1 && receipts[0].currency === tx.currency ? vatRates(receipts[0]) : [];

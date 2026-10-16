@@ -120,7 +120,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       const unknown = [raw.accountDebit, raw.accountCredit].find((n) => n && !known[n]);
       if (unknown) return t('journal.errAccount', { account: unknown });
       if (!raw.accountDebit && !raw.accountCredit) return t('journal.errNoAccount');
-      if (!vat) return parseRate(raw.vatCode) ? t('journal.errVatRate', { rate: raw.vatCode }) : t('journal.errVat', { code: raw.vatCode });
+      if (!vat) return parseRate(raw.vatCode) ? (withoutInputTax() ? t(`journal.errVatNotTaken.${withoutInputTax()!}`, { code: raw.vatCode }) : t('journal.errVatRate', { rate: raw.vatCode })) : t('journal.errVat', { code: raw.vatCode });
       if (vat.code && !formTakes(vat.code)) return t(`journal.errVatNotTaken.${withoutInputTax() ?? 'none'}`, { code: vat.code });
       if ((!raw.accountDebit || !raw.accountCredit) && !isVatAmountCode(vat.code)) return t('journal.byHand.errLegs', { n: i + 1 });
       if (!parseAmount(raw.amount)) return t('journal.errAmount');
