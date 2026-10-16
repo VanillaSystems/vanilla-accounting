@@ -23,7 +23,10 @@ export type ApiRefusal =
   /** `approved`: the date is not filed but held by that period's approved return (r7h-24). */
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason; approved?: string } }
   | { code: 'manualOnly' }
+  /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
+  /** «Privat oder bar bezahlt» on a receipt a payment already pays (src/server/edits.ts privatePayment). */
+  | { code: 'receiptPaid'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
   /** Cash basis: a booking of a payment keeps the payment's date (src/server/edits.ts applyAnswer). */
   | { code: 'paymentDate'; params: { date: string } }

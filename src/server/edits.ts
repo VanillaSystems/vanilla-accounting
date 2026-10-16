@@ -94,6 +94,24 @@ export function link(books: Books, receipt: string, payment: string): BookChange
   return { kind: 'unlink', receipt, payment };
 }
 
+/**
+ * «Privat oder bar bezahlt»: the owner's payment of the receipt, on its date and amount, linked to
+ * it, in one write. A receipt a payment already pays (the bank's, or an earlier private one) is
+ * refused: a second payment would book the expense and its input tax twice (r7h-23). Returns the
+ * new payment's ref; deleting that payment is the whole undo.
+ */
+export function privatePayment(books: Books, receiptId: string): string {
+  const r = receiptOf(books, receiptId);
+  const paid = books.mappings.find((m) => m.receiptId === receiptId);
+  if (paid) throw new RequestError(409, `Der Beleg ist schon bezahlt: die Zahlung ${paid.transactionRef} ist mit ihm verknüpft. Eine private Auslage dazu würde den Aufwand und die Vorsteuer doppelt buchen.`, { code: 'receiptPaid', params: { receipt: receiptId, payment: paid.transactionRef } });
+  if (!r.date || r.amount == null) throw new RequestError(400, 'Für eine Auslage braucht der Beleg Datum und Betrag.');
+  assertOpen(books, [r.date], 'newTransaction');
+  const ref = nextManualRef(books, r.date.slice(0, 4));
+  books.transactions.push({ ref, bank: 'manual', source: 'manual', date: r.date, amount: Math.abs(r.amount), currency: r.currency || baseCurrency(), direction: 'DBIT', description: r.description || r.filename });
+  books.mappings.push({ transactionRef: ref, receiptId });
+  return ref;
+}
+
 export function unlink(books: Books, receipt: string, payment: string): BookChange | undefined {
   assertOpen(books, refDates(books, payment), 'mapping');
   const had = books.mappings.length;

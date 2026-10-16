@@ -182,16 +182,16 @@ for (const call of allowed) {
   });
 }
 
-test('refused: DELETE of a manual payment that is booked -> 409 hasEntries, index unchanged', async () => {
+test('DELETE of an open manual payment that is booked takes its booking with it (r7h-23: the undo of «Privat bezahlt» is one step)', async () => {
   const made = await send({ method: 'POST', path: '/api/transactions/manual', body: { date: '2026-08-03', description: 'privat', amount: 7, currency: 'CHF' } });
   const ref = made.json.ref as string;
   const booked = await send({ method: 'POST', path: '/api/journal-entries', body: { transactionRef: ref, date: '2026-08-03', accountDebit: '6800', accountCredit: '2100', amount: 7, description: 'privat' } });
   assert.equal(booked.status, 200, booked.error);
-  const before = JSON.stringify(booksOnDisk(api.ws));
-  const { status, json } = await send({ method: 'DELETE', path: `/api/transactions/${ref}` });
-  assert.equal(status, 409);
-  assert.equal(json.code, 'hasEntries');
-  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
+  const { status } = await send({ method: 'DELETE', path: `/api/transactions/${ref}` });
+  assert.equal(status, 200);
+  const books = loadBooks(api.ws);
+  assert.equal(books.transactions.some((t) => t.ref === ref), false);
+  assert.equal(books.journalEntries.some((e) => e.transactionRef === ref), false, 'its booking went with it');
 });
 
 /** A camt.053 of the demo's Raiffeisen account with one payment on `date` and the bank's closing balance that day. */

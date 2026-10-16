@@ -36,6 +36,7 @@ export default {
     'error.closed.newEntry': 'Una nuova registrazione deve essere datata nel periodo aperto.',
     'error.manualOnly': 'Si possono eliminare solo le transazioni manuali. Le transazioni bancarie provengono dall’estratto conto (camt053/Wise).',
     'error.hasEntries': 'Il pagamento è registrato: eliminare prima la sua registrazione in Registrazioni.',
+    'error.receiptPaid': 'Il giustificativo è già pagato: il pagamento {payment} è collegato ad esso. Una spesa privata in più registrerebbe il costo e la sua imposta precedente due volte. Se quel pagamento non appartiene a questo giustificativo, scollegalo prima.',
     'error.yearClose': 'La differenza di cambio è calcolata dalla chiusura annuale: rilanciarla invece di modificare la registrazione.',
     'error.paymentDate': 'La registrazione di un pagamento porta la data del pagamento ({date}): l’IVA è conteggiata secondo le controprestazioni ricevute, appartiene al periodo del pagamento.',
     'error.paymentBalance': 'Le registrazioni del pagamento del {date} di {paid} darebbero insieme {booked}: tutte le parti insieme devono dare il pagamento.',

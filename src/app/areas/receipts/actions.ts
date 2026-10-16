@@ -51,8 +51,9 @@ export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: strin
   run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping(pair(v.r.id, ref)));
 
 /**
- * Paid privately or in cash: a manual payment on the receipt's date and amount, linked to it;
- * classify books it against the owner's account. Undo deletes the payment and its link.
+ * Paid privately or in cash: one write makes the owner's payment on the receipt's date and amount
+ * and links it; the books refuse a receipt a payment already pays (r7h-23); classify books it
+ * against the owner's account. Undo deletes the payment, which takes its booking and link with it.
  */
 export async function privateOutlay(nav: Nav, v: ReceiptView): Promise<boolean> {
   const { r } = v;
@@ -61,18 +62,12 @@ export async function privateOutlay(nav: Nav, v: ReceiptView): Promise<boolean> 
     return false;
   }
   let ref = '';
-  return run(nav, async () => {
-    ref = await api.createManualTransaction({ date: v.date!, description: r.description || r.filename, amount: Math.abs(r.amount!), currency: r.currency || baseCurrency() });
-    await api.addMapping(pair(r.id, ref));
-  }, t('receipts.privateDone'), () => api.deleteTransaction(ref));
+  return run(nav, async () => { ref = await api.privatePayment(r.id); }, t('receipts.privateDone'), () => api.deleteTransaction(ref));
 }
 
-/** A private payment made by mistake goes with its link; undo pays the receipt privately again. */
+/** A private payment made by mistake goes with its booking and its link; undo pays the receipt privately again. */
 export function undoPrivate(nav: Nav, v: ReceiptView, tx: BankTransaction, what: string) {
-  return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), async () => {
-    const ref = await api.createManualTransaction({ date: tx.date, description: tx.description, amount: tx.amount, currency: tx.currency });
-    await api.addMapping(pair(v.r.id, ref));
-  });
+  return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), () => api.privatePayment(v.r.id));
 }
 
 export function setKind(nav: Nav, v: ReceiptView, kind: ReceiptKind) {

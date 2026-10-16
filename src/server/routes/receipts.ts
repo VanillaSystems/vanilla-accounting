@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { RECEIPT_KINDS, type JournalEntry, type Mapping, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
 import { parseVatFacts } from '../../accounting/vat-facts.js';
-import { setReceipt, unbookedPayments } from '../edits.js';
+import { privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
@@ -217,6 +217,14 @@ router.post('/api/vision/extract', async (req, res) => {
     receipt.needsVisionReview = undefined;
     return { ok: true, extractedText: text };
   });
+});
+
+/** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment, linked; the inbox run books it. */
+router.post('/api/receipts/:id/private-payment', async (req, res) => {
+  const { id } = req.params;
+  const { ref, file } = updateBooks((books) => ({ ref: privatePayment(books, id), file: books.receipts.find((r) => r.id === id)!.filename }));
+  await bookAgain(file);
+  res.json({ ok: true, ref });
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and

@@ -33,6 +33,7 @@ export const messages = {
   'error.closed.newEntry': 'Neue Buchungen müssen in der offenen Periode liegen.',
   'error.manualOnly': 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).',
   'error.hasEntries': 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.',
+  'error.receiptPaid': 'Der Beleg ist schon bezahlt: die Zahlung {payment} ist mit ihm verknüpft. Eine private Auslage dazu würde den Aufwand und die Vorsteuer doppelt buchen. Gehört die Zahlung nicht zu diesem Beleg, zuerst ihre Verknüpfung lösen.',
   'error.yearClose': 'Die Kursdifferenz berechnet der Jahresabschluss: ihn neu laufen lassen, statt die Buchung zu ändern.',
   'error.paymentDate': 'Die Buchung einer Zahlung trägt das Datum der Zahlung ({date}): die MWST wird nach vereinnahmtem Entgelt abgerechnet, sie gehört in die Periode der Zahlung.',
   'error.paymentBalance': 'Die Buchungen der Zahlung vom {date} über {paid} ergäben zusammen {booked}: alle Teile müssen zusammen die Zahlung ergeben.',

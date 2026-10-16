@@ -36,6 +36,7 @@ export default {
     'error.closed.newEntry': 'A new entry must be dated in the open period.',
     'error.manualOnly': 'Only manual transactions can be deleted. Bank transactions come from the bank statement (camt053/Wise).',
     'error.hasEntries': 'The payment is booked: delete its entry in Journal first.',
+    'error.receiptPaid': 'The receipt is paid already: payment {payment} is linked to it. A private outlay on top would book the expense and its input tax twice. If that payment does not belong to this receipt, unlink it first.',
     'error.yearClose': 'The year-end close computes the exchange difference: run it again instead of editing the entry.',
     'error.paymentDate': 'An entry of a payment carries the payment’s date ({date}): VAT is reported on payments received, so it belongs to the payment’s period.',
     'error.paymentBalance': 'The entries of the payment of {date} for {paid} would add up to {booked}: all parts together must make the payment.',

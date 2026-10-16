@@ -36,6 +36,7 @@ export default {
     'error.closed.newEntry': 'Une nouvelle écriture doit être datée dans la période ouverte.',
     'error.manualOnly': 'Seules les transactions manuelles peuvent être supprimées. Les transactions bancaires proviennent de l’extrait de compte (camt053/Wise).',
     'error.hasEntries': 'Le paiement est comptabilisé : supprimer d’abord son écriture dans Écritures.',
+    'error.receiptPaid': 'La pièce est déjà payée : le paiement {payment} lui est lié. Une dépense privée en plus comptabiliserait la charge et son impôt préalable deux fois. Si ce paiement n’appartient pas à cette pièce, délie-le d’abord.',
     'error.yearClose': 'La différence de change est calculée par la clôture annuelle: relancez-la au lieu de modifier l’écriture.',
     'error.paymentDate': 'L’écriture d’un paiement porte la date du paiement ({date}) : la TVA est décomptée selon les contre-prestations reçues, elle appartient à la période du paiement.',
     'error.paymentBalance': 'Les écritures du paiement du {date} de {paid} feraient ensemble {booked} : toutes les parties doivent donner ensemble le paiement.',

@@ -68,6 +68,7 @@ export function errorText(e: unknown): string {
     case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
     case 'hasEntries': return t('error.hasEntries');
+    case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
     case 'yearClose': return t('error.yearClose');
     case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
@@ -192,6 +193,8 @@ export const api = {
   deleteTransaction: (ref: string) => request<Ok>('DELETE', `/api/transactions/${encodeURIComponent(ref)}`),
   createManualTransaction: (input: ManualTransactionInput) =>
     request<{ ref: string }>('POST', '/api/transactions/manual', input).then((r) => r.ref),
+  /** «Privat oder bar bezahlt»: the owner's payment of the receipt, linked; refused when a payment pays it already. */
+  privatePayment: (receiptId: string) => request<{ ref: string }>('POST', `/api/receipts/${receiptId}/private-payment`).then((r) => r.ref),
 
   bookPayment: (ref: string, lines: BookingLine[]) =>
     request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines }).then((r) => r.entries),

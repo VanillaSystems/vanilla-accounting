@@ -34,10 +34,11 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const { rates } = useFx();
   const owner = useWorkspace()?.bankAccounts.find((b) => b.bank === 'manual')?.account;
   const [q, setQ] = useState('');
-  const [idx, setIdx] = useState(0);
+  /** undefined: nothing picked yet, the first row is only highlighted. */
+  const [idx, setIdx] = useState<number | undefined>();
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q), [v, l, rates, q]);
   const items: Array<Candidate | 'private'> = [...best, ...more, 'private'];
-  const at = Math.min(idx, items.length - 1);
+  const at = Math.min(idx ?? 0, items.length - 1);
 
   function choose(item: Candidate | 'private' | undefined) {
     if (!item) return;
@@ -50,7 +51,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((at + 1) % items.length); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((at - 1 + items.length) % items.length); }
-    else if (e.key === 'Enter') { e.preventDefault(); choose(items[at]); }
+    // A payment the owner made is never taken by a stray Enter: it is chosen with the arrows or the mouse (r7h-23).
+    else if (e.key === 'Enter') { e.preventDefault(); if (items[at] !== 'private' || idx !== undefined) choose(items[at]); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
   }
 
@@ -76,7 +78,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
           <div><span className="lbl">{t('receipts.linkPayment')}</span><b>{v.vendor}</b> <span className="m">{v.desc}</span></div>
           <div className="mono">{v.date ? formatDate(v.date) : t('receipts.noDate')} · <b>{r.currency || baseCurrency()} {r.amount != null ? fmt(r.amount) : '—'}</b></div>
         </div>
-        <input autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(0); }} onKeyDown={onKeyDown} />
+        <input autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(undefined); }} onKeyDown={onKeyDown} />
         <div className="res" role="listbox">
           {best.length > 0 && <div className="gh">{t('receipts.bestFit')}</div>}
           {best.map(row)}
