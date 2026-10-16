@@ -1,10 +1,15 @@
 /**
- * The changes to the books an answer asks for: a ```vanilla-changes block at its end, a JSON list
- * of BookChange (src/types/assistant.ts). The block is cut from the text the person reads; every
- * change is checked here, at the edge, before src/server/edits.ts applies it.
+ * The changes an answer asks for: a ```vanilla-changes block at its end, a JSON list of Change
+ * (src/types/assistant.ts). The block is cut from the text the person reads; every change's shape
+ * is checked here, at the edge, before the server applies it (src/server/edits.ts for the books,
+ * src/server/workspace-edits.ts for the chart, the invoicing settings and invoice drafts, which
+ * check the values their own way). The kinds an undo alone uses (an account taken back, a draft
+ * dropped) are not accepted from an answer.
  */
-import type { BookChange, EntrySet, NewEntry, ReceiptSet } from '../types/assistant.js';
+import type { Change, DraftLine, EntrySet, InvoicingSet, NewEntry, ReceiptSet } from '../types/assistant.js';
+import { RECEIPT_KINDS, type ReceiptKind } from '../types/index.js';
 import { parseVatFacts } from '../accounting/vat-facts.js';
+import { PRESETS } from '../export/model.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 
@@ -72,7 +77,46 @@ function newEntry(v: unknown): NewEntry {
   };
 }
 
-function change(v: unknown): BookChange {
+const LANGUAGES = ['de', 'fr', 'it', 'en'];
+const TEXTS = ['intro', 'closing', 'mailSubject', 'mailBody'];
+
+function invoicingSet(v: unknown): InvoicingSet {
+  const s = obj(v, 'set');
+  const out: InvoicingSet = {};
+  if ('paymentTermsDays' in s) {
+    const days = num(s.paymentTermsDays, 'paymentTermsDays');
+    if (!Number.isInteger(days) || days < 1 || days > 120) throw new ChangesError('paymentTermsDays: 1 bis 120 Tage');
+    out.paymentTermsDays = days;
+  }
+  if ('texts' in s) {
+    const texts = obj(s.texts, 'texts');
+    out.texts = Object.fromEntries(Object.entries(texts).map(([lang, t]) => {
+      if (!LANGUAGES.includes(lang)) throw new ChangesError(`texts: Sprache ${lang}`);
+      const own = obj(t, `texts.${lang}`);
+      return [lang, Object.fromEntries(Object.entries(own).map(([k, text]) => {
+        if (!TEXTS.includes(k)) throw new ChangesError(`texts.${lang}.${k}`);
+        if (text !== null && typeof text !== 'string') throw new ChangesError(`texts.${lang}.${k} ist kein Text`);
+        return [k, text];
+      }))];
+    }));
+  }
+  if (!Object.keys(out).length) throw new ChangesError('set ist leer');
+  return out;
+}
+
+/** A draft as the invoices' own reader takes it (src/invoices/service.ts parseDraftPatch checks the lines when it is made). */
+function invoiceDraft(c: Record<string, unknown>): Change {
+  const draft = obj(c.draft, 'draft');
+  if (!Array.isArray(draft.lines) || !draft.lines.length) throw new ChangesError('draft.lines fehlt');
+  if ('customerId' in draft) throw new ChangesError('der Kunde steht in customer, nicht im Entwurf');
+  const customer = typeof c.customer === 'string' && c.customer.trim() ? c.customer.trim() : undefined;
+  const newCustomer = c.newCustomer === undefined ? undefined : obj(c.newCustomer, 'newCustomer');
+  if (!customer === !newCustomer) throw new ChangesError('customer oder newCustomer, eines von beiden');
+  const lines = draft.lines as DraftLine[];
+  return { kind: 'invoiceDraft', ...(customer ? { customer } : { newCustomer: { ...newCustomer, name: str(newCustomer!.name, 'newCustomer.name') } }), draft: { ...draft, lines } };
+}
+
+function change(v: unknown): Change {
   const c = obj(v, 'change');
   switch (c.kind) {
     case 'receipt': return { kind: 'receipt', id: str(c.id, 'id'), set: receiptSet(c.set) };
@@ -80,12 +124,29 @@ function change(v: unknown): BookChange {
     case 'entry': return { kind: 'entry', id: str(c.id, 'id'), set: entrySet(c.set) };
     case 'newEntry': return { kind: 'newEntry', entry: newEntry(c.entry) };
     case 'deleteEntry': return { kind: 'deleteEntry', id: str(c.id, 'id') };
+    case 'receiptKind': {
+      if (c.as !== null && !RECEIPT_KINDS.includes(c.as as ReceiptKind)) throw new ChangesError(`as: eines von ${RECEIPT_KINDS.join(', ')} oder null`);
+      return { kind: 'receiptKind', id: str(c.id, 'id'), as: c.as as ReceiptKind | null };
+    }
+    case 'account': {
+      const number = str(c.number, 'number');
+      if (!/^\d{4}$/.test(number)) throw new ChangesError('number: vier Stellen');
+      return { kind: 'account', number, name: str(c.name, 'name') };
+    }
+    case 'invoicing': return { kind: 'invoicing', set: invoicingSet(c.set) };
+    case 'invoiceDraft': return invoiceDraft(c);
+    case 'export': {
+      const preset = str(c.preset, 'preset');
+      if (!PRESETS.some((p) => p.id === preset)) throw new ChangesError(`preset: eines von ${PRESETS.map((p) => p.id).join(', ')}`);
+      return { kind: 'export', preset, ...(typeof c.period === 'string' && c.period.trim() ? { period: c.period.trim() } : {}) };
+    }
+    case 'bookAgain': return { kind: 'bookAgain' };
     default: throw new ChangesError(`unbekannte Änderung ${String(c.kind)}`);
   }
 }
 
 /** The changes the answer asks for; none without a block. A block that does not parse throws. */
-export function changesIn(text: string): BookChange[] {
+export function changesIn(text: string): Change[] {
   const m = BLOCK.exec(text);
   if (!m) return [];
   let raw: unknown;

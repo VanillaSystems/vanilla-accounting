@@ -48,7 +48,7 @@ test('its file tools write only into the draft, and only the customizing: never 
 test('the prompt names the owner\'s private account: the manifest\'s own, else the legal form\'s', () => {
   const ws = workspaceAt(DEMO_ROOT);
   assert.equal(ownerAccount(ws), '2451 Kontokorrent Anna Muster');
-  assert.match(assistantSystem('de', ownerAccount(ws)), /private account in these books is 2451 Kontokorrent Anna Muster\. .*no VAT code/);
+  assert.match(assistantSystem('de', ownerAccount(ws), ''), /private account in these books is 2451 Kontokorrent Anna Muster\. .*no VAT code/);
   const none = { bankAccounts: ws.bankAccounts.filter((a) => a.bank !== 'manual') };
   assert.equal(ownerAccount({ ...none, company: { ...ws.company, legalForm: 'Einzelfirma' } }), '2850 Privat');
   assert.equal(ownerAccount({ ...none, company: { ...ws.company, legalForm: 'GmbH' } }), '2451 Kontokorrent');

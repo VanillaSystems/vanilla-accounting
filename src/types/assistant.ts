@@ -4,7 +4,14 @@
  * conversation, the changes an answer made to the books and the events it streams as (NDJSON).
  */
 import type { ApiRefusal } from './api-error.js';
-import type { JournalEntry, Receipt } from './index.js';
+import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
+
+/** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
+type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
+type OwnText = 'intro' | 'closing' | 'mailSubject' | 'mailBody';
+
+/** An invoice line as an answer gives it; the invoices' own reader checks it (src/invoices/service.ts parseDraftPatch). */
+export interface DraftLine { text: string; quantity: number; unit?: string; price: number; vatRate: number }
 
 /** What the person is looking at, referred to and never copied: the server reads it when the message is sent. */
 export type ContextRef =
@@ -39,16 +46,65 @@ export type EntrySet = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'acc
  */
 export type NewEntry = Omit<JournalEntry, 'id' | 'transactionRef'> & Partial<Pick<JournalEntry, 'id' | 'transactionRef'>>;
 
-/** One change to the books (src/server/edits.ts): a receipt's facts, a link between receipt and payment, a booking changed, added or deleted. */
+/**
+ * One change to the books (src/server/edits.ts): a receipt's facts, a link between receipt and
+ * payment, a booking changed, added or deleted, a receipt's kind (a duplicate or noise: its links
+ * go; `links` are the payments an undo links it to again).
+ */
 export type BookChange =
   | { kind: 'receipt'; id: string; set: ReceiptSet }
   | { kind: 'link' | 'unlink'; receipt: string; payment: string }
   | { kind: 'entry'; id: string; set: EntrySet }
   | { kind: 'newEntry'; entry: NewEntry }
-  | { kind: 'deleteEntry'; id: string };
+  | { kind: 'deleteEntry'; id: string }
+  | { kind: 'receiptKind'; id: string; as: ReceiptKind | null; by?: Receipt['kindBy'] | null; rule?: string | null; links?: string[] };
 
-/** A change an answer made, with what undoes it. `payment`: the payment whose bookings it changed; its changes are undone together, so they keep adding up. */
-export interface MadeChange { id: string; change: BookChange; undo: BookChange; payment?: string; undone?: boolean }
+/** Firma › Rechnungslayout as a change sets it: the payment term, the texts per language (null: the app's own text again). */
+export interface InvoicingSet {
+  paymentTermsDays?: number;
+  texts?: Partial<Record<InvoiceLanguage, Partial<Record<OwnText, string | null>>>>;
+}
+
+/**
+ * One change to how the company works outside the books (src/server/workspace-edits.ts): an
+ * account of the chart (`name: null` takes back one the change added), the invoicing settings
+ * (`customers`: the terms an undo gives each customer back), an invoice draft (for a customer of
+ * the invoices, or a new one) and its undo, which drops it again.
+ */
+export type WorkspaceChange =
+  | { kind: 'account'; number: string; name: string | null }
+  | { kind: 'invoicing'; set: InvoicingSet; customers?: Record<string, number> }
+  | { kind: 'invoiceDraft'; customer?: string; newCustomer?: { name: string } & Record<string, unknown>; draft: { lines: DraftLine[] } & Record<string, unknown> }
+  | { kind: 'dropInvoiceDraft'; id: string; customer?: string };
+
+/** What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's booking of every open payment. */
+export type ActionChange =
+  | { kind: 'export'; preset: string; period?: string }
+  | { kind: 'bookAgain' };
+
+export type Change = BookChange | WorkspaceChange | ActionChange;
+
+const BOOK_KINDS = new Set<string>(['receipt', 'link', 'unlink', 'entry', 'newEntry', 'deleteEntry', 'receiptKind'] satisfies Array<BookChange['kind']>);
+const ACTION_KINDS = new Set<string>(['export', 'bookAgain'] satisfies Array<ActionChange['kind']>);
+export const isBookChange = (c: Change): c is BookChange => BOOK_KINDS.has(c.kind);
+export const isActionChange = (c: Change): c is ActionChange => ACTION_KINDS.has(c.kind);
+export const isWorkspaceChange = (c: Change): c is WorkspaceChange => !isBookChange(c) && !isActionChange(c);
+
+/** What the app adds to a change it made, for its card: the VAT code it took from the account, the file an export wrote, the invoice draft made. */
+export interface ChangeNote {
+  vatFollowed?: { from: string; to: string };
+  file?: { name: string; path: string };
+  draft?: { id: string; customer: string };
+  customers?: number;
+  /** An action that did not run: why (`noBrowser`, or the error's text). */
+  failed?: string;
+}
+
+/**
+ * A change an answer made, with what undoes it (none for an action). `payment`: the payment whose
+ * bookings it changed; its changes are undone together, so they keep adding up.
+ */
+export interface MadeChange { id: string; change: Change; undo?: Change; payment?: string; note?: ChangeNote; undone?: boolean }
 
 /** POST /api/assistant. Without `conversation` a new one starts. */
 export interface AssistantSend {

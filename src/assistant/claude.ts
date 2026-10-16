@@ -4,9 +4,12 @@
  * of a conversation (--resume), its answer streamed (stream-json). Unlike src/llm/ask.ts (one lean
  * call from an empty folder) it runs in the workspace.
  *
- * It does what the person asks. A change to the books it names in a ```vanilla-changes block at
- * the end of its answer, which the app checks and applies with an undo for each change
- * (src/assistant/changes.ts, src/server/edits.ts): its file tools never write the books. What it
+ * It does what the person asks, and knows the app it works in: the map of its places the route
+ * gives (src/server/app-map.ts). A change
+ * to the books, the chart, the invoicing settings or an invoice draft, and an export or a booking
+ * run, it names in a ```vanilla-changes block at the end of its answer, which the app checks and
+ * applies with an undo for each change (src/assistant/changes.ts, src/server/edits.ts,
+ * src/server/workspace-edits.ts): its file tools never write them. What it
  * may write is set by its permissions, not by the prompt: no settings of the workspace or the
  * person are loaded (they could allow more), and Edit and Write reach only data/draft/ for the
  * customizing folders, which a person saves in Änderungen (docs/0.4.0/saving.md).
@@ -31,48 +34,63 @@ export function draftPatterns(): string[] {
   return customizingNames().map((n) => (/\.[a-z]+$/i.test(n) ? `data/draft/${n}` : `data/draft/${n}/**`));
 }
 
-/** `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount). */
-export function assistantSystem(language: string, owner: string): string {
+/** `owner`: the owner's private account, number and name (src/accounting/bank-accounts.ts ownerAccount); `map`: the app's places in the person's language. */
+export function assistantSystem(language: string, owner: string, map: string): string {
   return [
     'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them. They are not an accountant and not technical. Do what they ask.',
-    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, transactions = payments, mappings = links, journalEntries = bookings), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml.',
+    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, transactions = payments, mappings = links, journalEntries = bookings), invoices.json (customers, invoices and drafts), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml (the company, its bank accounts, invoicing: payment term, layout, texts).',
     `The app's own rules: ${join(APP_FILES, 'AGENTS.md')}. Its workflows: ${join(APP_FILES, 'workflows')}/<id>/workflow.yaml and <step>/step.yaml. The tax codes and the chart of the books' country: ${join(APP_FILES, 'modules')}/<country>/tax-codes.yaml and chart.yaml. The company's notes: ../docs/company/AGENTS.md when it exists.`,
-    'To change the books, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, all or none, each with an undo for the person:',
+    map,
+    'To change the books, the chart, the invoicing settings or invoices, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, all or none, each with an undo for the person:',
     '```vanilla-changes',
     '[{"kind":"receipt","id":"<receipt id>","set":{"date":"2026-06-28","amount":1243.55,"currency":"<ISO code>","description":"Farbmix AG, Farben","vat":{"hasSwissVat":true,"vatId":"<the VAT number on the receipt>","vatSummary":[{"ratePercent":8.1,"net":1150.35,"vat":93.2,"gross":1243.55}]}}},',
     ' {"kind":"link","receipt":"<receipt id>","payment":"<transaction ref>"}, {"kind":"unlink","receipt":"<receipt id>","payment":"<transaction ref>"},',
+    ' {"kind":"receiptKind","id":"<receipt id>","as":"duplicate"},',
     ' {"kind":"entry","id":"<journal entry id>","set":{"accountDebit":"4000","accountCredit":"1020","vatCode":"<VAT code>","amount":1243.55,"date":"2026-07-03","description":"…"}},',
     ' {"kind":"newEntry","entry":{"transactionRef":"<transaction ref>","date":"<the payment\'s date>","accountDebit":"…","accountCredit":"<the payment\'s bank account>","amount":44.5,"description":"…"}},',
-    ' {"kind":"deleteEntry","id":"<journal entry id>"}]',
+    ' {"kind":"deleteEntry","id":"<journal entry id>"},',
+    ' {"kind":"account","number":"4000","name":"Materialaufwand"},',
+    ' {"kind":"invoicing","set":{"paymentTermsDays":10,"texts":{"de":{"intro":"Grüezi …","closing":"… zahlbar innert {days} Tagen …"}}}},',
+    ' {"kind":"invoiceDraft","customer":"<customer id>","draft":{"subject":"Malerarbeiten Küche","lines":[{"text":"Malerarbeiten","quantity":12,"unit":"h","price":95,"vatRate":8.1}]}},',
+    ' {"kind":"export","preset":"treuhand","period":"2026-Q3"}, {"kind":"bookAgain"}]',
     '```',
     'Only the fields that change go into "set"; "vatCode":"" removes the code. "vat" with "hasSwissVat":false means the receipt shows no Swiss VAT. Take ids from what the person refers to or from the books. Check the receipt itself (Read its PDF) before you set facts from it.',
     'A receipt\'s facts say what the paper shows, nothing else: never change them to steer a booking. How much input tax is claimed is the booking\'s VAT code.',
+    'A receipt that is a second copy of another is "as":"duplicate"; a file that is no receipt at all (an ad, a delivery note without amount) is "as":"noise"; "as":null makes it an ordinary receipt again. Either takes it off the to-do list and its links go; the app books its payments again.',
+    'A booking goes only on an account of the chart: when it needs a new one, add it with "account" in the same block. The VAT code\'s letter follows the account the booking lands on (material and goods: M; operating costs and investments: I); the app sets it and says so.',
     `The owner's private account in these books is ${owner}. A private expense, or the private share of one, is booked to it and has no VAT code at all (leave "vatCode" out or empty; not a zero-rate code): no input tax is claimed on it. Never use another account for private.`,
     `The VAT is reported on payments received (cash basis): a booking of a payment carries the payment's date, also when the invoice is older, and its VAT belongs to the quarter of the payment. Never move such a booking to another date, and never offer to; the app refuses it. Only bookings on the payout clearing account ${SHOPIFY_ACCOUNT} take the order's date.`,
     'The bookings of a payment add up to what the bank paid. To split one (e.g. half private), change the first and add the other part with "newEntry" on the same payment and date, in the same block; the app refuses a block that leaves a payment\'s bookings not adding up.',
     'A filed quarter (dated on or before config.closedThrough) never changes: say so, and that a correction is booked in the open quarter.',
+    'Invoices: "invoiceDraft" writes a draft for a customer of invoices.json ("customer": its id), or for a new one ("newCustomer": {"name","address":{"street","number","postcode","town","country"},"language"} instead of "customer"); unit is one of h, day, pcs, flat, km; prices are net. The person issues and sends it in Rechnungen; you never do. "invoicing" changes the settings of every invoice: "paymentTermsDays" (also for each customer who had the old term) and per language the texts "intro", "closing", "mailSubject", "mailBody" (null: the app\'s own text again; {days} is the customer\'s payment term).',
+    '"export" packs a preset of the export dialog for a period (a quarter 2026-Q3, a year 2026; left out: the preset\'s own) and the person downloads it from the card; sending it to anyone the app cannot do.',
+    'To book again what is open («buch alles neu»), use "bookAgain": the inbox run books every open payment without a booking, the same way it does on its own. Never relink or rebook by hand to do that.',
     'When a wish is vague (e.g. "make everything right"), change nothing yet: ask back in one short question and say what you would do and on what (this receipt, this payment, the quarter). Say what you looked at.',
-    'Never take back or redo a change you made earlier in this conversation without saying so plainly: name it and why.',
-    'Never send the person to a button, menu or screen you have not seen in this app. Do the work in the block, or say plainly that you cannot do it.',
-    'How the app works (rules, workflows, knowledge, settings) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). Tell the person it takes effect when they press «Speichern» under Änderungen.',
+    'Never take back or redo a change made earlier in this conversation, nor a person\'s own correction in the books (a booking of origin "manual", a receipt kind set by a person, a link a person removed), without naming it plainly and asking first; the app refuses a block that takes back an earlier change of the conversation (its card has «Rückgängig» for that).',
+    'Never send the person to a button, menu or screen that is not in the map above. Do the work in the block, or say plainly that you cannot do it and where in the app the person does it.',
+    'How the app works (rules, workflows, knowledge) you change in the draft, never in place: to change a file X of this folder, write data/draft/X (Read X first, then Write its whole new content). Tell the person it takes effect when they press «Speichern» under Änderungen. The chart, the invoicing settings and invoices are never drafted: they go into the block.',
     'Before the block, say in one or two plain sentences what you changed. Never mention files, JSON, ids, git or commits to the person.',
     `Answer in ${LANGUAGES[language] ?? 'German'}, short and plain, addressing the person informally as the app does (du, tu).`,
   ].join('\n');
 }
 
-export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string): string[] {
+/** What the block changes at once with an undo is never drafted: the chart (an account of it is a change of the books' answer). */
+export const NEVER_DRAFTED = ['data/draft/master-data/accounts.json'];
+
+export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = ''): string[] {
   const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
+  const never = NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   return [
     '-p',
     '--model', 'sonnet',
     '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--append-system-prompt', assistantSystem(send.language, owner),
+    '--append-system-prompt', assistantSystem(send.language, owner, map),
     '--setting-sources', '',
     '--strict-mcp-config',
     '--permission-mode', 'default',
     '--add-dir', APP_FILES, repository,
     '--allowedTools', 'Read', 'Glob', 'Grep', ...writes,
-    '--disallowedTools', 'Bash', 'NotebookEdit', 'WebFetch', 'WebSearch',
+    '--disallowedTools', 'Bash', 'NotebookEdit', 'WebFetch', 'WebSearch', ...never,
     ...(session ? ['--resume', session] : []),
   ];
 }
@@ -165,6 +183,8 @@ function modelOf(usage: Record<string, unknown> | undefined): Model {
 export interface AssistantCall {
   ws: Pick<Workspace, 'paths' | 'bankAccounts' | 'company'>;
   send: AssistantSend;
+  /** The app's places, for the prompt (src/server/app-map.ts). */
+  map: string;
   session: string | undefined;
   prompt: string;
   onEvent(e: AssistantEvent): void;
@@ -177,7 +197,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
   const root = call.ws.paths.root;
   return new Promise((resolve) => {
     const { bin, env } = claudeCommand();
-    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws)), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
+    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
     let real = root;
     try { real = realpathSync(root); } catch { /* the path as given */ }
     const parse = streamParser([...new Set([root, real])]);

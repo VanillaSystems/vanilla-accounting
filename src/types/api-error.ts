@@ -27,6 +27,11 @@ export type ApiRefusal =
   /** The bookings of a payment would no longer add up to it: `paid` and `booked` in its currency. */
   | { code: 'paymentBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | ClassifyRefusal
+  /** An AI sidebar answer (src/server/edits.ts applyAnswer, src/server/workspace-edits.ts): it would take back an earlier answer's change, link a receipt set aside, book on an account the chart lacks, or take back an account bookings use. */
+  | { code: 'takesBack' }
+  | { code: 'setAside'; params: { receipt: string } }
+  | { code: 'unknownAccount'; params: { account: string } }
+  | { code: 'accountInUse'; params: { account: string; entries: number } }
   /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
   | { code: 'personsBooking'; params: { entries: number } }
   | { code: 'fileExists'; params: { filename: string } }

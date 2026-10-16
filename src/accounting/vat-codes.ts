@@ -181,3 +181,18 @@ export function vatCodeOf(typed: string, accountDebit: string, accountCredit: st
   const code = r && codeForRate(r.rate, accountDebit, accountCredit, r.negative);
   return code ? { code, fromRate: r!.rate } : null;
 }
+
+/**
+ * A purchase code on an entry whose account changed: the same rate and sign, the family the
+ * account takes (pv-prefix-from-account): M on material and goods, I on operating costs and
+ * investments. Undefined for any other code (a sale, a correction, Bezugsteuer, an amount suffix)
+ * or when the accounts say neither.
+ */
+export function codeOnAccount(code: string | undefined, accountDebit: string, accountCredit: string): string | undefined {
+  const m = /^(-?)([MI])(\d+)$/.exec(code ?? '');
+  const info = m && vat().codes.parse(code!);
+  if (!m || !info) return undefined;
+  const probe = info.rate > 0 ? info.rate : vat().rateRows.find((r) => r.kind === 'supply' && !r.superseded)?.rate;
+  const family = probe ? codeForRate(probe, accountDebit, accountCredit)?.replace(/^-/, '')[0] : undefined;
+  return family === 'M' || family === 'I' ? `${m[1]}${family}${m[3]}` : undefined;
+}

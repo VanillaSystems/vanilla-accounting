@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { ApiRefusal } from '../types/api-error.js';
-import type { AssistantEvent, AssistantSend, BookChange, Conversation, ConversationSummary, MadeChange, Turn } from '../types/assistant.js';
+import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationSummary, MadeChange, Turn } from '../types/assistant.js';
 import { changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
@@ -39,8 +39,12 @@ export function listConversations(ws: Pick<Workspace, 'paths'>): ConversationSum
   }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
-/** Applies all the changes in one write of the books, or none and throws why (a RefusedChanges, or a ChangesError). */
-export type ApplyChanges = (changes: BookChange[]) => MadeChange[];
+/**
+ * Applies all the changes, or none and throws why (a RefusedChanges, or a ChangesError). `earlier`:
+ * the changes the conversation's answers made before and that stand, which an answer never takes
+ * back on its own; `language`: the person's, for what an action writes (an export's files).
+ */
+export type ApplyChanges = (changes: Change[], earlier: MadeChange[], language: string) => Promise<MadeChange[]>;
 
 /** Why the books refused an answer's changes: the API's words, and its code for the UI's. */
 export class RefusedChanges extends Error {
@@ -48,10 +52,10 @@ export class RefusedChanges extends Error {
 }
 
 /**
- * One message: stored, sent with its context read now, its answer streamed to `onEvent` and stored
+ * One message: stored, sent with its context read now and the app's places (`map`), its answer streamed to `onEvent` and stored
  * at the end. The changes to the books the answer asks for are applied before its `done`.
  */
-export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
+export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, map: string, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
   const at = now().toISOString();
   const c: Conversation = (send.conversation && readConversation(ws, send.conversation))
     || { id: randomUUID(), title: send.text.trim().replace(/\s+/g, ' ').slice(0, 60), at, turns: [] };
@@ -64,7 +68,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   const prompt = assistantPrompt(send.text, contextText(ws, send.context));
   let done: AssistantEvent | undefined;
   await callClaude({
-    ws, send, session: c.session, prompt, signal,
+    ws, send, map, session: c.session, prompt, signal,
     onEvent: (e) => {
       if (e.type === 'session') c.session = e.session;
       if (e.type === 'text') ai.text += e.text;
@@ -81,7 +85,8 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
     try {
       const asked = changesIn(said);
       if (asked.length) {
-        ai.changes = apply(asked);
+        const earlier = c.turns.flatMap((t) => (t.role === 'ai' && t !== ai ? (t.changes ?? []).filter((m) => !m.undone) : []));
+        ai.changes = await apply(asked, earlier, send.language);
         onEvent({ type: 'changes', changes: ai.changes });
       }
     } catch (e) {
@@ -95,19 +100,30 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   store(ws, c);
 }
 
+/** The accounts a change books on. */
+const accountsOf = (c: Change): string[] => {
+  const set = c.kind === 'newEntry' ? c.entry : c.kind === 'entry' ? c.set : undefined;
+  return [set?.accountDebit, set?.accountCredit].filter((a): a is string => !!a);
+};
+
 /**
- * Takes back one change an answer made, once, and with it the others of that answer on the same
- * payment, newest first, so its bookings add up again. The books refuse it as they refuse any edit
- * of a filed quarter. Returns the changes now undone.
+ * Takes back one change an answer made, once, and with it the others of that answer that cannot
+ * stand without it, newest first: those on the same payment, so its bookings add up again, and
+ * for an account the answer added, the bookings it put on that account. The books refuse it as
+ * they refuse any edit of a filed quarter. Returns the changes now undone.
  */
-export function undoChange(ws: Pick<Workspace, 'paths'>, id: string, change: string, revert: (undos: BookChange[]) => void): MadeChange[] | undefined {
+export function undoChange(ws: Pick<Workspace, 'paths'>, id: string, change: string, revert: (undos: Change[]) => void): MadeChange[] | undefined {
   const c = readConversation(ws, id);
   const turn = c?.turns.find((t): t is Extract<Turn, { role: 'ai' }> => t.role === 'ai' && !!t.changes?.some((x) => x.id === change));
   const made = turn?.changes?.find((x) => x.id === change);
   if (!c || !turn || !made) return undefined;
-  if (made.undone) return [made];
-  const together = turn.changes!.filter((x) => x === made || (!x.undone && made.payment && x.payment === made.payment));
-  revert(together.map((x) => x.undo).reverse());
+  if (made.undone || !made.undo) return [made];
+  const open = turn.changes!.filter((x) => !x.undone && x.undo);
+  const added = made.change.kind === 'account' && made.undo.kind === 'account' && made.undo.name === null ? made.change.number : undefined;
+  const on = new Set(open.filter((x) => x === made || (added && accountsOf(x.change).includes(added))));
+  for (const x of [...on]) for (const y of open) if (x.payment && y.payment === x.payment) on.add(y);
+  const together = open.filter((x) => on.has(x));
+  revert(together.map((x) => x.undo!).reverse());
   for (const x of together) x.undone = true;
   store(ws, c);
   return together;

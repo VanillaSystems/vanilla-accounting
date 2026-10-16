@@ -87,6 +87,7 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .droprow.s-undone { opacity: .55; }
 .aichanges { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .aichanges li { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; padding: 7px 10px; border-radius: 8px; background: var(--hover); font-size: 12.5px; }
-.aichanges li.undone span { color: var(--muted); text-decoration: line-through; }
+.aichanges li.undone > span:first-child { color: var(--muted); text-decoration: line-through; }
+.aichangeacts { display: flex; gap: 10px; flex: none; align-items: baseline; }
 .aichanges small { color: var(--muted); white-space: nowrap; }
 .aichanges .linkbtn { white-space: nowrap; }

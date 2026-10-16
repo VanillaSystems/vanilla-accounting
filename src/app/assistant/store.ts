@@ -8,6 +8,8 @@ import { useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
 import { language } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
+import { reloadWorkspace } from '../hooks/use-workspace.js';
+import { reloadInvoices } from '../areas/invoices/data.js';
 import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
 
 /** 400 px, less on a small window, so the page keeps room for its list and its detail. */
@@ -58,7 +60,8 @@ export function askAbout(ref: ContextRef): void {
 /** The page reloads the books when an answer changed them or a change was taken back. */
 const changed = new Set<() => void>();
 export function onBooksChanged(f: () => void): () => void { changed.add(f); return () => { changed.delete(f); }; }
-const booksChanged = () => { for (const f of changed) f(); };
+/** An answer may change the chart, the invoicing settings or the invoices too: they are read again with the books. */
+const booksChanged = () => { reloadWorkspace(); void reloadInvoices(); for (const f of changed) f(); };
 export function addContext(ref: ContextRef): void { if (!state.extra.some((r) => r.kind === ref.kind && r.id === ref.id)) set({ extra: [...state.extra, ref] }); }
 export function removeContext(ref: ContextRef | 'page'): void { set(ref === 'page' ? { pageOff: true } : { extra: state.extra.filter((r) => !(r.kind === ref.kind && r.id === ref.id)) }); }
 export function newConversation(): void { if (!state.sending) set({ listing: false, conversation: undefined, turns: [], extra: [], pageOff: false, error: undefined }); }

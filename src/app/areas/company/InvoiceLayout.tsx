@@ -80,6 +80,10 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
       <div>
         <div className="lkf">
           <div className="lkr"><span>{t('invoiceLayout.language')}</span>{seg(lang, LANGS.map((l): [InvoiceLanguage, string] => [l, l.toUpperCase()]), setLang, t('invoiceLayout.language'))}</div>
+          <label className="lkr"><span>{t('invoiceLayout.days')}</span>
+            <input key={settings.paymentTermsDays} className="mono" name="paymentTermsDays" inputMode="numeric" defaultValue={String(settings.paymentTermsDays)} disabled={!canEdit}
+              onBlur={(e) => { const days = Number(e.target.value); if (Number.isInteger(days) && days > 0 && days !== settings.paymentTermsDays) void patch({ paymentTermsDays: days }); }} />
+          </label>
           <label className="lkr"><span>{t('invoiceLayout.font')}</span>
             <select value={layout.font} disabled={!canEdit} onChange={(e) => setLayout('font', e.target.value as InvoiceLayout['font'])}>{INVOICE_FONTS.map((f) => <option key={f}>{f}</option>)}</select>
           </label>

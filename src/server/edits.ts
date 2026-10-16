@@ -11,8 +11,9 @@ import { paymentDates, paymentSides, type PaymentSide } from '../accounting/paym
 import { baseCurrency, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
+import { codeOnAccount } from '../accounting/vat-codes.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
-import type { BookChange, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
+import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { offSide, type BookingLine } from '../accounting/manual-booking.js';
@@ -49,6 +50,32 @@ export function setReceipt(books: Books, id: string, set: ReceiptSet): BookChang
   return { kind: 'receipt', id, set: before };
 }
 
+/** Kinds that take a receipt out of the books' evidence: it pays nothing, so its links go. */
+const SET_ASIDE = new Set<Receipt['kind']>(['duplicate', 'noise']);
+
+/**
+ * A receipt's kind as a person sets it («ist dasselbe», Belege' kind): a duplicate or noise loses
+ * its links, so it never pays a second time nor claims its input tax twice (the payments are
+ * booked again, src/server/routes/assistant.ts). The undo puts the kind and the links back.
+ */
+export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'receiptKind' }>): BookChange {
+  const r = receiptOf(books, c.id);
+  assertOpen(books, receiptDates(books, c.id), 'editReceipt');
+  const before: Extract<BookChange, { kind: 'receiptKind' }> = { kind: 'receiptKind', id: c.id, as: r.kind ?? null, by: r.kindBy ?? null, rule: r.kindRule ?? null };
+  const by = c.by === undefined ? (c.as ? 'human' : null) : c.by;
+  if (c.as) r.kind = c.as; else delete r.kind;
+  if (by) r.kindBy = by; else delete r.kindBy;
+  if (c.rule) r.kindRule = c.rule; else delete r.kindRule;
+  if (c.as && SET_ASIDE.has(c.as)) {
+    const links = books.mappings.filter((m) => m.receiptId === c.id).map((m) => m.transactionRef);
+    for (const ref of links) assertOpen(books, refDates(books, ref), 'mapping');
+    books.mappings = books.mappings.filter((m) => m.receiptId !== c.id);
+    if (links.length) before.links = links;
+  }
+  for (const ref of c.links ?? []) if (books.transactions.some((t) => t.ref === ref)) link(books, c.id, ref);
+  return before;
+}
+
 /** The open payments of these receipts without a booking (new VAT facts took theirs away): the inbox run books them. */
 export function unbookedPayments(books: Books, receipts: readonly string[]): string[] {
   const lock = periodLock(books);
@@ -79,9 +106,10 @@ export function unlink(books: Books, receipt: string, payment: string): BookChan
  * Returns the payments to book again and a receipt's file to name the run by.
  */
 export function relinked(books: Books, changes: readonly BookChange[]): { payments: string[]; file?: string } {
-  const links = changes.filter((c): c is Extract<BookChange, { kind: 'link' | 'unlink' }> => c.kind === 'link' || c.kind === 'unlink');
-  const payments = links.length ? unbookPayments(books, links.map((c) => c.payment), 'links') : [];
-  const file = books.receipts.find((r) => links.some((c) => c.receipt === r.id))?.filename;
+  const touched = changes.flatMap((c) => (c.kind === 'link' || c.kind === 'unlink' ? [{ receipt: c.receipt, payments: [c.payment] }]
+    : c.kind === 'receiptKind' && c.links?.length ? [{ receipt: c.id, payments: c.links }] : []));
+  const payments = touched.length ? unbookPayments(books, touched.flatMap((c) => c.payments), 'links') : [];
+  const file = books.receipts.find((r) => touched.some((c) => c.receipt === r.id))?.filename;
   return { payments, ...(file ? { file } : {}) };
 }
 
@@ -177,6 +205,7 @@ export function applyChange(books: Books, c: BookChange): BookChange | undefined
     case 'entry': return setEntry(books, c.id, c.set);
     case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry).id };
     case 'deleteEntry': return { kind: 'newEntry', entry: deleteEntry(books, c.id) };
+    case 'receiptKind': return setReceiptKind(books, c);
   }
 }
 
@@ -197,25 +226,85 @@ function unbalanced(off: PaymentSide): RequestError {
   return new RequestError(400, `Die Buchungen der Zahlung vom ${day(off.date)} über ${off.currency} ${params.paid.toFixed(2)} ergäben zusammen ${off.currency} ${params.booked.toFixed(2)}: alle Teile müssen zusammen die Zahlung ergeben.`, { code: 'paymentBalance', params });
 }
 
+/** What an answer's changes are checked against beside the books. */
+export interface AnswerContext {
+  bankAccounts: readonly LedgerBankAccount[];
+  /** The chart's account numbers; empty: the workspace keeps no chart, nothing to check. */
+  chart: ReadonlySet<string>;
+  /** The changes earlier answers of the conversation made and that stand. */
+  earlier: readonly MadeChange[];
+}
+
+/** The fields a change sets, without who set them. */
+const fields = (set: EntrySet) => Object.entries(set).filter(([k]) => k !== 'origin');
+
+/** An earlier change of the conversation that `c` takes back: its undo is what `c` asks for. */
+function takesBack(c: BookChange, earlier: readonly MadeChange[]): MadeChange | undefined {
+  return earlier.find((m) => {
+    const u = m.undo;
+    if (!u || m.undone || u.kind !== c.kind) return false;
+    if (c.kind === 'link' || c.kind === 'unlink') return u.kind === c.kind && u.receipt === c.receipt && u.payment === c.payment;
+    if (c.kind === 'receiptKind') return u.kind === 'receiptKind' && u.id === c.id && (u.as ?? null) === c.as;
+    if (c.kind === 'entry' && u.kind === 'entry' && u.id === c.id) {
+      const asked = fields(c.set);
+      return asked.length > 0 && asked.every(([k, v]) => k in u.set && (u.set as Record<string, unknown>)[k] === v);
+    }
+    return false;
+  });
+}
+
 /**
  * An answer of the AI sidebar (src/server/routes/assistant.ts): its changes as a person's, all or
- * none, and two refusals more. A booking of a payment it dates keeps the payment's date (cash basis,
- * src/accounting/payment-entries.ts), and a payment whose bank-side sum it changes still adds up
- * to what the bank paid. A person's hand edits keep their freedom: a split by hand is two edits
+ * none, and refusals more than a person's edits get. A booking of a payment it dates keeps the
+ * payment's date (cash basis, src/accounting/payment-entries.ts), and a payment whose bank-side
+ * sum it changes still adds up to what the bank paid. A booking goes only on an account of the
+ * chart (one the same answer adds counts: it is added first). A purchase code follows the
+ * account it lands on (codeOnAccount), and the card says so. It never takes back a change an
+ * earlier answer made (that change's «Rückgängig» does), nor links a receipt a person set aside
+ * as a duplicate or noise. A person's hand edits keep their freedom: a split by hand is two edits
  * with a gap between them, and a correction may hang on a payment with a date of its own.
  */
-export function applyAnswer(books: Books, changes: BookChange[], accounts: readonly LedgerBankAccount[]): Array<Omit<MadeChange, 'id'>> {
+export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerContext): Array<Omit<MadeChange, 'id'>> {
   const payments = new Map<string, string>();
   const dated: string[] = [];
+  const accounts = new Set<string>();
   const made = changes.flatMap((asked): Array<Omit<MadeChange, 'id'>> => {
+    const back = takesBack(asked, ctx.earlier);
+    if (back) throw new RequestError(400, 'Das nähme eine frühere Änderung dieses Gesprächs zurück: dafür gibt es bei ihr «Rückgängig».', { code: 'takesBack' });
+    if (asked.kind === 'link') {
+      const r = books.receipts.find((x) => x.id === asked.receipt);
+      if (r?.kindBy === 'human' && SET_ASIDE.has(r.kind)) throw new RequestError(400, `${r.description || r.filename} ist als ${r.kind === 'duplicate' ? 'Doppel' : 'kein Beleg'} beiseitegelegt und wird nicht verknüpft.`, { code: 'setAside', params: { receipt: r.description || r.filename } });
+    }
     const payment = paymentOf(books, asked);
-    if (payment && !payments.has(payment)) payments.set(payment, JSON.stringify(paymentSides(books, payment, accounts).map((s) => s.booked)));
-    const change = asked.kind === 'newEntry' ? { ...asked, entry: withRate(books, asked.entry) } : asked;
+    if (payment && !payments.has(payment)) payments.set(payment, JSON.stringify(paymentSides(books, payment, ctx.bankAccounts).map((s) => s.booked)));
+    let note: ChangeNote | undefined;
+    let change: BookChange = asked;
+    if (asked.kind === 'newEntry') {
+      const entry = withRate(books, asked.entry);
+      const to = codeOnAccount(entry.vatCode, entry.accountDebit, entry.accountCredit);
+      if (to && to !== entry.vatCode) note = { vatFollowed: { from: entry.vatCode!, to } };
+      change = { ...asked, entry: { ...entry, ...(to ? { vatCode: to } : {}) } };
+    }
+    const was = asked.kind === 'entry' ? books.journalEntries.find((e) => e.id === asked.id)?.vatCode ?? '' : undefined;
     const undo = applyChange(books, change);
+    if (asked.kind === 'entry' && undo?.kind === 'entry' && ['accountDebit', 'accountCredit', 'vatCode'].some((k) => k in asked.set)) {
+      const e = entryOf(books, asked.id);
+      const to = codeOnAccount(e.vatCode, e.accountDebit, e.accountCredit);
+      if (to && to !== e.vatCode) {
+        note = { vatFollowed: { from: e.vatCode!, to } };
+        e.vatCode = to;
+        change = { ...asked, set: { ...asked.set, vatCode: to } };
+        if (!('vatCode' in undo.set)) undo.set.vatCode = was;
+      }
+    }
     if (undo?.kind === 'deleteEntry') dated.push(undo.id);
     if (change.kind === 'entry' && change.set.date) dated.push(change.id);
-    return undo ? [{ change, undo, ...(payment ? { payment } : {}) }] : [];
+    const set = change.kind === 'newEntry' ? change.entry : change.kind === 'entry' ? change.set : {};
+    for (const a of [set.accountDebit, set.accountCredit]) if (a) accounts.add(a);
+    return undo ? [{ change, undo, ...(payment ? { payment } : {}), ...(note ? { note } : {}) }] : [];
   });
+  const unknown = ctx.chart.size ? [...accounts].find((a) => !ctx.chart.has(a)) : undefined;
+  if (unknown) throw new RequestError(400, `Konto ${unknown} gibt es im Kontenplan nicht: zuerst das Konto anlegen, in derselben Antwort.`, { code: 'unknownAccount', params: { account: unknown } });
   for (const e of books.journalEntries.filter((x) => dated.includes(x.id) && !x.corrects)) {
     const dates = paymentDates(books, e);
     if (dates.length && !dates.includes(e.date)) {
@@ -223,7 +312,7 @@ export function applyAnswer(books: Books, changes: BookChange[], accounts: reado
     }
   }
   for (const [ref, before] of payments) {
-    const sides = paymentSides(books, ref, accounts);
+    const sides = paymentSides(books, ref, ctx.bankAccounts);
     const off = sides.find((s) => s.booked !== s.paid);
     if (off && JSON.stringify(sides.map((s) => s.booked)) !== before) throw unbalanced(off);
   }

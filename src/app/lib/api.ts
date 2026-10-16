@@ -85,6 +85,10 @@ export function errorText(e: unknown): string {
       if (reason === 'account') return unknown ? t('error.statement.unknownAccount', unknown) : detail ? b.error : t('error.statement.account');
       return t(`error.statement.${reason}`);
     }
+    case 'takesBack': return t('error.takesBack');
+    case 'setAside': return t('error.setAside', b.params);
+    case 'unknownAccount': return t('error.unknownAccount', b.params);
+    case 'accountInUse': return t('error.accountInUse', { account: b.params.account, n: b.params.entries });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
     case 'noWorkspace': return t('desktop.noWorkspace');
@@ -239,6 +243,7 @@ export const api = {
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),
+  assistantExportUrl: (file: string) => `/api/assistant/exports/${encodeURIComponent(file)}`,
   logoUrl: (path: string) => `/api/invoice-logo?path=${encodeURIComponent(path)}`,
 
   invoices: () => request<InvoiceList>('GET', '/api/invoices'),

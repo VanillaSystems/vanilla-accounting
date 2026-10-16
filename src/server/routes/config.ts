@@ -11,6 +11,7 @@ import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, typ
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
 import { setAccountName } from '../../workspace/accounts-write.js';
+import { setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
 
 export const router = Router();
@@ -82,8 +83,12 @@ function newBank(raw: unknown): NewBank {
 
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'layout', 'texts']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts']);
   const out: InvoicingPatch = {};
+  if (b.paymentTermsDays !== undefined) {
+    if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 1 || (b.paymentTermsDays as number) > 120) throw new RequestError(400, 'Zahlungsfrist: 1 bis 120 Tage.');
+    out.paymentTermsDays = b.paymentTermsDays as number;
+  }
   if (b.setup !== undefined) {
     const s = patchBody(b.setup, ['currency', 'account', 'revenueAccount', 'paymentTermsDays']);
     // Its IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
@@ -149,6 +154,7 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
 /**
  * The company's profile and bank accounts in belege.workspace.yaml, patched field by field
  * (src/workspace/manifest-write.ts). No record of the books changes, so no period is closed to it.
+ * A new payment term also goes to every customer who had the old one.
  */
 router.patch('/api/workspace', (req, res) => {
   const b = patchBody(req.body, ['company', 'banks', 'addBank', 'invoicing', 'outgoingMail']);
@@ -160,7 +166,10 @@ router.patch('/api/workspace', (req, res) => {
     ...(b.invoicing === undefined ? {} : { invoicing: invoicingPatch(b.invoicing) }),
     ...(b.outgoingMail === undefined ? {} : { outgoingMail: mailPatch(b.outgoingMail) }),
   };
+  const terms = WS.invoicing?.paymentTermsDays;
   checked(() => patchManifest(WS.paths.manifest, patch));
+  const days = patch.invoicing?.paymentTermsDays;
+  if (days !== undefined && terms !== undefined) setCustomerTerms(WS, (c) => (c.paymentTermsDays === terms ? days : undefined));
   reopenWorkspace();
   res.json(companyInfo(WS, readBooks()));
 });

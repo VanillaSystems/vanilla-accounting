@@ -45,6 +45,8 @@ export interface NewBank {
 export interface InvoicingPatch {
   /** Sets invoicing up when the block is missing: the account customers pay to (in its currency), the revenue account, the payment term. */
   setup?: { currency: string; account: string; revenueAccount: string; paymentTermsDays: number };
+  /** The payment term a new customer starts with; each customer keeps their own. */
+  paymentTermsDays?: number;
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
   texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
 }
@@ -115,6 +117,7 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
       doc.set('invoicing', doc.createNode({ payTo: { [s.currency]: { account: s.account } }, revenueAccount: s.revenueAccount, paymentTermsDays: s.paymentTermsDays }));
     }
     if (!isMap(doc.get('invoicing'))) throw new WorkspaceError(`${path} has no invoicing block: add one (payTo, revenueAccount) before the layout`);
+    if (inv.paymentTermsDays !== undefined) doc.setIn(['invoicing', 'paymentTermsDays'], inv.paymentTermsDays);
     const { show, ...layout } = inv.layout ?? {};
     for (const [key, value] of Object.entries(layout)) set(doc, ['invoicing', 'layout', key], value);
     for (const [key, value] of Object.entries(show ?? {})) doc.setIn(['invoicing', 'layout', 'show', key], value);
