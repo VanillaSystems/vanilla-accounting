@@ -124,8 +124,8 @@ export function saleCodeOf(proposed: string | undefined, accountCredit: string, 
 export function saleCodeReason({ code, why }: SaleCode, currency: string): string {
   const asked = 'Vorschlag der App, die Frage dazu steht unter Aufgaben.';
   switch (why) {
-    case 'unregistered': return 'Die Firma ist nicht MWST-pflichtig: Umsatz ohne MWST-Code.';
-    case 'placeAbroad': return `Die Rechnung nennt den Leistungsort im Ausland, ohne Schweizer MWST: Leistung im Ausland, ${code}.`;
+    case 'unregistered': return 'Die Firma ist nicht steuerpflichtig: Umsatz ohne Steuercode.';
+    case 'placeAbroad': return `Die Rechnung nennt den Leistungsort im Ausland und keine Inlandsteuer: Leistung im Ausland, ${code}.`;
     case 'domesticIban': return `Kundenzahlung ohne Rechnung, ${currency} von einem Konto im Inland (${invoicing().territory.join(', ')}): Inlandumsatz mit ${code}. ${asked}`;
     case 'domesticCurrency': return `Kundenzahlung ohne Rechnung in ${currency}, die Bank nennt kein Konto im Ausland: Inlandumsatz mit ${code}. ${asked}`;
     case 'foreignCurrency': return `Kundenzahlung ohne Rechnung in ${currency}: Umsatz im Ausland, ${code}. ${asked}`;

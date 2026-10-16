@@ -49,7 +49,7 @@ const codes = (entries: JournalEntry[] | undefined) => entries?.map((e) => e.vat
 test('a domestic customer payment without an invoice is booked at the normal rate, never V0, and says why', async () => {
   const booked = await book([
     pay('KELLER', 4860, { counterparty: 'Familie Keller', description: 'Rechnung 2026-028 Malerarbeiten Wohnzimmer' }),
-    pay('MEIER', 3275, { counterparty: 'Hans Meier', counterpartyIban: 'CH9300762011623852957' }),
+    pay('MEIER', 3275, { counterparty: 'Hans Meier', counterpartyIban: 'CH0000762011623852957' }),
   ], { KELLER: [sale(4860)], MEIER: [sale(3275)] });
   assert.deepEqual(codes(booked.get('KELLER')), ['V81'], 'no IBAN, the books\' currency: domestic');
   assert.deepEqual(codes(booked.get('MEIER')), ['V81'], 'a Swiss IBAN: domestic');
@@ -66,7 +66,7 @@ test('a client in Vaduz is domestic: Liechtenstein is in the Swiss VAT territory
 
 test('money from abroad without an invoice is proposed as an export; the model\'s V81 there is not kept either', async () => {
   const booked = await book([
-    pay('DE', 900, { counterpartyIban: 'DE89370400440532013000' }),
+    pay('DE', 900, { counterpartyIban: 'DE00370400440532013000' }),
     pay('EUR', 500, { bank: 'Wise', currency: 'EUR' }),
   ], { DE: [sale(900, 'V81')], EUR: [sale(500, 'V81')] });
   assert.deepEqual([codes(booked.get('DE')), codes(booked.get('EUR'))], [['V0'], ['V0']]);
@@ -113,7 +113,7 @@ test('books not registered for VAT book a sale without a VAT code, whatever the 
   const booked = await book([pay('KELLER', 4860), pay('INV', 300)], { KELLER: [sale(4860, 'V0')], INV: [sale(300, 'V81')] },
     [{ id: 'r-inv', ref: 'INV', hasSwissVat: true, extractedText: 'Rechnung, MWST 8.1 %' }], false);
   assert.deepEqual([codes(booked.get('KELLER')), codes(booked.get('INV'))], [[''], ['']]);
-  assert.match(booked.get('KELLER')![0].reason!, /nicht MWST-pflichtig/);
+  assert.match(booked.get('KELLER')![0].reason!, /nicht steuerpflichtig/);
 });
 
 test('the entry says a sale without an invoice was coded by its payment, never «no receipt, no input tax»', async () => {

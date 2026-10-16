@@ -139,7 +139,7 @@ Layers are assigned by path prefix, most specific first:
 | File | Swiss specifics (lines) |
 |---|---|
 | `src/audit/sources.ts` | ESTV 1 |
-| `src/llm/prompts.ts` | CHF 6, MWST 15, tax code 4 |
+| `src/llm/prompts.ts` | CHF 6, MWST 18, Ziffer 2, tax code 4 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
 | `src/reconcile/vat-consistency.ts` | MWST 5 |
 
