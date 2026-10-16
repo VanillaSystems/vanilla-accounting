@@ -102,13 +102,18 @@ export function unlink(books: Books, receipt: string, payment: string): BookChan
 
 /**
  * After links changed by hand (the dialog, the AI sidebar, an undo): the automatic bookings of
- * their payments go, to be booked again from what is linked now (unbookPayments).
- * Returns the payments to book again and a receipt's file to name the run by.
+ * their payments go, to be booked again from what is linked now (unbookPayments). Returns every
+ * touched open payment left without any entry (one that had none before too: a run without a
+ * model may have left it so), to book again, and a receipt's file to name the run by.
  */
 export function relinked(books: Books, changes: readonly BookChange[]): { payments: string[]; file?: string } {
   const touched = changes.flatMap((c) => (c.kind === 'link' || c.kind === 'unlink' ? [{ receipt: c.receipt, payments: [c.payment] }]
     : c.kind === 'receiptKind' && c.links?.length ? [{ receipt: c.id, payments: c.links }] : []));
-  const payments = touched.length ? unbookPayments(books, touched.flatMap((c) => c.payments), 'links') : [];
+  const refs = new Set(touched.flatMap((c) => c.payments));
+  if (refs.size) unbookPayments(books, refs, 'links');
+  const lock = periodLock(books);
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const payments = books.transactions.filter((t) => refs.has(t.ref) && !booked.has(t.ref) && !lock.isClosed(t.date)).map((t) => t.ref);
   const file = books.receipts.find((r) => touched.some((c) => c.receipt === r.id))?.filename;
   return { payments, ...(file ? { file } : {}) };
 }

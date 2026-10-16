@@ -80,7 +80,7 @@ export interface StepContext {
   ask?: Ask;
   progress(done: number, total: number): void;
   log(line: string): void;
-  /** Payments a company rule holds for the person: a run of the engine asks each (src/workflows/actions.ts); the CLI only says so. */
+  /** Payments left for the person (a company rule asks, or no model to book them): a run of the engine asks each (src/workflows/actions.ts); the CLI only says so. */
   hold?(refs: string[]): void;
 }
 

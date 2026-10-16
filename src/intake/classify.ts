@@ -93,7 +93,8 @@ export function classifyStep({ force = false } = {}): StepRun {
     log(`  Classified: ${classified.length}`);
     log(`  Failed    : ${failed.length}`);
     log(`  Asked     : ${asked.length}`);
-    if (asked.length) hold?.(asked.map((a) => a.ref));
+    const held = [...asked.map((a) => a.ref), ...unasked];
+    if (held.length) hold?.(held);
     const notes: IntakeNote[] = [
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
       ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),

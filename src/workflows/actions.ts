@@ -124,7 +124,7 @@ export const ACTIONS: Record<string, Action> = {
   },
 
   'booking.rule-question': {
-    outcomes: ['proposed', 'open', 'gone'],
+    outcomes: ['proposed', 'open', 'gone', 'noModel'],
     effects: [],
     ai: true,
     async run(input, _effects, { ws, ask }) {
@@ -133,8 +133,8 @@ export const ACTIONS: Record<string, Action> = {
       if (periodLock(b).isClosed(t.date) || b.journalEntries.some((e) => e.transactionRef === t.ref)) return { outcome: 'gone' };
       const { asked } = await classifyTransactions(structuredClone(b), [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
       const held = asked[0];
-      // The rule was removed or switched off meanwhile: the next inbox run books the payment.
-      if (!held) return { outcome: 'gone' };
+      // No rule holds it: without a model it waits for a booking by hand; with one, the next inbox run books it.
+      if (!held) return { outcome: ask ? 'gone' : 'noModel' };
       return held.entries.length
         ? { outcome: 'proposed', output: { question: held.question, rule: held.rule, entries: held.entries } }
         : { outcome: 'open', output: { question: held.question, rule: held.rule } };

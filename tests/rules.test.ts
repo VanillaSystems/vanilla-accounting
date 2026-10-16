@@ -173,8 +173,9 @@ test('an ask rule turns the next matching payment into a task «Frag: …», not
   assert.deepEqual(booked('REF-CASH-800'), [], 'the 800 withdrawal is not booked');
 
   const workflows = loadWorkflows(APP_ROOT, ws.paths.root).workflows;
-  const asks = engine.runs().filter((r) => r.workflow === 'ask');
-  assert.deepEqual(asks.map((r) => [r.item.id, r.state.status, 'at' in r.state ? r.state.at : '']), [['REF-CASH-800', 'waiting', 'ask']]);
+  // Without a model, the 300 withdrawal no rule decides waits for a booking by hand.
+  const asks = engine.runs().filter((r) => r.workflow === 'ask').sort((a, b) => b.item.id.localeCompare(a.item.id));
+  assert.deepEqual(asks.map((r) => [r.item.id, r.state.status, 'at' in r.state ? r.state.at : '']), [['REF-CASH-800', 'waiting', 'ask'], ['REF-CASH-300', 'waiting', 'byHand']]);
   const task = taskOf(workflows.find((w) => w.id === 'ask')!, asks[0])!;
   assert.equal(fillTask(task.title.de!, task.item, task.reads), 'Frag: Wofür war der Barbezug?');
   assert.deepEqual(task.outcomes, ['accept', 'byHand']);
@@ -183,7 +184,7 @@ test('an ask rule turns the next matching payment into a task «Frag: …», not
   // A second inbox run finds the payment still unbooked and asks nothing new.
   await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
   await engine.idle();
-  assert.equal(engine.runs().filter((r) => r.workflow === 'ask').length, 1);
+  assert.equal(engine.runs().filter((r) => r.workflow === 'ask').length, 2);
 
   assert.deepEqual(await engine.command({ kind: 'answer', run: asks[0].id, outcome: 'accept' }), { ok: true, run: asks[0].id });
   await engine.idle();
