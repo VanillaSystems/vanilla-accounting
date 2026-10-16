@@ -487,7 +487,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       case 'discard': {
         const r = runs.get(cmd.run);
         if (!r) return { ok: false, refusal: 'not-found' };
-        try { settle(move(r, { status: 'discarded', at: now(), reason: cmd.reason ?? 'discarded by a person' })); } catch { return { ok: false, refusal: 'illegal' }; }
+        try { settle(move(r, { status: 'discarded', at: now(), reason: cmd.reason ?? 'von einer Person verworfen' })); } catch { return { ok: false, refusal: 'illegal' }; }
         return { ok: true, run: r.id };
       }
       case 'resume': {

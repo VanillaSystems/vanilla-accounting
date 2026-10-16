@@ -509,6 +509,8 @@ const short = (v: unknown): string => { const j = typeof v === 'string' ? v : JS
 
 function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; nav: Nav; books: Index }) {
   const { data, error } = useRun(id, view.rev);
+  // «Verwerfen» asks first: the run ends with no further step, and after «Eingereicht» that is a decision (r8f-44).
+  const [discarding, setDiscarding] = useState(false);
   if (error) return <div className="detail-empty"><div>{error}</div></div>;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
@@ -532,8 +534,17 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
         {data.status === 'done' || data.status === 'stuck' ? <button type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</button> : null}
         <AskAi context={{ kind: 'run', id, label: t('automation.run', { id }) }} />
-        {data.status !== 'done' && data.status !== 'discarded' ? <button type="button" className="btn ghost" onClick={act({ kind: 'discard', run: id })}>{t('automation.discard')}</button> : null}
+        {data.status !== 'done' && data.status !== 'discarded' && !discarding ? <button type="button" className="btn ghost" onClick={() => setDiscarding(true)}>{t('automation.discard')}</button> : null}
       </div>
+      {discarding && data.status !== 'discarded' ? (
+        <div className="ruledraft" data-testid="discard-ask">
+          <span>{t('automation.discardAsk')}</span>
+          <span className="ruleacts">
+            <button type="button" className="btn primary" onClick={() => { setDiscarding(false); act({ kind: 'discard', run: id, reason: t('automation.discardedByPerson') })(); }}>{t('automation.discardYes')}</button>
+            <button type="button" className="btn ghost" onClick={() => setDiscarding(false)}>{t('common.cancel')}</button>
+          </span>
+        </div>
+      ) : null}
       {runDocuments(data, books).slice(0, 3).map((r) => <RunDocument key={r.id} r={r} nav={nav} />)}
       {w ? <div className="wfscroll"><Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /></div> : null}
       <ol className="wfsteps">
