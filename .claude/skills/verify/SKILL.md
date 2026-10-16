@@ -109,7 +109,7 @@ source $TMPDIR/belege-vm/my-vm/env   # RUN VM IP EVIDENCE DMG and the persona's 
 
 Ready when it prints `ready`. `~/Downloads` then holds the dmg and made-up files of a painting firm (`persona-files.mjs`: a Q3 2026 camt.053 (`$PERSONA_CAMT`) for the IBAN `$PERSONA_IBAN`, the CSV a bank offers first, supplier PDFs with 8.1 % MWST, till-receipt photos, a holiday photo, a fake .docx, a duplicate PDF), all with the download quarantine flag, so macOS treats them like files from Safari.
 
-**Doctor.** `$V doctor` (read-only): VM running, SSH, Gatekeeper on, screen capture over VNC, and after `$V app` the app's DevTools port. Every line `ok`, else `down` + `up`.
+**Doctor.** `$V doctor` (read-only): VM running, SSH, Gatekeeper on, screen capture over VNC, and after `$V app` the app's DevTools port and that the app runs in the VM's GUI session (its audit session is the one of `gui/501`, read with `sudo launchctl procinfo`), where the keychain is. Every line `ok`, else `down` + `up`.
 
 **Drive, outside the app** (macOS dialogs, Finder, System Settings) through the VM's screen sharing:
 
@@ -121,7 +121,7 @@ $V sh 'open ~/Downloads/*.dmg'  # shell as admin; `open` = a double-click
 $V put file.pdf                 # more files into ~/Downloads, quarantined
 ```
 
-**Drive, inside the app** through its DevTools port. `$V app` (re)starts the installed `/Applications/Vanilla Accounting.app` with `--remote-debugging-port`, tunnels it to a free local port and writes `CDP` into the env; its stdout (the bundled server's log) goes to `/tmp/va.log` in the VM.
+**Drive, inside the app** through its DevTools port. `$V app` (re)starts the installed `/Applications/Vanilla Accounting.app` with `--remote-debugging-port`, tunnels it to a free local port and writes `CDP` into the env; its stdout (the bundled server's log) goes to `/tmp/va.log` in the VM. It starts the app as a LaunchAgent in the VM's GUI session (`launchctl bootstrap gui/501`): `~/Library/Application Support/vanilla-verify/app.plist` runs `launch.sh` there, which reads `~/.claude-token` (from `$V claude`) into `CLAUDE_CODE_OAUTH_TOKEN`, puts `~/.local/bin` on the `PATH` and `exec`s the app. Variables a test needs on top (a test CA, a fake mailbox) go as `export K=V` lines into `~/Library/Application Support/vanilla-verify/env` in the VM; `launch.sh` sources it.
 
 ```bash
 source $TMPDIR/belege-vm/my-vm/env; export CDP EVIDENCE PERSONA_IBAN_SPACED PERSONA_UID PERSONA_CAMT
@@ -140,6 +140,9 @@ Each call runs its steps, saves `$EVIDENCE/<name>.png` (the page) and prints the
 - `screencapture` and Finder AppleEvents over SSH fail (no screen-recording or automation rights). Use `$V shot` and `open`.
 - `vanilla-clean` has Gatekeeper off; `up` turns it on. A fresh clone has no SSH key; `up` installs it with the password.
 - To get past Gatekeeper quickly after proving the dialog once: `ditto` the app from the mounted dmg to `/Applications` and `xattr -dr com.apple.quarantine` it. Moving it to Applications by hand makes macOS ask again.
+- The keychain exists only in the VM's GUI session. An app started from an SSH shell (`nohup …/Contents/MacOS/Vanilla Accounting`) runs outside it and refuses every password with `The system keychain is not available.` (500 from `PUT /api/sources/<id>/secret`); `$V doctor` then says `FAIL app outside the GUI session`. Start the app only with `$V app`.
+- On the first start of an app build macOS asks once for the Documents folder, and later once for Downloads. While the prompt is open the app hangs and `$V app` gives up after 40 s with that hint. `$V shot`, `$V click` on «Allow» (about 780 405 on the 1400-px image), then `$V app` again; a window left blank after «Allow» also needs the second `$V app`. A new build (`$V install`, a new dmg) asks again.
+- The Claude token never goes on a command line: not in `open --env`, not in `launchctl setenv` (both take it as an argument, so `ps` and `open`'s own echo show it), not in an `ssh` command. `$V claude` copies the file over stdin, `launch.sh` reads it with `read`. Never `cat` it, never print the app's environment (`ps -E`), and `grep -r sk-ant` the evidence before handing it on. To check `ps`, count with a pattern that does not match itself: `$V sh 'ps -axo args | grep -c "[s]k-ant"'` must print 0.
 - Before relaunching with a debug port, kill every app process (`$V app` does `pkill -9` on the bundle path); a leftover helper keeps 9222 and DevTools does not start.
 - The VM has no `claude`. Reading a photo or a scan needs it; a persona test reports those paths as what an owner without Claude sees. To exercise them, `$V put tests/support/stub-bin/claude` and move it onto the app's PATH (see `tools/desktop/vm-e2e.sh`).
 - macOS runs at most two macOS VMs at once (Apple's limit); `vm.sh up` refuses a third. The CLI tools (`strings`, `git`) in the VM ask to install the Xcode tools: avoid them.

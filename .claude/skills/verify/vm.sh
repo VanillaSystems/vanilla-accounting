@@ -19,7 +19,8 @@
 #   vm.sh claude            Claude Code into the VM (as an owner installs it); with the owner's token
 #                           in ~/.vanilla-accounting/e2e/claude-token (claude setup-token) the app's
 #                           model calls run on that subscription
-#   vm.sh app               (re)start the installed app with its DevTools port, log in /tmp/va.log
+#   vm.sh app               (re)start the installed app in the GUI session (keychain) with its DevTools
+#                           port, the token from ~/.claude-token; log in /tmp/va.log
 #   vm.sh down [run]        stop and delete the VM and the tunnel; the evidence stays
 #   vm.sh list
 #
@@ -108,8 +109,32 @@ claude)
   if [ -f "$TOKEN" ]; then ssh_ 'umask 077; cat > ~/.claude-token' < "$TOKEN"; echo "token in the VM; vm.sh app passes it to the app"; else echo "no $TOKEN: the app's model calls fail with not logged in"; fi
   ;;
 app)
+  # A LaunchAgent in the VM's GUI session (gui/501), where the keychain is: started from SSH the app
+  # has none («The system keychain is not available.»). launch.sh reads the token with `read`, so it
+  # is on no command line, in no plist and in no output (launchctl setenv would put it in argv).
   load
-  ssh_ 'pkill -9 -f "Contents/MacOS/Vanilla Accountin[g]" 2>/dev/null; sleep 2; [ -f ~/.claude-token ] && export CLAUDE_CODE_OAUTH_TOKEN=$(cat ~/.claude-token); (nohup "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222 < /dev/null > /tmp/va.log 2>&1 &); for i in $(seq 1 30); do curl -s localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "app did not open its DevTools port" >&2; exit 1'
+  ssh_ 'mkdir -p ~/Library/Application\ Support/vanilla-verify; cat > ~/Library/Application\ Support/vanilla-verify/launch.sh' <<'EOF'
+#!/bin/sh
+# Started by launchd in the GUI session (vm.sh app). Extra variables for a test (a CA, a fake mailbox): lines `export K=V` in ./env.
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+[ -f "$HOME/.claude-token" ] && { IFS= read -r CLAUDE_CODE_OAUTH_TOKEN < "$HOME/.claude-token"; export CLAUDE_CODE_OAUTH_TOKEN; }
+E="$HOME/Library/Application Support/vanilla-verify/env"; [ -f "$E" ] && . "$E"
+exec "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222
+EOF
+  ssh_ 'cat > ~/Library/Application\ Support/vanilla-verify/app.plist' <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>ch.vanillasystems.verify.app</string>
+  <key>ProgramArguments</key><array><string>/bin/sh</string><string>/Users/admin/Library/Application Support/vanilla-verify/launch.sh</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+  <key>StandardOutPath</key><string>/tmp/va.log</string>
+  <key>StandardErrorPath</key><string>/tmp/va.log</string>
+</dict></plist>
+EOF
+  ssh_ 'G=gui/$(id -u); launchctl bootout $G/ch.vanillasystems.verify.app 2>/dev/null; pkill -9 -f "Contents/MacOS/Vanilla Accountin[g]" 2>/dev/null; sleep 2; : > /tmp/va.log; launchctl bootstrap $G ~/Library/Application\ Support/vanilla-verify/app.plist || exit 1; for i in $(seq 1 40); do curl -s -m 2 localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "no DevTools port: a macOS prompt (Documents, Downloads) blocks the app? vm.sh shot, click Allow, vm.sh app again; else /tmp/va.log" >&2; exit 1'
   [ -f "$ROOT/$RUN/tunnel.pid" ] && kill "$(cat "$ROOT/$RUN/tunnel.pid")" 2>/dev/null || true
   PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
   ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -N -L "$PORT:127.0.0.1:9222" "admin@$IP" < /dev/null > /dev/null 2>&1 & echo $! > "$ROOT/$RUN/tunnel.pid"
@@ -122,7 +147,11 @@ doctor)
   ssh_ true 2>/dev/null && ok "ssh admin@$IP" || bad "ssh admin@$IP"
   [ "$(ssh_ spctl --status 2>/dev/null)" = "assessments enabled" ] && ok "Gatekeeper on" || bad "Gatekeeper off (spctl --global-enable)"
   vnc capture "$ROOT/$RUN/doctor.png" && ok "screen capture over VNC" || bad "screen capture over VNC"
-  if [ -n "${CDP:-}" ]; then curl -s "$CDP/json/list" | grep -q '127.0.0.1:' && ok "app DevTools at $CDP" || bad "app DevTools at $CDP (vm.sh app)"; else echo "--   app not started with vm.sh app"; fi
+  if [ -n "${CDP:-}" ]; then
+    curl -s "$CDP/json/list" | grep -q '127.0.0.1:' && ok "app DevTools at $CDP" || bad "app DevTools at $CDP (vm.sh app)"
+    # The app's audit session is the GUI session's (gui/501 handle), else it has no keychain.
+    ssh_ 'p=$(lsof -nP -tiTCP:9222 -sTCP:LISTEN | head -1); g=$(launchctl print gui/$(id -u) | awk "/handle =/{print \$3; exit}"); s=$(echo admin | sudo -S launchctl procinfo "$p" 2>/dev/null | awk "/session id =/{print \$4; exit}"); [ -n "$p" ] && [ "$s" = "$g" ]' 2>/dev/null && ok "app in the GUI session (keychain)" || bad "app outside the GUI session: no keychain (vm.sh app)"
+  else echo "--   app not started with vm.sh app"; fi
   ;;
 down)
   RUN=$(runid "${1:-}"); D="$ROOT/$RUN"
