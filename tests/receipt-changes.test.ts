@@ -56,7 +56,7 @@ test('a deletion, a link by hand, an unlink, an edit and a private outlay wait i
   update(books, PERSON, (b) => {
     unlink(b, unlinked.id, unlinkedFrom);
     setReceipt(b, edited.id, { description: 'Neuer Text' });
-    outlayRef = privatePayment(b, outlay.id);
+    outlayRef = privatePayment(b, outlay.id).ref;
     link(b, byHand.id, payment.ref);
   });
   update(books, moduleActor('intake'), (b) => { b.mappings.push({ transactionRef: other.ref, receiptId: byRun.id, by: 'rule', rule: 'r' }); });

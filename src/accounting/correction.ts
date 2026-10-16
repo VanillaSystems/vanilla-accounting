@@ -107,7 +107,7 @@ export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, d
 /**
  * The filed period a payment's bookings correct, or undefined: a private outlay (a manual payment,
  * «Privat oder bar bezahlt») for a receipt dated in a filed period was paid on the receipt's day,
- * so its booking in the open period is a correction of that period, declared on its 0535 (golden
+ * so its booking in the open period is a correction of that period, declared on its correction return (golden
  * rule 1, r8k-10). A bank payment never is: an invoice of March paid in July is a July booking
  * (cash basis). The earliest filed receipt date names the period.
  */
