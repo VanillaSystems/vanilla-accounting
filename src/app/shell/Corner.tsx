@@ -14,6 +14,7 @@ import { useQuestions } from '../questions/store.js';
 import { forMe } from '../../questions/model.js';
 import { useAssistant } from '../assistant/store.js';
 import { ICONS } from '../areas/icons.js';
+import { readsInWords } from '../areas/automation/filing-summary.js';
 
 export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssistant(): void }) {
   const { view } = useAutomation();
@@ -58,7 +59,7 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
           ))}
           {view.tasks.map((task) => (
             <button key={task.run} type="button" className="cprow" onClick={() => go({ area: 'automation', view: 'tasks', run: task.run })}>
-              <span className="amber" aria-hidden="true" /><b>{fillTask(textIn(task.title, language()), task.item, task.reads)}</b>
+              <span className="amber" aria-hidden="true" /><b>{fillTask(textIn(task.title, language()), task.item, readsInWords(task.reads))}</b>
             </button>
           ))}
           {asked.map((x) => (

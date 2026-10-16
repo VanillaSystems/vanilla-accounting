@@ -23,7 +23,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
 import { Paper } from '../receipts/Paper.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
-import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
+import { approvalWithheld, fileName, returnSummary, outcomeText, periodText, readsInWords } from './filing-summary.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
@@ -209,7 +209,7 @@ function StepPanel({ w, step, view, nav }: { w: WorkflowDecl; step: StepDecl; vi
       {line(t('automation.step.reads'), step.reads.join(', '))}
       {line(t('automation.step.emits'), step.emits.join(', '))}
       {line(t('automation.step.effects'), step.effects.join(', '))}
-      {line(t('automation.step.outcomes'), Object.entries(step.outcomes).map(([o, to]) => `${o} → ${target(to)}`).join(' · '))}
+      {line(t('automation.step.outcomes'), Object.entries(step.outcomes).map(([o, to]) => `${outcomeText(o)} → ${target(to)}`).join(' · '))}
       {step.guide ? line(t('automation.step.guide'), <span className="mono">{step.guide}</span>) : null}
     </div>
   );
@@ -350,7 +350,7 @@ function Took({ s }: { s: StepRecord }) {
           : x.kind === 'receipts' ? <div key={i}>{t('automation.took.receipts', { n: x.ids.length })}<ul>{x.files.slice(0, 8).map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
           : <div key={i}>{t('automation.took.transactions', { n: x.n })}</div>
       ))}
-      {input.map(([k, v]) => <div key={k} className="mono">{k}: {v}</div>)}
+      {input.map(([k, v]) => <div key={k} className="mono">{k}: {k === 'period' ? periodText(v) : v}</div>)}
     </>
   );
 }
@@ -388,7 +388,7 @@ function Made({ s, nav }: { s: StepRecord; nav: Nav }) {
     );
   }
   const rest = Object.entries(s.output ?? {}).filter(([k]) => k !== 'notes');
-  if (!rest.length) return <p className="m">{s.outcome ? t('automation.made.outcome', { outcome: s.outcome }) : '—'}</p>;
+  if (!rest.length) return <p className="m">{s.outcome ? t('automation.made.outcome', { outcome: outcomeText(s.outcome) }) : '—'}</p>;
   return <>{rest.map(([k, v]) => <RunValue key={k} name={k} value={v} />)}</>;
 }
 
@@ -539,8 +539,8 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
             <li key={`${s.step}-${i}`} className={s.error ? 'err' : s.outcome ? 'ok' : 'on'}>
               <div className="sh">
                 <b>{decl ? tx(decl.label) : s.step}</b>
-                <span className="mono m">{decl?.body.kind === 'action' ? decl.body.uses : s.step}</span>
-                {s.outcome ? <span className="mono m">→ {s.outcome}</span> : null}
+                {decl ? null : <span className="mono m">{s.step}</span>}
+                {s.outcome ? <span className="m">→ {outcomeText(s.outcome)}</span> : null}
               </div>
               <div className="io">
                 <div className="box"><small>{t('automation.io.took')}</small><Took s={s} /></div>
@@ -678,9 +678,9 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             const withheld = approvalWithheld(task);
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
-                <b>{fillTask(tx(task.title), task.item, task.reads)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
+                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
-                {task.why ? <p>{fillTask(tx(task.why), task.item, task.reads)}</p> : null}
+                {task.why ? <p>{fillTask(tx(task.why), task.item, readsInWords(task.reads))}</p> : null}
                 {Object.entries(task.reads ?? {}).filter(([k]) => !tx(task.title).includes(`{${k}}`)).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
                 {task.reads?.return ? <ReturnIssues ret={task.reads.return as PeriodReturn} books={books} nav={nav} canEdit={canEdit} /> : null}
                 {withheld ? (
