@@ -11,13 +11,14 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { startApi } from './support/api-server.js';
+import { testIban } from './support/iban.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import type { Index } from '../src/types/index.js';
 
 const COIFFEUR = join(APP_ROOT, 'demo-coiffeur', APP_FOLDER);
 /** Made-up IBANs with valid check digits: the coiffeur demo's account and another one. */
 const SALON = 'CH8180808000000000004';
-const OTHER = 'CH5480808000000000005';
+const OTHER = testIban('80808000000000005');
 /** The demo's Raiffeisen account named in its manifest (tests/fixtures/*-index.json run on the demo manifest). */
 const DEMO = 'CH6580808000000000001';
 

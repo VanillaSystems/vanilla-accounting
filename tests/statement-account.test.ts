@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accountForStatement } from '../src/accounting/bank-accounts.js';
 import type { LedgerBankAccount } from '../src/workspace/workspace.js';
+import { testIban } from './support/iban.js';
 
 const KNOWN = ['CH56', '0483', '5012', '3456', '7800', '9'].join('');
 const OTHER = ['CH93', '0076', '2011', '6238', '5295', '7'].join('');
@@ -30,7 +31,7 @@ const wise = { bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise', st
 test('a firm with one account in the statement\'s currency and no IBAN in the books takes the camt wherever it is dropped (r8k-3)', () => {
   const m = accountForStatement([plain, wise], { iban: OTHER, currency: 'CHF', folder: '' });
   assert.ok('account' in m && m.by === 'currency' && m.account.account === '1020');
-  const eur = accountForStatement([plain, wise], { iban: 'BE68539007547034', currency: 'EUR', folder: '' });
+  const eur = accountForStatement([plain, wise], { iban: testIban('00000000000000099'), currency: 'EUR', folder: '' });
   assert.ok('account' in eur && eur.account.account === '1021');
   const none = accountForStatement([plain, wise], { iban: OTHER, currency: 'USD', folder: '' });
   assert.ok('problem' in none);
