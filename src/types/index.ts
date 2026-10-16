@@ -186,8 +186,8 @@ export interface JournalEntry {
   receipts?: string[];
 }
 
-/** The app's checks that set a booking's code themselves (src/accounting/sales-without-vat.ts saleCodeOf: a sale's VAT code). */
-export const CODE_CHECKS = ['saleCode', 'payoutReport'] as const;
+/** The app's checks that set a booking's code themselves: a sale's VAT code (src/accounting/sales-without-vat.ts saleCodeOf), a payout report's lines, a credit note's from the invoice it names (src/accounting/credit-note-code.ts). */
+export const CODE_CHECKS = ['saleCode', 'payoutReport', 'creditNote'] as const;
 export type CodeCheck = typeof CODE_CHECKS[number];
 
 /** The booking fields a person's change keeps the old values of. */

@@ -133,6 +133,14 @@ steps:
         then: a_purchase, with the original purchase's code inverted (-I81, -I0)
         why: a refund inverts the original VAT code
         source: AGENTS.md § VAT code rules
+      - id: sid-credit-note-names-invoice
+        when: a supplier's credit note without its own document whose payment text names an invoice already booked
+        then: >
+          the invoice's code with the minus (-M81 for an M81 invoice, -I81 for I81), in code
+          (src/accounting/credit-note-code.ts creditNoteCodeOf); the booking's reason names the invoice. A credit
+          note that names nothing booked keeps the receipt rule (pv-no-receipt, with the minus)
+        why: the credit takes back part of the input tax claimed on that invoice, whose receipt shows the tax
+        source: decision 2026-10-16, owner
       - id: sid-sale-refund
         status: proposed
         when: a DBIT that pays back all or part of an earlier sale to a customer

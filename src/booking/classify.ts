@@ -22,6 +22,7 @@ import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
+import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
@@ -454,6 +455,19 @@ function withSaleCodes(tx: BankTransaction, entries: JournalEntry[], documents: 
 }
 
 /**
+ * The model's lines of a supplier's credit note without its own document that names a booked
+ * invoice, with that invoice's code and the minus (src/accounting/credit-note-code.ts); the reason
+ * names the invoice, in place of the model's.
+ */
+function withCreditNoteCodes(books: Books, tx: BankTransaction, entries: JournalEntry[], documents: ReturnType<typeof mappedReceipts>): JournalEntry[] {
+  return entries.map((e) => {
+    const decided = creditNoteCodeOf(e, tx, documents, books);
+    if (!decided) return e;
+    return { ...e, vatCode: decided.code, reason: wordsIn('de').t('rules.say.creditNoteCode', { invoice: decided.invoice, invoiceCode: decided.invoiceCode, code: decided.code }), by: { kind: 'code', check: 'creditNote' } };
+  });
+}
+
+/**
  * A code the firm's form does not take is left off the entry: a firm not registered for VAT books
  * everything gross, one on the net tax rate method its purchases. On the effective method the
  * model's code stands as written, so a person sees a code the engine does not know.
@@ -583,7 +597,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
           continue;
         }
-        const entries = read ?? withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) }), mapped, context.vat ?? EFFECTIVE_QUARTERLY);
+        const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

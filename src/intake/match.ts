@@ -17,6 +17,7 @@ import { textFacts } from '../parsers/receipt-text.js';
 import { twinFinder } from './duplicates.js';
 import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
+import { numbersIn, squash } from '../accounting/document-numbers.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -73,14 +74,6 @@ function factsOf(r: Receipt): { date?: string; amount?: number; currency?: strin
   const groups = r.vatSummary ?? [];
   const gross = groups.length && groups.every((g) => g.gross != null) ? groups.reduce((sum, g) => sum + g.gross!, 0) : undefined;
   return { date: r.date || guessDate(r.filename) || text.date, amount: r.amount ?? gross ?? text.amount, currency: r.currency ?? text.currency };
-}
-
-const squash = (s: string) => s.toUpperCase().replace(/[\s\-/]/g, '');
-
-/** Invoice, order and customer numbers in a receipt's text («FM-79010», «RE-4471», «2026-031»): no dates, amounts or postcodes. */
-function numbersIn(text: string): string[] {
-  const tokens = text.split(/[\s,;:()[\]«»"']+/).map((x) => x.replace(/^[-/#]+|[-/#.]+$/g, ''));
-  return [...new Set(tokens.filter((x) => !x.includes('.') && /\d/.test(x) && (/[A-Za-z\-/]/.test(x) || x.length >= 5)).map(squash).filter((x) => x.length >= 5))];
 }
 
 /** Words of a payment's text that name who was paid, not what the bank calls the booking. */
