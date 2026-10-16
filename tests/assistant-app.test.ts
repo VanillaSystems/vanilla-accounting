@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadBooks } from '../src/books/store.js';
+import { loadBooks, saveBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { findBrowser } from '../src/invoices/pdf.js';
 import type { AssistantEvent, MadeChange } from '../src/types/assistant.js';
@@ -337,18 +337,24 @@ test('the Treuhänder-Paket of a quarter is packed and downloaded from the card'
   assert.equal(Buffer.from(await res.arrayBuffer()).subarray(0, 2).toString(), 'PK');
 });
 
-test('«buch alles neu» is the inbox run: it books an open payment that has no booking', async (t) => {
+test('«buch alles neu» is the inbox run: it books an open payment that has no booking, and leaves one whose booking the person deleted waiting for her (r10h-5)', async (t) => {
   const s = await sidebar(t);
-  const tx = demo.transactions.find((x) => x.date > closedThrough && demo.journalEntries.filter((e) => e.transactionRef === x.ref).length === 1 && !demo.journalEntries.find((e) => e.transactionRef === x.ref)!.origin)
-    ?? demo.transactions.find((x) => x.date > closedThrough && demo.journalEntries.filter((e) => e.transactionRef === x.ref).length === 1)!;
-  const entry = demo.journalEntries.find((e) => e.transactionRef === tx.ref)!;
+  const alone = (x: { ref: string; date: string }) => x.date > closedThrough && demo.journalEntries.filter((e) => e.transactionRef === x.ref).length === 1;
+  const [open, deleted] = demo.transactions.filter(alone);
+  // A payment that came without a booking: its entry is gone from the books, not deleted by a person.
+  const books = loadBooks(s.api.ws);
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== open.ref);
+  saveBooks(s.api.ws, books);
+  const entry = demo.journalEntries.find((e) => e.transactionRef === deleted.ref)!;
   const gone = await s.send('DELETE', `/api/journal-entries/${entry.id}`);
   assert.equal(gone.status, 200, JSON.stringify(gone.json));
-  assert.ok(!(await s.books()).journalEntries!.some((e) => e.transactionRef === tx.ref), 'the payment has no booking');
+  assert.ok(!(await s.books()).journalEntries!.some((e) => e.transactionRef === open.ref || e.transactionRef === deleted.ref), 'neither payment has a booking');
 
   const { made, refused } = await s.answer([{ kind: 'bookAgain' }]);
   assert.equal(refused, undefined, refused?.message);
   assert.deepEqual([made[0].change.kind, made[0].undo, made[0].note], ['bookAgain', undefined, undefined]);
   await s.rest();
-  assert.ok((await s.books()).journalEntries!.some((e) => e.transactionRef === tx.ref), 'the run booked it');
+  const after = (await s.books()).journalEntries!;
+  assert.ok(after.some((e) => e.transactionRef === open.ref), 'the run booked the open payment');
+  assert.ok(!after.some((e) => e.transactionRef === deleted.ref), 'the payment whose booking the person deleted waits for her');
 });
