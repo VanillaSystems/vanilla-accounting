@@ -13,15 +13,23 @@ import { initRepository } from '../src/workspace/git.js';
 import { loadBooks, sealsOf } from '../src/books/store.js';
 import {
   applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
-  vatPostings, yearClose, yearEndAccounts, yearEndTemplates, RECEIVABLES_ID, type Books, type YearCloseInput,
+  vatPostings, yearClose, yearEndAccounts, yearEndTemplates, RECEIVABLES_ID, type Books, type YearClose, type YearCloseInput,
 } from '../src/accounting/year-close.js';
-import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, readState, reopenTemplate, YearCloseRefused } from '../src/books/year-close.js';
+import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, readState, rebookTemplate, reopenTemplate, yearCloseOf, YearCloseRefused } from '../src/books/year-close.js';
+import { updateInvoices } from '../src/invoices/store.js';
+import type { Issued } from '../src/invoices/model.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import type { LedgerBankAccount, Workspace } from '../src/workspace/workspace.js';
 import { yearPaths } from '../src/workspace/workspace.js';
 import { BANKS, CHART, NO_YEAR_END_RATE, RATES, books, e, readyToClose, workspace } from './support/year-close.js';
 
 const ACCOUNTS = yearEndAccounts(CHART);
+
+/** A CHF invoice issued in October and still open: `net` plus 8.1 % is what the customer owes on 31.12. */
+const issuedInvoice = (number: string, net: number): Issued => ({
+  id: `in_${number}`, createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, status: 'issued', kind: 'invoice', customerId: 'cu_1', number, date: '2026-10-16', issuedAt: '2026-10-16T08:00:00Z', dueDate: '2026-11-15',
+  currency: 'CHF', language: 'de', reference: 'RF00', customer: { name: 'Kunde' }, lines: [{ text: 'Beratung', quantity: 1, price: net, vatRate: 8.1 }], payments: [], reminders: [], comments: [],
+} as unknown as Issued);
 
 
 
@@ -280,6 +288,7 @@ test('receivables: booked on 31.12. under the year\'s id, once; opening the next
   writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2451', '1100'].map((number) => ({ number, name: number }))));
   bookRevaluation(ws, '2026', RATES);
   for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
+  updateInvoices(ws, (book) => { book.invoices.push(issuedInvoice('2026-004', 500)); });
   const input = { date: '2026-12-31', accountDebit: '1100', accountCredit: '3400', amount: 540.5, description: 'Debitoren per 31.12.2026: 2026-004' };
   const booked = bookEntry(ws, input, 'receivables');
   assert.equal(booked.id, 'yc-2026-receivables');
@@ -385,4 +394,47 @@ test('r9k-1: a bank account whose ledger account the chart lacks is a typed prob
   const doctor = close.checks.find((c) => c.id === 'doctor')!;
   assert.deepEqual(doctor.problems, [{ code: 'bankNotInChart', account: '1022', label: 'Coiffure Nachbar GmbH' }]);
   assert.equal(doctor.status, 'fail');
+});
+
+test('r10c-1: a booked Debitoren step whose figure changed since (an invoice cancelled) is stale, not «erfasst»: the step says booked against now, and the close blocks until it is booked again', () => {
+  const b = books();
+  b.journalEntries.push(e('yc-2026-receivables', '2026-12-31', '1100', '3400', 2704.57, { origin: 'manual' }));
+  const chart = [...CHART, '1100'];
+  const state = { ...emptyState('2026'), templates: { ...Object.fromEntries(yearEndTemplates().map((t) => [t.id, 'na' as const])), receivables: 'done' as const } };
+  const receivables = { invoices: [{ number: '2026-002', customer: 'Kunde', date: '2026-10-16', currency: 'EUR', open: 1200, chf: 1147.93 }], total: 1147.93, revenueAccount: '3400' };
+  const close = yearClose(input(b, { receivables, chart, state }));
+  const step = close.templates.find((t) => t.id === RECEIVABLES_ID)!;
+  assert.deepEqual(step.booked, [{ id: 'yc-2026-receivables', transactionRef: 'yc-2026-receivables', chf: 2704.57 }]);
+  assert.deepEqual(step.stale, { booked: 2704.57, now: 1147.93 });
+  const blockers = (c: YearClose) => c.blockers.filter((p) => p.code !== 'fxToBook');
+  assert.deepEqual(blockers(close), [{ code: 'entryStale', template: 'receivables', booked: 2704.57, now: 1147.93 }]);
+
+  const same = yearClose(input(b, { receivables: { ...receivables, total: 2704.57 }, chart, state }));
+  assert.deepEqual([same.templates.find((t) => t.id === RECEIVABLES_ID)!.stale, blockers(same)], [undefined, []], 'the same figure: booked, nothing blocks');
+
+  const none = yearClose(input(b, { receivables: { invoices: [], total: 0, revenueAccount: '3400' }, chart, state }));
+  assert.deepEqual(none.templates.find((t) => t.id === RECEIVABLES_ID)?.stale, { booked: 2704.57, now: 0 }, 'every invoice paid or cancelled since: the step stays, with nothing to book');
+});
+
+test('r10c-1: «Neu buchen» replaces the Debitoren booking with today\'s figure on the same accounts and keeps the step booked; with nothing open any more the booking goes and the step is open again', () => {
+  const ws = workspace();
+  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '1100'].map((number) => ({ number, name: number }))));
+  updateInvoices(ws, (book) => { book.invoices.push(issuedInvoice('2026-002', 1000)); });
+  const old = bookEntry(ws, { date: '2026-12-31', accountDebit: '1100', accountCredit: '3400', amount: 2704.57, description: 'Debitoren per 31.12.2026: offene Rechnungen 2026-002, 2026-003' }, 'receivables');
+  assert.deepEqual(yearCloseOf(ws, '2026', RATES).templates.find((t) => t.id === RECEIVABLES_ID)?.stale, { booked: 2704.57, now: 1081 });
+
+  const again = rebookTemplate(ws, '2026', 'receivables', 'Debitoren per 31.12.2026: offene Rechnungen 2026-002', RATES);
+  assert.deepEqual(again.removed.map((x) => x.id), [old.id]);
+  assert.deepEqual([again.entry?.id, again.entry?.accountDebit, again.entry?.accountCredit, again.entry?.amount, again.entry?.description, again.entry?.origin, again.entry?.by?.kind],
+    ['yc-2026-receivables', '1100', '3400', 1081, 'Debitoren per 31.12.2026: offene Rechnungen 2026-002', 'manual', 'person']);
+  assert.deepEqual(loadBooks(ws).journalEntries.filter((x) => x.id === 'yc-2026-receivables').map((x) => x.amount), [1081], 'one booking, the new one');
+  assert.equal(readState(ws, '2026').templates.receivables, 'done');
+  assert.equal(yearCloseOf(ws, '2026', RATES).templates.find((t) => t.id === RECEIVABLES_ID)?.stale, undefined);
+  assert.throws(() => rebookTemplate(ws, '2026', 'receivables', 'x', RATES), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'entryNotStale', 'nothing changed: nothing to book again');
+
+  updateInvoices(ws, (book) => { (book.invoices[0] as Issued).cancelled = { date: '2026-12-20', reason: 'doppelt' }; });
+  const gone = rebookTemplate(ws, '2026', 'receivables', 'x', RATES);
+  assert.deepEqual([gone.removed.map((x) => x.id), gone.entry], [['yc-2026-receivables'], undefined]);
+  assert.ok(!loadBooks(ws).journalEntries.some((x) => x.id === 'yc-2026-receivables'));
+  assert.equal(readState(ws, '2026').templates.receivables, undefined, 'nothing to book: the step is open again');
 });
