@@ -92,3 +92,9 @@ file records every decision a person might have made differently, newest last.
     .gitattributes so two clones merge questions without a conflict:
     `vanilla-accounting/transactional-data/*/questions.jsonl merge=union` (not added to the real
     books repository; that is Ken's to do).
+22. Decision memos written (private books repo, docs/company/decisions-2026-10-16.md, with the
+    real figures). Decision 2 taken overnight: a customer payment without an invoice is asked once
+    with a proposal (standard rate for CHF from a Swiss account, zero for foreign money), the
+    answer kept as a rule for that customer; it changes no entry of the real books (measured: none
+    qualifies today). Decision 3 (Bilanz/ER net: derive the VAT legs at read time) stays Ken's:
+    the statement golden files would move and need his review.
