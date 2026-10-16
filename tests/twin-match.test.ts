@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { candidates, waitsBehind } from '../src/intake/match.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 
-const INVOICE = 'Swisscom (Schweiz) AG\n3050 Bern\nMWST-Nr. CHE-116.328.955 MWST\n\nMalerei Huber GmbH\nIndustriestrasse 14\n9500 Wil SG\nRechnung 7712399871\nDatum: 10.10.2026\n\nArtikel\ninOne mobile business, Oktober\nTotal exkl. MWST\nMWST 8.1%\nTotal CHF\nZahlbar innert 30 Tagen.\n\nBetrag CHF\n82.33\n82.33\n6.65\n88.98';
+const INVOICE = 'Swisscom (Schweiz) AG\n3050 Bern\nMWST-Nr. CHE-123.456.789 MWST\n\nMalerei Huber GmbH\nIndustriestrasse 14\n9500 Wil SG\nRechnung 7712399871\nDatum: 10.10.2026\n\nArtikel\ninOne mobile business, Oktober\nTotal exkl. MWST\nMWST 8.1%\nTotal CHF\nZahlbar innert 30 Tagen.\n\nBetrag CHF\n82.33\n82.33\n6.65\n88.98';
 const FORWARD = `Von: Thomas Huber <thomas@malerei-huber.example>\nGesendet: Freitag, 16. Oktober 2026 07:12\nAn: Sandra Huber\nBetreff: WG: Ihre Swisscom Rechnung Oktober\nKannst du die ablegen? Gruss Thomas\n---------- Weitergeleitete Nachricht ----------\nVon: Swisscom <rechnung@swisscom.example>\n\n${INVOICE}`;
 const rc = (id: string, text: string, location: Receipt['location']): Receipt => ({ id, filename: `${id}.pdf`, location, extractedText: text, date: '2026-10-10', amount: 88.98, currency: 'CHF', indexedAt: '2026-10-16T07:00:00Z' } as Receipt);
 const PAY: BankTransaction = { ref: 'RB-2026-3002', bank: 'Raiffeisen', date: '2026-10-22', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Rechnung Oktober Natel' } as BankTransaction;
