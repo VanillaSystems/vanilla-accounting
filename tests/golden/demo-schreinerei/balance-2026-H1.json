@@ -28,8 +28,13 @@
   "liabilities": [
     [
       "Kurzfristiges Fremdkapital",
-      0,
-      []
+      1707.15,
+      [
+        [
+          "2201",
+          1707.15
+        ]
+      ]
     ],
     [
       "Langfristiges Fremdkapital",
@@ -38,7 +43,7 @@
     ],
     [
       "Eigenkapital",
-      42144.65,
+      40437.5,
       [
         [
           "2800",
@@ -50,7 +55,7 @@
         ],
         [
           "",
-          -30855.35
+          -32562.5
         ]
       ]
     ]

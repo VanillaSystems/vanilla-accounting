@@ -16,11 +16,11 @@
     ],
     [
       "Anlagevermögen",
-      4149,
+      3972.99,
       [
         [
           "1520",
-          4149
+          3972.99
         ]
       ]
     ]
@@ -28,11 +28,11 @@
   "liabilities": [
     [
       "Kurzfristiges Fremdkapital",
-      -1548.82,
+      1665.82,
       [
         [
           "2201",
-          -1548.82
+          1665.82
         ]
       ]
     ],
@@ -48,7 +48,7 @@
     ],
     [
       "Eigenkapital",
-      41738.53,
+      38347.88,
       [
         [
           "2800",
@@ -60,12 +60,12 @@
         ],
         [
           "",
-          -4407.32
+          -7797.97
         ]
       ]
     ]
   ],
-  "totalAssets": 40128.92,
-  "totalLiabilities": 40128.92,
+  "totalAssets": 39952.91,
+  "totalLiabilities": 39952.91,
   "isBalanced": true
 }
