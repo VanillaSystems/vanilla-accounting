@@ -7,7 +7,7 @@ import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { desktop } from '../desktop/bridge.js';
 import { store, stored } from './storage.js';
-import { ZOOM_STEPS, tight, type Theme } from './look.js';
+import { ZOOM_STEPS, phone, tight, type Theme } from './look.js';
 
 export { ZOOM_STEPS, nextTheme, type Theme } from './look.js';
 
@@ -55,7 +55,7 @@ export function useZoom(): [number, (step: -1 | 0 | 1) => void] {
     store('zoom', String(zoom));
     dispatchEvent(new Event('resize'));
     // A media query does not see the page zoom: the page says itself when the room left is small (shell.css `.tight`).
-    const fit = () => root.classList.toggle('tight', tight(innerWidth, zoom));
+    const fit = () => { root.classList.toggle('tight', tight(innerWidth, zoom)); root.classList.toggle('phone', phone(innerWidth, zoom)); };
     fit();
     addEventListener('resize', fit);
     return () => removeEventListener('resize', fit);

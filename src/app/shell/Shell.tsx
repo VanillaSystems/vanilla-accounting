@@ -100,8 +100,11 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const propsRef = useRef(props);
   propsRef.current = props;
 
+  // On a phone one column shows at a time (shell.css `html.phone`): a tap on a row opens the detail, «←» or the dock the list (r8c-8).
+  const [phoneColumn, setPhoneColumn] = useState<'list' | 'detail'>('list');
   const goArea = useCallback((id: AreaId) => {
     const { route, query } = current.current;
+    setPhoneColumn('list');
     if (route.area === id) return;
     go({ route: AREA_HOME[id], query: query.period ? { period: query.period } : {} });
   }, [go]);
@@ -237,9 +240,12 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <a className="skip" href="#list">{t('shell.skip')}</a>
       <FxProvider index={books}>
         {Detail && !area.fullPage?.(loc.route) ? (
-          <main data-area={loc.route.area} style={mainStyle}>
-            <section className="list" id="list" ref={listRef} aria-label={area.label()}><List {...props} /></section>
-            <section className="detail" aria-live="polite"><Detail {...props} /></section>
+          <main data-area={loc.route.area} data-phone={phoneColumn} style={mainStyle}>
+            <section className="list" id="list" ref={listRef} aria-label={area.label()} onClickCapture={(e) => { if ((e.target as HTMLElement).closest?.('.row')) setPhoneColumn('detail'); }}><List {...props} /></section>
+            <section className="detail" aria-live="polite">
+              <button type="button" className="phoneback" onClick={() => setPhoneColumn('list')}>← {area.label()}</button>
+              <Detail {...props} />
+            </section>
             <Split list={listRef} width={listWidth} onWidth={setListWidth} />
           </main>
         ) : (

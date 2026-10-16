@@ -340,3 +340,30 @@ body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
   .row .dl { display: none; }
   .row .ds { display: inline; }
 }
+
+/* A phone-wide window (html.phone, set by prefs.ts like .tight, r8c-8): one column at a time, the list or the detail
+   («←» at its top goes back, a tap on a row goes in), and the dock as a bar along the bottom. */
+.phoneback { display: none; }
+html.phone { --abw: 0px; }
+html.phone main { grid-template-columns: minmax(0, 1fr) !important; margin-left: 0; }
+html.phone .split { display: none; }
+html.phone main[data-phone="list"] .detail { display: none; }
+html.phone main[data-phone="detail"] .list { display: none; }
+html.phone .list { padding: 72px 16px 84px; border-right: 0; }
+html.phone .detail { padding: 60px 16px 84px; }
+html.phone main.full { padding-top: 60px; padding-bottom: 84px; }
+html.phone .lhead { padding-left: 16px; padding-right: 16px; }
+html.phone .phoneback { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px -6px; padding: 4px 8px; border-radius: 8px; color: var(--muted); font: 500 13px "Instrument Sans"; cursor: pointer; }
+html.phone .phoneback:hover { color: var(--ink); background: var(--hover); }
+html.phone .detail-in > .head .amount { font-size: 26px; }
+html.phone .legend { display: none; }
+html.phone .topbar { max-width: calc(100vw - 24px); overflow-x: auto; }
+html.phone .corner { right: 12px; }
+html.phone .activity { top: auto; right: 0; bottom: 0; width: auto; height: 56px; padding: 0 6px; flex-direction: row; justify-content: space-around; gap: 0; border-right: 0; border-top: 1px solid var(--line); overflow-x: auto; }
+html.phone .activity .it { width: 44px; height: 56px; }
+html.phone .activity .it::before { left: 10px; right: 10px; top: 0; bottom: auto; width: auto; height: 2px; border-radius: 0 0 2px 2px; }
+html.phone .activity .it.go { position: static; width: 44px; height: 44px; align-self: center; }
+html.phone .activity .it.go .ring { display: none; }
+html.phone .activity .it.go .face svg { width: 22px; height: 22px; }
+html.phone .activity .it.go .cnt { top: -4px; right: -4px; }
+html.phone .activity .div, html.phone .activity .it .tip { display: none; }

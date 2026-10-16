@@ -16,4 +16,8 @@ export function nextTheme(theme: Theme, osDark: boolean): Theme {
 export const TIGHT_BELOW = 1040;
 export const tight = (windowWidth: number, zoom: number): boolean => windowWidth / zoom < TIGHT_BELOW;
 
+/** Below this many page pixels the page is as narrow as a phone: one column, the dock along the bottom (shell.css `html.phone`, r8c-8). */
+export const PHONE_BELOW = 600;
+export const phone = (windowWidth: number, zoom: number): boolean => windowWidth / zoom < PHONE_BELOW;
+
 export const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6] as const;
