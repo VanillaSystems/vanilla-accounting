@@ -2,7 +2,8 @@
  * A link made or taken back by hand (Zahlung verknüpfen, «Lösen», the AI sidebar, its undo): the
  * payment's automatic booking is made again with what is linked now, so an invoice with Swiss VAT
  * is booked with its input tax and a payment that lost its receipt claims none. A hand booking
- * stays as the person left it.
+ * stays as the person left it. «Lösen» in Belege puts back the booking that stood before the link
+ * (r8h-21); a second bank payment of another payee needs the person's confirm.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,7 +68,7 @@ test('linking a receipt by hand books its payment again with the receipt\'s VAT;
     assert.deepEqual(await onL(), [['I81', [receipt.id], 'classify']], 'booked again at once, with the input tax the receipt shows');
 
     const loose = await api.send('POST', '/api/mapping/remove', { receiptId: receipt.id, transactionRef: 'REF-L' });
-    assert.deepEqual(loose.json, { ok: true, again: ['REF-L'] });
+    assert.deepEqual(loose.json, { ok: true, again: [] }, 'the booking before the link is back, no run needed (r8h-21)');
     await rest();
     assert.deepEqual(await onL(), [['I0', [], 'classify']], 'no input tax on a payment without its receipt');
   } finally {
@@ -106,6 +107,43 @@ test('a link the AI sidebar makes books the payment again with the receipt; undo
     await ask([{ kind: 'unlink', receipt: receipt.id, payment: 'REF-L' }]);
     await rest();
     assert.deepEqual(await onL(), [['I0', [], 'classify']], 'an unlink by the sidebar the same');
+  } finally {
+    await done();
+  }
+});
+
+test('r8h-21: «Lösen» puts back the booking that stood before the link, as it was, instead of booking anew', async () => {
+  const { api, receipt, rest, done } = await setUp();
+  try {
+    const before = ((await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; transactionRef: string }>).filter((e) => e.transactionRef === 'REF-L');
+    assert.equal(before.length, 1);
+    assert.deepEqual((await api.send('POST', '/api/mapping/add', { receiptId: receipt.id, transactionRef: 'REF-L' })).json, { ok: true, again: ['REF-L'] });
+    await rest();
+    const linked = ((await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; transactionRef: string }>).filter((e) => e.transactionRef === 'REF-L');
+    assert.notEqual(linked[0].id, before[0].id, 'the link booked the payment again');
+    assert.deepEqual((await api.send('POST', '/api/mapping/remove', { receiptId: receipt.id, transactionRef: 'REF-L' })).json, { ok: true, again: [] }, 'nothing to book again: the old booking is back');
+    await rest();
+    const after = ((await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; transactionRef: string }>).filter((e) => e.transactionRef === 'REF-L');
+    assert.deepEqual(after, before, 'the booking before the link, byte for byte');
+  } finally {
+    await done();
+  }
+});
+
+test('r8h-21: a second bank payment of another payee is refused by one key (409 secondPayment) and taken with `confirm`', async () => {
+  const { api, receipt, rest, done } = await setUp();
+  try {
+    assert.equal((await api.send('POST', '/api/mapping/add', { receiptId: receipt.id, transactionRef: 'REF-L' })).status, 200);
+    await rest();
+    const other = (await api.send('GET', '/books.json')).json.transactions as Array<{ ref: string; date: string; bank: string; description: string }>;
+    const sva = other.find((t) => t.ref !== 'REF-L' && t.date > '2026-04-01' && t.bank !== 'manual' && !/Post CH/.test(t.description))!;
+    const refused = await api.send('POST', '/api/mapping/add', { receiptId: receipt.id, transactionRef: sva.ref });
+    assert.equal(refused.status, 409, JSON.stringify(refused.json));
+    const mine = ((await api.send('GET', '/books.json')).json.mappings as Array<{ receiptId: string; transactionRef: string }>).filter((m) => m.receiptId === receipt.id).map((m) => m.transactionRef);
+    assert.equal(refused.json.code, 'secondPayment');
+    assert.ok(mine.includes((refused.json.params as { payment: string }).payment), `names one of the receipt's payments ${JSON.stringify(mine)}`);
+    const taken = await api.send('POST', '/api/mapping/add', { receiptId: receipt.id, transactionRef: sva.ref, confirm: true });
+    assert.equal(taken.status, 200, JSON.stringify(taken.json));
   } finally {
     await done();
   }

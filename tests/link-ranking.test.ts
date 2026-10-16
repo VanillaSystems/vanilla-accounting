@@ -79,3 +79,14 @@ test('r8h-21: a payment 60 days and 20 % off is no «Passt am besten»: a receip
   assert.ok(more.some((c) => c.tx.ref === 'RB-0805'), 'the SVA payment is still listed, further down');
   assert.equal(suggestion(view('fm'), l, flat), undefined);
 });
+
+test('r8h-21: ↵ with nothing picked only picks the first row; ↵ on a picked row chooses it; ↓ from nothing picks the first', async () => {
+  const { linkKey } = await import('../src/app/areas/receipts/model.js');
+  assert.deepEqual(linkKey(undefined, 'Enter', 5), { kind: 'pick', idx: 0 }, 'a stray Enter links nothing');
+  assert.deepEqual(linkKey(0, 'Enter', 5), { kind: 'choose', idx: 0 });
+  assert.deepEqual(linkKey(undefined, 'ArrowDown', 5), { kind: 'pick', idx: 0 });
+  assert.deepEqual(linkKey(4, 'ArrowDown', 5), { kind: 'pick', idx: 0 });
+  assert.deepEqual(linkKey(undefined, 'ArrowUp', 5), { kind: 'pick', idx: 4 });
+  assert.deepEqual(linkKey(undefined, 'Escape', 5), { kind: 'close' });
+  assert.equal(linkKey(undefined, 'a', 5), undefined, 'typing goes to the search');
+});
