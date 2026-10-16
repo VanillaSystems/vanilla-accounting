@@ -98,6 +98,15 @@ export function errorText(e: unknown): string {
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
     case 'gone': return t(`error.gone.${b.params.what}`);
+    case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
+    case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
+    case 'unknownCustomer': return t('error.unknownCustomer');
+    case 'amountZero': return t('error.amountZero');
+    case 'noAccount': return t('error.noAccount');
+    case 'unknownVatCode': return t('error.unknownVatCode', b.params);
+    case 'noDescription': return t('error.noDescription');
+    case 'accountNumber': return t('error.accountNumber', b.params);
+    case 'accountName': return t('error.accountName', b.params);
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'setup': return setupText(b.params);
@@ -127,7 +136,8 @@ export const missingText = (m: Missing): string =>
   m.line === undefined ? t(`invoice.missing.${m.field}`) : t('invoice.missingLine', { line: m.line + 1, what: t(`invoice.missing.${m.field}`) });
 
 function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser', missing?: Missing[]): string {
-  if (code === 'incomplete' && missing?.length) return t('invoice.refusal.incompleteList', { list: missing.map(missingText).join(', ') });
+  // A customer's field is filled in where the customer is kept: the line says so.
+  if (code === 'incomplete' && missing?.length) return t('invoice.refusal.incompleteList', { list: missing.map(missingText).join(', ') }) + (missing.some((m) => m.field.startsWith('customer.')) ? ` ${t('invoice.refusal.customerWhere')}` : '');
   return t(`invoice.refusal.${code}`);
 }
 

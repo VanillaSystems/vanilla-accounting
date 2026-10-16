@@ -8,6 +8,7 @@
  */
 import type { Change, DraftLine, EntrySet, InvoicingSet, NewEntry, ReceiptSet } from '../types/assistant.js';
 import { RECEIPT_KINDS, type ReceiptKind } from '../types/index.js';
+import type { ApiRefusal } from '../types/api-error.js';
 import { parseVatFacts } from '../accounting/vat-facts.js';
 import { PRESETS } from '../export/model.js';
 import { PRIVATE_CHOICES, TARGET_KINDS, type PrivateChoice, type QuestionTarget } from '../questions/model.js';
@@ -17,7 +18,10 @@ const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 /** The text without the block; also while it streams in, an unfinished block is not shown. */
 export const withoutChanges = (text: string): string => text.replace(BLOCK, '').trimEnd();
 
-export class ChangesError extends Error {}
+/** A block the app cannot read as changes; `refusal` when a person can be told in plain words what is wrong. */
+export class ChangesError extends Error {
+  constructor(message: string, readonly refusal?: ApiRefusal) { super(message); }
+}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const str = (v: unknown, what: string): string => {
@@ -77,11 +81,11 @@ function newEntry(v: unknown): NewEntry {
   const date = str(e.date, 'date');
   if (!DATE.test(date)) throw new ChangesError('date muss JJJJ-MM-TT sein');
   const amount = num(e.amount, 'amount');
-  if (amount === 0) throw new ChangesError('amount ist 0');
+  if (amount === 0) throw new ChangesError('amount ist 0', { code: 'amountZero' });
   const text = (k: string) => (typeof e[k] === 'string' && e[k].trim() ? e[k].trim() : undefined);
   const accountDebit = 'accountDebit' in e ? account(e.accountDebit, 'accountDebit') : '';
   const accountCredit = 'accountCredit' in e ? account(e.accountCredit, 'accountCredit') : '';
-  if (!accountDebit && !accountCredit) throw new ChangesError('accountDebit oder accountCredit fehlt');
+  if (!accountDebit && !accountCredit) throw new ChangesError('accountDebit oder accountCredit fehlt', { code: 'noAccount' });
   const transactionRef = text('transactionRef');
   const vatCode = text('vatCode');
   const corrects = text('corrects');
@@ -144,8 +148,9 @@ function change(v: unknown): Change {
     }
     case 'account': {
       const number = str(c.number, 'number');
-      if (!/^\d{4}$/.test(number)) throw new ChangesError('number: vier Stellen');
-      return { kind: 'account', number, name: str(c.name, 'name') };
+      if (!/^\d{4}$/.test(number)) throw new ChangesError('number: vier Stellen', { code: 'accountNumber', params: { account: number } });
+      if (typeof c.name !== 'string' || !c.name.trim()) throw new ChangesError('name fehlt', { code: 'accountName', params: { account: number } });
+      return { kind: 'account', number, name: c.name.trim() };
     }
     case 'invoicing': return { kind: 'invoicing', set: invoicingSet(c.set) };
     case 'invoiceDraft': return invoiceDraft(c);

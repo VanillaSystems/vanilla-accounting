@@ -54,7 +54,18 @@ export type ApiRefusal =
   /** Opening balances typed for a year an earlier year of the books opens. */
   | { code: 'openingNotFirstYear'; params: { year: string } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
-  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' } };
+  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' } }
+  /** An invoicing refusal met through the AI sidebar (src/server/workspace-edits.ts): which rule, and what is missing. */
+  | { code: 'invoice'; params: { refusal: InvoiceRefusal; missing?: Missing[] } }
+  /** A change a person can meet that the books refuse: invoicing not set up, a customer the invoices lack, a booking of 0, without an account, a VAT code or text, an account number or name the chart cannot take. */
+  | { code: 'invoicingNotSetUp' }
+  | { code: 'unknownCustomer' }
+  | { code: 'amountZero' }
+  | { code: 'noAccount' }
+  | { code: 'unknownVatCode'; params: { code: string } }
+  | { code: 'noDescription' }
+  | { code: 'accountNumber'; params: { account: string } }
+  | { code: 'accountName'; params: { account: string } };
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):

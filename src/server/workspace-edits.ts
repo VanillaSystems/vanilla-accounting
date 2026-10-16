@@ -19,12 +19,13 @@ import { askQuestion, closeQuestion } from './questions.js';
 
 export interface Applied { undo?: WorkspaceChange; note?: ChangeNote }
 
-/** A refusal of the chart's, the manifest's or the invoices' own checks: 400 with its text. */
+/** A refusal of the chart's, the manifest's or the invoices' own checks: 400 with its text, an invoice's with its rule and what is missing. */
 function checked<T>(run: () => T): T {
   try {
     return run();
   } catch (e) {
-    if (e instanceof WorkspaceError || e instanceof InvoiceRuleError) throw new RequestError(400, e.message);
+    if (e instanceof InvoiceRuleError) throw new RequestError(400, e.message, { code: 'invoice', params: { refusal: e.code, ...(e.missing ? { missing: e.missing } : {}) } });
+    if (e instanceof WorkspaceError) throw new RequestError(400, e.message);
     throw e;
   }
 }
@@ -48,7 +49,7 @@ function account(ws: Workspace, books: Books, number: string, name: string | nul
  */
 function invoicing(ws: Workspace, set: InvoicingSet, customers: Record<string, number> | undefined): Applied {
   const settings = ws.invoicing;
-  if (!settings) throw new RequestError(400, 'Rechnungen sind noch nicht eingerichtet: Firma › Rechnungslayout fragt zuerst das Konto und die Zahlungsfrist.');
+  if (!settings) throw new RequestError(400, 'Rechnungen sind noch nicht eingerichtet: Firma › Rechnungslayout fragt zuerst das Konto und die Zahlungsfrist.', { code: 'invoicingNotSetUp' });
   const before: InvoicingSet = {};
   if (set.paymentTermsDays !== undefined) before.paymentTermsDays = settings.paymentTermsDays;
   if (set.texts) {
@@ -85,7 +86,7 @@ function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoic
     const { clear: _, ...draft } = parseDraftPatch(c.draft, loadInvoices(ws));
     const fields = c.newCustomer ? parseCustomer({ language: 'de', ...c.newCustomer }, false) : undefined;
     const customer = fields ? createCustomer(ws, fields as CustomerFields) : liveCustomers(loadInvoices(ws)).find((x) => x.id === c.customer);
-    if (!customer) throw new RequestError(400, 'Diesen Kunden gibt es nicht: einen neuen mit newCustomer anlegen.');
+    if (!customer) throw new RequestError(400, 'Diesen Kunden gibt es nicht: einen neuen mit newCustomer anlegen.', { code: 'unknownCustomer' });
     const made = createDraft(ws, { ...draft, customerId: customer.id });
     return { undo: { kind: 'dropInvoiceDraft', id: made.id, ...(fields ? { customer: customer.id } : {}) }, note: { draft: { id: made.id, customer: customer.name } } };
   });

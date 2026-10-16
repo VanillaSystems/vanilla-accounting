@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationSummary, MadeChange, Turn } from '../types/assistant.js';
-import { changesIn, withoutChanges } from './changes.js';
+import { ChangesError, changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
 
@@ -92,7 +92,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       }
     } catch (e) {
       ai.refused = (e as Error).message;
-      if (e instanceof RefusedChanges && e.refusal) ai.refusal = e.refusal;
+      if ((e instanceof RefusedChanges || e instanceof ChangesError) && e.refusal) ai.refusal = e.refusal;
       onEvent({ type: 'refused', message: ai.refused, ...(ai.refusal ? { refusal: ai.refusal } : {}) });
       ai.withdrawn = ai.text;
       ai.text = await saidAgain(ws, send, map, c, ai.refused, signal);

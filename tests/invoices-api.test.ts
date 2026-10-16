@@ -32,6 +32,7 @@ test('customers: created with the workspace terms; an address without town is re
   const bad = await api.send('POST', '/api/customers', { ...customer, address: { postcode: '1204', country: 'CH' } });
   assert.equal(bad.status, 400);
   assert.equal(bad.json.invoiceRefusal, 'incomplete');
+  assert.deepEqual(bad.json.missing, [{ field: 'customer.address' }], 'the UI names what is missing, never «address braucht postcode»');
 });
 
 test('drafts: created in the customer language, changed, deleted; a draft has no number', async () => {

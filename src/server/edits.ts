@@ -23,13 +23,13 @@ import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
-  if (!r) throw new RequestError(404, 'Receipt not found');
+  if (!r) throw new RequestError(404, 'Receipt not found', { code: 'gone', params: { what: 'receipt' } });
   return r;
 }
 
 function entryOf(books: Books, id: string): JournalEntry {
   const e = books.journalEntries.find((x) => x.id === id);
-  if (!e) throw new RequestError(404, 'Journal entry not found');
+  if (!e) throw new RequestError(404, 'Journal entry not found', { code: 'gone', params: { what: 'entry' } });
   return e;
 }
 
@@ -86,7 +86,7 @@ export function unbookedPayments(books: Books, receipts: readonly string[]): str
 
 export function link(books: Books, receipt: string, payment: string): BookChange | undefined {
   receiptOf(books, receipt);
-  if (!books.transactions.some((t) => t.ref === payment)) throw new RequestError(404, 'Transaction not found');
+  if (!books.transactions.some((t) => t.ref === payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, payment), 'mapping');
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
   books.mappings.push({ transactionRef: payment, receiptId: receipt });
@@ -125,7 +125,7 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
   const e = entryOf(books, id);
   assertOpen(books, [e.date, set.date], 'editEntry');
   if (e.origin === 'year-close') throw new RequestError(400, 'Die Kursdifferenz berechnet der Jahresabschluss: npm run year:close bucht sie neu.', { code: 'yearClose' });
-  if (set.amount !== undefined && (!Number.isFinite(set.amount) || set.amount === 0)) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
+  if (set.amount !== undefined && (!Number.isFinite(set.amount) || set.amount === 0)) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });
   const before: EntrySet = { origin: e.origin ?? null };
   if (set.date !== undefined) { before.date = e.date; e.date = set.date; }
   if (set.accountDebit !== undefined) { before.accountDebit = e.accountDebit; e.accountDebit = set.accountDebit; }
@@ -142,7 +142,7 @@ export function setEntry(books: Books, id: string, set: EntrySet): BookChange {
     before.by = e.by ?? null;
     e.by = { kind: 'person', at: new Date().toISOString(), was: Object.fromEntries(changed.map((k) => [k, before[k]])) as BookingFields };
   }
-  if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
+  if (!e.accountDebit && !e.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
   if (set.receipts !== undefined) {
     const unknown = set.receipts.find((id) => !books.receipts.some((r) => r.id === id));
     if (unknown) throw new RequestError(400, `receipts: Beleg ${unknown} gibt es nicht.`);
@@ -171,7 +171,7 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   if (id && books.journalEntries.some((je) => je.id === id)) throw new RequestError(409, `Buchung ${id} gibt es schon.`);
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
-    if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found');
+    if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     assertOpen(books, dates, 'newEntry');
   }
   const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
@@ -187,15 +187,15 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
  */
 export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver): JournalEntry[] {
   const tx = books.transactions.find((t) => t.ref === ref);
-  if (!tx) throw new RequestError(404, 'Transaction not found');
+  if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
   if (books.journalEntries.some((e) => e.transactionRef === ref)) throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
   if (!lines.length) throw new RequestError(400, 'lines: mindestens eine Zeile.');
   for (const l of lines) {
-    if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
-    if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.');
-    if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `Den Steuercode ${l.vatCode} gibt es nicht.`);
-    if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.');
+    if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });
+    if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.', { code: 'noDescription' });
+    if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `Den Steuercode ${l.vatCode} gibt es nicht.`, { code: 'unknownVatCode', params: { code: l.vatCode } });
+    if (!l.accountDebit !== !l.accountCredit ? !isVatAmountCode(l.vatCode) : !l.accountDebit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
   }
   const off = offSide(books, ref, lines, accounts);
   if (off) throw unbalanced(off);
@@ -220,7 +220,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
  */
 export function attachEntries(books: Books, ref: string, own: string, accounts: readonly LedgerBankAccount[]): JournalEntry[] {
   const tx = books.transactions.find((t) => t.ref === ref);
-  if (!tx) throw new RequestError(404, 'Transaction not found');
+  if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
   if (books.journalEntries.some((e) => e.transactionRef === ref)) throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
   const entries = books.journalEntries.filter((e) => e.transactionRef === own);

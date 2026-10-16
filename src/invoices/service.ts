@@ -76,15 +76,15 @@ export function findInvoice(book: InvoiceBook, idOrNumber: string): Invoice | un
 
 const isText = (v: unknown): v is string => typeof v === 'string';
 const isDate = (v: unknown): v is string => isText(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
-const bad = (msg: string): never => { throw new InvoiceRuleError('incomplete', msg); };
+const bad = (msg: string, missing?: Missing[]): never => { throw new InvoiceRuleError('incomplete', msg, missing); };
 
 function parseLines(v: unknown): InvoiceLine[] {
   if (!Array.isArray(v)) return bad('lines muss eine Liste sein.');
   return v.map((raw, i) => {
     const l = (raw ?? {}) as Record<string, unknown>;
-    if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`);
-    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`);
-    if (!invoicing().rates.includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoicing().rates.join(', ')}.`);
+    if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`, [{ field: 'line.text', line: i }]);
+    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
+    if (!invoicing().rates.includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoicing().rates.join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
     if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
     if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
     return {
@@ -106,7 +106,7 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & 
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
     if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
-    if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.'); out.customerId = v as string; }
+    if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.', [{ field: 'customer' }]); out.customerId = v as string; }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
     else if (k === 'supplied') {
       const p = (v ?? {}) as Record<string, unknown>;
@@ -130,13 +130,13 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   const unknown = Object.keys(b).filter((k) => !known.includes(k));
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: Partial<CustomerFields> = {};
-  if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.'); out.name = (b.name as string).trim(); }
+  if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.', [{ field: 'customer.name' }]); out.name = (b.name as string).trim(); }
   for (const k of ['attn', 'vatId', 'email'] as const) if (b[k] !== undefined) { if (!isText(b[k])) bad(`${k} ist ein Text.`); out[k] = (b[k] as string).trim(); }
   if (b.language !== undefined || !partial) { if (!INVOICE_LANGUAGES.includes(b.language as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = b.language as CustomerFields['language']; }
   if (b.paymentTermsDays !== undefined) { if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 0) bad('paymentTermsDays ist eine ganze Zahl von Tagen.'); out.paymentTermsDays = b.paymentTermsDays as number; }
   if (b.address !== undefined || !partial) {
     const a = (b.address ?? {}) as Record<string, unknown>;
-    if (!isText(a.postcode) || !isText(a.town) || !isText(a.country) || !/^[A-Z]{2}$/.test(a.country)) bad('address braucht postcode, town und country (zwei Buchstaben, CH, DE, …).');
+    if (!isText(a.postcode) || !isText(a.town) || !isText(a.country) || !/^[A-Z]{2}$/.test(a.country)) bad('address braucht postcode, town und country (zwei Buchstaben, CH, DE, …).', [{ field: 'customer.address' }]);
     const address: CustomerFields['address'] = { postcode: a.postcode as string, town: a.town as string, country: a.country as string };
     for (const k of ['street', 'number', 'line2', 'state'] as const) if (a[k] !== undefined) { if (!isText(a[k])) bad(`address.${k} ist ein Text.`); address[k] = a[k] as string; }
     out.address = address;

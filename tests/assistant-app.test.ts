@@ -255,7 +255,18 @@ test('an invoice draft for a customer, or for a new one; the undo drops it (and 
 
   const wrong = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines: [{ ...lines[0], vatRate: 7 }] } }]);
   assert.match(wrong.refused?.message ?? '', /vatRate/);
+  assert.deepEqual(wrong.refusal, { code: 'invoice', params: { refusal: 'incomplete', missing: [{ field: 'line.vatRate', line: 0 }] } }, 'the sidebar says which line lacks what, in the person\'s words');
   assert.equal(drafts().length, n);
+
+  const noTown = await s.answer([{ kind: 'invoiceDraft', newCustomer: { name: 'Familie Huber', address: { street: 'Dorf', number: '2', country: 'CH' } }, draft: { lines } }]);
+  assert.deepEqual(noTown.refusal, { code: 'invoice', params: { refusal: 'incomplete', missing: [{ field: 'customer.address' }] } });
+  assert.equal(s.invoices().customers.some((c) => c.name === 'Familie Huber'), false);
+});
+
+test('an account the chart cannot take is refused in plain words: four digits, a name', async (t) => {
+  const s = await sidebar(t);
+  assert.deepEqual((await s.answer([{ kind: 'account', number: '65', name: 'Porto' }])).refusal, { code: 'accountNumber', params: { account: '65' } });
+  assert.deepEqual((await s.answer([{ kind: 'account', number: '6599', name: ' ' }])).refusal, { code: 'accountName', params: { account: '6599' } });
 });
 
 test('the Treuhänder-Paket of a quarter is packed and downloaded from the card', { skip: !findBrowser() && 'no Chromium browser for the PDFs' }, async (t) => {
