@@ -32,6 +32,8 @@ export type Route =
   | { area: 'vat'; ziffer?: string }
   | { area: 'codes'; code?: string }
   | { area: 'reports'; report: Report; account?: string }
+  /** Eigene Berichte: the reports the owner saved (knowledge/reports/<slug>.report.yaml), one of them by its slug. */
+  | { area: 'reports'; report: 'custom'; saved?: string }
   | { area: 'close'; step?: string }
   /** An unknown section stays in the route, so the area can say it does not exist (urls.md rule 5). */
   | { area: 'company'; section: CompanySection | (string & {}) }
@@ -116,7 +118,7 @@ function segmentsOf(r: Route): Array<string | undefined> {
     case 'journal': return ['journal', r.id];
     case 'vat': return ['vat', r.ziffer];
     case 'codes': return ['vat', 'codes', r.code];
-    case 'reports': return ['reports', r.report, r.account];
+    case 'reports': return r.report === 'custom' ? ['reports', 'custom', r.saved] : ['reports', r.report, r.account];
     case 'close': return ['close', r.step];
     case 'company': return ['company', r.section];
     case 'invoices': return ['invoices', r.view === 'list' ? undefined : r.view, r.id];
@@ -132,7 +134,7 @@ function routeOf([a, b, c, d]: string[]): Route {
     case 'payments': return defined({ area: 'bank', payment: b });
     case 'journal': return defined({ area: 'journal', id: b });
     case 'vat': return b === 'codes' ? defined({ area: 'codes', code: c }) : defined({ area: 'vat', ziffer: b });
-    case 'reports': return isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
+    case 'reports': return b === 'custom' ? defined({ area: 'reports', report: 'custom', saved: c }) : isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
     case 'close': return defined({ area: 'close', step: b });
     case 'company': return { area: 'company', section: b ?? 'profile' };
     case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });

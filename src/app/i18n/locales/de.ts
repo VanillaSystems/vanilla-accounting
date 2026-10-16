@@ -3359,6 +3359,23 @@ export const messages = {
   'assistant.report.fileFailed': 'Datei nicht erstellt: {why}',
   'custom.save': 'Bericht speichern',
   'custom.tab': 'Eigene Berichte',
+  'custom.new': 'Neuer Bericht',
+  'custom.empty': 'Noch keine eigenen Berichte. Einen macht «Neuer Bericht», oder bitte die KI in Worten darum («alle Spesen im Quartal nach Konto») und drück auf ihrer Karte «Bericht speichern».',
+  'custom.ownPeriod': 'Eigener Zeitraum · {period}',
+  'custom.pagePeriod': 'Zeitraum der Seite · {period}',
+  'custom.periodLabel': 'Zeitraum',
+  'custom.edit': 'Bearbeiten',
+  'custom.delete': 'Löschen',
+  'custom.deleted': '«{title}» gelöscht',
+  'custom.savedToast': '«{title}» gespeichert, unter Eigene Berichte und in Änderungen',
+  'custom.savedCard': 'Gespeichert unter Eigene Berichte',
+  'custom.show': 'Zeigen',
+  'custom.undo': 'Rückgängig',
+  'custom.undone': 'Zurückgenommen',
+  'custom.unreadable': 'Nicht lesbar: {why}',
+  'custom.select': 'Einen Bericht wählen, oder «Neuer Bericht».',
+  'custom.running': 'Wird aus den Büchern gerechnet …',
+  'custom.sections': { one: '{n} Abschnitt', other: '{n} Abschnitte' },
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

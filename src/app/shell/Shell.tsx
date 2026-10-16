@@ -304,7 +304,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
           books={books}
           company={workspace?.company.name}
           page={period}
-          account={loc.route.area === 'reports' ? accountOfRoute(loc.route) : undefined}
+          account={loc.route.area === 'reports' && loc.route.report !== 'custom' ? accountOfRoute(loc.route) : undefined}
           quarters={quarters}
           toast={toast}
           onClose={() => { setOverlay(null); focusSelectedRow(); }}

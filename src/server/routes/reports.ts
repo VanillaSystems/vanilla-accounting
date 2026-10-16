@@ -4,6 +4,8 @@
  *
  *   POST /api/reports/run    { spec, period? } → { result }
  *   POST /api/reports/file   { spec, period?, format: pdf | csv, language } → the file
+ *   GET  /api/reports/saved  { reports }: knowledge/reports/*.report.yaml (src/reports/saved.ts)
+ *   POST /api/reports/saved  { kind: save, spec, slug? } | { kind: delete, slug } | { kind: restore, slug, text, now } → a SavedWrite
  */
 import { Router } from 'express';
 import { localToday, parsePeriod, type Period } from '../../accounting/periods.js';
@@ -17,6 +19,7 @@ import { checkSpec, parseSpec, type ReportRefusal, type ReportSpec } from '../..
 import { runReport, type ReportResult } from '../../reports/run.js';
 import { reportCsv, reportFileName, reportHtml } from '../../reports/files.js';
 import { refusalText } from '../../reports/words.js';
+import { deleteReport, isSlug, listSaved, restoreReport, saveReport } from '../../reports/saved.js';
 import { RequestError, WS, readBooks } from '../books.js';
 
 export const router = Router();
@@ -75,4 +78,30 @@ router.post('/api/reports/file', async (req, res) => {
   res.setHeader('Content-Type', b.format === 'pdf' ? 'application/pdf' : 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(name)}`);
   res.end(data);
+});
+
+router.get('/api/reports/saved', (_req, res) => {
+  res.json({ reports: listSaved(WS) });
+});
+
+const text = (v: unknown): v is string | null => v === null || typeof v === 'string';
+
+router.post('/api/reports/saved', (req, res) => {
+  const b = (req.body ?? {}) as { kind?: unknown; spec?: unknown; slug?: unknown; text?: unknown; now?: unknown };
+  if (b.slug !== undefined && !isSlug(b.slug)) throw new RequestError(400, 'slug: Kleinbuchstaben, Ziffern und Bindestriche.');
+  if (b.kind === 'save') { res.json(saveReport(WS, specOf(b.spec), b.slug as string | undefined)); return; }
+  if (!isSlug(b.slug)) throw new RequestError(400, 'slug fehlt.');
+  if (b.kind === 'delete') {
+    const out = deleteReport(WS, b.slug);
+    if (!out) throw new RequestError(404, 'Diesen Bericht gibt es nicht mehr.');
+    res.json(out);
+    return;
+  }
+  if (b.kind === 'restore' && text(b.text) && text(b.now)) {
+    const out = restoreReport(WS, b.slug, b.text, b.now);
+    if (!out) throw new RequestError(409, 'Der Bericht wurde seither geändert: nichts zurückgenommen.');
+    res.json(out);
+    return;
+  }
+  throw new RequestError(400, 'Unbekannter Befehl.');
 });

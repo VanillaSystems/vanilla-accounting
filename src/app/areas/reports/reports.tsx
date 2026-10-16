@@ -6,7 +6,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import './reports.css';
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
-import { REPORTS, type Report, type RouteOf } from '../../shell/route.js';
+import type { Report, RouteOf } from '../../shell/route.js';
+import { REPORT_LABEL, Tabs } from './Tabs.js';
+import { CustomDetail, CustomList, customKeys } from './custom/Custom.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -26,9 +28,9 @@ import { accountName, accountOfRoute, routeAccount } from './view.js';
 import { missingOpenings } from '../../../accounting/opening-balance.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 
-type Props = AreaProps<RouteOf<'reports'>>;
-
-const REPORT_LABEL = { income: 'tab.incomeStatement', balance: 'tab.balanceSheet', trial: 'tab.trialBalance' } as const satisfies Record<Report, string>;
+/** The route of one of the books' three reports (not Eigene Berichte). */
+export type BooksRoute = Extract<RouteOf<'reports'>, { report: Report }>;
+type Props = AreaProps<BooksRoute>;
 const SUM_LABEL = {
   grossProfit: 'income.grossProfit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
   totalAssets: 'balance.totalAssets', totalLiabilities: 'balance.totalLiabilities',
@@ -109,15 +111,12 @@ function List(props: Props) {
   return (
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit} />
-      <div className="counts" role="tablist" aria-label={t('reports.report')}>
-        {REPORTS.map((r) => (
-          <button key={r} type="button" role="tab" aria-selected={r === route.report} className={r === route.report ? 'on' : ''} onClick={() => nav.select({ area: 'reports', report: r })}>{t(REPORT_LABEL[r])}</button>
-        ))}
+      <Tabs route={route} nav={nav}>
         <span className="rnote">{switched && q ? `→ ${t(REPORT_LABEL[switched])}` : view.asOf ? t('balance.asOf', { date: formatDate(view.asOf) }) : ''}</span>
         <button type="button" className={`rall${all ? ' on' : ''}`} aria-pressed={all} title={all ? t('reports.onlyWithAmountTip') : t('reports.allAccountsTip')} onClick={toggleAll}>
           {all ? t('reports.allAccounts') : t('reports.onlyWithAmount')}
         </button>
-      </div>
+      </Tabs>
       <label className="search rsearch">
         {ICONS.search}
         <span className="sr">{t('reports.searchLabel')}</span>
@@ -217,25 +216,27 @@ export const reports: Area<RouteOf<'reports'>> = {
   id: 'reports',
   label: () => t('area.reports'),
   dock: { key: 'r', icon: ICONS.reports, tip: () => t('area.reports.tip') },
-  List,
-  Detail,
+  List: (p) => (p.route.report === 'custom' ? <CustomList {...p} route={p.route} /> : <List {...p} route={p.route} />),
+  Detail: (p) => (p.route.report === 'custom' ? <CustomDetail {...p} route={p.route} /> : <Detail {...p} route={p.route} />),
   legend,
   wide: true,
-  title: (r) => { const a = accountOfRoute(r); return a === undefined ? t(REPORT_LABEL[r.report]) : a === NO_ACCOUNT ? t('reports.noAccount') : `${a} ${accountName(a)}`; },
+  title: (r) => { if (r.report === 'custom') return t('custom.tab'); const a = accountOfRoute(r); return a === undefined ? t(REPORT_LABEL[r.report]) : a === NO_ACCOUNT ? t('reports.noAccount') : `${a} ${accountName(a)}`; },
   keys(e, p) {
+    if (p.route.report === 'custom') return customKeys(e, { ...p, route: p.route });
+    const route = p.route;
     const d = moveKey(e);
     if (d) {
-      const a = accountOfRoute(p.route);
+      const a = accountOfRoute(route);
       const i = a === undefined ? -1 : listed.ids.indexOf(a);
       const next = listed.ids[Math.min(listed.ids.length - 1, Math.max(0, i + d))];
-      if (next !== undefined) p.nav.select({ area: 'reports', report: p.route.report, account: routeAccount(next) });
+      if (next !== undefined) p.nav.select({ area: 'reports', report: route.report, account: routeAccount(next) });
       return true;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     if (e.key === 'Escape' && p.query.q) { p.nav.setQuery({ q: undefined }); return true; }
     if (e.key === 'd') { document.querySelector<HTMLElement>('[data-dlpop]')?.click(); return true; }
     if (e.key !== 'Enter') return false;
-    const a = accountOfRoute(p.route);
+    const a = accountOfRoute(route);
     const first = a === undefined ? undefined : ledgerOf(p.books, a, p.period, getAccountMap()).rows[0]?.entry;
     if (!first) return false;
     p.nav.go(entryAt(first, p.period));

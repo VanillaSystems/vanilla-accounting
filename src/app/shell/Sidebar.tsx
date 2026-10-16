@@ -27,6 +27,8 @@ import { ReportView } from '../areas/reports/custom/ReportView.js';
 import { spanOf } from '../../reports/words.js';
 import { specData } from '../../reports/spec.js';
 import type { ReportResult } from '../../reports/run.js';
+import type { SavedWrite } from '../../reports/saved.js';
+import { reloadSaved, undoWrite } from '../areas/reports/custom/Custom.js';
 import { builtInTexts } from '../../invoices/texts.js';
 import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
@@ -145,10 +147,19 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
 
 /**
  * A report the AI wrote as a spec, run by the app (src/reports/): its title and period, its first
- * rows and every total, «PDF» and «CSV» of the whole report.
+ * rows and every total, «PDF» and «CSV» of the whole report, «Bericht speichern» into Eigene
+ * Berichte with its «Rückgängig».
  */
 function ReportCard({ result, period, onGo }: { result: ReportResult; period?: string; onGo(route: Route): void }) {
   const [error, setError] = useState('');
+  const [saved, setSaved] = useState<SavedWrite>();
+  const [undone, setUndone] = useState(false);
+  const save = () => {
+    setError('');
+    api.saveReport(specData({ ...result.spec, period: period ?? result.spec.period })).then((w) => { setSaved(w); setUndone(false); return reloadSaved(); })
+      .catch((e: unknown) => setError(errorText(e)));
+  };
+  const undo = () => { if (saved) undoWrite(saved).then(() => setUndone(true), (e: unknown) => setError(errorText(e))); };
   const file = (format: 'pdf' | 'csv') => {
     setError('');
     postDownload('/api/reports/file', { spec: specData(result.spec), period: period ?? result.spec.period, format, language: language() }, `report.${format}`)
@@ -162,6 +173,13 @@ function ReportCard({ result, period, onGo }: { result: ReportResult; period?: s
       <span className="ruleacts">
         <button type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</button>
         <button type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</button>
+        {!saved || undone ? <button type="button" className="btn primary" data-testid="report-save" onClick={save}>{t('custom.save')}</button> : (
+          <>
+            <span className="m" data-testid="report-saved">{t('custom.savedCard')}</span>
+            <button type="button" className="linkbtn" onClick={() => onGo({ area: 'reports', report: 'custom', saved: saved.slug })}>{t('custom.show')}</button>
+            <button type="button" className="linkbtn" onClick={undo}>{t('custom.undo')}</button>
+          </>
+        )}
       </span>
       {error ? <span className="warnline">{error}</span> : null}
     </div>

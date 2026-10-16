@@ -1,6 +1,6 @@
 /** One account's ledger for the period: opening, debits, credits and closing, then every entry with its running balance. */
 import { useMemo } from 'react';
-import type { RouteOf } from '../../shell/route.js';
+import type { Report, RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -11,7 +11,7 @@ import { NO_ACCOUNT, ledgerOf, reportOfAccount } from './model.js';
 import { accountName, accountOfRoute } from './view.js';
 import { DownloadMenu } from '../export/DownloadMenu.js';
 
-type Props = AreaProps<RouteOf<'reports'>>;
+type Props = AreaProps<Extract<RouteOf<'reports'>, { report: Report }>>;
 
 export function Detail({ route, books, period, nav }: Props) {
   const account = accountOfRoute(route);

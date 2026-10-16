@@ -39,7 +39,7 @@ function pageItems(route: Route): Selection {
     case 'bank': return { payments: ['csv'], statements: ['orig'] };
     case 'journal': case 'codes': return { journal: ['csv'] };
     case 'vat': return { vat: ['pdf', 'csv'] };
-    case 'reports': return { [route.report]: ['pdf', 'csv'] };
+    case 'reports': return route.report === 'custom' ? {} : { [route.report]: ['pdf', 'csv'] };
     default: return {};
   }
 }

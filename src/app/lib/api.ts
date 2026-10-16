@@ -39,6 +39,8 @@ import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
 import { refusalText } from '../../reports/words.js';
+import type { ReportResult } from '../../reports/run.js';
+import type { SavedReport, SavedWrite } from '../../reports/saved.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -286,6 +288,11 @@ export const api = {
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
+  runReport: (spec: unknown, period?: string) => request<{ result: ReportResult }>('POST', '/api/reports/run', { spec, period }).then((r) => r.result),
+  savedReports: () => request<{ reports: SavedReport[] }>('GET', '/api/reports/saved').then((r) => r.reports),
+  saveReport: (spec: unknown, slug?: string) => request<SavedWrite>('POST', '/api/reports/saved', { kind: 'save', spec, slug }),
+  deleteReport: (slug: string) => request<SavedWrite>('POST', '/api/reports/saved', { kind: 'delete', slug }),
+  restoreReport: (w: SavedWrite) => request<SavedWrite>('POST', '/api/reports/saved', { kind: 'restore', slug: w.slug, text: w.before, now: w.after }),
   rules: () => request<RulesView>('GET', '/api/rules'),
   ruleCommand: (c: RuleCommand) => request<RuleCommandResult>('POST', '/api/rules', c),
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
