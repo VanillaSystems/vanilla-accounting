@@ -1,0 +1,16 @@
+# A private client: no public file, so this one is the whole business.
+id: beispiel-immobilien
+name: Beispiel Immobilien AG
+match:
+  tx: ["beispiel immobilien"]
+  uid: ["CHE-579.135.791"]
+accounts: ["3400"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-immobilien-unterhalt
+        when: the monthly payment of Beispiel Immobilien AG for the maintenance mandate
+        then: '3400 Ertrag Schreinerarbeiten, F1 (a Swiss client: the net tax rate on the gross amount, never V0)'
+        source: correction 2026-H1-immobilien-inland, decision 2026-07-10
+    precedents: []

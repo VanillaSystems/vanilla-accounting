@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 1088 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Raiffeisenbank Beispiel) Tj
+T* (Kontoauszug 01.06.2026 - 30.06.2026) Tj
+T* (Salon Beispiel, Marktgasse 3, 8400 Winterthur) Tj
+T* (IBAN CH0080808000000000004, Währung CHF) Tj
+T* () Tj
+T* (Anfangssaldo 01.06.2026: 5’529.95) Tj
+T* (01.06.2026 | Bareinzahlung | 1’706.75 | Ref. 90000000044) Tj
+T* (01.06.2026 | Dauerauftrag Miete Salon | -1’450.00 | Ref. 90000000045) Tj
+T* (09.06.2026 | Zahlung Beispiel Haarkosmetik AG | -378.10 | Ref. 90000000046) Tj
+T* (12.06.2026 | Zahlung Stadtwerk Beispiel | -232.60 | Ref. 90000000047) Tj
+T* (15.06.2026 | Bareinzahlung | 1’291.45 | Ref. 90000000048) Tj
+T* (18.06.2026 | eBill Muster Telecom AG | -59.00 | Ref. 90000000049) Tj
+T* (22.06.2026 | SumUp Auszahlung | 1’082.50 | Ref. 90000000050) Tj
+T* (26.06.2026 | Privatbezug Bella Beispiel | -2’500.00 | Ref. 90000000051) Tj
+T* (29.06.2026 | TWINT Gutschrift | 565.30 | Ref. 90000000052) Tj
+T* (30.06.2026 | Bareinzahlung | 1’705.60 | Ref. 90000000053) Tj
+T* (30.06.2026 | Kontoführungsgebühren | -8.00 | Ref. 90000000054) Tj
+T* (Schlusssaldo 30.06.2026: 7’253.85) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1477
+%%EOF

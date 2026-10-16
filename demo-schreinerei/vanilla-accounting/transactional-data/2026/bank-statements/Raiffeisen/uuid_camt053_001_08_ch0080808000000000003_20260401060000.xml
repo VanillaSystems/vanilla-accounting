@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>MSG-STM-RAIFFEISEN-2026-01</MsgId>
+      <CreDtTm>2026-04-01T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>STM-RAIFFEISEN-2026-01</Id>
+      <CreDtTm>2026-04-01T06:00:00</CreDtTm>
+      <FrToDt><FrDtTm>2026-01-01T00:00:00</FrDtTm><ToDtTm>2026-03-31T23:59:59</ToDtTm></FrToDt>
+      <Acct>
+        <Id><IBAN>CH0080808000000000003</IBAN></Id>
+        <Ccy>CHF</Ccy>
+        <Ownr><Nm>Schreinerei Beispiel GmbH</Nm></Ownr>
+        <Svcr><FinInstnId><Nm>Raiffeisenbank Beispiel</Nm></FinInstnId></Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">31000.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-01-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">16939.60</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-03-31</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="CHF">2300.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-01</Dt></BookgDt>
+        <ValDt><Dt>2026-01-01</Dt></ValDt>
+        <AcctSvcrRef>90000000001</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2300.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL LIEGENSCHAFTEN AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Miete Werkstatt Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Miete Werkstatt</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">904.65</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-08</Dt></BookgDt>
+        <ValDt><Dt>2026-01-08</Dt></ValDt>
+        <AcctSvcrRef>90000000002</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">904.65</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL HOLZHANDEL AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000040002026012</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung HH-2026-01</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Beispiel Holzhandel AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">29.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-12</Dt></BookgDt>
+        <ValDt><Dt>2026-01-12</Dt></ValDt>
+        <AcctSvcrRef>90000000003</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">29.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>EXAMPLE TOOLS INC PORTLAND</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>EXAMPLE TOOLS INC PORTLAND</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte EXAMPLE TOOLS INC PORTLAND</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">317.35</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-14</Dt></BookgDt>
+        <ValDt><Dt>2026-01-14</Dt></ValDt>
+        <AcctSvcrRef>90000000004</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">317.35</Amt>
+            <RltdPties><Cdtr><Pty><Nm>GARAGE BEISPIEL AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>GARAGE BEISPIEL AG ST. GALLEN</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte GARAGE BEISPIEL AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">85.70</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-19</Dt></BookgDt>
+        <ValDt><Dt>2026-01-19</Dt></ValDt>
+        <AcctSvcrRef>90000000005</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">85.70</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026013</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202601</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">3100.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-19</Dt></BookgDt>
+        <ValDt><Dt>2026-01-19</Dt></ValDt>
+        <AcctSvcrRef>90000000006</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">3100.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Versicherungen AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000630020263</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Prämienrechnung 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Versicherungen AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">3567.70</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-22</Dt></BookgDt>
+        <ValDt><Dt>2026-01-22</Dt></ValDt>
+        <AcctSvcrRef>90000000007</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">3567.70</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL IMMOBILIEN AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-011</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-011</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Immobilien AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">5803.20</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-26</Dt></BookgDt>
+        <ValDt><Dt>2026-01-26</Dt></ValDt>
+        <AcctSvcrRef>90000000008</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">5803.20</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MARCO BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Lohn Januar 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Nettolohn Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Lohnzahlung Marco Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2300.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-02</Dt></BookgDt>
+        <ValDt><Dt>2026-02-02</Dt></ValDt>
+        <AcctSvcrRef>90000000009</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2300.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL LIEGENSCHAFTEN AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Miete Werkstatt Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Miete Werkstatt</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1377.90</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-09</Dt></BookgDt>
+        <ValDt><Dt>2026-02-09</Dt></ValDt>
+        <AcctSvcrRef>90000000010</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1377.90</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL HOLZHANDEL AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000040002026028</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung HH-2026-02</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Beispiel Holzhandel AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">29.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-11</Dt></BookgDt>
+        <ValDt><Dt>2026-02-11</Dt></ValDt>
+        <AcctSvcrRef>90000000011</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">29.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>EXAMPLE TOOLS INC PORTLAND</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>EXAMPLE TOOLS INC PORTLAND</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte EXAMPLE TOOLS INC PORTLAND</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1420.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-12</Dt></BookgDt>
+        <ValDt><Dt>2026-02-12</Dt></ValDt>
+        <AcctSvcrRef>90000000012</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1420.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MUSTER BESCHLAEGE GMBH</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020261183</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MB-2026-118</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Beschläge GmbH</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">280.90</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-16</Dt></BookgDt>
+        <ValDt><Dt>2026-02-16</Dt></ValDt>
+        <AcctSvcrRef>90000000013</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">280.90</Amt>
+            <RltdPties><Cdtr><Pty><Nm>GARAGE BEISPIEL AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>GARAGE BEISPIEL AG ST. GALLEN</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte GARAGE BEISPIEL AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">87.95</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-18</Dt></BookgDt>
+        <ValDt><Dt>2026-02-18</Dt></ValDt>
+        <AcctSvcrRef>90000000014</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">87.95</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026029</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202602</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">4420.95</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-23</Dt></BookgDt>
+        <ValDt><Dt>2026-02-23</Dt></ValDt>
+        <AcctSvcrRef>90000000015</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">4420.95</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL IMMOBILIEN AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-021</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-021</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Immobilien AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">5803.20</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-25</Dt></BookgDt>
+        <ValDt><Dt>2026-02-25</Dt></ValDt>
+        <AcctSvcrRef>90000000016</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">5803.20</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MARCO BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Lohn Februar 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Nettolohn Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Lohnzahlung Marco Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2300.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-02</Dt></BookgDt>
+        <ValDt><Dt>2026-03-02</Dt></ValDt>
+        <AcctSvcrRef>90000000017</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2300.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL LIEGENSCHAFTEN AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Miete Werkstatt März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Miete Werkstatt</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2591.20</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-09</Dt></BookgDt>
+        <ValDt><Dt>2026-03-09</Dt></ValDt>
+        <AcctSvcrRef>90000000018</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2591.20</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL HOLZHANDEL AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000040002026033</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung HH-2026-03</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Beispiel Holzhandel AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">29.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-11</Dt></BookgDt>
+        <ValDt><Dt>2026-03-11</Dt></ValDt>
+        <AcctSvcrRef>90000000019</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">29.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>EXAMPLE TOOLS INC PORTLAND</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>EXAMPLE TOOLS INC PORTLAND</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte EXAMPLE TOOLS INC PORTLAND</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">248.45</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-16</Dt></BookgDt>
+        <ValDt><Dt>2026-03-16</Dt></ValDt>
+        <AcctSvcrRef>90000000020</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">248.45</Amt>
+            <RltdPties><Cdtr><Pty><Nm>GARAGE BEISPIEL AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>GARAGE BEISPIEL AG ST. GALLEN</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Debitkarte GARAGE BEISPIEL AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">12400.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-16</Dt></BookgDt>
+        <ValDt><Dt>2026-03-16</Dt></ValDt>
+        <AcctSvcrRef>90000000021</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">12400.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>MUSTER HANS UND VRENI</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-022</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-022</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Familie Muster</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">83.85</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-18</Dt></BookgDt>
+        <ValDt><Dt>2026-03-18</Dt></ValDt>
+        <AcctSvcrRef>90000000022</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">83.85</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026037</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202603</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">3064.50</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-23</Dt></BookgDt>
+        <ValDt><Dt>2026-03-23</Dt></ValDt>
+        <AcctSvcrRef>90000000023</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">3064.50</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL IMMOBILIEN AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Ustrd>Rechnung 2026-031</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-031</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Immobilien AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">5803.20</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-25</Dt></BookgDt>
+        <ValDt><Dt>2026-03-25</Dt></ValDt>
+        <AcctSvcrRef>90000000024</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">5803.20</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MARCO BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Ustrd>Lohn März 2026</Ustrd></RmtInf>
+            <AddtlTxInf>Nettolohn März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Lohnzahlung Marco Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2604.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-26</Dt></BookgDt>
+        <ValDt><Dt>2026-03-26</Dt></ValDt>
+        <AcctSvcrRef>90000000025</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2604.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Ausgleichskasse Muster</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000007700202615</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Akonto AHV Q1 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Ausgleichskasse Muster</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">15.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-31</Dt></BookgDt>
+        <ValDt><Dt>2026-03-31</Dt></ValDt>
+        <AcctSvcrRef>90000000026</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">15.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Raiffeisenbank Beispiel</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Kontoführung 1. Quartal</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Kontoführungsgebühren</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

@@ -1,0 +1,15 @@
+# The products supplier: its receipts show 8.1 % MWST, which a firm that is not registered cannot deduct.
+id: beispiel-haarkosmetik
+name: Beispiel Haarkosmetik AG
+match:
+  tx: ["beispiel haarkosmetik"]
+  uid: ["CHE-753.951.246"]
+accounts: ["4200", "4400"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-haarkosmetik-produkte
+        then: { account: "4200", vat: none }
+        source: decision 2026-01-12
+    precedents: []

@@ -28,6 +28,8 @@ processes/**
 reference/**
 demo/**
 demo-consulting/**
+demo-coiffeur/**
+demo-schreinerei/**
 tools/demo/**
 tools/cases/**
 tools/vat-codes/**

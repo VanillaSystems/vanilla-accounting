@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "config": {
+    "closedThrough": "2026-06-30",
+    "openingBalances": {
+      "2026": {
+        "1020": 31000,
+        "1500": 24000,
+        "1530": 18000,
+        "2800": 20000,
+        "2970": 53000
+      }
+    },
+    "openingBalancesNative": {
+      "2026": {}
+    },
+    "vatAdjustments": [],
+    "correctionCases": [
+      {
+        "id": "2026-H1-immobilien-inland",
+        "period": "2026-H1",
+        "title": "Inlandumsatz Beispiel Immobilien als Ausfuhr deklariert",
+        "wrong": "Die Juni-Zahlung der Beispiel Immobilien AG (St. Gallen) für die Rechnung 2026-061 lief mit V0 (Ziffer 220) statt F1: CHF 3’480.00 ohne Steuer deklariert.",
+        "fix": "Storno -V0 und Neubuchung F1 über je CHF 3’480.00 vom 10.07.2026 mit corrects 2026-H1, Steuer CHF 156.60 nachdeklariert; die Buchung vom Juni bleibt wie eingereicht.",
+        "originalEntryIds": [
+          "13ce8ebaa2feed1d"
+        ],
+        "correctionEntryIds": [
+          "83cda664ca63df8f",
+          "6647c7006f9e53aa"
+        ],
+        "source": "receipts/20260603-schreinerei-beispiel-rechnung-2026-061.pdf"
+      }
+    ]
+  }
+}

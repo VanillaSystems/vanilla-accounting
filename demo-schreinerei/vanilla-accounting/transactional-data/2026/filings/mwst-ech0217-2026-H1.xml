@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<eCH-0217:VATDeclaration
+    xmlns:eCH-0217="http://www.ech.ch/xmlns/eCH-0217/2"
+    xmlns:eCH-0058="http://www.ech.ch/xmlns/eCH-0058/5">
+  <eCH-0217:generalInformation>
+    <eCH-0217:uid>CHE135246357</eCH-0217:uid>
+    <eCH-0217:organisationName>Schreinerei Beispiel GmbH</eCH-0217:organisationName>
+    <eCH-0217:generationTime>2026-08-20T09:00:00</eCH-0217:generationTime>
+    <eCH-0217:reportingPeriodFrom>2026-01-01</eCH-0217:reportingPeriodFrom>
+    <eCH-0217:reportingPeriodTill>2026-06-30</eCH-0217:reportingPeriodTill>
+    <eCH-0217:typeOfSubmission>1</eCH-0217:typeOfSubmission>
+    <eCH-0217:formOfReporting>2</eCH-0217:formOfReporting>
+    <eCH-0217:businessReferenceId>MWST-2026-H1</eCH-0217:businessReferenceId>
+    <eCH-0217:sendingApplication>
+      <eCH-0058:manufacturer>Vanilla Accounting</eCH-0058:manufacturer>
+      <eCH-0058:product>Vanilla Accounting</eCH-0058:product>
+      <eCH-0058:productVersion>1.0</eCH-0058:productVersion>
+    </eCH-0217:sendingApplication>
+  </eCH-0217:generalInformation>
+  <eCH-0217:turnoverComputation>
+    <eCH-0217:totalConsideration>41103.35</eCH-0217:totalConsideration>
+    <eCH-0217:suppliesToForeignCountries>3480.00</eCH-0217:suppliesToForeignCountries>
+  </eCH-0217:turnoverComputation>
+  <eCH-0217:simpleTaxRateMethod>
+    <eCH-0217:suppliesPerTaxRate>
+      <eCH-0217:activityId>99901</eCH-0217:activityId>
+      <eCH-0217:taxRate>4.5</eCH-0217:taxRate>
+      <eCH-0217:turnover>37623.35</eCH-0217:turnover>
+    </eCH-0217:suppliesPerTaxRate>
+    <eCH-0217:acquisitionTax>
+      <eCH-0217:taxRate>8.1</eCH-0217:taxRate>
+      <eCH-0217:turnover>174.00</eCH-0217:turnover>
+    </eCH-0217:acquisitionTax>
+  </eCH-0217:simpleTaxRateMethod>
+  <eCH-0217:payableTax>1707.14</eCH-0217:payableTax>
+</eCH-0217:VATDeclaration>

@@ -6,6 +6,7 @@
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
 import type { Address, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, VatRate } from '../../src/invoices/model.js';
+import type { VatSetup } from '../../src/workspace/vat-setup.js';
 
 export const YEAR = '2026';
 
@@ -70,8 +71,8 @@ export interface Scenario {
   manual: ManualEntry[];
   /** The cases that explain the filed quarter's Korrekturabrechnung; entry ids are given as leg/entry keys. */
   correctionCases: CorrectionCase[];
-  /** The bank payment of a filed quarter's tax, once its figure is known. */
-  taxPayment(payable: number): Payment;
+  /** The bank payment of a filed period's tax, once its figure is known; a firm that files no return has none. */
+  taxPayment?(payable: number): Payment;
   /** The bank payment of the filed quarter's Korrekturabrechnung (0535): what the corrections add to its tax. */
   correctionPayment?(difference: number): Payment;
 }
@@ -104,8 +105,15 @@ export interface Demo {
   /** The directory under the app root, which is also its VANILLA_WORKSPACE shortcut. */
   dir: string;
   company: Company;
+  /** The firm's VAT setup; absent: registered, effective method, quarterly (src/workspace/vat-setup.ts). */
+  vat?: VatSetup;
+  /** The legal form the manifest names; absent: GmbH. */
+  legalForm?: 'GmbH' | 'AG' | 'Einzelfirma';
   closedThrough: string;
-  filed: { period: QuarterKey; generationTime: string };
+  /** The period filed on `closedThrough`, whose return and seal the demo ships; absent (a firm without returns): only the seal of the closed period. */
+  filed?: { period: QuarterKey; generationTime: string };
+  /** When the closed period was sealed, for a firm without returns (`filed` carries it otherwise). */
+  sealedAt?: string;
   banks: Record<string, StatementBank>;
   /** The owner's current account: the manifest's manual account, where PAID_PRIVATELY payments book. */
   ownerAccount: { account: string; label: string };

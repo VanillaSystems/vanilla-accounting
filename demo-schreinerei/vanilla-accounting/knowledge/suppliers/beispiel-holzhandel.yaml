@@ -1,0 +1,15 @@
+# The wood supplier: its receipts show 8.1 % MWST, which this firm does not deduct (Saldosteuersatz).
+id: beispiel-holzhandel
+name: Beispiel Holzhandel AG
+match:
+  tx: ["beispiel holzhandel"]
+  uid: ["CHE-246.802.469"]
+accounts: ["4000"]
+
+steps:
+  booking.guide.yaml#classify:
+    rules:
+      - id: demo-holzhandel-material
+        then: { account: "4000", vat: none }
+        source: decision 2026-01-10
+    precedents: []
