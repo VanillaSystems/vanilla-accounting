@@ -13,7 +13,7 @@ import { parseIban } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
-import { WorkspaceError } from './workspace.js';
+import { WorkspaceError, WorkspaceRefusal } from './workspace.js';
 
 /** A text field set, or removed with null; absent: unchanged. */
 type Edit<T> = T | null | undefined;
@@ -78,7 +78,7 @@ function set(doc: Document, path: Array<string | number>, value: unknown): void 
 /** An IBAN as the manifest keeps it: compact, upper case, checked. */
 function iban(text: Edit<string>, where: string): Edit<string> {
   if (text === undefined || text === null || text.trim() === '') return text === undefined ? undefined : null;
-  return parseIban(text) ?? (() => { throw new WorkspaceError(`${where}: "${text}" is not an IBAN (wrong length or check digits)`); })();
+  return parseIban(text) ?? (() => { throw new WorkspaceRefusal(`${where}: "${text}" is not an IBAN (wrong length or check digits)`, { code: 'iban', params: { bank: where.replace(/^bankAccounts /, ''), detail: text } }); })();
 }
 
 /** The manifest text with `patch` applied; throws a WorkspaceError for a change the app could not open. */

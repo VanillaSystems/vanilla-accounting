@@ -221,10 +221,13 @@ function InvoicingSetup({ ws, nav, canEdit, onDone }: { ws: CompanyInfo; nav: Na
   const banks = ws.bankAccounts.filter((a) => a.bank !== 'manual');
   const names = getAccountMap();
   const revenue = Object.keys(names).filter((n) => n.startsWith('3')).sort();
-  const [account, setAccount] = useState((banks.find((a) => a.currency === 'CHF') ?? banks[0])?.account ?? '');
+  const first = (banks.find((a) => a.currency === 'CHF') ?? banks[0])?.account ?? '';
+  const [account, setAccountOnly] = useState(first);
   const [revenueAccount, setRevenue] = useState(revenue.find((n) => n === '3400') ?? revenue[0] ?? '');
   const [days, setDays] = useState('30');
-  const [iban, setIban] = useState('');
+  // The IBAN the account's statements show is offered; the field asks only for one the books do not know.
+  const [iban, setIban] = useState(ws.statementIbans?.[first] ?? '');
+  const setAccount = (a: string) => { setAccountOnly(a); setIban(ws.statementIbans?.[a] ?? ''); };
   const [busy, setBusy] = useState(false);
   if (!banks.length) return <p className="m">{t('invoiceLayout.needsBank')}</p>;
   async function setup() {

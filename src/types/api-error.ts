@@ -1,4 +1,5 @@
 import type { AuditSnapshot } from '../audit/sources.js';
+import type { StatementProblem } from '../accounting/bank-accounts.js';
 import type { MailRefusal } from '../invoices/mail.js';
 import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
@@ -53,7 +54,11 @@ export type ApiRefusal =
   | { code: 'notInTrash' }
   | { code: 'deletedAgain' }
   | { code: 'alreadyBack' }
-  | { code: 'statement'; params: { reason: StatementRefusal; detail?: string; unknown?: UnknownAccount } }
+  | { code: 'statement'; params: StatementParams }
+  /** A bank account's IBAN typed in Firma › Bankkonten or the invoicing setup fails the length or check-digit test. */
+  | { code: 'iban'; params: { bank: string; detail: string } }
+  /** The account invoices are paid to must keep an IBAN (it is printed on them). */
+  | { code: 'payToNeedsIban'; params: { bank: string; currency: string } }
   | { code: 'noBrowser' }
   | { code: 'noClaude' }
   | { code: 'noWorkspace' }
@@ -113,7 +118,20 @@ export type ClassifyRefusal =
 /** A statement's account the manifest lacks: its IBAN and currency, and the bank's name when the statement gives it. */
 export interface UnknownAccount { iban: string; currency: string; bankName?: string }
 
-export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate';
+export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments';
+
+/**
+ * Why a statement was refused (nothing written). `account`: it lands on no bank account, `problem`
+ * says why in detail and `unknown` names the account the UI offers to add. `filedPayments`: it
+ * holds payments dated in a filed period that the books lack (`closed`).
+ */
+export interface StatementParams {
+  reason: StatementRefusal;
+  detail?: string;
+  unknown?: UnknownAccount;
+  problem?: StatementProblem;
+  closed?: { n: number; through: string; refs: string[] };
+}
 
 /** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */
 export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser'; missing?: Missing[] };

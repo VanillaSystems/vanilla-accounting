@@ -349,7 +349,8 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const [adding, setAdding] = useState(!!draft);
   const key = (b: { bank: string; currency: string }) => `${b.bank} ${b.currency}`;
   const [f, setF] = useState<Record<string, { label: string; iban: string }>>({});
-  const start = () => { setF(Object.fromEntries(ws.bankAccounts.map((b) => [key(b), { label: b.label, iban: b.iban ?? '' }]))); setEdit(true); };
+  // An account without an IBAN in the books starts with the one its statements show: «Speichern» adopts it.
+  const start = () => { setF(Object.fromEntries(ws.bankAccounts.map((b) => [key(b), { label: b.label, iban: b.iban ?? ws.statementIbans?.[b.account] ?? '' }]))); setEdit(true); };
   async function save(e: FormEvent) {
     e.preventDefault();
     const changed = ws.bankAccounts.filter((b) => f[key(b)].label.trim() !== b.label || f[key(b)].iban.replace(/\s/g, '').toUpperCase() !== (b.iban ?? ''));

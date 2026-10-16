@@ -9,16 +9,21 @@
  * ledger account.
  */
 import { readFileSync } from 'node:fs';
-import { accountForStatement, type StatementMatch } from '../accounting/bank-accounts.js';
+import { accountForStatement, unknownOf, type StatementMatch, type StatementProblem } from '../accounting/bank-accounts.js';
+import { parseIban } from './banks.js';
 import { readCamt, type CamtMessage, type CamtStatement } from '../providers/camt053/camt053.js';
 import { filesOfPart, type Workspace } from './workspace.js';
+import type { UnknownAccount } from '../types/api-error.js';
+
+/** An IBAN as written, compact and upper case, for telling two accounts apart even when a check digit is off. */
+export const compactIban = (raw: string): string => raw.replace(/\s+/g, '').toUpperCase();
 
 type Matched = Extract<StatementMatch, { account: unknown }>;
 
 export type StatementFile =
   | { status: 'read'; file: string; statement: CamtStatement; account: Matched['account']; by: Matched['by'] }
   | { status: 'duplicate'; file: string; statement: CamtStatement; of: string }
-  | { status: 'unmatched'; file: string; statement: CamtStatement; problem: string }
+  | { status: 'unmatched'; file: string; statement: CamtStatement; problem: string; refusal: StatementProblem; unknown?: UnknownAccount }
   | { status: 'skipped'; file: string; message: CamtMessage | 'unreadable'; reason: string };
 
 const SKIPPED: Record<Exclude<CamtMessage, 'camt.053'>, string> = {
@@ -51,14 +56,16 @@ export function readBankStatements(ws: Pick<Workspace, 'paths' | 'bankAccounts'>
     }
     for (const statement of camt.statements) {
       const match = accountForStatement(ws.bankAccounts, { iban: statement.iban, currency: statement.currency, folder });
-      if ('problem' in match) { out.push({ status: 'unmatched', file, statement, problem: match.problem }); continue; }
+      if ('problem' in match) { out.push({ status: 'unmatched', file, statement, problem: match.problem, refusal: match.refusal, ...(match.unknown ? { unknown: match.unknown } : {}) }); continue; }
       const { account } = match;
-      const first = statement.iban ? ibanOf.get(`${account.bank} ${account.currency}`) : undefined;
-      if (first && first.iban !== statement.iban) {
-        out.push({ status: 'unmatched', file, statement, problem: `bank-statements/${folder}/ holds statements of two ${account.currency} accounts: IBAN ${first.iban} (${first.file}) and IBAN ${statement.iban}. Add iban: ${first.iban} to ${account.bank} ${account.currency} in belege.workspace.yaml, and list the other account with its own bank label, ledger account and iban.` });
+      const iban = statement.iban ? compactIban(statement.iban) : undefined;
+      const first = iban ? ibanOf.get(`${account.bank} ${account.currency}`) : undefined;
+      if (first && iban && first.iban !== iban) {
+        const refusal: StatementProblem = { kind: 'twoAccounts', currency: account.currency, bank: account.bank, ibans: [first.iban, iban], ...(parseIban(iban) ? { iban: parseIban(iban) } : {}) };
+        out.push({ status: 'unmatched', file, statement, refusal, ...unknownOf(refusal), problem: `bank-statements/${folder}/ holds statements of two ${account.currency} accounts: IBAN ${first.iban} (${first.file}) and IBAN ${iban}. Add iban: ${first.iban} to ${account.bank} ${account.currency} in belege.workspace.yaml, and list the other account with its own bank label, ledger account and iban.` });
         continue;
       }
-      if (statement.iban) ibanOf.set(`${account.bank} ${account.currency}`, { iban: statement.iban, file });
+      if (iban) ibanOf.set(`${account.bank} ${account.currency}`, { iban, file });
       const key = `${account.bank} ${account.currency} ${statement.id}`;
       const earlier = seen.get(key);
       if (earlier) { out.push({ status: 'duplicate', file, statement, of: earlier }); continue; }

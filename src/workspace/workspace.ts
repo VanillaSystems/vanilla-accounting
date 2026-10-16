@@ -4,6 +4,7 @@
  * belege.workspace.yaml; its layout is LAYOUT (ADR 0013). The app's own
  * files (processes/, reference/, src/server/scan.html) are found from APP_ROOT, never the cwd.
  */
+import type { ApiRefusal } from '../types/api-error.js';
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -166,6 +167,10 @@ export interface Workspace {
 }
 
 export class WorkspaceError extends Error {}
+/** A manifest refusal the UI says in the person's words: the API maps `refusal` to its error body. */
+export class WorkspaceRefusal extends WorkspaceError {
+  constructor(message: string, readonly refusal: ApiRefusal) { super(message); }
+}
 
 export function workspacePaths(root: string): WorkspacePaths {
   const masterData = join(root, 'master-data');

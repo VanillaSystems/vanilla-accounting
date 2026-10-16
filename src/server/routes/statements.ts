@@ -8,8 +8,9 @@
 import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
-import { accountForStatement } from '../../accounting/bank-accounts.js';
+import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, statementPdf, withinBooks } from '../../books/bank-import.js';
+import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../../providers/camt053/camt053.js';
@@ -18,8 +19,8 @@ import { extractStatementBalances } from '../../providers/statement-pdf/statemen
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { matchPayments } from '../../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
-import type { StatementRefusal } from '../../types/api-error.js';
-import type { StatementClosingBalance, StatementImport } from '../../types/index.js';
+import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
+import type { BankTransaction, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, readBooks, updateBooks, withBooks } from '../books.js';
@@ -40,6 +41,10 @@ interface Placed {
   closing?: { date: string; amount: number };
   /** A camt export's first opening balance (OPBD). */
   opening?: { date: string; amount: number };
+  /** A camt export's payments, as the bank gave them (refs not yet made unique). */
+  transactions?: BankTransaction[];
+  /** The IBAN a camt export names for its account, compact. */
+  iban?: string;
 }
 
 const refuse = (status: number, error: string, reason: StatementRefusal, detail?: string): never => {
@@ -47,6 +52,18 @@ const refuse = (status: number, error: string, reason: StatementRefusal, detail?
 };
 
 const imported = (): LedgerBankAccount[] => WS.bankAccounts.filter((a) => a.statements);
+
+/** Why a statement lands on no account, in the words of the API's `error` (the UI says it in the person's language from `problem`). */
+function wordsOf(p: StatementProblem): string {
+  switch (p.kind) {
+    case 'noAccount': return `Kein Bankkonto der Firma nimmt diesen Auszug (${p.currency}${p.iban ? `, IBAN ${p.iban}` : ''}). Das Konto unter Firma › Bankkonten anlegen.`;
+    case 'otherIban': return `Der Auszug ist vom Konto IBAN ${p.iban}; das Bankkonto ${p.account.bank} ${p.currency} hat die IBAN ${p.account.iban}. Das Konto fehlt in den Büchern: unter Firma › Bankkonten anlegen.`;
+    case 'twoAccounts': return `Unter ${p.bank} liegen Auszüge zweier ${p.currency}-Konten: IBAN ${p.ibans[0]} und IBAN ${p.ibans[1]}. Das zweite Konto unter Firma › Bankkonten anlegen.`;
+  }
+}
+
+const refusedAccount = (p: StatementProblem, unknown?: UnknownAccount, bankName?: string): RequestError =>
+  new RequestError(400, wordsOf(p), { code: 'statement', params: { reason: 'account', detail: wordsOf(p), problem: p, ...(unknown ? { unknown: { ...unknown, ...(bankName ? { bankName } : {}) } } : {}) } });
 
 function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Placed {
   let camt: ReturnType<typeof readCamt>;
@@ -56,13 +73,29 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   const dates: string[] = [];
   const closings: Array<{ date: string; amount: number }> = [];
   const openings: Array<{ date: string; amount: number }> = [];
+  const transactions: BankTransaction[] = [];
+  let iban: string | undefined;
   for (const statement of camt.statements) {
     const match = accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
-    if ('problem' in match) throw new RequestError(400, match.problem, { code: 'statement', params: { reason: 'account', detail: match.problem, ...(match.unknown ? { unknown: { ...match.unknown, ...(statement.bankName ? { bankName: statement.bankName } : {}) } } : {}) } });
-    if (account && account.bank !== match.account.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
-    account = match.account;
-    const balances = parseStatementBalances(statement, account.bank, filename);
-    dates.push(...transactionsOf(statement, match.account).map((t) => t.date), ...balances.map((b) => b.date));
+    if ('problem' in match) throw refusedAccount(match.refusal, match.unknown, statement.bankName);
+    const found = match.account;
+    if (account && account.bank !== found.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
+    account = found;
+    const stated = statement.iban ? compactIban(statement.iban) : undefined;
+    iban ??= stated;
+    // The folder's other statements name this account's IBAN when the manifest does not: another IBAN is another account.
+    if (stated && !found.iban) {
+      const first = readBankStatements(WS).find((f) => f.status === 'read' && f.account.bank === found.bank && f.account.currency === found.currency && f.statement.iban && compactIban(f.statement.iban) !== stated);
+      if (first?.status === 'read') {
+        const valid = parseIban(stated);
+        const unknown = valid ? { iban: valid, currency: statement.currency } : undefined;
+        throw refusedAccount({ kind: 'twoAccounts', currency: found.currency, bank: found.bank, ibans: [compactIban(first.statement.iban!), stated], ...(valid ? { iban: valid } : {}) }, unknown, statement.bankName);
+      }
+    }
+    const balances = parseStatementBalances(statement, found.bank, filename);
+    const mine = transactionsOf(statement, found);
+    transactions.push(...mine);
+    dates.push(...mine.map((t) => t.date), ...balances.map((b) => b.date));
     closings.push(...balances.filter((b) => b.type === 'CLBD').map((b) => ({ date: b.date, amount: b.amount })));
     openings.push(...balances.filter((b) => b.type === 'OPBD' && b.currency === match.account.currency).map((b) => ({ date: b.date, amount: b.amount })));
   }
@@ -71,7 +104,27 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   if (!account || !last) return refuse(400, 'Der Auszug hat keine Daten.', 'notCamt');
   const closing = closings.sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   const opening = openings.sort((a, b) => a.date.localeCompare(b.date))[0];
-  return { account, filename, first: sorted[0], last, ...(closing ? { closing } : {}), ...(opening ? { opening } : {}) };
+  return { account, filename, first: sorted[0], last, transactions, ...(iban ? { iban } : {}), ...(closing ? { closing } : {}), ...(opening ? { opening } : {}) };
+}
+
+/**
+ * A statement reaching into a filed period may repeat payments the books hold (a year-to-date
+ * export): those stay as filed. One it holds that the books lack cannot be added there (golden
+ * rule 1), so the file is refused before anything is written, naming the payments and the first
+ * open day a new export should start on.
+ */
+function assertNoFiledPayments(placed: Placed): void {
+  const books = readBooks();
+  const lock = periodLock(books);
+  const through = books.config.closedThrough;
+  if (!through || !placed.transactions) return;
+  const key = (t: BankTransaction) => [t.bank, t.ref.split('~')[0], t.date, t.direction, t.amount.toFixed(2), t.currency].join('\u0000');
+  const held = new Set(books.transactions.map(key));
+  const missing = placed.transactions.filter((t) => lock.isClosed(t.date) && !held.has(key(t)));
+  if (!missing.length) return;
+  const refs = missing.map((t) => t.ref);
+  throw new RequestError(403, `Der Auszug enthält ${missing.length} Zahlung${missing.length === 1 ? '' : 'en'} bis ${through}, die in den Büchern fehlen (${refs.slice(0, 5).join(', ')}). Die Periode ist eingereicht: nichts eingelesen. Einen Auszug ab dem ersten offenen Tag einlesen.`,
+    { code: 'statement', params: { reason: 'filedPayments', closed: { n: missing.length, through, refs } } });
 }
 
 const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
@@ -126,6 +179,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   if (!xml && !/\.pdf$/i.test(name)) refuse(400, 'Nur camt.053 (XML) oder PDF.', 'format');
   const placed = xml ? placeCamt(body, name, hint) : placePdf(name, hint, month);
   assertOpen(readBooks(), [placed.last], 'newStatement');
+  assertNoFiledPayments(placed);
 
   const year = openYear(placed.last.slice(0, 4), readBooks().config.closedThrough);
   const dir = join(yearPaths(WS.paths, year).statements, placed.account.bank);
@@ -141,7 +195,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   try {
     const bank = readTransactions(WS);
     const unmatched = bank.files.find((f) => f.status === 'unmatched');
-    if (unmatched?.status === 'unmatched') refuse(400, unmatched.problem, 'account', unmatched.problem);
+    if (unmatched?.status === 'unmatched') throw refusedAccount(unmatched.refusal, unmatched.unknown);
     for (const f of bank.files) {
       if (f.status !== 'duplicate' || (f.file !== mine && f.of !== mine)) continue;
       const other = f.file === mine ? f.of : f.file;

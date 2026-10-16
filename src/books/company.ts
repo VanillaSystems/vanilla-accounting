@@ -3,6 +3,8 @@
  * invoicing), every filed return and seal by quarter, and each bank account's last balance
  * as its statement shows it. The API answers it at /api/workspace; the audit export writes it.
  */
+import { readBankStatements } from '../workspace/bank-statements.js';
+import { parseIban } from '../workspace/banks.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
@@ -23,6 +25,8 @@ export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' 
   seals: SealView[];
   /** The latest balance a statement shows, per ledger account, in the account's currency. */
   statementBalances: Array<{ account: string; date: string; amount: number }>;
+  /** Per ledger account whose manifest line names no IBAN: the IBAN its read statements show (Firma › Bankkonten offers it). */
+  statementIbans: Record<string, string>;
   /** The build of the app serving these books (src/version.ts), and how old it is. */
   appVersion: string;
   appTime?: { at: string; kind: 'built' | 'committed' };
@@ -32,6 +36,16 @@ function filedQuarters(ws: Workspace): QuarterKey[] {
   return partDirs(ws.paths, 'filings').flatMap((dir) => readdirSync(dir)
     .map((f) => /^mwst-ech0217-(\d{4}-(?:Q[1-4]|H[12]))\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
     .filter((q): q is QuarterKey => !!q)).sort();
+}
+
+function statementIbansOf(ws: Workspace): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of readBankStatements(ws)) {
+    if (f.status !== 'read' || f.account.iban || !f.statement.iban || out[f.account.account]) continue;
+    const iban = parseIban(f.statement.iban);
+    if (iban) out[f.account.account] = iban;
+  }
+  return out;
 }
 
 export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
@@ -53,6 +67,7 @@ export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
     filed: filedQuarters(ws),
     seals,
     statementBalances: [...latest.values()],
+    statementIbans: statementIbansOf(ws),
     appVersion: appVersion(),
     ...(appTime() ? { appTime: appTime() } : {}),
   };

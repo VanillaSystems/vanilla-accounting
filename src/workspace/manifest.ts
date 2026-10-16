@@ -5,7 +5,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { parseDocument } from 'yaml';
 import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
-import { WorkspaceError, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
+import { WorkspaceError, WorkspaceRefusal, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
 import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
 import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
 import { parseVatSetup } from './vat-setup.js';
@@ -62,7 +62,9 @@ export function parseManifest(source: string, path: string): Manifest {
     const bank = text(a.bank, `bankAccounts[${i}].bank`);
     if (a.statements !== undefined && !STATEMENT_KINDS.includes(a.statements as StatementKind)) fail(`bankAccounts[${i}].statements must be ${STATEMENT_KINDS.join(' or ')}`);
     const statements = bank === MANUAL_BANK ? undefined : (a.statements as StatementKind | undefined) ?? bankKind(bank).statements;
-    const iban = a.iban === undefined ? undefined : parseIban(String(a.iban)) ?? fail(`bankAccounts[${i}].iban "${String(a.iban)}" is not an IBAN (wrong length or check digits)`);
+    const iban = a.iban === undefined ? undefined : parseIban(String(a.iban)) ?? ((): never => {
+      throw new WorkspaceRefusal(`${path}: bankAccounts[${i}].iban "${String(a.iban)}" is not an IBAN (wrong length or check digits)`, { code: 'iban', params: { bank: `${String(a.bank)} ${String(a.currency)}`, detail: String(a.iban) } });
+    })();
     return {
       bank,
       currency: text(a.currency, `bankAccounts[${i}].currency`),
@@ -140,7 +142,7 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     const p = v as Record<string, unknown>;
     const bank = accounts.find((a) => a.account === String(p.account) && a.currency === cur);
     if (!bank) fail(`${where}.account "${String(p.account)}" must be a ${cur} account of bankAccounts`);
-    if (!bank!.iban) fail(`${where}: bankAccounts ${bank!.bank} ${cur} needs its iban to be printed on invoices`);
+    if (!bank!.iban) throw new WorkspaceRefusal(`${where}: bankAccounts ${bank!.bank} ${cur} needs its iban to be printed on invoices`, { code: 'payToNeedsIban', params: { bank: bank!.bank, currency: cur } });
     const qrIban = p.qrIban === undefined ? undefined : parseIban(String(p.qrIban));
     if (p.qrIban !== undefined && (!qrIban || !isQrIban(qrIban))) fail(`${where}.qrIban "${String(p.qrIban)}" is not a QR-IBAN (CH or LI, institution id 30000 to 31999, valid check digits)`);
     payTo[cur as InvoiceCurrency] = { account: bank!.account, iban: bank!.iban!, ...(qrIban ? { qrIban } : {}), bank: bank!.bank };

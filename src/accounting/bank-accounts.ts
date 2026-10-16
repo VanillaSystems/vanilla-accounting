@@ -9,7 +9,7 @@ import type { UnknownAccount } from '../types/api-error.js';
 import type { BankTransaction } from '../types/index.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import { setup } from '../engines/index.js';
-import { parseIban, type StatementKind } from '../workspace/banks.js';
+import { parseIban, type Iban, type StatementKind } from '../workspace/banks.js';
 
 export function findBankAccount(accounts: readonly LedgerBankAccount[], bank: string, currency: string): LedgerBankAccount | undefined {
   return accounts.find((a) => a.bank === bank && a.currency === currency);
@@ -47,15 +47,33 @@ export interface StatementAccount {
   folder: string;
 }
 
+/**
+ * Why a statement lands on no account, for the UI to say in the person's words (and the drop
+ * dialog to offer the account). `noAccount`: no account takes its currency (with its IBAN when it
+ * names one). `otherIban`: the account of its folder has another IBAN. `twoAccounts`: the folder
+ * already holds statements of another IBAN in that currency (src/workspace/bank-statements.ts).
+ */
+export type StatementProblem =
+  | { kind: 'noAccount'; currency: string; iban?: Iban }
+  | { kind: 'otherIban'; currency: string; iban: Iban; account: { bank: string; iban: Iban } }
+  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban };
+
 export type StatementMatch =
-  | { account: LedgerBankAccount & { statements: StatementKind }; by: 'iban' | 'folder' }
-  /** `unknown`: the statement's account when the manifest lacks it (the UI offers to add it). */
-  | { problem: string; unknown?: UnknownAccount };
+  | { account: LedgerBankAccount & { statements: StatementKind }; by: 'iban' | 'folder' | 'currency' }
+  /** `problem`: the words for the CLI and the logs; `unknown`: the statement's account when the manifest lacks it (the UI offers to add it). */
+  | { problem: string; refusal: StatementProblem; unknown?: UnknownAccount };
+
+/** The statement's account as the UI offers to add it: only an IBAN with valid check digits is offered. */
+export const unknownOf = (refusal: StatementProblem): { unknown: UnknownAccount } | Record<string, never> =>
+  refusal.iban ? { unknown: { iban: refusal.iban, currency: refusal.currency } } : {};
 
 /**
  * The ledger account a statement lands on: the account with its IBAN and currency, else the
- * account of its folder (the bank label, any case) and currency. A folder account with another
- * IBAN is a mismatch, never a fallback: the statement belongs to an account the manifest lacks.
+ * account of its folder (the bank label, any case) and currency, else, for a file in no bank's
+ * folder and as a PDF statement is placed, the firm's only imported account of that currency that
+ * names no IBAN. A folder account
+ * with another IBAN is a mismatch, never a fallback: the statement belongs to an account the
+ * manifest lacks. An IBAN the manifest names is never asked for again.
  */
 export function accountForStatement(accounts: readonly LedgerBankAccount[], s: StatementAccount): StatementMatch {
   const imported = accounts.filter((a): a is LedgerBankAccount & { statements: StatementKind } => a.statements !== undefined);
@@ -66,8 +84,14 @@ export function accountForStatement(accounts: readonly LedgerBankAccount[], s: S
   const where = s.folder ? `bank-statements/${s.folder}/` : 'bank-statements/';
   const of = `${iban ? `IBAN ${iban}` : 'an account without IBAN'} in ${s.currency}`;
   if (byFolder?.iban && iban) {
-    return { problem: `statement of ${of} is in ${where}, but ${byFolder.bank} ${byFolder.currency} has IBAN ${byFolder.iban}. Add that account to bankAccounts in belege.workspace.yaml (another bank label, its own ledger account, iban: ${iban}), or move the file to its bank's folder.`, unknown: { iban, currency: s.currency } };
+    const refusal: StatementProblem = { kind: 'otherIban', currency: s.currency, iban, account: { bank: byFolder.bank, iban: byFolder.iban } };
+    return { problem: `statement of ${of} is in ${where}, but ${byFolder.bank} ${byFolder.currency} has IBAN ${byFolder.iban}. Add that account to bankAccounts in belege.workspace.yaml (another bank label, its own ledger account, iban: ${iban}), or move the file to its bank's folder.`, refusal, ...unknownOf(refusal) };
   }
   if (byFolder) return { account: byFolder, by: 'folder' };
-  return { problem: `statement of ${of} in ${where} matches no bank account. Add { bank: ${s.folder || '<bank>'}, currency: ${s.currency}, account: "<ledger account>", label: <name>${iban ? `, iban: ${iban}` : ''} } to bankAccounts in belege.workspace.yaml.`, ...(iban ? { unknown: { iban, currency: s.currency } } : {}) };
+  // A folder named for a bank holds that bank's statements: only a file of no bank's folder falls back to the firm's one account of its currency.
+  const folderKnown = imported.some((a) => a.bank.toLowerCase() === s.folder.toLowerCase());
+  const inCurrency = imported.filter((a) => a.currency === s.currency && !a.iban);
+  if (!folderKnown && inCurrency.length === 1) return { account: inCurrency[0], by: 'currency' };
+  const refusal: StatementProblem = { kind: 'noAccount', currency: s.currency, ...(iban ? { iban } : {}) };
+  return { problem: `statement of ${of} in ${where} matches no bank account. Add { bank: ${s.folder || '<bank>'}, currency: ${s.currency}, account: "<ledger account>", label: <name>${iban ? `, iban: ${iban}` : ''} } to bankAccounts in belege.workspace.yaml.`, refusal, ...unknownOf(refusal) };
 }

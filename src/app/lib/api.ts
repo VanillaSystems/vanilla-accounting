@@ -1,3 +1,4 @@
+import type { StatementProblem } from '../../accounting/bank-accounts.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { BookingLine } from '../../accounting/manual-booking.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
@@ -57,6 +58,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 /** What to tell the user about a failed call: a coded refusal in their language, else the API's own text. */
+const dayAfter = (iso: string) => new Date(Date.parse(`${iso}T12:00:00Z`) + 864e5).toISOString().slice(0, 10);
+const groupedIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
+
+/** Why a statement lands on no bank account, in the person's words (never the manifest file). */
+function statementProblemText(p: StatementProblem): string {
+  switch (p.kind) {
+    case 'noAccount': return p.iban ? t('error.statement.unknownAccount', { iban: groupedIban(p.iban), currency: p.currency }) : t('error.statement.noAccount', { currency: p.currency });
+    case 'otherIban': return t('error.statement.otherIban', { iban: groupedIban(p.iban), bank: p.account.bank, currency: p.currency, known: groupedIban(p.account.iban) });
+    case 'twoAccounts': return t('error.statement.twoAccounts', { bank: p.bank, currency: p.currency, first: groupedIban(p.ibans[0]), second: groupedIban(p.ibans[1]) });
+  }
+}
+
 export function errorText(e: unknown): string {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
@@ -87,11 +100,14 @@ export function errorText(e: unknown): string {
     case 'deletedAgain': return t('error.deletedAgain');
     case 'alreadyBack': return t('error.alreadyBack');
     case 'statement': {
-      const { reason, detail = '', unknown } = b.params;
+      const { reason, detail = '', unknown, problem, closed } = b.params;
       if (reason === 'duplicate') return t('error.statement.duplicate', { detail });
-      if (reason === 'account') return unknown ? t('error.statement.unknownAccount', unknown) : detail ? b.error : t('error.statement.account');
+      if (reason === 'filedPayments') return closed ? t('error.statement.filedPayments', { n: closed.n, through: formatDate(closed.through), from: formatDate(dayAfter(closed.through)), refs: closed.refs.slice(0, 5).join(', ') }) : b.error;
+      if (reason === 'account') return problem ? statementProblemText(problem) : unknown ? t('error.statement.unknownAccount', unknown) : t('error.statement.account');
       return t(`error.statement.${reason}`);
     }
+    case 'iban': return t('error.iban', b.params);
+    case 'payToNeedsIban': return t('error.payToNeedsIban', b.params);
     case 'questionAnswered': return t('error.questionAnswered');
     case 'questionGone': return t(`questions.gone.${b.params.why}`);
     case 'takesBack': return t('error.takesBack');

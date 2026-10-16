@@ -6,7 +6,7 @@ import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { companyInfo } from '../../books/company.js';
-import { WorkspaceError } from '../../workspace/workspace.js';
+import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { parseIban } from '../../workspace/banks.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { writeAtomic } from '../../invoices/store.js';
@@ -26,6 +26,7 @@ function checked<T>(run: () => T): T {
   try {
     return run();
   } catch (e) {
+    if (e instanceof WorkspaceRefusal) throw new RequestError(400, e.message, e.refusal);
     if (e instanceof WorkspaceError) throw new RequestError(400, e.message);
     throw e;
   }
