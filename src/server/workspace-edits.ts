@@ -31,7 +31,8 @@ function checked<T>(run: () => T): T {
   }
 }
 
-function account(ws: Workspace, books: Books, number: string, name: string | null): Applied {
+/** An account named (added or renamed), or removed with `name` null; a removal of an account with bookings is refused (accountInUse). */
+export function account(ws: Workspace, books: Books, number: string, name: string | null): Applied {
   if (name !== null) {
     const was = checked(() => accountName(ws, number));
     // A new account goes only where the statements show it (x07); an undo of a rename puts back a name.

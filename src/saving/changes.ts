@@ -12,9 +12,11 @@ import { repositoryAt } from '../workspace/git.js';
 import { LAYOUT, yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 import { BOOK_FILES, fromJsonl } from '../books/years.js';
 import { hasBooks, loadBooks, periodLock, type Books } from '../books/store.js';
-import type { BankTransaction, JournalEntry, Mapping, Receipt, ReceiptPatch } from '../types/index.js';
+import type { BankStatement, BankTransaction, JournalEntry, Mapping, Receipt, ReceiptPatch } from '../types/index.js';
 import { latestDeletions } from '../books/receipt-trash.js';
-import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type ReceiptChange, type SaveDetail, type SaveSummary } from './model.js';
+import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type ReceiptChange, type RecordChange, type SaveDetail, type SaveSummary } from './model.js';
+import type { Customer, Invoice, InvoiceBook } from '../invoices/model.js';
+import type { YearCloseState } from '../accounting/year-close.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
@@ -76,16 +78,91 @@ export async function outsideChanges(ws: Ws): Promise<FileChange[]> {
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+const yearCloseFile = (ws: Ws, year: string) => join(yearPaths(ws.paths, year).filings, 'year-close.json');
+
 /** The books' own files: hashing every receipt and statement (hundreds of MB) would make the page slow. */
-const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog, yearPaths(ws.paths, y).questions])];
+const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...yearsOf(ws.paths).flatMap((y) => [yearPaths(ws.paths, y).books, yearPaths(ws.paths, y).runLog, yearPaths(ws.paths, y).questions, yearCloseFile(ws, y)])];
 
 /** How many of the books' own files differ from the last save, and the bookings a person changed since. The runs that wrote them are the engine's to name. */
 export async function booksChange(ws: Ws): Promise<BooksChange> {
   const repo = await repositoryAt(ws.paths.repository);
-  if (!repo) return { files: 0, runs: [], hand: [], receipts: [] };
+  if (!repo) return { files: 0, runs: [], hand: [], receipts: [], records: [] };
   const rows = await git.statusMatrix({ fs, dir: repo, filepaths: ownBooks(ws).map((p) => relative(repo, p)) });
   const files = rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1) && !(head === 0 && workdir === 0)).length;
-  return { files, runs: [], hand: files ? await handEdits(ws) : [], receipts: files ? await receiptChanges(ws) : [] };
+  // The chart is customizing (saved as its file), but an account added or renamed is listed here with its undo (r9c-6).
+  return { files, runs: [], hand: files ? await handEdits(ws) : [], receipts: files ? await receiptChanges(ws) : [], records: await recordChanges(ws) };
+}
+
+const wroteAt = (path: string) => (existsSync(path) ? statSync(path).mtime.toISOString() : '');
+const parseJson = <T>(text: string, fallback: T): T => { try { return text ? (JSON.parse(text) as T) : fallback; } catch { return fallback; } };
+
+/** The fields of a customer a person edits, as PATCH /api/customers takes them. */
+const customerFields = (c: Customer): Partial<Customer> =>
+  ({ name: c.name, attn: c.attn, address: c.address, language: c.language, vatId: c.vatId, email: c.email, paymentTermsDays: c.paymentTermsDays });
+
+/**
+ * The records changed since the last save that are neither bookings nor receipts (r9c-6), each
+ * with its undo or why there is none: invoices (a draft can be deleted; one issued or cancelled
+ * keeps its number), customers (a changed one goes back as saved; one added stays, customers are
+ * never deleted), statements read in (their payments belong to the books), the year close's
+ * steps (marked back, which takes the step's booking with it), the chart's accounts (removed or
+ * named back). Dated by the file's last write.
+ */
+export async function recordChanges(ws: Ws): Promise<RecordChange[]> {
+  const repo = await repositoryAt(ws.paths.repository);
+  if (!repo) return [];
+  const savedText = (path: string) => headBlob(repo, relative(repo, path));
+  const out: RecordChange[] = [];
+
+  const invPath = ws.paths.invoices;
+  const empty: InvoiceBook = { schema: 1, customers: [], invoices: [], sent: [] };
+  const now = parseJson<InvoiceBook>(read(invPath), empty);
+  const saved = parseJson<InvoiceBook>(await savedText(invPath), empty);
+  const at = wroteAt(invPath);
+  const savedInvoices = new Map(saved.invoices.map((i) => [i.id, i]));
+  const title = (i: Invoice) => (i.status === 'issued' ? `${i.kind === 'credit-note' ? 'Gutschrift' : 'Rechnung'} ${i.number} ${i.customer.name}` : now.customers.find((c) => c.id === i.customerId)?.name ?? i.id);
+  for (const i of now.invoices) {
+    if (i.deleted) continue;
+    const was = savedInvoices.get(i.id);
+    if (was && JSON.stringify(was) === JSON.stringify(i)) continue;
+    if (i.status === 'issued' && i.cancelled && !(was?.status === 'issued' && was.cancelled)) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'cancelled', text: title(i), at, blocked: 'cancelled' });
+    else if (i.status === 'issued' && (!was || was.status !== 'issued')) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'issued', text: title(i), at, blocked: 'issued' });
+    else if (i.status === 'draft' && !was) out.push({ kind: 'invoice', id: i.id, date: i.date, state: 'draft', text: title(i), at, undo: { kind: 'deleteDraft', id: i.id } });
+  }
+  const savedCustomers = new Map(saved.customers.map((c) => [c.id, c]));
+  for (const c of now.customers) {
+    if (c.deleted) continue;
+    const was = savedCustomers.get(c.id);
+    if (!was) out.push({ kind: 'customer', id: c.id, state: 'added', text: c.name, at, blocked: 'customerNew' });
+    else if (JSON.stringify(customerFields(was)) !== JSON.stringify(customerFields(c))) out.push({ kind: 'customer', id: c.id, state: 'changed', text: c.name, at, undo: { kind: 'customerBack', id: c.id, fields: customerFields(was) } });
+  }
+
+  for (const year of yearsOf(ws.paths)) {
+    const file = join(yearPaths(ws.paths, year).books, BOOK_FILES.bankStatements);
+    const savedFiles = new Set(recordsIn<BankStatement>(await savedText(file), file).map((s) => s.filename));
+    for (const s of recordsIn<BankStatement>(read(file), file)) {
+      if (savedFiles.has(s.filename)) continue;
+      out.push({ kind: 'statement', bank: s.bank, file: s.filename, from: s.fromDate, to: s.toDate, text: `${s.bank} ${s.filename}`, at: wroteAt(file), blocked: 'statement' });
+    }
+    const yc = yearCloseFile(ws, year);
+    const marksNow = parseJson<Partial<YearCloseState>>(read(yc), {}).templates ?? {};
+    const marksSaved = parseJson<Partial<YearCloseState>>(await savedText(yc), {}).templates ?? {};
+    for (const template of new Set([...Object.keys(marksNow), ...Object.keys(marksSaved)])) {
+      if (marksNow[template] === marksSaved[template]) continue;
+      out.push({ kind: 'yearClose', year, template, state: marksNow[template] ?? 'open', text: template, at: wroteAt(yc), undo: { kind: 'templateBack', year, template, state: marksSaved[template] ?? null } });
+    }
+  }
+
+  type Account = { number: string | number; name?: string };
+  const chartNow = parseJson<Account[]>(read(ws.paths.accounts), []);
+  const chartSaved = new Map(parseJson<Account[]>(await savedText(ws.paths.accounts), []).map((a) => [String(a.number), String(a.name ?? '')]));
+  for (const a of chartNow) {
+    const number = String(a.number), name = String(a.name ?? '');
+    const was = chartSaved.get(number);
+    if (was === undefined) out.push({ kind: 'account', number, state: 'added', text: `${number} ${name}`, at: wroteAt(ws.paths.accounts), undo: { kind: 'accountRemove', number } });
+    else if (was !== name) out.push({ kind: 'account', number, state: 'renamed', text: `${number} ${name}`, at: wroteAt(ws.paths.accounts), undo: { kind: 'accountRename', number, name: was } });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
 }
 
 const recordsIn = <T>(text: string, file: string) => fromJsonl(text, file) as T[];

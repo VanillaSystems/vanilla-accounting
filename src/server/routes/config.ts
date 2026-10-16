@@ -12,7 +12,7 @@ import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { assertPlaced } from '../edits.js';
-import { setCustomerTerms } from '../workspace-edits.js';
+import { account, setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
 import { changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
@@ -40,6 +40,12 @@ router.put('/api/accounts/:number', (req, res) => {
   // A new account goes only where the statements show it (x07); a rename of one the chart has stays possible.
   if (checked(() => accountName(WS, req.params.number)) === undefined) assertPlaced(req.params.number);
   res.json(checked(() => setAccountName(WS, req.params.number, name)));
+});
+
+/** Änderungen › «Rückgängig» of an account added since the last save (r9c-6): removed, unless bookings use it (accountInUse). */
+router.delete('/api/accounts/:number', (req, res) => {
+  account(WS, readBooks(), req.params.number, null);
+  res.json({ ok: true });
 });
 
 // The VAT returns as filed with the ESTV (filings/<year>/), read-only.

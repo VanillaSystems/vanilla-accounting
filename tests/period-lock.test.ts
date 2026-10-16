@@ -172,6 +172,9 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('accent: "#0f766e"') },
   { method: 'PUT', path: '/api/accounts/1100', body: { name: 'Debitoren' },
     check: () => readFileSync(api.ws.paths.accounts, 'utf8').includes('"Debitoren"') },
+  // Änderungen › Rückgängig of an added account (r9c-6): the chart holds no dated record either.
+  { method: 'DELETE', path: '/api/accounts/1100',
+    check: () => !readFileSync(api.ws.paths.accounts, 'utf8').includes('"Debitoren"') },
 ];
 
 for (const call of allowed) {

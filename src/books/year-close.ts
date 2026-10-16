@@ -207,6 +207,8 @@ export function bookEntry(ws: Workspace, input: EntryInput, template?: string): 
       ...(input.vatCode ? { vatCode: input.vatCode } : {}),
       description: input.description,
       origin: 'manual',
+      // A person booked it on the close's form: Änderungen lists it with its «Rückgängig» (r9c-6).
+      by: { kind: 'person', at: new Date().toISOString() },
     };
     b.journalEntries.push(entry);
     return entry;

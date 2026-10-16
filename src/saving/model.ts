@@ -7,6 +7,7 @@
  */
 
 import type { JournalEntry, ReceiptPatch } from '../types/index.js';
+import type { CustomerFields } from '../invoices/model.js';
 
 /** Where a change waits: the books (one item, written by runs and edits), the AI's draft, a file changed outside the app. */
 export type ChangeSource = 'draft' | 'outside' | 'books';
@@ -41,6 +42,30 @@ export type ReceiptChange = { id: string; text: string; at: string; date?: strin
   | { kind: 'privateOutlay'; payment: string; blocked?: 'personsBooking' }
 );
 
+/** What «Rückgängig» of a record change does: an API call the UI makes (src/app/areas/changes/changes.tsx). */
+export type RecordUndo =
+  | { kind: 'deleteDraft'; id: string }
+  | { kind: 'customerBack'; id: string; fields: Partial<CustomerFields> }
+  | { kind: 'accountRemove'; number: string }
+  | { kind: 'accountRename'; number: string; name: string }
+  | { kind: 'templateBack'; year: string; template: string; state: 'done' | 'na' | null };
+
+/** Why a record change has no «Rückgängig»: an issued or cancelled document keeps its number, a customer is never deleted, a statement's payments belong to the books. */
+export type RecordBlock = 'issued' | 'cancelled' | 'customerNew' | 'statement';
+
+/**
+ * A record a person changed since the last save that is neither a booking nor a receipt (r9c-6):
+ * an invoice (a draft, one issued, one cancelled), a customer, a statement read in, a step of the
+ * year close marked or booked, an account of the chart added or renamed. `at` is the file's last write.
+ */
+export type RecordChange = { at: string; text: string } & (
+  | { kind: 'invoice'; id: string; number?: string; date: string; state: 'draft' | 'issued' | 'cancelled' }
+  | { kind: 'customer'; id: string; state: 'added' | 'changed' }
+  | { kind: 'statement'; bank: string; file: string; from: string; to: string }
+  | { kind: 'account'; number: string; state: 'added' | 'renamed' }
+  | { kind: 'yearClose'; year: string; template: string; state: 'done' | 'na' | 'open' }
+) & ({ undo: RecordUndo } | { blocked: RecordBlock });
+
 /** The books' changes since the last save. */
 export interface BooksChange {
   /** The books' own files that differ from the last save (ledger, books/*.jsonl, run log, invoices). */
@@ -51,6 +76,37 @@ export interface BooksChange {
   hand: HandEdit[];
   /** What a person did to receipts since the last save (r8k-7). */
   receipts: ReceiptChange[];
+  /** Invoices, customers, statements, year-close steps and accounts changed since the last save (r9c-6). */
+  records: RecordChange[];
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * A books save's message built by code, naming what it holds by kind (r9c-6): the runs' bookings,
+ * the bookings and receipts changed by hand, the invoices, customers, statements and year-close
+ * steps. The chart is customizing and saved as its file. German, as every save message is.
+ */
+export function describeBooks(b: Pick<BooksChange, 'runs' | 'hand' | 'receipts' | 'records'>): string {
+  const parts: string[] = [];
+  const n = b.runs.reduce((s, r) => s + r.entries, 0);
+  if (b.runs.length) parts.push(`${count(n, 'Buchung', 'Buchungen')} aus ${[...new Set(b.runs.map((r) => r.label))].join(', ')}`);
+  if (b.hand.length) parts.push(`${count(b.hand.length, 'Buchung', 'Buchungen')} von Hand`);
+  if (b.receipts.length) parts.push(`${count(b.receipts.length, 'Beleg', 'Belege')} von Hand`);
+  const of = <K extends RecordChange['kind']>(kind: K, test: (r: Extract<RecordChange, { kind: K }>) => boolean = () => true) =>
+    b.records.filter((r): r is Extract<RecordChange, { kind: K }> => r.kind === kind && test(r as Extract<RecordChange, { kind: K }>)).length;
+  const drafts = of('invoice', (r) => r.state === 'draft'), issued = of('invoice', (r) => r.state === 'issued'), cancelled = of('invoice', (r) => r.state === 'cancelled');
+  if (drafts) parts.push(count(drafts, 'Rechnungsentwurf', 'Rechnungsentwürfe'));
+  if (issued) parts.push(`${count(issued, 'Rechnung', 'Rechnungen')} ausgestellt`);
+  if (cancelled) parts.push(`${count(cancelled, 'Rechnung', 'Rechnungen')} storniert`);
+  const added = of('customer', (r) => r.state === 'added'), changed = of('customer', (r) => r.state === 'changed');
+  if (added) parts.push(`${count(added, 'Kunde', 'Kunden')} neu`);
+  if (changed) parts.push(`${count(changed, 'Kunde', 'Kunden')} geändert`);
+  const statements = of('statement');
+  if (statements) parts.push(`${count(statements, 'Kontoauszug', 'Kontoauszüge')} eingelesen`);
+  const steps = of('yearClose');
+  if (steps) parts.push(`Abschluss: ${count(steps, 'Schritt', 'Schritte')}`);
+  return `${BOOKS}: ${parts.length ? parts.join(' · ') : 'geändert'}`;
 }
 
 /** How a saved change takes effect (workflows.md "Changing a workflow"): at once, once switched on, or after its maintainer's review. */

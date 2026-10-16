@@ -11,6 +11,11 @@ import { join } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { changesView, draftDir, fileDiff, saveDetail } from '../src/saving/changes.js';
+import { describeBooks, type RecordChange } from '../src/saving/model.js';
+import { updateInvoices } from '../src/invoices/store.js';
+import { setAccountName } from '../src/workspace/accounts-write.js';
+import { bookEntry, markTemplate } from '../src/books/year-close.js';
+import type { Customer, Draft, Issued } from '../src/invoices/model.js';
 import { commitExactly } from '../src/workspace/git.js';
 import { recordsPaths } from '../src/saving/changes.js';
 import { relative } from 'node:path';
@@ -50,7 +55,7 @@ test('the books wait as one item, beside the AI\'s draft and an outside edit', a
   const view = await changesView(ws);
   assert.deepEqual(view.outside.map((f) => [f.path, f.state, f.added, f.removed]), [['knowledge/rules/house.guide.yaml', 'modified', 1, 0]]);
   assert.deepEqual(view.draft.map((f) => [f.path, f.state]), [['workflows/booking/classify/step.yaml', 'added']]);
-  assert.deepEqual(view.books, { files: 1, runs: [], hand: [], receipts: [] }, 'the books as one item: the runs that wrote are the engine\'s to name');
+  assert.deepEqual(view.books, { files: 1, runs: [], hand: [], receipts: [], records: [] }, 'the books as one item: the runs that wrote are the engine\'s to name');
   assert.equal(view.outside.some((f) => f.path.includes('transactional-data') || f.path === 'ledger.json'), false);
   const diff = await fileDiff(ws, 'outside', 'knowledge/rules/house.guide.yaml');
   assert.deepEqual([diff!.before.split('\n').length, diff!.after.endsWith('three\n')], [4, true]);
@@ -68,4 +73,46 @@ test('Verlauf says whose a save was; a save lists the files it changed', async (
   assert.deepEqual(detail!.files.map((f) => [f.path, f.state, f.added]), [['vanilla-accounting/transactional-data/2026/books/entries.jsonl', 'modified', 1]]);
   const first = await saveDetail(ws, view.history[1].oid);
   assert.ok(first!.files.length > 5, 'the first save lists every file it added');
+});
+
+test('Änderungen lists invoices, customers, statement imports, year-close marks and bookings and account additions, each with its undo or why there is none, and the save names them by kind (r9c-6)', async () => {
+  const ws = await company();
+  const customer: Customer = { id: 'cu_new', createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, name: 'Beispiel Treuhand AG', address: { postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de', paymentTermsDays: 30 };
+  let cancelled = '';
+  updateInvoices(ws, (book) => {
+    book.customers.push(customer);
+    book.customers[0].paymentTermsDays = 10;
+    book.invoices.push({ id: 'in_new', createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_new', date: '2026-10-16', currency: 'CHF', language: 'de', comments: [], lines: [] } as Draft);
+    const issued = book.invoices.find((i): i is Issued => i.status === 'issued' && !i.cancelled && i.kind === 'invoice')!;
+    issued.cancelled = { date: '2026-10-16', reason: 'doppelt' };
+    cancelled = issued.number;
+  });
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => { b.bankStatements.push({ bank: 'Raiffeisen', filename: 'camt-oktober.xml', fromDate: '2026-10-01', toDate: '2026-10-10', currency: 'CHF' }); });
+  saveBooks(ws, books);
+  setAccountName(ws, '1100', 'Debitoren');
+  setAccountName(ws, '6100', 'Unterhalt');
+  markTemplate(ws, '2026', 'depreciation', 'na');
+  const booked = bookEntry(ws, { date: '2026-12-31', accountDebit: '6100', accountCredit: '1520', amount: 100, description: 'Abschreibung Laptop' }, 'accruedExpense');
+
+  const view = await changesView(ws);
+  const rows = view.books.records.map((r: RecordChange) => [r.kind, 'state' in r ? r.state : '', 'undo' in r ? r.undo.kind : r.blocked]);
+  assert.deepEqual(rows.sort(), [
+    ['account', 'added', 'accountRemove'],
+    ['account', 'renamed', 'accountRename'],
+    ['customer', 'added', 'customerNew'],
+    ['customer', 'changed', 'customerBack'],
+    ['invoice', 'cancelled', 'cancelled'],
+    ['invoice', 'draft', 'deleteDraft'],
+    ['statement', '', 'statement'],
+    ['yearClose', 'done', 'templateBack'],
+    ['yearClose', 'na', 'templateBack'],
+  ].sort());
+  const rename = view.books.records.find((r) => r.kind === 'account' && r.state === 'renamed')!;
+  assert.deepEqual('undo' in rename && rename.undo, { kind: 'accountRename', number: '6100', name: 'Unterhalt und Ersatz Einrichtungen' });
+  const term = view.books.records.find((r) => r.kind === 'customer' && r.state === 'changed')!;
+  assert.deepEqual('undo' in term && term.undo.kind === 'customerBack' && term.undo.fields.paymentTermsDays, 30, 'the term as saved');
+  assert.ok(view.books.records.some((r) => r.kind === 'invoice' && r.text.includes(cancelled)));
+  assert.deepEqual(view.books.hand.map((h) => [h.id, h.saved === undefined]), [[booked.id, true]], 'the year-close booking is a hand booking with its Rückgängig');
+  assert.equal(describeBooks(view.books), 'Bücher: 1 Buchung von Hand · 1 Rechnungsentwurf · 1 Rechnung storniert · 1 Kunde neu · 1 Kunde geändert · 1 Kontoauszug eingelesen · Abschluss: 2 Schritte');
 });

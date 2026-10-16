@@ -20,7 +20,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { holdsRules } from '../booking/rule-book.js';
 import { ruleDiff, rulesRefusal, withPreview } from './rules.js';
 import { booksBasis, changesView, customizingNames, draftDir, fileDiff, lastSaveAt, recordsPaths, saveDetail, unreversedOf } from './changes.js';
-import { BOOKS, diffLines, hunks, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type RunWrote, type SavingCommand, type SavingResult, type SyncState } from './model.js';
+import { BOOKS, describeBooks, diffLines, hunks, type BooksChange, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type RunWrote, type SavingCommand, type SavingResult, type SyncState } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 export type Ask = (prompt: string, opts: { step: string; system?: string }) => Promise<string>;
@@ -88,11 +88,9 @@ interface Answer { reply?: string; saves?: Array<{ message?: string; why?: strin
 
 const STATE_WORD: Record<FileChange['state'], string> = { added: 'neu', modified: 'geändert', deleted: 'entfernt' };
 
-/** A save's message built by code: the books by their runs' bookings, a file by its path and what happened to it. */
-function plainMessage(f: FileChange & { source: ChangeSource }, runs: RunWrote[]): string {
-  if (f.source !== 'books') return `${f.path} ${STATE_WORD[f.state]}`;
-  const n = runs.reduce((s, r) => s + r.entries, 0);
-  return runs.length ? `${BOOKS}: ${n} ${n === 1 ? 'Buchung' : 'Buchungen'} aus ${[...new Set(runs.map((r) => r.label))].join(', ')}` : `${BOOKS}: von Hand geändert`;
+/** A save's message built by code: the books by what changed in them, by kind (describeBooks, r9c-6); a file by its path and what happened to it. */
+function plainMessage(f: FileChange & { source: ChangeSource }, books: BooksChange): string {
+  return f.source !== 'books' ? `${f.path} ${STATE_WORD[f.state]}` : describeBooks(books);
 }
 
 function parseAnswer(text: string): Answer {
@@ -146,7 +144,7 @@ export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; ru
     } catch (e) {
       // MISSION: saving never needs the AI. Without it, code groups one save per file (r8c-3); only talking to it does.
       if (said) return refuse('model', `Die KI antwortet nicht (${e instanceof Error ? e.message : String(e)}). Die Speicherstände bleiben, wie sie sind.`);
-      answer = { reply: '', saves: files.map((f) => ({ message: plainMessage(f, v.books.runs), why: '', files: [f.path] })) };
+      answer = { reply: '', saves: files.map((f) => ({ message: plainMessage(f, v.books), why: '', files: [f.path] })) };
       plain = true;
     }
     const byPath = new Map(files.map((f) => [f.path, f]));

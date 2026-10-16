@@ -10,11 +10,12 @@ import './changes.css';
 import type { RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { formatDate } from '../../lib/utils.js';
+import { localToday, parsePeriod } from '../../../accounting/periods.js';
 import { t } from '../../i18n/index.js';
 import { changesCommand, changesNow as lastView, pollChanges, useChanges, useDiff, useSave } from '../../changes/store.js';
 import { api, errorText } from '../../lib/api.js';
 import { BotIcon } from '../automation/Graph.js';
-import { BOOKS, diffLines, hunks, type ChangesView, type FileChange, type ReceiptChange, type SaveSummary, type SavingCommand, type SavingResult } from '../../../saving/model.js';
+import { BOOKS, diffLines, hunks, type ChangesView, type FileChange, type ReceiptChange, type RecordChange, type SaveSummary, type SavingCommand, type SavingResult } from '../../../saving/model.js';
 import { ICONS } from '../icons.js';
 import { RuleDraft } from '../company/RulesSection.js';
 import { at } from '../receipts/view.js';
@@ -189,6 +190,50 @@ async function undoReceiptChange(c: ReceiptChange, nav: Nav) {
   }
 }
 
+/** «Rückgängig» of a record change (r9c-6): the API call its `undo` names; its refusals in the person's language. */
+async function undoRecordChange(c: Extract<RecordChange, { undo: unknown }>, nav: Nav) {
+  try {
+    const u = c.undo;
+    switch (u.kind) {
+      case 'deleteDraft': await api.deleteDraft(u.id); break;
+      case 'customerBack': await api.patchCustomer(u.id, u.fields); break;
+      case 'accountRemove': await api.removeAccount(u.number); break;
+      case 'accountRename': await api.setAccountName(u.number, u.name); break;
+      case 'templateBack': await api.markYearEndEntry(u.year, u.template, u.state); break;
+    }
+    nav.refresh();
+    await pollChanges();
+  } catch (e) {
+    nav.toast(errorText(e));
+  }
+}
+
+/** Where a record change leads: the invoice, the customers, the statement's bank, the close's step, the chart. */
+function recordRoute(c: RecordChange): Parameters<Nav['go']>[0] {
+  switch (c.kind) {
+    case 'invoice': return at({ area: 'invoices', view: 'list', id: c.number ?? `draft-${c.id}` }, c.date);
+    case 'customer': return { route: { area: 'invoices', view: 'customers', id: c.id }, query: {} };
+    case 'statement': return at({ area: 'bank' }, c.to);
+    case 'yearClose': return { route: { area: 'close', step: 'entries' }, query: { period: parsePeriod(c.year, localToday())! } };
+    case 'account': return { route: { area: 'company', section: 'accounts' }, query: {} };
+  }
+}
+
+/** What a record change says of itself. */
+function recordText(c: RecordChange): string {
+  const when = sayWhen(c.at);
+  switch (c.kind) {
+    case 'invoice': return t(`changes.record.invoice.${c.state}`, { when });
+    case 'customer': return t(`changes.record.customer.${c.state}`, { when });
+    case 'statement': return t('changes.record.statement', { when, from: formatDate(c.from), to: formatDate(c.to) });
+    case 'yearClose': return t(`changes.record.yearClose.${c.state}`, { when, step: tx(`yearClose.template.${c.template}`) });
+    case 'account': return t(`changes.record.account.${c.state}`, { when });
+  }
+}
+
+/** A key built from a code the API sends: its placeholders vary with the code. */
+const tx = t as unknown as (key: string, vars?: Record<string, string | number>) => string;
+
 /** «Rückgängig» of a change by hand: the booking back as saved, or gone when it was booked since. */
 async function restoreSaved(id: string, nav: Nav) {
   try {
@@ -271,6 +316,23 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                             <span className="chwho">{h.ai ? <BotIcon /> : PERSON}</span>{h.text} · {h.deleted ? t('changes.handDeleted') : t(h.ai ? (h.saved ? 'changes.aiChanged' : 'changes.aiBooked') : h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
                           </button>
                           <button type="button" className="quiet2" title={t(h.deleted ? 'changes.handRestoreTip' : h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+                {view.books.records.length ? (
+                  <>
+                    <div className="group"><span>{t('changes.records')}</span></div>
+                    <div className="chraw" data-testid="record-changes">
+                      {view.books.records.map((c) => (
+                        <div key={`${c.kind}:${'id' in c ? c.id : 'number' in c ? c.number : 'file' in c ? c.file : `${c.year}-${c.template}`}`} className="chrawrow" data-record={c.kind}>
+                          <button type="button" className="golink" onClick={() => nav.go(recordRoute(c))}>
+                            <span className="chwho">{PERSON}</span>{c.text} · {recordText(c)}
+                          </button>
+                          {'undo' in c
+                            ? <button type="button" className="quiet2" title={t(`changes.record.undoTip.${c.undo.kind}`)} onClick={() => void undoRecordChange(c, nav)}>{t('changes.handUndo')}</button>
+                            : <span className="m">{t(`changes.record.blocked.${c.blocked}`)}</span>}
                         </div>
                       ))}
                     </div>

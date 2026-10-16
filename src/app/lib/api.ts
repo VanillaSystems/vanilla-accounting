@@ -339,6 +339,7 @@ export const api = {
     renewPhone: () => request<PhoneInfo>('POST', '/api/desktop/phone', { renew: true }),
   },
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
+  removeAccount: (number: string) => request<Ok>('DELETE', `/api/accounts/${number}`),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),
   assistantExportUrl: (file: string) => `/api/assistant/exports/${encodeURIComponent(file)}`,
