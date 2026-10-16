@@ -20,7 +20,7 @@ import { filedXml, filingXml, releaseApproval, type PeriodReturn, type PreparedX
 import { loadWorkflows } from '../src/workflows/load.js';
 import { summaryOf, taskOf } from '../src/workflows/model.js';
 import { filedReturnsOf } from '../src/workspace/reads.js';
-import { returnSummary } from '../src/app/areas/automation/filing-summary.js';
+import { approvalWithheld, returnSummary } from '../src/app/areas/automation/filing-summary.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { saleQuestionLine } from '../src/intake/sale-questions.js';
 import { appendQuestionLine, readQuestions } from '../src/questions/store.js';
@@ -250,7 +250,7 @@ test('«Freigegeben» holds the period until «Eingereicht» or «Zurück»: not
   assert.equal(after.config.approvedReturn, undefined, 'filed: the hold gave way to the close');
 });
 
-test('«Eingereicht» never seals books that differ from the filed XML: a change that got past the hold stops the run with the figures, nothing closed (r7h-24)', async () => {
+test('«Eingereicht» never seals books that differ from the filed XML: a change that got past the hold stops the run with the figures, nothing closed, and the hold is lifted so the books can be restored, then «Weiter» seals (r7h-24, r8h-26)', async () => {
   const ws = demo();
   const engine = openEngine(ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
@@ -271,10 +271,10 @@ test('«Eingereicht» never seals books that differ from the filed XML: a change
   assert.deepEqual(state.status === 'stuck' ? state.why : undefined, { code: 'figuresChanged', params: { period: Q, filed: approved.toFixed(2), now: now.toFixed(2) } });
   assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31', 'nothing closed');
   assert.equal(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json')), false, 'nothing sealed');
-  assert.deepEqual(loadBooks(ws).config.approvedReturn, { period: Q, through: '2026-06-30' }, 'the hold stays until the books are as filed');
+  assert.equal(loadBooks(ws).config.approvedReturn, undefined, 'the hold is lifted, so the books can be restored in the app (r8h-26)');
 
   const back = loadBooks(ws);
-  back.journalEntries.find((x) => x.id === flipped)!.vatCode = 'I81';
+  update(back, PERSON, (b) => { b.journalEntries.find((x) => x.id === flipped)!.vatCode = 'I81'; });
   saveBooks(ws, back);
   await engine.command({ kind: 'resume', run: r.ok ? r.run! : '' });
   await engine.idle();
@@ -282,7 +282,7 @@ test('«Eingereicht» never seals books that differ from the filed XML: a change
   assert.equal(loadBooks(ws).config.closedThrough, '2026-06-30');
 });
 
-test('an open VAT question about a payment of the period is closed when the period is filed, with the reason (r7h-29)', async () => {
+test('a VAT question open about a payment of the period withholds the filing: the review withholds «Freigegeben», the XML step stops with questionsOpen and holds nothing; answered or closed, «Weiter» goes on; a question asked after the approval is closed with the reason at the seal (r8h-24, r7h-29)', async () => {
   const ws = demo();
   const tx = loadBooks(ws).transactions.find((t) => inQ2(t) && t.direction === 'CRDT')!;
   const q = saleQuestionLine(ws, tx, '2026-07-01T09:00:00.000Z');
@@ -290,10 +290,31 @@ test('an open VAT question about a payment of the period is closed when the peri
   const engine = openEngine(ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
-  for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome }); await engine.idle(); }
-  assert.equal(engine.run(r.ok ? r.run! : '')!.state.status, 'done');
-  const closed = readQuestions(ws).find((x) => x.id === q.id)!;
-  assert.deepEqual([closed.status, closed.closed?.how, closed.closed?.why], ['closed', 'withdrawn', 'closed']);
+  const id = r.ok ? r.run! : '';
+  const run = () => engine.run(id)!;
+  const task = taskOf(loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'vat-filing')!, run())!;
+  assert.deepEqual(approvalWithheld(task, readQuestions(ws), loadBooks(ws)), { outcome: 'approved', rates: [], questions: 1 }, 'the review withholds «Freigegeben» while the question is open');
+
+  await engine.command({ kind: 'answer', run: id, outcome: 'approved' });
+  await engine.idle();
+  assert.equal(run().state.status, 'stuck', 'an approval sent anyway stops before the XML');
+  assert.deepEqual(run().state.status === 'stuck' ? run().state.why : undefined, { code: 'questionsOpen', params: { period: Q, n: '1' } });
+  assert.equal(loadBooks(ws).config.approvedReturn, undefined, 'nothing held: the owner can still answer');
+  assert.equal(filingXml(ws, Q), undefined, 'no XML');
+
+  appendQuestionLine(ws, { v: 1, event: 'closed', id: q.id, at: '2026-07-02T09:00:00.000Z', by: 'Erika Beispiel', how: 'done' }, '2026-03-31');
+  await engine.command({ kind: 'resume', run: id });
+  await engine.idle();
+  assert.deepEqual(at(run()), ['waiting', 'submit'], 'answered: the XML is written and the period held');
+  assert.deepEqual(loadBooks(ws).config.approvedReturn, { period: Q, through: '2026-06-30' });
+
+  const late = saleQuestionLine(ws, tx, '2026-07-03T09:00:00.000Z');
+  appendQuestionLine(ws, late, '2026-03-31');
+  await engine.command({ kind: 'answer', run: id, outcome: 'filed' });
+  await engine.idle();
+  assert.equal(run().state.status, 'done');
+  const closed = readQuestions(ws).find((x) => x.id === late.id)!;
+  assert.deepEqual([closed.status, closed.closed?.how, closed.closed?.why], ['closed', 'withdrawn', 'closed'], 'the safety net at the seal: closed, saying why');
 });
 
 test('a filing run discarded while the period was held frees it (r7h-24)', async () => {

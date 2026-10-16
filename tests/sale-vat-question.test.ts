@@ -167,3 +167,28 @@ test('a filed quarter is never asked about nor changed; a payment with a receipt
   assert.equal(entriesOf('S-DOC')[0].vatCode, 'V0');
   assert.equal(classifyRules().filter((r) => String(r.id).startsWith('sale-q-inj')).length, 0, 'a refused answer keeps no rule');
 });
+
+test('an answer while the period is held (approved, not filed) is refused with the hold\'s reason and the question stays open, nothing booked, no rule; after «Zurück» the same answer goes through (r8h-24)', async () => {
+  const held = loadBooks(api.ws);
+  held.transactions.push({ ref: 'S-HELD', bank: 'Raiffeisen', date: '2026-08-20', amount: 540.5, currency: 'CHF', direction: 'CRDT', description: 'Beratung Keller', counterparty: 'Keller AG', counterpartyIban: 'CH0000762011623852958' });
+  held.journalEntries.push({ id: 'e-held', transactionRef: 'S-HELD', date: '2026-08-20', accountDebit: '1021', accountCredit: '3400', amount: 540.5, vatCode: 'V0', description: 'Kundenzahlung', origin: 'classify' });
+  held.config.approvedReturn = { period: '2026-Q3', through: '2026-09-30' };
+  saveBooks(api.ws, held);
+  const id = 'q-inj-S-HELD';
+  appendFileSync(yearPaths(api.ws.paths, '2026').questions, `${JSON.stringify({ v: 1, event: 'asked', id, at: new Date().toISOString(), by: 'app', to: OWNER, origin: 'booking', topic: 'saleVat', on: { kind: 'payment', id: 'S-HELD' }, text: '?', choices: ['saleDomestic', 'saleAbroad', 'notSale'] })}\n`);
+
+  const r = await api.send('POST', `/api/questions/${id}/answer`, { by: OWNER, choice: 'saleDomestic' });
+  assert.equal(r.status, 403, JSON.stringify(r.json));
+  assert.deepEqual([r.json.code, (r.json.params as { approved?: string }).approved], ['periodClosed', '2026-Q3'], 'the hold\'s own refusal, which names «Zurück»');
+  const q = saleQuestions().find((x) => x.id === id)!;
+  assert.deepEqual([q.status, q.answer], ['open', undefined], 'not stored as answered and refused: still asked');
+  assert.equal(entriesOf('S-HELD')[0].vatCode, 'V0', 'nothing booked');
+  assert.equal(classifyRules().some((x) => x.id === `sale-${id}`), false, 'no rule kept');
+
+  const free = loadBooks(api.ws);
+  delete free.config.approvedReturn;
+  saveBooks(api.ws, free);
+  const answered = await answer('S-HELD', 'saleDomestic');
+  assert.equal(answered.status, 'answered');
+  assert.equal(entriesOf('S-HELD')[0].vatCode, 'V81', 'booked as the owner said, once the period is free');
+});
