@@ -137,6 +137,22 @@ export function linkByCode(index: Books): Array<{ receipt: string; payment: stri
   return [...open.map(({ r, t }) => ({ receipt: r.id, payment: t.ref })), ...filed.map(({ r, t }) => ({ receipt: r.id, payment: t.ref, filed: true as const }))];
 }
 
+/**
+ * The receipt `r` waits behind as its possible copy, or undefined when `r` is the one to link
+ * (r5h-32). Of two receipts that seem one document, the one linked already, or the one staged
+ * before it in this run (`staged`, the run's order), is the original; `r` then waits for a person
+ * in Belege. A twin in the books that nothing is linked to does not hold `r` back: `r` is linked,
+ * and that twin, now the one without a link, is the one Belege asks about. Before, each of the
+ * pair held the other back, and neither was ever linked.
+ */
+export function waitsBehind(index: Pick<Books, 'receipts' | 'mappings'>, r: Receipt, staged: readonly string[]): string | undefined {
+  const t = twinFinder(index.receipts, documents()).find(r);
+  if (t?.relation !== 'duplicate') return undefined;
+  const linked = index.mappings.some((m) => m.receiptId === t.of);
+  const before = staged.includes(t.of) && staged.indexOf(t.of) < staged.indexOf(r.id);
+  return linked || before ? t.of : undefined;
+}
+
 const DAY = 864e5;
 const CANDIDATES = 20;
 /** The score from which a filed payment is shown: its amount to the half per mille, or a number of the receipt in its text. */
@@ -198,6 +214,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   }
   const visionNeeded = staged.filter((r) => r.needsVisionReview);
   const toProcess = staged.filter((r) => !r.needsVisionReview);
+  const order = staged.map((r) => r.id);
   const taken = new Set(snapshot.mappings.map((m) => m.transactionRef));
   const lock = periodLock(snapshot);
   const total = staged.length;
@@ -278,8 +295,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (dated.dateSource) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
-      const t = twinFinder(index.receipts, documents()).find(r);
-      if (t?.relation === 'duplicate') { twin = index.receipts.find((x) => x.id === t.of)?.filename; return; }
+      const behind = waitsBehind(index, r, order);
+      if (behind) { twin = index.receipts.find((x) => x.id === behind)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
       const filed: string[] = [];

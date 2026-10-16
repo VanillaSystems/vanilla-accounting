@@ -16,7 +16,7 @@ import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
 
 /** Why `r` is no receipt: the word rule that typed it, its kind, else what its text says, else its missing amount. */
-export function noneWhyOf(r: Pick<Receipt, 'kind' | 'kindRule' | 'extractedText'>): NoneWhy {
+export function noneWhyOf(r: Partial<Pick<Receipt, 'kind' | 'kindRule' | 'extractedText'>>): NoneWhy {
   if (r.kind === 'duplicate' || r.kind === 'statement') return r.kind;
   const rule = /^document:(.+)$/.exec(r.kindRule ?? '')?.[1] as SupportingWhy | OtherWhy | undefined;
   if (rule) return rule;
