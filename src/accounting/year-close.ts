@@ -12,6 +12,7 @@
 import type { Index, JournalEntry, QuarterKey } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { LegalForm } from '../workspace/setup.js';
+import { bookedStates } from './payment-entries.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
 import { chfAmount, computeBalances } from './ledger.js';
@@ -601,8 +602,9 @@ function preconditions(input: YearCloseInput): Check[] {
 
   const gaps = statementGaps(input);
 
-  const booked = new Set(books.journalEntries.map((e) => e.transactionRef.split('~')[0]));
-  const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && !booked.has(t.ref) && !booked.has(t.ref.split('~')[0])).map((t) => t.ref);
+  // Booked means the lines add up to the payment (r9k-2); a leg's booking may sit on its base ref (books from before unique legs).
+  const state = bookedStates(books, input.bankAccounts);
+  const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && state(t.ref) !== 'booked' && state(t.ref.split('~')[0]) !== 'booked').map((t) => t.ref);
   const unbooked: Problem[] = unbookedRefs.length ? [{ code: 'unbooked', count: unbookedRefs.length, refs: unbookedRefs.slice(0, 8) }] : [];
 
   const doctor = input.doctor.map((label): Problem => ({ code: 'doctor', label }));

@@ -70,7 +70,7 @@ const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) =>
  * The note for the message, or the plain statement that nothing waits. `tasks`: the workflows'
  * tasks as Automatisierung lists them, each with the rule that held its payment (workflows/ask).
  */
-export function openWork(ws: Pick<Workspace, 'paths'>, books: Books, tasks: ReadonlyArray<Task & { rule?: string }>, language: string): string {
+export function openWork(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, books: Books, tasks: ReadonlyArray<Task & { rule?: string }>, language: string): string {
   const { t } = wordsIn(language);
   const closed = books.config.closedThrough;
   const inOpen = (date: string | undefined) => !closed || !date || date > closed;
@@ -79,7 +79,7 @@ export function openWork(ws: Pick<Workspace, 'paths'>, books: Books, tasks: Read
   // The app's own questions need no reading of their answer: answered, they are done.
   const answered = questions.filter((q) => q.status === 'answered' && q.origin !== 'booking');
   const taskRefs = new Set(tasks.filter((x) => x.item.kind === 'transaction').map((x) => x.item.id));
-  const unbooked = unbookedPayments(books).filter((p) => !taskRefs.has(p.ref));
+  const unbooked = unbookedPayments(books, ws.bankAccounts).filter((p) => !taskRefs.has(p.ref));
   const journal = journalOf(books);
   const contradicting = journal.views.filter((v) => v.evidence);
   const unsettled = unsettledAtFiling(journal, filing().length);

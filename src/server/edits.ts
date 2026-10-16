@@ -8,7 +8,7 @@ import { periodLock, type Books } from '../books/store.js';
 import { isManualRef, nextManualRef } from '../books/refs.js';
 import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
-import { paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
+import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, chart, filing } from '../engines/index.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
@@ -332,7 +332,8 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
-  if (books.journalEntries.some((e) => e.transactionRef === ref)) throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
+  // A booked payment is not booked twice; one booked in part (r9k-2) takes the lines that complete it.
+  if (bookedState(books, ref, accounts) === 'booked') throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
   if (!lines.length) throw new RequestError(400, 'lines: mindestens eine Zeile.');
   for (const l of lines) {
     if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });

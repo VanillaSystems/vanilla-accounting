@@ -41,3 +41,31 @@ export function paymentSides(books: Pick<Index, 'transactions' | 'journalEntries
   }
   return [...sides.values()].map((s) => ({ ...s, paid: fromRappen(s.paid), booked: fromRappen(s.booked) }));
 }
+
+/** Where a payment's booking stands: no entry, entries that do not add up to what the bank paid, or booked. */
+export type BookedState = 'none' | 'partly' | 'booked';
+
+/**
+ * The one truth for «gebucht» (r9k-2): a payment is booked when its lines add up to what the bank
+ * paid on every bank side; lines that fall short (one line of a split undone) leave it partly
+ * booked, which Aufgaben, the bank list and the hand form treat as not booked. A payment on an
+ * account the manifest does not name counts as booked once it has an entry (no side to add up).
+ * A payment with no transaction (a private outlay gone) is booked by its entries alone.
+ */
+export function bookedState(books: Pick<Index, 'transactions' | 'journalEntries'>, ref: string, accounts: readonly LedgerBankAccount[]): BookedState {
+  if (!(books.journalEntries ?? []).some((e) => e.transactionRef === ref)) return 'none';
+  return paymentSides(books, ref, accounts).some((s) => s.booked !== s.paid) ? 'partly' : 'booked';
+}
+
+/** `bookedState` for many payments of the same books: the entries are grouped once. */
+export function bookedStates(books: Pick<Index, 'transactions' | 'journalEntries'>, accounts: readonly LedgerBankAccount[]): (ref: string) => BookedState {
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of books.journalEntries ?? []) byRef.set(e.transactionRef, [...(byRef.get(e.transactionRef) ?? []), e]);
+  const txByRef = new Map<string, typeof books.transactions>();
+  for (const t of books.transactions) txByRef.set(t.ref, [...(txByRef.get(t.ref) ?? []), t]);
+  return (ref) => {
+    const entries = byRef.get(ref);
+    if (!entries) return 'none';
+    return bookedState({ transactions: txByRef.get(ref) ?? [], journalEntries: entries }, ref, accounts);
+  };
+}

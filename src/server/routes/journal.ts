@@ -10,6 +10,7 @@ import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
 import { bookingWarnings } from '../../accounting/booking-warnings.js';
+import { bookedState } from '../../accounting/payment-entries.js';
 import type { Books } from '../../books/store.js';
 import { UNDO_FIELDS } from '../../books/entry-input.js';
 
@@ -138,7 +139,8 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   if (edit.answer) { undoAnswer(edit.answer, WS.company.owner); res.json({ ok: true, answer: edit.answer }); return; }
   const unbooked = updateBooks((books) => {
     restoreSaved(books, edit.id, edit.saved, edit.kept);
-    return books.transactions.some((t) => t.ref === edit.ref && t.source !== 'manual') && !books.journalEntries.some((e) => e.transactionRef === edit.ref);
+    // Not booked any more: no entry left, or the lines left fall short of the payment (one line of a split undone, r9k-2).
+    return books.transactions.some((t) => t.ref === edit.ref && t.source !== 'manual') && bookedState(books, edit.ref, WS.bankAccounts) !== 'booked';
   });
   if (unbooked) await bookPaymentAgain(edit.ref);
   res.json({ ok: true });

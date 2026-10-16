@@ -6,6 +6,7 @@
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 import { at, ledgerFor } from '../receipts/view.js';
 import { openTwins } from '../receipts/model.js';
 import { answerTwin } from '../receipts/actions.js';
@@ -60,7 +61,7 @@ function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck;
 /** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */
 export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean }) {
   const { questions } = useQuestions();
-  const issues = periodIssues(books, questions, from, to);
+  const issues = periodIssues(books, questions, from, to, useWorkspace()?.bankAccounts ?? []);
   if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
   return (
     <section className="wfissues" data-testid="period-issues">

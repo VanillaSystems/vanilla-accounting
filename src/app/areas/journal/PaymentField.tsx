@@ -8,6 +8,7 @@ import type { BankTransaction, Index } from '../../../types/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { unbookedPayments } from './model.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 
 const signed = (p: BankTransaction) => `${p.currency} ${p.direction === 'DBIT' ? '−' : ''}${fmt(p.amount)}`;
 const line = (p: BankTransaction) => `${formatDate(p.date)} · ${p.bank} · ${signed(p)} · ${p.description}`;
@@ -17,7 +18,8 @@ export function PaymentField({ books, picked, amount, onPick }: { books: Index; 
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listId = useId();
-  const matches = useMemo(() => (open ? unbookedPayments(books, q, amount).slice(0, 8) : []), [open, books, q, amount]);
+  const accounts = useWorkspace()?.bankAccounts ?? [];
+  const matches = useMemo(() => (open ? unbookedPayments(books, q, amount, accounts).slice(0, 8) : []), [open, books, q, amount, accounts]);
 
   if (picked) {
     return (

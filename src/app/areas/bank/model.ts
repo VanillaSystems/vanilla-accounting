@@ -9,6 +9,7 @@ import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { addDays, type IsoDate } from '../../../accounting/periods.js';
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
 import { fromRappen, toRappen } from '../../../accounting/rappen.js';
+import { bookedStates } from '../../../accounting/payment-entries.js';
 import { splitTitle } from '../receipts/model.js';
 import { baseCurrency } from '../../../engines/index.js';
 
@@ -96,17 +97,23 @@ function keyed(account: string, list: Statement[]): Statement[] {
 /** A Wise fee is folded into its payment when that payment is there ("FEE-CARD-1" belongs to "CARD-1"). */
 const baseRef = (fee: BankTransaction) => fee.ref.replace(/^FEE-/, '');
 
-/** Whether a payment has an amount and no entry; a Wise fee folded into a booked payment counts as booked with it. */
-export function isUnbooked(books: Pick<Index, 'transactions' | 'journalEntries'>): (t: BankTransaction) => boolean {
-  const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));
+/**
+ * Whether a payment has an amount and is not booked: no entry, or entries that do not add up to
+ * what the bank paid (src/accounting/payment-entries.ts bookedState, r9k-2); a Wise fee folded into
+ * a booked payment counts as booked with it. `accounts`: the manifest's bank accounts, which say
+ * where a payment's bank side is booked.
+ */
+export function isUnbooked(books: Pick<Index, 'transactions' | 'journalEntries'>, accounts: readonly LedgerBankAccount[]): (t: BankTransaction) => boolean {
+  const state = bookedStates(books, accounts);
+  const booked = (ref: string) => state(ref) === 'booked';
   const refs = new Set(books.transactions.map((t) => t.ref));
-  return (t) => t.amount !== 0 && !booked.has(t.ref) && !(t.type === 'wise-fee' && refs.has(baseRef(t)) && booked.has(baseRef(t)));
+  return (t) => t.amount !== 0 && !booked(t.ref) && !(t.type === 'wise-fee' && refs.has(baseRef(t)) && booked(baseRef(t)));
 }
 
 /** The payments of the open period nobody has booked yet, oldest first: Aufgaben lists them (corner-9). */
-export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>): BankTransaction[] {
+export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, accounts: readonly LedgerBankAccount[]): BankTransaction[] {
   const closed = books.config?.closedThrough;
-  const unbooked = isUnbooked(books);
+  const unbooked = isUnbooked(books, accounts);
   return books.transactions.filter((t) => (!closed || t.date > closed) && unbooked(t)).sort((x, y) => x.date.localeCompare(y.date) || x.ref.localeCompare(y.ref));
 }
 
@@ -262,7 +269,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     entriesOf: (ref) => entries.get(ref) ?? [],
     txByRef,
     needsReceipt: (t) => t.type !== 'wise-fee' && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
-    unbooked: isUnbooked(books),
+    unbooked: isUnbooked(books, accounts),
     strays: (from, to) => (books.journalEntries ?? []).filter((e) => e.date >= from && e.date <= to && e.origin !== 'year-close'
       && e.accountDebit !== e.accountCredit && !txByRef.has(e.transactionRef)
       && banked.some((a) => a.account === e.accountDebit || a.account === e.accountCredit)),

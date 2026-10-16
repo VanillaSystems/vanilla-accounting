@@ -23,7 +23,9 @@ export function books(): Books & Pick<Index, 'receipts' | 'mappings'> {
   return {
     receipts: [],
     mappings: [],
-    transactions: ['sale', 'buy', 'eur', 'vat'].map((ref) => ({ ref, bank: ref === 'eur' ? 'Wise' : 'Raiffeisen', date: '2026-02-10', amount: 1, currency: ref === 'eur' ? 'EUR' : 'CHF', direction: 'CRDT' as const, description: ref })),
+    // Each payment as the bank moved it, adding up to its entry (a payment is booked when its lines add up, r9k-2).
+    transactions: ([['sale', 1081, 'CRDT'], ['buy', 108.1, 'DBIT'], ['eur', 500, 'CRDT'], ['vat', 72.9, 'DBIT']] as const).map(([ref, amount, direction]) =>
+      ({ ref, bank: ref === 'eur' ? 'Wise' : 'Raiffeisen', date: '2026-02-10', amount, currency: ref === 'eur' ? 'EUR' : 'CHF', direction, description: ref })),
     bankStatements: [
       { bank: 'Raiffeisen', filename: 'r.xml', fromDate: '2026-01-01', toDate: '2026-12-31', currency: 'CHF' },
       { bank: 'Wise', filename: 'w.xml', fromDate: '2026-01-01', toDate: '2026-12-31', currency: 'EUR' },

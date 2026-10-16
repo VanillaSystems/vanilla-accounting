@@ -51,7 +51,7 @@ test('an entry typed without its payment is offered on the payment and, tied, bo
   const tied = books().journalEntries.find((e) => e.id === typed.id)!;
   assert.deepEqual([tied.transactionRef, tied.date, tied.origin, tied.amount, tied.accountDebit], ['RB-1001', '2026-10-02', 'manual', 386.6, '4400']);
   assert.deepEqual(unattachedFor(books(), 'RB-1001', ws.bankAccounts), [], 'nothing offered on a booked payment');
-  assert.ok(!unbookedPayments(books(), '').some((t) => t.ref === 'RB-1001'), 'the N form no longer offers it');
+  assert.ok(!unbookedPayments(books(), '', undefined, api.ws.bankAccounts).some((t) => t.ref === 'RB-1001'), 'the N form no longer offers it');
 
   const again = await api.send('POST', '/api/transactions/RB-1001/entries', { lines: [{ accountDebit: '4400', accountCredit: '1021', amount: 386.6, description: 'zweimal' }] });
   assert.deepEqual([again.status, again.json.code], [409, 'hasEntries'], 'a booked payment is not booked twice');
@@ -69,13 +69,13 @@ test('refused: a booking that does not add up to the payment, a ref that is no b
 
 test('the N form finds the open payments by date, amount or text, the typed amount first', () => {
   const b = books();
-  assert.deepEqual(unbookedPayments(b, '').map((t) => t.ref), ['RB-1002'], 'only the unbooked one');
-  assert.deepEqual(unbookedPayments(b, 'bau').map((t) => t.ref), ['RB-1002']);
-  assert.deepEqual(unbookedPayments(b, '05.10.2026').map((t) => t.ref), ['RB-1002']);
-  assert.deepEqual(unbookedPayments(b, '187.35').map((t) => t.ref), ['RB-1002']);
-  assert.deepEqual(unbookedPayments(b, 'malerbedarf'), []);
+  assert.deepEqual(unbookedPayments(b, '', undefined, api.ws.bankAccounts).map((t) => t.ref), ['RB-1002'], 'only the unbooked one');
+  assert.deepEqual(unbookedPayments(b, 'bau', undefined, api.ws.bankAccounts).map((t) => t.ref), ['RB-1002']);
+  assert.deepEqual(unbookedPayments(b, '05.10.2026', undefined, api.ws.bankAccounts).map((t) => t.ref), ['RB-1002']);
+  assert.deepEqual(unbookedPayments(b, '187.35', undefined, api.ws.bankAccounts).map((t) => t.ref), ['RB-1002']);
+  assert.deepEqual(unbookedPayments(b, 'malerbedarf', undefined, api.ws.bankAccounts), []);
   const tx = (ref: string, date: string, amount: number) => ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'DBIT' as const, description: ref });
   const many = { transactions: [tx('a', '2026-10-01', 50), tx('b', '2026-10-09', 20), tx('c', '2026-06-01', 50)], journalEntries: [], config: { closedThrough: '2026-06-30' } };
-  assert.deepEqual(unbookedPayments(many, '').map((t) => t.ref), ['b', 'a'], 'newest first, a filed one never');
-  assert.deepEqual(unbookedPayments(many, '', 50).map((t) => t.ref), ['a', 'b'], 'the typed amount first');
+  assert.deepEqual(unbookedPayments(many, '', undefined, []).map((t) => t.ref), ['b', 'a'], 'newest first, a filed one never');
+  assert.deepEqual(unbookedPayments(many, '', 50, []).map((t) => t.ref), ['a', 'b'], 'the typed amount first');
 });

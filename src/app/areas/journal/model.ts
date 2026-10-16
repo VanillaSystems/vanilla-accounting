@@ -7,6 +7,8 @@ import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../typ
 import { derivePeriod, filingKeyOf, type FilingLength, type Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
 import { evidenceCheck, type EvidenceCheck } from '../../../accounting/evidence-check.js';
+import { bookedStates } from '../../../accounting/payment-entries.js';
+import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
 import { chart, vat } from '../../../engines/index.js';
@@ -172,13 +174,13 @@ export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[
  * not zero, whose date, amount, text, counterparty, bank or ref hold every word typed. Those of the
  * typed amount first, then newest first.
  */
-export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, q: string, amount?: number): BankTransaction[] {
+export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, q: string, amount: number | undefined, accounts: readonly LedgerBankAccount[]): BankTransaction[] {
   const closed = books.config?.closedThrough;
-  const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));
+  const booked = bookedStates(books, accounts);
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const same = (t: BankTransaction) => amount !== undefined && Math.abs(t.amount - Math.abs(amount)) < 0.005;
   return books.transactions
-    .filter((t) => !booked.has(t.ref) && t.amount !== 0 && !(closed && t.date <= closed))
+    .filter((t) => booked(t.ref) !== 'booked' && t.amount !== 0 && !(closed && t.date <= closed))
     .filter((t) => {
       const h = [formatDate(t.date), t.date, fmt(t.amount), t.amount.toFixed(2), t.description, t.counterparty, t.reference, t.bank, t.currency, t.ref].join(' ').toLowerCase();
       return words.every((w) => h.includes(w));

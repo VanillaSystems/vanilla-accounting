@@ -24,6 +24,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
 import { Paper } from '../receipts/Paper.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
+import { bookedStates } from '../../../accounting/payment-entries.js';
 import { Parts } from '../bank/Parts.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, readsInWords } from './words.js';
@@ -655,8 +656,10 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const asked = forMe(q.questions, q.me).length;
   const send = (task: Task, outcome: string) => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); }); };
   const forms = useRef(new Map<string, HTMLFormElement | null>());
-  /** A payment still without an entry: the task carries its booking form, and «Gebucht» leads there instead of claiming it. */
-  const unbooked = (task: Task) => (task.item.kind === 'transaction' && books.transactions.some((x) => x.ref === task.item.id) && !(books.journalEntries ?? []).some((e) => e.transactionRef === task.item.id) ? task.item.id : undefined);
+  const accounts = useWorkspace()?.bankAccounts ?? [];
+  const booked = bookedStates(books, accounts);
+  /** A payment not booked (no entry, or lines short of the payment, r9k-2): the task carries its booking form, and «Gebucht» leads there instead of claiming it. */
+  const unbooked = (task: Task) => (task.item.kind === 'transaction' && books.transactions.some((x) => x.ref === task.item.id) && booked(task.item.id) !== 'booked' ? task.item.id : undefined);
   // «Eingereicht» seals the period for good: it asks once before it acts (r9n-36).
   const [confirming, setConfirming] = useState<string | undefined>();
   const answer = (task: Task, outcome: string) => () => {
@@ -670,7 +673,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     (inputs.find((i) => !i.value) ?? inputs[0])?.focus();
   };
   // A payment booked elsewhere meanwhile (on its receipt, in Buchungen) settles the task that waited for its booking (r4c-30).
-  const bookedMeanwhile = (task: Task) => task.item.kind === 'transaction' && task.outcomes.includes('booked') && (books.journalEntries ?? []).some((e) => e.transactionRef === task.item.id);
+  const bookedMeanwhile = (task: Task) => task.item.kind === 'transaction' && task.outcomes.includes('booked') && booked(task.item.id) === 'booked';
   const settled = useRef(new Set<string>());
   useEffect(() => {
     if (!canEdit) return;
@@ -683,7 +686,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const tasks = view.tasks.filter((task) => !bookedMeanwhile(task));
   // A payment nobody booked waits for the person even when no run asked about it (corner-9).
   const inTasks = new Set(tasks.map(unbooked).filter(Boolean));
-  const waiting = unbookedPayments(books).filter((p) => !inTasks.has(p.ref));
+  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0;
   // A firm not registered whose turnover passed the threshold has a task without any run (r5f-9).
   const threshold = thresholdPassed(books, useWorkspace()?.company.vat.registered);

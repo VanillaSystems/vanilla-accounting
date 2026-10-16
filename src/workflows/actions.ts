@@ -5,6 +5,7 @@
  */
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
+import { bookedState } from '../accounting/payment-entries.js';
 import { loadBooks, periodLock, type Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
@@ -132,10 +133,10 @@ export const ACTIONS: Record<string, Action> = {
   'ledger.transaction-state': {
     outcomes: ['open', 'booked', 'closed'],
     effects: [],
-    run(input) {
+    run(input, _effects, { ws }) {
       const t = tx(input);
       if (periodLock(books(input)).isClosed(t.date)) return { outcome: 'closed' };
-      return { outcome: books(input).journalEntries.some((e) => e.transactionRef === t.ref) ? 'booked' : 'open' };
+      return { outcome: bookedState(books(input), t.ref, ws.bankAccounts) === 'booked' ? 'booked' : 'open' };
     },
   },
 
@@ -148,6 +149,8 @@ export const ACTIONS: Record<string, Action> = {
       const scratch = structuredClone(books(input));
       const before = scratch.journalEntries.length;
       const t = tx(input);
+      // A payment a person booked in part (one line of a split undone, r9k-2) is hers to finish: no rule or model books over her lines.
+      if (bookedState(scratch, t.ref, ws.bankAccounts) === 'partly') return { outcome: 'undecided', output: { why: 'partlyBooked' } };
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries: scratch.journalEntries.slice(before) } };
       // A rule holds the payment for the person: its one question (workflows/ask) is the task, not «Bewegung von Hand buchen» (r7h-27).

@@ -96,9 +96,11 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   if (!tx) return undefined;
   const named = invoices && tx.direction === 'CRDT' ? namedInvoice(tx, invoices) : undefined;
   const cancelled = named?.cancelled ? { id: named.id, number: named.number } : undefined;
-  const [side] = paymentSides({ transactions: books.transactions, journalEntries: [] }, ref, accounts);
-  const bank = side && { account: side.account, side: side.paid < 0 ? 'accountCredit' as const : 'accountDebit' as const };
-  const paid = side ? Math.abs(side.paid) : tx.amount;
+  // What is still open on the bank side: the whole payment, or the rest after lines booked already (one line of a split undone, r9k-2).
+  const [side] = paymentSides(books, ref, accounts);
+  const open = side ? fromRappen(toRappen(side.paid) - toRappen(side.booked)) : undefined;
+  const bank = side && { account: side.account, side: (open ?? side.paid) < 0 ? 'accountCredit' as const : 'accountDebit' as const };
+  const paid = open !== undefined ? Math.abs(open) : tx.amount;
   const receiptIds = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
   const receipts = books.receipts.filter((r) => receiptIds.includes(r.id));
   // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
@@ -141,15 +143,16 @@ export function partsOf(tx: Pick<BankTransaction, 'parts' | 'currency' | 'amount
 /** One part of a collective payment in words: its payee and its reference (the invoice number), as the bank gave them. */
 export const partText = (p: Pick<BankTransactionPart, 'counterparty' | 'reference'>): string => [p.counterparty.trim(), p.reference?.trim()].filter(Boolean).join(' · ');
 
-const sidesWith = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
-  paymentSides({ transactions: books.transactions, journalEntries: lines.map((l, i) => ({ id: String(i), transactionRef: ref, date: '', ...l })) }, ref, accounts);
+/** The payment's bank sides with these lines added to the entries it has (a payment booked in part keeps them, r9k-2). */
+const sidesWith = (books: Pick<Index, 'transactions' | 'journalEntries'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
+  paymentSides({ transactions: books.transactions, journalEntries: [...(books.journalEntries ?? []).filter((e) => e.transactionRef === ref), ...lines.map((l, i) => ({ id: String(i), transactionRef: ref, date: '', ...l }))] }, ref, accounts);
 
 /** The first bank side these lines would leave off what the bank paid, or undefined when every side adds up. */
-export const offSide = (books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): PaymentSide | undefined =>
+export const offSide = (books: Pick<Index, 'transactions' | 'journalEntries'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): PaymentSide | undefined =>
   sidesWith(books, ref, lines, accounts).find((s) => s.booked !== s.paid);
 
 /** What is still to book on the payment's first bank side, in its currency and as the bank paid it (out: positive). */
-export function restOf(books: Pick<Index, 'transactions'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): number {
+export function restOf(books: Pick<Index, 'transactions' | 'journalEntries'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]): number {
   const [side] = sidesWith(books, ref, lines, accounts);
   return side ? fromRappen((side.paid < 0 ? -1 : 1) * (toRappen(side.paid) - toRappen(side.booked))) : 0;
 }

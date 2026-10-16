@@ -8,6 +8,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import type { Question } from '../../../questions/model.js';
+import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { journalOf } from '../journal/model.js';
 import { ledgerOf, needsYou } from '../receipts/model.js';
 import { unbookedPayments } from '../bank/model.js';
@@ -28,14 +29,14 @@ function dateOn(books: Index, q: Question): string | undefined {
 }
 
 /** The open issues of the days `from`–`to`, in the order a person works them off: questions, contradicting codes, unbooked payments, receipts without a payment. */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string): PeriodIssue[] {
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[]): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
     return within(date) ? [{ kind: 'question', q, date }] : [];
   });
   const evidence = journalOf(books).views.flatMap((v): PeriodIssue[] => (v.evidence && within(v.e.date) ? [{ kind: 'evidence', entry: v.e, check: v.evidence }] : []));
-  const unbooked = unbookedPayments(books).filter((t) => within(t.date)).map((tx): PeriodIssue => ({ kind: 'unbooked', tx }));
+  const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => ({ kind: 'unbooked', tx }));
   const l = ledgerOf(books, from);
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
   return [...asked, ...evidence, ...unbooked, ...unlinked];

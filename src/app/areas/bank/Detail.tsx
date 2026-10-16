@@ -133,13 +133,13 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           {(file || tx) && (
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
-              {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.entriesOf(tx.ref).length ? 'booked' : 'unbooked']} nav={nav} canEdit={canEdit} /> : null}
+              {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
               {file && <a className="dl inline" href={file} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
             </div>
           )}
-          {tx && canEdit && !closed && tx.amount && !b.entriesOf(tx.ref).length ? <PaymentBooking key={tx.ref} books={props.books} nav={nav} payment={tx.ref} /> : null}
+          {tx && canEdit && !closed && tx.amount && b.unbooked(tx) ? <PaymentBooking key={tx.ref} books={props.books} nav={nav} payment={tx.ref} /> : null}
           {tx ? <QuestionsOn key={`q-${tx.ref}`} on={{ kind: 'payment', id: tx.ref }} also={[...b.receiptsOf(tx.ref).map((id) => ({ kind: 'receipt' as const, id })), ...b.entriesOf(tx.ref).map((e) => ({ kind: 'entry' as const, id: e.id }))]} nav={nav} canEdit={canEdit} books={props.books} /> : null}
           {src ? (
             <div className="paper real stmt" role="button" tabIndex={0} aria-label={t('bank.openLarge')} onClick={() => setUi({ overlay: 'quick' })}>

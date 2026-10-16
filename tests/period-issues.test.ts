@@ -31,14 +31,14 @@ const books: Index = {
 const question = (id: string, on: string, status: Question['status'] = 'open'): Question => ({ id, on: { kind: 'payment', id: on }, text: '?', choices: [], by: 'app', origin: 'booking', topic: 'saleVat', askedAt: '2026-10-01T00:00:00Z', status });
 
 test('the review names each open issue of its quarter, and nothing of another quarter or already settled', () => {
-  const issues = periodIssues(books, [question('q1', 'KELLER'), question('q2', 'OKT'), question('q3', 'NATEL', 'answered')], '2026-07-01', '2026-09-30');
+  const issues = periodIssues(books, [question('q1', 'KELLER'), question('q2', 'OKT'), question('q3', 'NATEL', 'answered')], '2026-07-01', '2026-09-30', []);
   assert.deepEqual(issues.map((i) => [i.kind, i.kind === 'question' ? i.q.id : i.kind === 'evidence' ? i.entry.id : i.kind === 'unbooked' ? i.tx.ref : i.receipt.id]), [
     ['question', 'q1'],
     ['evidence', 'e-natel'],
     ['unbooked', 'SEP'],
     ['unlinked', 'lonely'],
   ]);
-  assert.deepEqual(periodIssues({ ...books, transactions: books.transactions.filter((t) => t.ref !== 'SEP' && t.ref !== 'NATEL'), receipts: [], journalEntries: books.journalEntries!.filter((e) => e.id !== 'e-natel') }, [], '2026-07-01', '2026-09-30'), [], 'nothing open: nothing listed');
+  assert.deepEqual(periodIssues({ ...books, transactions: books.transactions.filter((t) => t.ref !== 'SEP' && t.ref !== 'NATEL'), receipts: [], journalEntries: books.journalEntries!.filter((e) => e.id !== 'e-natel') }, [], '2026-07-01', '2026-09-30', []), [], 'nothing open: nothing listed');
 });
 
 const filed: Index = { ...books, config: { closedThrough: '2026-09-30' } };
