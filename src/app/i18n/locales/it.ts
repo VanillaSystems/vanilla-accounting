@@ -103,6 +103,8 @@ export default {
     'journal.all': 'tutte',
     'journal.filterNoReceipt': 'senza giustificativo',
     'journal.filterCorrections': 'correzioni',
+    'journal.originFilter': 'Registrato da',
+    'journal.originFilterTip': 'Solo le registrazioni «{who}» (ancora una volta: tutte). Il periodo qui sopra sceglie le date.',
     'journal.filters': 'Filtri',
     'journal.searchLabel': 'Cerca nelle registrazioni',
     'journal.searchTip': 'Cercare: premere /, poi digitare. Cerca nel testo, nel numero e nome del conto, nel codice IVA, nel riferimento e nell’importo. «6580» mostra tutte le registrazioni del conto.',

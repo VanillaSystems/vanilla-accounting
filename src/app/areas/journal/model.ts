@@ -77,20 +77,26 @@ function haystack(v: EntryView, accountName: (n: string) => string): string {
     formatDate(e.date), fmt(e.amount), fmt(chfAmount(e))].join(' ').toLowerCase();
 }
 
-export interface Rows { rows: EntryView[]; counts: Counts }
+/** Who booked an entry: Claude (the classifier), a person, an invoice, the year-end; what the AI did is reviewed as a list (treuhaender-43). */
+export const JOURNAL_ORIGINS = ['classify', 'manual', 'invoice', 'year-close'] as const;
+export type JournalOrigin = typeof JOURNAL_ORIGINS[number];
 
-/** The period's entries, newest first, those of one payment together; counts before the code filter and the search. */
-export function rowsOf(j: Journal, period: Period, filter: JournalFilter | undefined, vat: string | undefined, q: string | undefined, accountName: (n: string) => string): Rows {
+export interface Rows { rows: EntryView[]; counts: Counts; origins: Record<JournalOrigin, number> }
+
+/** The period's entries, newest first, those of one payment together; counts before the code filter, the origin and the search. */
+export function rowsOf(j: Journal, period: Period, filter: JournalFilter | undefined, vat: string | undefined, q: string | undefined, accountName: (n: string) => string, origin?: JournalOrigin): Rows {
   const pool = j.views.filter((v) => v.e.date >= period.from && v.e.date <= period.to);
   const counts: Counts = { alle: pool.length, ohneBeleg: pool.filter(FILTERS.ohneBeleg).length, korrekturen: pool.filter(FILTERS.korrekturen).length };
+  const origins = Object.fromEntries(JOURNAL_ORIGINS.map((o) => [o, pool.filter((v) => v.e.origin === o).length])) as Record<JournalOrigin, number>;
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const coded = vat ? hasVat(vat) : () => true;
   const rows = pool
     .filter((v) => !filter || FILTERS[filter](v))
+    .filter((v) => !origin || v.e.origin === origin)
     .filter((v) => coded(v.e))
     .filter((v) => { if (!words.length) return true; const h = haystack(v, accountName); return words.every((w) => h.includes(w)); })
     .sort((a, b) => b.e.date.localeCompare(a.e.date) || a.e.transactionRef.localeCompare(b.e.transactionRef));
-  return { rows, counts };
+  return { rows, counts, origins };
 }
 
 /** The rows by month, newest first: ['2026-09', [...]]. */

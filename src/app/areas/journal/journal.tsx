@@ -19,7 +19,7 @@ import { Kbd } from '../receipts/commands.js';
 import { NO_VAT } from '../codes/model.js';
 import { codeText, VatCards } from '../codes/vat-card.js';
 import { codesUi, setCodesUi } from '../codes/state.js';
-import { byMonth, rowsOf, JOURNAL_FILTERS, type EntryView, type JournalFilter } from './model.js';
+import { byMonth, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
 import { listed, setUi, toggleMonth, ui, useUi } from './state.js';
 import { journalFor, newEntryDate, runAct } from './commands.js';
 import { Detail } from './Detail.js';
@@ -37,7 +37,7 @@ function List(props: Props) {
   const s = useUi();
   const j = journalFor(books);
   const acName = getAccountMap();
-  const { rows, counts } = useMemo(() => rowsOf(j, period, s.filter, query.vat, query.q, (n) => acName[n] ?? ''), [j, period, s.filter, query.vat, query.q, acName]);
+  const { rows, counts, origins } = useMemo(() => rowsOf(j, period, s.filter, query.vat, query.q, (n) => acName[n] ?? '', s.origin), [j, period, s.filter, query.vat, query.q, acName, s.origin]);
   const months = byMonth(rows);
   const ids = months.filter(([m]) => !s.collapsed.has(m)).flatMap(([, xs]) => xs.map((v) => v.e.id));
   listed.ids = ids;
@@ -55,7 +55,7 @@ function List(props: Props) {
     if (ids.includes(v.e.id)) return;
     if (v.e.date < period.from || v.e.date > period.to) { if (!query.period) nav.go(at(route, v.e.date)); return; }
     toggleMonth(v.e.date.slice(0, 7), true);
-    if (s.filter && !rows.includes(v)) setUi({ filter: undefined });
+    if ((s.filter || s.origin) && !rows.includes(v)) setUi({ filter: undefined, origin: undefined });
   }, [route.id, ids[0], j]);
 
   const select = (id: string) => nav.select({ area: 'journal', id });
@@ -70,6 +70,14 @@ function List(props: Props) {
           {JOURNAL_FILTERS.filter((f) => counts[f] > 0 || s.filter === f).map((f) => (
             <button key={f} type="button" role="tab" aria-selected={s.filter === f} className={s.filter === f ? 'on' : ''} onClick={() => setFilter(f)}><span className="n">{counts[f]}</span>{t(FILTER_LABEL[f])}</button>
           ))}
+          {JOURNAL_ORIGINS.some((o) => origins[o] > 0) && (
+            <span className="origins" role="group" aria-label={t('journal.originFilter')}>
+              {JOURNAL_ORIGINS.filter((o) => origins[o] > 0 || s.origin === o).map((o) => (
+                <button key={o} type="button" aria-pressed={s.origin === o} className={s.origin === o ? 'on' : ''} data-origin={o} title={t('journal.originFilterTip', { who: t(`journal.origin.${o}`) })}
+                  onClick={() => setUi({ origin: s.origin === o ? undefined : o })}><span className="n">{origins[o]}</span>{t(`journal.origin.${o}`)}</button>
+              ))}
+            </span>
+          )}
           {query.vat && (
             <button type="button" className="vchip" data-testid="vat-filter" title={t('journal.vatFilterOff')} onClick={() => nav.setQuery({ vat: undefined })}>
               {t('journal.field.vatCode')} <b className="mono">{query.vat === NO_VAT ? t('journal.without') : query.vat}</b> ×
@@ -95,8 +103,8 @@ function List(props: Props) {
 
       {rows.length === 0 ? (
         <div className="empty">
-          <h2>{query.q || query.vat || s.filter ? t('journal.nothingFound') : t('journal.emptyTitle', { period: periodName(period) })}</h2>
-          {!query.q && !query.vat && !s.filter && canEdit && <p>{t('journal.emptyText')}</p>}
+          <h2>{query.q || query.vat || s.filter || s.origin ? t('journal.nothingFound') : t('journal.emptyTitle', { period: periodName(period) })}</h2>
+          {!query.q && !query.vat && !s.filter && !s.origin && canEdit && <p>{t('journal.emptyText')}</p>}
         </div>
       ) : (
         <div className="rows je" role="listbox" aria-label={t('area.journal')}>

@@ -103,6 +103,8 @@ export default {
     'journal.all': 'toutes',
     'journal.filterNoReceipt': 'sans justificatif',
     'journal.filterCorrections': 'corrections',
+    'journal.originFilter': 'Comptabilisé par',
+    'journal.originFilterTip': 'Seulement les écritures «{who}» (encore une fois : toutes). La période ci-dessus choisit les dates.',
     'journal.filters': 'Filtres',
     'journal.searchLabel': 'Rechercher dans les écritures',
     'journal.searchTip': 'Rechercher: appuyer sur /, puis taper. Cherche dans le texte, le numéro et le nom du compte, le code TVA, la référence et le montant. «6580» montre toutes les écritures du compte.',

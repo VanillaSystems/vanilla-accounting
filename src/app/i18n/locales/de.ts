@@ -100,6 +100,8 @@ export const messages = {
   'journal.all': 'alle',
   'journal.filterNoReceipt': 'ohne Beleg',
   'journal.filterCorrections': 'Korrekturen',
+  'journal.originFilter': 'Gebucht von',
+  'journal.originFilterTip': 'Nur die Buchungen «{who}» (noch einmal: alle). Den Zeitraum wählt die Periode oben.',
   'journal.filters': 'Filter',
   'journal.searchLabel': 'Buchungen durchsuchen',
   'journal.searchTip': 'Suchen: / drücken, dann tippen. Sucht in Text, Kontonummer und -name, MWST-Code, Referenz und Betrag. «6580» zeigt alle Buchungen auf dem Konto.',

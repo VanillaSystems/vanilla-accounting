@@ -103,6 +103,8 @@ export default {
     'journal.all': 'all',
     'journal.filterNoReceipt': 'without receipt',
     'journal.filterCorrections': 'corrections',
+    'journal.originFilter': 'Booked by',
+    'journal.originFilterTip': 'Only the entries «{who}» (again: all). The period above sets the dates.',
     'journal.filters': 'Filters',
     'journal.searchLabel': 'Search entries',
     'journal.searchTip': 'Search: press /, then type. Looks in the text, account number and name, VAT code, reference and amount. "6580" shows every entry on that account.',

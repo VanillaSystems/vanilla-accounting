@@ -6,12 +6,14 @@
 import { useSyncExternalStore } from 'react';
 import type { JournalEntryInput } from '../../lib/api.js';
 import { store, stored } from '../../shell/storage.js';
-import type { JournalFilter } from './model.js';
+import type { JournalFilter, JournalOrigin } from './model.js';
 
 export type Section = 'teile' | 'buchung' | 'herkunft';
 
 interface State {
   filter?: JournalFilter;
+  /** Only the entries one writer booked. */
+  origin?: JournalOrigin;
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */

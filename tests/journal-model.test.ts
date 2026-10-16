@@ -47,6 +47,19 @@ test('a payment waits for a receipt unless it has one, is a fee or needs none; f
   assert.deepEqual(rowsOf(j, q3, undefined, undefined, undefined, name).counts, { alle: 6, ohneBeleg: 2, korrekturen: 1 });
 });
 
+test('the origin filter lists what Claude booked, what a person did, within the period and with the other filters (treuhaender-43)', () => {
+  const by = (origin: Record<string, JournalEntry['origin']>) => ({ ...books, journalEntries: books.journalEntries!.map((e) => (origin[e.id] ? { ...e, origin: origin[e.id] } : e)) });
+  const b = by({ ok: 'classify', 'open-a': 'classify', 'open-b': 'manual', none: 'invoice', filed: 'classify' });
+  const j = journalOf(b);
+  const r = rowsOf(j, q3, undefined, undefined, undefined, name, 'classify');
+  assert.deepEqual(r.rows.map((v) => v.e.id), ['open-a', 'ok'], 'the filed quarter\'s entry is outside the period');
+  assert.deepEqual(r.origins, { classify: 2, manual: 1, invoice: 1, 'year-close': 0 });
+  assert.deepEqual(rowsOf(j, q3, 'ohneBeleg', undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'with «Ohne Beleg»');
+  const sept = parsePeriod('2026-09-11..2026-09-30', '2026-10-11')!;
+  assert.deepEqual(rowsOf(j, sept, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'a date range is the period');
+  assert.deepEqual(rowsOf(j, q3, undefined, undefined, undefined, name, 'year-close').rows, []);
+});
+
 test('filters, the code filter (a minus code is its own, none means without) and the search', () => {
   assert.deepEqual(ids('ohneBeleg'), ['open-a', 'open-b']);
   assert.deepEqual(ids('korrekturen'), ['corr']);
