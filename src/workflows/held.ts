@@ -1,8 +1,8 @@
 /**
- * The payments the company's ask rules hold (workflows/ask): which rule asked, and closing the
- * questions whose rule is gone (wishes3-7). A question stays open only while a rule still says to
- * ask about its payment; when the person removes or switches off that rule, its question closes
- * and the next inbox run books the payment.
+ * The payments the company's rules hold (workflows/ask): which rule asked, and closing the
+ * questions whose reason is gone (wishes3-7). A question stays open only while a rule still holds
+ * its payment: when the person removes or switches off an ask rule, or links the payout report a
+ * payout rule waited for (r5h-12), its question closes and the next inbox run books the payment.
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { hasBooks, loadBooks } from '../books/store.js';
@@ -23,9 +23,9 @@ export const askedBy = (r: Run): string | undefined => {
 export const askRuns = (engine: Pick<Engine, 'runs'>): Run[] =>
   engine.runs().filter((r) => r.workflow === ASK_WORKFLOW && r.mode === 'live' && r.state.status !== 'discarded');
 
-export const CLOSED_REASON = 'Die Regel, die fragen liess, gilt nicht mehr: der nächste Lauf bucht die Zahlung.';
+export const CLOSED_REASON = 'Keine Regel hält diese Zahlung mehr zurück (die Regel ist weg, oder der Bericht ist da): der nächste Lauf bucht sie.';
 
-/** Closes each waiting question whose payment no rule asks about any more. Returns the runs it closed. */
+/** Closes each waiting question whose payment no rule holds any more. Returns the runs it closed. */
 export async function closeAsksWithoutRule(engine: Pick<Engine, 'runs' | 'command'>, ws: Workspace): Promise<string[]> {
   const waiting = askRuns(engine).filter((r) => r.state.status === 'waiting' && r.item.kind === 'transaction' && askedBy(r) !== undefined);
   if (!waiting.length || !hasBooks(ws)) return [];

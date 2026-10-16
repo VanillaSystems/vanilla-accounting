@@ -10,6 +10,7 @@ import type { Books } from '../books/store.js';
 import type { BankTransaction } from '../types/index.js';
 import { mappedReceipts, paymentFacts, payoutLines, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
 import { chart } from '../engines/index.js';
+import { wordsIn } from '../export/texts.js';
 import type { RuleRow } from './rule-book.js';
 import { holds, loneWords, ruleFor, type PlacedRule, type RuleBooking } from './rules.js';
 
@@ -105,7 +106,7 @@ function bookedNow(books: Books, tx: BankTransaction, bank: string, decided = fa
 /**
  * What a rule's booking books for `tx`. A payout rule with its report linked keeps the figures the
  * payment is booked with today and puts them on its accounts and codes (payoutLines); without a
- * report, or not booked yet, it books as without one: the whole payout on its account.
+ * report, or not booked yet, the lines are the proposal: the whole payout on its account.
  */
 function wouldBook(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): RuleLine[] {
   const mapped = mappedReceipts(books, tx);
@@ -144,7 +145,10 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       return {
         ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction,
         text: [tx.description, tx.counterparty && !tx.description.includes(tx.counterparty) ? tx.counterparty : ''].filter(Boolean).join(' · '),
-        would: t.kind === 'book' ? { kind: 'book', lines } : { kind: 'ask', question: t.question, lines },
+        would: t.kind === 'ask' ? { kind: 'ask', question: t.question, lines }
+          // A payout rule without the payout report asks, the whole payout its proposal (r4c-21).
+          : t.booking.fees && !mappedReceipts(books, tx).length ? { kind: 'ask', question: wordsIn('de').t('rules.say.payoutAsk'), lines }
+            : { kind: 'book', lines },
         now,
         ...(JSON.stringify(decided) !== JSON.stringify(now) ? { beforeAi: decided } : {}),
         ...(deciderRow && ruleKey(deciderRow) !== key ? { decidedBy: deciderRow.id } : {}),

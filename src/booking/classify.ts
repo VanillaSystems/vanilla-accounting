@@ -327,7 +327,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const code = lines[0].vat;
   // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
-  // A payout rule without its report books the whole payout as sales until the report is linked (its link books it again).
+  // A payout rule without its report: these lines are the proposal the person may take (the whole payout as sales); a report linked later books it again.
   const noReport = booking.fees ? `; ${wordsIn('de').t('rules.say.noPayoutReport')}` : '';
   return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts })
     .map((e) => ({ ...e, rule: placed.rule.id }));
@@ -436,6 +436,12 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       // The payout report's figures need reading: the model reads them, the rule books them.
       payouts.set(tx.ref, { placed, booking: then.booking, fees: then.booking.fees });
       toModel.push(tx);
+      continue;
+    }
+    if (then.kind === 'book' && then.booking.fees) {
+      // No report to read the gross sales and the fees from: the payout waits for the person (r4c-21, r5h-12), with the whole payout as sales to take over.
+      log(`  ${tx.ref}  waits for its payout report (rule ${placed.rule.id})`);
+      outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: wordsIn('de').t('rules.say.payoutAsk'), entries: ruleEntries(books, tx, placed, then.booking, context, fx) });
       continue;
     }
     if (then.kind === 'book') {

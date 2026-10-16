@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { updateBooks, RequestError } from '../books.js';
+import { updateBooks, RequestError, WS } from '../books.js';
 import { link, relinked, unlink } from '../edits.js';
 import type { BookChange } from '../../types/assistant.js';
-import { bookAgain } from './automation.js';
+import { bookAgain, engine } from './automation.js';
+import { closeAsksWithoutRule } from '../../workflows/held.js';
 
 export const router = Router();
 
@@ -12,7 +13,10 @@ function linkBody(body: unknown): { receiptId: string; transactionRef: string } 
   return { receiptId, transactionRef };
 }
 
-/** A link made or taken back by hand: the payment's automatic booking is made again with what is linked now. */
+/**
+ * A link made or taken back by hand: the payment's automatic booking is made again with what is
+ * linked now, and a payout that waited for this report as a question stops waiting (r5h-12).
+ */
 async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: true; again: string[] }> {
   const { receiptId: receipt, transactionRef: payment } = linkBody(body);
   const change: BookChange = { kind, receipt, payment };
@@ -20,6 +24,7 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
     (kind === 'link' ? link : unlink)(books, receipt, payment);
     return relinked(books, [change]);
   });
+  await closeAsksWithoutRule(engine(), WS);
   if (payments.length) await bookAgain(file ?? payment);
   return { ok: true, again: payments };
 }

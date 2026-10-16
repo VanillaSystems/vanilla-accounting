@@ -194,6 +194,8 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- A card terminal's payout without its report is no longer booked. Before, a payout rule («bei SumUp immer so», `fees:`) booked the whole payout as sales at the rule's rate when no payout report was linked, so the VAT was charged on the net payout and the fees were not apart, and a «Verkauf ohne Rechnung» question was asked on top. Now the payout waits for the person as a question under Aufgaben («Frag: Auszahlungsbericht fehlt: Bericht verknüpfen, oder die ganze Auszahlung als Umsatz buchen?») with the whole payout as sales as the proposal: «Übernehmen» books that, stamped with the rule, and a report linked later books it again in the open period; linking the report while it waits closes the question, and the next run books the gross sales, the refunds and the fees from the report. Nothing provisional is ever filed. Persona findings r4c-21, r5h-12.
+
 - **⚠ action** The books move into a folder of their own and split by fiscal year
   ([ADR 0013](docs/adr/0013-workspace-layout-and-ownership.md)). Your books' folder becomes the
   company's repository; the books lie in its `vanilla-accounting/`: the settings and `knowledge/`
