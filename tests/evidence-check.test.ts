@@ -26,9 +26,19 @@ test('a zero code while the linked receipt shows 8.1 %: the rate code of the sam
   assert.deepEqual(evidenceCheck(entry({ vatCode: 'I0', accountDebit: '6500' }), [withVat, noVat], CLOSED), { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r1', 'r2'] });
 });
 
-test('a refund keeps its minus', () => {
+test('a refund keeps its minus; a minus rate code lowers the input tax and needs no receipt, so it is never flagged (r8h-22)', () => {
   assert.deepEqual(evidenceCheck(entry({ vatCode: '-M0', accountDebit: '1021', accountCredit: '4400' }), [withVat], CLOSED), { kind: 'receiptShowsVat', rate: 8.1, code: '-M81', receipts: ['r1'] });
-  assert.deepEqual(evidenceCheck(entry({ vatCode: '-M81', accountDebit: '1021', accountCredit: '4400' }), [], CLOSED), { kind: 'vatWithoutReceipt', code: '-M0' });
+  assert.equal(evidenceCheck(entry({ vatCode: '-M81', accountDebit: '1021', accountCredit: '4400' }), [], CLOSED), undefined, 'a credit note at -M81 without a PDF claims no input tax');
+  assert.equal(evidenceCheck(entry({ vatCode: '-I81', accountDebit: '1021', accountCredit: '6500' }), [noVat], CLOSED), undefined);
+});
+
+test('a code a person or the AI sidebar chose is explained, never offered as a one-click flip: the check carries `decided` (r8h-22)', () => {
+  const person = { kind: 'person' as const, at: '2026-10-16T09:00:00.000Z' };
+  const ai = { kind: 'assistant' as const, at: '2026-10-16T09:00:00.000Z', conversation: 'c1' };
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'M81', by: person }), [], CLOSED), { kind: 'vatWithoutReceipt', code: 'M0', decided: true });
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'M0', by: ai }), [withVat], CLOSED), { kind: 'receiptShowsVat', rate: 8.1, code: 'M81', receipts: ['r1'], decided: true });
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'M81', by: { kind: 'model', model: 'm' } }), [], CLOSED), { kind: 'vatWithoutReceipt', code: 'M0' }, 'the model\'s code is the app\'s: the click stays');
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'M81', by: { kind: 'rule', rule: 'r' } }), [], CLOSED), { kind: 'vatWithoutReceipt', code: 'M0' });
 });
 
 test('a rate code without a receipt that shows Swiss VAT: the zero code of the same family', () => {
