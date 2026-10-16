@@ -115,3 +115,10 @@ file records every decision a person might have made differently, newest last.
       - check the net-rate form's box numbers 323/333 against the real ESTV form 0553 before a net-rate firm files (taken from Banana's code list, because the PDF was not reachable);
       - whether the filing period stays a free choice per method;
       - whether to hide the MWST entry for a firm not registered (kept for now, with the threshold watch).
+27. Merged honesty2, safety, filedsale and seams; build rc.262 is in round 5 (other firms, Huber). Disk is tight, about 12 GB free: one VM per tester, each stops below 5 GB.
+    Queued for the next fix round:
+    - the private account by legal form (2850 for an Einzelfirma, not 2451);
+    - the privateUse setup question names K81-B for every kind of firm;
+    - the server routes do not check typed codes (only the forms do);
+    - «im eingereichten Quartal» wording for half years;
+    - whether the 0535 is also the correction form on the net tax rate method (Ken or the ESTV).
