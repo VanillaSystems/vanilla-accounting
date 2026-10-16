@@ -8,6 +8,7 @@ import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, deleteEntry, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
+import { bookPaymentAgain } from './automation.js';
 
 export const router = Router();
 
@@ -93,11 +94,20 @@ router.post('/api/journal-entries', (req, res) => {
   });
 });
 
-/** Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as saved, or gone. */
+/**
+ * Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as
+ * saved, or gone. A bank payment the undo leaves without a booking gets its booking run again, so
+ * the question the person had answered by booking it is back under Aufgaben (r8k-6).
+ */
 router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   const edit = (await handEdits(WS)).find((h) => h.id === req.params.id);
   if (!edit) throw new RequestError(404, 'Diese Buchung hat seit dem letzten Speichern keine Änderung von Hand.', { code: 'gone', params: { what: 'handEdit' } });
-  withBooks(res, (books) => { restoreSaved(books, edit.id, edit.saved, edit.kept); return { ok: true }; });
+  const unbooked = updateBooks((books) => {
+    restoreSaved(books, edit.id, edit.saved, edit.kept);
+    return books.transactions.some((t) => t.ref === edit.ref && t.source !== 'manual') && !books.journalEntries.some((e) => e.transactionRef === edit.ref);
+  });
+  if (unbooked) await bookPaymentAgain(edit.ref);
+  res.json({ ok: true });
 });
 
 /** A deletion by hand: the booking goes, and is recorded for Änderungen's «Rückgängig» also when no save held it (r7h-31). */

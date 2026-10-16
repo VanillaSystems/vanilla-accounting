@@ -155,6 +155,18 @@ export async function bookAgain(file: string): Promise<void> {
   if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
 }
 
+export const BOOKING = 'booking';
+
+/**
+ * The booking run of one payment a person's undo left without a booking (r8k-6): what
+ * «Automatisch buchen» starts. Without a model it holds at the hand step, so the task the person
+ * had answered by booking is back under Aufgaben; with one it books the payment as any other.
+ */
+export async function bookPaymentAgain(ref: string): Promise<void> {
+  const r = await engine().start(BOOKING, { kind: 'transaction', id: ref }, { kind: 'manual' }, 'live');
+  if (!r.ok && r.refusal !== 'not-runnable') console.error(`${BOOKING}: ${r.refusal} ${r.detail ?? ''}`);
+}
+
 /**
  * Inbox files a run was started for: a file no step can read starts no second run on its own.
  * One that left the inbox is forgotten, so the same bytes arriving again (a phone's retry) start
