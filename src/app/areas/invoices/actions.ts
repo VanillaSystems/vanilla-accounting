@@ -10,7 +10,7 @@ import type { Nav } from '../index.js';
 import { localToday, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
 import type { Location } from '../../shell/route.js';
 import { setUi } from './state.js';
-import { put, reloadInvoices } from './data.js';
+import { edits, put, reloadInvoices } from './data.js';
 import { inOrder } from '../../lib/in-order.js';
 import { customerChange, routeId } from './model.js';
 import { filing, invoiceRates, invoicing } from '../../../engines/index.js';
@@ -54,8 +54,9 @@ const draftSaves = inOrder();
 export async function saveDraft(nav: Nav, draft: Draft, patch: DraftChange): Promise<void> {
   const local = { ...draft } as Draft & Record<string, unknown>;
   for (const [k, v] of Object.entries(patch)) { if (v === null) delete local[k]; else local[k] = v; }
+  edits.touch(draft.id);
   put({ invoice: local });
-  const { result: saved, latest } = await draftSaves(draft.id, () => run(nav, api.patchDraft(draft.id, patch)));
+  const { result: saved, latest } = await edits.saving(draft.id, draftSaves(draft.id, () => run(nav, api.patchDraft(draft.id, patch))));
   if (!latest) return;
   if (saved) put({ invoice: saved });
   else void reloadInvoices();

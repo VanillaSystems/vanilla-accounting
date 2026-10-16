@@ -29,3 +29,21 @@ test('a failed save does not stop the next one', async () => {
   await assert.rejects(a, /refused/);
   assert.deepEqual(await b, { result: 'ok', latest: true });
 });
+
+test('a read of the records that answers while a draft is being saved keeps the draft as it is on the screen (r5h-22: unit, then VAT 0.6 s later, went back to 8.1 %)', async () => {
+  const { localEdits } = await import('../src/app/lib/local-edits.js');
+  const edits = localEdits();
+  const server0 = [{ id: 'd1', unit: '', vat: 8.1 }, { id: 'd2', unit: 'h', vat: 8.1 }];
+  // The books changed, so the page reads the records again; meanwhile the person edits d1 twice.
+  const merge = edits.read();
+  let release!: () => void;
+  const saved = edits.saving('d1', new Promise<void>((r) => { release = r; }));
+  edits.touch('d1');
+  const local = [{ id: 'd1', unit: 'flat', vat: 2.6 }, server0[1]];
+  assert.deepEqual(merge(server0, local), local, 'the older answer does not undo the edits on the screen');
+  release();
+  await saved;
+  const after = edits.read();
+  const server1 = [{ id: 'd1', unit: 'flat', vat: 2.6 }, { id: 'd2', unit: 'day', vat: 8.1 }];
+  assert.deepEqual(after(server1, local), server1, 'once saved, a read started later is the truth again');
+});
