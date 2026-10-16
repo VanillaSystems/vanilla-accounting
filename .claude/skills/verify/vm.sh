@@ -125,7 +125,7 @@ EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>ch.vanillasystems.verify.app</string>
+  <key>Label</key><string>local.vanilla-accounting.verify</string>
   <key>ProgramArguments</key><array><string>/bin/sh</string><string>/Users/admin/Library/Application Support/vanilla-verify/launch.sh</string></array>
   <key>RunAtLoad</key><true/>
   <key>ProcessType</key><string>Interactive</string>
@@ -134,7 +134,7 @@ EOF
   <key>StandardErrorPath</key><string>/tmp/va.log</string>
 </dict></plist>
 EOF
-  ssh_ 'G=gui/$(id -u); launchctl bootout $G/ch.vanillasystems.verify.app 2>/dev/null; pkill -9 -f "Contents/MacOS/Vanilla Accountin[g]" 2>/dev/null; sleep 2; : > /tmp/va.log; launchctl bootstrap $G ~/Library/Application\ Support/vanilla-verify/app.plist || exit 1; for i in $(seq 1 40); do curl -s -m 2 localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "no DevTools port: a macOS prompt (Documents, Downloads) blocks the app? vm.sh shot, click Allow, vm.sh app again; else /tmp/va.log" >&2; exit 1'
+  ssh_ 'G=gui/$(id -u); launchctl bootout $G/local.vanilla-accounting.verify 2>/dev/null; pkill -9 -f "Contents/MacOS/Vanilla Accountin[g]" 2>/dev/null; sleep 2; : > /tmp/va.log; launchctl bootstrap $G ~/Library/Application\ Support/vanilla-verify/app.plist || exit 1; for i in $(seq 1 40); do curl -s -m 2 localhost:9222/json/list | grep -q 127.0.0.1 && exit 0; sleep 1; done; echo "no DevTools port: a macOS prompt (Documents, Downloads) blocks the app? vm.sh shot, click Allow, vm.sh app again; else /tmp/va.log" >&2; exit 1'
   [ -f "$ROOT/$RUN/tunnel.pid" ] && kill "$(cat "$ROOT/$RUN/tunnel.pid")" 2>/dev/null || true
   PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
   ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=8 -N -L "$PORT:127.0.0.1:9222" "admin@$IP" < /dev/null > /dev/null 2>&1 & echo $! > "$ROOT/$RUN/tunnel.pid"
