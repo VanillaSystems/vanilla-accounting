@@ -2300,6 +2300,7 @@ export default {
     'automation.tasksEmpty': 'Niente ti aspetta.',
     'automation.unbookedTitle': { one: '{n} pagamento senza registrazione', other: '{n} pagamenti senza registrazione' },
     'automation.unbookedLead': 'Nel periodo aperto, registrati da nessuna esecuzione e da nessuno. Aprire il pagamento e registrarlo a mano, o «Registra automaticamente».',
+    'automation.unbookedWaits': "Registrazione eliminata: aspetta te, nessuna esecuzione la registra",
     'automation.thresholdTitle': 'Assoggettamento IVA: la cifra d’affari {year} ha raggiunto la soglia di {threshold}',
     'automation.thresholdOpen': 'Aprire la pagina IVA',
     'issues.title': { one: 'Ancora aperto in {period}: {n} punto', other: 'Ancora aperto in {period}: {n} punti' },

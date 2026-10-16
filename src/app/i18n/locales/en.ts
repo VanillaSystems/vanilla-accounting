@@ -2300,6 +2300,7 @@ export default {
     'automation.tasksEmpty': 'Nothing waits for you.',
     'automation.unbookedTitle': { one: '{n} payment without an entry', other: '{n} payments without an entry' },
     'automation.unbookedLead': 'In the open period, booked by no run and by nobody. Open the payment and book it by hand, or «Book automatically».',
+    'automation.unbookedWaits': "Booking deleted: waits for you, no run books it",
     'automation.thresholdTitle': 'VAT liability: the turnover {year} has reached the threshold of {threshold}',
     'automation.thresholdOpen': 'Open the VAT page',
     'issues.title': { one: 'Still open in {period}: {n} item', other: 'Still open in {period}: {n} items' },

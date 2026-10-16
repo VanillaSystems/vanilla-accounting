@@ -12,6 +12,7 @@ import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
 import type { Books } from '../../books/store.js';
 import { WS, assertOpen, readBooks, refDates, updateBooks, RequestError } from '../books.js';
+import { bookedAgain } from '../edits.js';
 import { learnFromCorrection } from '../questions.js';
 import { askSalesWithoutVat } from '../../intake/sale-questions.js';
 
@@ -47,6 +48,8 @@ router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   const done = updateBooks((books) => {
     openTransaction(books, txRef, overwrite);
     books.journalEntries = [...books.journalEntries.filter((je) => je.transactionRef !== txRef), ...entries];
+    // «Automatisch buchen» is the person asking the app: a payment waiting for her waits no more (r10h-5).
+    bookedAgain(books, txRef);
     return { ok: true, count: entries.length, entries };
   });
   // A sale booked now without an invoice is asked about now, as its reason says, not at the next inbox run (r4c-36).

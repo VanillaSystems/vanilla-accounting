@@ -335,6 +335,12 @@ export interface BankTransaction {
    * payer for certain. A filed transaction keeps what it was filed with.
    */
   counterpartyIban?: string;
+  /**
+   * The payment waits for a person (r10h-5): its booking was deleted on purpose, by hand or on a
+   * wish in the KI sidebar, so no run books it again. The mark goes with the next booking on it,
+   * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
+   */
+  waitsForPerson?: { since: string; why: 'bookingDeleted' };
 }
 
 /** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */

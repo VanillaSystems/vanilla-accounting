@@ -2297,6 +2297,7 @@ export const messages = {
   'automation.tasksEmpty': 'Nichts wartet auf dich.',
   'automation.unbookedTitle': { one: '{n} Zahlung ohne Buchung', other: '{n} Zahlungen ohne Buchung' },
   'automation.unbookedLead': 'In der offenen Periode, von keinem Lauf und von niemandem gebucht. Die Zahlung öffnen und von Hand buchen, oder «Automatisch buchen».',
+  'automation.unbookedWaits': "Buchung gelöscht: wartet auf dich, kein Lauf bucht sie",
   'automation.thresholdTitle': 'MWST-Pflicht: der Umsatz {year} hat die Grenze von {threshold} erreicht',
   'automation.thresholdOpen': 'MWST-Seite öffnen',
   'issues.title': { one: 'Noch offen in {period}: {n} Punkt', other: 'Noch offen in {period}: {n} Punkte' },

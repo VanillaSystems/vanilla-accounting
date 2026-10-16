@@ -752,6 +752,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 <button type="button" className="linkbtn" data-pay={p.ref} onClick={() => nav.go(at({ area: 'bank', payment: p.ref }, p.date))}>
                   <span className="mono">{formatDate(p.date)}</span> {payText(p).name} <span className="mono">{p.currency} {fmt(signed(p))}</span>
                 </button>
+                {p.waitsForPerson && <span className="m"> · {t('automation.unbookedWaits')}</span>}
               </li>
             ))}
           </ul>

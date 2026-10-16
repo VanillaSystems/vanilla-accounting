@@ -23,10 +23,11 @@ function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void):
   return asked.length ? [{ code: 'saleAsked', count: asked.length }] : [];
 }
 
+/** The open payments without a booking, less those waiting for a person (a booking deleted on purpose, r10h-5). */
 const unbooked = (books: Books) => {
   const lock = periodLock(books);
   const booked = new Set(books.journalEntries.map((je) => je.transactionRef));
-  return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date));
+  return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson);
 };
 
 export function classifyStep({ force = false } = {}): StepRun {

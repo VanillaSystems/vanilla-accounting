@@ -2300,6 +2300,7 @@ export default {
     'automation.tasksEmpty': 'Rien ne vous attend.',
     'automation.unbookedTitle': { one: '{n} paiement sans écriture', other: '{n} paiements sans écriture' },
     'automation.unbookedLead': 'Dans la période ouverte, comptabilisés par aucun traitement ni personne. Ouvrir le paiement et le comptabiliser à la main, ou « Comptabiliser automatiquement ».',
+    'automation.unbookedWaits': "Écriture supprimée : attend ta décision, aucune exécution ne la comptabilise",
     'automation.thresholdTitle': 'Assujettissement TVA : le chiffre d’affaires {year} a atteint le seuil de {threshold}',
     'automation.thresholdOpen': 'Ouvrir la page TVA',
     'issues.title': { one: 'Encore ouvert en {period} : {n} point', other: 'Encore ouvert en {period} : {n} points' },

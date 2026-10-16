@@ -301,7 +301,17 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   }
   const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
   books.journalEntries.push(entry);
+  bookedAgain(books, entry.transactionRef);
   return entry;
+}
+
+/**
+ * The payment's wait for a person ends (r10h-5): someone booked it, or asked the app to. Called by
+ * every path that books a payment; the mark is set by deleteEntry alone.
+ */
+export function bookedAgain(books: Books, ref: string): void {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (tx?.waitsForPerson) delete tx.waitsForPerson;
 }
 
 /**
@@ -340,6 +350,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), by: { kind: 'person', at },
   }));
   books.journalEntries.push(...entries);
+  bookedAgain(books, ref);
   return entries;
 }
 
@@ -366,7 +377,6 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
   return before;
 }
 
-/** Deletes a booking of the open period; returns it as it was. */
 /**
  * A booking a person changed or made by hand put back as the last save holds it (`saved`), or
  * taken out when it was booked since (Änderungen › «Rückgängig», src/saving/changes.ts handEdits).
@@ -385,12 +395,20 @@ export function restoreSaved(books: Books, id: string, saved: JournalEntry | und
     throw new RequestError(409, `Die Zahlung ${saved.transactionRef} ist seit dem Löschen wieder gebucht (${since.length} Buchungen, ${by === 'person' ? 'von Hand' : 'von der App'}): sie bleibt. Zuerst die heutige Buchung in Buchungen löschen.`, { code: 'bookedSince', params: { payment: saved.transactionRef, entries: since.length, by } });
   }
   books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries, saved];
+  bookedAgain(books, saved.transactionRef);
 }
 
+/**
+ * Deletes a booking of the open period; returns it as it was. A bank payment whose booking a person
+ * deletes (by hand, or on her wish through the KI sidebar) waits for her from then on (r10h-5): no
+ * run books it again until she books it or asks the app to (bookedAgain).
+ */
 export function deleteEntry(books: Books, id: string): JournalEntry {
   const entry = entryOf(books, id);
   assertOpen(books, [entry.date], 'deleteEntry');
   books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
+  const tx = books.transactions.find((t) => t.ref === entry.transactionRef);
+  if (tx) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
   return entry;
 }
 
