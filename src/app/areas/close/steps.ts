@@ -61,6 +61,7 @@ export function problemText(p: ShownProblem, year: string): string {
     case 'fxToBook': return tx('yearClose.problem.fxToBook', { account: p.account, difference: signed(p.difference) });
     case 'undecided': return tx('yearClose.problem.undecided', { templates: p.templates.map((id) => tx(`yearClose.template.${id}`)).join(', ') });
     case 'unbalanced': return tx('yearClose.problem.unbalanced', { residual: fmt(p.residual) });
+    case 'notInChart': case 'outsideStatements': return tx(`yearClose.problem.${p.code}`, { account: p.account, amount: fmt(p.amount) });
     case 'cashNegative': return t('journal.warn.cashNegative', { account: p.account, date: formatDate(p.date), balance: fmt(p.balance) });
     case 'swappedSale': return t('journal.warn.swappedSale', { accountDebit: p.accountDebit, accountCredit: p.accountCredit });
     default: return tx(`yearClose.problem.${p.code}`, p as unknown as Record<string, string>);
@@ -126,9 +127,10 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
     ? { id: 'invoices', label: t('close.check.invoices'), state: d.templates.find((tp) => tp.id === 'receivables')?.state ? 'ok' : 'open', detail: t('close.invoicesOpen', { n: r.invoices.length, amount: fmt(r.total) }), go: { step: 'entries' } }
     : { id: 'invoices', label: t('close.check.invoices'), state: 'ok', detail: t('close.invoicesNone') };
   const l = d.ledger;
-  const balance: CheckRow = l.residual === 0
+  // Balanced means the Bilanz as shown balances: a balance on an account outside the chart fails it too (r9c-2).
+  const balance: CheckRow = l.balanced
     ? { id: 'balance', label: t('close.check.balance'), state: 'ok', detail: t('yearClose.balanced') }
-    : { id: 'balance', label: t('close.check.balance'), state: 'warn', detail: [t('yearClose.unbalanced', { amount: fmt(l.residual) }), ...l.causes.map(causeText)].join(' · '), go: { area: 'balance' } };
+    : { id: 'balance', label: t('close.check.balance'), state: 'warn', detail: [...(l.residual === 0 ? [] : [t('yearClose.unbalanced', { amount: fmt(l.residual) })]), ...l.causes.map(causeText)].join(' · '), go: { area: 'balance' } };
   return [...engine, fx, ...vat, entries, invoices, balance];
 }
 

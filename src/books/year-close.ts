@@ -20,7 +20,7 @@ import { parseStatementBalances } from '../providers/camt053/statement-balances.
 import { estvRates, type EstvRates } from '../accounting/fx-conversion.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import {
-  applyRevaluation, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, revaluationEntries,
+  applyRevaluation, bookedFor, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, revaluationEntries,
   yearClose, yearEndAccounts, yearEndTemplates, PROFIT_ALLOCATION_ID, RECEIVABLES_ID, receivablesEntryId, receivablesReversal,
   type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState,
 } from '../accounting/year-close.js';
@@ -99,6 +99,15 @@ export function yearCloseOf(ws: Workspace, year: string, rates: EstvRates = rate
 /** A refusal of the year close: `why` for the screens (src/types/refusal.ts), the message for the CLI. */
 export class YearCloseRefused extends Refused {}
 
+/** The year end books only on accounts of the chart (r9c-2): a booking on 1100 with no 1100 in the chart drops out of the Bilanz. */
+const assertInChart = (ws: Workspace, ...accounts: string[]) => {
+  const chart = new Set(chartOf(ws));
+  // Books without a chart yet (no accounts.json) have nothing to check against, as differenceCauses reads it.
+  if (!chart.size) return;
+  const missing = accounts.find((a) => a && !chart.has(a));
+  if (missing) throw new YearCloseRefused({ code: 'accountNotInChart', params: { account: missing } }, `Account ${missing} is not in the chart of accounts: add it first (Firma › Kontenplan), or book on another.`);
+};
+
 const assertYearOpen = (books: Books, year: string, what: string) => {
   const closedThrough = books.config.closedThrough;
   if (closedThrough && closedThrough >= `${year}-12-31`) throw new YearCloseRefused({ code: 'yearClosedAlready', params: { year, through: closedThrough } }, `${year} is closed through ${closedThrough}: ${what}`);
@@ -115,6 +124,7 @@ export function bookRevaluation(ws: Workspace, year: string, rates: EstvRates = 
   const missing = rows.filter((r) => r.status === 'no-rate').map((r) => r.currency);
   if (missing.length) throw new YearCloseRefused({ code: 'rateNotPublished', params: { year, currencies: [...new Set(missing)].join(', ') } }, `The ESTV rate of 31.12.${year} is not published yet for ${[...new Set(missing)].join(', ')}: npm run fetch-rates -- --year ${year} once it is.`);
   const entries = revaluationEntries(year, rows, yearEndAccounts(chartOf(ws)).fxDifference);
+  assertInChart(ws, ...entries.flatMap((e) => [e.accountDebit, e.accountCredit]));
   update(books, moduleActor('year-close'), (b) => applyRevaluation(b, year, entries));
   saveBooks(ws, books);
   return entries;
@@ -132,6 +142,27 @@ export function markTemplate(ws: Workspace, year: string, id: string, state: Tem
   return next;
 }
 
+/**
+ * «zurück» on a step: the step is open again, and the booking the step made on 31.12. goes with it
+ * (r9c-16): a person's entry on the template's accounts, the receivables entry by its id. An entry
+ * the year close itself wrote (origin year-close) is not a step's booking and stays.
+ */
+export function reopenTemplate(ws: Workspace, year: string, id: string): { state: YearCloseState; removed: JournalEntry[] } {
+  const books = loadBooks(ws);
+  const template = yearEndTemplates().find((t) => t.id === id);
+  const ids = new Set([
+    ...(id === RECEIVABLES_ID ? [receivablesEntryId(year)] : []),
+    ...(template ? bookedFor(books.journalEntries, year, template).map((b) => b.id) : []),
+  ]);
+  const removed = books.journalEntries.filter((e) => ids.has(e.id) && e.origin === 'manual');
+  if (removed.length) {
+    assertYearOpen(books, year, 'its bookings of 31.12. stay.');
+    update(books, PERSON, (b) => { b.journalEntries = b.journalEntries.filter((e) => !removed.includes(e)); });
+    saveBooks(ws, books);
+  }
+  return { state: markTemplate(ws, year, id, null), removed };
+}
+
 export interface EntryInput {
   date: string;
   accountDebit: string;
@@ -147,6 +178,7 @@ export interface EntryInput {
  * one from a year-end template marks the template done.
  */
 export function bookEntry(ws: Workspace, input: EntryInput, template?: string): JournalEntry {
+  assertInChart(ws, input.accountDebit, input.accountCredit);
   const books = loadBooks(ws);
   const entry = update(books, PERSON, (b) => {
     const year = input.date.slice(0, 4);

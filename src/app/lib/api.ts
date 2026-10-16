@@ -289,7 +289,8 @@ export const api = {
   changesCommand: (cmd: SavingCommand) => request<SavingResult>('POST', '/api/changes', cmd),
   changesDiff: (source: string, path: string) => request<FileDiff>('GET', `/api/changes/diff?source=${encodeURIComponent(source)}&path=${encodeURIComponent(path)}`),
   bookRevaluation: (year: string) => request<{ entries: JournalEntry[] }>('POST', `/api/year-close/${year}/revaluation`),
-  markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<unknown>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),
+  /** `state: null` opens the step again and removes the booking it made; `removed` lists it for the undo (r9c-16). */
+  markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<{ removed?: JournalEntry[] }>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),
   bookYearEndEntry: (year: string, input: YearEndEntryInput) => request<{ entry: JournalEntry }>('POST', `/api/year-close/${year}/entries`, input),
   closeYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/close`),
   openYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/open`),

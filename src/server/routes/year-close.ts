@@ -7,7 +7,7 @@ import { Router, type Response } from 'express';
 import { isIsoDate } from '../../accounting/periods.js';
 import type { TemplateState } from '../../accounting/year-close.js';
 import {
-  bookEntry, bookRevaluation, closeYear, markTemplate, openingFor, openYear, YearCloseRefused, yearCloseOf,
+  bookEntry, bookRevaluation, closeYear, markTemplate, openingFor, openYear, reopenTemplate, YearCloseRefused, yearCloseOf,
 } from '../../books/year-close.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, stringField } from '../books.js';
 
@@ -23,7 +23,8 @@ async function answer(res: Response, run: () => unknown): Promise<void> {
   try {
     res.json(await run());
   } catch (e) {
-    if (e instanceof YearCloseRefused) throw new RequestError(409, e.message);
+    // The account refusal has the UI's words already (error.unknownAccount); the others are shown by their `runWhy` code.
+    if (e instanceof YearCloseRefused) throw new RequestError(409, e.message, e.why.code === 'accountNotInChart' ? { code: 'unknownAccount', params: { account: e.why.params.account } } : undefined);
     throw e;
   }
 }
@@ -46,7 +47,8 @@ router.put('/api/year-close/:year/templates/:id', async (req, res) => {
   const b = patchBody(req.body, ['state']);
   const state = b.state === null ? null : stringField(b, 'state');
   if (state !== null && state !== 'done' && state !== 'na') throw new RequestError(400, 'state: done, na oder null.');
-  await answer(res, () => markTemplate(WS, year, req.params.id, state as TemplateState | null));
+  // Open again: the booking the step made goes with it, and the answer names it for the toast and its undo (r9c-16).
+  await answer(res, () => (state === null ? reopenTemplate(WS, year, req.params.id) : markTemplate(WS, year, req.params.id, state as TemplateState)));
 });
 
 router.post('/api/year-close/:year/entries', async (req, res) => {

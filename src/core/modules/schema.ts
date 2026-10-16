@@ -190,10 +190,9 @@ export interface YearEndTemplate { id: string; accountDebit: string; accountCred
 
 /** year-end.yaml: the accounts the year close books on, its entry forms, the dividend's withholding tax. */
 export interface YearEndData {
-  accounts: { retainedEarnings: string[]; fxDifference: string[]; vatSettlement: string[]; vat: string[] };
+  accounts: { retainedEarnings: string[]; fxDifference: string[]; vatSettlement: string[]; vat: string[]; receivables: string[] };
   templates: YearEndTemplate[];
   profitAllocation: { accountDebit: string; accountCredit: string };
-  receivables: { accountDebit: string };
   withholdingTaxRate: number;
 }
 

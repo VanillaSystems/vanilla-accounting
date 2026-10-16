@@ -15,7 +15,7 @@ import {
   applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
   vatPostings, yearClose, yearEndAccounts, yearEndTemplates, RECEIVABLES_ID, type Books, type YearCloseInput,
 } from '../src/accounting/year-close.js';
-import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, YearCloseRefused } from '../src/books/year-close.js';
+import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, readState, reopenTemplate, YearCloseRefused } from '../src/books/year-close.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import type { LedgerBankAccount, Workspace } from '../src/workspace/workspace.js';
 import { yearPaths } from '../src/workspace/workspace.js';
@@ -126,7 +126,7 @@ test('open invoices on 31.12.: proposed as a receivables entry (1100 / the reven
   const receivables = { invoices: [{ number: '2026-004', customer: 'Kunde', date: '2026-12-01', currency: 'CHF', open: 540.5, chf: 540.5 }], total: 540.5, revenueAccount: '3400' };
   const close = yearClose(input(b, { receivables }));
   const proposed = close.templates.find((t) => t.id === RECEIVABLES_ID);
-  assert.deepEqual(proposed, { id: 'receivables', accountDebit: '1100', accountCredit: '3400', amount: 540.5, state: undefined });
+  assert.deepEqual(proposed, { id: 'receivables', accountDebit: '', accountCredit: '3400', amount: 540.5, state: undefined }, 'the test chart has no 1100: the debit is the person\'s pick (r9c-2)');
   assert.deepEqual(close.blockers, [{ code: 'undecided', templates: ['receivables'] }]);
   const decided = yearClose(input(b, { receivables, state: { ...emptyState('2026'), templates: { ...Object.fromEntries(yearEndTemplates().map((t) => [t.id, 'na' as const])), receivables: 'done' } } }));
   assert.deepEqual(decided.blockers, []);
@@ -244,6 +244,7 @@ test('closeYear refuses while anything blocks; openYear refuses a year that is n
 
 test('bookEntry: an accrual gets the next M-ref, marks its template done, and is refused in a closed period', () => {
   const ws = workspace();
+  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2300'].map((number) => ({ number, name: number }))));
   const entry = bookEntry(ws, { date: '2026-12-31', accountDebit: '6570', accountCredit: '2300', amount: 250, description: 'Abgrenzung Hosting Dezember' }, 'accruedExpense');
   assert.equal(entry.transactionRef, 'M2026-001');
   assert.equal(entry.origin, 'manual');
@@ -315,4 +316,56 @@ test('books that never filed and start in Q3 are not asked to file Q1 and Q2; bo
   const notClosed = (b: Books) => yearClose(input(b, { seals: { checks: [], unsealed: [] } })).checks.find((c) => c.id === 'quartersSealed')!.problems;
   assert.deepEqual(notClosed(fresh('2026-07-14')), [{ code: 'notClosed', quarter: '2026-Q3' }]);
   assert.deepEqual(notClosed(fresh('2026-02-10')).map((p) => 'quarter' in p && p.quarter), ['2026-Q1', '2026-Q2', '2026-Q3']);
+});
+
+test('the year end books only on accounts of the chart (r9c-2): the receivables account is the chart\'s, a chart without one leaves the pick blank and names the missing account; a booking on an account outside the chart is refused; a balance on such an account fails «Schlussbilanz geht auf»', () => {
+  const receivables = { invoices: [{ number: '2026-004', customer: 'Kunde', date: '2026-12-01', currency: 'CHF', open: 540.5, chf: 540.5 }], total: 540.5, revenueAccount: '3400' };
+  const b = books();
+  applyRevaluation(b, '2026', revaluationEntries('2026', revaluations(b, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  const without = yearClose(input(b, { receivables }));
+  assert.deepEqual(without.accounts.receivables, { account: '1100', inChart: false }, 'the chart of the test year has no 1100');
+  assert.equal(without.templates.find((t) => t.id === RECEIVABLES_ID)?.accountDebit, '', 'no account outside the chart is prefilled');
+  const withIt = yearClose(input(b, { receivables, chart: [...CHART, '1100'] }));
+  assert.deepEqual(withIt.accounts.receivables, { account: '1100', inChart: true });
+  assert.equal(withIt.templates.find((t) => t.id === RECEIVABLES_ID)?.accountDebit, '1100');
+
+  // Booked on 1100 anyway (the chart lacks it): the ledger's double entry balances, but the Bilanz leaves 1100 out.
+  const booked = books();
+  applyRevaluation(booked, '2026', revaluationEntries('2026', revaluations(booked, '2026', foreignAccounts(BANKS), RATES), ACCOUNTS.fxDifference));
+  booked.journalEntries.push(e('yc-2026-receivables', '2026-12-31', '1100', '3400', 540.5));
+  const close = yearClose(input(booked, { receivables, state: { ...emptyState('2026'), templates: { ...Object.fromEntries(yearEndTemplates().map((t) => [t.id, 'na' as const])), receivables: 'done' } } }));
+  assert.equal(close.ledger.residual, 0, 'the double entry balances');
+  assert.deepEqual(close.ledger.causes, [{ code: 'notInChart', account: '1100', amount: 540.5 }]);
+  assert.deepEqual(close.blockers, [{ code: 'notInChart', account: '1100', amount: 540.5 }], 'the year cannot close on an account the Bilanz does not show');
+  assert.equal(close.ledger.balanced, false, 'the check «Schlussbilanz geht auf» fails');
+  assert.equal(yearClose(input(booked, { receivables, chart: [...CHART, '1100'], state: close.state })).ledger.balanced, true, 'with the account in the chart it passes');
+});
+
+test('a year-end entry on an account the chart lacks is refused with the account named (r9c-2)', () => {
+  const ws = readyToClose();
+  bookRevaluation(ws, '2026', RATES);
+  const input = { date: '2026-12-31', accountDebit: '1100', accountCredit: '3400', amount: 540.5, description: 'Debitoren per 31.12.2026: 2026-004' };
+  assert.throws(() => bookEntry(ws, input, 'receivables'), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'accountNotInChart' && err.why.params.account === '1100');
+  assert.ok(!loadBooks(ws).journalEntries.some((x) => x.id === 'yc-2026-receivables'), 'nothing booked');
+  assert.throws(() => bookEntry(ws, { ...input, accountDebit: '1300', accountCredit: '6300' }), /1300/, 'a hand entry of the close as well');
+});
+
+test('«zurück» on a booked step takes its booking back too (r9c-16): the entry the step booked is removed and the step is open again; a step marked by hand only loses its mark', () => {
+  const ws = workspace();
+  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '2300', '1100'].map((number) => ({ number, name: number }))));
+  const accrual = bookEntry(ws, { date: '2026-12-31', accountDebit: '6570', accountCredit: '2300', amount: 250, description: 'Abgrenzung Hosting Dezember' }, 'accruedExpense');
+  const debtors = bookEntry(ws, { date: '2026-12-31', accountDebit: '1100', accountCredit: '3400', amount: 540.5, description: 'Debitoren per 31.12.2026: 2026-004' }, 'receivables');
+  markTemplate(ws, '2026', 'depreciation', 'done');
+  assert.deepEqual(readState(ws, '2026').templates, { accruedExpense: 'done', receivables: 'done', depreciation: 'done' });
+
+  const reopened = reopenTemplate(ws, '2026', 'accruedExpense');
+  assert.deepEqual(reopened.removed.map((x) => x.id), [accrual.id], 'the booking the step made goes with it');
+  assert.deepEqual(reopened.state.templates, { receivables: 'done', depreciation: 'done' });
+  assert.ok(!loadBooks(ws).journalEntries.some((x) => x.id === accrual.id));
+
+  const debtorsBack = reopenTemplate(ws, '2026', 'receivables');
+  assert.deepEqual(debtorsBack.removed.map((x) => x.id), [debtors.id]);
+  assert.ok(!loadBooks(ws).journalEntries.some((x) => x.id === debtors.id), 'the receivables entry can be booked again');
+  const byHand = reopenTemplate(ws, '2026', 'depreciation');
+  assert.deepEqual([byHand.state.templates, byHand.removed], [{}, []], 'marked done by hand, nothing booked: only the mark goes');
 });

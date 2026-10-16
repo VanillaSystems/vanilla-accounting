@@ -5,6 +5,7 @@
  */
 import { Fragment, useState, type ReactNode } from 'react';
 import type { EntryTemplate, TemplateState } from '../../../accounting/year-close.js';
+import type { JournalEntry } from '../../../types/index.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
 import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
 import { chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
@@ -175,8 +176,16 @@ function Entries({ d, nav, canEdit }: StepProps) {
   const editable = canEdit && !d.closed;
   const mark = (id: string, state: TemplateState | null, before: TemplateState | undefined) => {
     const label = tx(`yearClose.template.${id}`);
-    act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : state === 'done' ? t('close.markedDone', { label }) : t('close.markedOpen', { label }),
-      () => api.markYearEndEntry(d.year, id, before ?? null));
+    if (state) { act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : t('close.markedDone', { label }), () => api.markYearEndEntry(d.year, id, before ?? null)); return; }
+    // Open again: the booking the step made is removed with it (r9c-16); the undo books it back as it was and marks the step as before.
+    let removed: JournalEntry[] = [];
+    const booked = d.templates.find((tp) => tp.id === id)?.booked ?? [];
+    act(nav, async () => { removed = (await api.markYearEndEntry(d.year, id, null)).removed ?? []; },
+      booked.length ? t('close.reopenedUnbooked', { label, refs: booked.map((b) => b.transactionRef).join(', ') }) : t('close.markedOpen', { label }),
+      async () => {
+        for (const e of removed) await api.createJournalEntry({ id: e.id, transactionRef: e.transactionRef, date: e.date, accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '', ...(e.vatCode && { vatCode: e.vatCode }), origin: e.origin });
+        await api.markYearEndEntry(d.year, id, before ?? null);
+      });
   };
   return (
     <>
@@ -246,6 +255,11 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
         <span className="m">{tp.id === 'receivables' ? t('close.receivablesHint') : ''}</span>
       </div>
+      {tp.id === 'receivables' && !d.accounts.receivables.inChart && (
+        <p className="warnline" data-testid="receivables-account-missing">{I.dot}{t('close.receivablesAccountMissing', { account: d.accounts.receivables.account })}{' '}
+          <button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(d.accounts.receivables.account, t('close.receivablesAccountName')), t('close.accountAdded', { account: d.accounts.receivables.account }))}>{t('close.addAccount', { account: d.accounts.receivables.account })}</button>
+        </p>
+      )}
     </form>
   );
 }
@@ -301,7 +315,7 @@ function Close({ d, nav, canEdit }: StepProps) {
         <div className="fr"><span className="m">{t('yearClose.totalLiabilities')}</span><span className="r mono">{fmt(l.totalLiabilities)}</span></div>
         <div className="fr tot"><span>{t(l.result >= 0 ? 'yearClose.profit' : 'yearClose.loss')}</span><span className="r mono">{fmt(Math.abs(l.result))}</span></div>
       </div>
-      {l.residual === 0 ? <p className="okline">{I.check}{t('yearClose.balanced')}</p> : <p className="warnline">{I.dot}{t('yearClose.unbalanced', { amount: fmt(l.residual) })}</p>}
+      {l.balanced ? <p className="okline">{I.check}{t('yearClose.balanced')}</p> : <p className="warnline">{I.dot}{[...(l.residual === 0 ? [] : [t('yearClose.unbalanced', { amount: fmt(l.residual) })]), ...l.causes.map(causeText)].join(' · ')}</p>}
       {l.causes.map((c, i) => <p key={i} className="m">{causeText(c)}</p>)}
       <h3>{t('close.step.close', { year: d.year })}</h3>
       {d.closed ? <p className="okline">{I.check}{t('yearClose.closedNote', { date: formatDate(d.state.closedAt), year: d.year, period: lastPeriodOf(d.year) })}</p> : (

@@ -7,6 +7,9 @@ accounts:
   fxDifference: ["6960", "6950"]
   vatSettlement: ["2201", "2200"]
   vat: ["1170", "1171", "2200", "2201"]
+  # Debitoren: invoices still open on 31.12. (ADR 0010); the credit is the invoices' revenue account.
+  # Proposed only when the chart has one of these; else the person picks or adds the account.
+  receivables: ["1100"]
 
 # Blank accounts are the user's pick.
 templates:
@@ -24,8 +27,5 @@ templates:
 
 # After the shareholders' resolution, dated in the new year.
 profitAllocation: { accountDebit: "2970", accountCredit: "2950" }
-
-# Invoices still open on 31.12. (ADR 0010); the credit is the invoices' revenue account.
-receivables: { accountDebit: "1100" }
 
 withholdingTaxRate: 0.35

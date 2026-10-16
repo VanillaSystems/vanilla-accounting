@@ -46,6 +46,8 @@ export interface YearEndAccounts {
   vatSettlement: string;
   /** Every VAT account: owed (2200, 2201) and input tax (1170, 1171). */
   vatAccounts: string[];
+  /** Debitoren: the first candidate the chart has, else the first candidate with `inChart` false (the person adds it or picks another; nothing is booked on it, r9c-2). */
+  receivables: { account: string; inChart: boolean };
 }
 
 
@@ -54,11 +56,13 @@ export function yearEndAccounts(chart: readonly string[]): YearEndAccounts {
   const pick = (candidates: readonly string[]) => candidates.find((a) => has.has(a)) ?? candidates[0];
   const roles = yearEndData().accounts;
   const vatSettlement = pick(roles.vatSettlement);
+  const receivables = pick(roles.receivables);
   return {
     retainedEarnings: pick(roles.retainedEarnings),
     fxDifference: pick(roles.fxDifference),
     vatSettlement,
     vatAccounts: [...new Set([...roles.vat.filter((a) => has.has(a)), vatSettlement])].sort(),
+    receivables: { account: receivables, inChart: has.has(receivables) },
   };
 }
 
@@ -111,6 +115,12 @@ export interface ClosingLedger {
   /** totalAssets − totalLiabilities − result: zero when the books balance. */
   residual: number;
   causes: DifferenceCause[];
+  /**
+   * Whether the Bilanz as shown balances: the residual is zero and no balance sits on an account
+   * the Bilanz leaves out (one outside the chart, or outside both statements). A booking on 1100
+   * with no 1100 in the chart balances the double entry and still drops out of the Bilanz (r9c-2).
+   */
+  balanced: boolean;
 }
 
 /**
@@ -156,6 +166,7 @@ export function closingLedger(books: Books, year: string, chart: readonly string
     totalLiabilities: fromRappen(liabilities),
     residual: fromRappen(residual),
     causes,
+    balanced: residual === 0 && causes.length === 0,
   };
 }
 
@@ -386,7 +397,8 @@ export function dividendSplit(gross: number): DividendSplit {
  * basis their VAT is declared when the customer pays; the next year reverses the entry.
  */
 export const RECEIVABLES_ID = 'receivables';
-export const receivablesTemplate = (): EntryTemplate => ({ id: RECEIVABLES_ID, accountDebit: yearEndData().receivables.accountDebit, accountCredit: '' });
+/** The Debitoren template: its debit account only when the chart has it (r9c-2), else the person's pick. */
+export const receivablesTemplate = (accounts: YearEndAccounts): EntryTemplate => ({ id: RECEIVABLES_ID, accountDebit: accounts.receivables.inChart ? accounts.receivables.account : '', accountCredit: '' });
 
 /** The receivables entry of `year` carries this id, so the opening of the next year finds it. */
 export const receivablesEntryId = (year: string) => `yc-${year}-receivables`;
@@ -468,6 +480,9 @@ export type Problem =
   | { code: 'statementGap'; account: string; label: string; from: string; to: string }
   | { code: 'unbooked'; count: number; refs: string[] }
   | { code: 'doctor'; label: string }
+  /** A balance on an account the Bilanz leaves out: the year cannot close on it (r9c-2). */
+  | { code: 'notInChart'; account: string; amount: number }
+  | { code: 'outsideStatements'; account: string; amount: number }
   | { code: 'noRate'; currency: string }
   | { code: 'fxToBook'; account: string; difference: number }
   | { code: 'yearLocked' }
@@ -629,7 +644,7 @@ export function yearClose(input: YearCloseInput): YearClose {
   const ledger = closingLedger(books, year, input.chart, accounts);
   const receivables = input.receivables ?? { invoices: [], total: 0 };
   const proposed = receivables.invoices.length
-    ? [{ ...receivablesTemplate(), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
+    ? [{ ...receivablesTemplate(accounts), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
   const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
   const templates = [...yearEndTemplates(owner, input.legalForm), ...proposed].map((t) => {
@@ -646,6 +661,7 @@ export function yearClose(input: YearCloseInput): YearClose {
   const undecided = templates.filter((t) => !t.state).map((t) => t.id);
   if (undecided.length) blockers.push({ code: 'undecided', templates: undecided });
   if (toRappen(ledger.residual) !== 0) blockers.push({ code: 'unbalanced', residual: ledger.residual });
+  for (const c of ledger.causes) if (c.code === 'notInChart' || c.code === 'outsideStatements') blockers.push(c);
 
   return {
     year,
