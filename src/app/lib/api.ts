@@ -1,4 +1,4 @@
-import type { StatementProblem } from '../../accounting/bank-accounts.js';
+import type { StatementProblem } from '../../types/api-error.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { BookingLine } from '../../accounting/manual-booking.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';

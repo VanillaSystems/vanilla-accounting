@@ -5,11 +5,12 @@
  * by bank-balance reconciliation to match a statement's closing balance to a ledger account (no
  * statement names `manual`, so those rows never reconcile).
  */
-import type { UnknownAccount } from '../types/api-error.js';
+import type { StatementProblem, UnknownAccount } from '../types/api-error.js';
+export type { StatementProblem } from '../types/api-error.js';
 import type { BankTransaction } from '../types/index.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import { setup } from '../engines/index.js';
-import { parseIban, type Iban, type StatementKind } from '../workspace/banks.js';
+import { parseIban, type StatementKind } from '../workspace/banks.js';
 
 export function findBankAccount(accounts: readonly LedgerBankAccount[], bank: string, currency: string): LedgerBankAccount | undefined {
   return accounts.find((a) => a.bank === bank && a.currency === currency);
@@ -46,17 +47,6 @@ export interface StatementAccount {
   /** First folder under bank-statements/ ('' for a file directly in it). */
   folder: string;
 }
-
-/**
- * Why a statement lands on no account, for the UI to say in the person's words (and the drop
- * dialog to offer the account). `noAccount`: no account takes its currency (with its IBAN when it
- * names one). `otherIban`: the account of its folder has another IBAN. `twoAccounts`: the folder
- * already holds statements of another IBAN in that currency (src/workspace/bank-statements.ts).
- */
-export type StatementProblem =
-  | { kind: 'noAccount'; currency: string; iban?: Iban }
-  | { kind: 'otherIban'; currency: string; iban: Iban; account: { bank: string; iban: Iban } }
-  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban };
 
 export type StatementMatch =
   | { account: LedgerBankAccount & { statements: StatementKind }; by: 'iban' | 'folder' | 'currency' }

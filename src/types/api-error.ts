@@ -1,5 +1,5 @@
 import type { AuditSnapshot } from '../audit/sources.js';
-import type { StatementProblem } from '../accounting/bank-accounts.js';
+import type { Iban } from '../workspace/banks.js';
 import type { MailRefusal } from '../invoices/mail.js';
 import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
@@ -117,6 +117,17 @@ export type ClassifyRefusal =
  */
 /** A statement's account the manifest lacks: its IBAN and currency, and the bank's name when the statement gives it. */
 export interface UnknownAccount { iban: string; currency: string; bankName?: string }
+
+/**
+ * Why a statement lands on no account, for the UI to say in the person's words (and the drop
+ * dialog to offer the account). `noAccount`: no account takes its currency (with its IBAN when it
+ * names one). `otherIban`: the account of its folder has another IBAN. `twoAccounts`: the folder
+ * already holds statements of another IBAN in that currency (src/workspace/bank-statements.ts). Built in src/accounting/bank-accounts.ts.
+ */
+export type StatementProblem =
+  | { kind: 'noAccount'; currency: string; iban?: Iban }
+  | { kind: 'otherIban'; currency: string; iban: Iban; account: { bank: string; iban: Iban } }
+  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban };
 
 export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments';
 

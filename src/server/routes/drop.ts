@@ -22,9 +22,7 @@ import { findFile } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement } from './statements.js';
-import { readStatementFiles, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
-import { readBankStatements } from '../../workspace/bank-statements.js';
-import { assignUniqueRefs } from '../../providers/camt053/camt053.js';
+import { readStatementFiles, refsHeldWithout, withCamtBalances } from '../../books/bank-import.js';
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
@@ -252,8 +250,7 @@ function undo(row: DropRow): string[] {
   if (row.statement) {
     const books = readBooks();
     const mine = row.statement.file;
-    const others = readBankStatements(WS).filter((f) => f.file !== mine);
-    const held = new Set(assignUniqueRefs(withinBooks(transactionsOfFiles(others), books.config).kept).map((t) => t.ref));
+    const held = refsHeldWithout(WS, mine, books.config);
     const refs = new Set(row.statement.refs.filter((ref) => !held.has(ref)));
     assertOpen(books, [...refs].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
     if ((books.journalEntries ?? []).some((e) => refs.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');

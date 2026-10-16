@@ -6,7 +6,7 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
+import { assignUniqueRefs, statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
 import { pdfText } from '../parsers/pdf-text.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
@@ -51,6 +51,12 @@ export function transactionsOfFiles(files: StatementFile[]): BankTransaction[] {
     }
   }
   return out;
+}
+
+/** The refs the statement files other than `except` give, as the books hold them: what an undone statement must leave in place. */
+export function refsHeldWithout(ws: Ws, except: string, config: Index['config']): Set<string> {
+  const others = readBankStatements(ws).filter((f) => f.file !== except);
+  return new Set(assignUniqueRefs(withinBooks(transactionsOfFiles(others), config).kept).map((t) => t.ref));
 }
 
 /**
