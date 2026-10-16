@@ -11,7 +11,7 @@ and the providers.
 | core | 48 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 64 | 28 |
+| split | 64 | 26 |
 | infrastructure | 33 | 4 |
 | workflow | 19 | 0 |
 | view | 229 | 59 |
@@ -109,13 +109,11 @@ Layers are assigned by path prefix, most specific first:
 |---|---|
 | `src/accounting/classify-force.ts` | form 0535 1 |
 | `src/accounting/correction-cases.ts` | Ziffer 8, form 0535 2 |
-| `src/accounting/correction.ts` | CHF 2 |
 | `src/accounting/filed-return.ts` | Ziffer 3, eCH-0217 2 |
 | `src/accounting/fx-conversion.ts` | CHF 4, ESTV 8 |
 | `src/accounting/fx-rates.ts` | CHF 2, ESTV 5 |
 | `src/accounting/index.ts` | Ziffer 1 |
 | `src/accounting/reconcile-bank.ts` | CHF 3, camt.053 2 |
-| `src/accounting/reversal.ts` | CHF 2 |
 | `src/accounting/vat-codes.source.ts` | MWST 3, ESTV 1, Ziffer 4, tax code 90 |
 | `src/accounting/vat-codes.ts` | MWST 3, ESTV 2, Ziffer 6 |
 | `src/accounting/year-close.ts` | CHF 12, MWST 2, ESTV 3, Ziffer 1, form 0535 3, camt.053 1, Rappen 1 |

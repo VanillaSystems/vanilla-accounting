@@ -10,8 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { camt053Xml, type CamtEntry } from '../tools/demo/camt053.js';
-import { confirmPayment, matchPayments, paymentProposals, unlinkedNaming, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
-import { cancel, creditNoteDraft, issue, openAmount, openOn, refundDue, status, totals } from '../src/invoices/rules.js';
+import { confirmPayment, matchPayments, paymentProposals, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
+import { cancel, creditNoteDraft, issue, openAmount, openOn, paymentsNamingOpen, refundDue, status, totals } from '../src/invoices/rules.js';
 import { vat } from '../src/engines/index.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
 import { scorReference } from '../src/providers/qr-bill/reference.js';
@@ -238,10 +238,13 @@ test('a payment before the invoice date, or booked by hand, whose text names the
   assert.throws(() => confirmPayment(b, book, inv.id, 'W1', ctx), /schon zugeordnet/);
 });
 
-test('unlinkedNaming: the payments whose text names an open invoice they are not linked to, for the year end (r9c-3)', () => {
+test('paymentsNamingOpen: the payments whose text names an open invoice they are not linked to, for the year end (r9c-3)', () => {
   const inv = invoice('in_a', []);
   const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
   const b = books(fromCamt([credit('B1', '2026-08-04', 500, 'Anzahlung Rechnung 2026-001', 'Hans Meier'), credit('B2', '2026-08-05', 963.72, undefined, 'Beispiel Bistro AG')]));
   b.journalEntries.push({ id: 'm', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3300', amount: 500, vatCode: 'V81', origin: 'manual' });
-  assert.deepEqual(unlinkedNaming(b, book).map((p) => [p.transactionRef, p.number, p.amount]), [['B1', '2026-001', 500]], 'B2 fits by amount and name only: not named');
+  assert.deepEqual(paymentsNamingOpen(b.transactions, book.invoices, '2026-12-31').map((p) => [p.transactionRef, p.number, p.amount]), [['B1', '2026-001', 500]], 'B2 fits by amount and name only: not named');
+  assert.deepEqual(paymentsNamingOpen(b.transactions, book.invoices, '2026-08-03'), [], 'a payment after the day does not count');
+  const linked = { ...inv, payments: [{ transactionRef: 'B1', date: '2026-08-04', amount: 500, by: 'confirmed' as const }] };
+  assert.deepEqual(paymentsNamingOpen(b.transactions, [linked], '2026-12-31'), [], 'linked: nothing to say');
 });

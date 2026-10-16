@@ -287,9 +287,6 @@ export function paymentProposals(books: Books, book: InvoiceBook): PaymentPropos
   return out.sort((a, b) => Number(b.numberMatches) - Number(a.numberMatches) || Number(b.nameMatches) - Number(a.nameMatches) || a.date.localeCompare(b.date));
 }
 
-/** The incoming payments whose text names an open invoice they are not linked to: the year end's Debitoren would count their revenue twice (r9c-3). */
-export const unlinkedNaming = (books: Books, book: InvoiceBook): PaymentProposal[] => paymentProposals(books, book).filter((p) => p.direction === 'CRDT' && p.numberMatches);
-
 /**
  * A person confirms that `tx` pays `inv` (an incoming payment an invoice, an outgoing one a credit
  * note's refund): the allocation is recorded and booked from the document. Entries the classifier

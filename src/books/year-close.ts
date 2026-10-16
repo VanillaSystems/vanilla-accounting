@@ -27,8 +27,7 @@ import {
 import { roundCHF } from '../accounting/rappen.js';
 import { filingKeyOf } from '../accounting/periods.js';
 import { loadInvoices } from '../invoices/store.js';
-import { liveInvoices, openOn } from '../invoices/rules.js';
-import { unlinkedNaming } from '../invoices/payments.js';
+import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
@@ -75,9 +74,7 @@ export function receivablesOf(ws: Workspace, year: string, rates: EstvRates, boo
     const rate = inv.currency === 'CHF' ? 1 : rates.on(inv.currency, end)?.rate ?? 0;
     return [{ number: inv.number, customer: inv.customer.name, date: inv.date, currency: inv.currency, open: amount, chf: roundCHF(amount * rate) }];
   });
-  const numbers = new Set(open.map((i) => i.number));
-  const unlinked = unlinkedNaming(books, book).filter((p) => numbers.has(p.number) && p.date <= end)
-    .map((p) => ({ transactionRef: p.transactionRef, date: p.date, number: p.number, currency: p.currency, amount: p.amount }));
+  const unlinked = paymentsNamingOpen(books.transactions, invoices, end);
   return { invoices: open, total: roundCHF(open.reduce((s, i) => s + i.chf, 0)), revenueAccount: ws.invoicing?.revenueAccount, ...(unlinked.length && { unlinked }) };
 }
 

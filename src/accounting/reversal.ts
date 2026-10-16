@@ -33,12 +33,12 @@ export const newYearAfter = (date: string): string => `${Number(date.slice(0, 4)
 /** A VAT code with its sign turned: a refund's code for a charge, and back. */
 export const turned = (code: string | undefined): string | undefined => code && (code.startsWith('-') ? code.slice(1) : `-${code}`);
 
-/** A foreign-currency entry's amount is in its currency; the rate makes it the CHF the books count (chfAmount). */
+/** A foreign-currency entry's amount is in its currency; the rate makes it the base-currency figure the books count (chfAmount). */
 export type Money = Pick<JournalEntry, 'amount' | 'exchangeCurrency' | 'exchangeRate'>;
 
 export interface Draft extends Money { date: string; accountDebit: string; accountCredit: string; vatCode?: string; description: string }
 
-/** The amount as the entry was booked: the same figure in the same currency at the same rate, so the CHF value (and the tax on it) is the same (r9c-1). */
+/** The amount as the entry was booked: the same figure in the same currency at the same rate, so the base-currency value (and the tax on it) is the same (r9c-1). */
 export const sameMoney = (e: Money): Money => ({ amount: e.amount, ...(e.exchangeCurrency && e.exchangeRate && { exchangeCurrency: e.exchangeCurrency, exchangeRate: e.exchangeRate }) });
 
 /** The entry booked the other way round, on `date`. */

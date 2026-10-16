@@ -5,7 +5,7 @@
  * whole entry back, bank side included. Pure: Buchungen opens its correction form with these.
  */
 import type { BankTransaction, CorrectionCase, JournalEntry, Receipt } from '../types/index.js';
-import { chart, vat, yearEnd } from '../engines/index.js';
+import { chart, vat, yearEnd, baseCurrency } from '../engines/index.js';
 import { reversalOf, sameMoney, turned, type Draft, type Money } from './reversal.js';
 import { codeForRate } from './vat-codes.js';
 import { chfAmount } from './ledger.js';
@@ -90,7 +90,7 @@ export function accountCorrectionCode(e: Corrected, to: string, isPrivate: (acco
  *   VAT stays as declared (onto the private account: accountCorrectionCode).
  * - `storno`: the entry the other way round, bank side included.
  * A foreign-currency entry's correction keeps its currency and rate (sameMoney): the tax taken
- * back is the tax on the CHF value as booked, not on the foreign figure read as CHF (r9c-1).
+ * back is the tax on the base-currency value as booked, not on the foreign figure read as such (r9c-1).
  */
 export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, description: string, isBank: (account: string) => boolean, receiptRate?: number): Draft {
   const own = ownSide(e, isBank);
@@ -126,7 +126,7 @@ export const banksMoved = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit
   e.accountDebit === e.accountCredit ? [] : [e.accountDebit, e.accountCredit].filter((a) => !!a && isBank(a));
 
 const line = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate'>) =>
-  `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} ${e.exchangeCurrency && e.exchangeRate ? `${e.exchangeCurrency} ${e.amount.toFixed(2)} = CHF ${chfAmount(e as JournalEntry).toFixed(2)}` : e.amount.toFixed(2)}`;
+  `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} ${e.exchangeCurrency && e.exchangeRate ? `${e.exchangeCurrency} ${e.amount.toFixed(2)} = ${baseCurrency()} ${chfAmount(e as JournalEntry).toFixed(2)}` : e.amount.toFixed(2)}`;
 const day = (iso: string) => iso.split('-').reverse().join('.');
 
 const KIND_TITLE: Record<CorrectionKind, string> = { vat: 'Steuercode korrigiert', account: 'Konto korrigiert', storno: 'Buchung storniert' };

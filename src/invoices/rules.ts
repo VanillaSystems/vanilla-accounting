@@ -106,6 +106,29 @@ export function namedInvoice(tx: Pick<BankTransaction, 'reference' | 'descriptio
   return named.length === 1 ? named[0] : undefined;
 }
 
+/** A payment naming an open invoice without being allocated to it (r9c-3): the year end's Debitoren would count its revenue twice. */
+export interface UnlinkedNaming { transactionRef: string; date: string; number: string; currency: string; amount: number }
+
+/**
+ * The incoming payments up to `end` whose text names the number of an invoice open on `end` in
+ * their currency, while no live document holds them as a payment (r9c-3). Pure over the
+ * transactions: the proposals of src/invoices/payments.ts are the richer, interactive view.
+ */
+export function paymentsNamingOpen(transactions: readonly BankTransaction[], invoices: readonly Invoice[], end: string): UnlinkedNaming[] {
+  const alive = live(invoices);
+  const allocated = new Set(alive.flatMap((i) => (i.status === 'issued' ? i.payments.map((p) => p.transactionRef) : [])));
+  const open = alive.filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && openOn(i, alive, end) > 0);
+  const out: UnlinkedNaming[] = [];
+  for (const tx of transactions) {
+    if (tx.direction !== 'CRDT' || tx.date > end || allocated.has(tx.ref)) continue;
+    const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
+    for (const inv of open) {
+      if (inv.currency === tx.currency && namesNumber(text, inv.number)) out.push({ transactionRef: tx.ref, date: tx.date, number: inv.number, currency: tx.currency, amount: tx.amount });
+    }
+  }
+  return out;
+}
+
 export const namesNumber = (text: string, number: string): boolean => new RegExp(`(?<![0-9])${number.replace(/[^0-9A-Za-z]/g, (c) => `\\${c}`)}(?![0-9])`).test(text);
 
 /** Reminder fees not paid yet. */
