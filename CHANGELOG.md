@@ -39,6 +39,7 @@ Two markers flag an entry you must read before you update:
 - The KI sidebar's message field works like VS Code's chat input: one bordered field with the references as chips on top, the text, and a bar with «+» and a round send button (an arrow, muted while the text is empty). «+» opens a search over what a message can refer to: this page's item (on or off), a receipt, a booking or a payment of the books (by any word or the amount), a workflow or run (what «@» offers). Arrows, Enter and Escape work throughout. The header's «Gespräche» is now the button «Verlauf» with a clock; it opens the list «Vergangene Gespräche» and, pressed again, goes back to the conversation. Open, the sidebar's toggle at the top right shows an arrow «KI-Spalte schliessen» instead of a second robot.
 
 ### Fixed
+- «Regel anpassen?» shows on a rule booking a person corrected: the journal detail showed it only for bookings that could not be edited, so it never appeared in the open period.
 
 - A filing run of a period that is filed with the ESTV while the books drifted cannot be discarded: the hold lifts only by sealing, and «Verwerfen» says to restore the books first, then «Weiter» (golden rule 1).
 - A collective payment partly decided by payer rules is booked to the end when the model is ready: it books the parts no rule decided, the rule parts stay the rules'. Without a model the rest stays for the person.
