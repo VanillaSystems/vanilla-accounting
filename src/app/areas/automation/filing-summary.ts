@@ -7,8 +7,7 @@ import type { PeriodReturn } from '../../../workflows/filing.js';
 import { ratesWithoutActivityId, vat } from '../../../engines/index.js';
 import type { Task } from '../../../workflows/model.js';
 import type { Index } from '../../../types/index.js';
-import type { Question } from '../../../questions/model.js';
-import { openSaleQuestionsIn } from '../../../intake/sale-questions.js';
+import { openSaleQuestionsIn, type Question } from '../../../questions/model.js';
 
 export interface ReturnSummary {
   period: string;

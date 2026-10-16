@@ -21,7 +21,8 @@ import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/pe
 import { loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
-import { closeGoneSaleQuestions, openSaleQuestionsIn } from '../intake/sale-questions.js';
+import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
+import { openSaleQuestionsIn } from '../questions/model.js';
 import { readQuestions } from '../questions/store.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 import type { QuarterKey } from '../types/index.js';

@@ -100,6 +100,15 @@ export interface Question {
   closed?: { by: string; at: string; how: 'done' | 'withdrawn'; why?: SaleGone };
 }
 
+/** The app's open questions about sales whose payment is dated in `from`–`to`: a return of that period is not filed over them (r8h-24; src/workflows/filing.ts, the review task). */
+export function openSaleQuestionsIn(questions: readonly Question[], books: { transactions: ReadonlyArray<{ ref: string; date: string }> }, from: string, to: string): Question[] {
+  return questions.filter((q) => {
+    if (q.topic !== 'saleVat' || q.status !== 'open') return false;
+    const date = books.transactions.find((t) => t.ref === q.on.id)?.date;
+    return !!date && date >= from && date <= to;
+  });
+}
+
 /** GET /api/questions: every question, the names to pick from, the owner's account («2451 Kontokorrent …»), which «privat» books on. */
 export interface QuestionsView { questions: Question[]; people: string[]; owner: string }
 

@@ -51,15 +51,6 @@ export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, boo
 
 type QuestionBooks = Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'config'>;
 
-/** The app's open questions about sales whose payment is dated in `from`–`to`: a return of that period is not filed over them (r8h-24). */
-export function openSaleQuestionsIn(questions: readonly Question[], books: Pick<Index, 'transactions'>, from: string, to: string): Question[] {
-  return questions.filter((q) => {
-    if (q.topic !== 'saleVat' || q.status !== 'open') return false;
-    const date = books.transactions.find((t) => t.ref === q.on.id)?.date;
-    return !!date && date >= from && date <= to;
-  });
-}
-
 /** The app's open questions about sales whose reason went away, and why (src/accounting/sales-without-vat.ts saleQuestionGone). */
 export function goneSaleQuestions(questions: readonly Question[], books: QuestionBooks): Array<{ q: Question; why: SaleGone }> {
   return questions.flatMap((q) => {
