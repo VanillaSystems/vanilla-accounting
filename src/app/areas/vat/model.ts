@@ -8,7 +8,7 @@ import { entriesForReturn } from '../../../accounting/index.js';
 import { chfAmount } from '../../../accounting/ledger.js';
 import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
 import { chart, vat, filing, registration } from '../../../engines/index.js';
-import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
+import { taxOfRow, type ReturnFigures, type VatLine, type VatReport } from '../../../engines/return.js';
 import type { BoxId, Formula, ReturnData } from '../../../core/modules/schema.js';
 
 /** The four parts of the return, as the form groups its Ziffern. */
@@ -142,11 +142,27 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
     key,
     period: parsePeriod(key, today)!,
     state,
-    report: vat().report(entries, key, all),
+    report: quarter ? asFiled(vat().report(entries, key, all), vat().figures(entries, key as QuarterKey, all)) : vat().report(entries, key, all),
     lines,
     adjustments: vat().adjustmentsFor(all, entries, key),
     corrections: quarter ? entries.filter((e) => e.corrects === key) : [],
   };
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The report of a filing period with the figures the return files (r9n-28): the tax of each rate row
+ * is the rate on the row's total, the sums and the payable are rounded once (eCH-0217 rule 7.5), as
+ * the review task and the XML have them; the turnover, deduction and input-tax boxes are the same
+ * either way. The per-entry sum can differ by a Rappen; the page shows one figure.
+ */
+function asFiled(report: VatReport, figures: ReturnFigures & { payable: number }): VatReport {
+  const sums = new Set(Object.keys(sumsOf()));
+  const rates = report.rates.map((x) => ({ ...x, tax: r2(taxOfRow(x.row, figures.ziffern[x.row.ziffer] ?? 0)) }));
+  const taxOf = new Map(rates.filter((x) => x.row.kind === 'acquisition').map((x) => [x.row.ziffer, x.tax]));
+  const ziffern = report.ziffern.map((z) => (sums.has(z.number) && figures.ziffern[z.number] !== undefined ? { ...z, amount: figures.ziffern[z.number] } : taxOf.has(z.number) ? { ...z, amount: taxOf.get(z.number)! } : z));
+  return { ...report, ziffern, rates, toPay: Math.max(0, figures.payable), credit: Math.max(0, r2(-figures.payable)) };
 }
 
 export const amountOf = (v: VatReturn, n: string) => v.report.ziffern.find((z) => z.number === n)?.amount ?? 0;
