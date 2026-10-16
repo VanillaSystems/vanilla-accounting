@@ -34,25 +34,36 @@ export interface CorrectionOffer {
 }
 
 /**
- * The change a corrected booking teaches: the payment's rule books on one account; the person
- * moved the one booking to another (and maybe changed its code). None when no rule holds the
- * payment, the booking is not a person's correction, the rule books a split or a payout (fees,
- * private: too many shapes to read one account from), or the rule is the app's, not the company's.
+ * The change a corrected booking teaches: the payment's rule books on one account; the person (or
+ * the AI on her wish) moved the one booking to another (and maybe changed its code), or, on a
+ * payment of a filed period, booked a correction in the open period that moves it off the rule's
+ * account (r10f-35: a filed sale corrected to «kein Verkauf» teaches the payer rule the same).
+ * None when no rule holds the payment, the booking is not a correction, the rule books a split or
+ * a payout (fees, private: too many shapes to read one account from), or the rule is the app's,
+ * not the company's.
  */
 export function correctionOffer(ws: Workspace, books: Books, ref: string, context: ClassifyContext = loadClassifyContext(ws)): CorrectionOffer | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
-  if (!tx || periodLock(books).isClosed(tx.date)) return undefined;
+  if (!tx) return undefined;
+  const lock = periodLock(books);
   const entries = books.journalEntries.filter((e) => e.transactionRef === ref);
-  const e = entries[0];
-  if (entries.length !== 1 || e.by?.kind !== 'person' || !e.by.was) return undefined;
+  // A filed payment's correction entry: a person's, in the open period, naming the filed period it corrects.
+  const corrections = lock.isClosed(tx.date) ? entries.filter((e) => e.corrects && !lock.isClosed(e.date) && (e.by?.kind === 'person' || e.by?.kind === 'assistant')) : [];
+  const e = lock.isClosed(tx.date) ? corrections[0] : entries[0];
+  if (!e || (lock.isClosed(tx.date) ? corrections.length !== 1 : entries.length !== 1 || (e.by?.kind !== 'person' && e.by?.kind !== 'assistant') || !e.by.was)) return undefined;
   const placed = ruleOfPayment(books, tx, context, loadFxResolver());
   if (!placed || placed.rule.then.kind !== 'book') return undefined;
   const booking = placed.rule.then.booking;
   if (booking.fees || booking.private) return undefined;
   const bank = bankAccountFor(tx, context.bankAccounts);
-  const account = e.accountDebit === bank ? e.accountCredit : e.accountCredit === bank ? e.accountDebit : undefined;
+  // A correction entry moves the money between the rule's account and another: that other one is what the rule should book now.
+  const other = (a: string) => a !== bank && a !== booking.account;
+  const account = e.corrects ? [e.accountDebit, e.accountCredit].find(other)
+    : e.accountDebit === bank ? e.accountCredit : e.accountCredit === bank ? e.accountDebit : undefined;
   if (!account || account === bank) return undefined;
-  const to = { account, vat: e.by.was.vatCode !== undefined ? e.vatCode ?? null : booking.vat };
+  const code = e.vatCode ?? null;
+  const changedCode = (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was?.vatCode !== undefined;
+  const to = { account, vat: e.corrects ? (code && !code.startsWith('-') ? code : null) : changedCode ? code : booking.vat };
   if (to.account === booking.account && to.vat === booking.vat) return undefined;
   const row = companyRules(ws, ruleFactsOf(ws, placed.business)).find((r) => r.id === placed.rule.id && (r.business ?? undefined) === placed.business);
   if (!row) return undefined;
