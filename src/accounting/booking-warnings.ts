@@ -33,7 +33,7 @@ const swapped = (e: JournalEntry): boolean =>
 const inOrder = (books: Books, year: string): JournalEntry[] =>
   (books.journalEntries ?? []).filter((e) => e.date.startsWith(year)).map((e, i) => [e, i] as const).sort(([a, i], [b, j]) => a.date.localeCompare(b.date) || i - j).map(([e]) => e);
 
-/** Each cash account's balance in Rappen after every entry of the year that touches it, in order. */
+/** Each cash account's balance in hundredths after every entry of the year that touches it, in order. */
 function cashRun(books: Books, year: string): Array<{ entry: JournalEntry; account: string; balance: number }> {
   const opening = books.config?.openingBalances?.[year] ?? {};
   const balances = new Map<string, number>();
