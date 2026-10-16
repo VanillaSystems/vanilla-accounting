@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
 import { parseRule, ruleWords, type RuleFacts } from '../src/booking/rules.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import type { Books } from '../src/books/store.js';
+import { loadBooks, PERSON, saveBooks, update, type Books } from '../src/books/store.js';
 import { draftDir } from '../src/saving/changes.js';
 import { draftRules } from '../src/saving/rules.js';
 import { initRepository } from '../src/workspace/git.js';
@@ -135,7 +135,20 @@ test('corner-39: the AI\'s «immer so» in sentences cannot be kept; the same wi
   const prose = draftRules(ws, GUIDE)!;
   assert.deepEqual([prose.refused.map((r) => r.kind), prose.keepable], [['note'], false]);
 
+  // A payout booked today as corner-38 saw it: split right, but the sales at V0.
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => {
+    b.transactions.push({ ...payout('PO'), date: '2026-09-14' });
+    b.receipts.push({ id: 'po', filename: 'po.pdf', extractedText: 'SumUp Auszahlungsbericht' } as Receipt);
+    b.mappings.push({ transactionRef: 'PO', receiptId: 'po' });
+    const e = (id: string, accountDebit: string, accountCredit: string, amount: number, vatCode: string): JournalEntry => ({ id, transactionRef: 'PO', date: '2026-09-14', accountDebit, accountCredit, amount, vatCode, origin: 'classify' });
+    b.journalEntries.push(e('po-1', '1021', '3200', 1480, 'V0'), e('po-2', '3200', '1021', 40, 'V0'), e('po-3', '6800', '1021', 27.65, 'I81'));
+  });
+  saveBooks(ws, books);
+
   draft(RULES);
   const rule = draftRules(ws, GUIDE)!;
   assert.deepEqual([rule.added.map((r) => r.id), rule.refused, rule.keepable], [['sumup-umsatz'], [], true]);
+  const [example] = rule.preview[0].examples;
+  assert.deepEqual(example.would, { kind: 'book', lines: [{ account: '3400', vat: 'V81', amount: 1480 }, { account: '3400', vat: '-V81', amount: 40 }, { account: '6840', vat: 'I0', amount: 27.65 }] }, 'the card shows today\'s split on the rule\'s accounts and codes');
 });

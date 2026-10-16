@@ -276,17 +276,15 @@ export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, swis
  * the provider's fee on fees.account with fees.vat. The figures stay the reading's; accounts and
  * codes are the rule's. Undefined: a line off the bank, which no payout has.
  */
-export function payoutLines(entries: readonly JournalEntry[], bankAccount: string, booking: RuleBooking, isRevenue: (account: string) => boolean): JournalEntry[] | undefined {
-  const fees = booking.fees!;
+export function payoutLines(entries: readonly JournalEntry[], bankAccount: string, booking: RuleBooking, fees: NonNullable<RuleBooking['fees']>, isRevenue: (account: string) => boolean): JournalEntry[] | undefined {
+  const sale = ruleVatCode(booking.vat, { direction: 'CRDT' }, true);
+  const refund = ruleVatCode(booking.vat, { direction: 'DBIT' }, true);
   const out: JournalEntry[] = [];
   for (const e of entries) {
     const { vatCode: _, ...rest } = e;
-    const sale = ruleVatCode(booking.vat, { direction: 'CRDT' }, true);
     if (e.accountDebit === bankAccount) out.push({ ...rest, accountCredit: booking.account, ...(sale ? { vatCode: sale } : {}) });
-    else if (e.accountCredit === bankAccount && isRevenue(e.accountDebit)) {
-      const refund = ruleVatCode(booking.vat, { direction: 'DBIT' }, true);
-      out.push({ ...rest, accountDebit: booking.account, ...(refund ? { vatCode: refund } : {}) });
-    } else if (e.accountCredit === bankAccount) out.push({ ...rest, accountDebit: fees.account, vatCode: fees.vat });
+    else if (e.accountCredit === bankAccount && isRevenue(e.accountDebit)) out.push({ ...rest, accountDebit: booking.account, ...(refund ? { vatCode: refund } : {}) });
+    else if (e.accountCredit === bankAccount) out.push({ ...rest, accountDebit: fees.account, vatCode: fees.vat });
     else return undefined;
   }
   return out;
@@ -397,14 +395,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
   /** Payouts a rule books from the model's reading of their report (RuleBooking.fees). */
-  const payouts = new Map<string, { placed: PlacedRule; booking: RuleBooking }>();
+  const payouts = new Map<string, { placed: PlacedRule; booking: RuleBooking; fees: NonNullable<RuleBooking['fees']> }>();
   for (const tx of txs) {
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book' && then.booking.fees && mappedReceipts(books, tx).length) {
       // The payout report's figures need reading: the model reads them, the rule books them.
-      payouts.set(tx.ref, { placed, booking: then.booking });
+      payouts.set(tx.ref, { placed, booking: then.booking, fees: then.booking.fees });
       toModel.push(tx);
       continue;
     }
@@ -455,7 +453,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const payout = payouts.get(tx.ref);
         const read = payout && payoutLines(
           entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, context)}; ${wordsIn('de').t('rules.say.payoutRead')}` }),
-          bankAccount, payout.booking, (a) => chart().typeOf(a) === 'revenue',
+          bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue',
         )?.map((e) => ({ ...e, rule: payout.placed.rule.id }));
         if (payout && !read) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: the reading of the payout report is no payout`);
