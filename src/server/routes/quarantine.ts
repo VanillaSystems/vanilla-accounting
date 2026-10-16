@@ -35,6 +35,6 @@ router.post('/api/quarantine/:file/take', async (req, res) => {
   writeFileSync(join(WS.paths.inbox, name), bytes);
   const id = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
   handedOver([id]);
-  const started = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'outside', file: name }, 'live', [{ kind: 'receipt', file: name, id }]);
+  const started = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'outside', file: name }, 'live', [{ kind: 'receipt', file: name, id, inbox: name }]);
   res.json({ ok: true, file: name, ...(started.ok && started.run ? { run: started.run } : {}) });
 });

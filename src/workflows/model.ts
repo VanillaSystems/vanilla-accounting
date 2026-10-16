@@ -300,7 +300,8 @@ export type StartedBy =
  */
 export type Arrival =
   | ({ kind: 'statement' } & Omit<StatementImport, 'month'>)
-  | { kind: 'receipt'; file: string; id: string }
+  /** `inbox`: its name in the inbox, which a run waiting behind another keeps for itself (r4c-7). */
+  | { kind: 'receipt'; file: string; id: string; inbox?: string }
   | { kind: 'refused'; file: string; reason: string };
 
 export interface Run {

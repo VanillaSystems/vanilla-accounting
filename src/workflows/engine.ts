@@ -8,7 +8,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { emptyBooks, hasBooks, loadBooks, periodLock, saveBooks, update, type Actor, type Books } from '../books/store.js';
-import type { BooksPort } from '../intake/pipeline.js';
+import { stemOf, type BooksPort } from '../intake/pipeline.js';
 import type { AskOptions } from '../llm/ask.js';
 import type { BankTransaction, JournalEntry, Mapping } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
@@ -244,7 +244,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }
     try {
-      const result = await action.run(inputs, effects, { ws, ask, run: { id: run.id, mode: run.mode } });
+      const result = await action.run(inputs, effects, { ws, ask, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run) });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));
@@ -389,6 +389,12 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       }
     }
     pump();
+  }
+
+  /** The inbox files that runs of the same workflow waiting behind `run` came in with (their stems). */
+  function laterFiles(run: Run): Set<string> {
+    const waiting = [...runs.values()].filter((r) => r.id !== run.id && r.workflow === run.workflow && r.mode === run.mode && r.state.status === 'queued' && r.steps.length === 0);
+    return new Set(waiting.flatMap((r) => r.arrived ?? []).flatMap((a) => (a.kind === 'receipt' && a.inbox ? [stemOf(a.inbox)] : [])));
   }
 
   async function create(w: WorkflowDecl, item: ItemRef, by: StartedBy, mode: Run['mode'], arrived?: Arrival[]): Promise<Run> {

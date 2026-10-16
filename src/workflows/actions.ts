@@ -9,7 +9,7 @@ import { periodLock, type Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
-import { noteLines, type BooksPort, type StepRun } from '../intake/pipeline.js';
+import { noteLines, stemOf, type BooksPort, type StepRun } from '../intake/pipeline.js';
 import { readStep } from '../intake/read.js';
 import { vatCandidates, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
@@ -29,6 +29,8 @@ export interface ActionContext {
   run?: { id: string; mode: 'live' | 'dry' | 'replay' };
   /** The model, recorded by the runner; a replay answers from the recording. */
   ask?: (prompt: string, opts: AskOptions) => Promise<string>;
+  /** Inbox files that came in with a run of the same workflow still waiting behind this one: that run reads them, not this one (r4c-7). */
+  later?: () => ReadonlySet<string>;
 }
 
 export interface Effects {
@@ -62,15 +64,15 @@ const declared = (outcomes: string[], o: { effects?: string[]; ai?: boolean } = 
  * notes (what waits for the model, what failed) are its output, and a step that stops gets the
  * run stuck with its reason, nothing written.
  */
-function batch(step: StepRun, took: (books: Books, ws: Workspace) => Took[]): NonNullable<Action['run']> {
-  return async (_input, effects, { ws, ask }) => {
+function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => ReadonlySet<string>) => Took[]): NonNullable<Action['run']> {
+  return async (_input, effects, { ws, ask, later }) => {
     const port = effects['books.write']!;
     const before = structuredClone(port.read());
-    const todo = took(before, ws);
+    const todo = took(before, ws, later);
     const start = effects['runs.start'];
     // A payment a company rule holds for the person becomes a question of its own (workflows/ask).
     const hold = start && ((refs: string[]) => refs.forEach((id) => start('ask', { kind: 'transaction', id })));
-    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}) });
+    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(later ? { later } : {}) });
     if (r.stop) throw new Error(noteLines(r.notes).join('; '));
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
@@ -78,9 +80,10 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace) => Took[]): No
 }
 
 /** The documents lying in the inbox (PDFs and photos): what reading has in front of it. */
-const inboxFiles = (_b: Books, ws: Workspace): Took[] => {
+const inboxFiles = (_b: Books, ws: Workspace, later?: () => ReadonlySet<string>): Took[] => {
   const dir = ws.paths.inbox;
-  const names = existsSync(dir) ? readdirSync(dir).filter((f) => !f.startsWith('.') && /\.(pdf|png|jpe?g|heic|heif|webp|tiff?)$/i.test(f) && statSync(join(dir, f)).isFile()).sort() : [];
+  const theirs = later?.();
+  const names = existsSync(dir) ? readdirSync(dir).filter((f) => !f.startsWith('.') && /\.(pdf|png|jpe?g|heic|heif|webp|tiff?)$/i.test(f) && statSync(join(dir, f)).isFile() && !theirs?.has(stemOf(f))).sort() : [];
   return names.length ? [{ kind: 'files', names }] : [];
 };
 const receiptsWhere = (keep: (r: Books['receipts'][number]) => boolean) => (b: Books): Took[] => {

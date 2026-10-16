@@ -219,7 +219,7 @@ async function takeWaiting(s: DropSession): Promise<void> {
       row.inbox = freeName(WS.paths.inbox, row.name);
       writeFileSync(join(WS.paths.inbox, row.inbox), bytes);
       handedOver([row.id]);
-      arrival = { kind: 'receipt', file: row.name, id: row.id };
+      arrival = { kind: 'receipt', file: row.name, id: row.id, inbox: row.inbox };
     }
     const started = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'outside', file: row.name }, 'live', [arrival]);
     Object.assign(row, { state: 'taken', ...(started.ok && started.run ? { run: started.run } : {}) });

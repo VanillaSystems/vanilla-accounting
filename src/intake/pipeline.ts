@@ -82,7 +82,12 @@ export interface StepContext {
   log(line: string): void;
   /** Payments left for the person (a company rule asks, or no model to book them): a run of the engine asks each (src/workflows/actions.ts); the CLI only says so. */
   hold?(refs: string[]): void;
+  /** Stems of inbox files a run waiting behind this one came in with: left for it (src/workflows/actions.ts). */
+  later?: () => ReadonlySet<string>;
 }
+
+/** A file's name without its extension: a photo converted to PDF in the inbox keeps it. */
+export const stemOf = (name: string): string => name.replace(/\.[^.]*$/, '');
 
 export interface StepResult {
   notes: IntakeNote[];

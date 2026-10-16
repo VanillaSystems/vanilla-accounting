@@ -156,7 +156,7 @@ test('each file tells its run what it is: a statement by its bank, account and d
     const [st, rc] = s.rows;
     // The demo's PDFs print no closing balance, so the run claims none.
     assert.deepEqual((await runOf(st.run!)).arrived?.find((a) => a.file.endsWith(name)), { kind: 'statement', file: `Raiffeisen/${name}`, account: '1021', added: 0, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30' });
-    assert.deepEqual((await runOf(rc.run!)).arrived?.find((a) => a.file === 'fresh.pdf'), { kind: 'receipt', file: 'fresh.pdf', id: rc.id });
+    assert.deepEqual((await runOf(rc.run!)).arrived?.find((a) => a.file === 'fresh.pdf'), { kind: 'receipt', file: 'fresh.pdf', id: rc.id, inbox: 'fresh.pdf' });
   } finally {
     // The run a drop started works on; the workspace goes only once it rests.
     await SESSION(api).rest().catch(() => {});

@@ -25,7 +25,7 @@ import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
-import type { Ask, IntakeNote, StepRun } from './pipeline.js';
+import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { documentKind } from './document-kind.js';
 import { documents } from '../engines/index.js';
 
@@ -161,7 +161,7 @@ function kindOfText(fresh: Extracted): Pick<Receipt, 'kind' | 'kindBy' | 'kindRu
 
 // ─── The step ────────────────────────────────────────────────────────────────
 
-export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
+export const readStep: StepRun = async ({ ws, books, ask, progress, log, later }) => {
   // First: a statement that belongs to no bank account stops the step before receipts are read.
   const bank = readTransactions(ws);
   for (const f of bank.files) {
@@ -176,7 +176,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const archivedFiles = archivedPdfs(ws);
   const twice = archivedFiles.filter((f, i) => archivedFiles.findIndex((g) => g.filename === f.filename) !== i);
   if (twice.length) return { notes: [{ code: 'error', detail: `${twice.map((f) => f.filename).join(', ')}: in two year folders' receipts/, keep one` }], stop: true };
-  const stagedFiles = scanPdfs(ws.paths.inbox, 'staged');
+  // Asked at the scan, not at the step's start: a file that came in meanwhile with a run waiting behind this one is that run's (r4c-7).
+  const theirs = later?.();
+  const stagedFiles = scanPdfs(ws.paths.inbox, 'staged').filter((f) => !theirs?.has(stemOf(f.filename)));
   log(`Found ${archivedFiles.length} PDFs in receipts/, ${stagedFiles.length} PDFs in beleg-import/\n`);
 
   const files: Array<FoundFile & { id: string }> = [];
