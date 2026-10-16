@@ -46,7 +46,7 @@ test('without the activity code: the review names it and withholds the approval;
   const ret = review.reads!.return as PeriodReturn;
   const name = '1. Saldosteuersatz (Schreinerei)';
   assert.deepEqual(ratesWithoutActivityId(ret.figures), [name], 'the rate with turnover and no code, named as the MWST page names it');
-  assert.deepEqual(approvalWithheld(review), { rates: [name], outcome: 'approved' }, 'the task withholds «Freigegeben» and says why');
+  assert.deepEqual(approvalWithheld(review, [], loadBooks(ws)), { rates: [name], questions: 0, outcome: 'approved' }, 'the task withholds «Freigegeben» and says why');
 
   await engine.command({ kind: 'answer', run: r.run!, outcome: 'approved' });
   await engine.idle();
@@ -65,7 +65,7 @@ test('without the activity code: the review names it and withholds the approval;
   const xml = filingXml(ws, '2026-H2');
   assert.ok(xml && existsSync(xml));
   assert.match(readFileSync(xml!, 'utf8'), /<eCH-0217:activityId>41050<\/eCH-0217:activityId>/);
-  assert.equal(approvalWithheld(taskOf(w, run())!), undefined, 'the filing task withholds nothing');
+  assert.equal(approvalWithheld(taskOf(w, run())!, [], loadBooks(ws)), undefined, 'the filing task withholds nothing');
 });
 
 test('a half year on the net tax rate method is held from «Freigegeben» too: a booking into it is refused with the approval named, and «Eingereicht» never seals books that differ from the filed XML (r7f-29)', async () => {

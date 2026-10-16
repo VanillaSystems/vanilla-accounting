@@ -6,6 +6,9 @@
 import type { PeriodReturn } from '../../../workflows/filing.js';
 import { ratesWithoutActivityId, vat } from '../../../engines/index.js';
 import type { Task } from '../../../workflows/model.js';
+import type { Index } from '../../../types/index.js';
+import type { Question } from '../../../questions/model.js';
+import { openSaleQuestionsIn } from '../../../intake/sale-questions.js';
 
 export interface ReturnSummary {
   period: string;
@@ -27,14 +30,16 @@ export function returnSummary(ret: PeriodReturn): ReturnSummary {
 
 /**
  * What the review of a return cannot let through yet: the net tax rates without the authority's
- * activity code, which the XML step would refuse (r6f-22). The task shows it where the person
- * decides and withholds that outcome; undefined when nothing stands in the way.
+ * activity code (r6f-22), and the owner's open VAT questions about the period's payments (r8h-24),
+ * each of which the XML step would refuse. The task shows it where the person decides and
+ * withholds that outcome; undefined when nothing stands in the way.
  */
-export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>): { rates: string[]; outcome: 'approved' } | undefined {
+export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>, questions: readonly Question[], books: Pick<Index, 'transactions'>): { rates: string[]; questions: number; outcome: 'approved' } | undefined {
   if (task.workflow !== 'vat-filing' || task.step !== 'review') return undefined;
   const ret = task.reads?.return as PeriodReturn | undefined;
   const rates = ret ? ratesWithoutActivityId(ret.figures) : [];
-  return rates.length ? { rates, outcome: 'approved' } : undefined;
+  const open = ret ? openSaleQuestionsIn(questions, books, ret.from, ret.to).length : 0;
+  return rates.length || open ? { rates, questions: open, outcome: 'approved' } : undefined;
 }
 
 /** The file name of a path, either separator. */

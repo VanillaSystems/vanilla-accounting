@@ -676,7 +676,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
           {tasks.map((task) => {
             const w = view.workflows.find((x) => x.id === task.workflow);
             const pay = canEdit ? unbooked(task) : undefined;
-            const withheld = approvalWithheld(task);
+            const withheld = approvalWithheld(task, q.questions, books);
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
                 <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
@@ -684,12 +684,13 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 {task.why ? <p>{fillTask(tx(task.why), task.item, readsInWords(task.reads))}</p> : null}
                 {Object.entries(task.reads ?? {}).filter(([k]) => !tx(task.title).includes(`{${k}}`)).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
                 {task.reads?.return ? <ReturnIssues ret={task.reads.return as PeriodReturn} books={books} nav={nav} canEdit={canEdit} /> : null}
-                {withheld ? (
+                {withheld?.rates.length ? (
                   <p className="warnline" data-testid="approval-withheld">
                     {t('automation.activityIdMissing', { rates: withheld.rates.join(', ') })}{' '}
                     <button type="button" className="golink" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('area.company')} › {t('company.vat')}</button>
                   </p>
                 ) : null}
+                {withheld?.questions ? <p className="warnline" data-testid="approval-withheld-questions">{t('automation.questionsOpen', { n: withheld.questions })}</p> : null}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}

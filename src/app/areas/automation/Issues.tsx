@@ -57,7 +57,7 @@ function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck;
   );
 }
 
-/** «Noch offen in {period}»: under the return to review; it does not block the filing. */
+/** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */
 export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean }) {
   const { questions } = useQuestions();
   const issues = periodIssues(books, questions, from, to);

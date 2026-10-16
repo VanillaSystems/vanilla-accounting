@@ -297,8 +297,9 @@ test('a VAT question open about a payment of the period withholds the filing: th
 
   await engine.command({ kind: 'answer', run: id, outcome: 'approved' });
   await engine.idle();
-  assert.equal(run().state.status, 'stuck', 'an approval sent anyway stops before the XML');
-  assert.deepEqual(run().state.status === 'stuck' ? run().state.why : undefined, { code: 'questionsOpen', params: { period: Q, n: '1' } });
+  const stuck = run().state;
+  assert.equal(stuck.status, 'stuck', 'an approval sent anyway stops before the XML');
+  assert.deepEqual(stuck.status === 'stuck' ? stuck.why : undefined, { code: 'questionsOpen', params: { period: Q, n: '1' } });
   assert.equal(loadBooks(ws).config.approvedReturn, undefined, 'nothing held: the owner can still answer');
   assert.equal(filingXml(ws, Q), undefined, 'no XML');
 

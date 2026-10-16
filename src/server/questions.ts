@@ -128,8 +128,14 @@ function bookPrivate(books: Books, tx: BankTransaction, only: string | undefined
   return { booked: undo.map((u) => (u as { id: string }).id), undo };
 }
 
-/** A refusal of the books as the answer's words: a filed quarter, a payment it cannot book, an edit refused. */
+/**
+ * A refusal of the books as the answer's words: a filed quarter, a payment it cannot book, an edit
+ * refused. A period held by its approved return is no refusal of the answer: the request is refused
+ * with the hold's reason («Zurück» frees it), nothing is recorded, and the question stays open until
+ * the owner's answer can be booked (r8h-24).
+ */
 function refusalOf(e: unknown): Acted {
+  if (e instanceof ClosedPeriodError && e.approved) throw e;
   if (e instanceof Unclear) return { refused: e.why, detail: e.message };
   if (e instanceof ClosedPeriodError) return { refused: 'closed', ...(e.closedThrough ? { detail: e.closedThrough } : {}) };
   if (e instanceof RequestError) return { refused: 'refused', detail: e.message };

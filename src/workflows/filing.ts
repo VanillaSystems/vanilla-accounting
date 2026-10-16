@@ -10,8 +10,10 @@
  * The figures a person approves are the figures that are filed (r7h-24): the XML step writes the
  * XML from the books of that moment only when they still give the reviewed figures, else the
  * review comes again with today's; from the XML on, the period is held (`config.approvedReturn`,
- * src/books/store.ts periodLock) until «Eingereicht» closes it or «Zurück» frees it; and the seal
- * step refuses to seal books whose figures differ from the filed XML.
+ * src/books/store.ts periodLock) until «Eingereicht» closes it or «Zurück» frees it; the XML step
+ * waits while the owner's VAT questions about the period are open (r8h-24); and the seal step
+ * refuses to seal books whose figures differ from the filed XML, lifting the hold so they can be
+ * restored (r8h-26).
  */
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -19,7 +21,8 @@ import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/pe
 import { loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
-import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
+import { closeGoneSaleQuestions, openSaleQuestionsIn } from '../intake/sale-questions.js';
+import { readQuestions } from '../questions/store.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 import type { QuarterKey } from '../types/index.js';
 import { refuse } from '../types/refusal.js';
@@ -121,6 +124,9 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const books = loadBooks(ws);
       // The books changed since the review: no XML of stale figures; the person reviews today's.
       if (!sameFigures(ret, returnOf(books, key))) return { outcome: 'changed' };
+      // The owner's open VAT questions about the period's payments are hers to answer first: no return is filed over them (r8h-24).
+      const open = openSaleQuestionsIn(readQuestions(ws), books, ret.from, ret.to);
+      if (open.length) throw refuse('questionsOpen', { period: key, n: String(open.length) }, `${key}: ${open.length} VAT question(s) about its payments are open; answer them before the return is written`);
       const missing = ratesWithoutActivityId(ret.figures);
       if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (the company's VAT section), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({
@@ -150,6 +156,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const filedReturn = input.return as PeriodReturn;
       const today = returnOf(books, key);
       if (!sameFigures(filedReturn, today)) {
+        // The hold gave way: the person restores the bookings in the app, then «Weiter» (r8h-26).
+        hold(ws, books, key, false);
         throw refuse('figuresChanged', { period: key, filed: filedReturn.payable.toFixed(2), now: today.payable.toFixed(2) }, `${key}: the books (payable ${today.payable.toFixed(2)}) differ from the return filed (payable ${filedReturn.payable.toFixed(2)}); nothing closed or sealed until they are restored`);
       }
       if (!closed || closed < end) {
