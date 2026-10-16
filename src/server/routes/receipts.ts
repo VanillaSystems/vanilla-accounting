@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { renameSync, existsSync, createReadStream, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { renameSync, existsSync, createReadStream, mkdirSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { RECEIPT_KINDS, type JournalEntry, type Mapping, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
+import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
+import { deletionsOf, dropFromTrash, readTrashed, trashedFile, trashReceipt, type Trashed } from '../../books/receipt-trash.js';
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { privatePayment, setReceipt, unbookedPayments } from '../edits.js';
@@ -88,40 +88,6 @@ router.get('/api/receipts/:id', (req, res) => {
   createReadStream(pdfPath).pipe(res);
 });
 
-/**
- * Each deletion of a receipt waits in data/trash/<id>/<deletion>/ for TRASH_DAYS: its file, and
- * what the books held of it, so a restore («Rückgängig» in the toast) puts both back. The same
- * file dropped and deleted again is another deletion; only the latest one can come back.
- */
-interface Trashed {
-  deletedAt: string; receipt: Receipt; mappings: Mapping[]; file: string;
-  /** The entries the deletion took with it (a record from before this field has none). */
-  entries?: JournalEntry[];
-  /** The entries it kept (a person's) that named the receipt as seen: the restore names it there again. */
-  named?: string[];
-}
-const TRASH_DAYS = 30;
-const TRASH = () => join(WS.paths.data, 'trash');
-const ID = /^[\w-]+$/;
-
-/** The deletions of a receipt in the trash, oldest first (a deletion's name sorts by its time). */
-function deletionsOf(id: string): string[] {
-  const dir = join(TRASH(), id);
-  return existsSync(dir) ? readdirSync(dir).filter((d) => existsSync(join(dir, d, 'trashed.json'))).sort() : [];
-}
-
-function emptyOldTrash(): void {
-  if (!existsSync(TRASH())) return;
-  const before = new Date(Date.now() - TRASH_DAYS * 864e5).toISOString();
-  for (const id of readdirSync(TRASH())) {
-    for (const d of deletionsOf(id)) {
-      const at = (JSON.parse(readFileSync(join(TRASH(), id, d, 'trashed.json'), 'utf8')) as Trashed).deletedAt;
-      if (at < before) rmSync(join(TRASH(), id, d), { recursive: true, force: true });
-    }
-    if (!deletionsOf(id).length) rmSync(join(TRASH(), id), { recursive: true, force: true });
-  }
-}
-
 /** The receipt leaves the books with its links and the entries booked with it; its payments are booked again without it. */
 router.delete('/api/receipts/:id', async (req, res) => {
   const { id } = req.params;
@@ -139,12 +105,7 @@ router.delete('/api/receipts/:id', async (req, res) => {
     const trashed: Trashed = { deletedAt: new Date().toISOString(), receipt, mappings, file: relative(WS.paths.root, pdfPath), entries: had.filter((e) => !books.journalEntries.includes(e)), ...(named.length ? { named: named.map((e) => e.id) } : {}) };
     return { trashed, pdfPath, again };
   });
-  emptyOldTrash();
-  const deletion = `${trashed.deletedAt.replace(/[:.]/g, '-')}-${randomUUID().slice(0, 4)}`;
-  const into = join(TRASH(), id, deletion);
-  mkdirSync(into, { recursive: true });
-  writeFileSync(join(into, 'trashed.json'), JSON.stringify(trashed, null, 2));
-  if (existsSync(pdfPath)) renameSync(pdfPath, join(into, basename(pdfPath)));
+  const deletion = trashReceipt(WS, trashed, pdfPath);
   if (again.length) await bookAgain(trashed.receipt.filename);
   res.json({ ok: true, deletion });
 });
@@ -159,13 +120,12 @@ router.delete('/api/receipts/:id', async (req, res) => {
 router.post('/api/receipts/:id/restore', async (req, res) => {
   const { id } = req.params;
   const asked = (req.body as { deletion?: unknown } | undefined)?.deletion;
-  const all = ID.test(id) ? deletionsOf(id) : [];
+  const all = deletionsOf(WS, id);
   const deletion = typeof asked === 'string' ? asked : all.at(-1);
   if (!deletion || !all.includes(deletion)) throw new RequestError(404, 'Dieser Beleg liegt nicht mehr im Papierkorb.', { code: 'notInTrash' });
   if (deletion !== all.at(-1)) throw new RequestError(409, 'Dieser Beleg wurde später noch einmal gelöscht. «Rückgängig» der letzten Löschung holt ihn zurück.', { code: 'deletedAgain' });
-  const at = join(TRASH(), id, deletion);
-  const t = JSON.parse(readFileSync(join(at, 'trashed.json'), 'utf8')) as Trashed;
-  const from = join(at, basename(t.file));
+  const t = readTrashed(WS, id, deletion);
+  const from = trashedFile(WS, id, deletion, t);
   const to = join(WS.paths.root, t.file);
   const again = updateBooks((books) => {
     if (books.receipts.some((r) => r.id === id)) throw new RequestError(409, 'Dieser Beleg ist schon in den Büchern.', { code: 'alreadyBack' });
@@ -186,7 +146,7 @@ router.post('/api/receipts/:id/restore', async (req, res) => {
     return [...linked].some((ref) => !books.journalEntries.some((e) => e.transactionRef === ref));
   });
   if (existsSync(from)) { mkdirSync(dirname(to), { recursive: true }); renameSync(from, to); }
-  rmSync(join(TRASH(), id), { recursive: true, force: true });
+  dropFromTrash(WS, id);
   if (again) await bookAgain(t.receipt.filename);
   res.json({ ok: true, receipt: t.receipt });
 });

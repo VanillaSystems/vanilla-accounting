@@ -6,7 +6,7 @@
  * save. Verlauf is git's log.
  */
 
-import type { JournalEntry } from '../types/index.js';
+import type { JournalEntry, ReceiptPatch } from '../types/index.js';
 
 /** Where a change waits: the books (one item, written by runs and edits), the AI's draft, a file changed outside the app. */
 export type ChangeSource = 'draft' | 'outside' | 'books';
@@ -26,6 +26,21 @@ export interface RunWrote { run: string; workflow: string; label: string; at: st
 /** `kept`: for a deletion the app recorded (data/trash/entries), the payment's other bookings at that moment; the restore is refused while the payment has bookings not among them (r8h-23). */
 export interface HandEdit { id: string; ref: string; date: string; text: string; at: string; ai?: true; deleted?: true; saved?: JournalEntry; kept?: string[] }
 
+/**
+ * What a person did to a receipt since the last save, each with its «Rückgängig» (r8k-7): a
+ * deletion (back from the trash, deletion `deletion`), a link made or taken back by hand (the
+ * opposite), fields edited (`back` is the patch that puts them back as saved), «Privat oder bar
+ * bezahlt» (deleting the owner's payment `payment` takes its booking and link with it; blocked
+ * while a person's own booking hangs on it). `id` is the receipt's; `date` its date, for the link.
+ */
+export type ReceiptChange = { id: string; text: string; at: string; date?: string } & (
+  | { kind: 'deleted'; deletion: string }
+  | { kind: 'linked'; payment: string }
+  | { kind: 'unlinked'; payment: string }
+  | { kind: 'edited'; back: ReceiptPatch }
+  | { kind: 'privateOutlay'; payment: string; blocked?: 'personsBooking' }
+);
+
 /** The books' changes since the last save. */
 export interface BooksChange {
   /** The books' own files that differ from the last save (ledger, books/*.jsonl, run log, invoices). */
@@ -34,6 +49,8 @@ export interface BooksChange {
   runs: RunWrote[];
   /** The bookings a person changed or made by hand since the last save. */
   hand: HandEdit[];
+  /** What a person did to receipts since the last save (r8k-7). */
+  receipts: ReceiptChange[];
 }
 
 /** How a saved change takes effect (workflows.md "Changing a workflow"): at once, once switched on, or after its maintainer's review. */

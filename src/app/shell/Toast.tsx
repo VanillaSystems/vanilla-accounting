@@ -3,7 +3,11 @@ import { t } from '../i18n/index.js';
 
 interface Shown { msg: string; undo?: () => void; n: number }
 
-/** One message at a time; with an undo it stays 6 s and ⌘Z or its button takes the action back. */
+/**
+ * One message at a time; with an undo it stays 6 s and ⌘Z or its button takes the action back.
+ * The undo outlives the toast: ⌘Z after it has gone still takes the last action back (r8k-7,
+ * r8h-25), once, until another message takes its place.
+ */
 export function useToast() {
   const [shown, setShown] = useState<Shown | null>(null);
   const [visible, setVisible] = useState(false);
@@ -26,13 +30,14 @@ export function useToast() {
     if (!(visible && shown?.undo)) toast(msg);
   }, [visible, shown, toast]);
 
-  /** Runs the shown undo; false when there is none. */
+  /** Runs the last undo, shown or gone; false when there is none left. */
   const undo = useCallback(() => {
-    if (!visible || !shown?.undo) return false;
+    if (!shown?.undo) return false;
     shown.undo();
+    setShown({ ...shown, undo: undefined });
     setVisible(false);
     return true;
-  }, [visible, shown]);
+  }, [shown]);
 
   const node = (
     <div className={`toast${visible ? ' show' : ''}`} role="status" aria-live="polite">

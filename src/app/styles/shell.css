@@ -180,7 +180,7 @@ main { margin-left: var(--abw); }
 .counts button.runinbox { display: inline-flex; align-items: center; gap: 5px; }
 .counts button.runinbox:disabled { cursor: default; color: var(--faint); }
 .runinbox svg { width: 13px; height: 13px; }
-.toast { position: fixed; left: var(--page-mid); bottom: 26px; transform: translate(-50%, 20px); opacity: 0; z-index: 45; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1), bottom .3s; pointer-events: none; }
+.toast { position: fixed; left: var(--page-mid); bottom: 26px; transform: translate(-50%, 20px); opacity: 0; z-index: 70; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1), bottom .3s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .toast button { color: inherit; font-weight: 600; padding: 4px 8px; border-radius: 7px; }
 .toast button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }

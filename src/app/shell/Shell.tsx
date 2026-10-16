@@ -151,7 +151,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     overlayOpen: () => overlay !== null || dropOpen(),
     closeOverlay: () => { if (dropOpen()) closeDrop(); setOverlay(null); focusSelectedRow(); },
     palette: () => setOverlay({ kind: 'palette' }),
-    undo,
+    // ⌘Z with nothing left to take back says so instead of doing nothing (r8k-7).
+    undo: () => { if (!undo()) toast(t('shell.nothingToUndo')); return true; },
     area: (letter) => {
       const id = DOCK.flat().find((a) => AREAS[a].dock?.key === letter);
       if (id) goArea(id);

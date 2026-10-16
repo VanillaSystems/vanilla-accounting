@@ -3141,5 +3141,19 @@ export default {
     'rules.hand.missing.account': 'Which account?',
     'rules.hand.title': 'Your new rule',
     // end r8k-4
+  // r8k-6/7/8
+  'shell.nothingToUndo': 'Nothing to undo.',
+  'changes.receipts': 'Receipts · by hand',
+  'changes.receiptDeleted': 'deleted {when}',
+  'changes.receiptLinked': 'linked to payment {payment} {when}',
+  'changes.receiptUnlinked': 'unlinked from payment {payment} {when}',
+  'changes.receiptEdited': 'edited {when}',
+  'changes.receiptOutlay': 'paid privately or in cash {when} · payment {payment}',
+  'changes.receiptRestoreTip': 'Bring the deleted receipt back from the trash, with its links and bookings',
+  'changes.receiptUnlinkTip': 'Take the link back; the payment is booked again',
+  'changes.receiptLinkTip': 'Link the receipt to the payment again',
+  'changes.receiptEditTip': 'The fields as they were at the last save',
+  'changes.outlayUndoTip': 'Remove the private payment with its booking and link',
+  'changes.outlayBlocked': 'booked by hand: take that booking back first',
   },
 } satisfies Locale;

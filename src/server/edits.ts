@@ -90,7 +90,8 @@ export function link(books: Books, receipt: string, payment: string): BookChange
   if (!books.transactions.some((t) => t.ref === payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, payment), 'mapping');
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
-  books.mappings.push({ transactionRef: payment, receiptId: receipt });
+  // A link by hand (or by the AI sidebar on the person's wish) says so: Änderungen lists it (r8k-7).
+  books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'human' });
   return { kind: 'unlink', receipt, payment };
 }
 

@@ -14,7 +14,7 @@ import { t } from '../../i18n/index.js';
 import { changesCommand, changesNow as lastView, pollChanges, useChanges, useDiff, useSave } from '../../changes/store.js';
 import { api, errorText } from '../../lib/api.js';
 import { BotIcon } from '../automation/Graph.js';
-import { BOOKS, diffLines, hunks, type ChangesView, type FileChange, type SaveSummary, type SavingCommand, type SavingResult } from '../../../saving/model.js';
+import { BOOKS, diffLines, hunks, type ChangesView, type FileChange, type ReceiptChange, type SaveSummary, type SavingCommand, type SavingResult } from '../../../saving/model.js';
 import { ICONS } from '../icons.js';
 import { RuleDraft } from '../company/RulesSection.js';
 import { at } from '../receipts/view.js';
@@ -151,6 +151,44 @@ function useCommand(nav: Nav): [string | undefined, (cmd: SavingCommand) => Prom
   return [busy, go];
 }
 
+function receiptChangeText(c: ReceiptChange): string {
+  const when = sayWhen(c.at);
+  switch (c.kind) {
+    case 'deleted': return t('changes.receiptDeleted', { when });
+    case 'linked': return t('changes.receiptLinked', { when, payment: c.payment });
+    case 'unlinked': return t('changes.receiptUnlinked', { when, payment: c.payment });
+    case 'edited': return t('changes.receiptEdited', { when });
+    case 'privateOutlay': return t('changes.receiptOutlay', { when, payment: c.payment });
+  }
+}
+
+function receiptUndoTip(c: ReceiptChange): string {
+  switch (c.kind) {
+    case 'deleted': return t('changes.receiptRestoreTip');
+    case 'linked': return t('changes.receiptUnlinkTip');
+    case 'unlinked': return t('changes.receiptLinkTip');
+    case 'edited': return t('changes.receiptEditTip');
+    case 'privateOutlay': return t('changes.outlayUndoTip');
+  }
+}
+
+/** «Rückgängig» of what a person did to a receipt (r8k-7): the opposite write, an API call with its refusals in the person's language. */
+async function undoReceiptChange(c: ReceiptChange, nav: Nav) {
+  try {
+    switch (c.kind) {
+      case 'deleted': await api.restoreReceipt(c.id, c.deletion); break;
+      case 'linked': await api.removeMapping({ receiptId: c.id, transactionRef: c.payment }); break;
+      case 'unlinked': await api.addMapping({ receiptId: c.id, transactionRef: c.payment }); break;
+      case 'edited': await api.patchReceipt(c.id, c.back); break;
+      case 'privateOutlay': await api.deleteTransaction(c.payment); break;
+    }
+    nav.refresh();
+    await pollChanges();
+  } catch (e) {
+    nav.toast(errorText(e));
+  }
+}
+
 /** «Rückgängig» of a change by hand: the booking back as saved, or gone when it was booked since. */
 async function restoreSaved(id: string, nav: Nav) {
   try {
@@ -233,6 +271,23 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                             <span className="chwho">{h.ai ? <BotIcon /> : PERSON}</span>{h.text} · {h.deleted ? t('changes.handDeleted') : t(h.ai ? (h.saved ? 'changes.aiChanged' : 'changes.aiBooked') : h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
                           </button>
                           <button type="button" className="quiet2" title={t(h.deleted ? 'changes.handRestoreTip' : h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+                {view.books.receipts.length ? (
+                  <>
+                    <div className="group"><span>{t('changes.receipts')}</span></div>
+                    <div className="chraw" data-testid="receipt-changes">
+                      {view.books.receipts.map((c) => (
+                        <div key={`${c.kind}:${c.id}:${'payment' in c ? c.payment : ''}`} className="chrawrow" data-receipt={c.id}>
+                          <button type="button" className="golink" onClick={() => nav.go(at(c.kind === 'deleted' ? { area: 'receipts' } : { area: 'receipts', id: c.id }, c.date))}>
+                            <span className="chwho">{PERSON}</span>{c.text} · {receiptChangeText(c)}
+                          </button>
+                          {c.kind === 'privateOutlay' && c.blocked
+                            ? <span className="m">{t('changes.outlayBlocked')}</span>
+                            : <button type="button" className="quiet2" title={receiptUndoTip(c)} onClick={() => void undoReceiptChange(c, nav)}>{t('changes.handUndo')}</button>}
                         </div>
                       ))}
                     </div>

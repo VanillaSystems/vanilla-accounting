@@ -12,8 +12,9 @@ import { repositoryAt } from '../workspace/git.js';
 import { LAYOUT, yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 import { BOOK_FILES, fromJsonl } from '../books/years.js';
 import { hasBooks, loadBooks, periodLock, type Books } from '../books/store.js';
-import type { JournalEntry } from '../types/index.js';
-import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type SaveDetail, type SaveSummary } from './model.js';
+import type { BankTransaction, JournalEntry, Mapping, Receipt, ReceiptPatch } from '../types/index.js';
+import { latestDeletions } from '../books/receipt-trash.js';
+import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type ReceiptChange, type SaveDetail, type SaveSummary } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
@@ -81,10 +82,98 @@ const ownBooks = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.invoices, ...y
 /** How many of the books' own files differ from the last save, and the bookings a person changed since. The runs that wrote them are the engine's to name. */
 export async function booksChange(ws: Ws): Promise<BooksChange> {
   const repo = await repositoryAt(ws.paths.repository);
-  if (!repo) return { files: 0, runs: [], hand: [] };
+  if (!repo) return { files: 0, runs: [], hand: [], receipts: [] };
   const rows = await git.statusMatrix({ fs, dir: repo, filepaths: ownBooks(ws).map((p) => relative(repo, p)) });
   const files = rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1) && !(head === 0 && workdir === 0)).length;
-  return { files, runs: [], hand: files ? await handEdits(ws) : [] };
+  return { files, runs: [], hand: files ? await handEdits(ws) : [], receipts: files ? await receiptChanges(ws) : [] };
+}
+
+const recordsIn = <T>(text: string, file: string) => fromJsonl(text, file) as T[];
+
+/** The fields a person edits on a receipt; a kind or VAT facts count when a person set them (kindBy, vatBy). */
+const PLAIN_FIELDS = ['filename', 'date', 'amount', 'currency', 'description', 'remarks'] as const;
+
+/** The patch that puts a receipt's edited fields back as saved, or undefined when none of them changed. */
+function editedBack(was: Receipt, now: Receipt): ReceiptPatch | undefined {
+  const back: ReceiptPatch = {};
+  const moved = PLAIN_FIELDS.filter((k) => (was[k] ?? null) !== (now[k] ?? null));
+  if (moved.includes('filename')) back.filename = was.filename;
+  if (moved.includes('date')) back.date = was.date ?? null;
+  if (moved.includes('amount') || moved.includes('currency')) {
+    if (was.amount == null) back.amount = null;
+    else { back.amount = was.amount; back.currency = was.currency; }
+  }
+  if (moved.includes('description')) back.description = was.description ?? '';
+  if (moved.includes('remarks')) back.remarks = was.remarks ?? '';
+  if ((was.kindBy === 'human' || now.kindBy === 'human') && (was.kind ?? null) !== (now.kind ?? null)) back.kind = was.kind ?? null;
+  const facts = (r: Receipt) => JSON.stringify([r.hasSwissVat ?? null, r.vatSummary ?? null, r.vatId ?? null]);
+  if ((was.vatBy === 'human' || now.vatBy === 'human') && facts(was) !== facts(now)) {
+    if (was.hasSwissVat === undefined) back.vat = null;
+    else { back.vat = { hasSwissVat: was.hasSwissVat, vatSummary: was.vatSummary ?? [], ...(was.vatId ? { vatId: was.vatId } : {}) }; if (was.vatBy !== 'human') back.vatBy = null; }
+  }
+  return Object.keys(back).length ? back : undefined;
+}
+
+/**
+ * What a person did to receipts since the last save (r8k-7): receipts deleted (the trash's latest
+ * deletions since the save, while the receipt is not back), links made by hand (Mapping.by human)
+ * or taken back (a saved link gone while receipt and payment are still there), fields edited
+ * (editedBack), and «Privat oder bar bezahlt» (an owner's payment made since, linked to a receipt).
+ * A deletion is dated by its record, the rest by the file's last write.
+ */
+export async function receiptChanges(ws: Ws): Promise<ReceiptChange[]> {
+  const repo = await repositoryAt(ws.paths.repository);
+  if (!repo) return [];
+  const since = await lastSaveAt(ws);
+  const out: ReceiptChange[] = [];
+  const text = (r: Receipt) => r.description || r.filename;
+  const linkKey = (m: Mapping) => `${m.transactionRef}\n${m.receiptId}`;
+  const back = new Set<string>();
+  for (const year of yearsOf(ws.paths)) {
+    const books = yearPaths(ws.paths, year).books;
+    const file = (part: keyof typeof BOOK_FILES) => join(books, BOOK_FILES[part]);
+    const now = async <T>(part: keyof typeof BOOK_FILES) => recordsIn<T>(read(file(part)), file(part));
+    const saved = async <T>(part: keyof typeof BOOK_FILES) => recordsIn<T>(await headBlob(repo, relative(repo, file(part))), file(part));
+    const wrote = (part: keyof typeof BOOK_FILES) => (existsSync(file(part)) ? statSync(file(part)).mtime.toISOString() : '');
+    const receiptsNow = new Map((await now<Receipt>('receipts')).map((r) => [r.id, r]));
+    const receiptsSaved = new Map((await saved<Receipt>('receipts')).map((r) => [r.id, r]));
+    for (const id of receiptsNow.keys()) back.add(id);
+    const linksNow = await now<Mapping>('mappings');
+    const linksSaved = await saved<Mapping>('mappings');
+    const txNow = new Map((await now<BankTransaction>('transactions')).map((t) => [t.ref, t]));
+    const txSaved = new Set((await saved<BankTransaction>('transactions')).map((t) => t.ref));
+    const entriesNow = await now<JournalEntry>('journalEntries');
+    const outlays = new Set([...txNow.values()].filter((t) => t.source === 'manual' && !txSaved.has(t.ref)).map((t) => t.ref));
+
+    for (const r of receiptsNow.values()) {
+      const was = receiptsSaved.get(r.id);
+      const patch = was && editedBack(was, r);
+      if (patch) out.push({ kind: 'edited', id: r.id, text: text(r), at: wrote('receipts'), date: r.date, back: patch });
+    }
+    const savedKeys = new Set(linksSaved.map(linkKey));
+    const nowKeys = new Set(linksNow.map(linkKey));
+    for (const m of linksNow) {
+      const r = receiptsNow.get(m.receiptId);
+      if (!r || savedKeys.has(linkKey(m)) || m.by !== 'human' || outlays.has(m.transactionRef)) continue;
+      out.push({ kind: 'linked', id: r.id, text: text(r), at: wrote('mappings'), date: r.date, payment: m.transactionRef });
+    }
+    for (const m of linksSaved) {
+      const r = receiptsNow.get(m.receiptId);
+      if (!r || nowKeys.has(linkKey(m)) || !txNow.has(m.transactionRef)) continue;
+      out.push({ kind: 'unlinked', id: r.id, text: text(r), at: wrote('mappings'), date: r.date, payment: m.transactionRef });
+    }
+    for (const ref of outlays) {
+      const r = linksNow.filter((m) => m.transactionRef === ref).map((m) => receiptsNow.get(m.receiptId)).find((x) => x);
+      if (!r) continue;
+      const blocked = entriesNow.some((e) => e.transactionRef === ref && e.origin === 'manual');
+      out.push({ kind: 'privateOutlay', id: r.id, text: text(r), at: wrote('transactions'), date: r.date, payment: ref, ...(blocked ? { blocked: 'personsBooking' } : {}) });
+    }
+  }
+  for (const { id, deletion, trashed } of latestDeletions(ws)) {
+    if ((since && trashed.deletedAt <= since) || back.has(id)) continue;
+    out.push({ kind: 'deleted', id, text: text(trashed.receipt), at: trashed.deletedAt, date: trashed.receipt.date, deletion });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
 }
 
 const entriesIn = (text: string, file: string) => new Map((fromJsonl(text, file) as JournalEntry[]).map((e) => [e.id, e]));

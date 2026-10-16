@@ -3141,5 +3141,19 @@ export default {
     'rules.hand.missing.account': 'Su quale conto?',
     'rules.hand.title': 'La tua nuova regola',
     // end r8k-4
+  // r8k-6/7/8
+  'shell.nothingToUndo': 'Niente da annullare.',
+  'changes.receipts': 'Giustificativi · a mano',
+  'changes.receiptDeleted': 'eliminato {when}',
+  'changes.receiptLinked': 'collegato al pagamento {payment} {when}',
+  'changes.receiptUnlinked': 'scollegato dal pagamento {payment} {when}',
+  'changes.receiptEdited': 'modificato {when}',
+  'changes.receiptOutlay': 'pagato in privato o in contanti {when} · pagamento {payment}',
+  'changes.receiptRestoreTip': 'Riportare il giustificativo eliminato dal cestino, con i suoi collegamenti e le sue registrazioni',
+  'changes.receiptUnlinkTip': 'Scollegare di nuovo; il pagamento viene registrato di nuovo',
+  'changes.receiptLinkTip': 'Collegare di nuovo il giustificativo al pagamento',
+  'changes.receiptEditTip': 'I campi come erano all’ultimo salvataggio',
+  'changes.outlayUndoTip': 'Rimuovere il pagamento privato con la sua registrazione e il collegamento',
+  'changes.outlayBlocked': 'registrato a mano: prima ritirare questa registrazione',
   },
 } satisfies Locale;

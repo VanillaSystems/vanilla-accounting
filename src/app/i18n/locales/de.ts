@@ -3138,6 +3138,20 @@ export const messages = {
   'rules.hand.missing.account': 'Auf welches Konto?',
   'rules.hand.title': 'Deine neue Regel',
   // end r8k-4
+  // r8k-6/7/8
+  'shell.nothingToUndo': 'Nichts rückgängig zu machen.',
+  'changes.receipts': 'Belege · von Hand',
+  'changes.receiptDeleted': 'gelöscht {when}',
+  'changes.receiptLinked': 'mit Zahlung {payment} verknüpft {when}',
+  'changes.receiptUnlinked': 'von Zahlung {payment} gelöst {when}',
+  'changes.receiptEdited': 'geändert {when}',
+  'changes.receiptOutlay': 'privat oder bar bezahlt {when} · Zahlung {payment}',
+  'changes.receiptRestoreTip': 'Den gelöschten Beleg aus dem Papierkorb zurückholen, mit seinen Verknüpfungen und Buchungen',
+  'changes.receiptUnlinkTip': 'Die Verknüpfung wieder lösen; die Zahlung wird neu gebucht',
+  'changes.receiptLinkTip': 'Den Beleg wieder mit der Zahlung verknüpfen',
+  'changes.receiptEditTip': 'Die Felder wieder so, wie sie beim letzten Speichern waren',
+  'changes.outlayUndoTip': 'Die private Zahlung samt Buchung und Verknüpfung entfernen',
+  'changes.outlayBlocked': 'von Hand gebucht: zuerst diese Buchung zurücknehmen',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

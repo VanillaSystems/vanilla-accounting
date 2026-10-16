@@ -3141,5 +3141,19 @@ export default {
     'rules.hand.missing.account': 'Sur quel compte ?',
     'rules.hand.title': 'Votre nouvelle règle',
     // end r8k-4
+  // r8k-6/7/8
+  'shell.nothingToUndo': 'Rien à annuler.',
+  'changes.receipts': 'Justificatifs · à la main',
+  'changes.receiptDeleted': 'supprimé {when}',
+  'changes.receiptLinked': 'lié au paiement {payment} {when}',
+  'changes.receiptUnlinked': 'détaché du paiement {payment} {when}',
+  'changes.receiptEdited': 'modifié {when}',
+  'changes.receiptOutlay': 'payé en privé ou en espèces {when} · paiement {payment}',
+  'changes.receiptRestoreTip': 'Ramener le justificatif supprimé de la corbeille, avec ses liens et ses écritures',
+  'changes.receiptUnlinkTip': 'Détacher à nouveau le lien ; le paiement est recomptabilisé',
+  'changes.receiptLinkTip': 'Lier à nouveau le justificatif au paiement',
+  'changes.receiptEditTip': 'Les champs tels qu’ils étaient au dernier enregistrement',
+  'changes.outlayUndoTip': 'Retirer le paiement privé avec son écriture et son lien',
+  'changes.outlayBlocked': 'comptabilisé à la main : reprendre d’abord cette écriture',
   },
 } satisfies Locale;
