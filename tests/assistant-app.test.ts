@@ -18,7 +18,11 @@ import { findBrowser } from '../src/invoices/pdf.js';
 import type { AssistantEvent, MadeChange } from '../src/types/assistant.js';
 import type { ApiRefusal } from '../src/types/api-error.js';
 import type { Index } from '../src/types/index.js';
-import type { InvoiceBook } from '../src/invoices/model.js';
+import type { Draft, InvoiceBook } from '../src/invoices/model.js';
+import { defaultTexts, draftSheet, issuedIntro } from '../src/invoices/documents.js';
+import { invoicingContext } from '../src/invoices/service.js';
+import { sheetBlocks } from '../src/invoices/sheet.js';
+import { TEXTS } from '../src/invoices/texts.js';
 import { appMap } from '../src/server/app-map.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
@@ -196,6 +200,26 @@ test('the payment term and the invoice texts change at once: for every customer 
 
   const bad = await s.answer([{ kind: 'invoicing', set: { paymentTermsDays: 500 } }]);
   assert.match(bad.refused?.message ?? '', /1 bis 120/);
+});
+
+test('a greeting is a line of its own above the intro: «Grüezi» leaves the intro word for word, the draft shows both, the issued invoice keeps both; the undo takes it away (wishes3-10)', async (t) => {
+  const s = await sidebar(t);
+  const made = await s.answer([{ kind: 'invoicing', set: { texts: { de: { salutation: 'Grüezi' } } } }]);
+  assert.equal(made.refused, undefined, made.refused?.message);
+  assert.deepEqual(made.made[0].undo, { kind: 'invoicing', set: { texts: { de: { salutation: null } } } }, 'before: no greeting');
+  const info = (await s.send('GET', '/api/workspace')).json as { invoicing?: { texts: Record<string, Record<string, string>> } };
+  assert.deepEqual([info.invoicing?.texts.de.salutation, info.invoicing?.texts.de.intro], ['Grüezi', undefined], 'the intro is not touched');
+
+  const ws = workspaceAt(s.api.root);
+  const ctx = invoicingContext(ws);
+  const draft = { ...s.invoices().invoices.find((i) => i.kind === 'invoice')!, status: 'draft', intro: undefined, closing: undefined, language: 'de' } as Draft;
+  const sheet = draftSheet(ctx, s.invoices(), draft, undefined);
+  const html = sheetBlocks(sheet).map((b) => b.html).join('');
+  assert.ok(html.indexOf('Grüezi') >= 0 && html.indexOf('Grüezi') < html.indexOf(TEXTS.de.intro), 'the greeting, then the intro whole');
+  assert.equal(issuedIntro(defaultTexts(ctx, 'invoice', 'de', 30).salutation, TEXTS.de.intro), `Grüezi\n\n${TEXTS.de.intro}`);
+
+  assert.equal((await s.undo(made.made[0])).status, 200);
+  assert.doesNotMatch(s.manifest(), /Grüezi/);
 });
 
 test('an invoice draft for a customer, or for a new one; the undo drops it (and the new customer); a refused answer writes no draft', async (t) => {

@@ -23,13 +23,20 @@ export function senderFor(ctx: InvoicingContext, currency: InvoiceCurrency): Omi
   };
 }
 
-/** The texts above and below the table: the workspace's own for the language, else the app's. `{days}` is the payment term. */
-export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number): { intro: string; closing: string } {
+/**
+ * The texts above and below the table: the workspace's own for the language, else the app's.
+ * `{days}` is the payment term. `salutation`: the greeting line above the intro of an invoice, a
+ * setting of its own so a greeting never replaces the intro; none unless the workspace sets one.
+ */
+export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number): { salutation: string; intro: string; closing: string } {
   const L = TEXTS[lang];
-  if (kind === 'credit-note') return { intro: '', closing: L.creditClosing };
+  if (kind === 'credit-note') return { salutation: '', intro: '', closing: L.creditClosing };
   const own = ctx.settings?.texts[lang];
-  return { intro: own?.intro ?? L.intro, closing: (own?.closing ?? L.closing(days)).replaceAll('{days}', String(days)) };
+  return { salutation: own?.salutation ?? '', intro: own?.intro ?? L.intro, closing: (own?.closing ?? L.closing(days)).replaceAll('{days}', String(days)) };
 }
+
+/** The intro an invoice is issued with: the greeting line, then the intro. */
+export const issuedIntro = (salutation: string, intro: string): string => [salutation.trim(), intro].filter(Boolean).join('\n\n');
 
 function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
   const target = book.invoices.find((i) => i.id === c.creditFor);
@@ -69,6 +76,7 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
     sender: senderFor(ctx, draft.currency),
     lines: draft.lines,
     ...(draft.exemption ? { exemption: draft.exemption } : {}),
+    ...(texts.salutation ? { salutation: texts.salutation } : {}),
     intro: draft.intro ?? texts.intro,
     closing: draft.closing ?? texts.closing,
     layout: ctx.settings?.layout ?? DEFAULT_LAYOUT,

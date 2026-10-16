@@ -79,7 +79,7 @@ function newEntry(v: unknown): NewEntry {
 }
 
 const LANGUAGES = ['de', 'fr', 'it', 'en'];
-const TEXTS = ['intro', 'closing', 'mailSubject', 'mailBody'];
+const TEXTS = ['salutation', 'intro', 'closing', 'mailSubject', 'mailBody'];
 
 function invoicingSet(v: unknown): InvoicingSet {
   const s = obj(v, 'set');

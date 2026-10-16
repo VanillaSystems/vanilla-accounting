@@ -236,7 +236,8 @@ export interface InvoicingSettings {
   texts: Partial<Record<InvoiceLanguage, InvoiceOwnTexts>>;
 }
 
-export const OWN_TEXTS = ['intro', 'closing', 'mailSubject', 'mailBody'] as const;
+/** `salutation`: a greeting line above the intro («Grüezi»); the app's own has none. */
+export const OWN_TEXTS = ['salutation', 'intro', 'closing', 'mailSubject', 'mailBody'] as const;
 export type InvoiceOwnTexts = Partial<Record<(typeof OWN_TEXTS)[number], string>>;
 
 export const MAIL_SECURITY = ['tls', 'starttls', 'none'] as const;

@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
-import { TEXTS } from '../../../invoices/texts.js';
+import { builtInTexts } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { InvoicingPatch } from '../../../workspace/manifest-write.js';
 import { api, errorText } from '../../lib/api.js';
@@ -26,8 +26,6 @@ import '../invoices/invoices.css';
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
 const DAYS = '{days}';
-/** The app's own texts of a language, the payment term left as {days}. */
-const builtIn = (lang: InvoiceLanguage): Record<OwnText, string> => ({ intro: TEXTS[lang].intro, closing: TEXTS[lang].closing(9999).replace('9999', DAYS), mailSubject: TEXTS[lang].mailSubject, mailBody: TEXTS[lang].mailBody });
 type OwnText = (typeof OWN_TEXTS)[number];
 
 export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
@@ -57,15 +55,15 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   }
 
   const own = settings.texts[lang] ?? {};
-  const texts = { ...builtIn(lang), ...own };
+  const texts = { ...builtInTexts(lang), ...own };
   const changed = Object.keys(own).length;
   function saveText(key: OwnText, value: string) {
     if (value === texts[key]) return;
-    void patch({ texts: { [lang]: { [key]: value === builtIn(lang)[key] ? null : value } } });
+    void patch({ texts: { [lang]: { [key]: value === builtInTexts(lang)[key] ? null : value } } });
   }
   function resetTexts() {
     const was = { ...own };
-    void patch({ texts: { [lang]: { intro: null, closing: null, mailSubject: null, mailBody: null } } });
+    void patch({ texts: { [lang]: { salutation: null, intro: null, closing: null, mailSubject: null, mailBody: null } } });
     nav.toast(t('invoiceLayout.textsReset'), () => { void patch({ texts: { [lang]: was } }); });
   }
 
@@ -114,6 +112,9 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
             </span>
           </div>
         </div>
+        <div className="lkf" key={`greet-${lang}`}>
+          <label className="lkr"><span>{t('invoiceLayout.salutation')}</span><input name="salutation" defaultValue={texts.salutation} placeholder={t('invoiceLayout.salutationHint')} disabled={!canEdit} onBlur={(e) => saveText('salutation', e.target.value.trim())} /></label>
+        </div>
         <div className="lkf lkmail" key={lang}>
           <div className="lkr"><span>{t('invoiceLayout.mail')}</span><span className="m">{t('invoiceLayout.mailHint', { document: '{document}', company: '{company}' })}</span></div>
           <label className="lkr"><span>{t('invoiceLayout.mailSubject')}</span><input name="mailSubject" defaultValue={texts.mailSubject} disabled={!canEdit} onBlur={(e) => saveText('mailSubject', e.target.value)} /></label>
@@ -131,7 +132,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
 
 /** The newest invoice laid out as a draft with this layout (or a sample when there is none), its texts editable. */
 function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
-  ws: CompanyInfo; layout: InvoiceLayout; lang: InvoiceLanguage; texts: { intro: string; closing: string }; guide: boolean; canEdit: boolean; onText(key: 'intro' | 'closing', value: string): void;
+  ws: CompanyInfo; layout: InvoiceLayout; lang: InvoiceLanguage; texts: { salutation: string; intro: string; closing: string }; guide: boolean; canEdit: boolean; onText(key: 'intro' | 'closing', value: string): void;
 }) {
   const load = useInvoices();
   const d = load.state === 'ready' ? load.data : undefined;
@@ -150,7 +151,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
     const fallback = customer ? {} : { customer: { ...sheet.customer, name: t('invoiceLayout.sampleCustomer'), address: { street: t('invoiceLayout.sampleStreet'), number: '1', postcode: '8000', town: t('invoiceLayout.sampleTown'), country: 'CH' } } };
     const windowGuide = guide ? t(layout.window === 'left' ? 'invoiceLayout.windowFrameLeft' : 'invoiceLayout.windowFrameRight') : undefined;
     return { ...sheet, ...fallback, screen: screenOf(d, canEdit ? 'texts' : undefined, undefined, windowGuide) };
-  }, [d, ws, layout, lang, texts.intro, texts.closing, guide, canEdit]);
+  }, [d, ws, layout, lang, texts.intro, texts.closing, texts.salutation, guide, canEdit]);
   if (!data) return null;
   return <Sheet data={data} editing={canEdit} className="lkprev" onEdit={(key, value, final) => { if (final && (key === 'intro' || key === 'closing')) onText(key, value); }} />;
 }

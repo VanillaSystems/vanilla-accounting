@@ -2,7 +2,7 @@
  * The words printed on an invoice, in the invoice's language. These are document texts, not UI
  * texts: an invoice to a customer in Geneva is French whatever language the app speaks.
  */
-import type { Exemption, InvoiceLanguage, Unit } from './model.js';
+import type { Exemption, InvoiceLanguage, OWN_TEXTS, Unit } from './model.js';
 
 export interface InvoiceTexts {
   invoice: string; credit: string; draft: string; reminder: (level: number) => string;
@@ -120,6 +120,11 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     units: { h: 'h', day: 'day', pcs: 'pcs', flat: 'flat rate', km: 'km' },
   },
 };
+
+/** The app's own texts of Firma › Rechnungslayout in a language, the payment term left as {days}; no greeting line. */
+export const builtInTexts = (lang: InvoiceLanguage): Record<(typeof OWN_TEXTS)[number], string> => ({
+  salutation: '', intro: TEXTS[lang].intro, closing: TEXTS[lang].closing(9999).replace('9999', '{days}'), mailSubject: TEXTS[lang].mailSubject, mailBody: TEXTS[lang].mailBody,
+});
 
 const MONTHS_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 

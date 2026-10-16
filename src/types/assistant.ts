@@ -9,7 +9,7 @@ import type { PrivateChoice, QuestionTarget } from '../questions/model.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
-type OwnText = 'intro' | 'closing' | 'mailSubject' | 'mailBody';
+type OwnText = 'salutation' | 'intro' | 'closing' | 'mailSubject' | 'mailBody';
 
 /** An invoice line as an answer gives it; the invoices' own reader checks it (src/invoices/service.ts parseDraftPatch). */
 export interface DraftLine { text: string; quantity: number; unit?: string; price: number; vatRate: number }

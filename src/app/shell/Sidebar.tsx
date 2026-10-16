@@ -19,6 +19,8 @@ import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
 import type { Route } from './route.js';
 import { PRESETS } from '../../export/model.js';
+import { builtInTexts } from '../../invoices/texts.js';
+import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
 import { RuleDraft } from '../areas/company/RulesSection.js';
 import {
@@ -39,14 +41,19 @@ function entryWhat(set: EntrySet, withText = true): string {
   ].filter(Boolean).join(' · ');
 }
 
-/** The invoicing settings a card names: the payment term, and each text set or put back to the app's own. */
-function invoicingWhat(set: InvoicingSet, customers: number | undefined): string {
+/** The invoicing settings a card names: the payment term, and each text as it was → as it is now (`before`: the undo's, null the app's own), or put back to the app's own. */
+function invoicingWhat(set: InvoicingSet, customers: number | undefined, before: InvoicingSet | undefined): string {
   return [
     set.paymentTermsDays !== undefined && t('assistant.c.terms', { n: set.paymentTermsDays }),
     set.paymentTermsDays !== undefined && customers && t('assistant.c.termsCustomers', { n: customers }),
-    ...Object.entries(set.texts ?? {}).flatMap(([lang, texts]) => Object.entries(texts ?? {}).map(([k, v]) => (v === null
-      ? t('assistant.c.textReset', { text: t(`assistant.c.text.${k}` as 'assistant.c.text.intro'), lang: lang.toUpperCase() })
-      : t('assistant.c.text', { text: t(`assistant.c.text.${k}` as 'assistant.c.text.intro'), lang: lang.toUpperCase(), value: v })))),
+    ...Object.entries(set.texts ?? {}).flatMap(([lang, texts]) => Object.entries(texts ?? {}).map(([k, v]) => {
+      const text = t(`assistant.c.text.${k}` as 'assistant.c.text.intro');
+      const L = lang as InvoiceLanguage;
+      const key = k as (typeof OWN_TEXTS)[number];
+      const was = before?.texts?.[L]?.[key] ?? builtInTexts(L)[key];
+      if (v === null) return t('assistant.c.textReset', { text, lang: lang.toUpperCase() });
+      return was ? t('assistant.c.text', { text, lang: lang.toUpperCase(), before: was, value: v }) : t('assistant.c.textAdded', { text, lang: lang.toUpperCase(), value: v });
+    })),
   ].filter(Boolean).join(' · ');
 }
 
@@ -82,7 +89,7 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
       return { text: t('assistant.c.deleteEntry', { name: gone?.description || c.id, what: gone ? `${fmt(gone.amount)} · ${formatDate(gone.date)}` : '' }) };
     }
     case 'account': return { text: t(c.name === null ? 'assistant.c.accountGone' : 'assistant.c.account', { number: c.number, name: c.name ?? '' }), go: { area: 'company', section: 'accounts' } };
-    case 'invoicing': return { text: t('assistant.c.invoicing', { what: invoicingWhat(c.set, note?.customers) }), go: { area: 'company', section: 'invoice-layout' } };
+    case 'invoicing': return { text: t('assistant.c.invoicing', { what: invoicingWhat(c.set, note?.customers, undo?.kind === 'invoicing' ? undo.set : undefined) }), go: { area: 'company', section: 'invoice-layout' } };
     case 'invoiceDraft': {
       const net = (c.draft.lines ?? []).reduce((sum, l) => sum + l.quantity * l.price, 0);
       const text = t('assistant.c.invoiceDraft', { customer: note?.draft?.customer ?? c.newCustomer?.name ?? '', n: c.draft.lines?.length ?? 0, net: fmt(net) });

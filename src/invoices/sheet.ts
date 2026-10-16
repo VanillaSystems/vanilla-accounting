@@ -34,6 +34,8 @@ export interface SheetData {
   sender: Omit<Sender, 'payTo'> & { payTo?: Sender['payTo'] };
   lines: InvoiceLine[];
   exemption?: Exemption;
+  /** A draft's greeting line above the intro (Firma › Rechnungslayout); an issued invoice has it in its intro. */
+  salutation?: string;
   intro: string;
   closing: string;
   layout: InvoiceLayout;
@@ -153,6 +155,7 @@ export function sheetBlocks(d: SheetData): Block[] {
     show.customerVatId && d.customer.vatId && d.customer.address.country !== 'CH' ? `<span>${L.yourVat} ${esc(d.customer.vatId)}</span>` : '',
   ].join('');
   B.push({ html: `<h3>${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}</h3><div class="meta">${meta}</div>` });
+  if (show.intro && d.salutation) B.push({ html: `<p class="intro salutation">${esc(d.salutation)}</p>` });
   if (show.intro) B.push(...texts('intro', d.intro));
   B.push({ html: `<table class="tb">${colgroup}<thead><tr>${cols.map(([k, x]) => `<th class="${k === 'd' ? '' : 'r'}">${esc(x)}</th>`).join('')}</tr></thead></table>`, head: true });
   d.lines.forEach((l, k) => {
