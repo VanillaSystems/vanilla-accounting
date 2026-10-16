@@ -77,7 +77,7 @@ export const PRESETS: readonly Preset[] = [
   },
   {
     id: 'audit', period: 'year', sums: true, oneBook: false,
-    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf', 'csv'], ledgers: ['pdf', 'csv'], journal: ['csv', 'json'], payments: ['csv', 'json'], receiptList: ['csv'], chart: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
+    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf', 'csv'], ledgers: ['pdf', 'csv'], journal: ['pdf', 'csv', 'json'], payments: ['csv', 'json'], receiptList: ['csv'], chart: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
   },
   {
     id: 'excel', period: 'page', sums: false, oneBook: true,
@@ -138,8 +138,12 @@ export function accountsWithActivity(books: Index, period: Period): string[] {
 export const paymentsIn = (books: Index, period: Period) =>
   books.transactions.filter((t) => t.date >= period.from && t.date <= period.to);
 
-/** How many of an item a period holds: the dialog's hint and whether a tick is possible. Filings are counted by the server. */
-export function countOf(id: ItemId, books: Index, period: Period, names: Record<string, string>, account?: string): number {
+/**
+ * How many of an item a period holds: the dialog's hint and whether a tick is possible. Filings
+ * count the quarters whose return lies filed in the books (`filed`, CompanyInfo.filed): a quarter
+ * before the lock that never had a return is not one (r4t-9).
+ */
+export function countOf(id: ItemId, books: Index, period: Period, names: Record<string, string>, account?: string, filed?: readonly string[]): number {
   switch (id) {
     case 'income': case 'balance': case 'trial': return 1;
     case 'vat': return quartersIn(period).length;
@@ -150,7 +154,7 @@ export function countOf(id: ItemId, books: Index, period: Period, names: Record<
     case 'receiptList': case 'receipts': return receiptsIn(books, period).length;
     case 'chart': return Object.keys(names).length;
     case 'statements': return statementsIn(books, period).length;
-    case 'filings': return quartersIn(period).filter((q) => !!books.config?.closedThrough && parsePeriod(q, localToday())!.to <= books.config.closedThrough).length;
+    case 'filings': return quartersIn(period).filter((q) => (filed ? filed.includes(q) : !!books.config?.closedThrough && parsePeriod(q, localToday())!.to <= books.config.closedThrough)).length;
   }
 }
 

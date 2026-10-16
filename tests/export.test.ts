@@ -15,7 +15,7 @@ import { accountsOf } from '../src/workspace/reads.js';
 import { localToday, parsePeriod } from '../src/accounting/periods.js';
 import { chfAmount } from '../src/accounting/ledger.js';
 import { buildBundle, downloadOf, zipBundle, type Bundle } from '../src/export/bundle.js';
-import { BadRequest, PRESETS, entriesIn, parseRequest, presetPeriod, receiptsIn, statementsIn, type PresetId } from '../src/export/model.js';
+import { BadRequest, PRESETS, countOf, entriesIn, parseRequest, presetPeriod, receiptsIn, statementsIn, type PresetId } from '../src/export/model.js';
 import { closeBrowser, findBrowser, printPdf } from '../src/invoices/pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
@@ -63,10 +63,12 @@ test('Treuhänder-Paket: reports as PDF, journal for Banana, as CSV and as PDF, 
 
 test('Prüfung ESTV / AHV and Jahresarchiv: the year, with the filed returns and seals of its filed quarters', async () => {
   const audit = paths(await bundleOf('audit'));
-  for (const p of ['Berichte/Kontoblätter.pdf', 'Berichte/Kontoblätter.csv', 'Daten/Buchungen.json', 'Daten/Belege.csv', 'Daten/Kontenplan.csv', 'MWST-eingereicht/2026/mwst-ech0217-2026-Q1.xml', 'MWST-eingereicht/2026/seal-Q1.json']) {
+  for (const p of ['Berichte/Kontoblätter.pdf', 'Berichte/Kontoblätter.csv', 'Daten/Buchungen.pdf', 'Daten/Buchungen.json', 'Daten/Belege.csv', 'Daten/Kontenplan.csv', 'MWST-eingereicht/2026/mwst-ech0217-2026-Q1.xml', 'MWST-eingereicht/2026/seal-Q1.json']) {
     assert.ok(audit.includes(p), `audit has ${p}`);
   }
   assert.ok(!audit.some((p) => p.includes('Q2') && p.startsWith('MWST-eingereicht')), 'only filed quarters');
+  assert.equal(countOf('filings', books, parsePeriod('2026', today)!, names, undefined, ['2026-Q1']), 1, 'the dialog counts the quarters filed, not every quarter before the lock (r4t-9)');
+  assert.equal(countOf('filings', books, parsePeriod('2026', today)!, names, undefined, []), 0);
   const archive = paths(await bundleOf('archive'));
   for (const p of ['Berichte/Erfolgsrechnung.csv', 'Daten/Belege.json']) assert.ok(archive.includes(p), `archive has ${p}`);
 });

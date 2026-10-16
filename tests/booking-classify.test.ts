@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { classifyTransactions, entriesFor, type ClassifyDeps } from '../src/booking/classify.js';
+import { classifyTransactions, entriesFor, moneyAccounts, type ClassifyDeps } from '../src/booking/classify.js';
+import { loadChart } from '../src/workspace/chart.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
 import { workspaceAt, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
@@ -70,6 +71,17 @@ test('a foreign entry carries the ESTV daily sell rate of the payment date, not 
   assert.deepEqual([usd.exchangeCurrency, usd.exchangeRate], ['USD', USD_2026_08_14]);
   const [chf] = entriesFor(tx({ ref: 'C' }), [expense(50)], ctx);
   assert.equal(chf.exchangeRate, undefined);
+});
+
+test('a transfer between the company\'s own money accounts carries no VAT code, whoever proposed one (r4w-9)', () => {
+  const money = moneyAccounts(bankAccounts, loadChart().accounts);
+  assert.ok(['1000', '1021', '1022', '1090'].every((a) => money.has(a)), 'cash, the banks, the transfer account');
+  assert.ok(!money.has('2451') && !money.has('1510'), 'the owner\'s account and a fixed asset are no money');
+  const ctx = { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } as const, money };
+  const [cash] = entriesFor(tx({ ref: 'ATM', bank: 'Raiffeisen', amount: 800 }), [{ accountDebit: '1000', accountCredit: '', amount: 800, vatCode: 'I0', description: 'Bargeldbezug' }], ctx);
+  assert.deepEqual([cash.accountDebit, cash.accountCredit, cash.vatCode], ['1000', '1021', undefined]);
+  const [tool] = entriesFor(tx({ ref: 'T', bank: 'Raiffeisen', amount: 900 }), [{ accountDebit: '1510', accountCredit: '', amount: 900, vatCode: 'I81', description: 'Maschine' }], ctx);
+  assert.equal(tool.vatCode, 'I81', 'a fixed asset bought keeps its input tax');
 });
 
 test('a Stripe payout books its 1093 entries on the order date and adds the payout leg', () => {

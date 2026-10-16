@@ -25,6 +25,7 @@ import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '.
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
+import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
 export const CONCURRENCY = 3;
@@ -44,6 +45,19 @@ export interface EntryContext {
   reason?: string;
   /** Who decided the entries, and wrote the reason: the model or a rule. */
   by: BookedBy;
+  /** The accounts that hold money (cash, banks): an entry between two of them is a transfer and carries no VAT code. */
+  money?: ReadonlySet<string>;
+}
+
+/**
+ * The accounts that hold the company's money: its bank accounts and every account the chart puts
+ * on the same line (cash, the transfer account). Money moved between two of them is no purchase
+ * and no sale: code decides that it carries no VAT code (r4w-9: a cash withdrawal `1000 / 1020`).
+ */
+export function moneyAccounts(bankAccounts: readonly LedgerBankAccount[], accounts: readonly ChartAccount[]): Set<string> {
+  const banks = bankAccounts.filter((a) => a.bank !== 'manual').map((a) => a.account);
+  const lines = new Set(accounts.filter((a) => banks.includes(a.number)).map((a) => a.line));
+  return new Set([...banks, ...accounts.filter((a) => lines.has(a.line)).map((a) => a.number)]);
 }
 
 /**
@@ -54,7 +68,7 @@ export interface EntryContext {
  * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
  * in a closed period: then the payment date, because nothing new is ever dated there.
  */
-export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by }: EntryContext): JournalEntry[] {
+export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by, money }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
@@ -71,12 +85,13 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       accountCredit ||= e.accountDebit && bankAccount;
     }
     const onShopify = accountDebit === SHOPIFY_ACCOUNT || accountCredit === SHOPIFY_ACCOUNT;
+    const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
     return entry({
       date: onShopify ? orderDate : tx.date,
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: permittedCode(e.vatCode),
+      vatCode: transfer ? undefined : permittedCode(e.vatCode),
       description: e.description || tx.description,
     });
   });
@@ -133,6 +148,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   ownerAccount?: string;
   /** The firm's VAT setup (src/workspace/vat-setup.ts): which codes its bookings may carry; absent: the effective method. */
   vat?: VatSetup;
+  /** The accounts that hold money (moneyAccounts): a transfer between two carries no VAT code. */
+  moneyAccounts?: ReadonlySet<string>;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -203,6 +220,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     counterparties,
     ownerAccount: ownerAccount(ws).split(' ')[0],
     vat: ws.company.vat,
+    moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
   };
 }
 
@@ -306,7 +324,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
   // A payout rule without its report books the whole payout as sales until the report is linked (its link books it again).
   const noReport = booking.fees ? `; ${wordsIn('de').t('rules.say.noPayoutReport')}` : '';
-  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id } })
+  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock: periodLock(books), reason: `Regel: ${ruleLine(placed, context)}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts })
     .map((e) => ({ ...e, rule: placed.rule.id }));
 }
 
@@ -464,7 +482,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
         const payout = payouts.get(tx.ref);
         const read = payout && payoutLines(
-          entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, context)}; ${wordsIn('de').t('rules.say.payoutRead')}` }),
+          entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, context)}; ${wordsIn('de').t('rules.say.payoutRead')}` }),
           bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue',
         )?.map((e) => ({ ...e, rule: payout.placed.rule.id }));
         if (payout && !read) {
@@ -472,7 +490,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
           continue;
         }
-        const entries = read ?? withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY);
+        const entries = read ?? withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts }), mapped, context.vat ?? EFFECTIVE_QUARTERLY);
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

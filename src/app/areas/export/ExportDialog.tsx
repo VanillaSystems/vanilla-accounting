@@ -16,6 +16,7 @@ import { PeriodPicker } from '../../shell/PeriodPicker.js';
 import { ICONS } from '../icons.js';
 import { configOf, download, ownConfig, ownPresets, periodOf, saveOwnPresets, type DialogConfig, type OwnPreset } from './state.js';
 import { filing } from '../../../engines/index.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 
 interface Props {
   initial: DialogConfig;
@@ -48,7 +49,8 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
   const open = booksOpenPeriod(books, today, filing().length);
   const period = periodOf(c.period);
 
-  const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account)])) as Record<ItemId, number>, [books, period, names, account]);
+  const ws = useWorkspace();
+  const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account, ws?.filed)])) as Record<ItemId, number>, [books, period, names, account, ws]);
   const receiptKb = useMemo(() => receiptsIn(books, period).reduce((s, v) => s + v.r.fileSize, 0) / 1024, [books, period]);
 
   const year = open.token.slice(0, 4);
