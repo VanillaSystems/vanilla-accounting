@@ -17,7 +17,7 @@ import type { JournalEntry } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { checkWorkflow, loadWorkflow } from '../src/workflows/load.js';
 import { openEngine, type Ask as EngineAsk } from '../src/workflows/engine.js';
-import { runResult, type Run } from '../src/workflows/model.js';
+import { digestOf, runResult, type Run } from '../src/workflows/model.js';
 import { listRuns, saveRun } from '../src/workflows/store.js';
 import { DEMO_ROOT, booksOnDisk } from './support/workspace.js';
 
@@ -102,6 +102,7 @@ test('a replay writes nothing and shows the entries the run booked; a second run
     const booked = loadBooks(ws).journalEntries.filter((e) => e.transactionRef === refs[0]);
     assert.ok(booked.every((e) => e.run === run.id), 'every entry the run booked carries its id');
     assert.deepEqual(run.steps.map((s) => `${s.step}:${s.outcome}`), ['open:open', 'classify:decided', 'book:booked']);
+    assert.equal(digestOf(run).entries, booked.length, 'the digest counts what the book step booked: «fertig, 1 Buchung gebucht», not 0 (r7f-34)');
     assert.equal(run.steps[1].llm.length, 1, 'the model answer is recorded');
 
     const before = booksOnDisk(ws);

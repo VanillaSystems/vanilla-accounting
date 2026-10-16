@@ -2,4 +2,5 @@ label: {"de": "Korrekturbuchung in der offenen Periode", "en": "Correcting entry
 uses: ledger.book
 reads: ["entries"]
 effects: ["ledger.book"]
+emits: ["made"]
 outcomes: {"booked": "declare"}

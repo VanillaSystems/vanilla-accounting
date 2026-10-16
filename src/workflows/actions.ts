@@ -18,7 +18,7 @@ import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
-import { madeBetween, type Took } from './summary.js';
+import { madeBetween, madeEntry, type Took } from './summary.js';
 import type { ItemRef } from './model.js';
 import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
 import { closeSaleQuestionsHeld } from '../intake/sale-questions.js';
@@ -175,8 +175,10 @@ export const ACTIONS: Record<string, Action> = {
     outcomes: ['booked'],
     effects: ['ledger.book'],
     run(input, effects) {
-      effects['ledger.book']!(input.entries as JournalEntry[]);
-      return { outcome: 'booked' };
+      const entries = input.entries as JournalEntry[];
+      effects['ledger.book']!(entries);
+      // What it made, for the run view and the digest («Buchen: fertig, 1 Buchung gebucht», r7f-34).
+      return { outcome: 'booked', output: { made: entries.map(madeEntry) } };
     },
   },
 

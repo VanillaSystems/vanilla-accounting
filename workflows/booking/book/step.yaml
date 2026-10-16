@@ -2,4 +2,5 @@ label: {"de": "Buchung schreiben", "en": "Book the entries", "fr": "Écrire les 
 uses: ledger.book
 reads: ["transaction", "entries"]
 effects: ["ledger.book"]
+emits: ["made"]
 outcomes: {"booked": "done"}

@@ -49,11 +49,12 @@ export function madeBetween(before: Books, after: Books): Made[] {
     });
   }
   const booked = new Set(before.journalEntries.map((e) => e.id));
-  for (const e of after.journalEntries) if (!booked.has(e.id)) made.push(entryOf(e));
+  for (const e of after.journalEntries) if (!booked.has(e.id)) made.push(madeEntry(e));
   return made;
 }
 
-const entryOf = (e: JournalEntry): Made => ({
+/** A booking as the run view and the run's digest count it. */
+export const madeEntry = (e: JournalEntry): Made => ({
   kind: 'entry', id: e.id, date: e.date, debit: e.accountDebit, credit: e.accountCredit, amount: e.amount,
   ...(e.vatCode ? { vatCode: e.vatCode } : {}), ...(e.description ? { description: e.description } : {}),
 });
