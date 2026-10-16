@@ -90,3 +90,29 @@ test('r8h-21: ↵ with nothing picked only picks the first row; ↵ on a picked 
   assert.deepEqual(linkKey(undefined, 'Escape', 5), { kind: 'close' });
   assert.equal(linkKey(undefined, 'a', 5), undefined, 'typing goes to the search');
 });
+
+test('r9k-4: a payout report and a sales record take their exact credit as the best fit; the «money in is never best» rule is for supplier invoices only', () => {
+  const books2: Index = {
+    ...books,
+    receipts: [
+      receipt('po', { date: '2026-10-12', amount: 1187.3, description: 'SumUp Auszahlungsbericht PO-202610A' }),
+      receipt('sale', { date: '2026-10-12', amount: 1187.3, description: 'Tagesabrechnung Kasse', kind: 'sales-record' }),
+      receipt('inv', { date: '2026-10-12', amount: 1187.3, description: 'Grosshandel Beauty, Rechnung 4711' }),
+    ],
+    transactions: [
+      tx('PO-1012', '2026-10-12', 1187.3, { direction: 'CRDT', description: 'SumUp Auszahlung PO-202610A', counterparty: 'SUMUP PAYMENTS LIMITED' }),
+      tx('PRIV', '2026-10-12', 1000, { description: 'Privatbezug' }),
+      tx('RENT', '2026-10-05', 1250, { description: 'Miete Oktober' }),
+    ],
+    mappings: [],
+  };
+  const l2 = ledgerOf(books2, '2026-10-01');
+  for (const id of ['po', 'sale']) {
+    const { best } = candidates(l2.byId.get(id)!, l2, flat);
+    assert.equal(best[0]?.tx.ref, 'PO-1012', `${id}: ${JSON.stringify(best.map((c) => c.tx.ref))}`);
+    assert.equal(suggestion(l2.byId.get(id)!, l2, flat)?.tx.ref, 'PO-1012', `${id}: the one-key suggestion`);
+  }
+  const { best, more } = candidates(l2.byId.get('inv')!, l2, flat);
+  assert.deepEqual(best, [], 'a supplier invoice of the same amount still never takes the credit as best fit');
+  assert.ok(more.some((c) => c.tx.ref === 'PO-1012' && c.wrongWay), 'listed further down, marked as money the wrong way');
+});

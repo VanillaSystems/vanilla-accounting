@@ -222,10 +222,19 @@ export interface Candidate {
 const DAY = 864e5;
 const HALF_RAPPEN = 0.005;
 
-/** The way the receipt's money went: `in` for a credit note (its amount below zero) or a sale, `out` for an invoice; undefined without an amount. */
-function moneyWay(r: Pick<Receipt, 'amount' | 'kind'>): 'in' | 'out' | undefined {
+/** A payout report by its words (SumUp, TWINT, Stripe: «Auszahlung», «payout», «versement»), for a receipt nobody gave a kind. */
+const PAYOUT_WORDS = /auszahlung|payout|versement|accredito/i;
+export const readsAsPayout = (r: Pick<Receipt, 'description' | 'extractedText' | 'title'>): boolean =>
+  PAYOUT_WORDS.test([r.description ?? '', r.title?.vendor ?? '', (r.extractedText ?? '').slice(0, 400)].join(' '));
+
+/**
+ * The way the receipt's money went: `in` for a credit note (its amount below zero), a sale, or a
+ * payout report (its kind, else its words: r9k-4), `out` for a supplier invoice; undefined without an amount.
+ */
+function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extractedText' | 'title'>): 'in' | 'out' | undefined {
   if (r.amount == null || r.amount === 0) return undefined;
-  return r.amount < 0 || r.kind === 'sales-record' ? 'in' : 'out';
+  if (r.amount < 0 || r.kind === 'sales-record') return 'in';
+  return r.kind === undefined && readsAsPayout(r) ? 'in' : 'out';
 }
 
 /**
