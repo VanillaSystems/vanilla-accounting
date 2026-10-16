@@ -277,6 +277,7 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Editing a booking of a firm without input tax and typing a rate («8.1») hears why no code takes it («Mit dem Saldosteuersatz … es gibt keine Vorsteuer»), as the payment form already said. Persona findings r8f-50, r9n-41.
 - The MWST page of a filing period shows the figures the return files: the tax of each rate row is the rate on the row's total and the sums and the payable are rounded once, as eCH-0217 computes them and as the review task and the XML already had them; the headline, the Ziffer 500 notice and the corrected difference of a filed period now agree to the Rappen. The year overview, which files nothing, keeps the per-entry sum. Persona finding r9n-28.
 - Buchungen' Herkunft filter and a booking's Herkunft name a company rule's booking «Regel» and a booking the app's code decided «die App», no longer «Claude»; the run link says «von KI gebucht» only when the model decided the booking. Persona finding r9n-32.
 - «Eingereicht» on the filing task asks once before it seals the period («Ja, eingereicht» / «Abbrechen»), since nothing can change the period afterwards. Persona finding r9n-36.

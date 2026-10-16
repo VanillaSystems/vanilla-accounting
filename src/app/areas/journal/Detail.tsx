@@ -41,7 +41,7 @@ import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
 import { isCamt } from '../bank/model.js';
-import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -337,7 +337,8 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     // Both sides on one account moves nothing (the API refuses it too, r8k-8): the form waits until the other side is typed.
     if (next.accountDebit && next.accountDebit === next.accountCredit && !next.vatCode) return fail(t('error.sameAccount', { account: next.accountDebit }));
     const vatCode = vatCodeOf(next.vatCode, next.accountDebit, next.accountCredit);
-    if (!vatCode) return fail(parseRate(next.vatCode) ? t('journal.errVatRate', { rate: next.vatCode }) : t('journal.errVat', { code: next.vatCode }));
+    // A rate typed in a firm without input tax hears why no code takes it, as the payment form says (r8f-50, r9n-41).
+    if (!vatCode) return fail(parseRate(next.vatCode) ? (withoutInputTax() ? t(`journal.errVatNotTaken.${withoutInputTax()!}`, { code: next.vatCode }) : t('journal.errVatRate', { rate: next.vatCode })) : t('journal.errVat', { code: next.vatCode }));
     if (!next.amount) return fail(t('journal.errAmount'));
     wrong.current = false;
     setErr('');
