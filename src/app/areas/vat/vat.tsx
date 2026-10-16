@@ -28,7 +28,7 @@ import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { VatCards } from '../codes/vat-card.js';
 import type { ReturnFigures } from '../../../engines/return.js';
-import { baseCurrency, filing, registration } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, filing, registration } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -67,7 +67,7 @@ function NotRegistered({ period, books, canEdit }: Props) {
       {threshold !== undefined && (
         <p className={passed ? 'notice warn' : 'm'} data-testid="threshold">
           {passed && <span className="dot" aria-hidden="true" />}
-          <span>{t(passed ? 'vat.thresholdPassed' : 'vat.thresholdOk', { threshold: money(threshold) })}</span>
+          <span>{t(passed ? 'vat.thresholdPassed' : 'vat.thresholdOk', { threshold: money(threshold), next: String(Number(year) + 1) })}</span>
         </p>
       )}
     </div>
@@ -189,7 +189,7 @@ const legend = (): LegendItem[] => [
 export const vat: Area<RouteOf<'vat'>> = {
   id: 'vat',
   label: () => t('area.vat'),
-  dock: { key: 'm', icon: ICONS.vat, tip: () => t('area.vat.tip') },
+  dock: { key: 'm', icon: ICONS.vat, tip: () => t(!chargesVat() ? 'area.vat.tip.none' : filing().length === 'half' ? 'area.vat.tip.half' : 'area.vat.tip') },
   List,
   Detail,
   legend,

@@ -253,13 +253,24 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
     return { registered: v.registered, method: v.registered ? v.method : 'effective', period: v.registered ? v.period : 'quarterly', rates: [row(0), row(1)] };
   };
   const [f, setF] = useState<VatForm>(was);
+  const [err, setErr] = useState('');
   const next = setupOf(f);
   const setRate = (i: 0 | 1, patch: Partial<RateRow>) => setF({ ...f, rates: f.rates.map((r, j) => (j === i ? { ...r, ...patch } : r)) as [RateRow, RateRow] });
+  // A refusal (the setup holds for the year) stays in the form, where the person is; a toast alone is gone before it is read (r5f-7).
   async function save(e: FormEvent) {
     e.preventDefault();
     if (!next) return;
     if (JSON.stringify(next) === JSON.stringify(v)) { setEdit(false); return; }
-    if (await patch(nav, { vat: next }, t('company.vatSaved'), { vat: v })) setEdit(false);
+    try {
+      await api.patchWorkspace({ vat: next });
+    } catch (ex) {
+      setErr(errorText(ex));
+      return;
+    }
+    setErr('');
+    reloadWorkspace();
+    nav.toast(t('company.vatSaved'), () => { api.patchWorkspace({ vat: v }).then(reloadWorkspace, (ex) => nav.toast(errorText(ex))); });
+    setEdit(false);
   }
   const half = v.registered && v.period === 'half-yearly';
   return (
@@ -312,12 +323,13 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
               ))}
             </>
           )}
+          {err && <div className="err wide" role="alert" data-testid="vat-refused">{err}</div>}
           <div className="acts">
             <button type="submit" className="btn primary" disabled={!next}>{t('common.save')}</button>
             <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>
           </div>
         </form>
-      ) : canEdit && <div className="fedit"><button type="button" className="btn" onClick={() => { setF(was()); setEdit(true); }}>{I.edit}{t('company.edit')}</button></div>}
+      ) : canEdit && <div className="fedit"><button type="button" className="btn" onClick={() => { setF(was()); setErr(''); setEdit(true); }}>{I.edit}{t('company.edit')}</button></div>}
       <p>
         <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'vat' }, query: {} })}>{t('company.toVat')}</button>{'  '}
         {v.registered && <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('company.toCodes')}</button>}
@@ -523,7 +535,7 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
         </Fragment>
       ))}
       <p className="m src-note">{t('company.sealNote')}</p>
-      <p className="m">{t('company.howToClose')}{' '}
+      <p className="m">{t(chargesVat() ? 'company.howToClose' : 'company.howToCloseNoReturn')}{' '}
         <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'close' }, query: {} })}>{t('company.toClose')}</button>
       </p>
     </>

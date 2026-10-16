@@ -7,7 +7,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import type { EntryTemplate, TemplateState } from '../../../accounting/year-close.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
 import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
-import { filing, withoutInputTax } from '../../../engines/index.js';
+import { chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, errorText, type YearCloseView, type YearEndEntryInput } from '../../lib/api.js';
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
@@ -21,6 +21,7 @@ import { closeYear as yearOfPage, useYearClose } from './data.js';
 import { useShellUi } from '../../shell/ui.js';
 import { configOf } from '../export/state.js';
 import { STEPS, stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
+import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -75,6 +76,7 @@ function Q4({ d, nav, books }: StepProps) {
   const ws = useWorkspace();
   const today = localToday();
   const start = books.config?.closedThrough ? undefined : booksOpenPeriod(books, today, filing().length).from;
+  if (!chargesVat()) return <p className="lead">{t('close.noReturnLead', { year: d.year })}</p>;
   return (
     <>
       <p className="lead">{t('close.q4Lead', { period: lastPeriodOf(d.year) })}</p>
@@ -125,6 +127,15 @@ function Checks(p: StepProps) {
             : <div key={c.id} className={`chk st-${c.state}`} data-check={c.id}>{inner}</div>;
         })}
       </div>
+      {chargesVat() && <VatReconciliation d={d} />}
+    </>
+  );
+}
+
+function VatReconciliation({ d }: { d: YearCloseView }) {
+  const v = d.vat;
+  return (
+    <>
       <h3>{t('yearClose.sectionVat')}</h3>
       <p className="m">{t('yearClose.vatIntro', { account: d.accounts.vatSettlement })}</p>
       <div className="ftab vatq">
@@ -145,7 +156,7 @@ function Checks(p: StepProps) {
       </div>
       {v.unexplained === 0
         ? <p className="okline">{I.check}{t('yearClose.vatExplained')}</p>
-        : <p className="warnline">{I.dot}{t('yearClose.vatUnexplained', { amount: fmt(v.unexplained) })}</p>}
+        : <p className="warnline">{I.dot}{t('yearClose.vatUnexplained', { amount: fmt(v.unexplained), correction: correctionName() })}</p>}
     </>
   );
 }
@@ -247,11 +258,11 @@ function Close({ d, nav, canEdit }: StepProps) {
     await act(nav, async () => {
       if (toBook) await api.bookRevaluation(d.year);
       await api.closeYear(d.year);
-    }, t('close.closedToast', { year: d.year }));
+    }, t('close.closedToast', { year: d.year, period: lastPeriodOf(d.year) }));
   }
   return (
     <>
-      <p className="lead">{t('close.closeLead', { year: d.year })}</p>
+      <p className="lead">{t('close.closeLead', { year: d.year, period: lastPeriodOf(d.year) })}</p>
       <h3>{t('yearClose.sectionFx')}</h3>
       <p className="m">{t('yearClose.fxIntro', { account: d.accounts.fxDifference })}</p>
       {d.revaluations.length === 0 ? <p className="m">{t('yearClose.fxNone')}</p> : (
@@ -286,7 +297,7 @@ function Close({ d, nav, canEdit }: StepProps) {
       {l.residual === 0 ? <p className="okline">{I.check}{t('yearClose.balanced')}</p> : <p className="warnline">{I.dot}{t('yearClose.unbalanced', { amount: fmt(l.residual) })}</p>}
       {l.causes.map((c, i) => <p key={i} className="m">{causeText(c)}</p>)}
       <h3>{t('close.step.close', { year: d.year })}</h3>
-      {d.closed ? <p className="okline">{I.check}{t('yearClose.closedNote', { date: formatDate(d.state.closedAt), year: d.year })}</p> : (
+      {d.closed ? <p className="okline">{I.check}{t('yearClose.closedNote', { date: formatDate(d.state.closedAt), year: d.year, period: lastPeriodOf(d.year) })}</p> : (
         <>
           <button type="button" className="btn primary big" disabled={!canEdit || block.length > 0} onClick={() => setAsking(true)}>{t('close.step.close', { year: d.year })}</button>
           {block.length > 0 && (

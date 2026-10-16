@@ -4,7 +4,8 @@
  * read the same lists.
  */
 import type { Index } from '../types/index.js';
-import { localToday, parsePeriod, type IsoDate, type Period } from '../accounting/periods.js';
+import { filingKeyOf, localToday, parsePeriod, type IsoDate, type Period } from '../accounting/periods.js';
+import { filing } from '../engines/index.js';
 import { ledgerOf as receiptLedger } from '../app/areas/receipts/model.js';
 import { NO_ACCOUNT, openingOf } from '../app/areas/reports/model.js';
 
@@ -100,8 +101,9 @@ export function quartersIn(period: Period, today: IsoDate = localToday()): strin
   const first = Number((period.kind === 'all' ? '2000' : period.from).slice(0, 4));
   const last = Number((period.kind === 'all' ? today : period.to).slice(0, 4));
   for (let y = first; y <= last; y++) {
-    for (let q = 1; q <= 4; q++) {
-      const p = parsePeriod(`${y}-Q${q}`, today)!;
+    // The firm's filing periods of the year: quarters, or half years on a half-yearly setup.
+    for (const key of new Set([1, 4, 7, 10].map((m) => filingKeyOf(`${y}-${String(m).padStart(2, '0')}-01`, filing().length)))) {
+      const p = parsePeriod(key, today)!;
       if (p.from >= period.from && p.to <= period.to && p.to < today) out.push(p.token);
     }
   }

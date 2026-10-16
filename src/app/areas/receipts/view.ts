@@ -32,7 +32,7 @@ export const txLine = (tx: BankTransaction) => `${formatDate(tx.date)} ${bankOf(
 
 /** A place for an object dated `date`: in the current period when it holds the date (urls.md rule 1). */
 export const at = (route: Route, date: string | undefined, current?: Period): Location =>
-  ({ route, query: { period: parsePeriod(periodContaining(date, current), localToday()) ?? undefined } });
+  ({ route, query: { period: parsePeriod(periodContaining(date, current, filing().length), localToday()) ?? undefined } });
 
 /** How far a payment is from the receipt's date: "gleicher Tag", "2 Tage vorher". */
 export const dayText = (days: number) =>

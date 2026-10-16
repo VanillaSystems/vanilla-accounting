@@ -20,6 +20,7 @@ import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
 import { vat, vatSetup } from '../../../engines/index.js';
 import { methodOf } from '../../../workspace/vat-setup.js';
 import type { ReturnFigures } from '../../../engines/return.js';
+import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -86,7 +87,7 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
           <span>
             {t('vat.filedWas', { was: fmt(was), now: fmt(now) })}{' '}
             {corrections > 0 ? (
-              <>{t('vat.diffFromCorrections', { diff: signed(roundCHF(now - was)), n: corrections })} <a href="#" onClick={(e) => { e.preventDefault(); select(FORM_0535); }}>{t('vat.open0535')}</a></>
+              <>{t('vat.diffFromCorrections', { diff: signed(roundCHF(now - was)), n: corrections, correction: correctionName() })} <a href="#" onClick={(e) => { e.preventDefault(); select(FORM_0535); }}>{t('vat.open0535')}</a></>
             ) : t('vat.diffRounding')}
           </span>
         </div>
@@ -166,7 +167,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
   return (
     <div className="detail-in f0535" key={`0535:${v.key}`}>
       <div className="head">
-        <h2 className="who">{t(methodOf(vatSetup()) === 'net-rate' ? 'form0535.titleNetRate' : 'form0535.title')}<small>{t('vat.form0535Of', { period: periodName(v.period) })}</small></h2>
+        <h2 className="who">{t(methodOf(vatSetup()) === 'net-rate' ? 'form0535.titleNetRate' : 'form0535.title')}<small>{t('vat.form0535Of', { period: periodName(v.period), correction: correctionName() })}</small></h2>
         <div className="amount"><small>CHF</small>{signed(diff)}</div>
       </div>
       <div className="facts">

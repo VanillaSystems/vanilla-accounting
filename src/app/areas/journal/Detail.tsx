@@ -38,7 +38,8 @@ import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
 import { isCamt } from '../bank/model.js';
-import { vat, baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, filing, vat } from '../../../engines/index.js';
+import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -50,7 +51,7 @@ export function Detail(props: Props) {
   return <EntryDetail key={v.e.id} {...props} v={v} j={j} />;
 }
 
-const quarterName = (date: string) => { const p = parsePeriod(periodContaining(date), localToday()); return p ? periodName(p) : date; };
+const quarterName = (date: string) => { const p = parsePeriod(periodContaining(date, undefined, filing().length), localToday()); return p ? periodName(p) : date; };
 const filedName = (quarter: string) => { const p = parsePeriod(quarter, localToday()); return p ? periodName(p) : quarter; };
 
 function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
@@ -115,7 +116,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
       )}
 
       {e.corrects
-        ? <div className="notice">{ICONS.lock}<span>{t('journal.correctsNotice', { filed: filedName(e.corrects), declared: quarterName(e.date) })}</span></div>
+        ? <div className="notice">{ICONS.lock}<span>{t('journal.correctsNotice', { filed: filedName(e.corrects), declared: quarterName(e.date), correction: correctionName() })}</span></div>
         : v.locked && (
           <div className="notice">
             {ICONS.lock}<span>{t('journal.lockedNotice', { period: quarterName(e.date) })}</span>

@@ -505,7 +505,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         <span className={`wfpill st-${data.status}`}>{status(data.status)}</span>{' '}
         {t('automation.startedAt', { when: when(data.startedAt), by: startedText(data.startedBy) })}
         {seconds ? ` · ${t('automation.duration', { n: seconds })}` : ''}
-        {data.mode !== 'live' ? ` · ${data.mode}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
+        {data.mode !== 'live' ? ` · ${t(data.mode === 'dry' ? 'automation.mode.dry' : 'automation.mode.replay')}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
       </p>
       <p className="m mono runid">{id}</p>
       {data.error ? <p className="warnline">{data.error}</p> : null}
@@ -534,8 +534,8 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
               </div>
               {s.error ? <div className="warnline">{s.error}</div> : null}
               {((s.output?.notes as StepNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
-              {s.effects.filter((e) => e.refused || (!e.applied && Array.isArray(e.would))).map((e, j) => (
-                <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : t('automation.wouldBook', { n: (e.would as unknown[]).length })}</div>
+              {s.effects.filter((e) => e.refused || (!e.applied && e.would !== undefined)).map((e, j) => (
+                <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.skippedEffect')}</div>
               ))}
               {s.llm.map((c, j) => (
                 <details key={j} className="llm"><summary><BotIcon /> {t('automation.io.llm')}</summary><pre>{c.answer}</pre></details>

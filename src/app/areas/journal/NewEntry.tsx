@@ -25,6 +25,7 @@ import { listed, setUi, useUi } from './state.js';
 import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
 import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
 import { baseCurrency, chart, vat, withoutInputTax } from '../../../engines/index.js';
+import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -154,7 +155,7 @@ export function NewEntry(props: Props) {
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 40%, transparent)' }} onClick={close} />
       <div className="palette jnew" role="dialog" aria-label={filed ? t('journal.correctionTitle') : t('journal.addTitle')}>
         <div className="ctx">
-          <div><span className="lbl">{filed ? t('journal.correctionTitle') : t('journal.addTitle')}</span>{filed ? t(noInputTax === 'none' ? 'journal.correctionHintUnregistered' : 'journal.correctionHint', { filed: periodName(filed) }) : t('journal.addHint')}</div>
+          <div><span className="lbl">{filed ? t('journal.correctionTitle') : t('journal.addTitle')}</span>{filed ? t(noInputTax === 'none' ? 'journal.correctionHintUnregistered' : 'journal.correctionHint', { filed: periodName(filed), correction: correctionName() }) : t('journal.addHint')}</div>
           {corrected && as && (
             <div className="jcorr">
               <span className="seg" role="tablist" aria-label={t('journal.correctionLead')}>

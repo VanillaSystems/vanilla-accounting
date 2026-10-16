@@ -25,7 +25,7 @@ export const AREA_PLACES: { readonly [A in AreaId]: Place } = {
   invoices: { does: 'the company\'s own invoices to its customers: N writes a new draft (customer, lines with quantity, unit, price, VAT rate); a draft is issued (its number, a PDF with its payment slip), sent by e-mail or downloaded, reminded, cancelled or credited; the customers with address, language and payment term; incoming payments are matched to open invoices', kinds: ['invoiceDraft'] },
   bank: { does: 'the bank statements per account (an XML or PDF statement dropped here), their balance checked; each payment with its booking' },
   journal: { does: 'the bookings: accounts, VAT code, amount, date, text; N adds a booking by hand; filtered by VAT code', kinds: ['entry', 'newEntry', 'deleteEntry'] },
-  vat: { does: 'the VAT return per quarter (the tax form\'s lines), each line with the bookings behind it, the file for the tax authority, and the corrections of filed quarters' },
+  vat: { does: 'the VAT return per filing period (a quarter, or a half year on the net tax rate method; the tax form\'s lines), each line with the bookings behind it, the file for the tax authority, and the corrections of filed periods; a firm not registered sees its turnover against the registration threshold instead' },
   codes: { does: 'the VAT codes: what each means, which form lines it feeds, when it is used' },
   reports: { does: 'income statement, balance sheet and trial balance, each account\'s ledger' },
   close: { does: 'the year-end close step by step: exchange differences, the closing, the opening of the next year' },
@@ -44,7 +44,7 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   rules: { does: 'the company\'s rules, each in plain words with where it came from and how many payments it booked; «{rules.switchOff}» and «{rules.delete}» with an undo. A rule you draft (AGENTS.md, "Rules the app carries out") shows as a card under your answer: the person keeps it with «{rules.draft.keep}» or drops it with «{rules.draft.discard}»; a rule you take out asks «{rules.draft.remove}» there. That one click is all the person does; until then the rule does nothing' },
   phone: { does: 'receipts from the phone: switch on, scan the QR code with the iPhone app to pair; a new code locks out old phones' },
   accounts: { does: 'the chart of accounts: an account renamed or added', kinds: ['account'] },
-  periods: { does: 'the filed quarters and their seals' },
+  periods: { does: 'the filed periods and their seals' },
   opening: { does: 'the opening balances of the year' },
   display: { does: 'language, theme, the app\'s version' },
 };

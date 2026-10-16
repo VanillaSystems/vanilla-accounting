@@ -7,6 +7,7 @@ import { hrefOf } from '../../shell/history.js';
 import type { Location } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
+import { filing } from '../../../engines/index.js';
 
 /** A real link (copy, open in a new tab) that a plain click follows inside the app. */
 export function Go({ to, nav, className, title, vat, children }: { to: Location; nav: Nav; className?: string; title?: string; vat?: string; children: ReactNode }) {
@@ -20,7 +21,7 @@ export function Go({ to, nav, className, title, vat, children }: { to: Location;
 
 /** An entry, in the current period when it holds the entry's date (urls.md rule 1). */
 export const entryAt = (e: JournalEntry, current: Period): Location =>
-  ({ route: { area: 'journal', id: e.id }, query: { period: parsePeriod(periodContaining(e.date, current), localToday()) ?? undefined } });
+  ({ route: { area: 'journal', id: e.id }, query: { period: parsePeriod(periodContaining(e.date, current, filing().length), localToday()) ?? undefined } });
 
 const unsigned = (code: string) => code.replace(/^-/, '');
 

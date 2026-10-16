@@ -7,7 +7,8 @@ import type { YearCloseView } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { filingKeyOf } from '../../../accounting/periods.js';
-import { filing } from '../../../engines/index.js';
+import { chargesVat, filing } from '../../../engines/index.js';
+import { correctionName } from '../../lib/vat-words.js';
 
 export const STEPS = ['q4', 'checks', 'entries', 'close', 'open', 'profit', 'handover'] as const;
 export type Step = (typeof STEPS)[number];
@@ -24,7 +25,7 @@ export const lastPeriodOf = (year: string): string => filingKeyOf(`${year}-12-31
 export function stepLabel(step: Step, year: string): string {
   const next = String(+year + 1);
   switch (step) {
-    case 'q4': return t('close.step.q4', { period: lastPeriodOf(year) });
+    case 'q4': return chargesVat() ? t('close.step.q4', { period: lastPeriodOf(year) }) : t('close.step.noReturn');
     case 'checks': return t('close.step.checks');
     case 'entries': return t('close.step.entries');
     case 'close': return t('close.step.close', { year });
@@ -35,6 +36,13 @@ export function stepLabel(step: Step, year: string): string {
 }
 
 export type State = 'ok' | 'warn' | 'open' | 'later';
+
+/** The periods before the last one, as the firm files them («Q1 bis Q3», «H1»); a firm without returns has only its seals to check. */
+export function sealedLabel(year: string): string {
+  if (!chargesVat()) return t('yearClose.check.sealsIntact');
+  const last = lastPeriodOf(year);
+  return t('yearClose.check.quartersSealed', { periods: t(last === 'H2' ? 'yearClose.periodsBefore.half' : 'yearClose.periodsBefore.quarters') });
+}
 
 /** A key built from a code the API sends (a problem, a template): its placeholders vary with the code. */
 export const tx = t as unknown as (key: string, vars?: Record<string, string | number>) => string;
@@ -76,7 +84,7 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
   const over = yearOver(year, today);
   const text = (ps: readonly Problem[]) => ps.map((p) => problemText(p, year)).join(' ');
   const engine = d.checks.map((c): CheckRow => {
-    const label = tx(`yearClose.check.${c.id}`);
+    const label = c.id === 'quartersSealed' ? sealedLabel(year) : tx(`yearClose.check.${c.id}`);
     if (c.status === 'ok') return { id: c.id, state: 'ok', label, detail: t('close.checkOk') };
     // Before 31.12. a missing year-end balance, statement or Q4 return is not late yet.
     const waits = !over && (c.id === 'q4Filed' || c.id === 'bankReconciled' || c.id === 'statementsComplete');
@@ -96,10 +104,11 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
       : toBook.length ? { state: 'open', detail: t('close.fxToBook', { n: toBook.length, account: d.accounts.fxDifference }) }
       : { state: 'ok', detail: t('close.fxBooked') }),
   };
-  const vat: CheckRow = {
+  // A firm not registered has no returns to reconcile the VAT accounts with.
+  const vat: CheckRow[] = chargesVat() ? [{
     id: 'vat', label: t('close.check.vat'),
-    ...(d.vat.unexplained === 0 ? { state: 'ok', detail: t('yearClose.vatExplained') } : { state: over ? 'warn' : 'later', detail: t('yearClose.vatUnexplained', { amount: fmt(d.vat.unexplained) }) }),
-  };
+    ...(d.vat.unexplained === 0 ? { state: 'ok', detail: t('yearClose.vatExplained') } : { state: over ? 'warn' : 'later', detail: t('yearClose.vatUnexplained', { amount: fmt(d.vat.unexplained), correction: correctionName() }) }),
+  }] : [];
   const decided = d.templates.filter((tp) => tp.state).length;
   const entries: CheckRow = { id: 'entries', label: t('close.step.entries'), state: decided === d.templates.length ? 'ok' : 'open', detail: t('close.entriesDone', { done: decided, n: d.templates.length }), go: { step: 'entries' } };
   const r = d.receivables;
@@ -110,7 +119,7 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
   const balance: CheckRow = l.residual === 0
     ? { id: 'balance', label: t('close.check.balance'), state: 'ok', detail: t('yearClose.balanced') }
     : { id: 'balance', label: t('close.check.balance'), state: 'warn', detail: [t('yearClose.unbalanced', { amount: fmt(l.residual) }), ...l.causes.map(causeText)].join(' · '), go: { area: 'balance' } };
-  return [...engine, fx, vat, entries, invoices, balance];
+  return [...engine, fx, ...vat, entries, invoices, balance];
 }
 
 /** What still keeps "Jahr abschliessen" shut, besides the Kursdifferenz the close books itself. */
