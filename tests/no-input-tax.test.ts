@@ -79,3 +79,26 @@ test('demo (effective method): the same corrections take the input tax back and 
   assert.equal(inputTaxWithoutReceipt('I81'), 'I0');
   assert.equal(formTakes('K81-B'), true);
 });
+
+test('demo-schreinerei: a filed sale moved off the revenue accounts («kein Verkauf») carries -F1, so the correction return takes turnover and tax back; onto another revenue account it keeps its code (r9n-24)', () => {
+  const { books, owner, isPrivate } = demo('demo-schreinerei');
+  const closed = books.config.closedThrough!;
+  const sale = books.journalEntries.find((e) => e.date <= closed && e.vatCode === 'F1')!;
+  assert.ok(sale, 'the demo has a filed net-rate sale');
+  assert.equal(accountCorrectionCode(sale, owner, isPrivate), '-F1', 'onto the owner\'s account');
+  assert.equal(accountCorrectionCode(sale, '2140', isPrivate), '-F1', 'onto a loan: no sale either');
+  assert.equal(accountCorrectionCode(sale, '3200', isPrivate), undefined, 'onto another revenue account the sale stays declared');
+  assert.equal(accountCorrectionCode(sale, '', isPrivate), undefined, 'no target yet');
+  const corr: JournalEntry = { id: 'corr', transactionRef: 'M2026-098', date: '2026-10-16', accountDebit: sale.accountCredit, accountCredit: owner, amount: sale.amount, vatCode: '-F1', corrects: '2026-H1', description: 'kein Verkauf' };
+  const h1 = (es: JournalEntry[]) => vat().figures(entriesForReturn(es, '2026-H1', filing().length), '2026-H1', []);
+  const was = h1(books.journalEntries);
+  const now = h1([...books.journalEntries, corr]);
+  assert.equal(Math.round((was.ziffern['200'] - now.ziffern['200']) * 100) / 100, sale.amount, 'the turnover leaves Ziffer 200');
+  assert.ok(now.payable < was.payable, 'and the tax at the rate goes down');
+});
+
+test('demo (effective method): an account correction of a sale carries no code: the form is another round\'s', () => {
+  const { books, owner, isPrivate } = demo('demo');
+  const sale = books.journalEntries.find((e) => e.vatCode === 'V81')!;
+  assert.equal(accountCorrectionCode(sale, owner, isPrivate), undefined);
+});

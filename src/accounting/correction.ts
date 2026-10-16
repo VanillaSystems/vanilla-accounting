@@ -72,12 +72,23 @@ export function privateUseCode(code: string | undefined): string | undefined {
   return info && info.rate === rate && info.correctionZiffer === like.correctionZiffer ? candidate : undefined;
 }
 
+/** A sale booked at the firm's net tax rate (F1, F2): its code is the rate on the gross turnover. */
+export const isNetRateSale = (code: string | undefined): boolean => {
+  const info = code ? vat().codes.parse(code) : null;
+  return !!info?.flatOnGross && !info.isNegative;
+};
+
 /**
  * The VAT code an account correction carries: none (the VAT stays as declared), except onto the
  * owner's private account, where the input tax the purchase claimed is taken back with it (r4t-7).
+ * On the net tax rate method a sale moved onto an account that is no revenue (the owner's, a loan)
+ * was no sale: its code is turned (-F1), so the turnover and the tax at the rate leave the return
+ * it was declared on (r9n-24); onto another revenue account the sale stays declared.
  */
 export function accountCorrectionCode(e: Corrected, to: string, isPrivate: (account: string) => boolean): string | undefined {
-  return to && isPrivate(to) ? privateUseCode(e.vatCode) : undefined;
+  if (!to) return undefined;
+  if (isNetRateSale(e.vatCode)) return chart().typeOf(to) === 'revenue' ? undefined : turned(e.vatCode);
+  return isPrivate(to) ? privateUseCode(e.vatCode) : undefined;
 }
 
 /**

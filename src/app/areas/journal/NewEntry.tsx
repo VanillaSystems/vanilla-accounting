@@ -22,7 +22,7 @@ import type { JournalEntryInput } from '../../lib/api.js';
 import { AccountField } from './AccountField.js';
 import { VatCodeList } from './Detail.js';
 import { listed, setUi, useUi } from './state.js';
-import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, type CorrectionKind } from '../../../accounting/correction.js';
+import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, isNetRateSale, type CorrectionKind } from '../../../accounting/correction.js';
 import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
 import { baseCurrency, chargesVat, chart, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
@@ -61,9 +61,13 @@ export function NewEntry(props: Props) {
   const as = s.overlay.correcting?.as;
   const moved = tx ? [] : banksMoved(sides, isBankAccount);
   const accounts = getAccountMap();
-  // An account correction onto the owner's private account takes the input tax back with it (r4t-7).
-  const privateTo = as === 'account' && corrected ? [sides.accountDebit, sides.accountCredit].find(isPrivateAccount) : undefined;
-  const privateCode = privateTo && corrected ? accountCorrectionCode(corrected, privateTo, isPrivateAccount) : undefined;
+  // The account the correction moves the amount to: the side that is not the filed entry's own.
+  const movedTo = (dr: string, cr: string) => (corrected ? [dr, cr].find((a) => a && a !== corrected.accountDebit && a !== corrected.accountCredit) : undefined);
+  // An account correction onto the owner's private account takes the input tax back with it (r4t-7); a net-rate sale moved off revenue takes its turnover back (r9n-24).
+  const to = as === 'account' ? movedTo(sides.accountDebit, sides.accountCredit) : undefined;
+  const privateTo = to && isPrivateAccount(to) ? to : undefined;
+  const followCode = to && corrected ? accountCorrectionCode(corrected, to, isPrivateAccount) : undefined;
+  const saleCorrected = !!corrected && isNetRateSale(corrected.vatCode);
   // A firm without input tax has none to take back or claim: its correction carries no such code, and the form says why.
   const noInputTax = withoutInputTax();
   // A VAT correction of a purchase without input tax whose receipt shows Swiss VAT claims it (r4c-37).
@@ -77,7 +81,7 @@ export function NewEntry(props: Props) {
     const field = form.current?.elements.namedItem('vatCode') as HTMLInputElement | null;
     if (!field || as !== 'account' || !corrected) return;
     const f = Object.fromEntries(new FormData(form.current!)) as Record<string, string>;
-    const to = [f.accountDebit.trim(), f.accountCredit.trim()].find(isPrivateAccount);
+    const to = movedTo(f.accountDebit.trim(), f.accountCredit.trim());
     const code = to ? accountCorrectionCode(corrected, to, isPrivateAccount) : undefined;
     if (code && !field.value.trim()) { field.value = code; autoCode.current = code; }
     else if (!code && autoCode.current && field.value.trim() === autoCode.current) { field.value = ''; autoCode.current = undefined; }
@@ -174,6 +178,7 @@ export function NewEntry(props: Props) {
               </span>
               <p className="m" data-testid="correction-how">{claim
                 ? t('journal.correctionHow.claim', { rate: String(rate), code: claim, tax: taxOf(claim), was: corrected.vatCode ?? '' })
+                : as === 'account' && saleCorrected ? t('journal.correctionHowNetRateSale', { code: corrected.vatCode ?? '', turned: `-${corrected.vatCode ?? ''}` })
                 : as === 'account' && noInputTax ? t(`journal.correctionHowNoInputTax.${noInputTax}`)
                   : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '', side: t(chart().typeOf(corrected.accountCredit) === 'revenue' ? 'journal.correctionSide.revenue' : 'journal.correctionSide.expense') })}</p>
             </div>
@@ -205,12 +210,17 @@ export function NewEntry(props: Props) {
             </label>
           )}
           <VatCodeList />
-          {privateCode && (
-            <div className="notice" data-testid="correction-private">
-              {t('journal.correctionPrivate', { account: `${privateTo} ${accounts[privateTo!] ?? ''}`.trim(), tax: taxOf(corrected!.vatCode), was: corrected!.vatCode ?? '', code: privateCode })}
+          {followCode && saleCorrected && (
+            <div className="notice" data-testid="correction-no-sale">
+              {t('journal.correctionNoSale', { account: `${to} ${accounts[to!] ?? ''}`.trim(), amount: fmt(corrected!.amount), tax: taxOf(corrected!.vatCode), code: followCode })}
             </div>
           )}
-          {privateTo && noInputTax && (
+          {followCode && !saleCorrected && (
+            <div className="notice" data-testid="correction-private">
+              {t('journal.correctionPrivate', { account: `${privateTo} ${accounts[privateTo!] ?? ''}`.trim(), tax: taxOf(corrected!.vatCode), was: corrected!.vatCode ?? '', code: followCode })}
+            </div>
+          )}
+          {privateTo && noInputTax && !saleCorrected && (
             <div className="notice" data-testid="correction-no-input-tax">
               {t(`journal.correctionPrivateNoInputTax.${noInputTax}`, { account: `${privateTo} ${accounts[privateTo] ?? ''}`.trim() })}
             </div>
