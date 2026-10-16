@@ -546,4 +546,4 @@ export type AutomationCommand =
 
 export type CommandResult =
   | { ok: true; run?: string; runs?: string[] }
-  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases'; detail?: string };
+  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases' | 'period-filed'; detail?: string };

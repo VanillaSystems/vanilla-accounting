@@ -41,6 +41,8 @@ export interface EngineDeps {
   /** Switches a workflow's waiting version on (app-local, out of the workspace's reach). */
   approve?: (w: WorkflowDecl) => void;
   /** Called once a run came to rest and its run-log line (if any) is written: the records path commits here. */
+  /** A run that must not be discarded (the hold of a period filed with the tax authority, src/workflows/filing.ts). */
+  keeps?: (run: Run) => boolean;
   onRest?: (run: Run, line: RunLogLine | undefined) => void | Promise<void>;
   /** Where this engine runs, written on each run-log line. */
   host?: RunLogLine['host'];
@@ -487,6 +489,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       case 'discard': {
         const r = runs.get(cmd.run);
         if (!r) return { ok: false, refusal: 'not-found' };
+        if (deps.keeps?.(r)) return { ok: false, refusal: 'period-filed' };
         try { settle(move(r, { status: 'discarded', at: now(), reason: cmd.reason ?? 'von einer Person verworfen' })); } catch { return { ok: false, refusal: 'illegal' }; }
         return { ok: true, run: r.id };
       }

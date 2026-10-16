@@ -16,7 +16,7 @@ import { vat } from '../src/engines/index.js';
 import { ech0217Xml } from '../src/providers/ech0217/xml.js';
 import { APP_ROOT, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
 import { openEngine, SKIPPED } from '../src/workflows/engine.js';
-import { filedXml, filingXml, releaseApproval, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
+import { filedXml, filingXml, holdsFiledPeriod, releaseApproval, type PeriodReturn, type PreparedXml } from '../src/workflows/filing.js';
 import { loadWorkflows } from '../src/workflows/load.js';
 import { summaryOf, taskOf } from '../src/workflows/model.js';
 import { filedReturnsOf } from '../src/workspace/reads.js';
@@ -387,4 +387,26 @@ test('r8f-49: «Zurück» from the filing task recomputes the return, so the rev
   const task = taskOf(loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'vat-filing')!, run)!;
   assert.deepEqual(at(run), ['waiting', 'review']);
   assert.equal((task.reads!.return as PeriodReturn).payable, now, 'the review task reads the recomputed return');
+});
+
+test('golden rule 1: a filing run whose period is filed and drifted is not discarded, the hold stays until it seals; a normal discard is unchanged', async () => {
+  const ws = demo();
+  const engine = openEngine(ws, { appRoot: APP_ROOT, keeps: (run) => holdsFiledPeriod(ws, run), onRest: (run) => releaseApproval(ws, run) });
+  const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
+  await engine.idle();
+  const id = r.ok ? r.run! : '';
+  await engine.command({ kind: 'answer', run: id, outcome: 'approved' });
+  await engine.idle();
+  const books = loadBooks(ws);
+  books.journalEntries.find((x) => inQ2(x) && x.vatCode === 'I81')!.vatCode = 'M81';
+  saveBooks(ws, books);
+  await engine.command({ kind: 'answer', run: id, outcome: 'filed' });
+  await engine.idle();
+  assert.equal(engine.run(id)!.state.status, 'stuck');
+  assert.ok(loadBooks(ws).config.approvedReturn?.filed);
+  assert.deepEqual(await engine.command({ kind: 'discard', run: id }), { ok: false, refusal: 'period-filed' });
+  assert.equal(engine.run(id)!.state.status, 'stuck', 'the run stays');
+  assert.ok(loadBooks(ws).config.approvedReturn?.filed, 'the hold stays');
+  const text = (l: string) => readFileSync(`src/app/i18n/locales/${l}.ts`, 'utf8');
+  for (const l of ['de', 'en', 'fr', 'it']) assert.match(text(l), /'automation\.refusal\.period-filed'/);
 });

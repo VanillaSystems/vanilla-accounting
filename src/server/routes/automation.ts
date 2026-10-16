@@ -19,7 +19,7 @@ import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
-import { filingXml, releaseApproval } from '../../workflows/filing.js';
+import { filingXml, holdsFiledPeriod, releaseApproval } from '../../workflows/filing.js';
 import { ASK_WORKFLOW, CLOSED_REASON, closeAsksWithoutRule } from '../../workflows/held.js';
 import { isFilingKey } from '../../accounting/periods.js';
 import { filing } from '../../engines/index.js';
@@ -49,6 +49,7 @@ export function engine(): Engine {
     e = openEngine(ws, {
       appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws),
       isApproved: sw.isApproved, approve: sw.approve,
+      keeps: (run) => holdsFiledPeriod(ws, run),
       onRest: (run) => releaseApproval(ws, run),
     });
     engines.set(ws.paths.root, e);

@@ -97,15 +97,25 @@ function holdFiled(ws: Workspace, books: Books, key: QuarterKey, filed: PeriodRe
 }
 
 /**
+ * The run of a period filed with the tax authority whose books drifted (the hold has `filed`) is not
+ * discarded: the hold is lifted only by sealing (golden rule 1). The engine's `keeps` asks it.
+ */
+export function holdsFiledPeriod(ws: Workspace, run: Pick<Run, 'workflow' | 'item'>): boolean {
+  if (run.workflow !== 'vat-filing') return false;
+  const held = loadBooks(ws).config.approvedReturn;
+  return !!held?.filed && held.period === run.item.id;
+}
+
+/**
  * A filing run that came to rest without filing (discarded, by a person or when its workflow went)
- * frees the period it held; the engine's `onRest` calls it (src/server/routes/automation.ts).
+ * frees the period it held, unless that period is filed and drifted; the engine's `onRest` calls it (src/server/routes/automation.ts).
  */
 export function releaseApproval(ws: Workspace, run: Pick<Run, 'workflow' | 'item' | 'state'>): void {
   if (run.workflow !== 'vat-filing' || run.state.status !== 'discarded') return;
   const key = run.item.id;
   if (!isFilingKey(key, filing().length)) return;
   const books = loadBooks(ws);
-  if (books.config.approvedReturn?.period === key) { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key as QuarterKey, false); }
+  if (books.config.approvedReturn?.period === key && !books.config.approvedReturn.filed) { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key as QuarterKey, false); }
 }
 
 export const FILING_ACTIONS: Record<string, Action> = {
