@@ -70,6 +70,12 @@ export interface Preset {
   period: 'open' | 'year' | 'page';
 }
 
+/**
+ * Not migrated to report specs (src/reports/spec.ts) yet: the journal, payments and receipt lists
+ * are a spec's sections (entries, payments, receipts without a filter), but Erfolgsrechnung,
+ * Bilanz, Saldobilanz and the VAT returns are statements a spec cannot say (an account's opening
+ * balance, the report's blocks and sums, the boxes of a return), and a preset also packs the originals.
+ */
 export const PRESETS: readonly Preset[] = [
   {
     id: 'treuhand', period: 'open', sums: true, oneBook: false,

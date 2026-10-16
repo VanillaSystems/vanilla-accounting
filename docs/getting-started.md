@@ -231,7 +231,7 @@ it. The areas sit in the dock at the bottom edge of the window; press `G` and th
 | `G K` | Kontoauszüge: the bank statements and their payments | `/bank`, `/bank/1021-2026-09` |
 | `G U` | Buchungen: the journal | `/journal`, `/journal/<entry-id>` |
 | `G M` | MWST: the VAT return of a quarter, and the VAT codes | `/vat`, `/vat/405`, `/vat/codes/I81` |
-| `G R` | Bilanz & ER: Erfolgsrechnung, Bilanz, Saldobilanz and each account's ledger | `/reports/balance/1021` |
+| `G R` | Bilanz & ER: Erfolgsrechnung, Bilanz, Saldobilanz and each account's ledger; Eigene Berichte | `/reports/balance/1021`, `/reports/custom/<name>` |
 | `G A` | Abschluss: the year-end in seven steps | `/close`, `/close/<step>` |
 | `G F` | Firma: profile, VAT, banks, chart of accounts, periods, invoice layout, display | `/company/<section>` |
 
@@ -257,6 +257,34 @@ The keys that work everywhere:
 
 The key help lists the keys of the area you are in, such as `L` (link a payment), `Space`
 (preview), `D` (download) and `E` (edit) in Belege.
+
+## Your own reports
+
+A report the app has no page for («all expenses this quarter by account», «what came in EUR
+this year») is one you describe, and the app computes. There are two ways to make one:
+
+- **Ask the AI in the sidebar** (`⌘J`) in your own words. It writes what the report shows,
+  never a figure: the app runs it on the books and shows a card with the first rows and every
+  total, «PDF», «CSV» and «Bericht speichern». When the AI's words state a figure the app did
+  not compute, the app withdraws those words; the card stays.
+- **Without the AI:** Bilanz & ER › Eigene Berichte › «Neuer Bericht». Pick the period, then one
+  or more sections. Each section reads bookings, payments, receipts or invoices, with filters
+  (accounts or ranges such as `6000-6999`, VAT codes, a text or the other party, who booked it,
+  with or without a receipt, currencies), a grouping (month, quarter, account, other party, VAT
+  code) and the columns. «Vorschau» runs it.
+
+A comment under the report holds no figure of its own. Placeholders such as `{total}`,
+`{count}`, `{period}` or `{section1.total}` are filled from the books. With an account filter, a
+booking counts on the account's normal side, so a refund counts against an expense. Amounts in
+different currencies are summed apart. Bookings carry their VAT, and the report says how much
+of it is not settled yet, as the Erfolgsrechnung does.
+
+A saved report is a file, `knowledge/reports/<name>.report.yaml`, that holds what the report
+shows and never its figures. Eigene Berichte lists it and runs it each time it is opened, for
+its own period or, with one click, for the period of the page. «Bearbeiten» opens it in the
+form, and «Löschen» has «Rückgängig». Änderungen lists it until you save. The PDF has the title,
+the period, the filters in words, the group and section totals, the comment and the VAT note.
+The CSV is the plain table, one row per line, as the export writes it.
 
 ## 7. File the VAT return
 
