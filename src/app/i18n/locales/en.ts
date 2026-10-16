@@ -2567,7 +2567,6 @@ export default {
     'error.takesBack': 'That would take back an earlier change of this conversation: it has its own «Undo».',
     'error.invoicingNotSetUp': 'Invoicing is not set up yet: first give the bank account and the payment term under Company › Invoice layout.',
     'error.payToAccount': 'The account customers pay to in {currency} must be a bank account in {currency}.',
-    'error.iban': '“{iban}” is not an IBAN (length or check digits).',
     'error.ibanOnInvoices': 'The IBAN of {account} is printed on invoices in {currency}. First pick another account under Company › Invoice layout › Payment accounts.',
     'error.unknownCustomer': 'This customer is not in Invoices › Customers: add them there or pick another.',
     'error.amountZero': 'A booking needs an amount other than 0.',

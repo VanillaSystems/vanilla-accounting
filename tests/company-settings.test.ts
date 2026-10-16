@@ -130,7 +130,7 @@ test('API: an IBAN that is none, and clearing the IBAN invoices are paid to, are
   try {
     const bad = await api.send('PATCH', '/api/workspace', { banks: [{ bank: 'Raiffeisen', currency: 'CHF', iban: 'CH94 0076 2011 6238 5295 7' }] });
     assert.equal(bad.status, 400);
-    assert.deepEqual([bad.json.code, (bad.json as { params?: { iban?: string } }).params?.iban], ['iban', 'CH94 0076 2011 6238 5295 7']);
+    assert.deepEqual([bad.json.code, (bad.json as { params?: { detail?: string } }).params?.detail], ['iban', 'CH94 0076 2011 6238 5295 7']);
     const cleared = await api.send('PATCH', '/api/workspace', { banks: [{ bank: 'Raiffeisen', currency: 'CHF', iban: null }] });
     assert.equal(cleared.status, 400);
     assert.deepEqual([cleared.json.code, (cleared.json as { params?: { currency?: string } }).params?.currency], ['ibanOnInvoices', 'CHF']);

@@ -2567,7 +2567,6 @@ export default {
     'error.takesBack': 'Questo annullerebbe una modifica precedente di questa conversazione: per quella c’è il suo «Annulla».',
     'error.invoicingNotSetUp': 'La fatturazione non è ancora configurata: indicare prima il conto bancario e il termine di pagamento in Azienda › Layout delle fatture.',
     'error.payToAccount': 'Il conto su cui i clienti pagano in {currency} deve essere un conto bancario in {currency}.',
-    'error.iban': '«{iban}» non è un IBAN (lunghezza o cifre di controllo).',
     'error.ibanOnInvoices': 'L’IBAN di {account} sta sulle fatture in {currency}. Prima scegliere un altro conto in Azienda › Layout delle fatture › Conti di pagamento.',
     'error.unknownCustomer': 'Questo cliente non c\'è in Fatture › Clienti: aggiungerlo lì o sceglierne un altro.',
     'error.amountZero': 'Una registrazione ha bisogno di un importo diverso da 0.',

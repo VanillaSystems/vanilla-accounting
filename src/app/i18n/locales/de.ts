@@ -2564,7 +2564,6 @@ export const messages = {
   'error.takesBack': 'Das nähme eine frühere Änderung dieses Gesprächs zurück: dafür gibt es bei ihr «Rückgängig».',
   'error.invoicingNotSetUp': 'Rechnungen sind noch nicht eingerichtet: unter Firma › Rechnungslayout zuerst das Bankkonto und die Zahlungsfrist angeben.',
   'error.payToAccount': 'Das Konto, auf das Kunden in {currency} zahlen, muss ein Bankkonto in {currency} sein.',
-  'error.iban': '«{iban}» ist keine IBAN (Länge oder Prüfziffern).',
   'error.ibanOnInvoices': 'Die IBAN von {account} steht auf den Rechnungen in {currency}. Zuerst unter Firma › Rechnungslayout › Zahlungskonten ein anderes Konto wählen.',
   'error.unknownCustomer': 'Diesen Kunden gibt es unter Rechnungen › Kunden nicht: dort anlegen oder einen anderen wählen.',
   'error.amountZero': 'Eine Buchung braucht einen Betrag, der nicht 0 ist.',
