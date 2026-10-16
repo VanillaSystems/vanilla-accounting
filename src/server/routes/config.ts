@@ -133,7 +133,8 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
  * is refused while the open year holds entries (a label or an activity code may change any time).
  */
 function vatPatch(raw: unknown): VatSetup {
-  const next = parseVatSetup(raw, (msg) => { throw new RequestError(400, msg); });
+  // A refusal the form can meet (an activity code, a rate) carries its code, so the page says it in the person's words (r7f-30).
+  const next = parseVatSetup(raw, (msg, refusal) => { throw new RequestError(400, msg, refusal ? { code: 'vatSetup', params: refusal } : undefined); });
   if (!changesMethod(WS.company.vat, next)) return next;
   const books = readBooks();
   const year = booksOpenPeriod(books, localToday(), filing().length).from.slice(0, 4);

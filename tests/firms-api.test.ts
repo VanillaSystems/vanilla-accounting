@@ -121,3 +121,14 @@ test('net tax rate method: «kein Umsatz» on the sale question takes the paymen
   const back = loadBooks(api.ws).journalEntries.find((x) => x.id === 'e-ch')!;
   assert.deepEqual([back.accountCredit, back.vatCode, back.origin], ['3400', 'F1', 'classify']);
 });
+
+test('net tax rate method: a wrong activity code typed under Firma › MWST is refused with a code the page words, never with the manifest\'s English path (r7f-30)', async () => {
+  const api = await start('demo-schreinerei');
+  const before = readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8');
+  const res = await api.send('PATCH', '/api/workspace', { vat: { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '4105' }] } });
+  assert.equal(res.status, 400, JSON.stringify(res.json));
+  assert.deepEqual([res.json.code, res.json.params], ['vatSetup', { reason: 'activityId', rate: 1 }]);
+  assert.equal(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), before, 'nothing saved');
+  const ok = await api.send('PATCH', '/api/workspace', { vat: { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '41050' }] } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+});

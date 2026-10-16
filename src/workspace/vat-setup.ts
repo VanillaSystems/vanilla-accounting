@@ -63,10 +63,19 @@ export function filingLengthOf(setup: VatSetup, fallback: FilingLength): FilingL
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
+ * Why a setup a person typed is refused, for the UI's words (r7f-30): the `rate`-th approved rate's
+ * activity code is not five characters, the two rates are the same, a rate is no percent, or the
+ * rates are missing or more than two. A shape no form can send (a wrong method, a wrong key) has
+ * only the manifest reader's English message.
+ */
+export interface VatSetupRefusal { reason: 'activityId' | 'sameRate' | 'rate' | 'rates'; rate: number }
+export type VatSetupFail = (msg: string, refusal?: VatSetupRefusal) => never;
+
+/**
  * `company.vat` of the manifest, checked. Defaults keep every older manifest valid: `registered`
  * is true and `period` quarterly when absent. `fail` throws with the manifest's path in front.
  */
-export function parseVatSetup(raw: unknown, fail: (msg: string) => never): VatSetup {
+export function parseVatSetup(raw: unknown, fail: VatSetupFail): VatSetup {
   const vat = raw === undefined ? {} : isMap(raw) ? raw : fail('company.vat must be a mapping');
   const registered = vat.registered ?? true;
   if (typeof registered !== 'boolean') return fail('company.vat.registered must be true or false');
@@ -87,19 +96,19 @@ export function parseVatSetup(raw: unknown, fail: (msg: string) => never): VatSe
   return { registered: true, method: 'net-rate', reporting: 'received', period: period as VatPeriod, rates: parseNetRates(vat.rates, fail) };
 }
 
-export function parseNetRates(raw: unknown, fail: (msg: string) => never): NetRates {
-  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 2) return fail('company.vat.rates must list one or two approved net tax rates, as [{ rate: 4.5 }]');
+export function parseNetRates(raw: unknown, fail: VatSetupFail): NetRates {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 2) return fail('company.vat.rates must list one or two approved net tax rates, as [{ rate: 4.5 }]', { reason: 'rates', rate: 0 });
   const rates = raw.map((r, i): NetRate => {
     const where = `company.vat.rates[${i}]`;
     const o = isMap(r) ? r : typeof r === 'number' ? { rate: r } : fail(`${where} must be { rate, label?, activityId? }`);
     const rate = Number(o.rate);
-    if (!(rate > 0 && rate < 100) || !Number.isFinite(rate)) fail(`${where}.rate must be a percent above 0 and below 100`);
+    if (!(rate > 0 && rate < 100) || !Number.isFinite(rate)) fail(`${where}.rate must be a percent above 0 and below 100`, { reason: 'rate', rate: i + 1 });
     const label = o.label === undefined ? undefined : String(o.label).trim();
     const activityId = o.activityId === undefined ? undefined : String(o.activityId).trim();
-    if (activityId !== undefined && !/^[A-Z0-9]{5}$/.test(activityId)) fail(`${where}.activityId must be the tax authority's five-character activity code`);
+    if (activityId !== undefined && !/^[A-Z0-9]{5}$/.test(activityId)) fail(`${where}.activityId must be the tax authority's five-character activity code`, { reason: 'activityId', rate: i + 1 });
     return { rate, ...(label ? { label } : {}), ...(activityId ? { activityId } : {}) };
   });
-  if (rates.length === 2 && rates[0].rate === rates[1].rate && rates[0].activityId === rates[1].activityId) fail('company.vat.rates names the same rate twice');
+  if (rates.length === 2 && rates[0].rate === rates[1].rate && rates[0].activityId === rates[1].activityId) fail('company.vat.rates names the same rate twice', { reason: 'sameRate', rate: 2 });
   return asNetRates(rates)!;
 }
 

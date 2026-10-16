@@ -82,6 +82,8 @@ export type ApiRefusal =
   | { code: 'accountName'; params: { account: string } }
   /** The VAT setup (registration, method, period, a rate) holds for whole years: the open year already has entries. */
   | { code: 'vatMethodHeld'; params: { year: string; entries: number } }
+  /** A VAT setup the Firma page sent that no firm can have (src/workspace/vat-setup.ts VatSetupRefusal): which rate, and what is wrong with it. */
+  | { code: 'vatSetup'; params: { reason: 'activityId' | 'sameRate' | 'rate' | 'rates'; rate: number } }
   /** A question of the AI sidebar offering answers no question card has (src/questions/model.ts questionChoices). */
   | { code: 'questionChoices' }
   /** An account the chart places on neither statement (a closing class such as 9xxx): refused for a new account and for a booking. */

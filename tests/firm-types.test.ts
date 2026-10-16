@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { loadJurisdiction } from '../src/core/modules/load.js';
 import { filing, registration, setJurisdiction, vat, vatSetup } from '../src/engines/index.js';
 import { parseManifest } from '../src/workspace/manifest.js';
-import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, changesMethod, parseVatSetup, vatSetupYaml, type VatSetup } from '../src/workspace/vat-setup.js';
+import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, changesMethod, parseVatSetup, vatSetupYaml, type VatSetup, type VatSetupRefusal } from '../src/workspace/vat-setup.js';
 import { QUESTIONS, asked, firstMissing, firstUnsupported, vatSetupOf, type Answers } from '../src/workspace/setup.js';
 import { checkAnswers, SetupError } from '../src/workspace/create.js';
 import { planWorkspace } from '../src/workspace/scaffold.js';
@@ -28,7 +28,7 @@ import type { JournalEntry } from '../src/types/index.js';
 const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }] };
 const TWO_RATES: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5 }, { rate: 6.2, label: 'Handel' }] };
-const fail = (msg: string): never => { throw new Error(msg); };
+const fail = (msg: string, refusal?: VatSetupRefusal): never => { throw Object.assign(new Error(msg), { refusal }); };
 
 const manifest = (vat: string) => `schema: 1
 company: { name: Beispiel Test GmbH, uid: CHE-153.004.184, owner: Erika Beispiel, vat: ${vat} }
@@ -52,6 +52,13 @@ test('the manifest refuses what no firm can be', () => {
   refused({ method: 'net-rate', reporting: 'received', rates: [1, 2, 3] }, /one or two/);
   refused({ method: 'net-rate', reporting: 'received', rates: [{ rate: 0 }] }, /above 0 and below 100/);
   refused({ method: 'net-rate', reporting: 'received', rates: [{ rate: 4.5, activityId: '12' }] }, /five-character activity code/);
+  // What a person can type into the Firma form carries a typed reason, so the page refuses in her language (r7f-30).
+  const reason = (vat: unknown) => { try { parseVatSetup(vat, fail); } catch (e) { return (e as { refusal?: VatSetupRefusal }).refusal; } return undefined; };
+  assert.deepEqual(reason({ method: 'net-rate', reporting: 'received', rates: [{ rate: 4.5 }, { rate: 6.2, activityId: '4105' }] }), { reason: 'activityId', rate: 2 });
+  assert.deepEqual(reason({ method: 'net-rate', reporting: 'received', rates: [{ rate: 4.5 }, { rate: 4.5 }] }), { reason: 'sameRate', rate: 2 });
+  assert.deepEqual(reason({ method: 'net-rate', reporting: 'received', rates: [{ rate: 0 }] }), { reason: 'rate', rate: 1 });
+  assert.deepEqual(reason({ method: 'net-rate', reporting: 'received', rates: [] }), { reason: 'rates', rate: 0 });
+  assert.equal(reason({ method: 'flat' }), undefined, 'a shape no form sends has no typed reason');
   refused({ method: 'effective', reporting: 'received', rates: [{ rate: 4.5 }] }, /net tax rate method only/);
   refused({ method: 'effective', reporting: 'received', period: 'monthly' }, /quarterly, half-yearly/);
   refused({ method: 'effective', reporting: 'agreed' }, /cash basis/);
