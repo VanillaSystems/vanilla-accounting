@@ -76,7 +76,7 @@ function lockedQuarter(v: ReceiptView, l: Ledger): string {
 }
 
 /** The receipt pays a payment of a filed quarter: no link is made; its tax is a correction in the open quarter, booked from that payment's entry. */
-function FiledPaymentNotice({ l, nav, books, canEdit, payment, open }: Props & { l: Ledger; payment: string; open: string }) {
+function FiledPaymentNotice({ l, nav, books, canEdit, payment, open, receipt }: Props & { l: Ledger; payment: string; open: string; receipt: string }) {
   const tx = l.txByRef.get(payment);
   const entry = l.entriesByRef.get(payment)?.[0];
   if (!tx) return null;
@@ -85,7 +85,7 @@ function FiledPaymentNotice({ l, nav, books, canEdit, payment, open }: Props & {
     <div className="notice" data-testid="filed-payment">
       {ICONS.lock}<span>{t('receipts.filedPaymentNotice', { date: formatDate(tx.date), period: quarterName(tx.date), open })}</span>
       <a href="#" onClick={(e) => { e.preventDefault(); nav.go(go); }}>{t('receipts.filedPaymentOpen')}</a>
-      {canEdit && entry && open && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment); }}>{t('receipts.correctIn', { period: open })}</a>}
+      {canEdit && entry && open && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment, receipt); }}>{t('receipts.correctIn', { period: open })}</a>}
     </div>
   );
 }
@@ -144,7 +144,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'journal' }, query: {} }); }}>{t('receipts.correctIn', { period: open ? periodName(open) : '' })}</a>
         </div>
       )}
-      {!v.locked && !v.links.length && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} />}
+      {!v.locked && !v.links.length && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} />}
       <TwinNotice {...props} />
       {v.none
         ? <div className="notice">{t('receipts.noneNotice')} {edit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>

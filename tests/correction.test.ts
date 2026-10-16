@@ -6,11 +6,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { accountCorrectionCode, banksMoved, correctionKinds, correctionOf, privateUseCode, receiptRate } from '../src/accounting/correction.js';
+import { accountCorrectionCode, banksMoved, correctionKinds, correctionOf, correctionReceipts, privateUseCode, receiptRate } from '../src/accounting/correction.js';
 import { entriesForReturn } from '../src/accounting/declarations.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import { filing, vat } from '../src/engines/index.js';
-import type { JournalEntry } from '../src/types/index.js';
+import type { JournalEntry, Receipt } from '../src/types/index.js';
 import type { BookChange } from '../src/types/assistant.js';
 import { changesIn } from '../src/assistant/changes.js';
 import { applyAnswer } from '../src/server/edits.js';
@@ -117,4 +117,19 @@ test('a filed purchase without input tax whose receipt shows Swiss VAT: the MWST
   assert.equal(bank([geruest, entry(d)]), bank([geruest]), 'the bank stays');
   assert.equal(correctionOf(geruest, 'vat', '2026-10-16', 'Korrektur', isBank).vatCode, '-I0', 'without a receipt with Swiss VAT nothing to claim');
   assert.equal(correctionOf(natel, 'vat', '2026-10-16', 'Korrektur', isBank, 8.1).vatCode, '-I81', 'a code with tax is still taken back');
+});
+
+test('a late receipt for a filed payment claims its input tax: the receipt points at the payment, not linked, and the correction reads it (corner-33, r4c-37)', () => {
+  const geruest: JournalEntry = { id: 'g', transactionRef: 'RB-8', date: '2026-08-20', accountDebit: '6000', accountCredit: '1020', amount: 1120, vatCode: 'I0', description: 'Gerüst August' };
+  const late: Receipt = { id: 'late', filename: 'geruest-august.pdf', filedPayment: 'RB-8', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 83.92 }] } as Receipt;
+  const other: Receipt = { ...late, id: 'other', filedPayment: 'RB-9' };
+  const rate = receiptRate(correctionReceipts(geruest, [], [late, other]));
+  assert.equal(rate, 8.1, 'the receipt that pays the payment counts though it is not linked');
+  const d = correctionOf(geruest, 'vat', '2026-10-16', 'Korrektur', isBank, rate);
+  assert.deepEqual([d.accountDebit, d.accountCredit, d.vatCode], ['6000', '6000', 'I81'], 'I81, not the -I0 that books nothing');
+  assert.deepEqual(q3([geruest, entry(d)]), { 405: 83.92, 415: 0, payable: -83.92 }, 'the 0535 claims CHF 83.92 at Ziffer 405');
+  assert.equal(receiptRate(correctionReceipts(geruest, [], [other])), undefined, 'a receipt of another payment is not read');
+  const unpointed = { ...late, filedPayment: undefined };
+  assert.equal(receiptRate(correctionReceipts(geruest, [], [unpointed], 'late')), 8.1, 'opened from a receipt («Zahlung verknüpfen» on a filed payment): that receipt is read');
+  assert.equal(correctionReceipts(geruest, [late], [late], 'late').length, 1, 'a linked receipt is read once');
 });

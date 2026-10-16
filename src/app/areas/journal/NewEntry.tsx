@@ -62,7 +62,7 @@ export function NewEntry(props: Props) {
   const privateTo = as === 'account' && corrected ? [sides.accountDebit, sides.accountCredit].find(isPrivateAccount) : undefined;
   const privateCode = privateTo && corrected ? accountCorrectionCode(corrected, privateTo, isPrivateAccount) : undefined;
   // A VAT correction of a purchase without input tax whose receipt shows Swiss VAT claims it (r4c-37).
-  const rate = corrected ? receiptRateOf(books, corrected) : undefined;
+  const rate = corrected ? receiptRateOf(books, corrected, s.overlay.correcting?.from) : undefined;
   const claim = as === 'vat' && corrected && d.vatCode && d.vatCode === claimCode(corrected, d.accountDebit ?? '', rate) ? d.vatCode : undefined;
   const taxOf = (code: string | undefined) => (corrected && code ? fmt(Math.abs(vat().vatLine({ ...corrected, id: '', transactionRef: '', date: d.date ?? '', vatCode: code })?.tax ?? 0)) : '');
 
@@ -80,7 +80,7 @@ export function NewEntry(props: Props) {
   /** Another kind of correction: the form starts again from the filed entry. */
   function correctAs(kind: CorrectionKind) {
     if (!corrected || kind === as) return;
-    correct(books, corrected, kind);
+    correct(books, corrected, kind, s.overlay?.kind === 'new' ? s.overlay.correcting?.from : undefined);
     setRound(round + 1);
     setErr('');
     setSure(false);

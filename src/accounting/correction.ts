@@ -36,6 +36,16 @@ export function receiptRate(receipts: ReadonlyArray<Pick<Receipt, 'hasSwissVat' 
   return rates.length ? Math.max(...rates) : undefined;
 }
 
+/**
+ * The receipts whose VAT a correction of `e` reads: those linked to it, and those of its payment
+ * that came after the filing and so are not linked (`filedPayment`, corner-33); `from` is the
+ * receipt the correction was opened from, pointed at the payment or not.
+ */
+export function correctionReceipts<R extends Pick<Receipt, 'id' | 'filedPayment'>>(e: Pick<JournalEntry, 'transactionRef'>, linked: readonly R[], receipts: readonly R[], from?: string): R[] {
+  const late = receipts.filter((r) => !linked.some((l) => l.id === r.id) && ((!!r.filedPayment && r.filedPayment === e.transactionRef) || r.id === from));
+  return [...linked, ...late];
+}
+
 /** A purchase booked without input tax (I0, M0): the code a receipt with Swiss VAT at `rate` gives it. */
 export function claimCode(e: Corrected, account: string, rate: number | undefined): string | undefined {
   const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;

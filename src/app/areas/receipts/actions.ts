@@ -36,14 +36,15 @@ export const linkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string,
 
 /**
  * A payment of a filed quarter the receipt pays: never a link (golden rule 1). Its entry opens with
- * the correction in the open quarter started; a payment without an entry opens itself (corner-33).
+ * the correction in the open quarter started, its input tax read from the receipt `from` too; a
+ * payment without an entry opens itself (corner-33).
  */
-export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string): void {
+export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, from?: string): void {
   const tx = l.txByRef.get(ref);
   const entry = l.entriesByRef.get(ref)?.[0];
   if (!entry) { if (tx) nav.go(at({ area: 'bank', payment: ref }, tx.date)); return; }
   nav.go(at({ area: 'journal', id: entry.id }, entry.date));
-  correct(books, entry, correctionKinds(entry)[0]);
+  correct(books, entry, correctionKinds(entry)[0], from);
 }
 
 export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>

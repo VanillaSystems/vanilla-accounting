@@ -1,6 +1,6 @@
 /** What the list, the detail and the keys of Buchungen share: the journal of the loaded books, and the commands on an entry. */
 import type { Index, JournalEntry, Receipt } from '../../../types/index.js';
-import { correctionKinds, correctionOf, receiptRate, type CorrectionKind } from '../../../accounting/correction.js';
+import { correctionKinds, correctionOf, correctionReceipts, receiptRate, type CorrectionKind } from '../../../accounting/correction.js';
 import { ownerAccount } from '../../../accounting/bank-accounts.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { localToday, booksOpenPeriod, filingKeyOf, type Period } from '../../../accounting/periods.js';
@@ -47,13 +47,14 @@ export const isPrivateAccount = (account: string): boolean => {
   return !!ws && !!account && ownerAccount(ws).split(' ')[0] === account;
 };
 
-/** The Swiss VAT rate the receipts linked to an entry show, if any. */
-export const receiptRateOf = (books: Index, e: JournalEntry): number | undefined => receiptRate(journalFor(books).byId.get(e.id)?.receipts ?? []);
+/** The Swiss VAT rate an entry's receipts show, if any: those linked, the late ones of its filed payment, and `from`. */
+export const receiptRateOf = (books: Index, e: JournalEntry, from?: string): number | undefined =>
+  receiptRate(correctionReceipts(e, journalFor(books).byId.get(e.id)?.receipts ?? [], books.receipts, from));
 
-/** Opens the correction form of a filed entry for what was wrong with it. */
-export function correct(books: Index, e: JournalEntry, as: CorrectionKind): void {
-  setUi({ overlay: { kind: 'new', correcting: { entry: e.id, as }, draft: {
-    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount, receiptRateOf(books, e)),
+/** Opens the correction form of a filed entry for what was wrong with it; `from`: the receipt it was opened from. */
+export function correct(books: Index, e: JournalEntry, as: CorrectionKind, from?: string): void {
+  setUi({ overlay: { kind: 'new', correcting: { entry: e.id, as, ...(from && { from }) }, draft: {
+    ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount, receiptRateOf(books, e, from)),
     corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
   } } });
 }

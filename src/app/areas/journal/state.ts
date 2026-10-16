@@ -18,7 +18,7 @@ interface State {
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */
-  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; correcting?: { entry: string; as: CorrectionKind } } | null;
+  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
   /** A field of the entry form to focus once it shows. */
   focus?: string;
 }

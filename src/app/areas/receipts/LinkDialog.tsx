@@ -43,7 +43,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
     if (!item) return;
     onClose();
     if (item === 'private') privateOutlay(nav, v);
-    else if (item.filed) correctFiled(nav, books, l, item.tx.ref);
+    else if (item.filed) correctFiled(nav, books, l, item.tx.ref, r.id);
     else linkPayment(nav, v, item.tx.ref, txLine(item.tx), item.fit);
   }
 
