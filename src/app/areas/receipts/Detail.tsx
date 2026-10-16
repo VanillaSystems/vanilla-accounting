@@ -17,7 +17,7 @@ import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
-import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView } from './model.js';
+import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
@@ -132,8 +132,9 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <button type="button" className="miss" disabled={!edit} title={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
           {vat.length
             ? vat.map((g) => <span key={g.ratePercent} title={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
-            : r.hasSwissVat === undefined && withoutInputTax() !== 'none' ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
-            : <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>}
+            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread' ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
+            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'none' ? <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>
+            : null}
           {r.vatBy === 'human' && <ByHand />}
           {misfit !== undefined && <span className="misfit" data-testid="vat-misfit" title={t('receipts.vatMisfitTip', { gross: `${cur} ${fmt(misfit)}`, amount: `${cur} ${fmt(r.amount!)}` })}>{t('receipts.vatMisfit')}</span>}
           {vat.length > 0 && (r.vatId

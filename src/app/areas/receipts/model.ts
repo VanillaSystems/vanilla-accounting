@@ -325,3 +325,13 @@ export function together<F extends string>(before: Saves<F> | undefined, next: S
   if (!before || before.id !== next.id || next.at - before.at > TOGETHER_MS) return next;
   return { id: next.id, fields: [...new Set([...before.fields, ...next.fields])], back: { ...next.back, ...before.back }, at: next.at };
 }
+
+/**
+ * The VAT chip beside a receipt's facts when it shows no Swiss VAT line: `unread`, the VAT step has
+ * not read it yet; `none`, it shows none. A firm not registered has no VAT step, so an unread
+ * receipt shows no chip at all rather than a false «keine CH-MWST» beside an 8.1 % line (r7f-4).
+ */
+export function vatChipOf(hasSwissVat: boolean | undefined, noInputTax: 'none' | 'net-rate' | undefined): 'unread' | 'none' | undefined {
+  if (hasSwissVat !== undefined) return 'none';
+  return noInputTax === 'none' ? undefined : 'unread';
+}

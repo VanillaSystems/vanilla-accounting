@@ -179,7 +179,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
       <div className="ldl"><button type="button" className="dl inline" onClick={print}>{t('vat.print')}</button></div>
       <dl className="kv2 fhead">
         <dt>{t('vat.uid')}</dt><dd className="mono">{uid}</dd>
-        <dt>{t('vat.periodLabel')}</dt><dd className="mono">{filed.period} · {formatDate(from)}–{formatDate(to)}</dd>
+        <dt>{t('vat.periodLabel')}</dt><dd className="mono">{periodName(v.period)} · {formatDate(from)}–{formatDate(to)}</dd>
         <dt>{t('form0535.declaredTax')}</dt><dd className="mono">CHF {fmt(filedTax)}</dd>
       </dl>
       <div className="ftable">
@@ -209,7 +209,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
           </Fragment>
         ))}
       </div>
-      <p className="zexpl">{t('form0535.explanation', { period: filed.period })}</p>
+      <p className="zexpl">{t('form0535.explanation', { period: periodName(v.period) })}</p>
 
       <h3 className="fcases">{t('vat.casesTitle', { n: cases.length })}</h3>
       {check.unexplained.length === 0 && check.orphans.length === 0 ? (

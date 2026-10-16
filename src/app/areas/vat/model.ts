@@ -9,7 +9,7 @@ import { chfAmount } from '../../../accounting/ledger.js';
 import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
 import { chart, vat, filing, registration } from '../../../engines/index.js';
 import type { ReturnFigures, VatLine, VatReport } from '../../../engines/return.js';
-import type { BoxId, Formula } from '../../../core/modules/schema.js';
+import type { BoxId, Formula, ReturnData } from '../../../core/modules/schema.js';
 
 /** The four parts of the return, as the form groups its Ziffern. */
 export const SECTIONS = ['turnover', 'tax', 'input', 'result'] as const;
@@ -207,5 +207,22 @@ export function headline(v: VatReturn, filed: ReturnFigures | undefined, books: 
   return {
     kind: payable < 0 ? 'credit' : 'toPay', amount: Math.abs(payable), filed: true,
     ...(diff !== 0 ? { corrected: { kind: now < 0 ? 'credit' : 'toPay', amount: Math.abs(now), diff } } : {}),
+  };
+}
+
+/**
+ * The boxes of the firm's correction form, from its return form: its turnover box and deduction
+ * boxes, its input-tax boxes (none on the net tax rate method, whose section is left out, r6f-26)
+ * and the derived totals it has. 205 (opted exempt supplies within 200) is a box of the effective
+ * form the module does not model: it is listed and shown with a figure only.
+ */
+export function correctionBoxes(form: ReturnData): { turnover: string[]; turnoverTotals: string[]; taxTotals: string[]; inputTax: string[]; inputTaxTotals: string[]; settlement: string[]; otherFlows: string[] } {
+  const derived = (...ns: string[]) => ns.filter((n) => form.derived[n]);
+  return {
+    turnover: [form.turnoverBox, '205', ...Object.keys(form.deductions)], turnoverTotals: derived('289', '299'),
+    taxTotals: derived('399'),
+    inputTax: Object.keys(form.inputTax), inputTaxTotals: derived('479'),
+    settlement: derived('500', '510'),
+    otherFlows: ['900', '910'],
   };
 }
