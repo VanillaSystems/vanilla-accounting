@@ -104,7 +104,7 @@ export type SavingCommand =
   | { kind: 'discard' }
   | { kind: 'undo'; oid: string };
 
-export type SavingRefusal = 'no-repository' | 'nothing' | 'no-proposal' | 'stale' | 'not-customizing' | 'no-remote' | 'two-versions' | 'cannot-undo' | 'closed' | 'model';
+export type SavingRefusal = 'no-repository' | 'nothing' | 'no-proposal' | 'stale' | 'not-customizing' | 'no-remote' | 'two-versions' | 'cannot-undo' | 'closed' | 'model' | 'rules';
 
 export type SavingResult = { ok: true; reply?: string; saved?: number; reversed?: number } | { ok: false; refusal: SavingRefusal; message: string };
 

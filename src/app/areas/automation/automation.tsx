@@ -17,7 +17,7 @@ import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
 import { RunsHome } from './Runs.js';
 import { QueuePage } from './Queue.js';
-import type { Index } from '../../../types/index.js';
+import type { Index, JournalEntry } from '../../../types/index.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
@@ -91,6 +91,7 @@ function List({ route, nav, books }: Props) {
         {row({ area: 'automation', view: 'map', map: 'phases' }, <span className="t">{t('automation.map')}</span>)}
         {row({ area: 'automation', view: 'queue' }, <span className="t">{t('automation.queue')}</span>)}
         {row({ area: 'automation', view: 'tasks' }, <><span className="t">{t('automation.tasks')}</span>{waiting.length ? <span className="a"><span className="wfpill warn">{waiting.length}</span></span> : null}</>)}
+        <div className="row" role="option" aria-selected={false} tabIndex={-1} data-to="rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}><span className="t">{t('automation.toRules')}</span><span className="a">→</span></div>
         {PHASES.map((p) => {
           const ws = view?.workflows.filter((w) => w.phase === p) ?? [];
           if (!ws.length) return null;
@@ -379,8 +380,20 @@ function Made({ s, nav }: { s: StepRecord; nav: Nav }) {
 /** A value a step hands on, in words where it has some (the return, its XML), else as data. */
 function RunValue({ name, value }: { name: string; value: unknown }) {
   if (name === 'return') return <ReturnFacts ret={value as PeriodReturn} />;
+  if (name === 'entries' && Array.isArray(value)) return <Proposal entries={value as JournalEntry[]} />;
   if (name === 'xml') return <XmlFile x={value as PreparedXml} />;
   return <div className="mono">{name}: {short(value)}</div>;
+}
+
+/** The bookings a run would make, as a person reads a booking: Soll, Haben, amount, VAT code, text. */
+function Proposal({ entries }: { entries: JournalEntry[] }) {
+  return (
+    <div className="wfproposal" data-testid="proposal">
+      {entries.map((e) => (
+        <b key={e.id}>{t('automation.proposal', { booking: [`${e.accountDebit || '–'} / ${e.accountCredit || '–'}`, `${e.exchangeCurrency ?? baseCurrency()} ${fmt(e.amount)}`, e.vatCode, e.description].filter(Boolean).join(' · ') })}</b>
+      ))}
+    </div>
+  );
 }
 
 /** A box's name: a rate row by its rate, else the dictionary's name of the box, else the module's. */
@@ -417,7 +430,7 @@ function XmlFile({ x }: { x: PreparedXml }) {
 }
 
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
-type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'poorScan'; files: string[] } | { code: 'sameBytes'; files: Array<{ file: string; of: string }> } | { code: 'error'; detail: string };
+type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'poorScan'; files: string[] } | { code: 'sameBytes'; files: Array<{ file: string; of: string }> } | { code: 'asked'; count: number } | { code: 'error'; detail: string };
 function noteText(n: StepNote): string {
   switch (n.code) {
     case 'noModel': return t('automation.note.noModel', { n: n.waiting });
@@ -426,6 +439,7 @@ function noteText(n: StepNote): string {
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });
     case 'poorScan': return t('automation.note.poorScan', { n: n.files.length, files: n.files.join(', ') });
     case 'sameBytes': return t('automation.note.sameBytes', { n: n.files.length, files: n.files.map((f) => `${f.file} = ${f.of}`).join(', ') });
+    case 'asked': return t('automation.note.asked', { n: n.count });
     case 'error': return n.detail;
   }
 }
@@ -608,7 +622,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 <b>{fillTask(tx(task.title), task.item, task.reads)}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item, task.reads)}</p> : null}
-                {Object.entries(task.reads ?? {}).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
+                {Object.entries(task.reads ?? {}).filter(([k]) => !tx(task.title).includes(`{${k}}`)).map(([k, v]) => <RunValue key={k} name={k} value={v} />)}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 <span className="wfactions">
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}

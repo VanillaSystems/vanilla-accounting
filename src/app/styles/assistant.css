@@ -91,3 +91,11 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .aichangeacts { display: flex; gap: 10px; flex: none; align-items: baseline; }
 .aichanges small { color: var(--muted); white-space: nowrap; }
 .aichanges .linkbtn { white-space: nowrap; }
+
+/* A rule the AI drafted, in plain words, kept with one click (src/app/areas/company/RulesSection.tsx RuleDraft). */
+.ruledraft { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px 26px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 13px; }
+.ruledraft ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ruledraft .rk { color: var(--muted); font-size: 12px; }
+.ruledraft b { font-weight: 600; }
+.ruledraft.done { flex-direction: row; align-items: center; gap: 10px; color: var(--muted); }
+.ruleacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

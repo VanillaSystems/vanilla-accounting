@@ -20,6 +20,7 @@ import { withoutChanges } from '../../assistant/changes.js';
 import type { Route } from './route.js';
 import { PRESETS } from '../../export/model.js';
 import { api } from '../lib/api.js';
+import { RuleDraft } from '../areas/company/RulesSection.js';
 import {
   addContext, closeAssistant, newConversation, openConversation, removeContext, sendMessage, showConversations, stopAnswer, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
@@ -117,6 +118,13 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
   );
 }
 
+/** The draft files an answer wrote, relative to the app's folder; the rules files among them get a card of their own. */
+function draftsOf(turn: Extract<Parameters<typeof wroteDraft>[0], { role: 'ai' }>): { rules: string[]; other: boolean } {
+  const paths = [...new Set(turn.tools.filter((u) => !u.denied && /^(Edit|Write)$/.test(u.name) && u.detail.startsWith('data/draft/')).map((u) => u.detail.slice('data/draft/'.length)))];
+  const rules = paths.filter((p) => p.startsWith('knowledge/') && p.endsWith('.yaml'));
+  return { rules, other: paths.length > rules.length };
+}
+
 /** What @ offers: the workflows, then the latest runs, matching the typed word. */
 function mentions(q: string): ContextRef[] {
   const view = automationNow();
@@ -200,7 +208,15 @@ export function Sidebar({ page, books, onGo }: Props) {
                   {turn.error ? <div className="warnline">{turn.error}</div> : null}
                 </div>
               </div>
-              {turn.done && wroteDraft(turn) ? <button type="button" className="linkbtn aidraft" onClick={() => onGo({ area: 'changes' })}>{t('assistant.toChanges')}</button> : null}
+              {turn.done && wroteDraft(turn) ? (() => {
+                const d = draftsOf(turn);
+                return (
+                  <>
+                    {d.rules.map((path) => <RuleDraft key={path} path={path} onRules={() => onGo({ area: 'company', section: 'rules' })} />)}
+                    {d.other || !d.rules.length ? <button type="button" className="linkbtn aidraft" onClick={() => onGo({ area: 'changes' })}>{t('assistant.toChanges')}</button> : null}
+                  </>
+                );
+              })() : null}
             </Fragment>
           )))}
           {s.error ? <p className="warnline">{s.error}</p> : null}

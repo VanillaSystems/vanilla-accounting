@@ -74,7 +74,7 @@ export function rulesIn(path: string, text: string, facts: RuleFacts): RuleRow[]
 
 /** The chart's accounts by number, from the classifier's chart text (a prior-year export or accounts.json). */
 export function chartNames(chartText: string): Map<string, string> {
-  return new Map(chartText.split('\n').slice(1).map((l) => l.split('\t')).filter((c) => c[0]?.trim() && c[1]).map((c) => [c[0].trim(), c[1].trim()]));
+  return new Map(chartText.split('\n').map((l) => l.split('\t')).filter((c) => /^\d/.test(c[0]?.trim() ?? '') && c[1]).map((c) => [c[0].trim(), c[1].trim()]));
 }
 
 /** What a rule may name in this workspace: its chart, the VAT codes the app knows, its businesses. */

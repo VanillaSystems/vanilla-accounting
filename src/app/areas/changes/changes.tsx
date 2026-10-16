@@ -16,6 +16,7 @@ import { errorText } from '../../lib/api.js';
 import { BotIcon } from '../automation/Graph.js';
 import { BOOKS, diffLines, hunks, type ChangesView, type FileChange, type SaveSummary, type SavingCommand, type SavingResult } from '../../../saving/model.js';
 import { ICONS } from '../icons.js';
+import { RuleDraft } from '../company/RulesSection.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 
 type Props = AreaProps<RouteOf<'changes'>>;
@@ -27,6 +28,9 @@ const when = (iso: string) => local(iso).slice(11, 16);
 const dayOf = (iso: string) => local(iso).slice(0, 10);
 const kindLabel = (k: SaveSummary['kind']) => t(`changes.kind.${k}` as 'changes.kind.books');
 const stateLabel = (s: FileChange['state']) => t(`changes.state.${s}` as 'changes.state.added');
+
+/** A file of the company's rules: a guide of knowledge/rules/ or a business's file (src/booking/rule-book.ts holdsRules). */
+const isRulesFile = (path: string) => path.startsWith('knowledge/') && path.endsWith('.yaml') && !path.split('/').pop()!.startsWith('_');
 
 /** The rows of the list: Verlauf. */
 function rowsOf(view: ChangesView | undefined): R[] {
@@ -185,6 +189,9 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
   const thinking = busy === 'prepare' || busy === 'refresh' || busy === 'talk';
   if (!p) {
     const nothing = !view.books.files && !files.length;
+    // A rule the AI drafted reads as a rule, kept with one click; every other file waits for «Speichern vorbereiten».
+    const ruleDrafts = files.filter((f) => f.source === 'draft' && isRulesFile(f.path));
+    const others = files.filter((f) => !ruleDrafts.includes(f));
     return (
       <div className="detail-in chpage">
         <div className="head"><h2 className="who">{t('changes.since')}</h2></div>
@@ -205,11 +212,17 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                 </div>
               </>
             ) : null}
-            {files.length ? (
+            {ruleDrafts.length ? (
+              <>
+                <div className="group"><span>{t('changes.ruleDrafts')}</span></div>
+                {ruleDrafts.map((f) => <RuleDraft key={f.path} path={f.path} nav={nav} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} />)}
+              </>
+            ) : null}
+            {others.length ? (
               <>
                 <div className="group"><span>{t('changes.appFiles')}</span></div>
                 <div className="chraw">
-                  {files.map((f) => (
+                  {others.map((f) => (
                     <button key={f.source + f.path} type="button" className="chrawrow" onClick={() => nav.select({ area: 'changes', commit: f.source, file: f.path })}>
                       <span><span className="chwho">{whoIcon(f.source)}</span><span className="mono">{f.path}</span>{f.effect && f.effect !== 'applies-now' ? <span className={`chkind e-${f.effect}`}>{t(`changes.effect.${f.effect}` as 'changes.effect.applies-now')}</span> : null}</span>
                       <span className="chcount"><span className="plus">+{f.added}</span> <span className="minus">−{f.removed}</span></span>

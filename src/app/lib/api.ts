@@ -25,6 +25,7 @@ import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from
 import type { Conversation, ConversationSummary, MadeChange } from '../../types/assistant.js';
 import type { DropAction, DropSession } from '../../types/drop.js';
 import type { SourceRow } from '../../platform/sources/model.js';
+import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
@@ -186,6 +187,10 @@ export const api = {
   sources: () => request<SourceRow[]>('GET', '/api/sources'),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
+  rules: () => request<RulesView>('GET', '/api/rules'),
+  ruleCommand: (c: RuleCommand) => request<RuleCommandResult>('POST', '/api/rules', c),
+  draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
+  draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
     const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });

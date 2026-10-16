@@ -231,3 +231,5 @@
 .wfmap .wfcard.stuck { background: var(--warn-soft); border-color: transparent; }
 .wfmap .wfcard .wfpill { justify-self: start; margin-left: 0; }
 .wfmap .loop { font-size: 12px; color: var(--muted); border: 1px dashed var(--line-2); border-radius: 10px; padding: 8px 10px; }
+.wfproposal { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; font-size: 13px; }
+.wfproposal > b { font-weight: 600; }

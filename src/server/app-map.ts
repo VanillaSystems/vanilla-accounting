@@ -29,7 +29,7 @@ export const AREA_PLACES: { readonly [A in AreaId]: Place } = {
   reports: { does: 'income statement, balance sheet and trial balance, each account\'s ledger' },
   close: { does: 'the year-end close step by step: exchange differences, the closing, the opening of the next year' },
   company: { does: 'the company\'s settings, one section each (below)' },
-  automation: { does: 'the workflows (the inbox run that reads, matches and books receipts and payments; collecting receipts from the sources; the VAT filing), their runs, the queue, and the tasks that wait for the person', kinds: ['bookAgain'] },
+  automation: { does: 'the workflows (the inbox run that reads, matches and books receipts and payments; collecting receipts from the sources; the VAT filing), their runs, the queue, and the tasks that wait for the person (a payment a rule asks about waits here as «Frag: …»); «{automation.toRules}» leads to the company\'s rules', kinds: ['bookAgain'] },
   changes: { does: 'changes to how the app works (rules, workflows, knowledge) wait here as a draft until the person presses «{changes.save}»; «{changes.history}» lists every save with «{changes.undo}»' },
 };
 
@@ -40,6 +40,7 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   'invoice-layout': { does: 'how invoices look and read: font, colour, logo, envelope window, shown elements, the payment term in days, and per language (de, fr, it, en) the text above and below the table and the e-mail', kinds: ['invoicing'] },
   mail: { does: 'the mailbox the invoices are sent from' },
   sources: { does: 'where receipts come from: mailboxes and web logins; once one is set up, Automatisierung fetches it' },
+  rules: { does: 'the company\'s rules, each in plain words with where it came from and how many payments it booked; «{rules.switchOff}» and «{rules.delete}» with an undo. A rule you draft (AGENTS.md, "Rules the app carries out") the person keeps with «{rules.draft.keep}» on its card in your answer' },
   phone: { does: 'receipts from the phone: switch on, scan the QR code with the iPhone app to pair; a new code locks out old phones' },
   accounts: { does: 'the chart of accounts: an account renamed or added', kinds: ['account'] },
   periods: { does: 'the filed quarters and their seals' },

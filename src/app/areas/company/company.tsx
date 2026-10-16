@@ -29,13 +29,14 @@ import { MailSection } from './MailSection.js';
 import { SourcesSection } from './SourcesSection.js';
 import { PhoneSection } from './PhoneSection.js';
 import { desktop } from '../../desktop/bridge.js';
+import { RulesSection } from './RulesSection.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
   ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources']],
-  ['company.groupBooks', ['accounts', 'periods', 'opening']],
+  ['company.groupBooks', ['accounts', 'rules', 'periods', 'opening']],
   ['company.groupApp', ['display', 'phone']],
 ];
 
@@ -145,6 +146,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'mail': return <MailSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'sources': return <SourcesSection />;
     case 'phone': return <PhoneSection nav={p.nav} />;
+    case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} />;
     case 'accounts': return <Accounts {...p} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;

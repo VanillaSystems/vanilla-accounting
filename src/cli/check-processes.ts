@@ -10,6 +10,7 @@
  * merchants no counterparty file claims, most frequent first.
  */
 
+import { isExecutable } from '../booking/rules.js';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { parse } from 'yaml';
@@ -188,8 +189,10 @@ function checkProcedure(where: string, procedure: string, err: (m: string) => vo
 function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string } = {}) {
   for (const rule of rules ?? []) {
     const at = `${where}/${rule.id ?? '(no id)'}`;
+    // An executable rule (src/booking/rules.ts) in a business's file needs no when: its business is its condition.
+    const executable = isExecutable(rule);
     for (const field of ['id', 'when', 'then', 'source'] as const) {
-      if (!rule[field]) err(`${at}: rule has no ${field}`);
+      if (!rule[field] && !(executable && field === 'when')) err(`${at}: rule has no ${field}`);
     }
     if (rule.status && !RULE_STATUSES.has(rule.status)) err(`${at}: status must be one of ${[...RULE_STATUSES].join(', ')}`);
     if (rule.test !== undefined) {
