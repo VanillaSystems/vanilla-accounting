@@ -63,6 +63,18 @@ export interface SkipOffer { sender: string; n: number }
 /** A source as the Quellen page shows it: its verdict, whether each channel's secret is there (never its value), the senders it could skip. */
 export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: 'mail' | 'api'; present: boolean }>; skipOffers?: SkipOffer[] }
 
+/**
+ * Firma › Quellen: the sources, whether the app keeps a password it is given (the desktop app's
+ * keychain store, the login keychain under npm start; else where it goes), and whether this
+ * process runs a source's code (not in the Mac app yet: ADR 0014, unit 2b).
+ */
+export interface SourcesView { rows: SourceRow[]; secretsInApp: boolean; secretsWhere: string; runsHere: boolean }
+
+/** The connection check of a mailbox: what the source would read of the last weeks' mail, or why it could not look. */
+export type MailCheck =
+  | { ok: true; days: number; total: number; read: number; mails: Array<{ from: string; subject: string; date: string; read: boolean }> }
+  | { ok: false; reason: 'no-secret' | 'login' | 'connect' | 'not-mail'; detail?: string };
+
 /** The keychain name of a channel's secret: derived, never listed. */
 export const secretKey = (source: string, channel: 'mail' | 'api') => `source:${source}:${channel}` as const;
 

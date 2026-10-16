@@ -23,9 +23,18 @@ export interface ChildHandle {
 
 export interface Launcher { start(folder: string): ChildHandle }
 
+/**
+ * Whether a source's code can run in this process: not in the Mac app, whose fuses keep its own
+ * binary from running as node (ADR 0014, unit 2b: its utility-process launcher is not built yet).
+ * There a fork would start the app a second time, so nothing is pulled; the host's own part (a
+ * mailbox's connection check in Firma › Quellen) runs there all the same.
+ */
+export const sourcesRunHere = (): boolean => !process.versions.electron;
+
 /** Plain node for the CLI, `npm start` and the tests: --permission, read-only to the folder and the child's own file, no environment. */
 export const nodeLauncher: Launcher = {
   start(folder) {
+    if (!sourcesRunHere()) throw new Error('The Mac app runs no source yet (ADR 0014, unit 2b): npm start or npm run pull fetches it.');
     const child = fork(CHILD, [], {
       execArgv: ['--permission', `--allow-fs-read=${realpathSync(folder)}`, `--allow-fs-read=${realpathSync(CHILD)}`, '--disable-warning=ExperimentalWarning'],
       env: {},

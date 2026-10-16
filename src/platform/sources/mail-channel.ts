@@ -5,6 +5,7 @@
  * message (a body structure misses inline PDFs), held by their checksum until delivered.
  */
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import type { MailReach } from './model.js';
 import { senderAllowed } from './reach.js';
 
@@ -17,7 +18,7 @@ export interface MailBackend {
   close(): Promise<void>;
 }
 
-/** The real backend: one IMAP connection per pull. The libraries load here, as the Mac app does not pack them (desktop/not-packed.cjs). */
+/** The real backend: one IMAP connection per pull or check. The libraries load on first use, so a start without mail sources never loads them. */
 export async function imapBackend(r: MailReach, password: string, port = 993): Promise<MailBackend> {
   const [{ ImapFlow }, { simpleParser }] = await Promise.all([import('imapflow'), import('mailparser')]);
   const client = new ImapFlow({ host: r.host, port, secure: true, auth: { user: r.account, pass: password }, logger: false, connectionTimeout: 20_000, greetingTimeout: 20_000 });
@@ -47,6 +48,35 @@ export async function imapBackend(r: MailReach, password: string, port = 993): P
     },
     async close() { await client.logout().catch(() => client.close()); },
   };
+}
+
+/** A login the mail server refused: the password or the login name is wrong. */
+export class MailLoginError extends Error {}
+
+/**
+ * A stand-in mailbox for tests and the verify sandbox, never a real one: VANILLA_FAKE_MAILBOX
+ * names a JSON file `{ password, messages: MailSummary[] }`; another password is refused as a
+ * real server would. As VANILLA_SECRETS_FILE stands in for the keychain.
+ */
+function fakeBackend(file: string, password: string): MailBackend {
+  const box = JSON.parse(readFileSync(file, 'utf8')) as { password: string; messages: MailSummary[] };
+  if (password !== box.password) throw new MailLoginError('Authentication failed');
+  return {
+    async list(_folder, after, since) { return { validity: '1', messages: box.messages.filter((m) => (after ? m.uid > after : Date.parse(m.date) >= since.getTime())) }; },
+    async attachments() { return []; },
+    async close() {},
+  };
+}
+
+/** The backend of a check or a pull: the stand-in when one is named, else the real server; a refused login is a MailLoginError. */
+export async function mailBackend(r: MailReach, password: string): Promise<MailBackend> {
+  if (process.env.VANILLA_FAKE_MAILBOX) return fakeBackend(process.env.VANILLA_FAKE_MAILBOX, password);
+  try {
+    return await imapBackend(r, password);
+  } catch (e) {
+    if ((e as { authenticationFailed?: boolean }).authenticationFailed) throw new MailLoginError((e as Error).message);
+    throw e;
+  }
 }
 
 export interface MailCursor { validity: string; uid: number }

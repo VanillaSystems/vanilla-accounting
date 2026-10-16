@@ -14,6 +14,16 @@ The setup takes about ten minutes per mailbox. You do it once. You need:
 - for each mailbox, its IMAP server and a password that IMAP accepts. With most providers
   this is an **app-specific password**, not the password you use in the browser.
 
+**In the app.** Firma › Quellen › «Postfach verbinden» asks for the address, the IMAP server, the
+login (the address unless it differs) and the app password. It writes the source folder described
+below (every sender, the inbox, daily) and puts the password into the keychain store; «Verbindung
+prüfen» signs in and lists which of the last 60 days' mails the source would read, without fetching
+anything. Then «Einschalten». A source's password is set or replaced on its row the same way. The
+Mac app keeps the source and its password and checks the connection, but does not fetch mail by
+itself yet (ADR 0014, unit 2b: its launcher for a source's code is not built); `npm start` and
+`npm run pull` do. The rest of this page is the same setup by hand, with more choices (senders,
+several addresses on one login).
+
 The setup has two parts, kept apart on purpose:
 
 | What | Where | Why there |

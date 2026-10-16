@@ -12,6 +12,7 @@ import { wordsIn } from '../export/texts.js';
 import type { Change } from '../types/assistant.js';
 import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type Choice } from '../questions/model.js';
 import { normalRate } from '../accounting/sales-without-vat.js';
+import { sourcesRunHere } from '../platform/sources/launcher.js';
 
 interface Place {
   /** What a person does there, in English for the model; `{key}` is a text of the UI's in the person's language. */
@@ -40,7 +41,12 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   banks: { does: 'the bank accounts with their IBAN; a new account' },
   'invoice-layout': { does: 'how invoices look and read: font, colour, logo, envelope window, shown elements, the payment term in days, and per language (de, fr, it, en) the text above and below the table and the e-mail', kinds: ['invoicing'] },
   mail: { does: 'the mailbox the invoices are sent from' },
-  sources: { does: 'where receipts come from: mailboxes and web logins; once one is set up, Automatisierung fetches it' },
+  sources: {
+    does: 'where receipts come from: mailboxes and web logins. The person connects a mailbox here with «{sources.addMailbox}» (its address, IMAP server, login and app password), checks it with «{sources.check}», which lists the recent mails it would read, and switches it on with «{sources.approve}»; you cannot connect one, and never ask for or take a password in the chat. '
+      + (sourcesRunHere()
+        ? 'Once switched on, Automatisierung fetches its attachments daily'
+        : 'This is the Mac app, which does not fetch mail by itself yet (the page says so): until an update brings it, the person drags invoices from the mailbox into Belege'),
+  },
   rules: { does: 'the company\'s rules, each in plain words with where it came from and how many payments it booked; «{rules.switchOff}» and «{rules.delete}» with an undo. A rule you draft (AGENTS.md, "Rules the app carries out") shows as a card under your answer: the person keeps it with «{rules.draft.keep}» or drops it with «{rules.draft.discard}»; a rule you take out asks «{rules.draft.remove}» there. That one click is all the person does; until then the rule does nothing' },
   phone: { does: 'receipts from the phone: switch on, scan the QR code with the iPhone app to pair; a new code locks out old phones' },
   accounts: { does: 'the chart of accounts: an account renamed or added', kinds: ['account'] },

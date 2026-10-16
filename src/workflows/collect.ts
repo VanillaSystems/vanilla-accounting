@@ -8,6 +8,7 @@ import { APP_ROOT } from '../workspace/workspace.js';
 import { sources } from '../platform/sources/index.js';
 import { feedDue, pull } from '../platform/sources/host.js';
 import { feedState, readLedger } from '../platform/sources/ledger.js';
+import { sourcesRunHere } from '../platform/sources/launcher.js';
 import type { Action } from './actions.js';
 
 export const COLLECT_ACTIONS: Record<string, Action> = {
@@ -16,6 +17,7 @@ export const COLLECT_ACTIONS: Record<string, Action> = {
     effects: [],
     run(_input, _fx, { ws }) {
       const now = new Date();
+      if (!sourcesRunHere()) return { outcome: 'none', output: { sources: [] } };
       const due = sources(ws, APP_ROOT).flatMap((v) => {
         if (v.kind !== 'ready') return [];
         const lines = readLedger(ws, v.decl.id);

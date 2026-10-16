@@ -14,7 +14,7 @@ import type { Workspace } from '../../workspace/workspace.js';
 import { sources } from './index.js';
 import { nodeLauncher, runFeed, ChildCrashed, SourceError, type Launcher } from './launcher.js';
 import { appendLedger, feedState, readLedger } from './ledger.js';
-import { imapBackend, mailChannel, sha256, type Held, type MailBackend } from './mail-channel.js';
+import { mailBackend, mailChannel, sha256, type Held, type MailBackend } from './mail-channel.js';
 import { notReceipt } from '../../intake/recognize.js';
 import { freeName, putInQuarantine } from '../../intake/quarantine.js';
 import { secretKey, type Cadence, type FeedDecl, type MailReach, type SourceDecl } from './model.js';
@@ -85,7 +85,7 @@ export async function pull(req: PullRequest): Promise<PullOutcome> {
     const password = await secrets.get(secretKey(decl.id, 'mail'));
     if (!password) return { outcome: 'missing-secret', channel: 'mail', feeds: reports };
     try {
-      backend = await (req.mailBackend ?? imapBackend)(decl.reach.mail, password);
+      backend = await (req.mailBackend ?? mailBackend)(decl.reach.mail, password);
     } catch (e) {
       const err = e as Error & { authenticationFailed?: boolean; responseText?: string };
       if (err.authenticationFailed) return { outcome: 'missing-secret', channel: 'mail', refused: err.responseText ?? err.message, feeds: reports };

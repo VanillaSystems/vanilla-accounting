@@ -5,14 +5,20 @@
  *   GET  /api/sources               SourceRow[]
  *   POST /api/sources/:id/approve   switches the version on (outside the workspace): it runs live from now on
  *   POST /api/sources/:id/skip      { sender, version }: a mailbox skips that sender's mail from now on
+ *   POST /api/sources/mail          { address, host, account?, label?, password? }: a new mailbox source
+ *   PUT  /api/sources/:id/secret    { password | null }: its mailbox password, into the secret store
+ *   POST /api/sources/:id/check     MailCheck: the login tried, and what it would read
  */
 import { Router } from 'express';
 import { WS } from '../books.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { approveSource, sources } from '../../platform/sources/index.js';
 import { RequestError } from '../books.js';
-import { secretKey, type SourceRow } from '../../platform/sources/model.js';
-import { secrets } from '../../secrets/secrets.js';
+import { secretKey, type MailCheck, type SourceDecl, type SourceRow, type SourcesView } from '../../platform/sources/model.js';
+import { mailSecret, secrets } from '../../secrets/secrets.js';
+import { mailInputProblem, mailSourceId, previewMailbox, writeMailSource, type MailSourceInput } from '../../platform/sources/mail-setup.js';
+import { mailBackend, MailLoginError, type MailBackend } from '../../platform/sources/mail-channel.js';
+import { sourcesRunHere } from '../../platform/sources/launcher.js';
 import { readLedger } from '../../platform/sources/ledger.js';
 import { addSkip, skipOffers } from '../../platform/sources/skip.js';
 import { reachDiff } from '../../platform/sources/reach.js';
@@ -29,8 +35,62 @@ router.get('/api/sources', async (_req, res) => {
     const offers = decl?.reach.mail ? skipOffers(readLedger(WS, decl.id), readBooks().receipts, decl.reach.mail) : [];
     rows.push({ verdict, secrets: channels.map((channel, i) => ({ channel, present: present[i] })), ...(offers.length ? { skipOffers: offers } : {}) });
   }
-  res.json(rows);
+  res.json({ rows, secretsInApp: secrets.inApp(), secretsWhere: secrets.where(mailSecret('<id>')), runsHere: sourcesRunHere() } satisfies SourcesView);
 });
+
+/**
+ * «Postfach verbinden» (r5h-27): a person adds a mailbox with its address, IMAP server and login;
+ * the source folder is written and waits to be switched on, the password goes into the secret
+ * store (never the workspace, never a log).
+ */
+router.post('/api/sources/mail', async (req, res) => {
+  const body = (req.body ?? {}) as Partial<MailSourceInput> & { password?: unknown };
+  const input: MailSourceInput = { address: String(body.address ?? ''), host: String(body.host ?? ''), ...(body.account !== undefined ? { account: String(body.account) } : {}), ...(body.label ? { label: String(body.label) } : {}) };
+  const problem = mailInputProblem(input);
+  if (problem) throw new RequestError(400, `Das Feld ${problem} ist nicht gültig.`, { code: 'mailSourceField', params: { field: problem } });
+  if (body.password !== undefined && (typeof body.password !== 'string' || !body.password)) throw new RequestError(400, 'password: ein Text.');
+  if (body.password && !secrets.inApp()) throw new RequestError(409, `Das Passwort gehört nach ${secrets.where(mailSecret('<id>'))}.`);
+  const taken = new Set(sources(WS, APP_ROOT).map((v) => (v.kind === 'invalid' ? v.id : v.decl.id)));
+  const id = mailSourceId(input.address, taken);
+  writeMailSource(WS, id, input);
+  if (body.password) await secrets.set(mailSecret(id), body.password);
+  res.json({ ok: true, id });
+});
+
+/** The password of a source's mailbox, into the secret store; null removes it. Never echoed, never logged. */
+router.put('/api/sources/:id/secret', async (req, res) => {
+  const decl = mailDecl(req.params.id);
+  const password = (req.body as { password?: unknown })?.password;
+  if (password !== null && (typeof password !== 'string' || !password)) throw new RequestError(400, 'password: ein Text, oder null zum Entfernen.');
+  if (!secrets.inApp()) throw new RequestError(409, `Das Passwort gehört nach ${secrets.where(mailSecret(decl.id))}.`);
+  await secrets.set(mailSecret(decl.id), password);
+  res.json({ ok: true });
+});
+
+/** «Verbindung prüfen»: logs in and says which of the last weeks' mails the source would read. Fetches no attachment, writes nothing. */
+router.post('/api/sources/:id/check', async (req, res) => {
+  const decl = mailDecl(req.params.id);
+  const password = await secrets.get(mailSecret(decl.id));
+  if (!password) return void res.json({ ok: false, reason: 'no-secret' } satisfies MailCheck);
+  let backend: MailBackend;
+  try {
+    backend = await mailBackend(decl.reach.mail!, password);
+  } catch (e) {
+    return void res.json((e instanceof MailLoginError ? { ok: false, reason: 'login' } : { ok: false, reason: 'connect', detail: String((e as { code?: string }).code ?? (e as Error).message).slice(0, 200) }) satisfies MailCheck);
+  }
+  try {
+    res.json({ ok: true, ...(await previewMailbox(backend, decl)) } satisfies MailCheck);
+  } finally {
+    await backend.close();
+  }
+});
+
+/** A mailbox source of the workspace (pending or switched on), or 404. */
+function mailDecl(id: string): SourceDecl {
+  const v = sources(WS, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === id);
+  if (!v || v.kind === 'invalid' || !v.decl.reach.mail) throw new RequestError(404, `Die Mailbox ${id} gibt es nicht, oder sie hat Fehler.`);
+  return v.decl;
+}
 
 router.post('/api/sources/:id/approve', (req, res) => {
   const v = sources(WS, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === req.params.id);

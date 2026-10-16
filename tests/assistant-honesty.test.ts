@@ -166,3 +166,10 @@ test('a workflow\'s task is in the message with the rule that held its payment, 
   const note = openWork(api.ws, loadBooks(api.ws), [task as never], 'de');
   assert.match(note, /Tasks of the workflows \(1\):\n- «Frag: Wofür war der Barbezug\?» on the transaction S-GEN, since 15\.10\.2026, held by the rule cash-ask/);
 });
+
+test('the app map says a mailbox is connected in Firma › Quellen by the person, with the page\'s own words (r5h-27)', () => {
+  const de = appMap('de');
+  assert.match(de, /«Postfach verbinden»/);
+  assert.match(de, /«Verbindung prüfen»/);
+  assert.match(de, /never ask for or take a password in the chat/);
+});

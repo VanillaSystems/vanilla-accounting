@@ -26,7 +26,7 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 import type { Conversation, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
 import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.js';
-import type { SourceRow } from '../../platform/sources/model.js';
+import type { MailCheck, SourcesView } from '../../platform/sources/model.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
@@ -121,6 +121,7 @@ export function errorText(e: unknown): string {
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
     case 'openingYearClosed': return t('company.openingClosed', { year: b.params.year });
+    case 'mailSourceField': return t(`sources.field.${b.params.field}.invalid` as 'sources.field.address.invalid');
     case 'vatMethodHeld': return t('error.vatMethodHeld', { year: b.params.year, n: b.params.entries, next: String(Number(b.params.year) + 1) });
     case 'periodClosed': {
       const closed = t('error.periodClosed', { date: formatDate(b.params.closedThrough) });
@@ -226,7 +227,10 @@ export const api = {
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
   assistantUndo: (id: string, change: string) => request<MadeChange[]>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
   assistantHeld: (id: string, turn: number, take: boolean, language: string) => request<Extract<Turn, { role: 'ai' }>>('POST', `/api/assistant/${encodeURIComponent(id)}/held/${turn}`, { take, language }),
-  sources: () => request<SourceRow[]>('GET', '/api/sources'),
+  sources: () => request<SourcesView>('GET', '/api/sources'),
+  addMailSource: (input: { address: string; host: string; account?: string; password?: string }) => request<{ ok: true; id: string }>('POST', '/api/sources/mail', input),
+  saveSourcePassword: (id: string, password: string | null) => request<{ ok: true }>('PUT', `/api/sources/${encodeURIComponent(id)}/secret`, { password }),
+  checkSource: (id: string) => request<MailCheck>('POST', `/api/sources/${encodeURIComponent(id)}/check`),
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
