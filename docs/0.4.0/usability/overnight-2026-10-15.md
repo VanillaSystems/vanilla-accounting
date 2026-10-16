@@ -57,3 +57,9 @@ file records every decision a person might have made differently, newest last.
     with a pairing token in a QR code; the rest of the API stays loopback-only. The iOS app learns
     to pair. The desktop app also starts processing arriving files by itself.
 14. Booking a payment by hand without AI: merged (form in Kontoauszüge, the task and the receipt; lines must add up; «Gebucht» only with a booking). Open: «N» entries are still not tied to a payment (treuhaender-22).
+15. Flaky tests: three races in the test code (the inbox watcher's run, teardown before exit,
+    kept-alive connections) fixed; 20 runs under load all green. Found: tests wrote their runs
+    into the real app folder ~/Library/Application Support/Vanilla Accounting/runs (about 1'100
+    test folders) and left about as many -approvals folders in the temp dir. Tests now keep their
+    own folders. The existing leftovers are NOT deleted: they sit in Ken's real app folder next
+    to his own runs; to sort out together.
