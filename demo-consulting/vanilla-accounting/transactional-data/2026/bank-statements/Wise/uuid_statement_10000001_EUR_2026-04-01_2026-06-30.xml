@@ -10,7 +10,7 @@
       <CreDtTm>2026-07-01T06:00:00</CreDtTm>
       <FrToDt><FrDtTm>2026-04-01T00:00:00</FrDtTm><ToDtTm>2026-06-30T23:59:59</ToDtTm></FrToDt>
       <Acct>
-        <Id><IBAN>BE00967000000002</IBAN></Id>
+        <Id><IBAN>BE38967000000002</IBAN></Id>
         <Ccy>EUR</Ccy>
         <Ownr><Nm>Muster Consulting GmbH</Nm></Ownr>
         <Svcr><FinInstnId><Nm>Wise Europe SA</Nm></FinInstnId></Svcr>

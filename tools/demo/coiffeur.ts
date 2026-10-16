@@ -26,7 +26,7 @@ const VAT: VatSetup = { registered: false };
 const BANKS: Record<'raiffeisen', StatementBank> = {
   raiffeisen: {
     bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank Raiffeisen',
-    iban: 'CH0080808000000000004', institution: 'Raiffeisenbank Beispiel', opening: 6500,
+    iban: 'CH8180808000000000004', institution: 'Raiffeisenbank Beispiel', opening: 6500,
   },
 };
 

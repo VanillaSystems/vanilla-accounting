@@ -23,11 +23,11 @@ const COMPANY: Company = {
 const BANKS: Record<'raiffeisen' | 'wise-eur', StatementBank> = {
   raiffeisen: {
     bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank Raiffeisen',
-    iban: 'CH5880808000000000002', institution: 'Raiffeisenbank Bern-Muster', opening: 42000,
+    iban: 'CH3880808000000000002', institution: 'Raiffeisenbank Bern-Muster', opening: 42000,
   },
   'wise-eur': {
     bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise EUR',
-    iban: 'BE00967000000002', institution: 'Wise Europe SA', opening: 2500,
+    iban: 'BE38967000000002', institution: 'Wise Europe SA', opening: 2500,
   },
 };
 
