@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umzug als Gespräch · Prototyp</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --ink: #0b1220; --muted: #8b93a3; --bar: #0b1220; --chip: #1c2433; --on: #ffffff; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bar); font: 13px/1 "Instrument Sans", system-ui, sans-serif; }
+body { display: grid; grid-template-rows: auto 1fr; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 14px; color: var(--on); }
+.bar .name { font: 500 11px "Geist Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+.bar button { height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--chip); background: var(--chip); color: var(--on); font: inherit; cursor: pointer; }
+.bar button:hover { border-color: #3a4558; }
+.bar button[aria-pressed="true"] { background: var(--on); color: var(--ink); border-color: var(--on); }
+.bar .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--chip); margin-right: 8px; }
+.bar .seg button { border-color: transparent; }
+.bar button[hidden] { display: none; }
+.bar .sep { width: 1px; height: 18px; background: var(--chip); margin: 0 4px; }
+.bar .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div class="bar" role="toolbar" aria-label="Prototyp">
+  <span class="name">Umzug · Gespräch</span>
+  <span class="seg" role="group" aria-label="Weg">
+    <button type="button" data-path="jan">per 1.1.</button>
+    <button type="button" data-path="mitte">im laufenden Jahr</button>
+  </span>
+  <button type="button" data-at="talk">1 Gespräch</button>
+  <button type="button" data-at="list">2 Was ich brauche</button>
+  <button type="button" data-at="fetch">3 Holen</button>
+  <button type="button" data-at="half" data-only="mitte">4 Erstes Halbjahr</button>
+  <button type="button" data-at="know">5 Aus 2025 lernen</button>
+  <button type="button" data-at="done">6 Fertig</button>
+  <span class="sep"></span>
+  <span class="seg" role="group" aria-label="Darstellung">
+    <button type="button" data-theme="light">Hell</button>
+    <button type="button" data-theme="dark">Dunkel</button>
+  </span>
+  <button type="button" data-later title="Wissen und Lücken, wie sie nach einem Quartal Arbeit aussehen">Wissen nach Q3</button>
+  <button type="button" data-restart>Von vorn</button>
+  <span class="hint" id="hint"></span>
+</div>
+<iframe id="app" title="Vanilla Accounting"></iframe>
+<script>
+const frame = document.getElementById('app');
+const q = new URLSearchParams(location.hash.slice(1));
+let path = q.get('p') === 'mitte' ? 'mitte' : 'jan';
+let theme = q.get('th') === 'dark' ? 'dark' : 'light';
+let at = 'talk';
+let later = q.get('later') === '1';
+const hints = {
+  talk: 'Tipp: die Antwortknöpfe anklicken oder tippen («Bexio», «doppelt», «ab Juli») · «Im laufenden Jahr» führt zum zweiten Weg',
+  list: 'Tipp: «Hol es dir» · «Ich exportiere lieber selbst» zeigt den Weg mit Datei',
+  fetch: 'Tipp: «Einfügen», «Prüfen», «Holen» · darunter drei andere Wege · eine Datei ins Gespräch ziehen',
+  half: 'Tipp: Q1 versiegeln · bei Q2 eine Antwort wählen, dann versiegeln',
+  know: 'Tipp: «Alle 8 übernehmen» füllt das Wissen-Symbol im Dock · Fragen beantworten oder überspringen · die grüne Stufe «Wissen» zeigt den Bereich',
+  done: 'Tipp: «Eröffnung übernehmen», dann «Wissen ansehen» oder «Los geht\'s»',
+  landed: 'In der App: Dock › Wissen · in Buchungen ein Partnername · «Wissen nach Q3» zeigt die Lücken nach einem Quartal',
+};
+const mark = () => {
+  document.querySelectorAll('[data-path]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.path === path)));
+  document.querySelectorAll('[data-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === theme)));
+  document.querySelectorAll('[data-only]').forEach((b) => { b.hidden = b.dataset.only !== path; });
+  document.querySelectorAll('[data-at]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.at === at)));
+  document.querySelector('[data-later]').setAttribute('aria-pressed', String(later));
+  document.getElementById('hint').textContent = hints[at] || '';
+};
+const open = (to) => {
+  at = to || 'talk';
+  frame.src = `app.html?r=${Date.now()}#p=${path}&th=${theme}${to && to !== 'talk' ? '&at=' + to : ''}${later ? '&later=1' : ''}`;
+  mark();
+};
+document.querySelectorAll('[data-at]').forEach((b) => b.addEventListener('click', () => open(b.dataset.at)));
+document.querySelectorAll('[data-path]').forEach((b) => b.addEventListener('click', () => { path = b.dataset.path; open(); }));
+document.querySelectorAll('[data-theme]').forEach((b) => b.addEventListener('click', () => { theme = b.dataset.theme; frame.contentWindow.postMessage({ theme }, '*'); mark(); }));
+document.querySelector('[data-later]').addEventListener('click', () => { later = !later; frame.contentWindow.postMessage({ later }, '*'); mark(); });
+document.querySelector('[data-restart]').addEventListener('click', () => open());
+window.addEventListener('message', (e) => { if (e.data && e.data.chapter) { at = e.data.chapter; path = e.data.path; mark(); } });
+open(q.get('at'));
+</script>
+</body>
+</html>

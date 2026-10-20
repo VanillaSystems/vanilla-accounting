@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umzug · Prototyp</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --ink: #0b1220; --muted: #8b93a3; --bar: #0b1220; --chip: #1c2433; --on: #ffffff; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bar); font: 13px/1 "Instrument Sans", system-ui, sans-serif; }
+body { display: grid; grid-template-rows: auto 1fr; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 7px 14px; color: var(--on); }
+.bar .name { font: 500 11px "Geist Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+.bar button { height: 26px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--chip); background: var(--chip); color: var(--on); font: inherit; cursor: pointer; }
+.bar button:hover { border-color: #3a4558; }
+.bar button[aria-pressed="true"] { background: var(--on); color: var(--ink); border-color: var(--on); }
+.bar .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--chip); margin-right: 8px; }
+.bar .seg button { border-color: transparent; }
+.bar button[hidden] { display: none; }
+.bar .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div class="bar" role="toolbar" aria-label="Prototyp">
+  <span class="name">Umzug</span>
+  <span class="seg" role="group" aria-label="Weg">
+    <button type="button" data-weg="jan">per 1.1.</button>
+    <button type="button" data-weg="mitte">im laufenden Jahr</button>
+  </span>
+  <button type="button" data-screen="0-gespraech.html">0 Gespräch</button>
+  <button type="button" data-screen="1-plan.html">1 Was wir brauchen</button>
+  <button type="button" data-screen="2-gelesen.html">2 Gelesen</button>
+  <button type="button" data-screen="2m-halbjahr.html" data-only="mitte">2m Erstes Halbjahr</button>
+  <button type="button" data-screen="3-partner.html">3 Partner</button>
+  <button type="button" data-screen="4-regel.html">4 Regel</button>
+  <button type="button" data-screen="5-nicht-uebernehmen.html">5 Nicht übernehmen</button>
+  <button type="button" data-screen="6-fragen.html">6 Fragen</button>
+  <button type="button" data-screen="7-fertig.html">7 Fertig</button>
+  <button type="button" data-screen="8-erste-zahlungen.html">8 Erste Zahlungen</button>
+  <button type="button" data-screen="9-regeln.html">9 Regeln</button>
+  <button type="button" data-screen="10-wissen.html">10 Wissen</button>
+  <button type="button" data-screen="11-partner.html">11 Partner</button>
+  <button type="button" data-screen="12-luecken.html">12 Lücken</button>
+  <span class="hint" id="hint"></span>
+</div>
+<iframe id="app" src="0-gespraech.html" title="Vanilla Accounting"></iframe>
+<script>
+const frame = document.getElementById('app');
+const hints = {
+  '0-gespraech.html': 'Tipp: rechts die Antworten anklicken · «Im laufenden Jahr» führt zum zweiten Weg · «Nicht zur Hand» zeigt die Fragen ohne Datei',
+  '1-plan.html': 'Tipp: «Holen» oder «Alles holen» · «Lieber selbst exportieren?» aufklappen',
+  '2-gelesen.html': 'Tipp: die zwei gelben Fragen beantworten · «Weiter»',
+  '2m-halbjahr.html': 'Tipp: Q1 versiegeln · bei Q2 eine Antwort wählen, dann versiegeln',
+  '3-partner.html': 'Tipp: eine Zeile aufklappen · «Alle 8 auswählen» · eine Zeile mit ⚠ aufklappen',
+  '4-regel.html': 'Eine vorgeschlagene Regel mit den Buchungen 2025, die sie trägt',
+  '5-nicht-uebernehmen.html': 'Tipp: «Ich sehe es anders» führt zu einer Frage',
+  '6-fragen.html': 'Tipp: eine Antwort wählen, dann «Weiter» · «Überspringen»',
+  '7-fertig.html': 'Tipp: «Eröffnung übernehmen» · «Wissen ansehen»',
+  '8-erste-zahlungen.html': 'Tipp: rechts «Als Regel zeigen», dann «Behalten» (gezeigt im Weg per 1.1.)',
+  '9-regeln.html': 'Regeln sind jetzt ein Filter von Wissen · oben «Geschäftspartner» oder «Lücken»',
+  '10-wissen.html': 'Tipp: «Grünkaffee Muster AG» anklicken · «Lücken» in den Filtern oder unter den Zahlen',
+  '11-partner.html': 'Alles über einen Geschäftspartner · die offene Frage oben beantworten',
+  '12-luecken.html': 'Tipp: bei einer Lücke eine Antwort wählen · unten die Fragen vor der MWST-Abrechnung',
+};
+let weg = 'jan';
+const mark = (s, w) => {
+  if (w) weg = w;
+  document.querySelectorAll('[data-weg]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.weg === weg)));
+  document.querySelectorAll('[data-only]').forEach((b) => { b.hidden = b.dataset.only !== weg; });
+  document.querySelectorAll('[data-screen]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.screen === s)));
+  document.getElementById('hint').textContent = hints[s] || '';
+};
+const open = (s) => { frame.src = s === '0-gespraech.html' ? s + '#' + weg : s + '?weg=' + weg; };
+document.querySelectorAll('[data-screen]').forEach((b) => b.addEventListener('click', () => open(b.dataset.screen)));
+document.querySelectorAll('[data-weg]').forEach((b) => b.addEventListener('click', () => { weg = b.dataset.weg; mark(null); frame.src = '0-gespraech.html'; }));
+window.addEventListener('message', (e) => { if (e.data && e.data.screen) mark(e.data.screen, e.data.screen === '0-gespraech.html' ? null : e.data.weg); });
+mark('0-gespraech.html');
+</script>
+</body>
+</html>

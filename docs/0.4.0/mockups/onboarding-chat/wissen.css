@@ -1,0 +1,161 @@
+/* Design B: Geschäftspartner and Wissen as areas of their own, prose first. Only the app's tokens;
+   the cards reuse design A's classes (.kwk, .obcase, .obopt, .obstat, .obmap) under main.kw. */
+
+/* The dock icons fill once the setup has learned something. */
+.activity .it.kwfill { color: var(--ink); }
+.activity .it.kwfill .ic > svg > :first-child { fill: color-mix(in srgb, var(--accent) 30%, transparent); stroke: var(--accent); }
+.activity .it.kwflash .ic { animation: kwflash 1.6s ease; border-radius: 50%; }
+@keyframes kwflash { 0%, 40% { box-shadow: 0 0 0 6px var(--accent-soft); background: var(--accent-soft); } }
+
+/* Firma points to both instead of listing Regeln; Buchungen link each partner to its page. */
+.kwpoint { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.kwlink { color: inherit; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.kwlink:hover { color: var(--accent); text-decoration-color: var(--accent); }
+.obland.fade { opacity: 0; transition: opacity .6s ease; pointer-events: none; }
+
+/* The list. */
+main.kw { --lw: minmax(min(460px, 45%), 40%); }
+.kw .row.kwfix .a.kwwarn { color: var(--warn); }
+.kw .row.kwrow { grid-template-columns: minmax(0, 1fr) auto; row-gap: 5px; align-items: baseline; }
+.kw .row.kwrow .t { font-weight: 500; }
+.kw .row.kwrow .kwop { font-size: 12px; color: var(--warn); }
+.kw .row.kwrow .kwks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.kw .row.kwrow .kwks .wfpill { margin-left: auto; }
+.kw .kwnone, .kw .kwrare { font-size: 12.5px; margin: 10px 0 0; }
+.kw .kwempty { font-size: 12.5px; margin-top: 16px; }
+.kw .kwk { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.kw .kwk b { font-weight: 600; color: var(--ink); }
+.kw .kwk.app { color: var(--muted); border-style: dashed; }
+
+/* The detail: design A's partner page, Lücken and the cards inside them. */
+.kw .docbody { max-width: 880px; }
+.kw .docbody > section { margin-top: 22px; }
+.kw .docbody > section:first-child { margin-top: 0; }
+.kw .docbody h3 { margin: 0 0 6px; }
+.kw .docbody .lead { max-width: 70ch; margin: 0 0 14px; color: var(--ink-2); }
+.kw .wfpill.src-history { background: var(--accent-soft); color: var(--accent); }
+.kw .wfpill.src-answer { background: color-mix(in srgb, var(--ai) 14%, transparent); color: var(--ai); }
+.kw .wfpill.src-correction { background: var(--warn-soft); color: var(--warn); }
+.kw .wfpill.src-hand { background: var(--hover); color: var(--ink-2); }
+.kw .wfpill.src-example, .kw .wfpill.src-file { background: var(--pos-soft); color: var(--pos); }
+.kw .wfpill.src-ai { background: transparent; color: var(--ai); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ai) 45%, transparent); }
+.kw .wfpill.src-app { background: var(--hover); color: var(--muted); }
+.kw .obstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 2px 0 14px; }
+.kw .obstat { padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 1px; align-content: start; }
+.kw .obstat b { font: 600 20px "Geist Mono", ui-monospace, monospace; color: var(--ink); }
+.kw .obstat span { font-size: 12px; color: var(--muted); }
+.kw section.kwsec { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.kw .docbody > section.kwsec:first-child { border-top: 0; padding-top: 0; }
+.kw .kwsec > header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.kw .kwsec > header h3 { margin: 0; }
+.kw .kwsec > header .n { font: 500 12px "Geist Mono", monospace; color: var(--muted); }
+.kw .kwsec > header .m { font-size: 12.5px; }
+.kw .kwsec > header .linkbtn { margin-left: auto; font-size: 12.5px; }
+.kw .kwlist { display: grid; }
+.kw .kwi { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.kw .kwi .kwt { display: grid; gap: 2px; font-size: 13px; }
+.kw .kwi .kwt b { font-weight: 500; color: var(--ink); line-height: 1.45; }
+.kw .kwi.exec .kwt b { font-weight: 600; }
+.kw .kwi.app .kwt b { color: var(--muted); }
+.kw .kwi .kwt .m { font-size: 12px; }
+.kw .kwi .wfpill { justify-self: end; }
+.kw .kwi .acts { grid-column: 1; display: flex; gap: 6px; }
+.kw .kwi .acts .btn { height: 26px; font-size: 12px; }
+.kw .kwex { display: grid; grid-template-columns: 88px minmax(0, 1fr) 150px 96px; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2); }
+.kw .kwex .am { text-align: right; }
+.kw .obcase { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 8px 0 12px; display: grid; gap: 10px; }
+.kw .obcase > b { font-size: 14px; font-weight: 600; }
+.kw .obcase > .m { font-size: 12px; margin-top: -6px; }
+.kw .obcase .why { font-size: 13px; color: var(--ink-2); line-height: 1.5; margin: 0; }
+.kw .obcase .saved { display: none; font-size: 12.5px; color: var(--pos); align-items: center; gap: 6px; }
+.kw .obcase.answered .saved { display: flex; }
+.kw .kwprop { border-radius: 9px; padding: 9px 11px; background: var(--pos-soft); font-size: 12.5px; display: grid; gap: 3px; color: var(--ink); }
+.kw .kwprop small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kw .obopts { display: grid; gap: 6px; }
+.kw .kwgap .obopts { grid-template-columns: 1fr 1fr; }
+.kw .obopt { display: grid; grid-template-columns: 18px 1fr; gap: 1px 10px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; }
+.kw .obopt:hover { background: var(--hover); }
+.kw .obopt .rd { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line-2); margin-top: 2px; grid-row: span 2; }
+.kw .obopt b { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.kw .obopt span { font-size: 12.5px; color: var(--muted); }
+.kw .obopt .wfpill { margin-left: 6px; }
+.kw .obmap { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.kw .obmap td { padding: 7px 8px 7px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.kw .obmap td.m { color: var(--muted); font-size: 12px; }
+.kw .obmap tr.ask td { background: var(--warn-soft); }
+.kw .obmap tr.ask td:first-child { padding-left: 8px; border-radius: 8px 0 0 8px; }
+.kw .obmap tr.ask td:last-child { padding-right: 8px; border-radius: 0 8px 8px 0; }
+.kw .obz td.num { text-align: right; font-family: "Geist Mono", ui-monospace, monospace; white-space: nowrap; }
+.kw .obz tr.obzh td { font-size: 11.5px; padding-bottom: 4px; }
+.kw .obz tr td:first-child { padding-left: 8px; font-weight: 500; }
+.kw .obacts { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.kw .obacts .m { font-size: 12.5px; }
+.kw .kwlist > :last-child { border-bottom: 0; }
+
+/* The list: search, the «Neue Seite» button. */
+.kw .kwsearch { display: block; margin: -8px 0 16px; }
+.kw .kwsearch input { width: 100%; height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); font: 13px "Instrument Sans", system-ui, sans-serif; }
+.kw .kwsearch input:focus { outline: none; border-color: var(--accent); }
+.kw .kwsearch .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.kw .kwnew { margin: 14px 0 0; }
+
+/* Prose first: the notes, then what the app does by itself. */
+.kw .kwnotes, .kw .kwself, .kw .kwprops, .kw .kwdetails { margin-top: 18px; }
+.kw .docbody > :first-child { margin-top: 0; }
+.kw .kwnotes > header, .kw .kwself > header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.kw .kwnotes > header h3, .kw .kwself > header h3 { margin: 0; }
+.kw .kwnotes > header .linkbtn { margin-left: auto; font-size: 12.5px; }
+.kw .kwprose { font-size: 14.5px; line-height: 1.6; color: var(--ink); max-width: 68ch; }
+.kw .kwprose p { margin: 0 0 10px; }
+.kw .kwprose ul { margin: 0 0 10px; padding-left: 20px; }
+.kw .kwby { font-size: 12px; margin: 2px 0 0; }
+.kw .kwby .linkbtn { font-size: 12px; }
+.kw .kwnotes textarea { width: 100%; box-sizing: border-box; min-height: 200px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 10px; background: var(--bg); color: var(--ink); font: 14px/1.6 "Instrument Sans", system-ui, sans-serif; resize: vertical; }
+.kw .kwnotes textarea:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.kw .kwnacts { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.kw .kwnacts .m { font-size: 12px; }
+.kw .kwself { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--desk, var(--bg)); }
+.kw .kwself ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.kw .kwself li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.kw .kwself li:first-child { border-top: 0; }
+.kw .kwself li b { font-weight: 600; font-size: 13px; color: var(--ink); }
+.kw .kwself li .m { grid-column: 1; font-size: 12px; }
+.kw .kwself li .btn { grid-column: 2; grid-row: 1 / 3; height: 26px; font-size: 12px; }
+.kw .kwself li.off b { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line-2); }
+.kw .kwself > .m { margin: 0; font-size: 12.5px; }
+.kw .kwsugg { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; margin-top: 10px; padding: 9px 11px; border-radius: 9px; background: var(--accent-soft); font-size: 13px; color: var(--ink); }
+.kw .kwsugg > span { display: grid; gap: 2px; }
+.kw .kwsugg small { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kw .kwsugg .m { font-size: 12px; }
+.kw .kwsugg .btn { height: 26px; font-size: 12px; }
+
+/* Folded: the AI's proposals as one batch, and the details only the app needs. */
+.kw details.kwprops, .kw details.kwdetails { border-top: 1px solid var(--line); padding-top: 4px; }
+.kw details > summary { list-style: none; display: flex; align-items: baseline; gap: 8px; padding: 9px 0; cursor: pointer; font-size: 13.5px; color: var(--ink); }
+.kw details > summary::-webkit-details-marker { display: none; }
+.kw details > summary .chev { width: 13px; height: 13px; color: var(--faint); transition: transform .15s; align-self: center; }
+.kw details[open] > summary .chev { transform: rotate(90deg); }
+.kw details > summary b { font-weight: 600; }
+.kw details > summary .n { font: 500 12px "Geist Mono", monospace; color: var(--warn); }
+.kw details > summary .m { font-size: 12.5px; }
+.kw .kwprops ul { list-style: none; margin: 0 0 8px 21px; padding: 0; display: grid; }
+.kw .kwprops li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.kw .kwprops li > span { display: grid; gap: 2px; }
+.kw .kwprops li b { font-weight: 500; color: var(--ink); }
+.kw .kwprops li .m { font-size: 12px; }
+.kw .kwprops li .btn { height: 26px; font-size: 12px; }
+.kw .kwdetails h4, .kw .kwlink-g h4 { margin: 10px 0 4px 21px; font: 600 11px "Instrument Sans", system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); display: flex; gap: 6px; }
+.kw .kwdetails ul, .kw .kwdetails > p { margin: 0 0 6px 21px; padding-left: 16px; font-size: 12.5px; color: var(--ink-2); display: grid; gap: 3px; }
+.kw .kwdetails ul.app { color: var(--muted); }
+
+/* What the books link to the partner. */
+.kw .kwlinked { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; }
+.kw .kwlink-g h4 { margin-left: 0; }
+.kw .kwlink-g h4 .n { font-family: "Geist Mono", monospace; color: var(--muted); letter-spacing: 0; }
+.kw .kwlink-g ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.kw .kwlink-g li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+.kw .kwlink-g li a { color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kw .kwlink-g li a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.kw .kwlink-g li .mono, .kw .kwlink-g li a .mono { color: var(--muted); }
+.kw .kwlink-g > .m { font-size: 12px; }
+.kw .obcase.kwq { margin-top: 0; }

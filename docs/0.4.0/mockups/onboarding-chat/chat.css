@@ -1,0 +1,197 @@
+/* Design B: the switch as a conversation. Only the app's tokens; the cards reuse the app's classes
+   (.ruledraft, .rulepreview, .aiact, .qacts, .okline, .warnline, .srchead, .srcplain, .srccheck). */
+
+.obchat {
+  position: fixed; top: 14px; right: 14px; bottom: 14px; z-index: 40;
+  width: min(840px, calc(100vw - 600px)); min-width: 600px;
+  display: grid; grid-template-rows: auto auto 1fr auto;
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: 16px;
+  box-shadow: var(--shadow), 0 24px 60px -24px color-mix(in srgb, var(--ink) 35%, transparent);
+  overflow: hidden; transition: transform .35s ease, opacity .35s ease;
+}
+.obchat.peek { transform: translateX(calc(100% + 30px)); }
+.obchat.gone { transform: translateY(24px) scale(.98); opacity: 0; pointer-events: none; }
+
+.obhead { display: flex; align-items: center; gap: 12px; padding: 14px 20px 10px; }
+.obhead .face { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--ai); flex: 0 0 auto; }
+.obhead .face svg { width: 18px; height: 18px; stroke: var(--ai); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.obhead .who { display: grid; gap: 1px; margin-right: auto; }
+.obhead .who b { font: 700 15px "Hanken Grotesk", system-ui, sans-serif; color: var(--ink); }
+.obhead .who span { font-size: 12px; color: var(--muted); }
+
+.obrail { display: flex; gap: 4px; padding: 0 20px 12px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.obrail button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--faint); font: 500 12px "Instrument Sans", system-ui, sans-serif; white-space: nowrap; cursor: default; }
+.obrail button .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
+.obrail button.now { color: var(--ink); border-color: var(--accent); }
+.obrail button.now .dot { background: var(--accent); animation: obpulse 1.4s ease infinite; }
+.obrail button.done { color: var(--pos); border-color: color-mix(in srgb, var(--pos) 35%, var(--line)); background: var(--pos-soft); cursor: pointer; }
+.obrail button.done .dot { background: var(--pos); }
+.obrail button.done:hover { filter: brightness(.97); }
+@keyframes obpulse { 50% { opacity: .35; } }
+
+.obscroll { overflow-y: auto; scroll-behavior: smooth; }
+.obthread { max-width: 700px; margin: 0 auto; padding: 22px 24px 30px; display: flex; flex-direction: column; gap: 10px; }
+
+.obmsg { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; animation: obin .22s ease; }
+.obmsg.ai { display: flex; gap: 10px; align-self: flex-start; max-width: 100%; color: var(--ink); }
+.obmsg.ai > .bot { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 3px; color: var(--ai); stroke: var(--ai); }
+.obmsg.ai > .tx { display: grid; gap: 6px; }
+.obmsg.ai > .tx p { margin: 0; }
+.obmsg.me { align-self: flex-end; max-width: 75%; padding: 8px 12px; border-radius: 12px; background: var(--accent-soft); color: var(--ink); }
+.obmsg.me small { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.obmsg.typing { color: var(--muted); }
+.obmsg.typing .tx { display: inline-flex; gap: 4px; align-items: center; height: 22px; }
+.obmsg.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); animation: obdot 1s infinite; }
+.obmsg.typing i:nth-child(2) { animation-delay: .15s; }
+.obmsg.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes obdot { 50% { transform: translateY(-3px); opacity: .5; } }
+@keyframes obin { from { opacity: 0; transform: translateY(4px); } }
+
+.obind { margin-left: 26px; display: grid; gap: 8px; animation: obin .22s ease; }
+.obind > .qacts { margin-top: 0; }
+.obind .qacts .btn { cursor: pointer; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
+.obind .qacts .btn:not(.primary) { background: var(--bg); }
+.obind .qacts .btn small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.obind .qacts .btn.primary small { color: color-mix(in srgb, var(--on-accent) 80%, transparent); }
+.obind .qacts .btn.chosen { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); opacity: 1; }
+.obind .qacts .btn.chosen small { color: var(--muted); }
+.obind .qacts.answered .btn:not(.chosen) { display: none; }
+.obind .okline, .obind .warnline { margin: 0; }
+
+.obcard { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 14px 16px; display: grid; gap: 10px; font-size: 13px; color: var(--ink); }
+.obcard h4 { margin: 0; font: 600 11px "Instrument Sans", system-ui, sans-serif; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.obcard .rk { color: var(--muted); font-size: 12px; }
+.obcard .lead { font-size: 13.5px; }
+.obcard .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.obcard .aiact.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.obcard .aiact.primary:hover { background: var(--accent); filter: brightness(1.08); }
+.obcard .aiact.primary:disabled { background: var(--bg); border-color: var(--line-2); color: var(--faint); filter: none; }
+.obcard .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.obcard .linkbtn:hover { text-decoration: underline; }
+.obcard input { height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); font: 13px "Geist Mono", ui-monospace, monospace; }
+
+.obkv { display: grid; grid-template-columns: 150px 1fr auto; gap: 5px 12px; margin: 0; align-items: baseline; }
+.obkv dt { color: var(--muted); font-size: 12.5px; }
+.obkv dd { margin: 0; }
+.obkv .mono { font-family: "Geist Mono", ui-monospace, monospace; font-size: 12.5px; }
+
+.obbadge { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font: 500 11px "Instrument Sans", system-ui, sans-serif; white-space: nowrap; }
+.obbadge.ai { background: var(--accent-soft); color: var(--ai); }
+.obbadge.pos { background: var(--pos-soft); color: var(--pos); }
+.obbadge.warn { background: var(--warn-soft); color: var(--warn); }
+
+.obcheck { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.obcheck li { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 10px; padding: 9px 0; border-top: 1px solid var(--line); align-items: start; }
+.obcheck li:first-child { border-top: 0; }
+.obcheck li svg { width: 16px; height: 16px; margin-top: 1px; stroke: var(--ink-2); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.obcheck li b { font-weight: 600; }
+.obcheck li span.rk { grid-column: 2; }
+.obcheck li .obbadge { grid-row: 1; grid-column: 3; }
+.obcheck li.got svg { stroke: var(--pos); }
+.obcheck li.got b { color: var(--muted); }
+
+.obsrc .srchead { margin: 0; }
+.obsrc .srchead b { font-weight: 600; }
+.obsrc .srchead .mono { color: var(--muted); }
+.obsrc .srcpw { margin: 0; }
+.obsrc .srccheck { margin: 0; flex-direction: row; flex-wrap: wrap; }
+.obsrc .srclines { margin: 0; }
+.obsrc .srclines p { margin: 6px 0 0; color: var(--muted); }
+.obcard .found { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.obcard .found div { padding: 8px 10px; border-radius: 8px; background: var(--hover); display: grid; gap: 1px; }
+.obcard .found b { font: 600 17px "Hanken Grotesk", system-ui, sans-serif; }
+.obcard .found span { font-size: 11.5px; color: var(--muted); }
+.obbar { height: 4px; border-radius: 2px; background: var(--hover); overflow: hidden; }
+.obbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .55s ease; }
+
+.obways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.obways button { display: grid; gap: 2px; text-align: left; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; cursor: pointer; }
+.obways button:hover { background: var(--hover); }
+.obways button b { font-size: 12.5px; font-weight: 600; }
+.obways button span { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+
+.obdrop { display: grid; place-items: center; gap: 4px; padding: 20px; border: 1.5px dashed var(--line-2); border-radius: 12px; color: var(--muted); text-align: center; cursor: pointer; }
+.obdrop:hover, .obchat.dragging .obdrop { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.obdrop b { color: var(--ink); font-weight: 600; }
+.obsteps { margin: 0; padding-left: 20px; display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
+
+.obmail { display: grid; gap: 6px; padding: 10px 12px; border-radius: 8px; background: var(--hover); font-size: 12.5px; }
+.obmail .h { color: var(--muted); }
+.obmail p { margin: 0; white-space: pre-wrap; color: var(--ink); line-height: 1.5; }
+
+.obtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.obtable th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.obtable td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.obtable td.n, .obtable th.n { text-align: right; font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.obtable tr.off td { color: var(--warn); background: var(--warn-soft); }
+.obtable tr.sum td { font-weight: 600; border-bottom: 0; }
+.obq { display: flex; align-items: baseline; gap: 10px; }
+.obq b { font: 700 15px "Hanken Grotesk", system-ui, sans-serif; }
+.obq .obbadge { margin-left: auto; }
+.obwhy { padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 8px 8px 0; color: var(--ink); line-height: 1.5; }
+
+.obbin { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.obbin:first-of-type { border-top: 0; padding-top: 0; }
+.obbinh { display: flex; align-items: baseline; gap: 8px; }
+.obbinh b { font-size: 13.5px; font-weight: 600; }
+.obbinh .count { font: 500 12px "Geist Mono", ui-monospace, monospace; color: var(--muted); }
+.obrows { list-style: none; margin: 0; padding: 0; display: grid; }
+.obrow { display: grid; grid-template-columns: 18px minmax(150px, 1.3fr) 70px minmax(150px, 1.6fr) 90px; gap: 8px; align-items: baseline; width: 100%; padding: 6px 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; border-radius: 0; }
+.obrows li:first-child .obrow { border-top: 0; }
+.obrow:hover { background: var(--hover); }
+.obrow .chev { width: 12px; height: 12px; stroke: var(--muted); fill: none; stroke-width: 2; transition: transform .15s; }
+.obrow[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.obrow .ev { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11.5px; color: var(--muted); }
+.obrow .bk { color: var(--ink-2); }
+.obrow .sm { text-align: right; font-family: "Geist Mono", ui-monospace, monospace; font-size: 11.5px; }
+.obrow.kept .nm::after { content: " ✓"; color: var(--pos); }
+.obrows .ruledraft { margin: 2px 0 8px 26px; }
+.obrows .ruledraft[hidden] { display: none; }
+.obrare { display: flex; flex-wrap: wrap; gap: 4px; }
+.obrare span { padding: 1px 8px; border-radius: 999px; background: var(--hover); font-size: 11.5px; color: var(--ink-2); }
+.obsplit { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; }
+.obsplit i { display: block; background: var(--accent); }
+.obsplit i:nth-child(2) { background: color-mix(in srgb, var(--accent) 55%, var(--bg)); }
+.obsplit i:nth-child(3) { background: var(--faint); }
+.obmix { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr; gap: 6px 12px; align-items: center; font-size: 12.5px; }
+.obmix .rk { grid-column: 2; margin-top: -4px; }
+
+.obflag { display: grid; grid-template-columns: minmax(130px, 1fr) 1.5fr; gap: 4px 14px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.obflag:first-of-type { border-top: 0; }
+.obflag .nm { font-weight: 600; }
+.obflag s { color: var(--muted); }
+.obflag .now { color: var(--ink); }
+.obflag .why { grid-column: 2; color: var(--muted); }
+.obflag .aiact { grid-column: 2; justify-self: start; }
+
+.obsum { list-style: none; margin: 0; padding: 0; display: grid; }
+.obsum li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: baseline; }
+.obsum li:first-child { border-top: 0; }
+.obsum li .rk { grid-column: 1 / -1; }
+.obsum li > span:nth-child(2) { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+
+.obfoot { padding: 10px 20px 14px; border-top: 1px solid var(--line); }
+.obfoot .aibox { max-width: 700px; margin: 0 auto; flex-direction: row; align-items: flex-end; gap: 6px; }
+.obfoot textarea { flex: 1; resize: none; border: 0; outline: 0; background: none; color: var(--ink); font: 14px/1.45 "Instrument Sans", system-ui, sans-serif; padding: 5px 4px; height: 30px; }
+.obfoot textarea::placeholder { color: var(--faint); }
+.obfoot .ib { width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center; background: none; color: var(--ink-2); cursor: pointer; flex: 0 0 auto; }
+.obfoot .ib:hover { background: var(--hover); }
+.obfoot .ib.send { background: var(--accent); color: var(--on-accent); }
+.obfoot .ib svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.obfoot .hint { max-width: 700px; margin: 6px auto 0; font-size: 11.5px; color: var(--faint); }
+
+.obback { position: fixed; right: 22px; bottom: 22px; z-index: 41; display: none; }
+.obchat.peek ~ .obback { display: inline-flex; }
+.obback.btn { height: 38px; padding: 0 16px; border-radius: 999px; box-shadow: var(--shadow); }
+
+body:has(.obchat:not(.gone)) .topbar { display: none; }
+body:has(.obchat:not(.peek):not(.gone)) main section.detail { visibility: hidden; }
+.rulelist .obbadge { margin-right: 4px; }
+
+/* The Firma list fills in while the conversation runs. */
+.row.fset .a.unset { color: var(--faint); }
+.row.fset.flash { animation: obflash 1.6s ease; }
+@keyframes obflash { 0%, 30% { background: var(--pos-soft); box-shadow: inset 3px 0 0 var(--pos); } }
+.obland { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: var(--shadow); animation: obin .3s ease; }
+.obland svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; }
+.obland { pointer-events: none; }

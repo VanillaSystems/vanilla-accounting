@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umzug A and B</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --bg: #ffffff; --page: #eceff4; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --line: #e1e5ec; --accent: #0067b1; --on-accent: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151a23; --page: #0b0e14; --ink: #eef1f6; --ink-2: #b9c0cc; --muted: #8b93a3; --line: #262d3a; --accent: #6cb4f0; --on-accent: #0b1220; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--ink); font: 400 14px/1.5 "Instrument Sans", system-ui, sans-serif; display: grid; grid-template-rows: auto 1fr; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px 8px; }
+header h1 { margin: 0; font: 800 19px/1.2 "Hanken Grotesk", system-ui, sans-serif; margin-right: auto; }
+.seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line); }
+.seg button { height: 28px; padding: 0 12px; border: 0; border-radius: 7px; background: none; color: var(--ink-2); font: 500 13px "Instrument Sans", system-ui, sans-serif; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+header a { color: var(--accent); font-weight: 600; text-decoration: none; }
+header a:hover { text-decoration: underline; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 16px 16px; min-height: 0; transition: grid-template-columns .3s ease; }
+.cols[data-focus="a"] { grid-template-columns: 2.2fr 1fr; }
+.cols[data-focus="b"] { grid-template-columns: 1fr 2.2fr; }
+.col { display: grid; grid-template-rows: auto 1fr; gap: 8px; min-width: 0; min-height: 0; }
+.cap { display: grid; gap: 2px; }
+.cap b { font: 700 15px "Hanken Grotesk", system-ui, sans-serif; display: flex; align-items: baseline; gap: 8px; }
+.cap b span { font: 500 11px "Geist Mono", monospace; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.cap b a { margin-left: auto; font: 600 12.5px "Instrument Sans", system-ui, sans-serif; color: var(--accent); text-decoration: none; }
+.cap p { margin: 0; color: var(--ink-2); font-size: 13px; max-width: 70ch; }
+.frame { position: relative; width: 100%; height: 100%; min-height: 420px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.frame iframe { position: absolute; top: 0; left: 0; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; }
+@media (max-width: 900px) { .cols, .cols[data-focus] { grid-template-columns: 1fr; } .frame { height: 70vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Switching from another program: design A and design B</h1>
+  <span class="seg" role="group" aria-label="Width">
+    <button type="button" data-focus="" aria-pressed="true">Equal width</button>
+    <button type="button" data-focus="a" aria-pressed="false">A wider</button>
+    <button type="button" data-focus="b" aria-pressed="false">B wider</button>
+  </span>
+  <a href="onboarding/index.html">About A</a>
+  <a href="onboarding-chat/index.html">About B</a>
+</header>
+<div class="cols" id="cols">
+  <section class="col" aria-label="Design A">
+    <div class="cap">
+      <b><span>A</span>Screens with the AI column <a href="onboarding/prototype.html" target="_blank" rel="noopener">Open full size ↗</a></b>
+      <p>Own screens in Firma (plan, read, partners, questions, done). The AI asks in the usual narrow column on the right; a list on the left fills in with each fact's source. Click the screens and answers inside the frame.</p>
+    </div>
+    <div class="frame"><iframe src="onboarding/prototype.html" title="Design A: switch in screens" loading="lazy"></iframe></div>
+  </section>
+  <section class="col" aria-label="Design B">
+    <div class="cap">
+      <b><span>B</span>One conversation with the setup <a href="onboarding-chat/prototype.html" target="_blank" rel="noopener">Open full size ↗</a></b>
+      <p>Everything in one wide conversation panel, with the cards inside the conversation. Behind it the real Firma page fills in, and a rail at the top shows what is set up. Answer with the buttons or type.</p>
+    </div>
+    <div class="frame"><iframe src="onboarding-chat/prototype.html" title="Design B: switch as a conversation" loading="lazy"></iframe></div>
+  </section>
+</div>
+<script>
+const cols = document.getElementById('cols');
+// Each prototype renders at a laptop width of 1280 px and is scaled to its column; its height fills the column.
+const fit = (frame) => {
+  const f = frame.querySelector('iframe');
+  const k = frame.clientWidth / 1280;
+  f.style.transform = `scale(${k})`;
+  f.style.height = `${frame.clientHeight / k}px`;
+};
+const ro = new ResizeObserver((es) => es.forEach((e) => fit(e.target)));
+document.querySelectorAll('.frame').forEach((f) => ro.observe(f));
+document.querySelectorAll('[data-focus]').forEach((b) => b.addEventListener('click', () => {
+  if (b.closest('.seg')) {
+    cols.dataset.focus = b.dataset.focus;
+    document.querySelectorAll('.seg [data-focus]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }
+}));
+</script>
+</body>
+</html>

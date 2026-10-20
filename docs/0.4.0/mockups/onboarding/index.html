@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umzug · Mockups</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --line: #e7eaf0; --accent: #0067b1; --page: #eceff4; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 "Instrument Sans", system-ui, sans-serif; }
+.doc { max-width: 1180px; margin: 0 auto; padding: 48px 24px 120px; display: grid; gap: 28px; }
+h1 { font: 800 34px/1.1 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+h2 { font: 700 22px/1.2 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+p, li { color: var(--ink-2); max-width: 78ch; }
+p { margin: 0; }
+.shot { display: grid; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.frame { position: relative; width: 100%; aspect-ratio: 1440 / 900; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; container-type: inline-size; }
+.frame iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(calc(100cqw / 1440px)); pointer-events: none; }
+.shot a { color: var(--accent); font-weight: 600; }
+code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>Umzug aus einem anderen Programm · Mockups</h1>
+  <div class="shot"><h2>Clickable prototype</h2><p>The whole flow to click through, from the first question in the AI column to the first payments booked «wie 2025». The switch at the top picks the path: <b>per 1.1.</b> (a clean cut at New Year) or <b>im laufenden Jahr</b> (start in Q3, Q1 and Q2 filed from Bexio). The path also follows from the answer to «Ab wann soll die App buchen?». The dark bar jumps to any screen. Inside the screens, the answer buttons, the step list on the left, the main buttons, the expandable rows, the select-all box, sealing a quarter and the answers to the questions all work.</p><a href="prototype.html">Open the prototype →</a></div>
+  <p>Made from the real Firma and Buchungen pages of the demo workspace (Muster Kaffee GmbH), captured read-only, with only the new parts added by hand in the app's own class names and colour tokens. The story: Anna Muster runs the café on Bexio and switches either in January 2026 with her 2025 journal, or on 1 July 2026 with Q1 and Q2 already filed from Bexio by her Treuhänder. She is happy to let the AI do the legwork and give it access.</p>
+
+  <h2>The idea</h2>
+  <ul>
+    <li><b>Find out first, then ask.</b> The app looks up the UID register (legal form, VAT registration, address) and reads the first file it gets (program, single or double entry, fiscal year). Only what changes the import plan is asked, one question at a time with answer buttons, in the AI column. What is known fills a list on the left with its source (UID-Register, aus deiner Datei, deine Antwort), and each row can be answered there by hand too.</li>
+    <li><b>The plan is written for this person.</b> «Was wir von dir brauchen» lists exactly what these answers require, in this program's words. Nothing in the app is specific to Bexio: the AI writes the list, the export steps and the fetch code for the program it finds (ADR 0015).</li>
+    <li><b>«Wir holen es für dich» is the default.</b> In order of preference: the program's interface with one access key (the AI writes a one-time source in the workspace), an export file (the AI explains it by the program's own menu names), the app's own browser window (the person logs in, the source reads), the Treuhänder (the AI drafts the e-mail, the person sends it). Each is the existing source card: its reach in plain words, «Prüfen» to see what it would fetch, then «Holen».</li>
+    <li><b>Review only where it matters.</b> Fetching needs no review. The person looks closely at two things: a rule with the bookings that carry it, and a filed quarter before it is sealed.</li>
+    <li><b>A filed quarter is checked, then sealed.</b> On a mid-year switch the first half year comes in as the full journal. Each filed quarter is recomputed from it and compared with the return as filed, Ziffer by Ziffer. A difference is explained with the booking behind it and resolved before sealing. After sealing the quarter never changes (golden rule 1), and a later correction goes through the 0535.</li>
+    <li><b>History is evidence, not knowledge.</b> The 2025 journal is kept beside the books as examples. The AI and the classifier look things up in it and say so («wie 2025 gebucht»). Nothing in it binds the app on its own, and it never enters the books: they start on 1 January with the opening balances. On the mid-year path the first half year of 2026 does enter the books, and 2025 stays evidence.</li>
+    <li><b>A rule exists only once the person has seen its evidence and kept it.</b> Where a partner was booked the same way every time (at least 4×), the app drafts a rule on the existing rule card, with the bookings that carry it. Its source reads «Buchungen 2025, bestätigt am …».</li>
+    <li><b>Three bins per partner on one screen:</b> «Eindeutig» (a proposed rule, select all and keep), «Uneinheitlich» (no rule, one plain question), «Selten» (examples only, nothing to do).</li>
+    <li><b>Old mistakes are not learned.</b> A pattern that breaks a rule of the app (input tax without a receipt that shows Swiss VAT, a foreign service without reverse charge, input tax on a private purchase) is shown as «so nicht übernehmen», with the reason in one sentence. The 2025 books stay untouched.</li>
+    <li><b>Few questions, the most money and the most payments first,</b> one at a time, each skippable. A skipped question comes back at the next payment, not as a reminder.</li>
+    <li><b>Learning goes on while working.</b> A rare partner is booked «wie 2025» with «Immer so?» under it. Firma › Wissen shows where each rule came from.</li>
+    <li><b>Wissen, not Regeln.</b> What the app knows is more than booking rules: how it recognises a partner, where the receipt comes from, which document is valid proof, how payments line up with invoices, the cases the person decided, and what is still open. Firma › Regeln becomes Firma › Wissen, one page per business partner, with Regeln as one part of it and as a filter. Design: <code>docs/0.4.0/knowledge.md</code>.</li>
+    <li><b>The knowledge grows from the work.</b> The app measures where it could not go on alone, per step and per partner, and shows each gap with the one answer or rule that closes it. Agreeing cases are offered as one rule, a note the app could carry out is offered as a rule, a rule that stopped matching or contradicts a newer decision is shown for review. Before the VAT return the AI asks only the open questions, all at once. Nothing new binds the app until the person keeps it.</li>
+  </ul>
+
+  <div class="shot">
+    <h2>0 · Gespräch</h2>
+    <p>The switch starts as a conversation in the AI column, in Firma as a group «Umzug von Bexio» whose steps double as progress. The AI asks for the UID number and looks it up in the UID register: name, GmbH, address and the VAT registration fill the list on the left before anything is asked. Then it asks for any file from the old books. A Bexio journal export answers the program, double entry and the fiscal year, so two questions fall away. Without a file it asks the program (Bexio, Abacus, Banana, Excel, «Mein Treuhänder macht es») and single or double entry instead. Single entry means there is no journal to import: the app builds the year from bank statements and receipts. Then only the questions the register and the file cannot answer: the VAT method and period, per 1 January or in the running year, and who has the data. «Mein Treuhänder macht es» already answers the last one, so it is not asked again. The screen opens at the first question; the frame below is <code>0-gespraech.html#jan</code>, played to the end.</p>
+    <a href="0-gespraech.html#jan">Open the conversation →</a>
+    <div class="frame"><iframe src="0-gespraech.html#jan" title="0-gespraech" loading="lazy"></iframe></div>
+  </div>
+  <div class="shot">
+    <h2>0 · Gespräch, switch in the running year</h2>
+    <p>«Im laufenden Jahr» adds two questions: which quarters of 2026 are already filed, and how the first half year should come in. The AI recommends the full journal (every booking enters the books, each filed quarter is compared with its return, then sealed) and names the alternative in one sentence: account totals at 30 June are faster and enough for the annual accounts, but a later correction of Q1 or Q2 cannot be computed in the app. When the list is complete, «Plan ansehen» appears on both sides.</p>
+    <a href="0-gespraech.html#mitte">Open full size →</a>
+    <div class="frame"><iframe src="0-gespraech.html#mitte" title="0-gespraech-mitte" loading="lazy"></iframe></div>
+  </div>
+  <div class="shot">
+    <h2>1 · Was wir von dir brauchen</h2>
+    <p>The checklist written for these answers, each item with who fetches it: the chart of accounts, the 2025 journal (examples, never in the books), the balance sheet at 31.12.2025 for the opening, receipts optional, and the Q4 2025 return marked «nicht nötig» because it is still filed from Bexio. Below, «Wir holen es für dich»: one source card «Bexio: Umzug, einmal holen» the AI wrote for this switch. It shows its reach in the app's plain words (the Bexio interface, which data, runs once, writes nothing), the access key stored once, and the «Prüfen» result with counts. «Holen» fetches once and switches the source off. If the person would rather not hand over a key, «Lieber selbst exportieren?» opens the export steps by Bexio's menu names and a drop zone.</p>
+    <a href="1-plan.html">Open full size →</a>
+    <div class="frame"><iframe src="1-plan.html" title="1-plan" loading="lazy"></iframe></div>
+  </div>
+  <div class="shot">
+    <h2>1 · Was wir von dir brauchen, switch in the running year</h2>
+    <p>Two more items: the journal of 1 January to 30 June 2026, which enters the books, and the filed returns for Q1 and Q2. The Bexio card fetches 2026 too. A second card reads the filed returns from the ESTV ePortal in the app's own browser window: the person signs in there as always, the source downloads the two returns. If she has no ePortal access, the AI has drafted the e-mail to the Treuhänder; the app sends nothing itself, and the reply's PDFs come in through the receipts mailbox. The filed returns go to the year's <code>filings/</code> as filed, never regenerated.</p>
+    <a href="1-plan.html?weg=mitte">Open full size →</a>
+    <div class="frame"><iframe src="1-plan.html?weg=mitte" title="1-plan-mitte" loading="lazy"></iframe></div>
+  </div>
+  <div class="shot">
+    <h2>2 · Gelesen</h2>
+    <p>What came back, as numbers: 68 accounts, 1'184 bookings, 88 partners, 6 balances. The chart of accounts is taken as it is, with Bexio's numbers and names. The app only needs to know what five accounts stand for (bank, euro bank, input tax, VAT owed, the owner's account), and it recognises four of them. The fifth is one plain question in yellow. Bexio's VAT codes are translated to the app's codes with their counts; only one code with three bookings needs a decision. On the mid-year path the first number is the 612 bookings of 2026 that enter the books, and «Weiter» leads to the half-year check instead of the partners.</p>
+    <a href="2-gelesen.html">Open full size →</a>
+    <div class="frame"><iframe src="2-gelesen.html" title="2-gelesen" loading="lazy"></iframe></div>
+  </div>
+  <div class="shot">
+    <h2>2m · Erstes Halbjahr prüfen (switch in the running year)</h2>
+    <p>Each filed quarter recomputed from the imported journal, beside the return as filed, Ziffer by Ziffer (299, 399, 400, 405, 500). Q1: «stimmt mit der eingereichten Abrechnung überein» with «Als eingereicht versiegeln». Q2: «weicht in Ziffer 405 um CHF 12.40 ab». The AI names the booking behind it: a Digitec invoice Bexio booked on its invoice date in June, paid on 2 July; on cash basis its input tax belongs to Q3, which is why the filed return left it out. Two answers say what each does: book it on the payment date in Q3 (recommended; Q2 then matches) or keep it in Q2 (sealed with it, and the CHF 12.40 shows in the Q2 Korrekturabrechnung, form 0535). Sealing Q2 stays disabled until one is chosen. Q3 is open: the app books from 1 July, and corrections of Q1 and Q2 go there with the quarter they correct.</p>
+    <a href="2m-halbjahr.html?weg=mitte">Open full size →</a>
+    <div class="frame"><iframe src="2m-halbjahr.html?weg=mitte" title="2m-halbjahr" loading="lazy"></iframe></div>
+  </div>
+  <div class="shot">
+    <h2>3 · Geschäftspartner in three bins</h2>
+    <p>The core screen. «Eindeutig» lists the partners booked the same way every time, at least 4×, each with its count («12 von 12»), its booking and its total. Nothing is ticked: «Alle 8 auswählen» and «Übernehmen» are two clicks, so the person still makes the act of keeping them. Two partners in this bin are unanimous but wrong: they carry a warning sign, their booking is struck through, and they cannot be ticked. «Uneinheitlich» shows how a partner was split (Coop Pronto: 14× car, 6× café supplies, 3× private) and leads to the questions. «Selten» holds 75 partners with one or two bookings. They stay examples and need nothing.</p>
+    <a href="3-partner.html">Open full size →</a>
+    <div class="frame"><iframe src="3-partner.html" title="3-partner" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>4 · One proposed rule, opened</h2>
+    <p>Opening a row shows the rule card the app already uses for rules from a wish (the same «Neu» line, preview list and «Behalten»), here with the bookings of 2025 that carry it: the newest five and «und 7 weitere». It says how the app will recognise the partner (the name on the bank statement), that no other rule covers the same payments, and which source the rule will carry once kept.</p>
+    <a href="4-regel.html">Open full size →</a>
+    <div class="frame"><iframe src="4-regel.html" title="4-regel" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>5 · Nicht übernehmen</h2>
+    <p>Three patterns the app will not learn however often they were booked, each as «2025 gebucht» against «So bucht die App» and one plain reason: AliExpress with 8.1 % input tax but no receipt showing Swiss VAT, a Vienna design studio without reverse charge, and private Coop purchases with input tax. «Ich sehe es anders» turns into a question that gets recorded, not a silent override. A note says that 2025 stays as filed, and that whether to declare anything for 2025 is a matter for the Treuhänder.</p>
+    <a href="5-nicht-uebernehmen.html">Open full size →</a>
+    <div class="frame"><iframe src="5-nicht-uebernehmen.html" title="5-nicht-uebernehmen" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>6 · Fragen, one at a time</h2>
+    <p>One question per mixed partner, ordered by payments and money. Each shows how 2025 was split, then two or three answers that say what each one will become: a note for the AI that decides by the receipt (recommended where the bank text cannot tell the cases apart), a rule, or a rule that asks every time. After an answer, a green line says what was saved and with which source. «Überspringen» is always there, and a skipped question comes back at the next payment of that partner.</p>
+    <a href="6-fragen.html">Open full size →</a>
+    <div class="frame"><iframe src="6-fragen.html" title="6-fragen" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>7 · Fertig</h2>
+    <p>What the app now knows, each item with its source as a badge: 8 rules from the 2025 bookings that you confirmed, 3 answers, 3 patterns not learned, and 1'184 examples that never count as rules on their own. Then what it will still ask: rare and new partners get a proposal to confirm. Last, the opening balances read from the 31.12.2025 balance sheet, with «Übernehmen» into Firma › Eröffnung 2026, which already exists and keeps them editable until the year is closed. On the mid-year path a section «Erstes Halbjahr 2026» says which quarters are sealed and why (<code>7-fertig.html?weg=mitte</code>).</p>
+    <a href="7-fertig.html">Open full size →</a>
+    <div class="frame"><iframe src="7-fertig.html" title="7-fertig" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>8 · Die ersten Zahlungen</h2>
+    <p>A real entry page (Buchungen), shown for the 1.1. path (its payment is dated May 2026, which on the mid-year path lies in the imported half year). Vistaprint was a rare partner, so no rule booked it. The AI booked it from the 2025 example and the receipt, and says so in the margin: «Gebucht wie 2025», with both dates, and that the receipt shows 8.1 % Swiss VAT. Below it, «Immer so?» offers the rule. «Als Regel zeigen» opens the same rule card with the payments it would match. The margin, which the app normally fades until hover, stays fully visible while an offer is in it.</p>
+    <a href="8-erste-zahlungen.html">Open full size →</a>
+    <div class="frame"><iframe src="8-erste-zahlungen.html" title="8-erste-zahlungen" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>9 · Wissen › Regeln, with sources</h2>
+    <p>The existing rules list, each rule now with a badge for where it came from: «aus Buchungen 2025» (confirmed during the switch), «deine Antwort», «aus «Immer so?»», «von Hand». The section is renamed Wissen; the rules list is its filter «Regeln», beside Geschäftspartner, Firma, Hinweise, Fälle and Lücken. The 2025 journal keeps a row of its own, «Beispiele 2025», so the evidence stays findable.</p>
+    <a href="9-regeln.html">Open full size →</a>
+    <div class="frame"><iframe src="9-regeln.html" title="9-regeln" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>10 · Firma › Wissen</h2>
+    <p>Everything the app and the AI know, per business partner. Each row shows what is known about the partner (Regel, Hinweise, Fälle, Belege, Beschaffung, Vertrag; dashed when it comes from the app's public layer), where it came from, and whether a question or a gap is open. Above the list, the automation of the quarter as plain facts: statements imported, receipts matched, payments booked without the person, and the number of gaps. Below it, what holds for the whole company (what counts as private, the company vehicle, the receipts mailbox) and a note on the app's own layer. «Wissen ansehen» on Fertig leads here.</p>
+    <a href="10-wissen.html">Open full size →</a>
+    <div class="frame"><iframe src="10-wissen.html" title="10-wissen" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>11 · One partner: Grünkaffee Muster AG</h2>
+    <p>The partner's page, a dossier in sections: Offene Fragen (answered in place: the answer is written into the partner's knowledge as a note or a case), Erkennung, Konten &amp; MWST, Regeln (the app carries them out: «Ändern», «Ausschalten»), Hinweise für die KI, Fälle, Belege (valid proof against supporting documents), Beschaffung (where the receipt comes from, with the portal steps folded in), Zahlungen, Kontakt &amp; Vertrag, and Beispiele from the 2025 journal, which are evidence and never a rule. Every item has its source badge. A proposal of the AI is outlined and offers «Bestätigen» and «Verwerfen».</p>
+    <a href="11-partner.html">Open full size →</a>
+    <div class="frame"><iframe src="11-partner.html" title="11-partner" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>12 · Wissenslücken</h2>
+    <p>How the knowledge grows. Per step (import, receipts, booking, VAT return), how much ran without the person and the most frequent reason it did not. Then the gaps ranked by how often and how much the person stepped in, each with the one thing that closes it: 12 Coop questions answered the same way become one rule; a note in sentences that the app can execute becomes two rules; three cases decided alike become a rule; a rule that contradicts a newer decision is offered changed; a rule that stopped matching gets its recognition extended. Before the Q3 return the AI checks the quarter against the knowledge and asks the four open questions in one batch. A fact, never a reminder.</p>
+    <a href="12-luecken.html">Open full size →</a>
+    <div class="frame"><iframe src="12-luecken.html" title="12-luecken" loading="lazy"></iframe></div>
+  </div>
+
+  <h2>Open questions</h2>
+  <ul>
+    <li><b>Where the switch lives.</b> Here it is a group in Firma, opened by the conversation. It could also be the first screen of the desktop setup, which already asks whether the firm is new or switching (<code>desktop.q.start</code>). Firma keeps it reachable later, for instance when the Treuhänder sends the export a week afterwards.</li>
+    <li><b>The threshold for «Eindeutig».</b> 4 identical bookings is a guess. Monthly partners pass easily, quarterly ones only just.</li>
+    <li><b>Where the examples live.</b> The 2025 journal is outside the books, read only. It needs a place in the workspace (a folder of its own beside <code>transactional-data/</code>) and its own line in <code>LAYOUT</code>.</li>
+    <li><b>The UID register lookup.</b> The public UID register has a web service (UID-Webservice of the BFS); whether the app may call it directly, and whether the VAT registration is in the same answer, needs checking. Method and period are not in it, which is why they are asked.</li>
+    <li><b>How far access goes.</b> These owners will hand the AI an access key without hesitation. The mockup still shows the source card with «Prüfen» before «Holen» and switches the source off after one run. Is a one-time source the right shape, or should it stay as a live source until the year is closed (for receipts the Treuhänder adds later)?</li>
+    <li><b>Interface and portal facts.</b> The Bexio interface (api.bexio.com, an access key the owner creates), its paths for accounts, journal, taxes and files, the ESTV ePortal address and whether it offers the filed returns as download are taken from memory and must be checked before anything is built. The app must not grow a Bexio branch: the AI writes these sources in the workspace.</li>
+    <li><b>Invoice date against payment date.</b> Programs that book creditor invoices on the invoice date (Bexio with Kreditoren) put input tax into the wrong quarter for a cash-basis firm. The half-year check shows it per quarter, but the import should probably take the payment date from the start, and say so.</li>
+    <li><b>Changing an imported quarter before sealing.</b> «Mit dem Zahlungsdatum übernehmen» changes the import of a quarter that is filed but not yet sealed, so that the books match the return. That reads golden rule 1 as «the books must say what was filed». Confirm this, and whether a difference whose cause stays unknown may be sealed at all.</li>
+    <li><b>Opening balances on a mid-year switch.</b> With the full journal the books start on 1 January with the 31.12.2025 balance, and the switch date is only where the app starts booking. With account totals only, the opening is at the switch date, and the app's opening (one per year, <code>config.openingBalances</code>) would need a date other than 1 January, or the totals become one summary entry per account for the first half year. Which one?</li>
+    <li><b>Where the conversation lives.</b> It is in the AI column of Firma. The desktop setup also asks new or switching first (<code>desktop.q.start</code>); the conversation could start there and continue here.</li>
+    <li><b>Bexio export details.</b> The Bexio codes shown (UN81, VB81, …) and the export steps are placeholders until checked against a real Bexio export.</li>
+    <li><b>Partner file or folder.</b> The design keeps one <code>&lt;id&gt;.yaml</code> per partner and adds an <code>&lt;id&gt;.md</code> for long procedures. A folder per partner would also hold a contract PDF. Which one?</li>
+    <li><b>Measuring the gaps.</b> The automation figures need each run to record who decided an item (rule, case, note, AI from an example, person). The index records the origin of an entry today, not why the AI asked. Where that record lives is open.</li>
+    <li><b>When a pattern becomes a rule proposal.</b> «3 cases decided alike» and «9 of 12 answers» are guesses for the threshold, like the 4 bookings of «Eindeutig».</li>
+    <li><b>Company facts.</b> A new <code>knowledge/company.yaml</code>, or <code>facts:</code> in <code>belege.workspace.yaml</code>.</li>
+  </ul>
+</div>
+</body>
+</html>

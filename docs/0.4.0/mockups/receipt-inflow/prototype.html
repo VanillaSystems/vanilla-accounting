@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Belegeingang · Prototyp</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --ink: #0b1220; --muted: #8b93a3; --bar: #0b1220; --chip: #1c2433; --on: #ffffff; --accent: #4ea1e6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bar); font: 13px/1 "Instrument Sans", system-ui, sans-serif; }
+body { display: grid; grid-template-rows: 40px 1fr; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--on); }
+.bar .name { font: 500 11px "Geist Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+.bar button { height: 26px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--chip); background: var(--chip); color: var(--on); font: inherit; cursor: pointer; }
+.bar button:hover { border-color: #3a4558; }
+.bar button[aria-pressed="true"] { background: var(--on); color: var(--ink); border-color: var(--on); }
+.bar .sep { width: 1px; height: 18px; background: var(--chip); margin: 0 4px; }
+.bar .hint { margin-left: auto; color: var(--muted); font-size: 12px; }
+iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div class="bar" role="toolbar" aria-label="Prototyp">
+  <span class="name">Prototyp</span>
+  <button type="button" data-state="blank" aria-pressed="true">Leer · erster Start</button>
+  <button type="button" data-state="populated" aria-pressed="false">Eingerichtet</button>
+  <button type="button" data-state="problem" aria-pressed="false">Mit Problem</button>
+  <span class="sep"></span>
+  <button type="button" data-state="again">Von vorn</button>
+  <span class="hint" id="hint">Tipp: «Mit KI einrichten» klicken</span>
+</div>
+<iframe id="app" src="app.html" title="Vanilla Accounting"></iframe>
+<script>
+const frame = document.getElementById('app');
+let current = 'blank';
+const hints = { blank: 'Tipp: «Mit KI einrichten» oder «Handy-App» klicken', populated: 'Tipp: eine Datei auf «Hierher ziehen» ziehen · «Handy» → Foto simulieren · «Belege holen»', problem: 'Tipp: «Automatisch» aufklappen, «Letzter Lauf» öffnen · «Handy» einschalten' };
+document.querySelectorAll('[data-state]').forEach((b) => b.addEventListener('click', () => {
+  const s = b.dataset.state === 'again' ? current : b.dataset.state;
+  current = s;
+  document.querySelectorAll('[data-state]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.state === s)));
+  document.getElementById('hint').textContent = hints[s];
+  frame.contentWindow.postMessage({ state: s }, '*');
+}));
+window.addEventListener('message', (e) => {
+  if (!e.data || !e.data.reached) return;
+  current = e.data.reached;
+  document.querySelectorAll('[data-state]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.state === current)));
+  document.getElementById('hint').textContent = hints[current];
+});
+</script>
+</body>
+</html>

@@ -30,7 +30,7 @@ without asking which one it has in front of it.
 | **Works with** | the Mac app, and Claude Desktop with Cowork, connected to the app through its plugin (MCP) | the same, plus command-line tools: Claude Code or Codex in a terminal, the `vanilla` CLI, `npm` scripts, git |
 | **Talks to the model** | in Claude Desktop: chat, attached files, dictation | in Claude Desktop or in a terminal agent; the app's own model steps run through the `claude` CLI |
 | **Sets up** | by double-click: the app, the plugin, a folder for the books | anything the docs describe, including a clone of the app |
-| **Never needs** | a terminal, git, `npm`, a configuration file, an API key | (nothing is closed to them) |
+| **Never needs** | a terminal, git, `npm`, a configuration file, an API key, mail server settings (IMAP or POP server, port, app password, a filter written in a mail provider's search syntax) | (nothing is closed to them) |
 
 Rules:
 
@@ -39,6 +39,18 @@ Rules:
   CLI is a second door to the same commands
   ([ADR 0005](../adr/0005-agents-command-registry-cli-mcp.md),
   [ADR 0006](../adr/0006-desktop-shell.md)).
+- **Find out first, then propose what fits.** Before the app or its AI proposes how to do
+  something, it finds out what the person actually has: from what it can see itself (the
+  computer, the programs on it, the company's mail domain, where earlier receipts came from) and
+  then from a few plain questions («Wo liest du deine Mails?»). It proposes only what fits that
+  situation, the way the non-technical kind can follow without help first and the technical way
+  only as an alternative, and builds it from there. It doesn't recommend a program the person
+  may not use. On a Mac, the Mail app is a likely guess and may be offered as one («Liest du
+  deine Mails in Apple Mail?»); a stronger sign (another program set as the Mac's mail program, a
+  webmail domain, the person's answer) wins over that guess. For mail, the mailbox's own server
+  (IMAP or POP) is the preferred way when the person has its access data, for example from their
+  IT person or provider, because it collects even when the Mac is off; the app asks for them in
+  plain words and, without them, offers the other ways.
 - **Same rights at both levels.** The skill level changes how a person works, never what they
   may do: the table below holds for both kinds.
 - **The model runs on the person's own Claude subscription at both levels.** The non-technical
