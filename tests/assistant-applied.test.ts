@@ -63,7 +63,15 @@ test('r8f-47, r8f-48: the prompt leaves made-or-held to the app and makes a gene
   assert.doesNotMatch(prompt, /Write such an answer as a proposal/, 'the model no longer guesses whether the app will hold its block');
   assert.match(prompt, /the app's decision[^.]*says which under your answer/);
   assert.match(prompt, /never that it is done, never that nothing changes before «Übernehmen», and never name «Übernehmen» or a confirmation at all/);
-  assert.match(prompt, /never an English sentence such as «Let me look at …»/, 'the answer is in the person\'s language from the first word (r10f-36)');
+  assert.match(prompt, /Also what you say while you read or search is in German, never a sentence in another language/, 'the answer is in the person\'s language from the first word (r10f-36)');
   assert.match(prompt, /every booking of the open period the wish holds for/);
   assert.match(prompt, /Say that a payment is not booked only after you read its bookings/);
+});
+
+test('an English chat is told to answer in English: the German examples are said in English, no rule forbids English, buttons carry their English names', () => {
+  const prompt = assistantSystem('en', '2850', '');
+  assert.match(prompt, /Also what you say while you read or search is in English, never a sentence in another language/);
+  assert.match(prompt, /The examples in these instructions and in the guides are quoted in German: say what they mean in English/);
+  assert.doesNotMatch(prompt, /never an English sentence/, 'a German-minded rule told the English chat to avoid English, so it answered in German');
+  assert.doesNotMatch(prompt, /«Freigegeben»|«Eingereicht»|«Zurück»|under Aufgaben|booking in Buchungen/, 'buttons and places by their English names');
 });

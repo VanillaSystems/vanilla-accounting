@@ -93,7 +93,7 @@ function pngExif(view: DataView): number | undefined {
   return undefined;
 }
 
-async function heicToJpeg(image: Uint8Array): Promise<Uint8Array> {
+export async function heicToJpeg(image: Uint8Array): Promise<Uint8Array> {
   const dir = mkdtempSync(join(tmpdir(), 'heic-'));
   try {
     writeFileSync(join(dir, 'in.heic'), image);

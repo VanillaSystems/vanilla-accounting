@@ -8,6 +8,7 @@ import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
 import type { Choice, Question, QuestionTarget } from '../questions/model.js';
 import type { ReportSpec } from '../reports/spec.js';
 import type { ReportResult } from '../reports/result.js';
+import type { Attachment } from './attachment.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
@@ -82,7 +83,22 @@ export type WorkspaceChange =
   | { kind: 'dropInvoiceDraft'; id: string; customer?: string }
   /** A question to the owner the AI cannot decide (src/server/questions.ts); its undo withdraws it. */
   | { kind: 'question'; on: QuestionTarget; text: string; choices?: Choice[]; to?: string }
-  | { kind: 'withdrawQuestion'; id: string };
+  | { kind: 'withdrawQuestion'; id: string }
+  /**
+   * «Postfach verbinden» from the sidebar: a mailbox source drafted as Firma › Quellen drafts it
+   * (src/platform/sources/mail-setup.ts), waiting to be switched on; `host` is filled from the
+   * domain's MX records when the answer names none. Never a password: the card takes it.
+   */
+  | { kind: 'mailbox'; address: string; host?: string; account?: string; label?: string }
+  /** The undo of a mailbox drafted: its folder, its password and its switch go. */
+  | { kind: 'dropMailbox'; id: string }
+  /**
+   * A source the AI wrote with the person in data/draft/sources/<id>/ (src/platform/sources/draft.ts),
+   * taken into the workspace, waiting to be switched on. Never a secret in its files.
+   */
+  | { kind: 'source'; id: string }
+  /** The undo of a source taken in: the folder as it was before (`previous`), or gone with its switch and secrets. */
+  | { kind: 'dropSource'; id: string; previous?: Record<string, string> };
 
 /**
  * What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's
@@ -114,6 +130,10 @@ export interface ChangeNote {
   failed?: string;
   /** The booking now claims input tax at a rate that no receipt of its payment shows. */
   noReceipt?: boolean;
+  /** The mailbox source drafted, or the one that holds the address already (`existing`, nothing written), for its card. */
+  mailbox?: { id: string; existing?: boolean };
+  /** The source taken in from the AI's draft, for its card; `replaced`: it changed a source the workspace held. */
+  source?: { id: string; label?: { en: string } & Record<string, string>; replaced?: boolean };
   /** A report's run for its card: its first rows, and the totals of all of them (src/reports/run.ts previewOf). */
   report?: ReportResult;
 }
@@ -154,10 +174,22 @@ export interface MadeChange {
 }
 
 /** POST /api/assistant. Without `conversation` a new one starts. */
+/**
+ * Why a button started the conversation («Mit KI einrichten»: setting up receipt collection). A
+ * conversation with a purpose starts without the page's reference and gets only its own context;
+ * the AI stays on it (src/assistant/claude.ts). Kept with the conversation.
+ */
+export type Purpose = 'collection-setup';
+export const PURPOSES: readonly Purpose[] = ['collection-setup'];
+
 export interface AssistantSend {
   conversation?: string;
+  /** Only on a conversation's first message; later ones take the conversation's own. */
+  purpose?: Purpose;
   text: string;
   context: ContextRef[];
+  /** The uploads the message carries (POST /api/assistant/attachments), by id. */
+  attachments?: string[];
   /** The UI's language: the AI answers in it. */
   language: string;
 }
@@ -165,7 +197,7 @@ export interface AssistantSend {
 export interface ToolUse { name: string; detail: string; denied?: boolean }
 
 export type Turn =
-  | { role: 'me'; text: string; at: string; context: ContextRef[] }
+  | { role: 'me'; text: string; at: string; context: ContextRef[]; attachments?: Attachment[] }
   | {
     role: 'ai'; text: string; at: string; tools: ToolUse[]; changes?: MadeChange[]; refused?: string; refusal?: ApiRefusal; error?: string; done: boolean;
     /** Changes the app holds for the person's «Übernehmen» instead of making them (HeldChanges). */
@@ -179,6 +211,7 @@ export interface Conversation {
   id: string;
   title: string;
   at: string;
+  purpose?: Purpose;
   session?: string;
   turns: Turn[];
 }

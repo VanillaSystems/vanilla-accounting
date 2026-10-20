@@ -23,7 +23,7 @@ interface Place {
 }
 
 export const AREA_PLACES: { readonly [A in AreaId]: Place } = {
-  receipts: { does: 'the receipts and supplier invoices: files dropped here (PDFs, photos) are read, matched to their payment and booked; each shows its facts, its payment and its booking; a possible duplicate asks «{drop.twin.same}»', kinds: ['receipt', 'link', 'unlink', 'receiptKind'] },
+  receipts: { does: 'the receipts and supplier invoices: files dropped here (PDFs, photos) are read, matched to their payment and booked; each shows its facts, its payment and its booking; a possible duplicate asks «{drop.twin.same}»; above the list, the ways receipts come in: dragging files, the phone (paired in {area.company} › {company.phone}), and the automatic collection from connected sources (a mailbox is connected in {area.company} › {company.sources}, or by you) with «{inflow.fetch}» and its last run', kinds: ['receipt', 'link', 'unlink', 'receiptKind'] },
   invoices: { does: 'the company\'s own invoices to its customers: N writes a new draft (customer, lines with quantity, unit, price, VAT rate); a draft is issued (its number, a PDF with its payment slip), sent by e-mail or downloaded, reminded, cancelled or credited; the customers with address, language and payment term; incoming payments are matched to open invoices', kinds: ['invoiceDraft'] },
   bank: { does: 'the bank statements per account (an XML or PDF statement dropped here), their balance checked; each payment with its booking' },
   journal: { does: 'the bookings: accounts, VAT code, amount, date, text; N adds a booking by hand; filtered by VAT code', kinds: ['entry', 'newEntry', 'deleteEntry'] },
@@ -43,10 +43,11 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   'invoice-layout': { does: 'how invoices look and read: font, colour, logo, envelope window, shown elements, the payment term in days, and per language (de, fr, it, en) the text above and below the table and the e-mail', kinds: ['invoicing'] },
   mail: { does: 'the mailbox the invoices are sent from' },
   sources: {
-    does: 'where receipts come from: mailboxes and web logins. The person connects a mailbox here with «{sources.addMailbox}» (its address, IMAP server, login and app password), checks it with «{sources.check}», which lists the recent mails it would read, and switches it on with «{sources.approve}»; you cannot connect one, and never ask for or take a password in the chat. '
+    does: 'where receipts come from: mailboxes and web logins. The person connects a mailbox here with «{sources.addMailbox}» (its address, IMAP server, login and app password), checks it with «{sources.check}», which lists the recent mails it would read, and switches it on with «{sources.approve}»; any source shows what it may reach, «{sources.preview}» runs it without delivering, and «{sources.signIn}» opens the own window of a browser source, where the person signs in. You connect one too: "mailbox" in your block drafts a mailbox as that form does, "source" takes a source you wrote with the person (any channel) into the sources of the company; its card under your answer has the password or key field, «{sources.check}» or «{sources.preview}» and «{sources.approve}»; never ask for or take a password in the chat. '
       + (sourcesRunHere()
-        ? 'Once switched on, Automatisierung fetches its attachments daily'
-        : 'This is the Mac app, which does not fetch mail by itself yet (the page says so): until an update brings it, the person drags invoices from the mailbox into Belege'),
+        ? 'Once switched on, a mailbox is fetched daily: {area.automation} checks every hour which sources are due, and «{inflow.fetch}» fetches at once'
+        : 'This is the Mac app: it fetches through the Mail app of this Mac (a source binding the app\'s Mail code); a mailbox\'s server and a source\'s own code are fetched by the app started on a computer with npm start, and meanwhile the person drags invoices into {area.receipts}'),
+    kinds: ['mailbox', 'source'],
   },
   rules: { does: 'the company\'s rules, each in plain words with where it came from and how many payments it booked; «{rules.switchOff}» and «{rules.delete}» with an undo. A rule you draft (AGENTS.md, "Rules the app carries out") shows as a card under your answer: the person keeps it with «{rules.draft.keep}» or drops it with «{rules.draft.discard}»; a rule you take out asks «{rules.draft.remove}» there. That one click is all the person does; until then the rule does nothing' },
   phone: { does: 'receipts from the phone: switch on, scan the QR code with the iPhone app to pair; a new code locks out old phones' },

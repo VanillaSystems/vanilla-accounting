@@ -12,6 +12,8 @@ import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationS
 import { ChangesError, changesIn, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
+import { attachmentsNote, keepAttachments } from './attachments.js';
+import type { Attachment } from '../types/attachment.js';
 import { wordsIn } from '../export/texts.js';
 import { strayFigures } from '../reports/figures.js';
 import { accountsOf as chartOf } from '../workspace/reads.js';
@@ -66,18 +68,19 @@ export class RefusedChanges extends Error {
  * the person now (`waiting`, src/server/open-work.ts), its answer streamed to `onEvent` and stored
  * at the end. The changes to the books the answer asks for are applied before its `done`.
  */
-export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, { map, waiting }: { map: string; waiting: string }, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
+export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, { map, waiting, attachments = [] }: { map: string; waiting: string; attachments?: Attachment[] }, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
   const at = now().toISOString();
   const c: Conversation = (send.conversation && readConversation(ws, send.conversation))
-    || { id: randomUUID(), title: send.text.trim().replace(/\s+/g, ' ').slice(0, 60), at, turns: [] };
+    || { id: randomUUID(), title: send.text.trim().replace(/\s+/g, ' ').slice(0, 60), at, ...(send.purpose ? { purpose: send.purpose } : {}), turns: [] };
   const last = c.turns.at(-1);
-  const me: Turn = { role: 'me', text: send.text, at, context: send.context };
+  const paths = keepAttachments(ws, c.id, attachments);
+  const me: Turn = { role: 'me', text: send.text, at, context: send.context, ...(attachments.length ? { attachments } : {}) };
   const ai: Extract<Turn, { role: 'ai' }> = { role: 'ai', text: '', at, tools: [], done: false };
   c.turns.push(me, ai);
   c.at = at;
   store(ws, c);
   onEvent({ type: 'conversation', id: c.id });
-  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(last?.role === 'ai' && last.held ? [heldNote(last.held.status)] : []), waiting]);
+  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(last?.role === 'ai' && last.held ? [heldNote(last.held.status)] : []), waiting, ...(attachments.length ? [attachmentsNote(attachments, paths)] : [])]);
   let done: AssistantEvent | undefined;
   await callClaude({
     ws, send, map, session: c.session, prompt, signal,

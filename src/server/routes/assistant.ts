@@ -4,17 +4,21 @@
  *   GET  /api/assistant        the conversations, newest first
  *   GET  /api/assistant/:id    one conversation with its turns
  *   POST /api/assistant        an AssistantSend → the answer's events
+ *   POST /api/assistant/attachments?name=…   a file's bytes for the next message → its Attachment
+ *   DELETE /api/assistant/attachments/:att   an upload taken off before it was sent
+ *   GET  /api/assistant/:id/attachments/:att a sent attachment's file
  */
 import { randomUUID } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { Router, type Response } from 'express';
+import express, { Router, type Response } from 'express';
 import { RequestError, WS, readBooks, refusalOf, reopenWorkspace, updateBooks } from '../books.js';
 import { listConversations, readConversation, RefusedChanges, sendMessage, settleHeld, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
-import { isActionChange, isBookChange, isWorkspaceChange, type ActionChange, type AssistantEvent, type AssistantSend, type BookChange, type ContextRef, type MadeChange } from '../../types/assistant.js';
+import { PURPOSES, isActionChange, isBookChange, isWorkspaceChange, type Purpose, type ActionChange, type AssistantEvent, type AssistantSend, type BookChange, type ContextRef, type MadeChange } from '../../types/assistant.js';
 import type { Books } from '../../books/store.js';
 import { applyAnswer, applyChange, relinked, unbookedPayments } from '../edits.js';
-import { applyWorkspaceChange } from '../workspace-edits.js';
+import { applyWorkspaceChange, withMailHosts } from '../workspace-edits.js';
+import { collectionNow } from '../collection-now.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import { heldRows, holdReasons, withoutProof } from '../../assistant/held.js';
 import { appMap } from '../app-map.js';
@@ -29,6 +33,8 @@ import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
 import { filing } from '../../engines/index.js';
 import { factsRefusal, refused, runSpec } from './reports.js';
 import { previewOf } from '../../reports/run.js';
+import { AttachmentError, attachmentFile, dropPending, findAttachments, saveAttachment } from '../../assistant/attachments.js';
+import { ATTACHMENT_MAX_MB } from '../../types/attachment.js';
 
 export const router = Router();
 
@@ -42,9 +48,12 @@ function sendOf(body: unknown): AssistantSend {
   if (context.length > 12 || !context.every((r): r is ContextRef => !!r && KINDS.has(r.kind) && typeof r.id === 'string' && typeof r.label === 'string')) {
     throw new RequestError(400, 'context: Verweise mit kind, id und label.');
   }
+  const attachments = Array.isArray(b.attachments) ? b.attachments : [];
+  if (attachments.length > 10 || !attachments.every((a): a is string => typeof a === 'string')) throw new RequestError(400, 'attachments: höchstens 10 Ids.');
   return {
-    text: text.slice(0, 20_000), context,
+    text: text.slice(0, 20_000), context, ...(attachments.length ? { attachments } : {}),
     ...(typeof b.conversation === 'string' && b.conversation ? { conversation: b.conversation } : {}),
+    ...(PURPOSES.includes(b.purpose as Purpose) ? { purpose: b.purpose as Purpose } : {}),
     language: typeof b.language === 'string' ? b.language : 'de',
   };
 }
@@ -66,19 +75,58 @@ router.get('/api/assistant/:id', (req, res) => {
   res.json(c);
 });
 
-/** What waits under Aufgaben now: the questions, the workflows' tasks with the rule that held each, the payments without a booking. */
-function waitingNow(language: string): string {
+/**
+ * What waits under Aufgaben now (the questions, the workflows' tasks with the rule that held each,
+ * the payments without a booking), and how receipts come in now. A conversation with a purpose gets
+ * only its own context, so the AI has nothing unrelated to bring up.
+ */
+async function waitingNow(language: string, purpose: Purpose | undefined): Promise<string> {
+  if (purpose === 'collection-setup') return [PURPOSE_NOTE[purpose], await collectionNow(WS, language, readBooks().receipts)].join('\n\n');
   const runs = new Map(engine().runs().map((r) => [r.id, r]));
   const tasks = automationView().tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
-  return openWork(WS, readBooks(), tasks, language);
+  const books = readBooks();
+  return [openWork(WS, books, tasks, language), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
 }
+
+const PURPOSE_NOTE: Record<Purpose, string> = {
+  'collection-setup': 'This conversation\'s purpose: setting up how receipts come in (the person started it with «Mit KI einrichten»). Stay on it.',
+};
+
+/** An attachment refused at the boundary: its words, and its code for the UI's. */
+const asRequest = (e: unknown) => (e instanceof AttachmentError ? new RequestError(e.refusal.params.reason === 'size' ? 413 : 400, e.message, e.refusal) : e);
+
+/** A file for the next message, kept outside the books until it is sent (src/assistant/attachments.ts); the raw limit is above ours, so ours says why. */
+router.post('/api/assistant/attachments', express.raw({ type: () => true, limit: `${ATTACHMENT_MAX_MB + 5}mb` }), async (req, res) => {
+  const name = typeof req.query.name === 'string' ? req.query.name : '';
+  const bytes = Buffer.isBuffer(req.body) ? new Uint8Array(req.body) : new Uint8Array();
+  try {
+    res.json(await saveAttachment(WS, name, req.get('Content-Type') ?? '', bytes));
+  } catch (e) { throw asRequest(e); }
+});
+
+router.delete('/api/assistant/attachments/:att', (req, res) => {
+  dropPending(WS, req.params.att);
+  res.json({ ok: true });
+});
+
+router.get('/api/assistant/:id/attachments/:att', (req, res) => {
+  const file = attachmentFile(WS, req.params.id, req.params.att);
+  if (!file) throw new RequestError(404, 'Diese Datei gibt es nicht mehr.');
+  res.type(file.attachment.type);
+  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.attachment.name)}`);
+  res.sendFile(file.path);
+});
 
 router.post('/api/assistant', async (req, res) => {
   const send = sendOf(req.body);
+  let attachments;
+  try { attachments = findAttachments(WS, send.attachments ?? [], send.conversation); } catch (e) { throw asRequest(e); }
   const emit = ndjson(res);
   const stop = new AbortController();
   res.on('close', () => { if (!res.writableFinished) stop.abort(); });
-  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: waitingNow(send.language) }, emit, stop.signal);
+  const known = send.conversation ? readConversation(WS, send.conversation) : undefined;
+  const purpose = known ? known.purpose : send.purpose;
+  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose), attachments }, emit, stop.signal);
   res.end();
 });
 
@@ -138,7 +186,8 @@ async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 
  * first: an answer that rebooks rather than fixes one booking (src/assistant/held.ts) changes
  * nothing and comes back as the rows of its card.
  */
-const apply: ApplyChanges = async (changes, earlier, language, { conversation, hold }) => {
+const apply: ApplyChanges = async (answered, earlier, language, { conversation, hold }) => {
+  const changes = await withMailHosts(answered);
   // A report whose filter names an account the chart lacks, or a code the form does not take, refuses the answer before anything is made.
   for (const c of changes) {
     const r = c.kind === 'report' ? factsRefusal(c.spec) : undefined;

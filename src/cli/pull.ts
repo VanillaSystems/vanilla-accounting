@@ -18,4 +18,6 @@ for (const f of r.feeds) console.log(`${f.feed}: ${f.documents} new, ${f.duplica
 if (r.outcome === 'ok') console.log(r.feeds.length ? (values.dry ? 'Dry run: nothing delivered.' : 'Delivered into the inbox; «Eingang verarbeiten» reads them.') : 'Nothing is due.');
 else if (r.outcome === 'missing-secret') { console.error(r.refused ? `⛔ The ${r.channel} login was refused (${r.refused}): npm run secret -- source:${source}:${r.channel}` : `⛔ No password: npm run secret -- source:${source}:${r.channel}`); process.exit(1); }
 else if (r.outcome === 'changed') { console.error(`⛔ ${r.feed}: ${r.message}`); process.exit(1); }
+else if (r.outcome === 'mail-app') { console.error(`⛔ The Mail app of this Mac could not be read: ${r.problem} (Firma › Quellen, «Verbindung prüfen», says what to do)`); process.exit(1); }
+else if (r.outcome === 'login-needed') { console.error(`⛔ The page asks for a sign-in (${r.at}): npm run browser -- open source-${source}, sign in there, then pull again`); process.exit(1); }
 else { console.error(`⛔ ${r.feed}: ${r.attempted} is outside the source's reach (${r.channel})`); process.exit(1); }

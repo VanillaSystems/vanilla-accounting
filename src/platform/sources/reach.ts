@@ -67,6 +67,11 @@ export function reachLines(r: Reach): Array<{ channel: Channel; what: string }> 
     for (const f of r.mail.from) out.push({ channel: 'mail', what: `from ${f.text}` });
     for (const s of r.mail.skip) out.push({ channel: 'mail', what: `not from ${s.text}` });
   }
+  if (r.macMail) {
+    out.push({ channel: 'mail', what: `${r.macMail.account} in the Mail app of this Mac · ${r.macMail.folders.join(', ')}` });
+    for (const f of r.macMail.from) out.push({ channel: 'mail', what: `from ${f.text}` });
+    for (const s of r.macMail.skip) out.push({ channel: 'mail', what: `not from ${s.text}` });
+  }
   if (r.web) for (const [k, ps] of [['sign-in', r.web.signIn], ['open', r.web.open], ['download', r.web.download]] as const) for (const p of ps) out.push({ channel: 'web', what: `${k} ${p.text}` });
   if (r.api) for (const a of r.api.allow) out.push({ channel: 'api', what: `${a.method} ${r.api.base}${a.path.text}` });
   return out;

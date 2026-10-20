@@ -7,4 +7,4 @@ triggers:
   - manual: {"for": "source", "label": {"de": "Jetzt holen", "en": "Fetch now", "fr": "Relever maintenant", "it": "Raccogli ora"}}
 emits: ["documents.delivered", "records.imported"]
 start: pull
-steps: ["pull", "login", "secret", "repair"]
+steps: ["pull", "login", "secret", "mail-app", "repair"]

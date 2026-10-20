@@ -43,9 +43,11 @@ interface Props {
   toggle: RefObject<HTMLElement | null>;
   /** Closed by a choice, Escape or a click elsewhere; the composer takes the focus back. */
   onClose(): void;
+  /** «Datei anhängen …»: the composer opens the file picker. */
+  onFile(): void;
 }
 
-export function Picker({ page, pageOn, attached, books, toggle, onClose }: Props) {
+export function Picker({ page, pageOn, attached, books, toggle, onClose, onFile }: Props) {
   const [level, setLevel] = useState<PickLevel>('root');
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -114,6 +116,11 @@ export function Picker({ page, pageOn, attached, books, toggle, onClose }: Props
           );
         })}
       </div>
+      {level === 'root' ? (
+        <button type="button" className="aipickfile" data-testid="attach-file" onMouseDown={(e) => e.preventDefault()} onClick={onFile}>
+          {ICONS.upload}<span>{t('assistant.attachFile')}</span>
+        </button>
+      ) : null}
     </div>
   );
 }

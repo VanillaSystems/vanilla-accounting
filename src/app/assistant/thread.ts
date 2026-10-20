@@ -4,7 +4,7 @@
  * at another page still knows what it refers to. A new one starts only on «Neu», or when «Mit KI …»
  * on an object opens the sidebar while it is closed. Pure, so a test can walk it without a browser.
  */
-import type { ContextRef, Turn } from '../../types/assistant.js';
+import type { ContextRef, Purpose, Turn } from '../../types/assistant.js';
 
 export interface Thread {
   open: boolean;
@@ -14,6 +14,8 @@ export interface Thread {
   extra: ContextRef[];
   /** The page's reference is left out of the next message. */
   pageOff: boolean;
+  /** Why a button started this conversation: its messages leave the page out until the person adds it with «+». */
+  purpose?: Purpose;
 }
 
 /** Where the open conversation's id is remembered in this browser. */
@@ -25,7 +27,11 @@ export const startThread = (stored: (key: string) => string | null): Pick<Thread
   return id ? { conversation: id } : {};
 };
 
-export const newThread = (): Pick<Thread, 'conversation' | 'turns' | 'extra' | 'pageOff'> => ({ conversation: undefined, turns: [], extra: [], pageOff: false });
+/** A new conversation; one with a purpose starts without the page's reference. */
+export const newThread = (purpose?: Purpose): Pick<Thread, 'conversation' | 'turns' | 'extra' | 'pageOff' | 'purpose'> => ({ conversation: undefined, turns: [], extra: [], pageOff: !!purpose, purpose });
+
+/** After a message is sent: the page goes with the next one again, except in a conversation with a purpose, where it stays as the person left it. */
+export const afterSend = (t: Thread): Pick<Thread, 'pageOff'> => ({ pageOff: t.purpose ? t.pageOff : false });
 
 /** «Mit KI …» on an object: one more reference in the open conversation; with the sidebar closed, a new conversation about that object. */
 export function askAboutThread(t: Thread, ref: ContextRef): Partial<Thread> {

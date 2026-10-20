@@ -6,13 +6,15 @@
  * sidebar takes its width from the page (--aiw), and every fixed element centres on what is left.
  */
 import { useSyncExternalStore } from 'react';
-import { api, errorText } from '../lib/api.js';
-import { language } from '../i18n/index.js';
+import { ApiError, api, errorText } from '../lib/api.js';
+import { language, t } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { reloadInvoices } from '../areas/invoices/data.js';
-import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
-import { KEPT_CONVERSATION, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
+import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Purpose, Turn } from '../../types/assistant.js';
+import { KEPT_CONVERSATION, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
+import { attachmentRefusal, attachmentType, showsAsImage, type Attachment, type AttachmentType } from '../../types/attachment.js';
+import { MAX_FOLDER_FILES, type Dropped } from './folder-drop.js';
 
 /** 400 px, less on a small window, so the page keeps room for its list and its detail. */
 export const SIDEBAR_WIDTH = 'min(400px, 34vw)';
@@ -23,9 +25,16 @@ export interface AssistantState extends Thread {
   sending: boolean;
   conversations?: ConversationSummary[];
   error?: string;
+  /** The files the next message carries, each uploading until it has its `attachment`. */
+  files: ComposerFile[];
+  /** Why the last file given was not attached (its type, its size, the upload). */
+  fileError?: string;
 }
 
-let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], extra: [], pageOff: false, sending: false, ...startThread(stored) };
+/** A file in the composer: `preview` an object URL of an image the browser shows. */
+export interface ComposerFile { key: string; name: string; type: AttachmentType; preview?: string; attachment?: Attachment }
+
+let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], extra: [], files: [], pageOff: false, sending: false, ...startThread(stored) };
 const listeners = new Set<() => void>();
 let stop: AbortController | undefined;
 
@@ -43,7 +52,7 @@ function set(patch: Partial<AssistantState>): void {
 if (state.conversation) {
   const id = state.conversation;
   api.assistantConversation(id).then(
-    (c) => { if (state.conversation === id && !state.turns.length) set({ turns: c.turns, pageOff: false }); },
+    (c) => { if (state.conversation === id && !state.turns.length) set({ turns: c.turns, purpose: c.purpose, pageOff: !!c.purpose }); },
     () => { if (state.conversation === id && !state.turns.length) set({ conversation: undefined }); },
   );
 }
@@ -54,6 +63,7 @@ export const useAssistant = (): AssistantState => useSyncExternalStore((l) => { 
 export const syncSidebarWidth = () => document.documentElement.style.setProperty('--aiw', state.open ? SIDEBAR_WIDTH : '0px');
 
 export function toggleAssistant(): void { set({ open: !state.open }); }
+export function openAssistant(): void { set({ open: true, listing: false }); }
 export function closeAssistant(): void { set({ open: false }); }
 
 /** «Mit KI …» on an object (src/app/assistant/thread.ts askAboutThread): into the open conversation, or a new one when the sidebar was closed. */
@@ -71,7 +81,58 @@ export function addContext(ref: ContextRef): void { if (!state.extra.some((r) =>
 /** The page's reference goes with the next message again, after it was taken off. */
 export function keepPage(): void { set({ pageOff: false }); }
 export function removeContext(ref: ContextRef | 'page'): void { set(ref === 'page' ? { pageOff: true } : { extra: state.extra.filter((r) => !(r.kind === ref.kind && r.id === ref.id)) }); }
+let fileKey = 0;
+const forget = (f: ComposerFile) => { if (f.preview) URL.revokeObjectURL(f.preview); };
+
+/**
+ * Files dropped on the chat, pasted into the composer or picked with «+»: each is checked here as
+ * the server checks it, then uploaded at once, so a refusal shows before the message is sent.
+ * `open`: dropped on the window's edge with the sidebar closed, it opens on a new conversation as
+ * «Mit KI …» does.
+ */
+export function attachFiles(files: File[], open = false): void {
+  if (open && !state.open) set(state.sending ? { open: true } : { listing: false, error: undefined, ...newThread(), open: true });
+  else if (state.listing) set({ listing: false });
+  set({ fileError: undefined });
+  for (const file of files) {
+    const refused = attachmentRefusal(file);
+    if (refused) { set({ fileError: errorText(new ApiError({ error: '', ...refused })) }); continue; }
+    const type = attachmentType(file)!;
+    const f: ComposerFile = { key: `f${++fileKey}`, name: file.name, type, ...(showsAsImage(type) ? { preview: URL.createObjectURL(file) } : {}) };
+    set({ files: [...state.files, f] });
+    api.assistantAttach(file).then(
+      (attachment) => {
+        // Taken off while it uploaded: the upload goes too.
+        if (!state.files.some((x) => x.key === f.key)) { void api.assistantDetach(attachment.id).catch(() => undefined); return; }
+        set({ files: state.files.map((x) => (x.key === f.key ? { ...x, attachment, name: attachment.name } : x)) });
+      },
+      (e) => { forget(f); set({ files: state.files.filter((x) => x.key !== f.key), fileError: errorText(e) }); },
+    );
+  }
+}
+
+/** A drop with folders in it (src/app/assistant/folder-drop.ts): their files attached, and one line for what stayed behind. */
+export function attachDropped(d: Dropped): void {
+  attachFiles(d.files, true);
+  if (!d.folders.length || (!d.skipped && !d.over)) return;
+  const folder = d.folders.join(', ');
+  set({ fileError: [d.skipped ? t('assistant.folderSkipped', { folder, n: d.skipped }) : '', d.over ? t('assistant.folderOver', { folder, max: MAX_FOLDER_FILES, n: d.over }) : ''].filter(Boolean).join(' ') });
+}
+
+export function removeFile(key: string): void {
+  const f = state.files.find((x) => x.key === key);
+  if (f) forget(f);
+  if (f?.attachment) void api.assistantDetach(f.attachment.id).catch(() => undefined);
+  set({ files: state.files.filter((x) => x.key !== key), fileError: undefined });
+}
+
+/** Whether a file of the next message is still uploading: the message waits for it. */
+export const uploading = (s: AssistantState): boolean => s.files.some((f) => !f.attachment);
+
 export function newConversation(): void { if (!state.sending) set({ listing: false, error: undefined, ...newThread() }); }
+
+/** A button with a purpose («Mit KI einrichten») starts a new conversation without the page's reference; «+» adds it back. */
+export function newPurposeConversation(purpose: Purpose): void { if (!state.sending) set({ listing: false, error: undefined, ...newThread(purpose) }); }
 
 export async function showConversations(): Promise<void> {
   set({ listing: true });
@@ -84,7 +145,7 @@ export function hideConversations(): void { set({ listing: false }); }
 export async function openConversation(id: string): Promise<void> {
   try {
     const c = await api.assistantConversation(id);
-    set({ listing: false, conversation: c.id, turns: c.turns, extra: [], pageOff: true, error: undefined });
+    set({ listing: false, conversation: c.id, turns: c.turns, extra: [], pageOff: true, purpose: c.purpose, error: undefined });
   } catch (e) { set({ error: errorText(e) }); }
 }
 
@@ -119,18 +180,20 @@ function apply(e: AssistantEvent): void {
 
 /** Sends a message with the page's reference (unless taken off) and the added ones; the answer streams into the last turn. */
 export async function sendMessage(text: string, page: ContextRef | undefined): Promise<void> {
-  if (state.sending || !text.trim()) return;
+  if (state.sending || !text.trim() || uploading(state)) return;
   const { conversation, context } = messageOf(state, page);
   const at = new Date().toISOString();
+  const attachments = state.files.map((f) => f.attachment!);
+  state.files.forEach(forget);
   set({
-    sending: true, error: undefined, extra: [], pageOff: false,
-    turns: [...state.turns, { role: 'me', text, at, context }, { role: 'ai', text: '', at, tools: [], done: false }],
+    sending: true, error: undefined, extra: [], files: [], fileError: undefined, ...afterSend(state),
+    turns: [...state.turns, { role: 'me', text, at, context, ...(attachments.length ? { attachments } : {}) }, { role: 'ai', text: '', at, tools: [], done: false }],
   });
   stop = new AbortController();
   try {
     const res = await fetch('/api/assistant', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: stop.signal,
-      body: JSON.stringify({ conversation, text, context, language: language() }),
+      body: JSON.stringify({ conversation, text, context, ...(state.purpose && !conversation ? { purpose: state.purpose } : {}), ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}), language: language() }),
     });
     if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `HTTP ${res.status}`);
     const reader = res.body.getReader();

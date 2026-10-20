@@ -75,6 +75,12 @@ export function phoneApp(books: express.RequestHandler, token: () => string | un
   return app;
 }
 
+/**
+ * Where the receipt app («Vanilla Belege», ios/) is downloaded: the first step of «Handy koppeln».
+ * A placeholder until the app is published (docs/releasing.md, «The iPhone app's download link»).
+ */
+export const APP_STORE_URL = 'https://apps.apple.com/ch/app/vanilla-belege';
+
 /** The URL the QR code carries: the scan page, with the token in the fragment. The receipt app reads host, port and token from it. */
 export const pairingUrl = (address: string, port: number, token: string) => `http://${address}:${port}/scan#token=${token}`;
 

@@ -6,12 +6,12 @@
  * `previewMailbox` is the connection check: it logs in, reads the last weeks' mail headers and says
  * which mails the source would read, without fetching an attachment or writing anything.
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { stringify } from 'yaml';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { MailBackend } from './mail-channel.js';
-import type { SourceDecl } from './model.js';
+import type { SourceDecl, SourceVerdict } from './model.js';
 import { senderAllowed } from './reach.js';
 
 export interface MailSourceInput { address: string; host: string; account?: string; label?: string }
@@ -57,6 +57,17 @@ export function writeMailSource(ws: Pick<Workspace, 'paths'>, id: string, i: Mai
   writeFileSync(join(dir, 'source.yaml'), mailSourceYaml(i));
 }
 
+/** Takes a mailbox source's folder out of the workspace (the undo of one the AI sidebar drafted). */
+export function removeMailSource(ws: Pick<Workspace, 'paths'>, id: string): void {
+  rmSync(join(ws.paths.root, 'sources', id), { recursive: true, force: true });
+}
+
+/** Where a mailbox goes (r6h-25): the source that holds the address already, else a new id unique among every source. */
+export function mailSourceSlot(address: string, all: readonly SourceVerdict[]): { id: string; existing?: SourceDecl } {
+  const existing = mailSourceFor(address, all.flatMap((v) => (v.kind === 'invalid' ? [] : [v.decl])));
+  return existing ? { id: existing.id, existing } : { id: mailSourceId(address, new Set(all.map((v) => (v.kind === 'invalid' ? v.id : v.decl.id)))) };
+}
+
 /** The mailbox source of the workspace that holds `address` (its login or one of its boxes), by id. */
 export function mailSourceFor(address: string, decls: readonly SourceDecl[]): SourceDecl | undefined {
   const a = address.trim().toLowerCase();
@@ -70,7 +81,7 @@ export interface MailPreview { days: number; total: number; read: number; mails:
 
 /** Of the mail of the last `days`, newest first, the ones the source would read (its senders, its addresses). */
 export async function previewMailbox(backend: MailBackend, decl: SourceDecl, now = new Date(), days = 60, limit = 200): Promise<MailPreview> {
-  const reach = decl.reach.mail!;
+  const reach = (decl.reach.mail ?? decl.reach.macMail)!;
   const boxes = Array.isArray(decl.settings.boxes) ? (decl.settings.boxes as Array<{ to?: string }>) : [];
   const addresses = boxes.length && boxes.every((b) => b.to) ? boxes.map((b) => b.to!.toLowerCase()) : [];
   const since = new Date(now.getTime() - days * 86_400_000);

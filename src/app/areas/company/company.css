@@ -18,9 +18,23 @@
 .srcpw { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
 .srcpw input { min-width: 0; width: 220px; max-width: 100%; }
 .srccheck { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
+/* «Verbindung prüfen» and «Speichern» beside the password: framed, so they read as buttons on a card. */
+.srccheck .btn, .srcpw .btn:not(.primary) { height: 30px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); cursor: pointer; }
+.srccheck .btn:hover:not(:disabled), .srcpw .btn:not(.primary):hover:not(:disabled) { background: var(--hover); }
+.srccheck .btn:disabled, .srcpw .btn:disabled { color: var(--faint); cursor: default; }
 .srcmails { list-style: none; margin: 0; padding: 0; font-size: 12.5px; display: grid; gap: 3px; }
 .srcmails li { overflow-wrap: anywhere; }
+/* A source's reach in plain words (SourceCard.tsx): what the person approves. */
+.srcplain { margin: 0; padding-left: 18px; font-size: 12.5px; display: grid; gap: 2px; overflow-wrap: anywhere; }
 .srcmails li.skip { color: var(--faint); }
+/* «Mail-Programm auf diesem Mac»: the Mail app's accounts, one row each with its button. */
+.fedit { flex-wrap: wrap; }
+.fedit .fhint { flex-basis: 100%; margin: 0; }
+.srcmac { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.srcmac .acts { display: flex; gap: 10px; }
+.srcaccounts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.srcaccounts li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; overflow-wrap: anywhere; }
+.srcaccounts li .btn { margin-left: auto; }
 
 /* The app's build under the sections, for a person reporting what they run. */
 .appver { margin: 18px 12px 0; font-size: 11px; color: var(--faint); user-select: text; }

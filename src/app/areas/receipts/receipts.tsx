@@ -23,6 +23,9 @@ import { intakeAdd } from './intake.js';
 import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
+import { EmptyTable, FirstRun, Strip } from './InflowStrip.js';
+import { InflowDialogs } from './InflowDialogs.js';
+import './receipts.css';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import { baseCurrency } from '../../../engines/index.js';
 
@@ -30,6 +33,9 @@ type Props = AreaProps<RouteOf<'receipts'>>;
 
 const FILTER_LABEL = { zugeordnet: 'receipts.filterLinked', offen: 'receipts.filterOpen', ohneDatum: 'receipts.filterNoDate' } as const;
 
+
+/** No receipt in the books and none on its way: the page shows the ways in instead of a list. */
+const noReceiptsYet = (books: AreaProps['books'], inbox: readonly InboxFile[]) => books.receipts.length === 0 && inbox.length === 0;
 
 const groupLabel = (key: GroupKey) =>
   key === 'need' ? t('receipts.groupNeed') : key === 'noDate' ? t('receipts.noDate') : monthName(`${key.slice(6)}-01`);
@@ -49,6 +55,7 @@ function List(props: Props) {
   const { groups: gs, later } = groups(rows, l, query.filter, (v) => suggestions.has(v.r.id));
   const pending = period.to >= l.openFrom && !query.filter && !query.q ? s.inbox.filter((f) => !l.byId.has(f.id)) : [];
   const filed = !!l.closedThrough && period.kind !== 'all' && period.to <= l.closedThrough;
+  const firstRun = canEdit && noReceiptsYet(books, s.inbox);
 
   const ids = [
     ...pending.map((f) => f.id),
@@ -111,28 +118,11 @@ function List(props: Props) {
         </div>
       </ListHead>
 
-      {counts.alle === 0 && hidden.length === 0 && pending.length === 0 ? (
+      {canEdit && !firstRun && <Strip {...props} />}
+      {firstRun ? <FirstRun {...props} /> : counts.alle === 0 && hidden.length === 0 && pending.length === 0 ? (
         <div className="empty">
-          {books.transactions.length === 0 && books.receipts.length === 0 ? (
-            <>
-              <h2>{t('receipts.startTitle')}</h2>
-              <ol className="firststeps">
-                <li><b>{t('receipts.start1')}</b>{t('receipts.start1Text')}</li>
-                <li><b>{t('receipts.start2')}</b>{t('receipts.start2Text')}</li>
-                <li><b>{t('receipts.start3')}</b>{t('receipts.start3Text')}</li>
-              </ol>
-            </>
-          ) : (
-            <>
-              <h2>{t('receipts.emptyTitle', { period: periodName(period) })}</h2>
-              <p>{t('receipts.emptyText')}</p>
-            </>
-          )}
-          {canEdit && (
-            <button type="button" className="well" style={{ width: '100%' }} onClick={() => intakeAdd.run(props as AreaProps)}>
-              <span><b>{t('receipts.well')}</b>{t('receipts.wellHint')}</span>
-            </button>
-          )}
+          <h2>{t('receipts.emptyTitle', { period: periodName(period) })}</h2>
+          <p>{t('receipts.emptyText')}</p>
         </div>
       ) : rows.length === 0 && pending.length === 0 ? (
         query.q ? (
@@ -187,6 +177,7 @@ function List(props: Props) {
         </>
       )}
       <Quarantine nav={nav} canEdit={canEdit} />
+      <InflowDialogs {...props} />
     </div>
   );
 }
@@ -304,6 +295,12 @@ function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; on
   );
 }
 
+/** The receipt beside the list; while there is none at all, the empty table of the ways in. */
+function ReceiptsDetail(props: Props) {
+  const { inbox } = useUi();
+  return props.canEdit && !props.route.id && noReceiptsYet(props.books, inbox) ? <EmptyTable /> : <Detail {...props} />;
+}
+
 const legend = (): LegendItem[] => [
   [['↑', '↓'], t('keys.select'), t('receipts.keySelectTip')],
   [['↵'], t('receipts.keyAccept'), t('receipts.keyAcceptTip')],
@@ -321,7 +318,7 @@ export const receipts: Area<RouteOf<'receipts'>> = {
   label: () => t('area.receipts'),
   dock: { key: 'b', icon: ICONS.receipts, tip: () => t('area.receipts.tip'), badge: (books) => badgeCount(ledgerFor(books)) },
   List,
-  Detail,
+  Detail: ReceiptsDetail,
   add: intakeAdd,
   legend,
   title: (r, books) => { const v = r.id ? ledgerFor(books).byId.get(r.id) : undefined; return v && (v.vendor || v.r.filename); },

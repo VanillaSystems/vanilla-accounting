@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { LineCounter, parseDocument, isMap, isSeq, isScalar, type Node } from 'yaml';
-import { CADENCES, type ApiReach, type FeedDecl, type MailReach, type Problem, type Reach, type SourceDecl, type Text, type WebReach } from './model.js';
+import { CADENCES, type ApiReach, type FeedDecl, type MacMailReach, type MailReach, type Problem, type Reach, type SourceDecl, type Text, type WebReach } from './model.js';
 import { parseHostPath, parseSender } from './reach.js';
 
 const ID = /^[a-z][a-z0-9-]*$/;
@@ -63,7 +63,7 @@ export function readDecl(folder: string, origin: 'app' | 'company', appSources: 
   const reach: Reach = {};
   const r = get(['reach']);
   if (r !== undefined) {
-    keys(r, ['mail', 'web', 'api'], 'reach');
+    keys(r, ['mail', 'mac-mail', 'web', 'api'], 'reach');
     if (get(['reach', 'mail']) !== undefined) {
       keys(get(['reach', 'mail']), ['host', 'account', 'folders', 'from', 'skip'], 'reach.mail');
       const senders = (k: 'from' | 'skip') => strings(['reach', 'mail', k], `reach.mail.${k}`).flatMap((s) => { const p = parseSender(s); if (!p.ok) { fail(get(['reach', 'mail', k]), p.message); return []; } return [p.value]; });
@@ -73,6 +73,17 @@ export function readDecl(folder: string, origin: 'app' | 'company', appSources: 
       if (!mail.folders.length) mail.folders = ['INBOX'];
       if (!mail.from.length) fail(get(['reach', 'mail']), 'reach.mail.from: the senders it may read ("*" for anyone)');
       reach.mail = mail;
+    }
+    if (get(['reach', 'mac-mail']) !== undefined) {
+      keys(get(['reach', 'mac-mail']), ['account', 'folders', 'from', 'skip'], 'reach.mac-mail');
+      const senders = (k: 'from' | 'skip') => strings(['reach', 'mac-mail', k], `reach.mac-mail.${k}`).flatMap((s) => { const p = parseSender(s); if (!p.ok) { fail(get(['reach', 'mac-mail', k]), p.message); return []; } return [p.value]; });
+      const account = value(['reach', 'mac-mail', 'account']);
+      if (typeof account !== 'string' || !account) fail(get(['reach', 'mac-mail']), 'reach.mac-mail: account (its name in the Mail app)');
+      const mac: MacMailReach = { account: String(account), folders: strings(['reach', 'mac-mail', 'folders'], 'reach.mac-mail.folders'), from: senders('from'), skip: senders('skip') };
+      if (!mac.folders.length) mac.folders = ['INBOX'];
+      if (!mac.from.length) fail(get(['reach', 'mac-mail']), 'reach.mac-mail.from: the senders it may read ("*" for anyone)');
+      if (reach.mail) fail(get(['reach', 'mac-mail']), 'reach: one way to the mail, mail (its server) or mac-mail (the Mail app), not both');
+      reach.macMail = mac;
     }
     if (get(['reach', 'web']) !== undefined) {
       keys(get(['reach', 'web']), ['start', 'sign-in', 'open', 'download'], 'reach.web');

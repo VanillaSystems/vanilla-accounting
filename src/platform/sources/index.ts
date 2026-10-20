@@ -34,6 +34,14 @@ export function approveSource(ws: Ws, decl: SourceDecl, now = () => new Date()):
   writeFileSync(approvalsFile(ws), JSON.stringify(all, null, 2) + '\n');
 }
 
+/** Takes a source's switch back: a source made again under the same id waits to be switched on anew. */
+export function withdrawApproval(ws: Ws, id: string): void {
+  const all = readApprovals(ws);
+  if (!(id in all)) return;
+  delete all[id];
+  writeFileSync(approvalsFile(ws), JSON.stringify(all, null, 2) + '\n');
+}
+
 /** Whether the app's source folder is meant to be bound only (`bindable: true`), never run itself. */
 const bindable = (folder: string) => { try { return (parse(readFileSync(join(folder, 'source.yaml'), 'utf8')) as { bindable?: unknown })?.bindable === true; } catch { return false; } };
 

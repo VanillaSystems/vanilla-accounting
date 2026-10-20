@@ -20,7 +20,7 @@ import {
   type Arrival, outputsOf, plusDuration, stepOf, transition,
   type AutomationCommand, type CommandResult, type EffectRecord, type ItemRef, type QueueReason, type Run, type RunState, type StartedBy, type StepRecord, type WorkflowDecl,
 } from './model.js';
-import { listRuns, saveRun } from './store.js';
+import { forgetRun, listRuns, saveRun } from './store.js';
 import { appendLine, lineFor, type RunLogLine } from './runlog.js';
 
 /** What a dry run or a replay records for an effect it cannot check on a copy (a seal, a filing): nothing was written. */
@@ -113,6 +113,16 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   };
   const move = (run: Run, next: RunState): Run => { const r = transition(run, next); save(r); return r; };
 
+  /**
+   * A scheduled check that found nothing to do (the hourly collection with no source due): it
+   * changed nothing and started nothing, so it is no run for a person, and it is not kept.
+   */
+  const idle = (run: Run) => run.startedBy.kind === 'schedule' && run.mode === 'live' && run.state.status === 'done'
+    && run.steps.every((s) => s.effects.every((e) => !e.applied))
+    && ![...runs.values()].some((r) => r.startedBy.kind === 'parent' && r.startedBy.run === run.id);
+
+  // Idle checks kept before they were forgotten go now.
+  for (const r of [...runs.values()]) if (idle(r)) { runs.delete(r.id); forgetRun(ws, r.id); }
   // A run the process left running when it stopped goes back into the queue at its step.
   for (const r of runs.values()) if (r.state.status === 'running') move(r, { status: 'queued', at: r.state.at, since: now() });
 
@@ -192,6 +202,8 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     settle(run);
     if (run.state.status === 'done' && run.mode === 'live') await emitFrom(run);
     if (run.state.status === 'done' || run.state.status === 'stuck' || run.state.status === 'discarded') await childRested(run);
+    // Forgotten only once nothing of the drive reads it any more (pump counts it while active).
+    if (idle(run)) { active.delete(id); runs.delete(id); forgetRun(ws, id); counter++; }
   }
 
   /** One step of a running run, saved before it returns. */

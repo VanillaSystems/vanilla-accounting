@@ -114,8 +114,14 @@ test('a missing password stops that source only; a dry run writes nothing', asyn
   assert.equal((await pull(req(ws, fake().backend))).outcome, 'ok', 'the other source pulls');
   const dry = office();
   const r = await pull(req(dry, fake().backend, { mode: 'dry' }));
-  assert.deepEqual(r, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, quarantined: 0, complete: true }] });
+  assert.deepEqual(r, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, quarantined: 0, complete: true, seen: [
+    { name: 'invoice-1.pdf', from: 'billing@vendor.example', date: '2026-10-01T08:00:00Z', as: 'new' },
+    { name: 'copy.pdf', from: 'billing@vendor.example', date: '2026-10-03T08:00:00Z', as: 'duplicate' },
+    { name: 'invoice-2.pdf', from: 'billing@vendor.example', date: '2026-10-04T08:00:00Z', as: 'new' },
+  ] }] }, 'a dry run says what it would bring, for «Prüfen»');
   assert.deepEqual([inbox(dry), readLedger(dry, 'office')], [[], []]);
+  const first = await pull(req(office(), fake().backend, { mode: 'dry', limit: 1 }));
+  assert.equal(first.feeds[0].seen?.length, 1, 'a preview stops after its limit instead of reading months of mail');
 });
 
 test('code that fetches is changed; code that reaches past its reach is over-reach; a version not switched on does not run live', async () => {

@@ -271,7 +271,7 @@ export function workspaceAt(root: string): Workspace {
  * Memoized: every CLI and the API resolve it once per process.
  */
 export function openWorkspace(): Workspace {
-  return (opened ??= workspaceAt(locate()));
+  return (opened ??= workspaceAt(locateWorkspace()));
 }
 let opened: Workspace | undefined;
 
@@ -288,7 +288,8 @@ export function appLanguages(): string[] {
 /** The demo repositories the app ships (tools/demo/generate.ts): demo/, demo-consulting/, …, each with its vanilla-accounting/. */
 export const DEMO_NAME = /^demo(-[a-z0-9]+)*$/;
 
-function locate(): string {
+/** Where openWorkspace() would open, without opening it. */
+export function locateWorkspace(): string {
   const env = workspaceVar(process.env) ?? workspaceFromAppEnv();
   if (env) {
     const dir = DEMO_NAME.test(env) ? join(APP_ROOT, env) : resolve(env.replace(/^~(?=$|\/)/, homedir()));

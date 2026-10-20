@@ -90,6 +90,11 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .btn.ghost { color: var(--ink-2); }
 .btn.ghost:hover { background: var(--bg); color: var(--ink); }
 .btn .k { font: 500 11px "Geist Mono"; opacity: .75; }
+/* A button that reads as a link (accent, underlined on hover); an area's own rule may size it. */
+.linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
+.linkbtn:hover { text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:disabled { color: var(--faint); cursor: default; text-decoration: none; }
+[data-theme="dark"] .linkbtn:not(:disabled) { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
 
 /* top glass bar + dock (from the agreed shell) */
 .topbar { position: fixed; left: var(--page-mid); top: 14px; transform: translate(-50%, 0);
@@ -327,8 +332,6 @@ body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
 .activity .it.go .cnt { position: absolute; top: -5px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #d98a00; color: #fff; font: 600 11px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
 @keyframes go-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .activity .it.go.running .ring circle { animation: none; stroke-dasharray: none; } }
-.firststeps { margin: 10px 0 18px; padding: 0; list-style: none; display: grid; gap: 10px; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
-.firststeps b { color: var(--ink); font-weight: 600; }
 /* A narrow list (a small window with the AI sidebar open): short dates, the add button under the title. */
 .list { container-type: inline-size; }
 .row .ds { display: none; }
@@ -367,3 +370,16 @@ html.phone .activity .it.go .ring { display: none; }
 html.phone .activity .it.go .face svg { width: 22px; height: 22px; }
 html.phone .activity .it.go .cnt { top: -4px; right: -4px; }
 html.phone .activity .div, html.phone .activity .it .tip { display: none; }
+/* Files dragged over the window (src/app/shell/Shell.tsx useDrop): the page takes them as receipts, the AI sidebar (closed: the window's right edge, --ai-edge wide) as a message's attachments; the zone under the pointer is lit. */
+:root { --ai-edge: 88px; }
+.drop { right: max(var(--aiw), var(--ai-edge)); }
+.drop.show:not(.on) .box { opacity: .45; }
+.dropchat { position: fixed; top: 0; right: 0; bottom: 0; width: max(var(--aiw), var(--ai-edge)); z-index: 36; display: grid; background: color-mix(in srgb, var(--desk) 88%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-left: 1px solid var(--line); opacity: 0; pointer-events: none; transition: opacity .18s; }
+.dropchat.show { opacity: 1; pointer-events: auto; }
+.dropchat .box { margin: 14px; border: 2px dashed color-mix(in srgb, var(--ai) 55%, transparent); border-radius: 18px; display: grid; place-items: center; text-align: center; padding: 12px; transition: background .15s, border-color .15s; }
+.dropchat.on .box { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, transparent); }
+.dropchat .box svg { width: 34px; height: 34px; color: var(--ai); }
+.dropchat h2 { font: 800 20px "Hanken Grotesk"; letter-spacing: -.01em; margin: 10px 0 6px; }
+.dropchat p { color: var(--muted); margin: 0; font-size: 13px; }
+.dropchat.edge .box { margin: 10px 8px; padding: 8px 0; }
+.dropchat.edge h2 { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 15px; margin: 10px auto 0; }

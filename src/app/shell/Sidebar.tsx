@@ -14,6 +14,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
+import { dictationLang, recognizer, withHeard, type DictationError } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange } from '../../types/assistant.js';
 import { ApiError, errorText } from '../lib/api.js';
@@ -33,8 +34,13 @@ import { builtInTexts } from '../../invoices/texts.js';
 import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
 import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
+import { MailboxCard } from '../areas/company/MailboxCard.js';
+import { SourceCard } from '../areas/company/SourceCard.js';
 import { questionText } from '../questions/Questions.js';
+import { dropFiles } from './DropDialog.js';
+import { ATTACHMENT_TYPES, showsAsImage, type Attachment } from '../../types/attachment.js';
 import {
+  attachFiles, removeFile, uploading, type ComposerFile,
   addContext, closeAssistant, hideConversations, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
 
@@ -114,6 +120,10 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
       return { text: note?.question?.answered ? t('assistant.c.questionAnswered', { text: c.text, by: note.question.answered }) : t('assistant.c.question', { to: note?.question?.to ?? c.to ?? '', text: c.text }), go };
     }
     case 'withdrawQuestion': return { text: t('assistant.c.withdrawQuestion') };
+    case 'mailbox': return { text: t(note?.mailbox?.existing ? 'assistant.c.mailboxExisting' : 'assistant.c.mailbox', { address: c.address, host: c.host ?? '' }), go: { area: 'company', section: 'sources' } };
+    case 'dropMailbox': return { text: t('assistant.c.dropMailbox') };
+    case 'source': return { text: t(note?.source?.replaced ? 'assistant.c.sourceReplaced' : 'assistant.c.source', { label: note?.source?.label?.[language()] ?? note?.source?.label?.en ?? c.id }), go: { area: 'company', section: 'sources' } };
+    case 'dropSource': return { text: t('assistant.c.dropSource') };
     case 'export': {
       const preset = PRESETS.some((p) => p.id === c.preset) ? t(`export.preset.${c.preset}` as 'export.preset.treuhand') : c.preset;
       if (failed || !note?.file) return { text: [t('assistant.c.exportNot', { preset }), failed].filter(Boolean).join(' · ') };
@@ -130,8 +140,11 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
       {changes.map((c) => {
         if (c.change.kind === 'report' && c.note?.report) return <li key={c.id} className="aireport"><ReportCard result={c.note.report} period={c.change.period} onGo={onGo} /></li>;
         const d = describe(c, books);
+        const mailbox = c.change.kind === 'mailbox' && c.note?.mailbox && !c.undone ? { id: c.note.mailbox.id, address: c.change.address, host: c.change.host } : undefined;
+        const source = c.change.kind === 'source' && c.note?.source && !c.undone ? c.note.source.id : undefined;
         return (
-          <li key={c.id} className={c.undone ? 'undone' : ''}>
+          <Fragment key={c.id}>
+          <li className={c.undone ? 'undone' : ''}>
             <span>{d.text}</span>
             <span className="aichangeacts">
               {d.href ? <a className="linkbtn" href={d.href} download>{t('assistant.download')}</a> : null}
@@ -139,6 +152,9 @@ function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index
               {c.undone ? <small>{t('assistant.undone')}</small> : c.undo ? <button type="button" className="linkbtn" onClick={() => void undoChange(c)}>{t('assistant.undo')}</button> : null}
             </span>
           </li>
+          {mailbox ? <li className="aimailbox"><MailboxCard {...mailbox} onSources={() => onGo({ area: 'company', section: 'sources' })} /></li> : null}
+          {source ? <li className="aimailbox"><SourceCard id={source} onSources={() => onGo({ area: 'company', section: 'sources' })} /></li> : null}
+          </Fragment>
         );
       })}
     </ul>
@@ -255,7 +271,10 @@ function draftsOf(turn: Extract<Parameters<typeof wroteDraft>[0], { role: 'ai' }
   return { rules, other: paths.length > rules.length };
 }
 
-const Spans = ({ line }: { line: Span[] }) => <>{line.map((x, i) => (x.bold ? <strong key={i}>{x.text}</strong> : <Fragment key={i}>{x.text}</Fragment>))}</>;
+const Spans = ({ line }: { line: Span[] }) => <>{line.map((x, i) => {
+  const text = x.bold ? <strong>{x.text}</strong> : x.text;
+  return x.href ? <a key={i} href={x.href} target="_blank" rel="noopener noreferrer">{text}</a> : <Fragment key={i}>{text}</Fragment>;
+})}</>;
 
 /** An answer's text with its bold, lists and paragraphs (src/app/assistant/markdown.ts), as elements, never as markup. */
 function AnswerText({ text }: { text: string }) {
@@ -278,23 +297,78 @@ function Chip({ r, onRemove }: { r: ContextRef; onRemove(): void }) {
   );
 }
 
+/** A file the composer carries: its thumbnail or kind, its name, × to take it off; dimmed while it uploads. */
+function FileChip({ f }: { f: ComposerFile }) {
+  return (
+    <span className={`aichip aifile${f.attachment ? '' : ' uploading'}`} title={f.attachment ? f.name : t('assistant.uploading', { name: f.name })} data-testid="attachment-chip">
+      {f.preview ? <img src={f.preview} alt="" /> : <span className="aifilekind">{ATTACHMENT_TYPES[f.type]}</span>}
+      {f.name}
+      <button type="button" aria-label={t('assistant.removeContext', { label: f.name })} onClick={() => removeFile(f.key)}>×</button>
+    </span>
+  );
+}
+
+/**
+ * A file a sent message carried: it opens in a new tab; «Als Beleg übernehmen» hands a copy to the
+ * drop (src/app/shell/DropDialog.tsx), which takes it into the inbox as a dropped receipt.
+ */
+function SentFile({ a, conversation }: { a: Attachment; conversation: string | undefined }) {
+  const [state, setState] = useState<'idle' | 'busy' | 'handed'>('idle');
+  const url = conversation && api.assistantAttachmentUrl(conversation, a.id);
+  const asReceipt = async () => {
+    if (!url) return;
+    setState('busy');
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await dropFiles([new File([await res.blob()], a.name, { type: a.type })]);
+      setState('handed');
+    } catch { setState('idle'); }
+  };
+  return (
+    <span className="aisent" data-testid="sent-attachment">
+      <a className="aichip aifile" href={url || undefined} target="_blank" rel="noreferrer" title={a.name}>
+        {url && showsAsImage(a.type) ? <img src={url} alt="" /> : <span className="aifilekind">{ATTACHMENT_TYPES[a.type]}</span>}
+        {a.name}
+      </a>
+      {state === 'handed' ? <small>{t('assistant.asReceiptDone')}</small>
+        : <button type="button" className="linkbtn" disabled={!url || state === 'busy'} onClick={() => void asReceipt()}>{t('assistant.asReceipt')}</button>}
+    </span>
+  );
+}
+
 export function Sidebar({ page, books, onGo }: Props) {
   const s = useAssistant();
   const [text, setText] = useState('');
   const [pick, setPick] = useState(0);
   const [picking, setPicking] = useState(false);
+  const [ear] = useState(recognizer);
+  const [listening, setListening] = useState<(() => void) | null>(null);
+  const [heardError, setHeardError] = useState<DictationError>();
   const plus = useRef<HTMLButtonElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { if (s.open) area.current?.focus(); }, [s.open, s.conversation]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [s.turns]);
+  useEffect(() => () => listening?.(), [listening]);
+  useEffect(() => { if (!s.open) listening?.(); }, [s.open, listening]);
   if (!s.open) return null;
 
   const at = /(?:^|\s)@(\S*)$/.exec(text);
   const offered = at ? search(automationCandidates(), at[1], 8).map((c) => c.ref) : [];
   const choose = (r: ContextRef) => { addContext(r); setText(text.replace(/@(\S*)$/, '')); setPick(0); area.current?.focus(); };
-  const send = () => { if (!s.sending && text.trim()) { void sendMessage(text, page); setText(''); } };
-  const empty = !text.trim();
+  const waiting = uploading(s);
+  const send = () => { if (!s.sending && !waiting && text.trim()) { listening?.(); void sendMessage(text, page); setText(''); } };
+  const listen = () => {
+    if (!ear) return;
+    if (listening) { listening(); return; }
+    const before = text;
+    setHeardError(undefined);
+    const stop = ear.start(dictationLang(language()), (heard) => setText(withHeard(before, heard)), (error) => { setListening(null); setHeardError(error); area.current?.focus(); });
+    setListening(() => stop);
+  };
+  const empty = !text.trim() || waiting;
 
   return (
     <aside className="aside" aria-label={t('assistant.title')}>
@@ -328,6 +402,7 @@ export function Sidebar({ page, books, onGo }: Props) {
             <div key={i} className="msg me">
               {turn.text}
               {turn.context.length ? <small>{turn.context.map((r) => r.label).join(' · ')}</small> : null}
+              {turn.attachments?.length ? <span className="aisentfiles">{turn.attachments.map((a) => <SentFile key={a.id} a={a} conversation={s.conversation} />)}</span> : null}
             </div>
           ) : (
             <Fragment key={i}>
@@ -375,15 +450,23 @@ export function Sidebar({ page, books, onGo }: Props) {
               ))}
             </div>
           ) : null}
-          {picking ? <Picker page={page} pageOn={!s.pageOff} attached={s.extra} books={books} toggle={plus} onClose={() => { setPicking(false); area.current?.focus(); }} /> : null}
-          <div className="aibox">
+          {picking ? <Picker page={page} pageOn={!s.pageOff} attached={s.extra} books={books} toggle={plus} onClose={() => { setPicking(false); area.current?.focus(); }} onFile={() => { setPicking(false); picker.current?.click(); }} /> : null}
+          <input
+            ref={picker} type="file" multiple hidden accept={Object.entries(ATTACHMENT_TYPES).flatMap(([type, ext]) => [type, `.${ext}`]).join(',')} data-testid="attach-input"
+            onChange={(e) => { attachFiles([...(e.target.files ?? [])]); e.target.value = ''; area.current?.focus(); }}
+          />
+          <div className={s.sending ? 'aibox busy' : 'aibox'} data-testid="composer">
             <div className="aichips">
               {page && !s.pageOff ? <Chip r={page} onRemove={() => removeContext('page')} /> : null}
               {s.extra.map((r) => <Chip key={r.kind + r.id} r={r} onRemove={() => removeContext(r)} />)}
+              {s.files.map((f) => <FileChip key={f.key} f={f} />)}
             </div>
+            {s.fileError ? <div className="warnline aifileerror" role="alert">{s.fileError}</div> : null}
+            {heardError ? <div className="warnline aifileerror" role="alert">{t(`assistant.dictation.${heardError}`)}</div> : null}
             <textarea
               ref={area} rows={3} value={text} placeholder={t('assistant.placeholder')} aria-label={t('assistant.message')}
               onChange={(e) => { setText(e.target.value); setPick(0); }}
+              onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); attachFiles(files); } }}
               onKeyDown={(e) => {
                 if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }
                 if (offered.length && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); choose(offered[pick]); return; }
@@ -395,6 +478,14 @@ export function Sidebar({ page, books, onGo }: Props) {
                 type="button" className="aiplus" aria-label={t('assistant.mention')} title={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
                 ref={plus} onClick={() => setPicking(!picking)}
               >{ICONS.plus}</button>
+              {listening && ear?.online ? <small className="aiheard" aria-live="polite">{t('assistant.dictation.online')}</small> : null}
+              {ear ? (
+                <button
+                  type="button" className={`aimic${listening ? ' on' : ''}`} aria-pressed={!!listening} data-testid="dictate"
+                  aria-label={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')} title={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')}
+                  onClick={listen}
+                >{ICONS.mic}</button>
+              ) : null}
               {s.sending
                 ? <button type="button" className="aisend" aria-label={t('assistant.stop')} title={t('assistant.stop')} onClick={stopAnswer}>{ICONS.stop}</button>
                 : <button type="button" className="aisend" aria-label={t('assistant.send')} title={t('assistant.send')} aria-disabled={empty} onClick={send}>{ICONS.arrowUp}</button>}

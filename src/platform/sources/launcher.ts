@@ -9,7 +9,7 @@ import { fork } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { Channel, ChildMessage, ParentMessage, Yielded } from './model.js';
+import type { Channel, ChildMessage, ParentMessage, SourceDecl, Yielded } from './model.js';
 
 const CHILD = join(dirname(fileURLToPath(import.meta.url)), 'child.mjs');
 
@@ -30,6 +30,76 @@ export interface Launcher { start(folder: string): ChildHandle }
  * mailbox's connection check in Firma › Quellen) runs there all the same.
  */
 export const sourcesRunHere = (): boolean => !process.versions.electron;
+
+/**
+ * Why a source cannot run in this process, or nothing when it can. In the Mac app: a company's own
+ * code needs the fenced child (`fence`), and a mailbox over IMAP its mail client, which the app does
+ * not pack (`imap`, docs/desktop.md). The app's own code over the Mail app of the Mac runs there.
+ */
+export function whyNotHere(decl: Pick<SourceDecl, 'code' | 'reach'>): 'fence' | 'imap' | undefined {
+  if (sourcesRunHere()) return undefined;
+  if (decl.code.kind === 'own') return 'fence';
+  if (decl.reach.mail) return 'imap';
+  return undefined;
+}
+
+/** The launcher a source runs with here: the fenced child where it can start, else the app's own code in this process. */
+export const launcherFor = (decl: Pick<SourceDecl, 'code'>): Launcher => (sourcesRunHere() || decl.code.kind === 'own' ? nodeLauncher : inProcessLauncher);
+
+/**
+ * The app's own source code, run in this process (the Mac app, ADR 0014 unit 2b open): the code
+ * the app ships is as trusted as the rest of the app, so it needs no fence, only the same protocol
+ * as the child (child.mjs): it calls channels through the host, yields one item at a time.
+ */
+export const inProcessLauncher: Launcher = {
+  start() {
+    let onMsg: (m: ChildMessage) => void = () => {};
+    let waiting: (() => void) | undefined;
+    let calls = 0;
+    let stopped = false;
+    const pending = new Map<number, { resolve(v: unknown): void; reject(e: Error): void }>();
+    const emit = (m: ChildMessage) => { if (!stopped) queueMicrotask(() => onMsg(m)); };
+    const channel = (name: Channel) => new Proxy({}, {
+      get: (_t, method) => (...args: unknown[]) => new Promise((resolve, reject) => {
+        const id = ++calls;
+        pending.set(id, { resolve, reject });
+        emit({ type: 'call', id, channel: name, method: String(method), args });
+      }),
+    });
+    const out = {
+      document: (file: string, o: { key?: string; date?: string } = {}) => ({ kind: 'document', file, key: o.key, date: o.date }),
+      record: (record: unknown, o: { key?: string } = {}) => ({ kind: 'record', record, key: o.key }),
+      checkpoint: (cursor: unknown) => ({ kind: 'checkpoint', cursor }),
+    };
+    async function run(m: Extract<ParentMessage, { type: 'start' }>) {
+      try {
+        const mod = (await import(m.entry)) as { default?: Record<string, (io: unknown, from: unknown) => AsyncIterable<Yielded>> };
+        const feed = mod.default?.[m.feed];
+        if (typeof feed !== 'function') throw new Error(`the code has no feed "${m.feed}"`);
+        const io = { mail: channel('mail'), web: channel('web'), api: channel('api'), out, settings: Object.freeze({ ...m.settings }), log: (text: string) => emit({ type: 'log', text: String(text) }) };
+        for await (const item of feed(io, m.from)) {
+          if (stopped) return;
+          emit({ type: 'yield', item });
+          await new Promise<void>((resolve) => { waiting = resolve; });
+        }
+        emit({ type: 'end' });
+      } catch (e) {
+        emit({ type: 'error', message: String((e as Error)?.message ?? e) });
+      }
+    }
+    return {
+      send(m) {
+        if (m.type === 'start') void run(m);
+        else if (m.type === 'reply') { const p = pending.get(m.id); pending.delete(m.id); if (p) { if (m.ok) p.resolve(m.value); else p.reject(new Error(m.error)); } }
+        else { const w = waiting; waiting = undefined; w?.(); }
+      },
+      onMessage(f) { onMsg = f; },
+      // The code runs in this process: it ends by `end` or `error`, never by an exit.
+      onExit() {},
+      kill() { stopped = true; const w = waiting; waiting = undefined; w?.(); },
+    };
+  },
+};
 
 /** Plain node for the CLI, `npm start` and the tests: --permission, read-only to the folder and the child's own file, no environment. */
 export const nodeLauncher: Launcher = {

@@ -99,7 +99,7 @@ export const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex'
  * it) and `attachments(uid)` (each as a file reference to bytes the host holds). `held` collects
  * the bytes by reference for the delivery, with their sender.
  */
-export function mailChannel(backend: MailBackend, r: MailReach, addresses: string[], since: Date, held: Map<string, Held>) {
+export function mailChannel(backend: MailBackend, r: Pick<MailReach, 'folders' | 'from' | 'skip'>, addresses: string[], since: Date, held: Map<string, Held>) {
   const folder = r.folders[0] ?? 'INBOX';
   /** The sender of each message handed to the code. */
   const seen = new Map<number, string>();
@@ -120,7 +120,7 @@ export function mailChannel(backend: MailBackend, r: MailReach, addresses: strin
       return parts.map((p) => {
         const ref = `held:${sha256(p.content)}`;
         held.set(ref, { name: p.filename, content: p.content, from: seen.get(uid) });
-        return { file: ref, filename: p.filename, contentType: p.contentType };
+        return { file: ref, filename: p.filename, contentType: p.contentType, size: p.content.length };
       });
     },
   };

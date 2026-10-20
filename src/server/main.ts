@@ -6,6 +6,8 @@ import { closeBrowser } from '../invoices/pdf.js';
 import { startBackground } from './background.js';
 import { pairingUrl, phoneToken } from './phone.js';
 import { WS } from './books.js';
+import { locateWorkspace } from '../workspace/workspace.js';
+import { bundledDemo } from '../workspace/demo-copy.js';
 import { useKeychain } from '../secrets/keychain-store.js';
 
 // npm start keeps its secrets in the Mac's keychain (the desktop app sets its own store).
@@ -22,6 +24,7 @@ function listening() {
   const { port } = server.address() as AddressInfo;
   console.log(`\nAPI server running on port ${port}`);
   if (READONLY) console.log('🔒 READ-ONLY mode — all writes are blocked');
+  if (bundledDemo(locateWorkspace())) console.log(`Demo: working on a copy in ${WS.paths.repository} (npm run demo:reset starts it afresh)`);
 
   // Every IPv4 address, so the phone can be pointed at the right one.
   const token = phoneToken();

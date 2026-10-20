@@ -8,7 +8,7 @@ import { APP_ROOT } from '../workspace/workspace.js';
 import { sources } from '../platform/sources/index.js';
 import { feedDue, pull } from '../platform/sources/host.js';
 import { feedState, readLedger } from '../platform/sources/ledger.js';
-import { sourcesRunHere } from '../platform/sources/launcher.js';
+import { whyNotHere } from '../platform/sources/launcher.js';
 import type { Action } from './actions.js';
 
 export const COLLECT_ACTIONS: Record<string, Action> = {
@@ -17,9 +17,8 @@ export const COLLECT_ACTIONS: Record<string, Action> = {
     effects: [],
     run(_input, _fx, { ws }) {
       const now = new Date();
-      if (!sourcesRunHere()) return { outcome: 'none', output: { sources: [] } };
       const due = sources(ws, APP_ROOT).flatMap((v) => {
-        if (v.kind !== 'ready') return [];
+        if (v.kind !== 'ready' || whyNotHere(v.decl)) return [];
         const lines = readLedger(ws, v.decl.id);
         return v.decl.feeds.some((f) => feedDue(f, feedState(lines, f.id).last, now)) ? [{ kind: 'source' as const, id: v.decl.id }] : [];
       });
@@ -27,7 +26,7 @@ export const COLLECT_ACTIONS: Record<string, Action> = {
     },
   },
   'source.pull': {
-    outcomes: ['ok', 'login-needed', 'person-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited'],
+    outcomes: ['ok', 'login-needed', 'person-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited', 'mail-app'],
     effects: ['inbox.add', 'records.import', 'collected.append'],
     async run(input, _fx, { ws, run }) {
       const r = await pull({ ws, appRoot: APP_ROOT, source: String(input.source), run: run?.id ?? 'run', mode: run?.mode === 'live' || !run ? 'live' : 'dry' });

@@ -1,12 +1,13 @@
 /**
  * The small part of Markdown an answer of the AI sidebar uses, as data the sidebar renders with
  * React elements (never as HTML, so nothing in an answer is markup): paragraphs, line breaks, bold
- * (**…**, a heading line as bold), and lists with - , * or 1. Anything else stays as written. Pure,
+ * (**…**, a heading line as bold), lists with - , * or 1., and web links (a bare https:// address or
+ * [text](https://…); no other scheme). Anything else stays as written. Pure,
  * so a test reads it without a browser.
  */
 
-/** A run of text, bold or not. */
-export interface Span { text: string; bold?: true }
+/** A run of text, bold or not, a link when it has `href`. */
+export interface Span { text: string; bold?: true; href?: string }
 
 /** A paragraph's lines, or a list's items, each a line of spans. */
 export type Block =
@@ -17,6 +18,31 @@ const BULLET = /^\s*[-*•]\s+(.*)$/;
 const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
 const HEADING = /^\s*#{1,6}\s+(.*)$/;
 
+const LINK = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|https?:\/\/[^\s<>«»"]+/g;
+
+/** A bare address ends before the punctuation that closes its sentence, and before a ")" it did not open. */
+function trimmed(url: string): string {
+  let u = url.replace(/[.,;:!?'"\]]+$/, '');
+  while (u.endsWith(')') && (u.match(/\(/g)?.length ?? 0) < (u.match(/\)/g)?.length ?? 0)) u = u.slice(0, -1).replace(/[.,;:!?'"\]]+$/, '');
+  return u;
+}
+
+/** The links in a run of text: web addresses only, so an answer can never link to a script or a file. */
+function linked(text: string, bold: boolean): Span[] {
+  const out: Span[] = [];
+  const plain = (t: string) => { if (t) out.push(bold ? { text: t, bold: true } : { text: t }); };
+  let at = 0;
+  for (const m of text.matchAll(LINK)) {
+    const href = m[2] ?? trimmed(m[0]);
+    const whole = m[2] ? m[0] : href;
+    plain(text.slice(at, m.index));
+    out.push({ text: m[1] ?? href, href, ...(bold ? { bold: true as const } : {}) });
+    at = m.index + whole.length;
+  }
+  plain(text.slice(at));
+  return out;
+}
+
 /** The spans of one line: text between a pair of ** is bold; a ** without its pair stays as written. */
 export function spans(line: string): Span[] {
   const out: Span[] = [];
@@ -25,9 +51,11 @@ export function spans(line: string): Span[] {
   paired.forEach((text, i) => {
     if (!text) return;
     const bold = i % 2 === 1;
-    const last = out.at(-1);
-    if (last && !!last.bold === bold) last.text += text;
-    else out.push(bold ? { text, bold: true } : { text });
+    for (const span of linked(text, bold)) {
+      const last = out.at(-1);
+      if (last && !last.href && !span.href && !!last.bold === bold) last.text += span.text;
+      else out.push(span);
+    }
   });
   return out;
 }

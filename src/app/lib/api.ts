@@ -31,8 +31,10 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 import type { Conversation, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
+import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
 import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.js';
-import type { MailCheck, SourcesView } from '../../platform/sources/model.js';
+import type { MailCheck, SourcePreview, SourcesView } from '../../platform/sources/model.js';
+import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
@@ -136,6 +138,7 @@ export function errorText(e: unknown): string {
       b.params.invoices && t('error.bankInUse.invoices', { n: b.params.invoices }),
     ].filter(Boolean).join(', ') });
     case 'ledgerAccountTaken': return t('error.ledgerAccountTaken', b.params);
+    case 'attachment': return t(`error.attachment.${b.params.reason}`, { name: b.params.name, mb: 'mb' in b.params ? b.params.mb : 0, limit: ATTACHMENT_MAX_MB });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
     case 'gone': return t(`error.gone.${b.params.what}`);
@@ -168,6 +171,13 @@ export function errorText(e: unknown): string {
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
     case 'openingYearClosed': return t('company.openingClosed', { year: b.params.year });
     case 'mailSourceField': return t(`sources.field.${b.params.field}.invalid` as 'sources.field.address.invalid');
+    case 'mailHostUnknown': return t('error.mailHostUnknown', b.params);
+    case 'macMail': return t(`sources.macMail.problem.${b.params.problem}`);
+    case 'mailboxPassword': return t('error.mailboxPassword');
+    case 'sourceDraftMissing': return t('error.sourceDraftMissing', b.params);
+    case 'sourceInvalid': return t('error.sourceInvalid', { id: b.params.id, problems: b.params.problems.join('; ') });
+    case 'sourceSecret': return t('error.sourceSecret');
+    case 'sourceAppId': return t('error.sourceAppId', b.params);
     case 'vatMethodHeld': return t('error.vatMethodHeld', { year: b.params.year, n: b.params.entries, next: String(Number(b.params.year) + 1) });
     case 'vatSetup': return t(`error.vatSetup.${b.params.reason}`, { rate: String(b.params.rate) });
     case 'periodClosed': {
@@ -277,12 +287,22 @@ export const api = {
   changes: (since?: string) => request<ChangesView | { unchanged: true }>('GET', `/api/changes${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
+  /** A file for the next message (src/types/attachment.ts): kept beside the conversations, never in the books. */
+  assistantAttach: async (file: File): Promise<Attachment> => {
+    if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
+    const res = await fetch(`/api/assistant/attachments?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+    if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
+    return res.json() as Promise<Attachment>;
+  },
   assistantConversation: (id: string) => request<Conversation>('GET', `/api/assistant/${encodeURIComponent(id)}`),
   assistantUndo: (id: string, change: string) => request<MadeChange[]>('POST', `/api/assistant/${encodeURIComponent(id)}/changes/${encodeURIComponent(change)}/undo`),
   assistantHeld: (id: string, turn: number, take: boolean, language: string) => request<Extract<Turn, { role: 'ai' }>>('POST', `/api/assistant/${encodeURIComponent(id)}/held/${turn}`, { take, language }),
   sources: () => request<SourcesView>('GET', '/api/sources'),
+  mailHost: (address: string) => request<MailHost>('GET', `/api/sources/mail-host?address=${encodeURIComponent(address)}`),
   addMailSource: (input: { address: string; host: string; account?: string; password?: string }) => request<{ ok: true; id: string; updated?: true }>('POST', '/api/sources/mail', input),
-  saveSourcePassword: (id: string, password: string | null) => request<{ ok: true }>('PUT', `/api/sources/${encodeURIComponent(id)}/secret`, { password }),
+  saveSourcePassword: (id: string, password: string | null, channel: 'mail' | 'api' = 'mail') => request<{ ok: true }>('PUT', `/api/sources/${encodeURIComponent(id)}/secret`, { password, channel }),
+  signInSource: (id: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/sign-in`),
+  previewSource: (id: string) => request<SourcePreview>('POST', `/api/sources/${encodeURIComponent(id)}/preview`),
   checkSource: (id: string) => request<MailCheck>('POST', `/api/sources/${encodeURIComponent(id)}/check`),
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
@@ -369,11 +389,15 @@ export const api = {
     setPhone: (on: boolean) => request<PhoneInfo>('POST', '/api/desktop/phone', { on }),
     renewPhone: () => request<PhoneInfo>('POST', '/api/desktop/phone', { renew: true }),
   },
+  /** «Handy koppeln», step 1: where the receipt app is downloaded, and its QR code. */
+  phoneApp: () => request<{ url: string; qr: string }>('GET', '/api/phone/app'),
   patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   removeAccount: (number: string) => request<Ok>('DELETE', `/api/accounts/${number}`),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),
+  assistantDetach: (id: string) => request<{ ok: true }>('DELETE', `/api/assistant/attachments/${encodeURIComponent(id)}`),
   assistantExportUrl: (file: string) => `/api/assistant/exports/${encodeURIComponent(file)}`,
+  assistantAttachmentUrl: (conversation: string, id: string) => `/api/assistant/${encodeURIComponent(conversation)}/attachments/${encodeURIComponent(id)}`,
   logoUrl: (path: string) => `/api/invoice-logo?path=${encodeURIComponent(path)}`,
 
   invoices: () => request<InvoiceList>('GET', '/api/invoices'),

@@ -730,6 +730,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                   </p>
                 ) : null}
                 <span className="wfactions">
+                  {task.do === 'open-login' && task.item.kind === 'source' ? <button type="button" className="btn ghost" data-testid="task-sign-in" onClick={() => { api.signInSource(task.item.id).then(() => nav.toast(t('sources.signInOpened')), (e: unknown) => nav.toast(errorText(e))); }}>{t('sources.signIn')}</button> : null}
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
                   {task.outcomes.filter((o) => o !== withheld?.outcome && !(o === 'filed' && confirming === task.run)).map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}
                   <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: task.run }, query: {} })}>{t('automation.run', { id: task.run })}</button>

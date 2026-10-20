@@ -6,5 +6,8 @@
   <true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
+  <!-- «Mail-Programm auf diesem Mac»: the app asks Mail through osascript (src/platform/sources/mac-mail.ts); under the hardened runtime macOS refuses those Apple events without this. -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
 </dict>
 </plist>

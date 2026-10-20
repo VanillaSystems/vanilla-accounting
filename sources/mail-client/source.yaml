@@ -1,0 +1,9 @@
+# The app's source for the Mail app on this Mac (ADR 0014, macOS only): a company binds it per
+# account with `code: app:mail-client` and its reach `mac-mail` (the account's name in Mail, its
+# mailbox, the senders). No server and no password: the host asks Mail (src/platform/sources/mac-mail.ts).
+# It is never run on its own.
+bindable: true
+label: { en: Mail app on this Mac, de: Mail-Programm auf diesem Mac, fr: App Mail de ce Mac, it: App Mail di questo Mac }
+code: ./source.ts
+feeds:
+  attachments: { output: document, every: daily }

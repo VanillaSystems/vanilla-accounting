@@ -6,6 +6,8 @@ import type { SetupRefusal } from '../workspace/create.js';
 import type { SaleGone } from '../questions/model.js';
 import type { RuleRefusal } from './rule-refusal.js';
 import type { ReportRefusal } from '../reports/spec.js';
+import type { AttachmentRefusal } from './attachment.js';
+import type { MacMailProblem } from './mac-mail.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -43,6 +45,8 @@ export type ApiRefusal =
   /** The bookings of a payment would no longer add up to it: `paid` and `booked` in its currency. */
   | { code: 'paymentBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | ClassifyRefusal
+  /** A file given the AI sidebar it cannot take (src/types/attachment.ts): its type, empty, too big, or gone before the message was sent. */
+  | AttachmentRefusal
   /** An AI sidebar answer (src/server/edits.ts applyAnswer, src/server/workspace-edits.ts): it would take back an earlier answer's change, link a receipt set aside, book on an account the chart lacks, or take back an account bookings use. */
   /** Someone answered the question first (the books folder is shared). */
   | { code: 'questionAnswered' }
@@ -83,6 +87,17 @@ export type ApiRefusal =
   | { code: 'openingNotFirstYear'; params: { year: string } }
   | { code: 'openingYearClosed'; params: { year: string } }
   | { code: 'mailSourceField'; params: { field: 'address' | 'host' | 'account' } }
+  /** «Mail-Programm auf diesem Mac»: the Mail app could not be read (src/platform/sources/mac-mail.ts), or it holds no such account or mailbox. */
+  | { code: 'macMail'; params: { problem: MacMailProblem } }
+  /** A mailbox the AI drafts: the domain's MX records name no IMAP server the app knows, so the person names it. */
+  | { code: 'mailHostUnknown'; params: { domain: string } }
+  /** A mailbox the AI drafts with a password: a password goes only into the card's field, never through the chat. */
+  | { code: 'mailboxPassword' }
+  /** A source the AI names whose draft (data/draft/sources/<id>/) is missing, does not load, holds a secret, or takes the name of the app's own code (src/platform/sources/draft.ts). */
+  | { code: 'sourceDraftMissing'; params: { id: string } }
+  | { code: 'sourceInvalid'; params: { id: string; problems: string[] } }
+  | { code: 'sourceSecret'; params: { id: string; file: string } }
+  | { code: 'sourceAppId'; params: { id: string } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
   | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' } }
   /** Firma › Bankkonten › «Entfernen» (or the undo of an add) while statements, bookings or invoices use the account (r9k-1). */

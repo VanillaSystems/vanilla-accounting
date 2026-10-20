@@ -9,6 +9,8 @@ import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload
 import { capturedStem } from '../../intake/captured.js';
 import { smallerPdf } from '../../parsers/smaller.js';
 import { INTAKE, engine } from './automation.js';
+import { APP_STORE_URL } from '../phone.js';
+import { qrSvg } from '../../desktop/qr.js';
 
 export const router = Router();
 
@@ -17,6 +19,11 @@ export const router = Router();
 router.get('/scan', (_req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(readFileSync(join(APP_ROOT, 'src', 'server', 'scan.html'), 'utf8'));
+});
+
+/** «Handy koppeln», step 1: the receipt app's download link and its QR code (paper colours, as a scanner expects). */
+router.get('/api/phone/app', (_req, res) => {
+  res.json({ url: APP_STORE_URL, qr: qrSvg(APP_STORE_URL) });
 });
 
 router.get('/scan/manifest.json', (_req, res) => {

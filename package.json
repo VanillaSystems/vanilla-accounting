@@ -58,6 +58,7 @@
     "evidence": "tsx src/cli/evidence.ts",
     "gaps": "tsx src/cli/gaps.ts",
     "demo:generate": "tsx tools/demo/generate.ts",
+    "demo:reset": "tsx src/cli/demo-reset.ts",
     "tutti": "tsx src/collect/tutti.ts",
     "pretest": "tsc --noEmit",
     "test": "sh tools/test/run.sh",

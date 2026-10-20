@@ -5,7 +5,7 @@
  * 0.4.0 pilot (status, no state) is read as a run of today's shape.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
@@ -24,6 +24,11 @@ export function saveRun(ws: Pick<Workspace, 'paths'>, run: Run): void {
   const path = join(dir, `${run.id}.json`);
   writeFileSync(`${path}.tmp`, JSON.stringify(run, null, 2));
   renameSync(`${path}.tmp`, path);
+}
+
+/** A run that is not kept (engine.ts idle): its file goes. */
+export function forgetRun(ws: Pick<Workspace, 'paths'>, id: string): void {
+  rmSync(join(runsDir(ws), `${id}.json`), { force: true });
 }
 
 export function loadRun(ws: Pick<Workspace, 'paths'>, id: string): Run | undefined {

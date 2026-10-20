@@ -147,6 +147,10 @@ test('an answer\'s bold, lists and paragraphs are data, never markup; an unpaire
   ]);
   assert.deepEqual(markdownBlocks('5 ** 2 <b>x</b>'), [{ kind: 'p', lines: [[{ text: '5 ** 2 <b>x</b>' }]] }], 'HTML is text');
   assert.deepEqual(markdownBlocks('### Offen'), [{ kind: 'p', lines: [[{ text: 'Offen', bold: true }]] }]);
+  assert.deepEqual(markdownBlocks('Hier: https://myaccount.google.com/apppasswords. Dann weiter.'), [{ kind: 'p', lines: [[{ text: 'Hier: ' }, { text: 'https://myaccount.google.com/apppasswords', href: 'https://myaccount.google.com/apppasswords' }, { text: '. Dann weiter.' }]] }], 'a bare address is a link, without the full stop after it');
+  assert.deepEqual(markdownBlocks('Seite [App-Passwörter](https://myaccount.google.com/apppasswords) öffnen'), [{ kind: 'p', lines: [[{ text: 'Seite ' }, { text: 'App-Passwörter', href: 'https://myaccount.google.com/apppasswords' }, { text: ' öffnen' }]] }], 'a Markdown link shows its text');
+  assert.deepEqual(markdownBlocks('(siehe https://de.wikipedia.org/wiki/IMAP_(Protokoll))'), [{ kind: 'p', lines: [[{ text: '(siehe ' }, { text: 'https://de.wikipedia.org/wiki/IMAP_(Protokoll)', href: 'https://de.wikipedia.org/wiki/IMAP_(Protokoll)' }, { text: ')' }]] }], 'a bracket the address opened stays in it, the one around it does not');
+  assert.deepEqual(markdownBlocks('[klick](javascript:alert(1)) file:///etc/passwd'), [{ kind: 'p', lines: [[{ text: '[klick](javascript:alert(1)) file:///etc/passwd' }]] }], 'only web addresses become links');
 });
 
 test('a payer rule reads with the payer\'s name, not its key (3, r4w-8)', () => {

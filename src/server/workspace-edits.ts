@@ -1,6 +1,6 @@
 /**
  * The AI sidebar's changes outside the books (src/types/assistant.ts WorkspaceChange): an account
- * of the chart, the invoicing settings, an invoice draft. Each goes through the write path the
+ * of the chart, the invoicing settings, an invoice draft, a question, a mailbox source drafted. Each goes through the write path the
  * Firma page and Rechnungen use (accounts-write, manifest-write, the invoices' service), refuses
  * what they refuse, and returns the change that undoes it. No record of the books changes, so no
  * period is closed to them.
@@ -9,14 +9,21 @@ import type { Books } from '../books/store.js';
 import { accountName, removeAccount, setAccountName } from '../workspace/accounts-write.js';
 import { assertPlaced } from './edits.js';
 import { patchManifest } from '../workspace/manifest-write.js';
-import { WorkspaceError, type Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, WorkspaceError, type Workspace } from '../workspace/workspace.js';
 import { createCustomer, createDraft, parseCustomer, parseDraftPatch, removeDraft } from '../invoices/service.js';
 import { loadInvoices, updateInvoices } from '../invoices/store.js';
 import { InvoiceRuleError, liveCustomers, liveInvoices } from '../invoices/rules.js';
 import type { Customer, CustomerFields } from '../invoices/model.js';
-import type { ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
+import type { Change, ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
 import { askQuestion, closeQuestion, openQuestionOn } from './questions.js';
+import { sources, withdrawApproval } from '../platform/sources/index.js';
+import { mailInputProblem, mailSourceSlot, removeMailSource, writeMailSource, type MailSourceInput } from '../platform/sources/mail-setup.js';
+import { mailSecret, secrets } from '../secrets/secrets.js';
+import { domainOf, lookupMailHost } from '../platform/sources/mail-host.js';
+import { restoreSource, SourceDraftError, takeSourceDraft } from '../platform/sources/draft.js';
+import { secretKey } from '../platform/sources/model.js';
+import { resolveMx } from 'node:dns/promises';
 
 export interface Applied { undo?: WorkspaceChange; note?: ChangeNote }
 
@@ -123,6 +130,64 @@ function question(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'question' 
   return { undo: { kind: 'withdrawQuestion', id: q.id }, note: { question: { id: q.id, ...(q.to ? { to: q.to } : {}), ...(q.answer ? { answered: q.answer.by } : {}) } } };
 }
 
+/**
+ * A mailbox drafted from the sidebar, as «Postfach verbinden» in Firma › Quellen drafts it: its
+ * source folder, waiting to be switched on; no password (the card puts it into the secret store).
+ * A mailbox the workspace holds already is not drafted again: its card stands instead.
+ */
+function mailbox(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'mailbox' }>): Applied {
+  const domain = c.address.split('@')[1] ?? '';
+  if (!c.host) throw new RequestError(400, `Für ${domain} ist kein IMAP-Server bekannt.`, { code: 'mailHostUnknown', params: { domain } });
+  const input: MailSourceInput = { address: c.address, host: c.host, ...(c.account ? { account: c.account } : {}), ...(c.label ? { label: c.label } : {}) };
+  const problem = mailInputProblem(input);
+  if (problem) throw new RequestError(400, `Das Feld ${problem} ist nicht gültig.`, { code: 'mailSourceField', params: { field: problem } });
+  const { id, existing } = mailSourceSlot(c.address, sources(ws, APP_ROOT));
+  if (existing) return { note: { mailbox: { id, existing: true } } };
+  writeMailSource(ws, id, input);
+  return { undo: { kind: 'dropMailbox', id }, note: { mailbox: { id } } };
+}
+
+/** The answer's mailboxes with their IMAP server: one the answer names, else the one the domain's MX records point to (as Belege's «Weg hinzufügen» guesses it). */
+export async function withMailHosts(changes: Change[]): Promise<Change[]> {
+  return Promise.all(changes.map(async (c) => {
+    if (c.kind !== 'mailbox' || c.host) return c;
+    const domain = domainOf(c.address);
+    const host = domain ? (await lookupMailHost(domain, resolveMx)).host : undefined;
+    return host ? { ...c, host } : c;
+  }));
+}
+
+/** The undo of a mailbox drafted: its folder, its switch and its password go, so the same mailbox drafted again waits to be switched on anew. */
+function dropMailbox(ws: Workspace, id: string): Applied {
+  removeMailSource(ws, id);
+  withdrawApproval(ws, id);
+  if (secrets.inApp()) secrets.set(mailSecret(id), null).catch((e: Error) => console.error(`mailbox ${id}: ${e.message}`));
+  return {};
+}
+
+/**
+ * A source the AI wrote with the person, taken from its draft into the workspace, waiting to be
+ * switched on; refused with the loader's problems, or when a file holds a secret.
+ */
+function source(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'source' }>): Applied {
+  try {
+    const { previous, label } = takeSourceDraft(ws, c.id, APP_ROOT);
+    return { undo: { kind: 'dropSource', id: c.id, ...(previous ? { previous } : {}) }, note: { source: { id: c.id, label, ...(previous ? { replaced: true } : {}) } } };
+  } catch (e) {
+    if (e instanceof SourceDraftError) throw new RequestError(400, e.message, e.refusal);
+    throw e;
+  }
+}
+
+/** The undo of a source taken in: what the folder held before, or nothing, its switch and secrets with it. */
+function dropSource(ws: Workspace, id: string, previous?: Record<string, string>): Applied {
+  restoreSource(ws, id, previous);
+  if (!previous && secrets.inApp()) {
+    for (const channel of ['mail', 'api'] as const) secrets.set(secretKey(id, channel), null).catch((e: Error) => console.error(`source ${id}: ${e.message}`));
+  }
+  return {};
+}
+
 /** One change; the manifest is read again by the caller (reopenWorkspace) after an invoicing change. */
 export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceChange): Applied {
   switch (c.kind) {
@@ -132,5 +197,9 @@ export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceCh
     case 'dropInvoiceDraft': return dropInvoiceDraft(ws, c.id, c.customer);
     case 'question': return question(ws, c);
     case 'withdrawQuestion': closeQuestion(c.id, AI, 'withdrawn'); return {};
+    case 'mailbox': return mailbox(ws, c);
+    case 'dropMailbox': return dropMailbox(ws, c.id);
+    case 'source': return source(ws, c);
+    case 'dropSource': return dropSource(ws, c.id, c.previous);
   }
 }

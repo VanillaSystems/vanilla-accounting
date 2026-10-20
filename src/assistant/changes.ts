@@ -13,6 +13,7 @@ import { parseVatFacts } from '../accounting/vat-facts.js';
 import { PRESETS } from '../export/model.js';
 import { parseSpec } from '../reports/spec.js';
 import { questionChoices, TARGET_KINDS, type QuestionTarget } from '../questions/model.js';
+import { domainOf } from '../platform/sources/mail-host.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 
@@ -173,6 +174,20 @@ function change(v: unknown): Change {
       if (!choices) throw new ChangesError(`choices: ${JSON.stringify(c.choices)}`, { code: 'questionChoices' });
       const to = typeof c.to === 'string' && c.to.trim() ? c.to.trim() : undefined;
       return { kind: 'question', on: { kind: on.kind as QuestionTarget['kind'], id: str(on.id, 'on.id') }, text: str(c.text, 'text'), ...(choices.length ? { choices } : {}), ...(to ? { to } : {}) };
+    }
+    case 'mailbox': {
+      const address = str(c.address, 'address');
+      if (!domainOf(address)) throw new ChangesError('address ist keine Adresse', { code: 'mailSourceField', params: { field: 'address' } });
+      const opt = (k: 'host' | 'account' | 'label') => (typeof c[k] === 'string' && c[k].trim() ? { [k]: c[k].trim() } : {});
+      if ('password' in c) throw new ChangesError('kein Passwort im Block: die Karte fragt es', { code: 'mailboxPassword' });
+      return { kind: 'mailbox', address, ...opt('host'), ...opt('account'), ...opt('label') };
+    }
+    case 'source': {
+      const id = str(c.id, 'id');
+      const extra = Object.keys(c).filter((k) => k !== 'kind' && k !== 'id');
+      if (extra.some((k) => /pass|secret|token|key|credential/i.test(k))) throw new ChangesError('kein Geheimnis im Block: die Karte fragt es', { code: 'sourceSecret', params: { id, file: 'block' } });
+      if (extra.length) throw new ChangesError(`source: nur die id; die Dateien stehen in data/draft/sources/${id}/`);
+      return { kind: 'source', id };
     }
     default: throw new ChangesError(`unbekannte Änderung ${String(c.kind)}`);
   }

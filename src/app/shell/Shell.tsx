@@ -37,7 +37,9 @@ import { TopBar } from './TopBar.js';
 import { Corner } from './Corner.js';
 import { Sidebar } from './Sidebar.js';
 import { pageContext } from '../assistant/context.js';
-import { onBooksChanged, syncSidebarWidth, toggleAssistant } from '../assistant/store.js';
+import { attachDropped, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
+import { droppedFiles } from '../assistant/folder-drop.js';
+import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
 
@@ -73,7 +75,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);
-  const [dropping, setDropping] = useState(false);
+  const [dropping, setDropping] = useState<DropTarget | null>(null);
+  const aiOpen = useAssistant().open;
 
   const area = areaOf(loc.route);
   const open = booksOpenPeriod(books, localToday(), filing().length);
@@ -184,7 +187,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
 
   // The drop dialog takes every drop; the Bank area keeps its own, where the open account places a statement.
-  useDrop(canEdit, setDropping, (files) => (area.drop && !dropOpen() ? area.drop.run(files, propsRef.current) : void dropFiles(files)));
+  useDrop(canEdit, setDropping, (files, target, entries) => (target === 'chat' ? void droppedFiles(entries, files).then(attachDropped) : area.drop && !dropOpen() ? area.drop.run(files, propsRef.current) : void dropFiles(files)));
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;
@@ -281,12 +284,19 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
           ))}
         </div>
       )}
-      <div className={`drop${dropping ? ' show' : ''}`} aria-hidden="true">
+      <div className={`drop${dropping ? ' show' : ''}${dropping === 'page' ? ' on' : ''}`} aria-hidden="true" data-testid="drop-page">
         <div className="box"><div>
           {ICONS.upload}
-          <h2>{t('drop.title')}</h2>
+          <h2>{area.drop ? t('drop.title') : t('drop.page')}</h2>
           <p>{area.drop?.text() ?? t('drop.text')}</p>
           <p style={{ marginTop: 4, fontSize: 12.5, color: 'var(--faint)' }}>{area.drop?.formats() ?? t('drop.formats')}</p>
+        </div></div>
+      </div>
+      <div className={`dropchat${dropping ? ' show' : ''}${dropping === 'chat' ? ' on' : ''}${aiOpen ? '' : ' edge'}`} aria-hidden="true" data-testid="drop-chat">
+        <div className="box"><div>
+          <BotIcon />
+          <h2>{t(aiOpen ? 'drop.chat' : 'drop.ai')}</h2>
+          {aiOpen ? <p>{t('drop.chatText')}</p> : null}
         </div></div>
       </div>
 
@@ -330,23 +340,33 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   );
 }
 
-/** Files dragged over the page show the drop zone; dropped, they go to the inbox. */
-function useDrop(enabled: boolean, setShown: (on: boolean) => void, onFiles: (files: File[]) => void) {
+/** Where dragged files go: the page takes them as receipts, the AI sidebar (or, closed, the window's right edge) as a message's attachments. */
+type DropTarget = 'page' | 'chat';
+/** The width of the «An die KI» edge while the sidebar is closed; shell.css --ai-edge says the same. */
+const AI_EDGE = 88;
+
+/**
+ * Files dragged over the window show the two drop zones, the one under the pointer lit; dropped, they go where it says.
+ * `entries` are the drop's items as entries, read while the event lasts: a folder is one, to walk later.
+ */
+function useDrop(enabled: boolean, setShown: (on: DropTarget | null) => void, onFiles: (files: File[], target: DropTarget, entries: (FileSystemEntry | null)[]) => void) {
   const latest = useRef(onFiles);
   latest.current = onFiles;
   useEffect(() => {
     if (!enabled) return;
     let depth = 0;
     const files = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes('Files');
-    const enter = (e: DragEvent) => { if (!files(e)) return; e.preventDefault(); depth++; setShown(true); };
-    const over = (e: DragEvent) => { if (files(e)) e.preventDefault(); };
-    const leave = () => { if (--depth <= 0) { depth = 0; setShown(false); } };
+    const target = (e: DragEvent): DropTarget => e.clientX >= (document.querySelector('aside.aside')?.getBoundingClientRect().left ?? innerWidth - AI_EDGE) ? 'chat' : 'page';
+    const enter = (e: DragEvent) => { if (!files(e)) return; e.preventDefault(); depth++; setShown(target(e)); };
+    const over = (e: DragEvent) => { if (files(e)) { e.preventDefault(); setShown(target(e)); } };
+    const leave = () => { if (--depth <= 0) { depth = 0; setShown(null); } };
     const drop = (e: DragEvent) => {
       if (!files(e)) return;
       e.preventDefault();
       depth = 0;
-      setShown(false);
-      latest.current([...(e.dataTransfer?.files ?? [])]);
+      setShown(null);
+      const entries = [...(e.dataTransfer?.items ?? [])].map((i) => i.webkitGetAsEntry?.() ?? null);
+      latest.current([...(e.dataTransfer?.files ?? [])], target(e), entries);
     };
     addEventListener('dragenter', enter);
     addEventListener('dragover', over);

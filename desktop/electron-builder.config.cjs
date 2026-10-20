@@ -57,9 +57,9 @@ module.exports = {
     '!node_modules/**/*.{map,d.ts,d.mts,d.cts}',
   ],
   asar: true,
-  // The AI sidebar's Claude reads the app's rules, workflows and country modules with its own file
-  // tools, which cannot look inside app.asar (src/assistant/claude.ts APP_FILES).
-  asarUnpack: ['AGENTS.md', 'workflows/**/*', 'modules/**/*'],
+  // The AI sidebar's Claude reads the app's rules, workflows, guides and country modules with its own
+  // file tools, which cannot look inside app.asar (src/assistant/claude.ts APP_FILES).
+  asarUnpack: ['AGENTS.md', 'workflows/**/*', 'processes/**/*', 'modules/**/*'],
   // Chromium's own translations only for the app's languages.
   electronLanguages: ['de', 'fr', 'it', 'en'],
   // Hardening of the release build: the app's binary cannot be run as Node, takes no NODE_OPTIONS
@@ -86,6 +86,8 @@ module.exports = {
     hardenedRuntime: true,
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',
+    // What macOS shows when the app first asks Mail for its accounts (Firma › Quellen, «Mail-Programm auf diesem Mac»).
+    extendInfo: { NSAppleEventsUsageDescription: 'Vanilla Accounting reads the invoices in your Mail accounts that you choose, and saves their attachments into your books. It never sends or changes mail.' },
     // null: no signing, even when the keychain holds an identity.
     identity: signed ? undefined : null,
     notarize,

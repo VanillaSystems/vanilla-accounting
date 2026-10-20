@@ -15,6 +15,7 @@ import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, usePhoneToken } from
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
 import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
+import { bundledDemo } from '../workspace/demo-copy.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 import type { DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
 import { qrSvg } from './qr.js';
@@ -93,6 +94,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
 
   async function openBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);
+    if (bundledDemo(root)) return openDemo();
     if (!appFolderIn(root)) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
     workspaceAt(root);
     if (books) (await import('../server/books.js')).reopenWorkspace(root);
