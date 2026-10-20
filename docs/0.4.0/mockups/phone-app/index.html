@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Belege-App · Mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Tokens from src/app/styles/tokens.css (the Mac app), light and dark. --brand is the brand tile's blue (desktop/icon.svg). */
+:root {
+  --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --faint: #a3a9b5; --line: #e7eaf0; --line-2: #d3d8e1;
+  --accent: #0067b1; --accent-soft: #e8f1f9; --on-accent: #fff; --hover: #f4f6f9; --desk: #f4f6f9;
+  --warn: #9a5b00; --warn-soft: #fdf3e1; --pos: #1a7f4b; --pos-soft: #e8f5ee; --neg: #b42318;
+  --brand: #005B8C; --page: #eceff4; --group: #f4f6f9; --sheet: #ffffff;
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --sans: "Instrument Sans", var(--sys); --head: "Hanken Grotesk", var(--sys); --mono: "Geist Mono", ui-monospace, monospace;
+}
+:root[data-theme="dark"] {
+  --bg: #0a0a0a; --ink: #ededed; --ink-2: #b0b0b0; --muted: #8f8f8f; --faint: #5a5a5a; --line: #1f1f1f; --line-2: #2e2e2e;
+  --accent: #ededed; --accent-soft: #1a1a1a; --on-accent: #0a0a0a; --hover: #131313; --desk: #111111;
+  --warn: #e8b04b; --warn-soft: #2c2112; --pos: #5cc790; --pos-soft: #14281d; --neg: #f2877d;
+  --page: #050505; --group: #131313; --sheet: #161616;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 14px/1.45 var(--sans); }
+.doc { max-width: 1400px; margin: 0 auto; padding: 36px 24px 100px; display: grid; gap: 28px; }
+.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+h1 { font: 800 32px/1.1 var(--head); margin: 0; margin-right: auto; }
+h2 { font: 700 20px/1.2 var(--head); margin: 0; }
+.lede { max-width: 80ch; color: var(--ink-2); margin: 0; }
+.toggle { font: 500 13px var(--sans); padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); cursor: pointer; }
+.stage { display: grid; grid-template-columns: 393px 1fr; gap: 32px; align-items: start; }
+.explain { display: grid; gap: 14px; max-width: 70ch; }
+.explain p, .explain li { color: var(--ink-2); margin: 0; }
+.explain ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.explain .box { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; }
+.explain b { color: var(--ink); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(393px, 1fr)); gap: 28px 24px; justify-items: center; }
+.shot { display: grid; gap: 10px; justify-items: center; }
+.shot figcaption { max-width: 393px; font-size: 13px; color: var(--ink-2); }
+.shot figcaption b { color: var(--ink); }
+figure { margin: 0; }
+@media (max-width: 900px) { .stage { grid-template-columns: 1fr; justify-items: center; } }
+
+/* ---------- the phone ---------- */
+.phone { width: 393px; height: 852px; border-radius: 54px; background: var(--bg); position: relative; overflow: hidden; box-shadow: 0 0 0 10px #1b1d22, 0 0 0 11px #3a3d44, 0 30px 70px -20px rgba(0,0,0,.45); font-family: var(--sans); color: var(--ink); }
+.island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; border-radius: 20px; background: #000; z-index: 30; }
+.status { position: absolute; top: 0; left: 0; right: 0; height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 6px 32px 0 40px; font: 600 16px var(--sys); z-index: 25; color: var(--ink); }
+.status .r { display: flex; gap: 6px; align-items: center; }
+.status svg { width: 18px; height: 12px; fill: currentColor; }
+.screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.home { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; border-radius: 3px; background: var(--ink); opacity: .85; z-index: 30; }
+.phone.dark-ui .status { color: #fff; }
+.phone.dark-ui .home { background: #fff; }
+
+.nav { padding: 58px 18px 0; display: flex; align-items: center; gap: 10px; }
+.mark { width: 34px; height: 34px; flex: none; }
+.mark svg { display: block; }
+.conn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--hover); font-size: 13px; color: var(--ink-2); border: 0; font-family: inherit; cursor: pointer; white-space: nowrap; }
+.conn i { width: 8px; height: 8px; border-radius: 50%; background: var(--pos); flex: none; }
+.conn.warn { background: var(--warn-soft); color: var(--warn); }
+.conn.warn i { background: var(--warn); }
+.conn.off i { background: var(--faint); }
+.iconbtn { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--hover); display: grid; place-items: center; color: var(--ink-2); margin-left: auto; cursor: pointer; flex: none; }
+.iconbtn svg, .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.title { padding: 14px 20px 4px; }
+.title h3 { margin: 0; font: 800 34px/1.05 var(--head); letter-spacing: -.01em; }
+.title small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
+.banner { margin: 10px 16px 0; padding: 10px 12px; border-radius: 12px; background: var(--warn-soft); color: var(--warn); font-size: 13px; display: flex; gap: 9px; }
+.banner b { display: block; color: var(--warn); }
+.banner span { color: var(--ink-2); }
+.list { flex: 1; overflow-y: auto; padding: 6px 0 150px; }
+.day { padding: 16px 20px 6px; font: 500 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; }
+.row { display: grid; grid-template-columns: 40px 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 20px; cursor: pointer; }
+.row:active, .row.hl { background: var(--hover); }
+.thumb { width: 40px; height: 50px; border-radius: 6px; background: #fff; border: 1px solid var(--line-2); grid-row: span 2; position: relative; overflow: hidden; }
+.thumb::before { content: ""; position: absolute; left: 6px; right: 6px; top: 8px; height: 26px; background: repeating-linear-gradient(#c9ced8 0 1.5px, transparent 1.5px 5px); }
+.thumb.multi { box-shadow: 3px 3px 0 -1px var(--bg), 3px 3px 0 0 var(--line-2); }
+.row .n { font-size: 16px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .n.guess { color: var(--ink-2); }
+.row .n em { font-style: normal; font-size: 11px; font-weight: 500; color: var(--muted); border: 1px solid var(--line-2); border-radius: 5px; padding: 1px 5px; margin-left: 6px; vertical-align: 2px; }
+.row .a { font: 500 15px var(--mono); text-align: right; white-space: nowrap; }
+.row .a small { font-size: 11px; color: var(--muted); margin-right: 3px; }
+.row .s { grid-column: 2 / span 2; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.row .s > * { flex: none; }
+.st { display: inline-flex; align-items: center; gap: 5px; }
+.st svg { width: 13px; height: 13px; }
+.st.wait { color: var(--muted); }
+.st.mac { color: var(--ink-2); }
+.st.done { color: var(--pos); }
+.st.ask { color: var(--warn); }
+.dotsep::before { content: "·"; margin: 0 2px; color: var(--faint); }
+.spin { width: 11px; height: 11px; border: 1.6px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.fresh { animation: fresh 1.8s ease-out; }
+@keyframes fresh { from { background: var(--accent-soft); } to { background: transparent; } }
+
+.bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 16px 34px; display: grid; gap: 10px; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid var(--line); }
+.bar .btns { display: grid; grid-template-columns: 1fr 56px; gap: 10px; }
+.scan { height: 56px; border-radius: 16px; border: 0; background: var(--accent); color: var(--on-accent); font: 600 17px var(--sans); display: flex; align-items: center; justify-content: center; gap: 9px; cursor: pointer; }
+.scan svg { stroke: var(--on-accent); width: 21px; height: 21px; }
+.lib { height: 56px; border-radius: 16px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+.lib svg { width: 22px; height: 22px; }
+.sync { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
+.sync button { border: 0; background: none; color: var(--accent); font: 600 12.5px var(--sans); cursor: pointer; padding: 0; }
+:root[data-theme="dark"] .sync button { color: var(--ink); text-decoration: underline; }
+
+/* detail */
+.sheethead { padding: 58px 12px 0; display: flex; align-items: center; justify-content: space-between; }
+.back { border: 0; background: none; color: var(--accent); font: 500 16px var(--sans); display: inline-flex; align-items: center; gap: 2px; cursor: pointer; padding: 8px; }
+:root[data-theme="dark"] .back { color: var(--ink); }
+.paperwrap { margin: 8px 20px 0; height: 300px; border-radius: 14px; background: var(--desk); display: grid; place-items: center; position: relative; }
+.paper { width: 170px; background: #fff; color: #222; border-radius: 3px; box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 14px 12px; font: 8.5px/1.45 var(--mono); }
+.paper b { display: block; font: 700 10.5px var(--sans); text-align: center; margin-bottom: 4px; }
+.paper .ln { display: flex; justify-content: space-between; }
+.paper hr { border: 0; border-top: 1px dashed #bbb; margin: 5px 0; }
+.pages { position: absolute; bottom: 10px; right: 12px; font: 500 11px var(--mono); background: rgba(0,0,0,.55); color: #fff; padding: 3px 7px; border-radius: 6px; }
+.fields { margin: 14px 16px 0; border-radius: 14px; background: var(--group); overflow: hidden; }
+.field { display: grid; grid-template-columns: 96px 1fr auto; gap: 8px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.field:last-child { border-bottom: 0; }
+.field label { color: var(--muted); font-size: 13px; }
+.field input { border: 0; background: none; font: 500 15px var(--sans); color: var(--ink); outline: none; padding: 0; min-width: 0; }
+.field .v { font: 500 15px var(--mono); }
+.field .edit { color: var(--accent); }
+:root[data-theme="dark"] .field .edit { color: var(--ink-2); }
+.source { margin: 8px 20px 0; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: flex-start; }
+.source svg { width: 13px; height: 13px; margin-top: 2px; flex: none; }
+.timeline { margin: 14px 16px 0; border-radius: 14px; background: var(--group); padding: 12px 14px; display: grid; gap: 9px; font-size: 13.5px; }
+.timeline div { display: flex; gap: 9px; align-items: center; }
+.timeline .ok { color: var(--pos); }
+.timeline .todo { color: var(--faint); }
+.timeline small { margin-left: auto; color: var(--muted); font: 12px var(--mono); }
+
+/* camera */
+.cam { position: absolute; inset: 0; background: radial-gradient(120% 80% at 50% 45%, #6b5a48 0%, #3d3328 55%, #1d1813 100%); }
+.cam::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,.025) 0 2px, transparent 2px 9px); }
+.docshot { position: absolute; left: 92px; top: 196px; width: 210px; height: 330px; background: #f6f3ec; transform: rotate(-6deg) skewY(2deg); box-shadow: 0 14px 30px rgba(0,0,0,.45); padding: 18px 16px; font: 9px/1.5 var(--mono); color: #333; }
+.docshot b { display: block; font: 700 12px var(--sans); text-align: center; margin-bottom: 6px; }
+.docshot .ln { display: flex; justify-content: space-between; }
+.edge { position: absolute; left: 84px; top: 186px; width: 226px; height: 350px; transform: rotate(-6deg) skewY(2deg); border: 2.5px solid #4ea1e6; border-radius: 4px; background: rgba(78,161,230,.12); box-shadow: 0 0 0 1px rgba(255,255,255,.25); z-index: 3; }
+.edge.lost { border-color: rgba(255,255,255,.35); background: none; border-style: dashed; }
+.camtop { position: absolute; top: 54px; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 6px 18px; z-index: 5; }
+.pill { height: 32px; padding: 0 12px; border-radius: 999px; border: 0; background: rgba(0,0,0,.45); color: #fff; font: 500 13.5px var(--sans); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; backdrop-filter: blur(8px); }
+.pill.on { background: #fff; color: #111; }
+.pill svg { width: 15px; height: 15px; }
+.hint { position: absolute; top: 112px; left: 50%; transform: translateX(-50%); z-index: 5; background: rgba(0,0,0,.55); color: #fff; font-size: 13px; padding: 7px 12px; border-radius: 10px; white-space: nowrap; backdrop-filter: blur(8px); }
+.cambottom { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 18px 34px; background: linear-gradient(transparent, rgba(0,0,0,.75) 30%); z-index: 5; display: grid; gap: 14px; }
+.strip { display: flex; gap: 8px; align-items: center; min-height: 64px; overflow-x: auto; }
+.strip .pg { width: 46px; height: 60px; border-radius: 5px; background: #f6f3ec; position: relative; flex: none; border: 2px solid transparent; cursor: pointer; }
+.strip .pg::before { content: ""; position: absolute; left: 6px; right: 6px; top: 9px; height: 30px; background: repeating-linear-gradient(#b8b2a6 0 1.5px, transparent 1.5px 5px); }
+.strip .pg span { position: absolute; bottom: -2px; right: -2px; background: #fff; color: #111; font: 600 10px var(--sans); border-radius: 6px; padding: 1px 5px; }
+.strip .pg.sel { border-color: #4ea1e6; }
+.strip .note { color: rgba(255,255,255,.75); font-size: 12.5px; }
+.shutterrow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.shutter { width: 74px; height: 74px; border-radius: 50%; border: 4px solid #fff; background: none; padding: 4px; cursor: pointer; }
+.shutter i { display: block; width: 100%; height: 100%; border-radius: 50%; background: #fff; transition: transform .1s; }
+.shutter:active i { transform: scale(.9); }
+.camlink { color: #fff; background: none; border: 0; font: 500 16px var(--sans); cursor: pointer; justify-self: start; }
+.finishbtn { justify-self: end; height: 40px; padding: 0 16px; border-radius: 12px; border: 0; background: #fff; color: #111; font: 600 15px var(--sans); cursor: pointer; }
+.finishbtn:disabled { opacity: .35; }
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; z-index: 8; pointer-events: none; }
+.flash.go { animation: flash .35s ease-out; }
+@keyframes flash { from { opacity: .85; } to { opacity: 0; } }
+
+/* page review */
+.review { position: absolute; inset: 0; background: #111; z-index: 6; display: flex; flex-direction: column; }
+.review .big { flex: 1; display: grid; place-items: center; padding-top: 70px; }
+.review .big .docshot { position: static; transform: none; width: 230px; height: 360px; }
+.review .acts { display: flex; justify-content: space-around; padding: 14px 16px 38px; }
+.review .acts button { background: none; border: 0; color: #fff; display: grid; justify-items: center; gap: 4px; font: 500 12px var(--sans); cursor: pointer; }
+.review .acts svg { width: 24px; height: 24px; stroke: #fff; }
+.review .acts .del { color: #ff8a80; }
+.review .acts .del svg { stroke: #ff8a80; }
+.review .rtitle { position: absolute; top: 60px; left: 0; right: 0; text-align: center; color: #fff; font: 600 15px var(--sans); }
+.review .rtitle button { position: absolute; left: 14px; top: -4px; }
+
+/* pairing */
+.qrcam { position: absolute; inset: 0; background: radial-gradient(100% 70% at 50% 40%, #4b5563, #111827); }
+.qrframe { position: absolute; left: 76px; top: 318px; width: 240px; height: 240px; border-radius: 26px; box-shadow: 0 0 0 999px rgba(0,0,0,.45); }
+.qrframe::before, .qrframe::after { content: ""; position: absolute; inset: 0; border-radius: 26px; border: 4px solid #fff; clip-path: polygon(0 0, 30% 0, 30% 6%, 6% 6%, 6% 30%, 0 30%, 0 70%, 6% 70%, 6% 94%, 30% 94%, 30% 100%, 0 100%, 0 0, 100% 0, 100% 30%, 94% 30%, 94% 6%, 70% 6%, 70% 0, 100% 0, 100% 100%, 70% 100%, 70% 94%, 94% 94%, 94% 70%, 100% 70%, 100% 100%); }
+.qrframe svg { position: absolute; inset: 42px; width: auto; height: auto; opacity: .9; }
+.pairtext { position: absolute; left: 24px; right: 24px; top: 104px; color: #fff; text-align: center; display: grid; gap: 6px; z-index: 3; }
+.pairtext h4 { margin: 0; font: 700 22px var(--head); }
+.pairtext p { margin: 0; color: rgba(255,255,255,.8); font-size: 14px; }
+.pairbottom { position: absolute; left: 20px; right: 20px; bottom: 44px; display: grid; gap: 10px; z-index: 3; }
+.pairbottom .scan { background: #fff; color: #111; }
+.pairbottom .alt { color: rgba(255,255,255,.85); background: none; border: 0; font: 500 14px var(--sans); cursor: pointer; }
+.paired { position: absolute; left: 20px; right: 20px; top: 330px; background: var(--bg); color: var(--ink); border-radius: 18px; padding: 22px; display: grid; gap: 8px; justify-items: center; text-align: center; z-index: 4; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
+.paired .ok { width: 46px; height: 46px; border-radius: 50%; background: var(--pos-soft); color: var(--pos); display: grid; place-items: center; }
+.paired h4 { margin: 0; font: 700 19px var(--head); }
+.paired p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+
+/* rename sheet */
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.35); z-index: 20; display: flex; align-items: flex-end; }
+.sheet { width: 100%; background: var(--sheet); border-radius: 22px 22px 0 0; padding: 10px 18px 40px; display: grid; gap: 12px; }
+.sheet .grab { width: 38px; height: 5px; border-radius: 3px; background: var(--line-2); justify-self: center; }
+.sheet h4 { margin: 0; font: 700 18px var(--head); }
+.sheet input { height: 46px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--bg); padding: 0 14px; font: 500 16px var(--sans); color: var(--ink); outline: none; }
+.sheet input:focus { border-color: var(--accent); }
+.sheet .sugg { display: flex; flex-wrap: wrap; gap: 6px; }
+.sheet .sugg button { border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 6px 11px; font: 500 13px var(--sans); cursor: pointer; }
+.sheet .note { font-size: 12px; color: var(--muted); }
+.toast { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); background: var(--ink); color: var(--bg); font-size: 13px; padding: 9px 14px; border-radius: 12px; white-space: nowrap; z-index: 40; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.on { opacity: 1; }
+
+/* note step and keyboard */
+.notehead { padding: 58px 12px 0; display: flex; align-items: center; justify-content: space-between; }
+.notebody { padding: 6px 20px 0; display: grid; gap: 10px; }
+.notebody h4 { margin: 0; font: 700 22px var(--head); }
+.notebody p { margin: 0; color: var(--muted); font-size: 13px; }
+.noteprev { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--group); }
+.noteprev b { display: block; font-weight: 500; }
+.noteprev span { font: 500 13px var(--mono); color: var(--ink-2); }
+.notefield { min-height: 92px; border-radius: 14px; border: 1.5px solid var(--accent); background: var(--bg); padding: 12px 14px; font: 400 16px/1.4 var(--sans); color: var(--ink); width: 100%; resize: none; outline: none; }
+.notefield::placeholder { color: var(--faint); }
+.notehint { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.notehint svg { width: 13px; height: 13px; }
+.kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 336px; background: #d1d4db; padding: 8px 4px 0; display: grid; grid-template-rows: auto repeat(4, 42px) 1fr; gap: 11px; z-index: 12; }
+:root[data-theme="dark"] .kbd { background: #2b2b2e; }
+.kbd .sugbar { height: 30px; display: flex; justify-content: space-around; align-items: center; color: #3a3a3c; font: 400 15px var(--sys); }
+:root[data-theme="dark"] .kbd .sugbar { color: #d0d0d4; }
+.kbd .r { display: flex; justify-content: center; gap: 6px; padding: 0 3px; }
+.kbd .k { flex: 1; max-width: 34px; height: 42px; border-radius: 5px; background: #fff; box-shadow: 0 1px 0 #8a8d93; display: grid; place-items: center; font: 400 21px var(--sys); color: #000; }
+:root[data-theme="dark"] .kbd .k { background: #6b6b70; color: #fff; box-shadow: 0 1px 0 #111; }
+.kbd .k.w { max-width: 46px; background: #abb0ba; font-size: 15px; }
+:root[data-theme="dark"] .kbd .k.w { background: #47474b; }
+.kbd .k.space { max-width: none; flex: 5; font-size: 15px; }
+.kbd .k.ret { max-width: 92px; flex: 2; background: #abb0ba; font-size: 15px; }
+:root[data-theme="dark"] .kbd .k.ret { background: #47474b; }
+.kbd .under { display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 26px 0; color: #3a3a3c; }
+:root[data-theme="dark"] .kbd .under { color: #d0d0d4; }
+.kbd .under svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.6; }
+.kbd .mic { position: relative; }
+.kbd .mic::after { content: "Diktieren"; position: absolute; right: 34px; top: 4px; background: var(--ink); color: var(--bg); font: 500 11px var(--sans); padding: 3px 7px; border-radius: 6px; white-space: nowrap; }
+.notebar { position: absolute; left: 0; right: 0; bottom: 336px; display: flex; gap: 10px; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--line); z-index: 12; }
+.notebar .scan { flex: 1; height: 46px; font-size: 16px; }
+.notebar .skip { flex: 1; height: 46px; border-radius: 14px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); font: 500 16px var(--sans); cursor: pointer; }
+.field.notef span.t { color: var(--ink); font-size: 14.5px; line-height: 1.35; }
+.field.notef span.t.empty { color: var(--faint); }
+/* icons */
+.iconsec { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
+.homescr { border-radius: 28px; padding: 26px 20px 30px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 10px; justify-items: center; }
+.homescr.light { background: linear-gradient(160deg, #cfe0f2, #e9d9e8 60%, #f4e7d6); }
+.homescr.dark { background: linear-gradient(160deg, #0f1a2b, #1d1426 60%, #241a12); }
+.homescr.tint { background: linear-gradient(160deg, #2a2016, #3a2a18 60%, #1c140c); }
+.app { display: grid; gap: 5px; justify-items: center; width: 64px; }
+.app svg { width: 62px; height: 62px; display: block; }
+.app span { font: 500 11px var(--sys); color: #111; text-align: center; white-space: nowrap; }
+.homescr.dark .app span, .homescr.tint .app span { color: #f2f2f2; }
+.app.ph svg { opacity: .55; }
+.iconcap { font-size: 13px; color: var(--ink-2); margin-top: 8px; }
+.iconcap b { color: var(--ink); }
+.master { display: grid; gap: 10px; justify-items: start; }
+.master .pair { display: flex; gap: 18px; align-items: flex-end; }
+.master svg { display: block; }
+/* launch */
+.launchrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(393px, 1fr)); gap: 24px; justify-items: center; }
+.lskel { position: absolute; inset: 0; }
+.lskel .navs { position: absolute; top: 58px; left: 18px; width: 34px; height: 34px; border-radius: 8px; background: var(--hover); }
+.lskel .bars { position: absolute; left: 0; right: 0; bottom: 0; height: 122px; border-top: 1px solid var(--line); background: var(--bg); }
+.lcenter { position: absolute; inset: 0; display: grid; place-items: center; background: #005B8C; }
+.cand { display: grid; gap: 10px; align-content: start; }
+.cand.rec .homescr { box-shadow: 0 0 0 3px var(--accent); }
+.small40 { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 6px 12px; display: grid; }
+.small40 .srow { display: flex; align-items: center; gap: 12px; padding: 7px 0; font: 400 15px var(--sys); color: var(--ink); }
+.small40 .srow + .srow { border-top: 1px solid var(--line); }
+.small40 .srow i { margin-left: auto; color: var(--faint); font-style: normal; }
+.small40 svg { flex: none; }
+.lblue { position: absolute; inset: 0; background: #005B8C; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #fff; }
+.lglyph { fill: none; stroke: #fff; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.lname { font: 700 26px var(--head); letter-spacing: .01em; }
+.lmaker { position: absolute; bottom: 44px; left: 0; right: 0; display: flex; justify-content: center; align-items: center; gap: 8px; font: 600 13.5px var(--sans); color: rgba(255,255,255,.92); }
+.mailin { width: 100%; height: 46px; border-radius: 12px; border: 1.5px solid var(--accent); background: var(--bg); color: var(--ink); padding: 0 12px; font: 400 16px var(--sans); outline: none; }
+.alt2 { border: 0; background: none; color: var(--muted); font: 500 14px var(--sans); cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <div class="top">
+    <h1>Belege-App · Mockup</h1>
+    <button type="button" class="toggle" id="theme">Dunkel</button>
+  </div>
+  <p class="lede">The iPhone receipt app (ios/Belege) redesigned with the Mac app's tokens and fonts and the brand «V». The phone on the left is clickable: scan, take pages by hand, finish, and watch a receipt get its name. Below it, every screen at rest. Demo data only. Notes for the Swift work are in <code>NOTES.md</code>.</p>
+
+  <div class="stage">
+    <div id="live"></div>
+    <div class="explain">
+      <h2>Try it</h2>
+      <ul>
+        <li><b>Scannen</b>: the camera outlines the receipt, but nothing is taken until you tap the shutter. Turning pages captures nothing. Take a few pages, tap a page in the strip to retake, move or delete it, then <b>Fertig</b>.</li>
+        <li>The new receipt appears at the top with a name the phone read itself (marked <b>vorläufig</b>). A moment later the Mac has read it, and the name and amount are confirmed.</li>
+        <li>Tap a receipt for its detail. <b>Umbenennen</b> lets you set the name by hand.</li>
+        <li>Tap the connection badge to cycle its states: connected, the Mac's «Handy» switch off, Mac not found, not paired (opens pairing).</li>
+      </ul>
+      <div class="box">
+        <b>How a receipt gets its name</b>
+        <p><b>(a) On the phone, right after the scan.</b> Apple's text recognition (Vision) reads the first lines and a total. Fast, offline, and a guess: shown as <i>vorläufig</i>.</p>
+        <p><b>(b) From the Mac, once it has read it.</b> The Mac's reading is the real one (vendor, total, VAT, matched payment). Today the phone can't ask for it: the phone listener only has <code>/scan</code>, <code>/api/status</code> and <code>/api/upload</code>. It needs one new read-only route, for example <code>GET /api/uploads?names=…</code>, with the same token.</p>
+        <p><b>Recommendation: both.</b> (a) at once, so the list never shows a bare timestamp; (b) replaces it when the Mac has read the receipt. A name you type yourself wins over both.</p>
+      </div>
+      <div class="box">
+        <b>Why a custom camera</b>
+        <p>Today's scanner is Apple's <code>VNDocumentCameraViewController</code>. Its public API has no setting for auto-capture: the Auto/Manual switch lives inside Apple's screen and starts on Auto. So it takes pictures on its own while pages are being turned. A camera of our own (AVFoundation with Vision's rectangle detection) outlines the receipt live and captures only on the shutter. An «Auto» switch is there, off by default.</p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Every screen</h2>
+  <div class="gallery" id="gallery"></div>
+
+  <h2>App icon · «Vanilla Belege»</h2>
+  <p class="lede">Three candidates on the Mac icon's tile (#005B8C, from the branding repo: desktop/icon.svg, recorded in desktop/brand-icons.json), each on a home screen and small (Settings 29 px, Spotlight 40 px). <b>B is chosen</b>; below it, B in iOS 18's three versions.</p>
+  <div class="iconsec" id="candidates"></div>
+  <h2>B in iOS 18's three versions</h2>
+  <div class="iconsec" id="icons"></div>
+
+  <h2>Launch screen</h2>
+  <p class="lede">iOS requires one; today <code>UILaunchScreen: {}</code> shows a blank screen. The owner chose a branded one: brand blue in light and dark, the app's glyph and name, and Vanilla Accounting as the maker at the bottom.</p>
+  <div class="launchrow" id="launch"></div>
+</div>
+
+<script>
+'use strict';
+// The brand mark, copied from desktop/icon.svg (VanillaMachines/261011-branding, desktop/brand-icons.json): white «V» wave on #005B8C.
+const VT = 'translate(226.099 305.340) scale(13.50276)';
+const VD = 'M5.275,0.35C5.275,0.35 1.437,0.35 1.437,0.35C0.888,0.35 0.437,0.801 0.437,1.35C0.437,1.468 0.458,1.586 0.499,1.697L9.608,26.302C10.564,28.886 13.042,30.611 15.797,30.611C18.553,30.611 21.031,28.886 21.987,26.302L29.41,6.253C29.555,5.862 29.93,5.601 30.348,5.601C30.765,5.601 31.14,5.862 31.285,6.253L36.133,19.347C36.278,19.739 36.653,20 37.071,20C37.071,20 40.91,20 40.91,20C41.459,20 41.91,19.549 41.91,19C41.91,18.882 41.889,18.764 41.848,18.653L36.537,4.308C35.581,1.724 33.103,-0.001 30.348,-0.001C27.592,-0.001 25.114,1.724 24.158,4.308L16.735,24.357C16.59,24.748 16.215,25.009 15.797,25.009C15.38,25.009 15.005,24.748 14.86,24.357L6.213,1.003C6.068,0.611 5.693,0.35 5.275,0.35Z';
+const brandMark = (size) => `<svg viewBox="100 100 824 824" width="${size}" height="${size}" aria-label="Vanilla"><rect x="100" y="100" width="824" height="824" rx="185.4" fill="#005B8C"/><path transform="${VT}" d="${VD}" fill="#fff"/></svg>`;
+const ic = (d) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const I = {
+  gear: ic('<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path>'),
+  scan: ic('<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"></path><path d="M8 9h8M8 12h8M8 15h5"></path>'),
+  photos: ic('<rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="m21 16-5-5-8 8"></path>'),
+  clock: ic('<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>'),
+  mac: ic('<rect x="3" y="4" width="18" height="12" rx="1.5"></rect><path d="M8 20h8M12 16v4"></path>'),
+  check: ic('<path d="M5 12.5 10 17l9-10"></path>'),
+  ask: ic('<circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6M12 17h.01"></path>'),
+  chevL: ic('<path d="m15 18-6-6 6-6"></path>'),
+  pencil: ic('<path d="M4 20h4L19 9l-4-4L4 16z"></path>'),
+  flashI: ic('<path d="M13 2 4 14h7l-1 8 9-12h-7z"></path>'),
+  retake: ic('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path>'),
+  left: ic('<path d="M19 12H5M11 6l-6 6 6 6"></path>'),
+  right: ic('<path d="M5 12h14M13 6l6 6-6 6"></path>'),
+  trash: ic('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"></path>'),
+  phone: ic('<rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path>'),
+  sparkle: ic('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"></path>'),
+};
+const statusBar = () => `<div class="status"><span>9:41</span><span class="r"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3.5" fill="none" stroke="currentColor"/><rect x="2" y="2" width="16" height="8" rx="2"/><rect x="23.5" y="4" width="1.8" height="4" rx="1"/></svg></span></div>`;
+
+// ---------- data ----------
+const CONN = {
+  on: { cls: '', text: 'Annas Mac · verbunden' },
+  off: { cls: 'warn', text: 'Mac: Handy aus' },
+  away: { cls: 'off', text: 'Mac nicht gefunden' },
+  unpaired: { cls: 'warn', text: 'Nicht gekoppelt' },
+};
+const seed = () => ([
+  { day: 'Heute', id: 1, name: 'Bäckerei Muster', amount: '18.40', pages: 1, state: 'wait', guess: true, time: '14:02' },
+  { day: 'Heute', id: 2, name: 'Coop Pronto', amount: '79.25', pages: 1, state: 'done', time: '08:15', note: 'Tanken' },
+  { day: 'Gestern', id: 3, name: 'Post CH', amount: '217.75', pages: 3, state: 'done', time: '16:40', note: 'Pakete', remark: 'Retoure an Kunde Meier, Brille zu klein' },
+  { day: 'Gestern', id: 4, name: 'Grünkaffee Muster', amount: "2'888.30", pages: 2, state: 'mac', time: '11:05' },
+  { day: 'Gestern', id: 5, name: 'Parkhaus Zentrum', amount: '6.00', pages: 1, state: 'ask', time: '09:12' },
+  { day: 'Mittwoch, 15. Okt.', id: 6, name: 'Swisscom', amount: '64.90', pages: 2, state: 'done', time: '19:30' },
+  { day: 'Mittwoch, 15. Okt.', id: 7, name: 'Beleg 15.10., 12:44', amount: null, pages: 1, state: 'mac', time: '12:44', unread: true },
+]);
+const STATE = {
+  wait: (r) => `<span class="st wait">${I.clock}wartet aufs Senden</span>`,
+  sending: () => '<span class="st wait"><span class="spin"></span>wird gesendet</span>',
+  mac: (r) => `<span class="st mac">${I.mac}${r.unread ? 'auf dem Mac · wird gelesen' : 'auf dem Mac'}</span>`,
+  done: () => `<span class="st done">${I.check}gelesen · zugeordnet</span>`,
+  ask: () => `<span class="st ask">${I.ask}Frage auf dem Mac</span>`,
+};
+
+// ---------- screens ----------
+function listScreen(s) {
+  const c = CONN[s.conn];
+  const waiting = s.items.filter((r) => r.state === 'wait').length;
+  const groups = [];
+  for (const r of s.items) { let g = groups.find((x) => x.day === r.day); if (!g) groups.push(g = { day: r.day, rows: [] }); g.rows.push(r); }
+  const banner = s.conn === 'off' ? `<div class="banner">${I.mac}<div><b>Der Mac nimmt gerade nichts an</b><span>Am Mac unter Firma › Handy einschalten. Deine Belege warten hier und gehen danach von selbst.</span></div></div>`
+    : s.conn === 'away' ? `<div class="banner">${I.mac}<div><b>Mac nicht gefunden</b><span>Ist er an und im selben WLAN? Deine Belege warten hier.</span></div></div>` : '';
+  const sync = s.conn !== 'on' ? `${waiting} ${waiting === 1 ? 'wartet' : 'warten'} · gehen, sobald der Mac da ist`
+    : s.sending ? '<span class="spin"></span> sendet …' : waiting ? `${waiting} ${waiting === 1 ? 'wartet' : 'warten'} · <button type="button" data-act="send">Jetzt senden</button>` : 'Alles auf dem Mac';
+  return `<div class="screen">
+  <div class="nav"><div class="mark">${brandMark(34)}</div><button type="button" class="conn ${c.cls}" data-act="conn"><i></i>${c.text}</button><button type="button" class="iconbtn" data-act="settings" aria-label="Einstellungen">${I.gear}</button></div>
+  <div class="title"><h3>Belege</h3><small>Muster Kaffee GmbH · ${(s.email || 'anna.muster@muster-kaffee.ch').split('@')[0]}</small></div>
+  ${banner}
+  <div class="list">${groups.map((g) => `<div class="day"><span>${g.day}</span><span>${g.rows.length}</span></div>${g.rows.map((r) => `
+    <div class="row${r.fresh ? ' fresh' : ''}" data-open="${r.id}">
+      <div class="thumb${r.pages > 1 ? ' multi' : ''}"></div>
+      <span class="n${r.guess || r.unread ? ' guess' : ''}">${r.name}${r.guess ? '<em>vorläufig</em>' : ''}</span>
+      <span class="a">${r.amount ? `<small>CHF</small>${r.amount}` : ''}</span>
+      <span class="s">${(STATE[r.state] || STATE.wait)(r)}<span class="dotsep"></span>${r.pages} ${r.pages > 1 ? 'Seiten' : 'Seite'}<span class="dotsep"></span>${r.time}</span>
+    </div>`).join('')}`).join('')}</div>
+  <div class="bar">
+    <div class="btns"><button type="button" class="scan" data-act="scan">${I.scan}Scannen</button><button type="button" class="lib" data-act="lib" aria-label="Aus Fotos importieren">${I.photos}</button></div>
+    <div class="sync">${sync}</div>
+  </div>
+</div>`;
+}
+
+function receiptPaper(r) {
+  return `<div class="paper"><b>${r.name.replace(/<[^>]+>/g, '')}</b><div class="ln"><span>Musterstrasse 4</span></div><div class="ln"><span>8000 Zürich</span></div><hr><div class="ln"><span>Gipfeli 3×</span><span>5.40</span></div><div class="ln"><span>Brot dunkel</span><span>6.20</span></div><div class="ln"><span>Kaffee 2×</span><span>6.80</span></div><hr><div class="ln"><span><b style="display:inline;font-size:9px">Total CHF</b></span><span>${r.amount || '—'}</span></div><div class="ln"><span>MWST 2.6 %</span><span>0.47</span></div></div>`;
+}
+
+function detailScreen(s) {
+  const r = s.items.find((x) => x.id === s.open) || s.items[0];
+  const src = r.custom ? 'Von dir benannt' : r.guess ? 'Vorläufig: vom Handy gelesen. Der Mac bestätigt den Namen, sobald er den Beleg gelesen hat.' : r.unread ? 'Noch ohne Namen: der Mac liest den Beleg gerade.' : 'Vom Mac gelesen, 14:03';
+  const steps = [['Aufgenommen', r.time, true], ['Auf dem Mac', r.state !== 'wait' ? r.time : '', r.state !== 'wait'], ['Gelesen', r.state === 'done' || r.state === 'ask' ? r.time : '', r.state === 'done' || r.state === 'ask'], [r.state === 'ask' ? 'Frage auf dem Mac: geschäftlich oder privat?' : 'Einer Zahlung zugeordnet', '', r.state === 'done']];
+  return `<div class="screen">
+  <div class="sheethead"><button type="button" class="back" data-act="back">${I.chevL}Belege</button><button type="button" class="back" data-act="rename">Umbenennen</button></div>
+  <div class="paperwrap">${receiptPaper(r)}${r.pages > 1 ? `<span class="pages">1 / ${r.pages}</span>` : ''}</div>
+  <div class="fields">
+    <div class="field"><label>Name</label><span style="font-weight:500">${r.name}</span><span class="edit" data-act="rename">${I.pencil}</span></div>
+    <div class="field"><label>Betrag</label><span class="v">${r.amount ? `CHF ${r.amount}` : '—'}</span><span></span></div>
+    <div class="field notef" data-act="edit-note"><label>Notiz</label><span class="t${r.remark ? '' : ' empty'}">${r.remark || 'Für die Buchhaltung, tippen'}</span><span class="edit">${I.pencil}</span></div>
+    <div class="field"><label>Von</label><span style="font-size:14.5px">${(s.email || 'anna.muster@muster-kaffee.ch')}</span><span></span></div>
+    <div class="field"><label>Aufgenommen</label><span class="v">${r.day === 'Heute' ? '17.10.2026' : r.day === 'Gestern' ? '16.10.2026' : '15.10.2026'} · ${r.time}</span><span></span></div>
+  </div>
+  <div class="source">${I.sparkle}<span>${src}</span></div>
+  <div class="timeline">${steps.map(([t, time, ok]) => `<div class="${ok ? 'ok' : 'todo'}">${ok ? I.check : I.clock}<span style="color:var(--ink)">${t}</span><small>${time}</small></div>`).join('')}</div>
+  ${s.noting ? `<div class="scrim" data-act="close-sheet"><div class="sheet" data-stop>
+    <div class="grab"></div><h4>Notiz für die Buchhaltung</h4>
+    <textarea class="notefield" id="nt2" placeholder="Bewirtung Kunde Müller, 3 Personen">${r.remark || ''}</textarea>
+    <span class="note">Diktieren geht mit dem Mikrofon der Tastatur. Die Notiz steht beim Beleg auf dem Mac${r.state === 'wait' ? ' und geht mit dem Beleg mit' : ' und wird nachgeschickt'}.</span>
+    <button type="button" class="scan" data-act="save-note">Sichern</button>
+  </div></div>` : ''}
+  ${s.renaming ? `<div class="scrim" data-act="close-sheet"><div class="sheet" data-stop>
+    <div class="grab"></div><h4>Umbenennen</h4>
+    <input id="rn" value="${r.name.replace(/"/g, '&quot;')}">
+    <div class="sugg">${[`${r.name.replace(/<[^>]+>/g, '')}, Kundenbesuch`, `${r.name.replace(/<[^>]+>/g, '')}, Team`].map((x) => `<button type="button" data-name="${x}">${x}</button>`).join('')}</div>
+    <span class="note">Dein Name gilt, auch auf dem Mac. Der Mac überschreibt ihn nicht.</span>
+    <button type="button" class="scan" data-act="save-name">Sichern</button>
+  </div></div>` : ''}
+</div>`;
+}
+
+function cameraScreen(s) {
+  const pages = s.pages || [];
+  return `<div class="screen dark-ui">
+  <div class="cam"></div>
+  <div class="docshot"><b>Coop Pronto</b><div class="ln"><span>Tankstelle Zürich</span></div><div class="ln"><span>17.10.2026 08:15</span></div><hr style="border:0;border-top:1px dashed #999;margin:6px 0"><div class="ln"><span>Bleifrei 95</span><span>71.85</span></div><div class="ln"><span>Wasser</span><span>2.40</span></div><div class="ln"><span>Kaffee</span><span>5.00</span></div><hr style="border:0;border-top:1px dashed #999;margin:6px 0"><div class="ln"><span>TOTAL CHF</span><span>79.25</span></div><div class="ln"><span>MWST 8.1 %</span><span>5.94</span></div></div>
+  <div class="edge${s.turning ? ' lost' : ''}"></div>
+  <div class="camtop"><button type="button" class="pill" data-act="cancel">Abbrechen</button><button type="button" class="pill${s.auto ? ' on' : ''}" data-act="auto">${I.flashI.replace('class="i"', 'class="i" style="width:14px;height:14px"')}Auto ${s.auto ? 'an' : 'aus'}</button></div>
+  <div class="hint">${s.turning ? 'Kein Beleg im Bild' : s.auto ? 'Auto: nimmt auf, sobald der Beleg ruhig liegt' : 'Beleg erkannt · tippe zum Aufnehmen'}</div>
+  <div class="flash" id="flash"></div>
+  <div class="cambottom">
+    <div class="strip">${pages.length ? pages.map((p, i) => `<div class="pg" data-page="${i}"><span>${i + 1}</span></div>`).join('') + `<span class="note">Seite ${pages.length + 1}: umblättern, dann tippen</span>` : '<span class="note">Mehrseitig? Einfach weiter aufnehmen.</span>'}</div>
+    <div class="shutterrow"><button type="button" class="camlink" data-act="turn">${s.turning ? 'Liegt wieder' : 'Umblättern'}</button><button type="button" class="shutter" data-act="snap" aria-label="Aufnehmen"><i></i></button><button type="button" class="finishbtn" data-act="finish"${pages.length ? '' : ' disabled'}>Fertig${pages.length ? ` (${pages.length})` : ''}</button></div>
+  </div>
+  ${s.review != null ? `<div class="review">
+    <div class="rtitle"><button type="button" class="pill" data-act="close-review">Zurück</button>Seite ${s.review + 1} von ${pages.length}</div>
+    <div class="big"><div class="docshot"><b>Coop Pronto</b><div class="ln"><span>Seite ${s.review + 1}</span></div><hr style="border:0;border-top:1px dashed #999;margin:6px 0"><div class="ln"><span>Bleifrei 95</span><span>71.85</span></div><div class="ln"><span>TOTAL CHF</span><span>79.25</span></div></div></div>
+    <div class="acts"><button type="button" data-act="move-l">${I.left}Nach vorn</button><button type="button" data-act="retake">${I.retake}Neu aufnehmen</button><button type="button" data-act="move-r">${I.right}Nach hinten</button><button type="button" class="del" data-act="del-page">${I.trash}Löschen</button></div>
+  </div>` : ''}
+</div>`;
+}
+
+function noteScreen(s) {
+  const n = s.pendingPages || 1;
+  const rows = [['q','w','e','r','t','z','u','i','o','p'], ['a','s','d','f','g','h','j','k','l'], ['⇧','y','x','c','v','b','n','m','⌫']];
+  return `<div class="screen">
+  <div class="notehead"><button type="button" class="back" data-act="note-skip">Überspringen</button><span style="font:600 16px var(--sans)">Neuer Beleg</span><button type="button" class="back" data-act="note-save" style="font-weight:600">Sichern</button></div>
+  <div class="notebody">
+    <div class="noteprev"><div class="thumb${n > 1 ? ' multi' : ''}"></div><div><b>Coop Pronto <em style="font-style:normal;font-size:11px;color:var(--muted);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px">vorläufig</em></b><span>CHF 79.25 · ${n} ${n > 1 ? 'Seiten' : 'Seite'}</span></div></div>
+    <h4>Notiz für die Buchhaltung</h4>
+    <p>Freiwillig. Wofür war es? Steht dann beim Beleg auf dem Mac.</p>
+    <textarea class="notefield" id="nt" placeholder="Bewirtung Kunde Müller, 3 Personen">${s.noteText || ''}</textarea>
+    <div class="notehint">${ic('<rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>')}Lieber sprechen? Das Mikrofon unten an der Tastatur.</div>
+  </div>
+  <div class="notebar"><button type="button" class="skip" data-act="note-skip">Ohne Notiz</button><button type="button" class="scan" data-act="note-save">Sichern</button></div>
+  <div class="kbd" aria-hidden="true">
+    <div class="sugbar"><span>«Bewirtung»</span><span>Kunde</span><span>Müller</span></div>
+    ${rows.map((r) => `<div class="r">${r.map((k) => `<span class="k${k === '⇧' || k === '⌫' ? ' w' : ''}">${k}</span>`).join('')}</div>`).join('')}
+    <div class="r"><span class="k w">123</span><span class="k w">☺</span><span class="k space">Leerzeichen</span><span class="k ret">Return</span></div>
+    <div class="under"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg><span class="mic"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></span></div>
+  </div>
+</div>`;
+}
+
+function pairScreen(s) {
+  return `<div class="screen dark-ui">
+  <div class="qrcam"></div>
+  <div class="pairtext"><div style="justify-self:center;margin-bottom:6px">${brandMark(52)}</div><h4>Mit dem Mac verbinden</h4><p>Am Mac: Firma › Handy öffnen und einschalten. Dann den Code hier ins Feld halten.</p></div>
+  <div class="qrframe">${qr()}</div>
+  <div class="pairbottom"><button type="button" class="scan" data-act="paired">Code erkannt (simulieren)</button><button type="button" class="alt" data-act="back">Später</button></div>
+  ${s.pairedOk ? `<div class="paired">${brandMark(46)}<h4>Verbunden mit Annas Mac</h4><p style="font-weight:600;color:var(--ink)">Wie erreicht dich die Buchhaltung bei Fragen?</p><p>Die E-Mail steht bei deinen Belegen, damit die Buchhaltung weiss, wen sie fragen kann.</p><input class="mailin" id="ml" type="email" placeholder="anna.muster@firma.ch" value="${s.email || ''}"><button type="button" class="scan" style="width:100%" data-act="mail-save">Weiter</button><button type="button" class="alt2" data-act="back">Später</button></div>` : ''}
+</div>`;
+}
+
+function qr() {
+  const n = 25; let cells = ''; let seedN = 11;
+  const rnd = () => { seedN = (seedN * 9301 + 49297) % 233280; return seedN / 233280; };
+  const finder = (x, y) => x >= 0 && x < 7 && y >= 0 && y < 7;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const inF = finder(x, y) || finder(x - 18, y) || finder(x, y - 18);
+    if (inF) { const fx = x >= 18 ? x - 18 : x; const fy = y >= 18 ? y - 18 : y; if (fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx > 1 && fx < 5 && fy > 1 && fy < 5)) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`; }
+    else if (rnd() > 0.52) cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }
+  return `<svg viewBox="-1 -1 27 27"><rect x="-1" y="-1" width="27" height="27" fill="#fff" rx="2"/><g fill="#111">${cells}</g></svg>`;
+}
+
+// ---------- the live phone ----------
+const phone = (inner) => `<div class="phone${inner.includes('screen dark-ui') ? ' dark-ui' : ''}"><div class="island"></div>${statusBar()}${inner}<div class="home"></div><div class="toast"></div></div>`;
+let S = { view: 'list', conn: 'on', items: seed(), pages: [], auto: false };
+const live = document.getElementById('live');
+function draw() {
+  const screen = S.view === 'list' ? listScreen(S) : S.view === 'detail' ? detailScreen(S) : S.view === 'camera' ? cameraScreen(S) : S.view === 'note' ? noteScreen(S) : pairScreen(S);
+  live.innerHTML = phone(screen);
+}
+function toast(t) { const el = live.querySelector('.toast'); el.textContent = t; el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 2200); }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function finishScan() { S.pendingPages = S.pages.length; S.noteText = ''; S.view = 'note'; draw(); live.querySelector('#nt').focus(); }
+async function saveScan(remark) {
+  const n = S.pendingPages;
+  const r = { day: 'Heute', id: Date.now(), name: 'Coop Pronto', amount: '79.25', pages: n, state: 'sending', guess: true, time: '14:21', fresh: true, remark };
+  S.items.unshift(r); S.pages = []; S.view = 'list'; draw();
+  if (S.conn !== 'on') { r.state = 'wait'; draw(); return; }
+  await sleep(1300); r.state = 'mac'; r.fresh = false; draw();
+  await sleep(1800); r.state = 'done'; r.guess = false; r.note = 'Tanken'; draw(); toast('Vom Mac gelesen: Coop Pronto, CHF 79.25');
+}
+
+live.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-stop]') && !e.target.closest('[data-act],[data-name]')) return;
+  const n = e.target.closest('[data-name]'); if (n) { live.querySelector('#rn').value = n.dataset.name; return; }
+  const row = e.target.closest('[data-open]'); if (row) { S.open = Number(row.dataset.open); S.view = 'detail'; return draw(); }
+  const pg = e.target.closest('[data-page]'); if (pg) { S.review = Number(pg.dataset.page); return draw(); }
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  switch (el.dataset.act) {
+    case 'conn': { const order = ['on', 'off', 'away', 'unpaired']; S.conn = order[(order.indexOf(S.conn) + 1) % 4]; if (S.conn === 'unpaired') { S.view = 'pair'; S.pairedOk = false; } return draw(); }
+    case 'settings': return toast('Einstellungen: Mac, Konto, Bildqualität');
+    case 'scan': S.view = 'camera'; S.pages = []; S.turning = false; S.review = null; return draw();
+    case 'lib': return toast('Fotos wählen: jedes Foto wird ein Beleg');
+    case 'send': S.sending = true; draw(); await sleep(1200); S.sending = false; S.items.forEach((r) => { if (r.state === 'wait') { r.state = 'mac'; r.unread = r.guess; } }); draw(); await sleep(1500); S.items.forEach((r) => { if (r.state === 'mac' && r.guess) { r.state = 'done'; r.guess = false; r.unread = false; } }); return draw();
+    case 'cancel': S.view = 'list'; return draw();
+    case 'auto': S.auto = !S.auto; return draw();
+    case 'turn': S.turning = !S.turning; draw(); if (S.turning) toast(S.auto ? 'Auto aus wäre hier besser: nichts aufgenommen' : 'Nichts aufgenommen. Erst beim Tippen.'); return;
+    case 'snap': if (S.turning) { toast('Kein Beleg im Bild'); return; } S.pages.push({}); draw(); live.querySelector('#flash').classList.add('go'); return;
+    case 'finish': return finishScan();
+    case 'note-skip': return saveScan('');
+    case 'note-save': return saveScan(live.querySelector('#nt').value.trim());
+    case 'edit-note': S.noting = true; draw(); live.querySelector('#nt2').focus(); return;
+    case 'save-note': { const r = S.items.find((x) => x.id === S.open); r.remark = live.querySelector('#nt2').value.trim(); S.noting = false; draw(); return toast(r.state === 'wait' ? 'Notiz geht mit dem Beleg mit' : 'Notiz an den Mac geschickt'); }
+    case 'close-review': S.review = null; return draw();
+    case 'del-page': S.pages.splice(S.review, 1); S.review = null; return draw();
+    case 'retake': S.review = null; draw(); return toast(`Seite neu aufnehmen: tippen, wenn sie liegt`);
+    case 'move-l': if (S.review > 0) S.review -= 1; return draw();
+    case 'move-r': if (S.review < S.pages.length - 1) S.review += 1; return draw();
+    case 'back': S.view = 'list'; S.renaming = false; S.noting = false; if (S.conn === 'unpaired') S.conn = S.pairedOk ? 'on' : 'unpaired'; return draw();
+    case 'rename': S.renaming = true; draw(); live.querySelector('#rn').focus(); return;
+    case 'close-sheet': S.renaming = false; S.noting = false; return draw();
+    case 'save-name': { const r = S.items.find((x) => x.id === S.open); r.name = live.querySelector('#rn').value || r.name; r.guess = false; r.custom = true; S.renaming = false; return draw(); }
+    case 'paired': S.pairedOk = true; S.conn = 'on'; draw(); live.querySelector('#ml').focus(); return;
+    case 'mail-save': { const v = live.querySelector('#ml').value.trim(); if (!/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(v)) { toast('Bitte eine E-Mail eingeben'); return; } S.email = v; S.view = 'list'; S.pairedOk = false; draw(); return toast(`Gekoppelt · ${v.split('@')[0]}`); }
+    default: return undefined;
+  }
+});
+draw();
+
+// ---------- the gallery ----------
+const shots = [
+  ['Liste, verbunden', 'Vendor and amount instead of a timestamp, grouped by day. Each row has one quiet state: <b>wartet aufs Senden</b>, <b>auf dem Mac</b>, <b>gelesen · zugeordnet</b>, or amber <b>Frage auf dem Mac</b>. A phone-side guess is marked <b>vorläufig</b>. The badge names the Mac instead of «Ser ve…».', listScreen({ view: 'list', conn: 'on', items: seed() })],
+  ['Liste, Handy am Mac aus', 'The most common trap: paired, but the Mac\'s «Handy» switch is off. The badge turns amber and says what to do on the Mac. Receipts wait on the phone and go by themselves afterwards.', listScreen({ view: 'list', conn: 'off', items: seed().map((r, i) => (i < 2 ? { ...r, state: 'wait' } : r)) })],
+  ['Kamera: erkannt, nichts aufgenommen', 'Edges are outlined live, but nothing is captured until the shutter. «Auto» exists and is off by default. «Fertig (2)» makes one receipt of the pages in the strip.', cameraScreen({ pages: [{}, {}], auto: false })],
+  ['Kamera: umblättern', 'While a page is turned no receipt is in the picture: the outline turns dashed, and nothing is taken. With Apple\'s scanner this is where surprise captures happen.', cameraScreen({ pages: [{}], turning: true })],
+  ['Seite prüfen', 'Tap a page in the strip: move it forward or back, take it again, or delete it.', cameraScreen({ pages: [{}, {}, {}], review: 1 })],
+  ['Notiz nach «Fertig»', 'Optional and skippable: a note for the accountant. A plain text field, so the keyboard\'s own dictation mic works with no extra code and no permission.', noteScreen({ pendingPages: 2 })],
+  ['Beleg', 'The receipt with its name, its note, amount and where the name came from, and how far it has got: taken, on the Mac, read, matched.', detailScreen({ items: seed(), open: 3 })],
+  ['Umbenennen', 'The person\'s name wins: the Mac does not overwrite it.', detailScreen({ items: seed(), open: 1, renaming: true })],
+  ['Notiz später ändern', 'The note can be added or changed on the receipt later. If the receipt is already on the Mac, the note is sent after it.', detailScreen({ items: seed(), open: 3, noting: true })],
+  ['Koppeln', 'Pairing scans the code from Firma › Handy on the Mac, as today, with the steps written out.', pairScreen({})],
+  ['Koppeln: E-Mail', 'Right after the code: one field, the email. It is the label shown for this phone (short where space is tight: «anna.muster»), and the accountant\'s contact. Not verified. One-person firms skip it.', pairScreen({ pairedOk: true })],
+];
+document.getElementById('gallery').innerHTML = shots.map(([t, c, html]) => `<figure class="shot">${phone(html)}<figcaption><b>${t}.</b> ${c}</figcaption></figure>`).join('');
+
+// ---------- app icon ----------
+// The iOS AppIcon (ios/Belege/Assets.xcassets/AppIcon.appiconset) is the desktop icon's square, full bleed:
+// the same path and transform, seen through the rect's area (viewBox 100 100 824 824).
+// Three candidates: A the brand «V», B the Mac's «Belege» glyph (src/app/areas/icons.tsx), C the receipt outline with the «V» inside.
+const RCPT = 'M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z';
+const RCPT_LINES = 'M9 8h6M9 12h6M9 16h3';
+function glyph(design, ink) {
+  if (design === 'A') return `<path transform="${VT}" d="${VD}" fill="${ink}"/>`;
+  if (design === 'B') return `<g transform="translate(152 152) scale(30)" fill="none" stroke="${ink}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${RCPT}"/><path d="${RCPT_LINES}"/></g>`;
+  // C: the receipt outline, and the «V» path scaled into it (the same path, scale 7.6 instead of 13.5).
+  return `<g transform="translate(104 104) scale(34)" fill="none" stroke="${ink}" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="${RCPT}"/></g><path transform="translate(352.8 374) scale(7.6)" d="${VD}" fill="${ink}"/>`;
+}
+function icon(kind, size = 62, masked = true, design = 'B') {
+  const id = 'c' + Math.random().toString(36).slice(2, 8);
+  const ground = { default: '#005B8C', dark: '#0d1418', tint: '#14110d' }[kind];
+  const ink = { default: '#ffffff', dark: '#ffffff', tint: '#f0b45a' }[kind];
+  const glow = kind === 'dark' ? `<rect x="100" y="100" width="824" height="824" fill="url(#${id}g)"/>` : '';
+  return `<svg viewBox="100 100 824 824" width="${size}" height="${size}" aria-label="Vanilla Belege"><defs><clipPath id="${id}"><rect x="100" y="100" width="824" height="824" rx="185.4"/></clipPath><radialGradient id="${id}g" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="#005B8C" stop-opacity=".55"/><stop offset="1" stop-color="#005B8C" stop-opacity="0"/></radialGradient></defs><g${masked ? ` clip-path="url(#${id})"` : ''}><rect x="100" y="100" width="824" height="824" fill="${ground}"/>${glow}${glyph(design, ink)}</g></svg>`;
+}
+const SQ = 'M0 112C0 39 39 0 112 0h288c73 0 112 39 112 112v288c0 73-39 112-112 112H112C39 512 0 473 0 400z';
+const others = (kind) => ['Kamera', 'Fotos', 'Mail', 'Wallet', 'Kalender', 'Notizen', 'Wetter'].map((n, i) => {
+  const hues = kind === 'tint' ? ['#3a2c1d'] : kind === 'dark' ? ['#1e1e1e'] : ['#ffffff', '#f2f2f7', '#e9eef5'];
+  const fill = hues[i % hues.length];
+  return `<div class="app ph"><svg viewBox="0 0 512 512"><path d="${SQ}" fill="${fill}"/></svg><span>${n}</span></div>`;
+});
+const home = (kind, label, design = 'B') => {
+  const apps = others(kind); apps.splice(5, 0, `<div class="app">${icon(kind === 'light' ? 'default' : kind, 62, true, design)}<span>Vanilla Belege</span></div>`);
+  return `<figure><div class="homescr ${kind}">${apps.join('')}</div><figcaption class="iconcap">${label}</figcaption></figure>`;
+};
+const small = (design) => `<div class="small40"><div class="srow">${icon('default', 29, true, design)}<span>Vanilla Belege</span><i>›</i></div><div class="srow">${icon('default', 40, true, design)}<span>Spotlight · 40 px</span></div></div>`;
+document.getElementById('candidates').innerHTML = [
+  ['A', 'The brand «V» as on the Mac · not chosen', 'Clearly Vanilla, but says nothing about receipts, and would clash with a future Vanilla phone app.'],
+  ['B', 'The Mac\'s «Belege» glyph · chosen', 'White on #005B8C, the Mac icon\'s tile: says what the app does. The brand lives on the launch screen and inside the app.'],
+  ['C', 'Receipt with the «V» inside · not chosen', 'An app-family idea; the «V» gets small at Settings size.'],
+].map(([d, t, line]) => `<figure class="cand${d === 'B' ? ' rec' : ''}">${home('light', '', d).replace('<figcaption class="iconcap"></figcaption>', '')}${small(d)}<figcaption class="iconcap"><b>${d} · ${t}.</b> ${line}</figcaption></figure>`).join('');
+document.getElementById('icons').innerHTML = [
+  home('light', '<b>B, default.</b> White receipt on #005B8C, the Mac icon\'s tile. Today\'s AppIcon set (light only) has A; B replaces it.'),
+  home('dark', '<b>B, dark.</b> White on near-black with a soft #005B8C glow, Apple\'s dark style. The #005B8C mark itself on black would be too low in contrast.'),
+  home('tint', '<b>B, tinted.</b> The glyph alone, delivered grayscale; iOS tints it, here in an amber a person might pick.'),
+  `<figure class="master"><div class="pair">${icon('default', 150, false)}${icon('dark', 72, false)}${icon('tint', 72, false)}</div><figcaption class="iconcap"><b>Masters, 1024 × 1024 px.</b> Square, iOS rounds the corners. Dark and tinted would be new files in the AppIcon set (today light only), all made in the branding repo like the existing one. The tinted master is grayscale; shown tinted here.</figcaption></figure>`,
+].join('');
+
+// ---------- launch screen ----------
+// The owner's choice: always brand blue, the receipt glyph and «Belege» in the centre, the maker's mark at the bottom.
+const launchBlue = `<div class="screen"><div class="lblue">
+  <svg class="lglyph" viewBox="0 0 24 24" width="112" height="112" aria-hidden="true"><path d="${RCPT}"/><path d="${RCPT_LINES}"/></svg>
+  <span class="lname">Belege</span>
+  <span class="lmaker"><svg viewBox="0 0 42.4 30.7" width="22" height="16" aria-hidden="true"><path d="${VD}" fill="#fff"/></svg>Vanilla Accounting</span>
+</div></div>`;
+document.getElementById('launch').innerHTML = [
+  `<figure class="shot">${phone(launchBlue).replace('class="phone"', 'class="phone dark-ui"')}<figcaption><b>Launch screen, light and dark alike.</b> #005B8C, the white receipt glyph of the icon with «Belege» under it, and at the bottom the maker\'s mark: the white «V» wave and «Vanilla Accounting». Apple suggests the app\'s empty first screen instead; the owner chose the branded one.</figcaption></figure>`,
+].join('');
+
+const btn = document.getElementById('theme');
+btn.addEventListener('click', () => {
+  const dark = document.documentElement.dataset.theme !== 'dark';
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  btn.textContent = dark ? 'Hell' : 'Dunkel';
+});
+const fromHash = () => { const dark = location.hash === '#dark'; document.documentElement.dataset.theme = dark ? 'dark' : 'light'; btn.textContent = dark ? 'Hell' : 'Dunkel'; };
+if (location.hash) fromHash();
+window.addEventListener('hashchange', fromHash);
+</script>
+</body>
+</html>

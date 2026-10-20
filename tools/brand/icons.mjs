@@ -1,8 +1,12 @@
 /**
  * The app's icons are the brand's, copied from the branding repository and pinned by hash:
  *
- *   node tools/brand/icons.mjs ../../VanillaMachines/261011-branding    copy, render iOS sizes, pin
+ *   node tools/brand/icons.mjs ../../VanillaMachines/261011-branding    copy, pin
  *   node tools/brand/icons.mjs --check                                  verify (tests and desktop:build)
+ *
+ * The desktop and the web take the wave; the iPhone app (Vanilla Belege) takes its own set, the plain
+ * receipt glyph of the Belege area, as three 1024 px masters (light, dark, tinted) from which Xcode
+ * renders every size: the per-size form of an AppIcon set drops the dark and tinted appearances.
  *
  * desktop/brand-icons.json lists each icon file with its SHA-256, and the hashes of every icon the
  * app shipped before (the receipt with a check, the red wave). A copy moves the hashes it replaces
@@ -24,9 +28,10 @@ const COPIES = {
   'public/favicon.ico': 'web/favicon.ico',
   'public/favicon-192.png': 'web/icon-192.png',
   'public/apple-touch-icon.png': 'web/apple-touch-icon.png',
-  [`${IOS}/AppIcon-1024.png`]: 'ios/AppIcon-1024.png',
+  [`${IOS}/AppIcon-1024.png`]: 'ios-belege/AppIcon-1024.png',
+  [`${IOS}/AppIcon-dark-1024.png`]: 'ios-belege/AppIcon-dark-1024.png',
+  [`${IOS}/AppIcon-tinted-1024.png`]: 'ios-belege/AppIcon-tinted-1024.png',
 };
-const IOS_SIZES = [40, 58, 60, 80, 87, 120, 180];
 
 const sha = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 
@@ -48,8 +53,7 @@ function copy(brand) {
   const pin = JSON.parse(readFileSync(PIN, 'utf8'));
   const before = Object.values(pin.files);
   for (const [to, from] of Object.entries(COPIES)) copyFileSync(join(brand, 'assets/app-icons', from), to);
-  for (const px of IOS_SIZES) execFileSync('sips', ['-s', 'format', 'png', '-z', String(px), String(px), `${IOS}/AppIcon-1024.png`, '--out', `${IOS}/AppIcon-${px}.png`], { stdio: 'ignore' });
-  const files = Object.fromEntries([...Object.keys(COPIES), ...IOS_SIZES.map((px) => `${IOS}/AppIcon-${px}.png`)].sort().map((f) => [f, sha(f)]));
+  const files = Object.fromEntries(Object.keys(COPIES).sort().map((f) => [f, sha(f)]));
   const now = new Set(Object.values(files));
   const retired = [...new Set([...pin.retired, ...before])].filter((h) => !now.has(h)).sort();
   writeFileSync(PIN, `${JSON.stringify({ source: pin.source, files, retired }, null, 2)}\n`);

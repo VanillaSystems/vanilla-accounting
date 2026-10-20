@@ -7,9 +7,9 @@ enum UploadError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .fileNotFound: return "Receipt file not found on device"
-        case .notPaired: return "This phone is not paired with the Mac: scan the code in Settings › Pair with Mac"
-        case .serverError(let code): return "Server returned error \(code)"
+        case .fileNotFound: return "Die Datei des Belegs fehlt auf dem Handy"
+        case .notPaired: return "Dieses Handy ist nicht mit dem Mac gekoppelt: in den Einstellungen den Code am Mac scannen"
+        case .serverError(let code): return "Der Mac hat mit Fehler \(code) geantwortet"
         }
     }
 }

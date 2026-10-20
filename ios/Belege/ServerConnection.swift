@@ -18,6 +18,8 @@ final class ServerConnection: ObservableObject {
     var token: String? { TokenStore.load() }
 
     func start() {
+        // One line in the device console: whether the pairing survived (no address, no token printed).
+        print("[Belege] pairing: server \(storedURLString.isEmpty ? "none" : "stored"), token \(token == nil ? "missing" : "present")")
         guard let url = URL(string: storedURLString), !storedURLString.isEmpty else { return }
         Task { await ping(url) }
     }
