@@ -87,6 +87,7 @@ function statementProblemText(p: StatementProblem): string {
     case 'noAccount': return p.iban ? t('error.statement.unknownAccount', { iban: groupedIban(p.iban), currency: p.currency }) : t('error.statement.noAccount', { currency: p.currency });
     case 'otherIban': return t('error.statement.otherIban', { iban: groupedIban(p.iban), bank: p.account.bank, currency: p.currency, known: groupedIban(p.account.iban) });
     case 'twoAccounts': return t('error.statement.twoAccounts', { bank: p.bank, currency: p.currency, first: groupedIban(p.ibans[0]), second: groupedIban(p.ibans[1]) });
+    case 'whichAccount': return t('error.statement.whichAccount', { currency: p.currency, accounts: p.accounts.map((a) => a.label).join(', ') });
   }
 }
 

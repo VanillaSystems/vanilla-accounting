@@ -8,7 +8,8 @@ import type { BankTransaction, StatementImport } from '../../../types/index.js';
 import type { OpeningOffer } from '../../../accounting/opening-balance.js';
 import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
-import { api, errorText, sources, type StatementRemoved } from '../../lib/api.js';
+import { ApiError, api, errorText, sources, type StatementRemoved } from '../../lib/api.js';
+import { dropFiles } from '../../shell/DropDialog.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
 import { at } from '../receipts/view.js';
@@ -66,10 +67,16 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
   const ok = files.filter((f) => STATEMENT_FILE.test(f.name));
   const skipped = files.filter((f) => !ok.includes(f)).map((f) => f.name);
   const read: StatementImport[] = [];
-  for (const f of ok) {
+  for (const [i, f] of ok.entries()) {
     try {
       read.push(await api.importStatement(f, f.name, into && { account: into.account.account, month: into.month }));
     } catch (e) {
+      // Several accounts could take it: the drop dialog asks which, and takes the rest after it (#25).
+      if (e instanceof ApiError && e.body.code === 'statement' && e.body.params.problem?.kind === 'whichAccount') {
+        if (read.length) nav.refresh();
+        void dropFiles(ok.slice(i));
+        return;
+      }
       nav.toast(`${f.name}: ${errorText(e)}`);
       if (read.length) nav.refresh();
       return;

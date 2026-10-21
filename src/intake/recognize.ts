@@ -9,7 +9,7 @@ import type { DropRow } from '../types/drop.js';
 import type { DocumentsData, OtherWhy } from '../core/modules/schema.js';
 import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
-import { documentKind } from './document-kind.js';
+import { documentKind, namesStatement } from './document-kind.js';
 import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 
 /** What the file is, and a PDF's text of its first pages (for the duplicate check; never stored in the row). */
@@ -48,8 +48,8 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
     // A PDF header on bytes no reader opens (cut short, damaged): no step would ever read it, so it waits in quarantine, not in the inbox.
     if (text === undefined) return { kind: 'receipt', how: 'structure', state: 'quarantine', reason: 'unreadable' };
     const iban = IBAN.exec(text)?.[0];
-    if (/kontoauszug|account statement|relevé de compte|estratto conto/i.test(text) && iban) {
-      return { kind: 'statement-pdf', how: 'hint', state: 'take', facts: { iban: iban.replace(/\s/g, '') } };
+    if (namesStatement(text, words ?? documents())) {
+      return { kind: 'statement-pdf', how: 'hint', state: 'take', ...(iban ? { facts: { iban: iban.replace(/\s/g, '') } } : {}) };
     }
     const doc = text.trim() ? documentKind(text, words ?? documents()) : undefined;
     if (doc?.is === 'other') return { kind: 'receipt', how: 'hint', state: 'quarantine', reason: 'not-receipt', document: doc.why, text };
