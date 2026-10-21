@@ -408,6 +408,7 @@ export const messages = {
   'journal.byHand.submit': 'Von Hand buchen',
   'journal.byHand.booked': '{n} Zeilen gebucht auf {ref}',
   'error.classifyAccount': 'Claudes Antwort hatte eine Buchung ohne Konto («{description}»): nichts gebucht, die Zahlung bleibt, wie sie war.',
+  'error.classifySeparateFee': 'Claudes Antwort bucht die Gebühr {amount} in der Zahlung, die Bank belastet sie aber separat ({fee}): nichts gebucht, die Zahlung bleibt, wie sie war.',
   'error.classifyBalance': 'Claudes Buchungen der Zahlung vom {date} über {paid} hätten zusammen {booked} ergeben: nichts gebucht, die Zahlung bleibt, wie sie war.',
   'error.personsBooking': { one: 'Diese Zahlung hat eine Buchung von Hand: sie bleibt.', other: 'Diese Zahlung hat {n} Buchungen von Hand: sie bleiben.' },
   'journal.keepTitle': 'Deine Buchung behalten?',

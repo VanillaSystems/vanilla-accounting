@@ -23,21 +23,21 @@ steps:
         then: do not touch its mappings
         source: AGENTS.md § Period close
         test: closed-period
-      - id: ev-exempt-wise-fee
-        when: "transaction.type is wise-fee, or a FEE-TRANSFER-…/FEE-CARD-… row (\"Wise Charges for: …\")"
-        then: settled, exempt — the Wise statement is the evidence
+      - id: ev-exempt-separate-fee
+        when: the transaction is the fee of another payment, debited as a movement of its own (a fee row that names the payment it charges for)
+        then: settled, exempt — the bank statement is the evidence
         source: definition
         test: wise-fee
       - id: ev-exempt-own-transfer
         status: proposed
-        when: money moves between two of our own accounts (Raiffeisen ↔ Wise, Wise currency ↔ currency)
+        when: money moves between two of our own accounts (bank ↔ bank, one currency account ↔ another)
         then: settled, exempt — both statements are the evidence
         source: proposed 2026-10-07 by Claude — confirm or replace
         test: own-transfer
     rules:
       - id: ev-reference
         status: proposed
-        when: "the receipt prints the payment reference of exactly one open transaction: the whole reference, a 16+ digit QR reference anywhere, or a 6+ digit invoice number standing on its own (Wise transfer references come from the monthly statement PDF, the Wise camt053 drops them)"
+        when: "the receipt prints the payment reference of exactly one open transaction: the whole reference, a 16+ digit QR reference anywhere, or a 6+ digit invoice number standing on its own"
         then: link it, whatever the amount or currency; fee rows, statements and credit notes against outgoing payments never qualify. An existing link the reference contradicts is reported, and moved only when the amount agrees too
         why: "a payment in another currency than its invoice, and an invoice linked to the wrong payment, are found only this way"
         source: proposed 2026-10-08 by Claude — confirm or replace
@@ -58,11 +58,6 @@ steps:
         when: our own bank's account fee or quarterly close row (Raiffeisen "Gebührenbelastung Kontoführung", "Abschlussbetreffnis", often CHF 0.00)
         then: settled, exempt — the bank's monthly statement PDF is the evidence; book 6940 Bankspesen without a VAT code
         source: proposed 2026-10-08 by Claude — confirm or replace
-      - id: ev-wise-original-amount
-        when: a receipt in a currency other than the Wise account that paid it
-        then: match on the original-currency amount shown on the Wise monthly statement
-        why: that amount appears nowhere else
-        source: AGENTS.md § Special cases
       - id: ev-unique-amount
         status: proposed
         when: exactly one transaction has the same amount and currency within 10 days of the receipt date, and no other receipt claims it
@@ -101,7 +96,7 @@ steps:
       - id: cov-fx
         status: proposed
         when: receipts and transaction are in different currencies
-        then: compare via the Wise statement's original amount, else at the ESTV rate of the payment date with 3% tolerance
+        then: compare via the original amount the bank statement prints, else at the ESTV rate of the payment date with 3% tolerance
         source: proposed 2026-10-07 by Claude — confirm or replace
     precedents: []
 

@@ -223,7 +223,49 @@ test('a Wise card fee is booked once, on its FEE-CARD payment, never again insid
   const on = (account: string) => b.journalEntries.filter((e) => e.accountDebit === account).map((e) => [e.transactionRef, e.amount]);
   assert.deepEqual(on('6940'), [['FEE-CARD-7200000001', 0.02]], 'the fee once, on its own payment');
   assert.deepEqual(on('6570'), [['CARD-7200000001', 9.5]], 'the charge whole on the expense');
-  assert.equal(b.transactions[0].description, charge.description, 'the stored bank text stays as Wise wrote it');
+  assert.match(b.journalEntries.find((e) => e.transactionRef === 'CARD-7200000001')?.reason ?? '', /separat \(FEE-CARD-7200000001\)/, 'the booking says why the fee line went');
+});
+
+test('any bank: a payment whose fee is its own movement keeps no fee line, the fee goes back to the expense at its code (#24)', async () => {
+  // Not Wise: a CHF card payment on another bank, whose foreign-use fee the bank debits apart, linked to it as the books link a separate fee.
+  const charge = tx({ ref: 'KART-48151623', bank: 'Raiffeisen', amount: 86.4, description: 'Kartenzahlung Hotel Beispiel Lyon, Fremdwaehrungszuschlag 1.30 CHF' });
+  const fee = tx({ ref: 'FEE-KART-48151623', bank: 'Raiffeisen', amount: 1.3, description: 'Spesen Kartenzahlung KART-48151623', type: 'wise-fee' });
+  const b = books([charge, fee]);
+  const { ask, prompts } = stubAsk((ref) => ref === 'KART-48151623'
+    ? [{ ...expense(85.1), accountDebit: '6640', vatCode: 'I81', description: 'Hotel Beispiel, Übernachtung' }, { accountDebit: '6900', accountCredit: '', amount: 1.3, vatCode: '', description: 'Bank, Kartenspesen' }]
+    : [{ accountDebit: '6900', accountCredit: '', amount: 1.3, vatCode: '', description: 'Bank, Kartenspesen' }]);
+  const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual([classified.sort(), failed], [['FEE-KART-48151623', 'KART-48151623'], []]);
+  assert.match(prompts[0], /Fee: 1\.3 CHF, debited separately as FEE-KART-48151623/, 'the model is told the fee is its own movement');
+  const lines = (ref: string) => b.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.amount, e.vatCode]);
+  assert.deepEqual(lines('KART-48151623'), [['6640', 86.4, 'I81']], 'the whole payment on the expense, at its code');
+  assert.deepEqual(lines('FEE-KART-48151623'), [['6900', 1.3, undefined]], 'the fee once, on its own movement');
+});
+
+test('a fee line the code cannot put back unambiguously is refused: nothing booked, the payment waits (#24)', async () => {
+  const charge = tx({ ref: 'KART-1', bank: 'Raiffeisen', amount: 60 });
+  const fee = tx({ ref: 'FEE-KART-1', bank: 'Raiffeisen', amount: 2, type: 'wise-fee' });
+  const feeLine: ClassifyEntry = { accountDebit: '6900', accountCredit: '', amount: 2, vatCode: 'I0', description: 'Bank, Spesen' };
+  for (const [why, answer] of [
+    ['two expense lines it could go back to', [expense(40), { ...expense(18), accountDebit: '6500' }, feeLine]],
+    ['a fee line with a VAT rate', [{ ...expense(58), vatCode: 'I81' }, { ...feeLine, vatCode: 'I81' }]],
+  ] as const) {
+    const b = books([charge]);
+    b.transactions.push(fee);
+    const { ask } = stubAsk(() => [...answer]);
+    const { classified, failed } = await classifyTransactions(b, [charge], { ask, fx, context });
+    assert.deepEqual(classified, [], why);
+    assert.deepEqual(failed.map((f) => [f.ref, f.refusal]), [['KART-1', { code: 'classifySeparateFee', params: { fee: 'FEE-KART-1', currency: 'CHF', amount: 2 } }]], why);
+    assert.deepEqual(b.journalEntries, [], why);
+  }
+});
+
+test('a payment without a separate fee movement keeps a fee line of the same amount as the model gave it', async () => {
+  const charge = tx({ ref: 'KART-2', bank: 'Raiffeisen', amount: 60 });
+  const b = books([charge, tx({ ref: 'FEE-KART-3', bank: 'Raiffeisen', amount: 2, type: 'wise-fee' })]);
+  const { ask } = stubAsk(() => [expense(58), { accountDebit: '6900', accountCredit: '', amount: 2, vatCode: 'I0', description: 'Bank, Spesen' }]);
+  await classifyTransactions(b, [charge], { ask, fx, context });
+  assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.amount]), [['6570', 58], ['6900', 2]]);
 });
 
 test('a VAT-amount code (M81-2) keeps its one empty leg: the code is its other side', async () => {

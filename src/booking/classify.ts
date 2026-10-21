@@ -31,6 +31,7 @@ import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
+import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
@@ -439,13 +440,6 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
-/**
- * A Wise card charge's text without the fee it names («(fee: 0.14 EUR)»): Wise debits that fee as a
- * payment of its own (FEE-CARD-…, `type: 'wise-fee'`), and the charge's amount is without it. Read on
- * the charge, the model split it out as a 6940 line there and the fee was booked twice (#24).
- */
-const withoutCardFee = (description: string) => description.replace(/^(Card transaction of .*?)\s*\(fee: [^)]*\)/s, '$1');
-
 /** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts. */
 export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
   const receipts = mappedReceipts(books, tx)
@@ -461,8 +455,9 @@ export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
       vatSummary: r.vatSummary,
       lineItems: r.lineItems,
     }));
+  const fee = separateFeeOf(tx, books.transactions);
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: withoutCardFee(tx.description), bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}) },
+    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}) },
     receipts,
   };
 }
@@ -649,7 +644,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
           continue;
         }
-        const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
+        const fee = read ? undefined : withoutSeparateFee(tx, separateFeeOf(tx, books.transactions), llmEntries);
+        if (fee && 'refused' in fee) {
+          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${fee.refused.reason}`);
+          if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...fee.refused });
+          continue;
+        }
+        const lines = fee?.lines ?? llmEntries;
+        const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
+        const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
         const refused = paymentRefusal(tx, entries, bankAccount);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
@@ -659,7 +662,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const held = proposing.get(tx.ref);
         if (held) { held.entries = entries.map((e) => ({ ...e, rule: held.rule })); continue; }
         books.journalEntries.push(...entries);
-        log(`  [Batch ${batchNum}]  ${tx.ref}  → ${llmEntries.length} entries (${llmEntries.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
+        log(`  [Batch ${batchNum}]  ${tx.ref}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
         outcome.classified.push(tx.ref);
       }
     } catch (e) {

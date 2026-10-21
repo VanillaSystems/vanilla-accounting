@@ -43,12 +43,12 @@ steps:
         then: expense it (6xxx), do not capitalise (1xxx)
         why: not worth an asset record
         source: AGENTS.md § VAT code rules
-      - id: cls-wise-split
-        when: a Wise card charge took money from several currency accounts
+      - id: cls-separate-fee
+        when: the payment's fee is debited as a movement of its own (a fee row that names the payment it charges for)
         then: >
-          one entry per debited account leg; the charge currency first, then other foreign currencies, CHF last
-        why: that is how Wise funds a card payment
-        source: AGENTS.md § Special cases
+          book the whole payment on its expense, with no fee line; the fee is booked once, on its own movement
+        why: a fee line inside the payment books the fee twice and leaves the expense short by it; code removes such a line or refuses the answer (src/booking/separate-fee.ts)
+        source: decision 2026-10-21, owner
       - id: cls-salary
         status: proposed
         when: a salary paid to an employee (the owner too, when employed by the company)
@@ -275,10 +275,6 @@ steps:
   find_imbalance:
     goal: Find why the books do not balance, without plugging the difference.
     rules:
-      - id: imb-fx-legs
-        when: the difference sits on a Wise foreign-currency account
-        then: look for a currency-split leg booked once instead of per account
-        source: AGENTS.md § Special cases (Wise currency splits)
       - id: imb-duplicates
         when: the difference equals one transaction amount
         then: look for a transaction booked twice (re-imported ref, manual + bank)

@@ -142,11 +142,13 @@ export type ApiRefusal =
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):
- * an entry without an account, or entries that do not add up to what the bank paid.
+ * an entry without an account, or entries that do not add up to what the bank paid; or a fee line on a
+ * payment whose fee the bank debits as its own movement (src/booking/separate-fee.ts).
  */
 export type ClassifyRefusal =
   | { code: 'classifyAccount'; params: { description: string } }
-  | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } };
+  | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
+  | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no
