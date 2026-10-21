@@ -61,6 +61,23 @@ test('a statement PDF is one by its title in any of the languages, before any re
   assert.equal(await kindOf(['Invoice INV-77', 'Your monthly statement is available online', 'Total due USD 20.00']), 'receipt');
 });
 
+test('a PDF taken for a statement that no account reads stays a file the person can take as a receipt (#25)', async () => {
+  const api = await startApi('demo');
+  try {
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=billing.pdf`, await textPdf(['Billing statement October 2026', 'Example Hosting Ltd', 'Amount due USD 20.00']));
+    const row = s.rows[0];
+    assert.deepEqual([row.kind, row.state, row.reason], ['statement-pdf', 'refused', 'not-imported']);
+    s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'as', as: 'receipt' });
+    assert.deepEqual([s.rows[0].kind, s.rows[0].state, s.rows[0].message], ['receipt', 'taken', undefined], 'taken into the inbox as a receipt');
+    await rest();
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
 test('a ZIP is unpacked three levels deep and no deeper; a bomb is refused before it is unpacked', async () => {
   const pdf = readFileSync(RECEIPT);
   const l3 = await zipOf([['c.pdf', pdf]]);
