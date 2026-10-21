@@ -63,3 +63,16 @@ export function documentKind(text: string, words: DocumentsData): DocumentVerdic
   if (score <= WEAK && firstOf({ newsletter }, text).length) return { is: 'other', why: 'newsletter' };
   return score >= RECEIPT ? { is: 'receipt', score } : { is: 'unclear', score };
 }
+
+/**
+ * A bank statement says so in its first lines, before any word of a receipt, of a document beside
+ * one or of one that is none: «Kontoauszug», a currency account's «… statement», «Relevé de compte». A «Gutschrift»
+ * line below the title leaves it a statement; an invoice that mentions a statement stays an invoice.
+ */
+export function namesStatement(text: string, words: DocumentsData): boolean {
+  const head = text.slice(0, HEAD);
+  const at = words.statement.length ? wordsRe(words.statement).exec(head)?.index : undefined;
+  if (at === undefined) return false;
+  const lists = [words.receipt.title, ...Object.values(words.supporting), ...Object.values(words.other)];
+  return !firstOf(Object.fromEntries(lists.map((l, i) => [i, l])), head).some((x) => x.at < at);
+}
