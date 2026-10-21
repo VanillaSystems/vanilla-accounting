@@ -631,10 +631,12 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         outcome.classified.push(tx.ref);
         continue;
       }
-      if (byOrders && !Array.isArray(byOrders) && placed) {
-        // Its order documents do not book it: the payout waits for the person, the whole payout as sales to take over, as without them.
-        log(`  ${tx.ref}  waits for its orders (rule ${placed.rule.id})`);
-        outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: wordsIn('de').t('rules.say.ordersAsk', { why: orderHoldWords(byOrders) }), entries: ruleEntries(books, tx, placed, split, context, fx) });
+      if (byOrders && !Array.isArray(byOrders)) {
+        // Its order documents do not book it, and no model may guess past them: under a rule the payout waits as its question, the whole payout as sales to take over; else it is the person's to book.
+        log(`  ${tx.ref}  waits for its orders${placed ? ` (rule ${placed.rule.id})` : ''}`);
+        const why = wordsIn('de').t('rules.say.ordersAsk', { why: orderHoldWords(byOrders) });
+        if (placed) outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: why, entries: ruleEntries(books, tx, placed, split, context, fx) });
+        else outcome.failed.push({ ref: tx.ref, reason: why });
         continue;
       }
     }

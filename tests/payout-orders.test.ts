@@ -103,6 +103,12 @@ test('without a rule, the firm\'s answer «Auszahlungen: ja» gives the accounts
     ['1021', '3200', 'V81'], ['1021', '3200', 'V81'], ['1021', '3200', 'V0'], ['3200', '1021', '-V81'], ['6580', '1021', 'I0'],
   ]);
   assert.deepEqual(books.journalEntries[0].by, { kind: 'code', check: 'payoutOrders' });
+
+  const short = booksOf(ORDERS, ['o1001', 'o1003', 'o990']);
+  const held = await classifyTransactions(short, [PAYOUT], { fx, context: loadClassifyContext(ws), ask: async () => { throw new Error('no model may guess past its orders'); } });
+  assert.deepEqual([held.classified, held.asked, short.journalEntries], [[], [], []]);
+  assert.deepEqual(held.failed.map((f) => f.ref), ['PAY-1'], 'without a rule to ask by, the payout is the person\'s to book');
+  assert.match(held.failed[0].reason, /Bestellungen der Auszahlung/);
 });
 
 test('an order missing from the payout books nothing: the payout waits for the person, the question says what is missing, the proposal is today\'s whole payout as sales', async () => {
