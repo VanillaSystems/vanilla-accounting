@@ -413,6 +413,7 @@ export default {
     'error.classifyAccount': 'La risposta di Claude conteneva una registrazione senza conto («{description}»): nulla registrato, il pagamento resta com’era.',
     'error.classifySeparateFee': 'La risposta di Claude ha nel pagamento una riga di {amount}, quanto la commissione che la banca addebita a parte ({fee}): nulla registrato, il pagamento resta com’era.',
     'error.classifyUnknownAccount': 'La risposta di Claude registrava sul conto {account} («{description}»), che il piano dei conti non ha: nulla registrato, il pagamento resta com’era. Creare il conto (Firma › Kontenplan) o registrare a mano.',
+    'error.classifyUnknownVatCode': 'La risposta di Claude registrava con il codice IVA {code} («{description}»), che l’app non conosce: nulla registrato, il pagamento resta com’era. Riclassificare o registrare a mano.',
     'error.classifyBalance': 'Le registrazioni di Claude per il pagamento del {date} di {paid} avrebbero dato insieme {booked}: nulla registrato, il pagamento resta com’era.',
     'error.personsBooking': { one: 'Questo pagamento ha una registrazione fatta a mano: resta.', other: 'Questo pagamento ha {n} registrazioni fatte a mano: restano.' },
     'journal.keepTitle': 'Tenere la tua registrazione?',
