@@ -11,9 +11,11 @@
  * The first time a workspace is seen, what it runs today is taken as switched on (the baseline).
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
+import { APP_FOLDER, appFolderIn } from '../workspace/workspace.js';
+import { demoHome, resetDemoCopy } from '../workspace/demo-copy.js';
 import { parse } from 'yaml';
 import type { Workspace } from '../workspace/workspace.js';
 import type { JournalEntry } from '../types/index.js';
@@ -77,11 +79,18 @@ export function companyPart(w: WorkflowDecl, root: string): { hash: string; file
 interface Approved { part: string; files?: Record<string, string>; at: string; baseline?: boolean }
 type Approvals = Record<string, Approved>;
 
-export function approvalsPath(ws: Ws): string {
+export function approvalsPath(ws: { paths: { root: string } }): string {
   let root = ws.paths.root;
   try { root = realpathSync(root); } catch { /* as given */ }
   const dir = process.env.VANILLA_APPROVALS_DIR ?? join(homedir(), '.vanilla-accounting', 'approvals');
   return join(dir, `${createHash('sha256').update(root).digest('hex').slice(0, 16)}.json`);
+}
+
+/** Throws a demo's copy away with its switch-on record: kept, the record would flag the fresh copy's files as changed. */
+export function resetDemo(name: string): string {
+  const dir = join(demoHome(), name);
+  rmSync(approvalsPath({ paths: { root: appFolderIn(dir) ?? join(dir, APP_FOLDER) } }), { force: true });
+  return resetDemoCopy(name);
 }
 
 function read(ws: Ws): Approvals | undefined {

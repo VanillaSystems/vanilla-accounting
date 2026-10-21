@@ -5,12 +5,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 process.env.VANILLA_DEMO_DIR = mkdtempSync(join(tmpdir(), 'demo-copy-'));
+process.env.VANILLA_APPROVALS_DIR = mkdtempSync(join(tmpdir(), 'demo-approvals-'));
 const { bundledDemo, demoCopy, resetDemoCopy } = await import('../src/workspace/demo-copy.js');
+const { resetDemo, approvalsPath } = await import('../src/workflows/switch-on.js');
 const { APP_ROOT } = await import('../src/workspace/workspace.js');
 const { DEMO_REPO, DEMO_ROOT, tempWorkspace } = await import('./support/workspace.js');
 
@@ -43,4 +45,14 @@ test('npm start with VANILLA_WORKSPACE=demo opens the copy, so nothing it writes
   process.env.VANILLA_WORKSPACE = 'demo';
   const { WS } = await import('../src/server/books.js');
   assert.ok(WS.paths.root.startsWith(process.env.VANILLA_DEMO_DIR!), `the server opened ${WS.paths.root}`);
+});
+
+test('resetting a demo also drops the copy\'s switch-on record, or the fresh copy shows as changed and not switched on', () => {
+  const root = demoCopy(DEMO_ROOT);
+  const record = approvalsPath({ paths: { root } });
+  mkdirSync(join(record, '..'), { recursive: true });
+  writeFileSync(record, '{}');
+  resetDemo('demo');
+  assert.equal(existsSync(record), false, 'the old copy\'s record outlived the copy');
+  assert.equal(existsSync(root), false);
 });
