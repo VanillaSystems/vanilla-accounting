@@ -16,7 +16,7 @@ import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js'
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { baseCurrency, chart, filing, setup } from '../engines/index.js';
+import { baseCurrency, chart, filing, setup, vat } from '../engines/index.js';
 import { roundCHF, toRappen } from '../accounting/rappen.js';
 import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
@@ -126,7 +126,8 @@ const day = (iso: string) => iso.split('-').reverse().join('.');
 /**
  * Why the classifier's entries for `tx` must not be booked: an entry without an account (other than
  * a VAT-amount code's one leg), an entry on an account `chart` does not have (the bank account aside,
- * which the ledger names), or entries that do not move the bank account by what the bank paid, the
+ * which the ledger names), an entry with a VAT code the engine does not know (a code the firm's form
+ * does not take was already left off by permittedCode, so on the effective method only), or entries that do not move the bank account by what the bank paid, the
  * rules the AI sidebar's changes keep too (src/server/edits.ts applyAnswer). The payment then stays
  * unbooked for the person, with this reason. An empty `chart` checks no account.
  */
@@ -147,6 +148,14 @@ export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEnt
     return {
       reason: `Claudes Antwort bucht auf Konto ${account} («${description}»), das der Kontenplan nicht hat: nichts gebucht, die Zahlung bleibt, wie sie war.`,
       refusal: { code: 'classifyUnknownAccount', params: { account, description } },
+    };
+  }
+  const unknownCode = entries.find((e): e is JournalEntry & { vatCode: string } => !!e.vatCode && !vat().codes.parse(e.vatCode));
+  if (unknownCode) {
+    const { vatCode: code, description = '' } = unknownCode;
+    return {
+      reason: `Claudes Antwort bucht mit dem Steuercode ${code} («${description}»), den die App nicht kennt: nichts gebucht, die Zahlung bleibt, wie sie war.`,
+      refusal: { code: 'classifyUnknownVatCode', params: { code, description } },
     };
   }
   const account = { bank: tx.bank, currency: tx.currency, account: bankAccount, label: bankAccount };
@@ -517,7 +526,7 @@ function withCreditNoteCodes(books: Books, tx: BankTransaction, entries: Journal
 /**
  * A code the firm's form does not take is left off the entry: a firm not registered for VAT books
  * everything gross, one on the net tax rate method its purchases. On the effective method the
- * model's code stands as written, so a person sees a code the engine does not know.
+ * model's code stands as written; one the engine does not know is refused (paymentRefusal).
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
 /** The model's code with the sign the accounts give it (r9h-11): a credit note's M0 becomes -M0, whatever the model wrote. */
