@@ -44,6 +44,8 @@ export type OrderSplit =
 /**
  * The code an order's sale takes, or 'tax' when its own tax line disagrees with where it was
  * delivered: a domestic delivery must show the domestic tax at the normal rate, an export none.
+ * A domestic order without a tax line is such a disagreement, a new case for the person, never a
+ * sale without output tax (processes/booking.guide.yaml#sale_vat sv-order-tax).
  */
 function codesOf(o: OrderFacts, codes: OrderCodes): { sale: string; refund: string } | undefined | 'tax' {
   if (!codes.domestic) return undefined;
@@ -68,7 +70,8 @@ export function payoutByOrders(tx: Pick<BankTransaction, 'date' | 'amount' | 'cu
   let refunds = 0;
   for (const { o, added, back } of inPayout) {
     if (o.currency !== tx.currency) return { hold: { why: 'currency', order: o.number, currency: o.currency } };
-    if (added.length && (o.payouts.length > 1 || added.some((s) => toRappen(s.amount) > toRappen(o.gross)))) return { hold: { why: 'split', order: o.number } };
+    // A provider keeps a few percent; a share below half the gross is more likely a part of the order whose other part the document did not name, which would land in the fees.
+    if (added.length && (o.payouts.length > 1 || added.some((s) => toRappen(s.amount) > toRappen(o.gross) || 2 * toRappen(s.amount) < toRappen(o.gross)))) return { hold: { why: 'split', order: o.number } };
     const code = codesOf(o, codes);
     if (code === 'tax') return { hold: { why: 'tax', order: o.number } };
     if (added.length) {

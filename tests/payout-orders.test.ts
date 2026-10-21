@@ -130,6 +130,14 @@ test('an order whose own tax line disagrees with its delivery country is the per
   assert.match(out2.asked[0].question, /#1001/);
 });
 
+test('an order of which the payout holds less than half is taken for a part payment whose other part the page did not name: nothing booked, never the rest as fees', async () => {
+  const ws = company();
+  const books = booksOf({ ...ORDERS, o1003: { ...ORDERS.o1003, gross: 400 } });
+  const out = await classifyTransactions(books, [PAYOUT], { fx, context: loadClassifyContext(ws) });
+  assert.deepEqual([out.classified, books.journalEntries], [[], []]);
+  assert.match(out.asked[0].question, /#1003 steht in mehreren Auszahlungen/);
+});
+
 test('without any order document the payout stays as today: the rule\'s question about the missing report', async () => {
   const ws = company();
   const books = booksOf({}, []);
