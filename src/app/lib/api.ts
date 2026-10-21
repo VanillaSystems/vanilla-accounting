@@ -87,6 +87,7 @@ function statementProblemText(p: StatementProblem): string {
     case 'noAccount': return p.iban ? t('error.statement.unknownAccount', { iban: groupedIban(p.iban), currency: p.currency }) : t('error.statement.noAccount', { currency: p.currency });
     case 'otherIban': return t('error.statement.otherIban', { iban: groupedIban(p.iban), bank: p.account.bank, currency: p.currency, known: groupedIban(p.account.iban) });
     case 'twoAccounts': return t('error.statement.twoAccounts', { bank: p.bank, currency: p.currency, first: groupedIban(p.ibans[0]), second: groupedIban(p.ibans[1]) });
+    case 'whichAccount': return t('error.statement.whichAccount', { currency: p.currency, accounts: p.accounts.map((a) => a.label).join(', ') });
   }
 }
 
@@ -111,10 +112,12 @@ export function errorText(e: unknown): string {
       return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
     case 'classifyAccount': return t('error.classifyAccount', b.params);
+    case 'classifyUnknownAccount': return t('error.classifyUnknownAccount', b.params);
     case 'classifyBalance': {
       const { date, currency, paid, booked } = b.params;
       return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
+    case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'notInTrash': return t('error.notInTrash');
