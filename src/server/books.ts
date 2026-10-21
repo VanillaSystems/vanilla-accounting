@@ -6,14 +6,15 @@ import type { Response } from 'express';
 import type { Index, Receipt } from '../types/index.js';
 import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, update, PERSON, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
-import { locateWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
+import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
 
 /**
  * Live: a route that changes the manifest reopens it, the desktop app opens other books, and every
- * route reads the new one. A bundled demo opens as its copy, never the original in the repository.
+ * route reads the new one. The books the desktop app opened before loading the API are the first;
+ * otherwise the located ones, a bundled demo as its copy, never the original in the repository.
  */
-export let WS = openWorkspaceAt(demoCopy(locateWorkspace()));
+export let WS = openWorkspace(() => demoCopy(locateWorkspace()));
 
 export function reopenWorkspace(root: string = WS.paths.root): void {
   WS = openWorkspaceAt(root);

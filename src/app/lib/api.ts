@@ -113,6 +113,7 @@ export function errorText(e: unknown): string {
     }
     case 'classifyAccount': return t('error.classifyAccount', b.params);
     case 'classifyUnknownAccount': return t('error.classifyUnknownAccount', b.params);
+    case 'classifyUnknownVatCode': return t('error.classifyUnknownVatCode', b.params);
     case 'classifyBalance': {
       const { date, currency, paid, booked } = b.params;
       return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });

@@ -21,6 +21,10 @@ import { startApi } from './support/api-server.js';
 import { booksOnDisk } from './support/workspace.js';
 import { loadBooks } from '../src/books/store.js';
 import './support/jurisdiction.js';
+import { loadJurisdiction } from '../src/core/modules/load.js';
+import { setJurisdiction } from '../src/engines/index.js';
+import { APP_ROOT } from '../src/workspace/workspace.js';
+import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, type VatSetup } from '../src/workspace/vat-setup.js';
 
 const REPO = process.cwd();
 const fx = loadFxResolver();
@@ -332,6 +336,35 @@ test('a model booking on an account missing from the chart never lands: the paym
   assert.deepEqual(failed.map((f) => [f.ref, f.refusal]), [['SHOP', { code: 'classifyUnknownAccount', params: { account: '3450', description: 'Webshop Bestellung #1001, M. Muster, CH' } }]]);
   assert.match(failed[0].reason, /3450.*nichts gebucht/);
   assert.ok(!b.journalEntries.some((e) => e.accountDebit === '3450' || e.accountCredit === '3450'), 'nothing on 3450');
+});
+
+test('a model booking with a VAT code the engine does not know never lands: the payment waits, unbooked, with the code named (#56)', async () => {
+  const b = books([tx({ ref: 'Z', amount: 100 }), tx({ ref: 'OK', amount: 100 })]);
+  const { ask } = stubAsk((ref) => ref === 'Z'
+    ? [{ accountDebit: '6570', accountCredit: '', amount: 100, vatCode: 'Z0', description: 'Shop, Ware' }]
+    : [expense(100)]);
+  const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(classified, ['OK']);
+  assert.deepEqual(failed.map((f) => [f.ref, f.refusal]), [['Z', { code: 'classifyUnknownVatCode', params: { code: 'Z0', description: 'Shop, Ware' } }]]);
+  assert.match(failed[0].reason, /Z0.*nichts gebucht/);
+  assert.deepEqual(b.journalEntries.map((e) => e.transactionRef), ['OK'], 'nothing booked for Z');
+});
+
+test('a code the firm\'s form does not take is left off, not refused: a firm not registered and one on the net tax rate method book the payment without it (#56)', async () => {
+  const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
+  const netRate: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }] };
+  try {
+    for (const setup of [NOT_REGISTERED, netRate]) {
+      setJurisdiction(ch, setup);
+      const b = books([tx({ ref: 'I', amount: 100 }), tx({ ref: 'Z', amount: 100 })]);
+      const { ask } = stubAsk((ref) => [{ accountDebit: '6570', accountCredit: '', amount: 100, vatCode: ref === 'I' ? 'I81' : 'Z0', description: 'Shop, Ware' }]);
+      const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+      assert.deepEqual([classified, failed], [['I', 'Z'], []], `${setup.registered ? 'net rate' : 'not registered'}: both booked`);
+      assert.deepEqual(b.journalEntries.map((e) => e.vatCode), [undefined, undefined], 'without a code');
+    }
+  } finally {
+    setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  }
 });
 
 test('the classify prompt names no account the standard chart lacks (#37)', () => {

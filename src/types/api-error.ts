@@ -142,13 +142,15 @@ export type ApiRefusal =
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):
- * an entry without an account, an entry on an account the chart does not have, or entries that do
+ * an entry without an account, an entry on an account the chart does not have, an entry with a VAT
+ * code the engine does not know, or entries that do
  * not add up to what the bank paid; or a fee line on a payment whose fee the bank debits as its own
  * movement (src/booking/separate-fee.ts).
  */
 export type ClassifyRefusal =
   | { code: 'classifyAccount'; params: { description: string } }
   | { code: 'classifyUnknownAccount'; params: { account: string; description: string } }
+  | { code: 'classifyUnknownVatCode'; params: { code: string; description: string } }
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } };
 
