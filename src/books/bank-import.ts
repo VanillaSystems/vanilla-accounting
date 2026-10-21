@@ -191,7 +191,7 @@ export interface Scan {
  */
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
-  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank', counterpartyIban: 'bank',
+  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank', counterpartyIban: 'bank', bankTxId: 'bank',
   source: 'kept', remarks: 'kept', noReceiptNeeded: 'kept', waitsForPerson: 'kept',
 } as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
 
@@ -240,7 +240,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
     const out = { ...t };
     // Wise drops transfer references from camt053; its monthly PDFs keep them. The map holds
     // Wise transaction ids only (CARD-…, TRANSFER-…), read from the folders of `wise` accounts.
-    const fromPdf = scan.wiseRefs.get(t.ref.split('~')[0]);
+    const fromPdf = scan.wiseRefs.get(t.bankTxId ?? t.ref.split('~')[0]);
     if (fromPdf && !out.reference) out.reference = fromPdf;
     return out;
   });
