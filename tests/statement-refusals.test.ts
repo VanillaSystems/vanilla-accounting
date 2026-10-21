@@ -54,6 +54,35 @@ test('a firm with one CHF account and no IBAN in the books reads its camt.053 li
   } finally { await api.stop(); }
 });
 
+test('two CHF accounts without IBAN: the camt.053 asks which one instead of refusing; the drop dialog takes the answer and reads it into that account (#25)', async () => {
+  const api = await startApi('tests/fixtures/fresh-books-index.json', {}, { manifestOf: COIFFEUR });
+  const { SESSION } = await import('./support/inbox-run.js');
+  try {
+    const added = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'ZKB', currency: 'CHF', account: '1022', label: 'ZKB Geschäftskonto' } });
+    assert.equal(added.status, 200, JSON.stringify(added.json));
+    const file = camt('S-ZKB', OTHER, [['2026-10-03', -40, '55000000001']], 'Zürcher Kantonalbank');
+    const res = await api.fetch('/api/statements?name=zkb.xml', { method: 'POST', body: file });
+    assert.equal(res.status, 400);
+    const body = await res.json() as { error: string; params: { reason: string; problem: unknown; unknown?: unknown } };
+    assert.deepEqual(body.params.problem, { kind: 'whichAccount', currency: 'CHF', iban: OTHER, accounts: [{ account: '1020', bank: 'Raiffeisen', label: 'Bank Raiffeisen' }, { account: '1022', bank: 'ZKB', label: 'ZKB Geschäftskonto' }] });
+    assert.doesNotMatch(body.error, /Kein Bankkonto/, 'not «no account takes it»: two do');
+
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=zkb.xml`, Buffer.from(file));
+    const row = s.rows[0];
+    assert.deepEqual([row.state, row.chooseAccount?.accounts.map((a) => a.account)], ['refused', ['1020', '1022']], 'the row asks which account');
+    await assert.rejects(post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'account', account: '1021' }), /400/, 'only an account it offered');
+    s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'account', account: '1022' });
+    assert.deepEqual([s.rows[0].state, s.rows[0].chooseAccount, s.rows[0].statement?.file], ['taken', undefined, 'ZKB/zkb.xml']);
+    await rest();
+    const books = await (await api.fetch('/books.json')).json() as Index;
+    assert.deepEqual(books.transactions.map((t) => [t.ref, t.bank]), [['55000000001', 'ZKB']], 'read into the account the person chose');
+  } finally {
+    await api.stop();
+  }
+});
+
 test('an account whose IBAN the books know takes only its own statements; another IBAN names the known one and offers the new account', async () => {
   const api = await startApi('tests/fixtures/fresh-books-index.json');
   try {

@@ -48,6 +48,19 @@ test('recognized by structure: a receipt PDF, a photo, a camt.053 with its facts
   assert.equal((await recognize(Buffer.from('hello'), 'notes.txt')).reason, 'as-pdf');
 });
 
+test('a statement PDF is one by its title in any of the languages, before any receipt word; an invoice that mentions a statement stays a receipt (#25)', async () => {
+  const kindOf = async (lines: string[]) => (await recognize(await textPdf(lines), 'download.pdf')).kind;
+  // A currency account's monthly statement as an e-money provider writes it: no «Kontoauszug», no IBAN on the page.
+  assert.equal(await kindOf(['Example Payments Ltd', 'CHF statement', '1 August 2026 - 31 August 2026', 'Account holder', 'Muster GmbH', 'CHF on 31 August 2026 1,234.56 CHF',
+    'Description Incoming Outgoing Amount', 'Card transaction of 12.00 CHF issued by Example Shop -12.00 1,234.56']), 'statement-pdf');
+  assert.equal(await kindOf(['Banque Exemple SA', 'Relevé de compte 01.08.2026 - 31.08.2026', 'Solde au 31.08.2026 1 234.56']), 'statement-pdf');
+  assert.equal(await kindOf(['Banca Esempio', 'Estratto conto agosto 2026', 'Saldo finale 1234.56']), 'statement-pdf');
+  const raiffeisen = await recognize(await textPdf(['Raiffeisenbank Beispiel', 'Kontoauszug 01.08.2026 - 31.08.2026', 'IBAN CH65 8080 8000 0000 0000 1', 'Gutschrift Kunde 100.00']), 'k.pdf');
+  assert.deepEqual([raiffeisen.kind, raiffeisen.facts], ['statement-pdf', { iban: 'CH6580808000000000001' }], 'a «Gutschrift» line below the title does not make it a receipt');
+  assert.equal(await kindOf(['Malerbedarf Muster AG', 'Rechnung R-2026-81', 'Datum: 12.08.2026', 'Statement of work: Fassade', 'Total CHF 108.10']), 'receipt');
+  assert.equal(await kindOf(['Invoice INV-77', 'Your monthly statement is available online', 'Total due USD 20.00']), 'receipt');
+});
+
 test('a ZIP is unpacked three levels deep and no deeper; a bomb is refused before it is unpacked', async () => {
   const pdf = readFileSync(RECEIPT);
   const l3 = await zipOf([['c.pdf', pdf]]);

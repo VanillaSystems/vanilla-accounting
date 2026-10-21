@@ -38,11 +38,13 @@ test('a firm with one account in the statement\'s currency and no IBAN in the bo
   assert.deepEqual(none.refusal, { kind: 'noAccount', currency: 'USD', iban: OTHER });
 });
 
-test('two accounts in the currency without IBAN: no guess, the refusal is typed and offers the IBAN', () => {
-  const second = { ...plain, bank: 'ZKB', account: '1022' } as unknown as LedgerBankAccount;
-  const m = accountForStatement([plain, second], { iban: OTHER, currency: 'CHF', folder: '' });
+test('two accounts in the currency without IBAN: no guess, the refusal asks which one, and still offers the IBAN as a new account', () => {
+  const second = { ...plain, bank: 'ZKB', account: '1022', label: 'ZKB' } as unknown as LedgerBankAccount;
+  const m = accountForStatement([plain, second, raiffeisen, wise], { iban: OTHER, currency: 'CHF', folder: '' });
   assert.ok('problem' in m);
-  assert.deepEqual([m.refusal.kind, m.unknown], ['noAccount', { iban: OTHER, currency: 'CHF' }]);
+  assert.deepEqual(m.refusal, { kind: 'whichAccount', currency: 'CHF', iban: OTHER, accounts: [{ account: '1020', bank: 'Raiffeisen', label: 'Raiffeisen' }, { account: '1022', bank: 'ZKB', label: 'ZKB' }] },
+    'only the CHF accounts that name no IBAN are asked: one with another IBAN is another account');
+  assert.deepEqual(m.unknown, { iban: OTHER, currency: 'CHF' });
 });
 
 test('an IBAN the books know is never asked for: a statement of another IBAN names the known account', () => {
