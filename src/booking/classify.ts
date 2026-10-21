@@ -16,11 +16,11 @@ import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js'
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { baseCurrency, chart, filing, setup, vat } from '../engines/index.js';
+import { baseCurrency, chart, filing, invoicing, setup, vat } from '../engines/index.js';
 import { roundCHF, toRappen } from '../accounting/rappen.js';
 import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
-import { saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
+import { normalRate, saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
@@ -35,6 +35,7 @@ import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
+import { payoutByOrders, type OrderHold } from './payout-orders.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
@@ -414,6 +415,39 @@ export function payoutFromReport(books: Books, tx: BankTransaction, booking: Rul
   return entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by, reason: `${reason}${said}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
 }
 
+/**
+ * A payout booked per order from the order documents linked to it (src/booking/payout-orders.ts):
+ * the payout rule's (or the firm's) sales account at its code for a domestic delivery, the export
+ * code for one abroad, the fees on its fee account. Undefined when no linked document names a
+ * share of `tx`; an OrderHold when they do but the person must decide.
+ */
+export function payoutFromOrders(books: Books, tx: BankTransaction, booking: RuleBooking & { fees: NonNullable<RuleBooking['fees']> }, context: ClassifyContext, fx: FxResolver, by: BookedBy, reason: string): JournalEntry[] | OrderHold | undefined {
+  const mapped = mappedReceipts(books, tx);
+  const orders = mapped.flatMap((r) => (r.order ? [r.order] : []));
+  if (tx.direction !== 'CRDT' || !orders.length) return undefined;
+  const refund = (code: string) => ruleVatCode(code, { direction: 'DBIT' }, true)!;
+  const domestic = booking.vat ? { sale: booking.vat, refund: refund(booking.vat), rate: normalRate() } : undefined;
+  const abroad = saleVatCode('saleAbroad');
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const split = payoutByOrders(tx, orders, { bank: bankAccount, sales: booking.account, fees: booking.fees },
+    { territory: invoicing().territory, domestic, ...(domestic && abroad ? { abroad: { sale: abroad, refund: refund(abroad) } } : {}) }, merchantOf(tx.description));
+  if (!split || 'hold' in split) return split?.hold;
+  const said = wordsIn('de').t('rules.say.payoutOrders', { orders: split.orders, refunds: split.refunds.toFixed(2), fees: split.fees.toFixed(2) });
+  const lock = periodLock(books);
+  return entriesFor(tx, split.lines, { fx, receiptDate: undefined, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by, reason: `${reason}${said}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
+}
+
+/** Why a payout's orders book nothing, as its question says it (booking texts stay German). */
+function orderHoldWords(hold: OrderHold): string {
+  const de = wordsIn('de');
+  switch (hold.why) {
+    case 'missing': return de.t('rules.say.ordersMissing', { orders: hold.orders.toFixed(2), paid: hold.paid.toFixed(2) });
+    case 'tax': return de.t('rules.say.ordersTax', { order: hold.order });
+    case 'split': return de.t('rules.say.ordersSplit', { order: hold.order });
+    case 'currency': return de.t('rules.say.ordersCurrency', { order: hold.order, currency: hold.currency });
+  }
+}
+
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
 export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRule, booking: RuleBooking, context: ClassifyContext, fx: FxResolver): JournalEntry[] {
   const mapped = mappedReceipts(books, tx);
@@ -584,11 +618,20 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     if (split?.fees) {
       const by: BookedBy = placed ? { kind: 'rule', rule: placed.rule.id } : { kind: 'code', check: 'payoutReport' };
       const reason = placed ? `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}; ` : '';
-      const read = payoutFromReport(books, tx, { ...split, fees: split.fees }, context, fx, by, reason);
+      const byOrders = payoutFromOrders(books, tx, { ...split, fees: split.fees }, context, fx, placed ? by : { kind: 'code', check: 'payoutOrders' }, reason);
+      const read = Array.isArray(byOrders) ? byOrders : payoutFromReport(books, tx, { ...split, fees: split.fees }, context, fx, by, reason);
       if (read) {
         books.journalEntries.push(...(placed ? read.map((e) => ({ ...e, rule: placed.rule.id })) : read));
-        log(`  ${tx.ref}  → payout report${placed ? ` (rule ${placed.rule.id})` : ''}`);
+        log(`  ${tx.ref}  → ${read === byOrders ? 'orders' : 'payout report'}${placed ? ` (rule ${placed.rule.id})` : ''}`);
         outcome.classified.push(tx.ref);
+        continue;
+      }
+      if (byOrders && !Array.isArray(byOrders)) {
+        // Its order documents do not book it, and no model may guess past them: under a rule the payout waits as its question, the whole payout as sales to take over; else it is the person's to book.
+        log(`  ${tx.ref}  waits for its orders${placed ? ` (rule ${placed.rule.id})` : ''}`);
+        const why = wordsIn('de').t('rules.say.ordersAsk', { why: orderHoldWords(byOrders) });
+        if (placed) outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: why, entries: ruleEntries(books, tx, placed, split, context, fx) });
+        else outcome.failed.push({ ref: tx.ref, reason: why });
         continue;
       }
     }

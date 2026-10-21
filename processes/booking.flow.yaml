@@ -17,7 +17,7 @@
 # rebook is `npm run classify -- --force`, which removes and rebooks every
 # transaction whose entries are all classify's own open-period work. It keeps
 # closed periods, entries with `corrects`, entries with no bank transaction behind
-# them (SHOPIFY-<n>, M-refs) and rebook-shopify payouts (src/accounting/classify-force.ts).
+# them (SHOPIFY-<n>, M-refs) and payouts the retired rebook-shopify split (src/accounting/classify-force.ts).
 
 id: booking
 name: Book transactions
