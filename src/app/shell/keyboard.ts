@@ -1,7 +1,7 @@
 /**
  * The keyboard model of the mockup. Typing in a field never triggers it. The shell's own keys:
  * ⌘K palette, G + letter area, N add, T light/dark, ⇧E export, / search, ? key help, ⌘Z undo,
- * Esc back to the list; ↑/↓ and J/K belong to the area (moveKey), ⌘+/⌘−/⌘0 to the zoom (prefs.ts).
+ * ⌘B the dock narrow or wide, Esc back to the list; ↑/↓ and J/K belong to the area (moveKey), ⌘+/⌘−/⌘0 to the zoom (prefs.ts).
  */
 import { useEffect, useRef } from 'react';
 
@@ -31,6 +31,8 @@ export interface ShellKeys {
   exportOpen(): void;
   /** ⌘J: the AI sidebar, also while typing. */
   assistant(): void;
+  /** ⌘B: the dock narrow or wide. */
+  toggleNav(): void;
 }
 
 const plain = (e: KeyboardEvent) => !e.metaKey && !e.ctrlKey && !e.altKey;
@@ -62,6 +64,7 @@ export function useShellKeys(keys: ShellKeys) {
       }
       if ((e.key === 'Enter' || e.key === ' ') && takesOwnEnter(target)) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && k.undo()) { e.preventDefault(); return; }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') { e.preventDefault(); k.toggleNav(); return; }
       if (gPending && plain(e) && /^[a-z]$/.test(e.key)) { endG(); if (k.area(e.key)) e.preventDefault(); return; }
       if (plain(e) && e.shiftKey && e.key === 'E') { e.preventDefault(); k.exportOpen(); return; }
       if (k.areaKeys(e)) { e.preventDefault(); return; }

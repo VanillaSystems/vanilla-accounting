@@ -528,7 +528,7 @@ export function corner(v: AutomationView): Corner {
 }
 
 /** The dock badge of Automatisierung: what waits for a person, and what is stuck. */
-export const openCount = (v: AutomationView): number => v.tasks.length + v.runs.filter((r) => r.status === 'stuck').length;
+export const openCount = (v: Pick<AutomationView, 'tasks' | 'runs'>): number => v.tasks.length + v.runs.filter((r) => r.status === 'stuck').length;
 
 export type AutomationCommand =
   | { kind: 'start'; workflow: string; item: ItemRef; mode?: 'live' | 'dry' }
