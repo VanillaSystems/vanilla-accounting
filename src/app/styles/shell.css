@@ -366,10 +366,12 @@ html.navwide:not(.phone) .activity:not(.keys) .tip { display: none; }
 html.navwide:not(.phone) .autow { padding: 12px 2px 6px; }
 html.navwide:not(.phone) .autow .wopen { align-items: stretch; gap: 10px; padding: 4px; }
 html.navwide:not(.phone) .autow .wopen::before { left: -8px; }
-.autow .wtitle { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font: 600 12.5px "Instrument Sans"; color: var(--ink); }
+.autow .wtitle { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; font: 600 12.5px "Instrument Sans"; color: var(--ink); }
 .autow .wtitle .trig { width: 24px; height: 24px; border-radius: 7px; }
 .autow .wtitle .trig svg { width: 14px; height: 14px; }
-.autow .wtitle em { margin-left: auto; font: 500 10.5px "Geist Mono"; font-style: normal; color: var(--muted); white-space: nowrap; }
+.autow .wtitle .trig { flex: none; }
+.autow .wtitle .wname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autow .wtitle em { margin-left: auto; flex: none; font: 500 10.5px "Geist Mono"; font-style: normal; color: var(--muted); white-space: nowrap; }
 .autow.running .wtitle em { color: var(--accent); }
 .autow.waiting .wtitle em { color: var(--warn); }
 .autow .figrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }

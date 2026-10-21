@@ -139,7 +139,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
           aria-label={`${AREAS[AUTOMATION].label()}: ${tipLines.join('. ')}`} onClick={() => setOpen(!open)}>
           {wide ? (
             <>
-              <span className="wtitle"><span className="trig">{ICONS.automation}</span>{AREAS[AUTOMATION].label()}{words.word ? <em>{words.word}</em> : null}</span>
+              <span className="wtitle"><span className="trig">{ICONS.automation}</span><span className="wname">{AREAS[AUTOMATION].label()}</span>{words.word ? <em>{words.word}</em> : null}</span>
               <span className="figrow">{stack}</span>
             </>
           ) : (
