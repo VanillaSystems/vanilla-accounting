@@ -21,6 +21,8 @@ test('the shell lays out one column on a phone: the other column hidden, the doc
   assert.match(css, /html\.phone main\[data-phone="list"\] \.detail[^{]*\{[^}]*display: none/, 'the detail waits behind the list');
   assert.match(css, /html\.phone main\[data-phone="detail"\] \.list[^{]*\{[^}]*display: none/, 'the list steps aside for the detail');
   assert.match(css, /html\.phone \.activity\b[^{]*\{[^}]*bottom: 0/, 'the dock lies along the bottom');
+  assert.match(css, /html\.phone :is\(\.autow, \.navtoggle, \.autocard\) \{ display: none; \}/, 'no Automatisierung widget, no width toggle, no summary card on a phone');
+  assert.match(css, /html\.phone \.activity \.it\.bolt \{ display: grid; \}/, 'Automatisierung is a compact item of the bottom bar instead');
   const shell = readFileSync('src/app/shell/Shell.tsx', 'utf8');
   assert.match(shell, /data-phone=\{/, 'the shell says which column shows');
   assert.match(shell, /className="phoneback"/, 'the detail has «←» back to the list');

@@ -2,12 +2,13 @@
  * Per-viewer preferences, kept in this browser (docs/urls.md: never in a link): theme, zoom,
  * language, and small remembered values. Every storage access may throw (private window).
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { desktop } from '../desktop/bridge.js';
 import { store, stored } from './storage.js';
 import { ZOOM_STEPS, phone, tight, type Theme } from './look.js';
+import { NAV_WIDE_CLASS, keepNavWide, navWideStored } from './nav-width.js';
 
 export { ZOOM_STEPS, nextTheme, type Theme } from './look.js';
 
@@ -88,6 +89,17 @@ export function usePersistedFlag(key: string, fallback: boolean): [boolean, (v: 
     return saved === null ? fallback : saved !== 'false';
   });
   return [value, (v) => { setValue(v); store(key, String(v)); }];
+}
+
+/** The dock narrow or wide (nav-width.ts); the split and every fixed element place themselves again. */
+export function useNavWide(): [boolean, () => void] {
+  const [wide, setWide] = useState(navWideStored);
+  useEffect(() => {
+    document.documentElement.classList.toggle(NAV_WIDE_CLASS, wide);
+    keepNavWide(wide);
+    dispatchEvent(new Event('resize'));
+  }, [wide]);
+  return [wide, useCallback(() => setWide((w) => !w), [])];
 }
 
 /**
