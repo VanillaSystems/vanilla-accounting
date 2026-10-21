@@ -45,6 +45,8 @@ export interface TaxCodeEngine {
   purchaseAt(rate: number, box: BoxId): string | undefined;
   /** By meaning: the first catalogue code whose turnover is deducted in `box`. */
   deductedIn(box: BoxId): string | undefined;
+  /** By meaning: the acquisition-tax code at `rate` on a net amount (B81-1), the price of a service from abroad that charged no tax; undefined when the form takes none. */
+  acquisitionAt(rate: number): string | undefined;
 }
 
 export function taxCodeEngine(data: TaxCodesData, form: Pick<ReturnData, 'codes' | 'turnoverBox' | 'rateOrder' | 'deductions' | 'inputTax'>, netRates: readonly NetRate[] = []): TaxCodeEngine {
@@ -103,6 +105,11 @@ export function taxCodeEngine(data: TaxCodesData, form: Pick<ReturnData, 'codes'
     purchaseBoxes: data.purchaseBoxes,
     purchaseAt: (rate, box) => meanings.find(([, m]) => m.inputTaxZiffer === box && !m.acquisitionZiffer && m.rate === rate)?.[0],
     deductedIn: (box) => meanings.find(([, m]) => m.deductionZiffer === box)?.[0],
+    acquisitionAt(rate) {
+      const code = meanings.find(([, m]) => m.acquisitionZiffer && m.rate === rate)?.[0];
+      const net = code && `${code}${data.amountSuffix.net}`;
+      return net && engine.parse(net) ? net : undefined;
+    },
     parse(code) {
       if (!code) return null;
       const isNegative = code.startsWith(data.negativePrefix);

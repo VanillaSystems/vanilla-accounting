@@ -6,7 +6,7 @@
  * never part of it.
  */
 
-import type { UnknownAccount } from './api-error.js';
+import type { AccountChoice, UnknownAccount } from './api-error.js';
 import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
 import type { TwinWhy } from './index.js';
 
@@ -44,6 +44,10 @@ export interface DropRow {
   message?: string;
   /** A statement of an account the books do not know: the UI asks whether it is the firm's and offers «Bankkonto hinzufügen». */
   unknownAccount?: UnknownAccount;
+  /** A statement several accounts of its currency could take (none names an IBAN): the UI asks which (#25). */
+  chooseAccount?: AccountChoice;
+  /** The bank account (ledger number) the person said the statement is of. */
+  account?: string;
   /** Taken: the run that takes it up. */
   run?: string;
   /** A receipt: the name it got in the inbox. */
@@ -88,6 +92,8 @@ export type DropAction =
   | { kind: 'undo' }
   /** A statement of an unknown account is the owner's private one: set aside. */
   | { kind: 'private' }
+  /** A statement of one of the accounts it offered (`chooseAccount`): read into that one. */
+  | { kind: 'account'; account: string }
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' };
 

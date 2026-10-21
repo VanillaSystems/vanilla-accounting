@@ -173,7 +173,11 @@ export interface UnknownAccount {
 export type StatementProblem =
   | { kind: 'noAccount'; currency: string; iban?: Iban }
   | { kind: 'otherIban'; currency: string; iban: Iban; account: { bank: string; iban: Iban } }
-  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban };
+  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban }
+  | AccountChoice;
+
+/** `whichAccount`: several accounts of its currency name no IBAN, so any of them could be it; the person picks one (the drop dialog asks, #25). */
+export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }> }
 
 export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments';
 

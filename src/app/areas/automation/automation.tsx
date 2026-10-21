@@ -34,7 +34,7 @@ import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/f
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
-import { questionsNow, useQuestions } from '../../questions/store.js';
+import { useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
@@ -798,7 +798,8 @@ const legend = (): LegendItem[] => [
 export const automation: Area<RouteOf<'automation'>> = {
   id: 'automation',
   label: () => t('area.automation'),
-  dock: { key: 'w', icon: ICONS.automation, tip: () => t('area.automation.tip'), badge: () => { const v = automationNow(); const q = questionsNow(); return (v ? openCount(v) : 0) + forMe(q.questions, q.me).length; } },
+  // What waits for the person is the dock widget's count (src/app/automation/widget.ts), not a badge.
+  dock: { key: 'w', icon: ICONS.automation, tip: () => t('area.automation.tip') },
   List,
   Detail,
   legend,

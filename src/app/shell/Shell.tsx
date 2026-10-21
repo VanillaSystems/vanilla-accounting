@@ -29,7 +29,7 @@ import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
 import { PeriodPicker } from './PeriodPicker.js';
-import { nextTheme, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
+import { nextTheme, useNavWide, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
 import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
@@ -75,6 +75,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);
+  const [navWide, toggleNav] = useNavWide();
   const [dropping, setDropping] = useState<DropTarget | null>(null);
   const aiOpen = useAssistant().open;
 
@@ -169,6 +170,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     toggleLegend: () => setLegend(!legend),
     exportOpen: () => openExport(),
     assistant: toggleAssistant,
+    toggleNav,
   });
   useLayoutEffect(syncSidebarWidth, []);
 
@@ -209,6 +211,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       ...PRESETS.map((x) => ({ label: t('export.palettePreset', { name: t(`export.preset.${x.id}`) }), side: t('export.paletteBuiltin'), run: () => openExport(configOf(x.id, openNow(), p.period)) })),
       ...ownPresets().map((x) => ({ label: t('export.palettePreset', { name: x.name }), side: t('export.paletteOwn'), run: () => openExport(ownConfig(x)) })),
       { label: t('shell.themeToggle'), side: 'T', run: toggleTheme },
+      { label: t('dock.navToggle'), side: '⌘B', run: toggleNav },
     ].filter(hit);
     const areas: PaletteItem[] = DOCK.flat().map((id) => ({ label: AREAS[id].label(), side: `G ${AREAS[id].dock!.key.toUpperCase()}`, run: () => goArea(id) })).filter(hit);
     return [...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
@@ -274,7 +277,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <Sidebar page={pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
       <DropDialog books={books} refresh={refresh} onGo={(loc) => nav.go(loc)} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
-      <Dock current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
+      <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
       {legend && (
         <div className="legend">
