@@ -88,8 +88,10 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
   const pick = async (a: (typeof choice.accounts)[number]) => {
     setBusy(true);
     try {
-      if (keep && choice.iban) await api.patchWorkspace({ banks: [{ bank: a.bank, currency: choice.currency, iban: choice.iban }] });
-      await act(session, r, { kind: 'account', account: a.account });
+      const next = await api.dropRow(session.id, r.key, { kind: 'account', account: a.account });
+      set({ session: next });
+      // Only once the statement is read in: a refused one leaves the account as it was.
+      if (keep && choice.iban && next.rows.find((x) => x.key === r.key)?.state === 'taken') await api.patchWorkspace({ banks: [{ bank: a.bank, currency: choice.currency, iban: choice.iban }] });
     } catch (e) {
       set({ error: errorText(e) });
     } finally {
@@ -140,7 +142,9 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
             <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
             <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
           </span>
-        ) : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && r.reason !== 'unreadable'
+        ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount
+          ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
+        : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && r.reason !== 'unreadable'
           ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
         {r.state === 'locked' ? (
           <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>

@@ -79,8 +79,10 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   const transactions: BankTransaction[] = [];
   let iban: string | undefined;
   for (const statement of camt.statements) {
-    // The account the person named takes a statement of its currency unless it names another IBAN: two accounts of one bank and currency are told apart by it.
-    const chosen = hint?.statements && hint.currency === statement.currency && (!hint.iban || !statement.iban || hint.iban === parseIban(statement.iban)) ? { ...hint, statements: hint.statements } : undefined;
+    // The account the person named takes a statement of its currency, unless an IBAN the books know says otherwise.
+    const named = statement.iban ? parseIban(statement.iban) : undefined;
+    const known = !!named && WS.bankAccounts.some((a) => a.iban === named && a.currency === statement.currency);
+    const chosen = hint?.statements && !known && hint.currency === statement.currency && (!hint.iban || !named || hint.iban === named) ? { ...hint, statements: hint.statements } : undefined;
     const match = chosen ? { account: chosen } : accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
     if ('problem' in match) throw refusedAccount(match.refusal, match.unknown, statement.bankName, statement.ownerName);
     const found = match.account;
@@ -156,7 +158,7 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
   if (!account) {
     const currency = named.currency ?? baseCurrency();
     // A PDF's name rarely gives its IBAN: then any account of its currency could be it.
-    const open = imported().filter((a) => a.currency === currency && (!iban || !a.iban));
+    const open = (named.currency ? imported().filter((a) => a.currency === currency) : chf).filter((a) => !iban || !a.iban);
     if (open.length > 1) throw refusedAccount({ kind: 'whichAccount', currency, accounts: open.map((a) => ({ account: a.account, bank: a.bank, label: a.label })) });
     return refuse(400, 'Zu welchem Konto gehört der Auszug? Aus dem fehlenden Monat hinzufügen.', 'account');
   }

@@ -134,16 +134,20 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       unquarantine(row);
       Object.assign(row, { state: 'take', reason: undefined });
       break;
-    case 'as':
-      if (settled || row.state === 'refused' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+    case 'as': {
+      // A PDF its words took for a statement that no account read in may still be a receipt: the person says so (#25).
+      const notStatement = row.kind === 'statement-pdf' && row.reason === 'not-imported' && a.as === 'receipt';
+      if (settled || (row.state === 'refused' && !notStatement) || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      if (notStatement) { delete row.message; delete row.unknownAccount; delete row.chooseAccount; }
       if (a.as === 'receipt') unquarantine(row);
       Object.assign(row, a.as === 'quarantine' ? { state: 'quarantine', reason: 'held' } : { kind: 'receipt', state: 'take', reason: undefined });
       break;
+    }
     case 'private':
       setAsidePrivate(s, row);
       break;
     case 'account':
-      if (!row.chooseAccount?.accounts.some((x) => x.account === a.account)) throw new RequestError(400, 'Nur eines der angebotenen Konten nimmt diesen Auszug.');
+      if (!row.chooseAccount?.accounts.some((x) => x.account === a.account) || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur eines der angebotenen Konten nimmt diesen Auszug.');
       delete row.chooseAccount;
       delete row.unknownAccount;
       delete row.message;
@@ -189,6 +193,7 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
 function setAsidePrivate(s: DropSession, row: DropRow): void {
   if (!row.unknownAccount) throw new RequestError(400, 'Nur ein Auszug eines unbekannten Kontos wird als privat beiseitegelegt.');
   delete row.unknownAccount;
+  delete row.chooseAccount;
   delete row.message;
   row.reason = 'private';
   rmSync(fileOf(s.id, row.key), { force: true });
