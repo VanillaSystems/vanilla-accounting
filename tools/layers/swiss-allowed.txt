@@ -58,12 +58,10 @@ src/books/company.ts
 src/books/year-close.ts
 src/cli/check-processes.ts
 src/cli/evidence.ts
-src/cli/extract-shopify-orders.ts
 src/cli/fetch-estv-rates.ts
 src/cli/import-board.ts
 src/cli/import-opening-balances.ts
 src/cli/init.ts
-src/cli/rebook-shopify-orders.ts
 src/cli/reconcile-balances.ts
 src/cli/restamp-fx-rates.ts
 src/cli/vat-ech0217.ts

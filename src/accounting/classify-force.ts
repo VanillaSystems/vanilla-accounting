@@ -95,9 +95,9 @@ function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined)
 }
 
 /**
- * rebook-shopify replaces a Stripe payout's entries with per-order sales and gives the
- * payout leg the id sha256("payout|<ref>"). Rebooking such a payout through classify
- * would bring back the aggregated V0 revenue it replaced.
+ * The retired rebook-shopify CLI replaced a payout's entries with per-order sales dated at
+ * the order and gave the payout leg the id sha256("payout|<ref>"); books it wrote keep them.
+ * Rebooking such a payout through classify would lose the order dates it booked on.
  */
 function isRebookShopifyPayout(ref: string, group: readonly JournalEntry[]): boolean {
   const payoutId = createHash('sha256').update(`payout|${ref}`).digest('hex').substring(0, 16);
