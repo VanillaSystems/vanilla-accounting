@@ -439,6 +439,13 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
+/**
+ * A Wise card charge's text without the fee it names («(fee: 0.14 EUR)»): Wise debits that fee as a
+ * payment of its own (FEE-CARD-…, `type: 'wise-fee'`), and the charge's amount is without it. Read on
+ * the charge, the model split it out as a 6940 line there and the fee was booked twice (#24).
+ */
+const withoutCardFee = (description: string) => description.replace(/^(Card transaction of .*?)\s*\(fee: [^)]*\)/s, '$1');
+
 /** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts. */
 export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
   const receipts = mappedReceipts(books, tx)
@@ -455,7 +462,7 @@ export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
       lineItems: r.lineItems,
     }));
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}) },
+    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: withoutCardFee(tx.description), bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}) },
     receipts,
   };
 }

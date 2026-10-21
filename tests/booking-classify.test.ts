@@ -202,6 +202,30 @@ test('Skonto answered as the model did (invoice total, and a discount line with 
   );
 });
 
+test('a Wise card fee is booked once, on its FEE-CARD payment, never again inside the card charge (#24)', async () => {
+  // As Wise's camt053 has them (tests/fixtures/camt053/uuid_statement_wise_USD.xml): the charge is the converted amount without the fee; the fee is its own debit.
+  const charge = tx({ ref: 'CARD-7200000001', currency: 'USD', amount: 9.5, description: 'Card transaction of 7.60 CHF issued by Example Hosting INTERNET (fee: 0.02 USD)' });
+  const fee = tx({ ref: 'FEE-CARD-7200000001', currency: 'USD', amount: 0.02, description: 'Wise Charges for: CARD-7200000001', type: 'wise-fee' });
+  const b = books([charge, fee]);
+  // The model as the Q3 replay saw it: a fee its payment's text names becomes a 6940 line of that payment.
+  const ask: ClassifyDeps['ask'] = async (prompt) => {
+    const blocks = [...prompt.matchAll(/^### Transaction \d+: (\S+)\n[\s\S]*?Amount: ([\d.]+)[\s\S]*?Bank description: (.*)$/gm)];
+    return JSON.stringify(Object.fromEntries(blocks.map(([, ref, amount, text]) => {
+      const named = /\(fee: ([\d.]+)/.exec(text)?.[1];
+      const feeLine = (a: number): ClassifyEntry => ({ accountDebit: '6940', accountCredit: '', amount: a, vatCode: 'I0', description: 'Wise, Kartengebühren' });
+      if (text.startsWith('Wise Charges')) return [ref, { entries: [feeLine(Number(amount))] }];
+      const rest = Math.round((Number(amount) - Number(named ?? 0)) * 100) / 100;
+      return [ref, { entries: [{ ...expense(rest), accountDebit: '6570' }, ...(named ? [feeLine(Number(named))] : [])] }];
+    })));
+  };
+  const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual([classified.sort(), failed], [['CARD-7200000001', 'FEE-CARD-7200000001'], []]);
+  const on = (account: string) => b.journalEntries.filter((e) => e.accountDebit === account).map((e) => [e.transactionRef, e.amount]);
+  assert.deepEqual(on('6940'), [['FEE-CARD-7200000001', 0.02]], 'the fee once, on its own payment');
+  assert.deepEqual(on('6570'), [['CARD-7200000001', 9.5]], 'the charge whole on the expense');
+  assert.equal(b.transactions[0].description, charge.description, 'the stored bank text stays as Wise wrote it');
+});
+
 test('a VAT-amount code (M81-2) keeps its one empty leg: the code is its other side', async () => {
   const b = books([tx({ ref: 'SH', amount: 50 })]);
   const { ask } = stubAsk(() => [expense(50), { accountDebit: '', accountCredit: '6580', amount: 3.75, vatCode: 'M81-2', description: 'Shopify, Vorsteuer' }]);
