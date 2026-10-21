@@ -3309,7 +3309,7 @@ export default {
     'rules.say.zeroCode': 'comptabilisé avec {code} : aucun justificatif ne montre la TVA suisse',
     'rules.say.creditNoteCode': 'note de crédit pour la facture {invoice}, comptabilisée avec {invoiceCode} : {code} reprend son impôt préalable',
     'rules.say.purchaseVat.noInputTax': '{business} : pas d’impôt préalable sur ce paiement, {code} (règle {rule} de l’app)',
-    'rules.say.purchaseVat.unreadReceipt': '{business} : le justificatif illisible compte comme {rate} % de TVA suisse, impôt préalable {code} (règle {rule} de l’app)',
+    'rules.say.purchaseVat.unreadReceipt': '{business} : le justificatif illisible compte comme {rate} % de TVA suisse, impôt préalable {code} (règle {rule} de l’entreprise)',
     'rules.say.purchaseVat.receiptShowsVat': 'Le justificatif montre {rate} % de TVA suisse sur tout le montant : impôt préalable {code}',
     'rules.say.acquisition.foreignService': 'prestation d’un fournisseur à l’étranger ({country}), le justificatif ne montre ni TVA suisse ni IDE suisse : impôt sur les acquisitions {code}',
     'rules.say.acquisition.swissVat': 'le justificatif montre la TVA suisse : impôt préalable {code}, pas d’impôt sur les acquisitions',

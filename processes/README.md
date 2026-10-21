@@ -150,22 +150,25 @@ whole mechanism. It is why the next quarter is quieter than this one.
 
 A business's facts that decide a code without judgment are carried out by code,
 not left to a model that may miss them (src/booking/purchase-vat.ts). A rule of
-an app business file under `booking.guide.yaml#purchase_vat` states its fact as
-`apply:` beside its prose:
+a business file under `booking.guide.yaml#purchase_vat` states it as `apply:`
+beside its prose:
 
-- `apply: { inputTax: none, direction: in }`: the business's purchase lines on
-  such a payment claim no input tax (a platform's payout, whose fees a monthly
-  bill proves);
-- `apply: { unreadReceipt: 8.1 }`: its receipt that could not be read counts as
-  showing Swiss VAT at that rate on its whole amount.
+- `apply: { inputTax: none, direction: in }`, in the app layer only: the
+  business's purchase lines on such a payment claim no input tax (a platform's
+  payout, whose fees a monthly bill proves). A fact true for every company.
+- `apply: { unreadReceipt: 8.1 }`, in the company layer only
+  (`knowledge/<role>/<id>.yaml`): the business's receipt that could not be read
+  counts as showing Swiss VAT at that rate on its whole amount. That is a risk
+  the company chooses to take, not a fact of the business, so no shipped file
+  states it; without it an unread receipt decides nothing.
 
-Only the app layer carries `apply:`, and only what is true for every company:
-an account is one company's chart, so a business file never books one. A rule
-that leaves a choice («CHE number → I81, none → B81-1») has no `apply:` and
-stays the model's. The company's word goes first: a business whose file in
-`knowledge/` has rules of its own for the step keeps the model's codes, and a
-company's executable booking rule books before any of this. `npm run
-check-processes` checks every `apply:`.
+An account is one company's chart, so `apply:` never books one. A rule that
+leaves a choice («CHE number → I81, none → B81-1») has no `apply:` and stays
+the model's. The company's word goes first: a business whose file in
+`knowledge/` has rules of its own for the step keeps the model's codes (unless
+that file has an `apply:` of its own), and a company's executable booking rule
+books before any of this. `npm run check-processes` checks every `apply:` and
+refuses each form in the other layer.
 
 ## The contract
 

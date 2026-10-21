@@ -3309,7 +3309,7 @@ export default {
     'rules.say.zeroCode': 'registrato con {code}: nessun giustificativo mostra l’IVA svizzera',
     'rules.say.creditNoteCode': 'nota di credito per la fattura {invoice}, registrata con {invoiceCode}: {code} riprende la sua imposta precedente',
     'rules.say.purchaseVat.noInputTax': '{business}: nessuna imposta precedente su questo pagamento, {code} (regola {rule} dell’app)',
-    'rules.say.purchaseVat.unreadReceipt': '{business}: il giustificativo illeggibile vale come {rate} % di IVA svizzera, imposta precedente {code} (regola {rule} dell’app)',
+    'rules.say.purchaseVat.unreadReceipt': '{business}: il giustificativo illeggibile vale come {rate} % di IVA svizzera, imposta precedente {code} (regola {rule} dell’azienda)',
     'rules.say.purchaseVat.receiptShowsVat': 'Il giustificativo mostra {rate} % di IVA svizzera sull’intero importo: imposta precedente {code}',
     'rules.say.acquisition.foreignService': 'prestazione di un fornitore all’estero ({country}), il giustificativo non mostra né IVA svizzera né IDI svizzero: imposta sull’acquisto {code}',
     'rules.say.acquisition.swissVat': 'il giustificativo mostra l’IVA svizzera: imposta precedente {code}, nessuna imposta sull’acquisto',

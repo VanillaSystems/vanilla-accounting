@@ -3309,7 +3309,7 @@ export default {
     'rules.say.zeroCode': 'booked with {code}: no receipt shows Swiss VAT',
     'rules.say.creditNoteCode': 'credit note for invoice {invoice}, booked with {invoiceCode}: {code} takes its input tax back',
     'rules.say.purchaseVat.noInputTax': '{business}: no input tax on this payment, {code} (the app\'s rule {rule})',
-    'rules.say.purchaseVat.unreadReceipt': '{business}: the unreadable receipt counts as {rate} % Swiss VAT, input tax {code} (the app\'s rule {rule})',
+    'rules.say.purchaseVat.unreadReceipt': '{business}: the unreadable receipt counts as {rate} % Swiss VAT, input tax {code} (the company\'s rule {rule})',
     'rules.say.purchaseVat.receiptShowsVat': 'The receipt shows {rate} % Swiss VAT on the whole amount: input tax {code}',
     'rules.say.acquisition.foreignService': 'a service from a supplier abroad ({country}), the receipt shows neither Swiss VAT nor a Swiss UID: acquisition tax {code}',
     'rules.say.acquisition.swissVat': 'the receipt shows Swiss VAT: input tax {code}, no acquisition tax',

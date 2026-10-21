@@ -3306,7 +3306,7 @@ export const messages = {
   'rules.say.zeroCode': 'gebucht mit {code}: kein Beleg zeigt Schweizer MWST',
   'rules.say.creditNoteCode': 'Gutschrift zu Rechnung {invoice}, gebucht mit {invoiceCode}: {code} nimmt deren Vorsteuer zurück',
   'rules.say.purchaseVat.noInputTax': '{business}: keine Vorsteuer auf dieser Zahlung, {code} (Regel {rule} der App)',
-  'rules.say.purchaseVat.unreadReceipt': '{business}: der unleserliche Beleg gilt als {rate} % Schweizer MWST, Vorsteuer {code} (Regel {rule} der App)',
+  'rules.say.purchaseVat.unreadReceipt': '{business}: der unleserliche Beleg gilt als {rate} % Schweizer MWST, Vorsteuer {code} (Regel {rule} der Firma)',
   'rules.say.purchaseVat.receiptShowsVat': 'Der Beleg zeigt {rate} % Schweizer MWST auf dem ganzen Betrag: Vorsteuer {code}',
   'rules.say.acquisition.foreignService': 'Dienstleistung eines Lieferanten im Ausland ({country}), der Beleg zeigt weder Schweizer MWST noch eine Schweizer UID: Bezugsteuer {code}',
   'rules.say.acquisition.swissVat': 'Der Beleg zeigt Schweizer MWST: Vorsteuer {code}, keine Bezugsteuer',

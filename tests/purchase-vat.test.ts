@@ -1,7 +1,8 @@
 /**
- * The shipped knowledge decides a purchase line's input-tax code in code (issue #45): a business
- * file's `apply:` and the receipt rules of booking.guide.yaml#purchase_vat. The company's own word
- * for a business goes first, a rule that leaves a choice stays the model's, and a firm on the net
+ * The business files and the receipt rules decide a purchase line's input-tax code in code (issue
+ * #45): an app business file's `apply:` states a fact, a company file's `apply:` the company's
+ * choice for an unread receipt, and the receipt rules of booking.guide.yaml#purchase_vat. The
+ * company's own word for a business goes first, a rule that leaves a choice stays the model's, and a firm on the net
  * tax rate method or not registered books per its setup. Synthetic business files, no real vendor.
  */
 import { test } from 'node:test';
@@ -10,7 +11,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyTransactions, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
-import { parseApply, shippedVat } from '../src/booking/purchase-vat.js';
+import { parseApply, businessVat } from '../src/booking/purchase-vat.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
 import { loadJurisdiction } from '../src/core/modules/load.js';
@@ -40,14 +41,21 @@ steps:
 const STATION = `id: station
 name: Tankstelle Muster
 match: { tx: [ "tankstelle muster" ] }
+facts:
+  - id: station-vat
+    fact: registered for Swiss VAT, mostly 8.1 %
+    source: test fixture
+`;
+/** The company's choice, not a fact of the business: its unread receipt counts as 8.1 %. */
+const STATION_HOUSE = `id: station
 steps:
   booking.guide.yaml#purchase_vat:
     rules:
-      - id: pv-station-unread
+      - id: station-unread
         when: a receipt that stays unreadable
         then: charged at 8.1
         apply: { unreadReceipt: 8.1 }
-        source: test fixture
+        source: decision 2026-10-21
 `;
 const CLOUD = `id: cloud
 name: Cloudservice
@@ -75,7 +83,7 @@ function contextOf(k: ReturnType<typeof loadKnowledge>, vat?: VatSetup): Classif
   return {
     companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '',
     bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }],
-    counterparties: k.counterparties, purchaseVat: shippedVat(k), ...(vat && { vat }),
+    counterparties: k.counterparties, purchaseVat: businessVat(k), ...(vat && { vat }),
   };
 }
 
@@ -135,19 +143,21 @@ steps:
   assert.deepEqual(fields(fee), ['6580', 'I81', MODEL]);
 });
 
-test('an unread receipt of a business whose file says it always charges 8.1 %: the model\'s I0 becomes I81 by code', async () => {
-  const k = knowledgeWith();
+test('an unread receipt of a business whose company file counts it as 8.1 %: the model\'s I0 becomes I81 by code, naming the company\'s rule', async () => {
+  const k = knowledgeWith({ station: STATION_HOUSE });
   const [e] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k));
   assert.deepEqual(fields(e), ['6200', 'I81', CODE]);
-  assert.match(e.reason ?? '', /pv-station-unread/);
+  assert.match(e.reason ?? '', /station-unread der Firma/);
 });
 
-test('an unread receipt of a business without such a fact is no evidence: the model\'s code stands either way', async () => {
+test('an unread receipt without a company rule is no evidence, also of a business the app knows charges VAT: the model\'s code stands either way', async () => {
   const k = knowledgeWith();
-  const [zero] = await book(pay('Kiosk Ecke', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k));
-  assert.deepEqual(fields(zero), ['6200', 'I0', MODEL]);
-  const [rated] = await book(pay('Kiosk Ecke', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I81')], contextOf(k));
-  assert.deepEqual(fields(rated), ['6200', 'I81', MODEL]);
+  for (const who of ['Kiosk Ecke', 'Tankstelle Muster Dorf']) {
+    const [zero] = await book(pay(who, 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k));
+    assert.deepEqual(fields(zero), ['6200', 'I0', MODEL], who);
+    const [rated] = await book(pay(who, 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I81')], contextOf(k));
+    assert.deepEqual(fields(rated), ['6200', 'I81', MODEL], who);
+  }
 });
 
 test('a linked Swiss receipt showing 8.1 % on the whole amount: the model\'s zero code becomes the rate code of the account (pv-charged)', async () => {
@@ -187,7 +197,7 @@ test('a firm on the net tax rate method books its purchases without a code, what
   const netRate: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }] };
   setJurisdiction(ch, netRate);
   try {
-    const k = knowledgeWith();
+    const k = knowledgeWith({ station: STATION_HOUSE });
     const [fuel] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k, netRate));
     assert.deepEqual(fields(fuel), ['6200', '', MODEL]);
     const [, fee] = await book(pay('Plattform Auszahlung', 'CRDT', 95), [], [line('', '3400', 100, 'F1'), line('6580', '1020', 5, 'I81')], contextOf(k, netRate));
@@ -199,23 +209,33 @@ test('a firm not registered for VAT books every line without a code', async () =
   const unregistered: VatSetup = { registered: false };
   setJurisdiction(ch, unregistered);
   try {
-    const k = knowledgeWith();
+    const k = knowledgeWith({ station: STATION_HOUSE });
     const [fuel] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I81')], contextOf(k, unregistered));
     assert.deepEqual(fields(fuel), ['6200', '', MODEL]);
   } finally { setJurisdiction(ch); }
 });
 
-test('apply: takes inputTax none or an unread receipt\'s rate, with an optional direction; anything else is refused with what to write', () => {
-  assert.deepEqual(parseApply({ inputTax: 'none', direction: 'in' }), { ok: true, fact: { kind: 'noInputTax' }, direction: 'in' });
-  assert.deepEqual(parseApply({ unreadReceipt: 8.1 }), { ok: true, fact: { kind: 'unreadReceipt', rate: 8.1 } });
+test('apply: takes inputTax none in an app file and an unread receipt\'s rate in a company file, with an optional direction; anything else is refused with what to write', () => {
+  assert.deepEqual(parseApply({ inputTax: 'none', direction: 'in' }, 'app'), { ok: true, fact: { kind: 'noInputTax' }, direction: 'in' });
+  assert.deepEqual(parseApply({ unreadReceipt: 8.1 }, 'workspace'), { ok: true, fact: { kind: 'unreadReceipt', rate: 8.1 } });
+  assert.match((parseApply({ unreadReceipt: 8.1 }, 'app') as { problem: string }).problem, /company's choice.*knowledge\//);
+  assert.match((parseApply({ inputTax: 'none' }, 'workspace') as { problem: string }).problem, /processes\//);
   for (const bad of [{ inputTax: 'I0' }, { unreadReceipt: 'acht' }, { inputTax: 'none', unreadReceipt: 8.1 }, { account: '6200' }, { inputTax: 'none', direction: 'both' }, 'I0']) {
-    assert.equal(parseApply(bad).ok, false, JSON.stringify(bad));
+    assert.equal(parseApply(bad, 'app').ok, false, JSON.stringify(bad));
+    assert.equal(parseApply(bad, 'workspace').ok, false, JSON.stringify(bad));
   }
 });
 
-test('the shipped business files carry their facts (pv-shopify-fees, pv-coop-pronto)', () => {
+test('an unread receipt\'s rate written in an app business file is no fact: the loader skips it', () => {
+  const k = knowledgeWith();
+  const station = k.counterpartyFiles.find((f) => f.layer === 'app' && f.body.id === 'station')!;
+  station.body.steps = { 'booking.guide.yaml#purchase_vat': { rules: [{ id: 'pv-station-unread', when: 'unreadable', then: 'I81', source: 'x', apply: { unreadReceipt: 8.1 } }] } };
+  assert.equal(businessVat(k).facts.has('station'), false);
+});
+
+test('the shipped business files carry their facts (pv-shopify-fees); Coop Pronto\'s states facts only, no rate for an unread receipt', () => {
   const k = loadKnowledge(APP_ROOT, mkdtempSync(join(tmpdir(), 'pv-ws-')));
-  const facts = shippedVat(k).facts;
+  const facts = businessVat(k).facts;
   assert.deepEqual(facts.get('shopify'), [{ rule: 'pv-shopify-fees', business: 'shopify', direction: 'in', fact: { kind: 'noInputTax' } }]);
-  assert.deepEqual(facts.get('coop-pronto'), [{ rule: 'pv-coop-pronto', business: 'coop-pronto', fact: { kind: 'unreadReceipt', rate: 8.1 } }]);
+  assert.equal(facts.has('coop-pronto'), false);
 });

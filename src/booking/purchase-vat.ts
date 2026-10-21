@@ -2,16 +2,18 @@
  * The input-tax code of the model's purchase lines, decided in code where the shipped knowledge
  * decides it (issue #45: most misses that needed Swiss knowledge had it shipped and unapplied).
  *
- * Two sources, both of the app layer (processes/), so both true for every company:
- * - a business's file states a fact about its documents as `apply:` on a rule of
- *   booking.guide.yaml#purchase_vat (ShippedFact): its payouts claim no input tax, or its receipt
- *   that could not be read shows Swiss VAT at a rate;
+ * Two sources:
+ * - a business's file states as `apply:` on a rule of booking.guide.yaml#purchase_vat what code
+ *   carries out (BusinessFact): the app layer (processes/) a fact true for every company, that its
+ *   payouts claim no input tax; the company layer (knowledge/) the company's own choice, that the
+ *   business's receipt that could not be read counts as Swiss VAT at a rate (a risk only the
+ *   company takes, so no shipped file states it);
  * - booking.guide.yaml#purchase_vat itself: the receipt decides the code (pv-no-receipt,
  *   pv-charged, pv-otherwise), the proposal the evidence check shows a person
  *   (src/accounting/evidence-check.ts), carried out at booking only where it cannot be wrong.
  * A rule without `apply:` (a choice, a case to ask about) stays the model's. A business whose file
  * in the company's knowledge/ has rules of its own for the step keeps the model's code: the
- * company's word goes before the app's. The company's executable rules book before the model and
+ * company's word goes before the app's, unless that file states such a choice itself. The company's executable rules book before the model and
  * a person's booking is never classified, so neither reaches this.
  */
 import { evidenceCheck } from '../accounting/evidence-check.js';
@@ -19,12 +21,12 @@ import { formTakes } from '../accounting/vat-codes.js';
 import { vat } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
-import type { Knowledge } from '../knowledge/layers.js';
+import type { Knowledge, Layer } from '../knowledge/layers.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
 
 export const PURCHASE_VAT_STEP = 'booking.guide.yaml#purchase_vat';
 
-/** What a business's file states about input tax, as code carries it out. */
+/** What a business's file states about input tax, as code carries it out: noInputTax in the app layer, unreadReceipt in the company's. */
 export type VatFact =
   /** Its purchase lines claim no input tax on such a payment: the tax is proven and claimed elsewhere (a monthly bill). */
   | { kind: 'noInputTax' }
@@ -32,25 +34,29 @@ export type VatFact =
   | { kind: 'unreadReceipt'; rate: number };
 
 /** A fact of one business's file: its rule id, and the direction of the payments it holds for. */
-export interface ShippedFact { rule: string; business: string; direction?: 'in' | 'out'; fact: VatFact }
+export interface BusinessFact { rule: string; business: string; direction?: 'in' | 'out'; fact: VatFact }
 
-/** The shipped facts by business, and the businesses whose company file decides the step itself. */
-export interface ShippedVat { facts: ReadonlyMap<string, readonly ShippedFact[]>; companyDecides: ReadonlySet<string> }
+/** The facts by business, and the businesses whose company file decides the step itself. */
+export interface BusinessVat { facts: ReadonlyMap<string, readonly BusinessFact[]>; companyDecides: ReadonlySet<string> }
 
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
- * A rule's `apply:` as written: `{ inputTax: none, direction: in }` or `{ unreadReceipt: 8.1 }`.
+ * A rule's `apply:` as written in a business file of `layer`: in the app layer
+ * `{ inputTax: none, direction: in }`, a fact; in the company's `{ unreadReceipt: 8.1 }`, its choice.
  * The lint (check-processes) reports the problem; the loader skips such a rule.
  */
-export function parseApply(raw: unknown): { ok: true; fact: VatFact; direction?: 'in' | 'out' } | { ok: false; problem: string } {
-  if (!isMap(raw)) return { ok: false, problem: 'apply must be a map: { inputTax: none } or { unreadReceipt: <rate> }' };
+export function parseApply(raw: unknown, layer: Layer): { ok: true; fact: VatFact; direction?: 'in' | 'out' } | { ok: false; problem: string } {
+  const form = layer === 'app' ? '{ inputTax: none }' : '{ unreadReceipt: <rate> }';
+  if (!isMap(raw)) return { ok: false, problem: `apply must be a map: ${form}` };
   const { inputTax, unreadReceipt, direction, ...rest } = raw;
   const extra = Object.keys(rest)[0];
   if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply takes inputTax, unreadReceipt and direction` };
   if (direction !== undefined && direction !== 'in' && direction !== 'out') return { ok: false, problem: 'apply.direction must be in or out' };
   const dir = direction === undefined ? {} : { direction: direction as 'in' | 'out' };
   if ((inputTax === undefined) === (unreadReceipt === undefined)) return { ok: false, problem: 'apply takes one of inputTax and unreadReceipt' };
+  if (layer === 'app' && unreadReceipt !== undefined) return { ok: false, problem: 'apply.unreadReceipt is a company\'s choice, not a fact of the business: it goes in the company\'s file (knowledge/<role>/<id>.yaml)' };
+  if (layer === 'workspace' && inputTax !== undefined) return { ok: false, problem: 'apply.inputTax is a fact of the business for every company: it goes in the app\'s file (processes/<role>/<id>.yaml)' };
   if (inputTax !== undefined) return inputTax === 'none' ? { ok: true, fact: { kind: 'noInputTax' }, ...dir } : { ok: false, problem: 'apply.inputTax must be none' };
   const rate = Number(unreadReceipt);
   if (typeof unreadReceipt !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate >= 100) return { ok: false, problem: 'apply.unreadReceipt must be a VAT rate in percent, e.g. 8.1' };
@@ -61,20 +67,20 @@ type Rules = { rules?: Array<{ id?: string; status?: string; apply?: unknown }> 
 const rulesOf = (steps: Record<string, unknown> | undefined) => (steps?.[PURCHASE_VAT_STEP] as Rules)?.rules ?? [];
 
 /**
- * The facts of the app layer's business files, by business. A business whose company file has
- * rules of its own for the step contributes none, and neither does a rule whose question is open.
+ * The facts of the business files, by business. A business whose company file has rules of its
+ * own for the step takes its facts from that file alone, and a rule whose question is open gives none.
  */
-export function shippedVat(k: Pick<Knowledge, 'counterpartyFiles'>): ShippedVat {
+export function businessVat(k: Pick<Knowledge, 'counterpartyFiles'>): BusinessVat {
   const companyDecides = new Set(k.counterpartyFiles
     .filter((f) => f.layer === 'workspace' && f.body.id && rulesOf(f.body.steps).length > 0)
     .map((f) => f.body.id!));
-  const facts = new Map<string, ShippedFact[]>();
+  const facts = new Map<string, BusinessFact[]>();
   for (const f of k.counterpartyFiles) {
     const business = f.body.id;
-    if (f.layer !== 'app' || !business || companyDecides.has(business)) continue;
+    if (!business || (f.layer === 'app' && companyDecides.has(business))) continue;
     for (const r of rulesOf(f.body.steps)) {
       if (r.apply === undefined || !r.id || r.status === 'open') continue;
-      const parsed = parseApply(r.apply);
+      const parsed = parseApply(r.apply, f.layer);
       if (!parsed.ok) continue;
       facts.set(business, [...(facts.get(business) ?? []), { rule: r.id, business, fact: parsed.fact, ...(parsed.direction && { direction: parsed.direction }) }]);
     }
@@ -117,18 +123,18 @@ function asRead(r: Receipt, rate: number, amount: number): Receipt {
 const de = () => wordsIn('de');
 
 /**
- * The model's entries of `tx` with the input-tax codes the shipped knowledge decides; every other
+ * The model's entries of `tx` with the input-tax codes the business files and the receipt rules decide; every other
  * entry as it came. `documents` are the payment's linked receipts; the business it routes to
- * (among `counterparties`) brings its file's facts from `shipped`. Only an entry the model decided,
+ * (among `counterparties`) brings its files' facts from `known`. Only an entry the model decided,
  * with an input-tax code, changes; its reason then names the rule that decided, and it is booked
- * by code. A business whose company file decides the step keeps every code the model wrote.
+ * by code. A business whose company file decides the step without a fact of its own keeps every code the model wrote.
  */
-export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], documents: readonly Receipt[], shipped: ShippedVat | undefined, counterparties: readonly Counterparty[] = []): JournalEntry[] {
+export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], documents: readonly Receipt[], known: BusinessVat | undefined, counterparties: readonly Counterparty[] = []): JournalEntry[] {
   const routing = identify(signalsOfTransaction(tx, [...documents]), counterparties);
   const business = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
-  if (business && shipped?.companyDecides.has(business.id)) return entries;
+  if (business && known?.companyDecides.has(business.id) && !known.facts.has(business.id)) return entries;
   const way = tx.direction === 'CRDT' ? 'in' : 'out';
-  const holding = ((business && shipped?.facts.get(business.id)) || []).filter((f) => !f.direction || f.direction === way);
+  const holding = ((business && known?.facts.get(business.id)) || []).filter((f) => !f.direction || f.direction === way);
   const none = holding.find((f) => f.fact.kind === 'noInputTax');
   const assume = holding.map((f) => (f.fact.kind === 'unreadReceipt' ? { rule: f.rule, rate: f.fact.rate } : undefined)).find((f) => f);
   const model = entries.filter((e) => e.by?.kind === 'model' && ratedCode.test(e.vatCode ?? '') && vat().codes.parse(e.vatCode!));

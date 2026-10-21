@@ -32,7 +32,7 @@ import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
-import { shippedVat, withPurchaseVat, type ShippedVat } from './purchase-vat.js';
+import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
@@ -178,7 +178,7 @@ export interface ClassifyContext extends ClassifyPromptContext {
   /** The firm's own payout split (payoutDefault) for a payout report no rule names the provider of. */
   payout?: RuleBooking;
   /** What the app's business files state about input tax (src/booking/purchase-vat.ts): code decides it on the model's lines. */
-  purchaseVat?: ShippedVat;
+  purchaseVat?: BusinessVat;
 }
 
 /**
@@ -268,7 +268,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     casebook: loadCases(),
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
-    purchaseVat: shippedVat(knowledge),
+    purchaseVat: businessVat(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
     vat: ws.company.vat,
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),

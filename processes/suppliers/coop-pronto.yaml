@@ -11,22 +11,7 @@ match:
   uid: [ "CHE-312.150.257" ]
   file: [ '^\d{8}-coop-pronto' ]
 
-steps:
-  receipt-intake.guide.yaml#vision:
-    rules:
-      - id: vis-coop-pronto
-        when: a Coop Pronto receipt that stays unreadable
-        then: record hasSwissVat true at 8.1%, and note "assumed, OCR" in remarks
-        why: Coop Pronto always charges 8.1%; the fact belongs on the receipt so booking stays a function of facts
-        source: AGENTS.md § VAT code rules
-    precedents: []
-
-  booking.guide.yaml#purchase_vat:
-    rules:
-      - id: pv-coop-pronto
-        when: a Coop Pronto receipt whose OCR is unreadable
-        then: charged — I81
-        why: Coop Pronto always charges 8.1%
-        apply: { unreadReceipt: 8.1 }
-        source: AGENTS.md § VAT code rules
-    precedents: []
+facts:
+  - id: coop-pronto-vat
+    fact: a Swiss retailer of the Coop group, registered for Swiss VAT; its receipts show MWST, mostly at the normal rate of 8.1 % (fuel, shop goods), food at the reduced rate of 2.6 %
+    source: MWSTG Art. 25
