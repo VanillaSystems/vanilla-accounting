@@ -36,8 +36,11 @@ git(seed, 'remote', 'add', 'origin', origin);
 // The adopter's copy, with node_modules of its own that links each package of this checkout's.
 const app = join(tmp, 'app');
 execFileSync('git', ['clone', '-q', origin, app]);
+// Not the marker of what this checkout's node_modules was installed from: the copy's update writes its own,
+// and through a link it would read a stale hash and overwrite this checkout's.
+const installedMarker = '.vanilla-installed-lock.sha256';
 mkdirSync(join(app, 'node_modules'));
-for (const p of readdirSync(join(APP_ROOT, 'node_modules'))) symlinkSync(join(APP_ROOT, 'node_modules', p), join(app, 'node_modules', p));
+for (const p of readdirSync(join(APP_ROOT, 'node_modules')).filter((p) => p !== installedMarker)) symlinkSync(join(APP_ROOT, 'node_modules', p), join(app, 'node_modules', p));
 
 // A workspace of 0.3, from before the schema: books.json at the root, no `schema` in it nor in the manifest.
 const ws = join(tmp, 'ws');
