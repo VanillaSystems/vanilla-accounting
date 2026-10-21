@@ -39,11 +39,12 @@ function rateShown(d: AcquisitionDocument): number {
  * - a service from a supplier outside the VAT territory, every receipt read and none showing Swiss
  *   VAT or a Swiss UID: the acquisition code at the normal rate on the net amount (B81-1), on the
  *   net tax rate method too, whose form owes it without the deduction;
- * - an acquisition code the model wrote although a receipt shows Swiss VAT: the input-tax code at
- *   the receipt's rate (none on the net tax rate method); although a receipt shows a Swiss UID, or
+ * - an acquisition code the model wrote although the receipts show Swiss VAT: the input-tax code at
+ *   their rate (none on the net tax rate method); although they show a Swiss UID, or
  *   the line buys goods or an exempt service, or the supplier sits in the territory: the zero code
  *   of the account.
- * Without the facts the model's code stands: code decides only on what it was told.
+ * Without the facts, or with receipts that disagree, the model's code stands: code decides only on
+ * what it was told.
  */
 export function acquisitionCodeOf(line: Line, documents: readonly AcquisitionDocument[], setup: VatSetup): AcquisitionCode | undefined {
   if (!setup.registered || !documents.length) return undefined;
@@ -52,16 +53,20 @@ export function acquisitionCodeOf(line: Line, documents: readonly AcquisitionDoc
   if (!refund && !(expense(line.accountDebit) && !expense(line.accountCredit))) return undefined;
   const supply = SUPPLIES.includes(line.supply ?? '') ? line.supply : undefined;
   const country = /^[A-Za-z]{2}$/.test(line.supplierCountry ?? '') ? line.supplierCountry!.toUpperCase() : undefined;
-  const shown = documents.find((d) => d.hasSwissVat);
+  // A line cannot be told apart from its payment's other receipts: receipts that disagree (one with Swiss VAT, one without, or one not read) decide nothing.
+  const shown = documents.every((d) => d.hasSwissVat === true) ? documents[0] : undefined;
+  if (!shown && !documents.every((d) => d.hasSwissVat === false)) return undefined;
+  const uids = documents.filter((d) => SWISS_UID.test(d.vatId ?? '')).length;
+  if (!shown && uids && uids < documents.length) return undefined;
   const domestic = country ? invoicing().territory.includes(country) : undefined;
   const against: AcquisitionWhy | undefined = shown ? 'swissVat'
-    : documents.some((d) => SWISS_UID.test(d.vatId ?? '')) ? 'swissUid'
+    : uids ? 'swissUid'
     : supply === 'goods' || supply === 'exempt' ? supply
     : domestic ? 'domestic'
     : undefined;
   const neg = vat().codes.negativePrefix;
   if (!against) {
-    if (supply !== 'service' || domestic !== false || !documents.every((d) => d.hasSwissVat === false)) return undefined;
+    if (supply !== 'service' || domestic !== false) return undefined;
     const code = vat().codes.acquisitionAt(normalRate());
     return code ? { code: refund ? neg + code : code, why: 'foreignService', country } : undefined;
   }

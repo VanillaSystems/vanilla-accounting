@@ -29,11 +29,12 @@ const swissUidNoVat = { id: 'r1', filename: 'shop.pdf', extractedText: 'Laden AG
 const pay = (direction: 'DBIT' | 'CRDT' = 'DBIT'): BankTransaction =>
   ({ ref: 'P1', bank: 'Raiffeisen', date: '2026-10-17', amount: 200, currency: 'CHF', direction, description: 'Card payment' });
 
-function books(tx: BankTransaction, receipt: Receipt | null): Books {
+function books(tx: BankTransaction, receipt: Receipt | Receipt[] | null): Books {
+  const receipts = receipt ? [receipt].flat() : [];
   return {
     transactions: [tx],
-    receipts: receipt ? [receipt] : [],
-    mappings: receipt ? [{ transactionRef: tx.ref, receiptId: receipt.id }] : [],
+    receipts,
+    mappings: receipts.map((r) => ({ transactionRef: tx.ref, receiptId: r.id })),
     bankStatements: [],
     journalEntries: [],
     config: { closedThrough: '2026-09-30' },
@@ -41,7 +42,7 @@ function books(tx: BankTransaction, receipt: Receipt | null): Books {
 }
 
 /** Books the payment with the jurisdiction set up as `setup`, the model answering `line` (the bank side left empty). */
-async function booked(setup: VatSetup, line: Partial<ClassifyEntry>, receipt: Receipt | null = foreignInvoice, direction: 'DBIT' | 'CRDT' = 'DBIT'): Promise<JournalEntry> {
+async function booked(setup: VatSetup, line: Partial<ClassifyEntry>, receipt: Receipt | Receipt[] | null = foreignInvoice, direction: 'DBIT' | 'CRDT' = 'DBIT'): Promise<JournalEntry> {
   setJurisdiction(jurisdiction, setup);
   try {
     const tx = pay(direction);
@@ -120,6 +121,12 @@ test('a domestic supplier without VAT (below the threshold) is no Bezugsteuer', 
 test('no receipt: the receipt gate stands, the model\'s I0 is kept', async () => {
   const e = await booked(EFFECTIVE_QUARTERLY, { supply: 'service', supplierCountry: 'DK' }, null);
   assert.deepEqual([e.vatCode, e.by?.kind], ['I0', 'model']);
+});
+
+test('receipts of one payment that disagree (one with Swiss VAT, one without) decide nothing: the model\'s codes stand', async () => {
+  const both = [foreignInvoice, { ...swissVatInvoice, id: 'r2' }];
+  assert.equal((await booked(EFFECTIVE_QUARTERLY, { supply: 'service', supplierCountry: 'DK' }, both)).vatCode, 'I0');
+  assert.equal((await booked(EFFECTIVE_QUARTERLY, { vatCode: 'B81-1', supply: 'service', supplierCountry: 'DK' }, both)).vatCode, 'B81-1');
 });
 
 test('a refund of a foreign service takes the acquisition code with the minus', async () => {
