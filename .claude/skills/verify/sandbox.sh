@@ -5,6 +5,8 @@
 #   sandbox.sh doctor [run-id] read-only health + isolation check
 #   sandbox.sh diff [run-id]   what changed in the sandbox's books vs. the snapshot taken at `up`
 #   sandbox.sh down [run-id]   stop what `up` started, delete the sandbox (evidence is kept)
+#   sandbox.sh stub [run-id] [text-file]  answer model calls with tests/support/stub-bin/claude (text-file: its first words)
+#   sandbox.sh unstub [run-id]  back to the refusing shim
 #   sandbox.sh list            sandboxes that currently exist
 #
 # run-id defaults to $VERIFY_RUN, then to the only existing sandbox.
@@ -49,6 +51,22 @@ load() {
   source "$SB/env"
 }
 
+shim() {
+  printf '#!/bin/sh\ncat >/dev/null\necho "verify sandbox: no model calls" >&2\nexit 1\n' >"$SB/bin/claude"
+  chmod +x "$SB/bin/claude"
+}
+
+# The API spawns `claude` by PATH on every call, so swapping $SB/bin/claude takes effect at once.
+cmd_stub() {
+  load "${1:-}"; local text="${2:-}"
+  [[ -z "$text" ]] || text="$(cd "$(dirname "$text")" && pwd)/$(basename "$text")"
+  printf '#!/bin/sh\n%sexec %q "$@"\n' "${text:+CLAUDE_STUB_TEXT=$(printf %q "$text") }" "$REPO/tests/support/stub-bin/claude" >"$SB/bin/claude"
+  chmod +x "$SB/bin/claude"
+  echo "stub: $RUN answers model calls with the test stub${text:+ (text from $text)}; unstub to refuse again"
+}
+
+cmd_unstub() { load "${1:-}"; shim; echo "unstub: $RUN refuses model calls again"; }
+
 cmd_up() {
   RUN="${1:-v$(date +%Y%m%d-%H%M%S)}"; SB="$BASE/$RUN"
   [[ -e "$SB" ]] && die "sandbox $SB already exists; run 'down $RUN' first"
@@ -66,8 +84,7 @@ cmd_up() {
   [[ -d "$SB/beleg-import" ]] || mkdir "$SB/beleg-import"
   # No model calls: src/llm/ask.ts spawns `claude`, and the API finds this refusing shim first.
   mkdir "$SB/bin"
-  printf '#!/bin/sh\ncat >/dev/null\necho "verify sandbox: no model calls" >&2\nexit 1\n' >"$SB/bin/claude"
-  chmod +x "$SB/bin/claude"
+  shim
 
   API_PORT="$(claim_port 3556)"; UI_PORT="$(claim_port 5273)"
   # The Vite config lives in the repo (gitignored .verify/), so it and its plugins resolve the
@@ -89,8 +106,10 @@ export default {
 EOF
 
   # API: VANILLA_WORKSPACE names the sandbox, and cwd = the sandbox so no .env of the repo is loaded.
+  # What the app keeps on this computer outside the workspace (approvals, runs, demo copies, the
+  # browser profile, traces) goes next to the sandbox, never into the owner's ~/.vanilla-accounting.
   # READONLY=1 in the caller's environment starts it in audit mode, as `npm run start:audit` does.
-  (cd "$SB" && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" PATH="$SB/bin:$PATH" PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
+  (cd "$SB" && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" VANILLA_DEMO_DIR="$SB.local/demo" VANILLA_BROWSER_DIR="$SB.local/browser" VANILLA_TRACES_DIR="$SB.local/traces" PATH="$SB/bin:$PATH" VANILLA_API_HOST=127.0.0.1 PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
   echo $! >"$SB/api.pid"
   # UI: cwd = the repo; data comes through the API proxy.
   (cd "$REPO" && exec node "$REPO/node_modules/vite/bin/vite.js" --config "$VITE_CONFIG" </dev/null >"$SB/ui.log" 2>&1) &
@@ -144,15 +163,18 @@ cmd_doctor() {
   load "${1:-}"; local bad=0
   check() { if eval "$2"; then echo "ok    $1"; else echo "FAIL  $1"; bad=1; fi; }
   # The first PDF under a year's $1/ of the sandbox, fetched through the UI, is byte-identical to the clone's.
+  # New, empty books have none: nothing to compare is no failure.
   served() {
-    local d f; d="$(ls -d "$SB"/transactional-data/*/"$1" 2>/dev/null | head -1)"
-    [[ -n "$d" ]] || return 1
-    f="$(cd "$d" && find . -name '*.pdf' | sort | head -1)"; f="${f#./}"
-    [[ -n "$f" ]] && get "$UI/$1/$(jq -rn --arg f "$f" '$f|split("/")|map(@uri)|join("/")')" | cmp -s - "$d/$f"
+    local d f
+    f="$(cd "$SB" && find transactional-data -path "*/$1/*" -name '*.pdf' 2>/dev/null | sort | head -1)"
+    [[ -n "$f" ]] || return 0
+    d="$SB/${f%%/$1/*}/$1"; f="${f#*/$1/}"
+    get "$UI/$1/$(jq -rn --arg f "$f" '$f|split("/")|map(@uri)|join("/")')" | cmp -s - "$d/$f"
   }
   check "api pid $API_PID alive"                  "alive $API_PID"
   check "ui pid $UI_PID alive"                    "alive $UI_PID"
   check "port $API_PORT owned by api pid"         "lsof -nP -a -p $API_PID -iTCP:$API_PORT -sTCP:LISTEN >/dev/null 2>&1"
+  check "api listens on loopback only"            "! lsof -nP -a -p $API_PID -iTCP:$API_PORT -sTCP:LISTEN | awk 'NR>1{print \$9}' | grep -qv '^127\.0\.0\.1:'"
   check "port $UI_PORT owned by ui pid"           "lsof -nP -a -p $UI_PID -iTCP:$UI_PORT -sTCP:LISTEN >/dev/null 2>&1"
   check "api cwd is the sandbox"                  "[[ \"\$(lsof -a -p $API_PID -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')\" == \"\$(cd $SB && pwd -P)\" ]]"
   check "GET /api/status ok"                      "get $API/api/status | grep -q '\"ok\":true'"
@@ -164,7 +186,12 @@ cmd_doctor() {
   check "UI serves the sandbox bank statements"   "served bank-statements"
   check "real workspace books untouched since up" "[[ \"\$(books_sha \"\$WS_SRC\")\" == $REAL_INDEX_SHA ]]"
   check "api opened the sandbox workspace"        "ps eww -p $API_PID | grep -q 'VANILLA_WORKSPACE=$SB '"
-  check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude </dev/null 2>/dev/null"
+  check "api keeps its local state beside it"     "ps eww -p $API_PID | grep -q 'VANILLA_APPROVALS_DIR=$SB.approvals .*VANILLA_DEMO_DIR=$SB.local/demo '"
+  if grep -q stub-bin "$SB/bin/claude"; then
+    check "api finds the test stub as claude (stubbed)" "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:'"
+  else
+    check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude </dev/null 2>/dev/null"
+  fi
   echo "closedThrough: $(get "$API/api/config" | jq -r '.closedThrough // "none"')"
   echo "UI=$UI  API=$API  EVIDENCE=$EVIDENCE"
   return $bad
@@ -172,7 +199,9 @@ cmd_doctor() {
 
 cmd_diff() {
   load "${1:-}"
-  get "$API/books.json" > "$SB/index.now.json"
+  # Right after a write the API can be busy for a while: retry once before giving up loudly.
+  get "$API/books.json" > "$SB/index.now.json" || get "$API/books.json" > "$SB/index.now.json" \
+    || die "GET /books.json did not answer twice in 15 s; run doctor, then diff again"
   node -e '
     const fs = require("fs");
     const [a, b] = process.argv.slice(1).map((p) => JSON.parse(fs.readFileSync(p, "utf8")));
@@ -211,7 +240,7 @@ cmd_down() {
   for pid in "$UI_PID" "$API_PID"; do alive "$pid" && kill -KILL "$pid" 2>/dev/null || true; done
   # Keep the logs with the evidence before the sandbox goes.
   mkdir -p "$EVIDENCE"; cp "$SB/api.log" "$SB/ui.log" "$EVIDENCE/" 2>/dev/null || true
-  rm -rf "$SB" "$SB.approvals" "$SB.runs" "$VITE_CONFIG" "$BASE/.ports/$API_PORT" "$BASE/.ports/$UI_PORT"
+  rm -rf "$SB" "$SB.approvals" "$SB.runs" "$SB.local" "$VITE_CONFIG" "$BASE/.ports/$API_PORT" "$BASE/.ports/$UI_PORT"
   port_free "$API_PORT" && port_free "$UI_PORT" || echo "warning: port $API_PORT or $UI_PORT still listening (not ours? check lsof)"
   echo "down: $RUN removed; evidence kept at $EVIDENCE"
 }
@@ -223,6 +252,8 @@ case "${1:-}" in
   doctor) shift; cmd_doctor "$@" ;;
   diff) shift; cmd_diff "$@" ;;
   down) shift; cmd_down "$@" ;;
+  stub) shift; cmd_stub "$@" ;;
+  unstub) shift; cmd_unstub "$@" ;;
   list) cmd_list ;;
-  *) sed -n '2,9p' "$0"; exit 2 ;;
+  *) sed -n '2,11p' "$0"; exit 2 ;;
 esac
