@@ -49,7 +49,7 @@ async function booked(setup: VatSetup, line: Partial<ClassifyEntry>, receipt: Re
     const b = books(tx, receipt);
     const sides = direction === 'DBIT' ? { accountDebit: '6570', accountCredit: '' } : { accountDebit: '', accountCredit: '6570' };
     const entry = { ...sides, amount: 200, vatCode: 'I0', description: 'Wincher, Abo SEO', ...line } as ClassifyEntry;
-    const context: ClassifyContext = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '', bankAccounts, vat: setup };
+    const context: ClassifyContext = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts, vat: setup };
     const ask = async () => JSON.stringify({ P1: { entries: [entry], reason: 'Beleg ohne Schweizer MWST: I0.' } });
     const { classified } = await classifyTransactions(b, [tx], { ask, fx, context });
     assert.deepEqual(classified, ['P1']);

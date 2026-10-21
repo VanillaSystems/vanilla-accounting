@@ -148,7 +148,7 @@ function classifyPrompt(journalRows: number, historicEntries = ''): Promise<stri
   } as unknown as Parameters<typeof classifyTransactions>[0];
   let prompt = '';
   const ask: ClassifyDeps['ask'] = async (p) => { prompt = p; return '{}'; };
-  const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries, vatCodes: '', bankAccounts: [], casebook: cases };
+  const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries, bankAccounts: [], casebook: cases };
   return classifyTransactions(books, [salary], { ask, fx, context }).then(() => prompt);
 }
 

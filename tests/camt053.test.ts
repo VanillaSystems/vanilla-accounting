@@ -186,7 +186,7 @@ test('a single payment keeps its counterparty beside the remittance text, which 
   <RmtInf><Ustrd>Rechnung August Natel</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`));
   assert.deepEqual([credit.description, credit.counterparty], ['Rechnung 2026-028 Malerarbeiten Wohnzimmer', 'Familie Keller']);
   assert.deepEqual([debit.description, debit.counterparty], ['Rechnung August Natel', 'Swisscom (Schweiz) AG']);
-  const prompt = buildBatchClassifyPrompt([{ tx: credit, receipts: [] }], { companyName: 'Malerei', chartOfAccounts: '', historicEntries: '', vatCodes: '' });
+  const prompt = buildBatchClassifyPrompt([{ tx: credit, receipts: [] }], { companyName: 'Malerei', chartOfAccounts: '', historicEntries: '' });
   assert.match(prompt, /Bank description: Rechnung 2026-028 Malerarbeiten Wohnzimmer\n {2}Counterparty: Familie Keller/, 'the model is told who paid');
 });
 

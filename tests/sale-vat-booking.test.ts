@@ -26,7 +26,7 @@ const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'r
 
 const fx = loadFxResolver();
 const context = {
-  companyName: 'Malerei Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '',
+  companyName: 'Malerei Test GmbH', chartOfAccounts: '', historicEntries: '',
   bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' }],
 };
 const pay = (ref: string, amount: number, o: Partial<BankTransaction> = {}): BankTransaction =>

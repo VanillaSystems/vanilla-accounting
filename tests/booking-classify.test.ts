@@ -66,7 +66,7 @@ const bankAccounts: LedgerBankAccount[] = [
   { bank: 'manual', currency: 'CHF', account: '2451', label: 'Kontokorrent' },
   { bank: 'manual', currency: 'EUR', account: '2451', label: 'Kontokorrent' },
 ];
-const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '', bankAccounts };
+const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts };
 
 test('a foreign entry carries the ESTV daily sell rate of the payment date, not the flat rate', () => {
   const ctx = { fx, receiptDate: undefined, receipts: [], bankAccount: '1023', lock, by: { kind: 'model', model: 'sonnet' } as const };
@@ -168,7 +168,7 @@ test('the prompt carries each receipt\'s VAT facts', async () => {
   const b = books([tx({ ref: 'V' })], [{ id: 'r1', ref: 'V', hasSwissVat: true, vatId: 'CHE-111.222.333', vatSummary: [{ ratePercent: 8.1, vat: 3.75, gross: 50 }] }]);
   const { ask, prompts } = stubAsk(() => [expense(50)]);
   await classifyTransactions(b, b.transactions, { ask, fx, context });
-  assert.match(prompts[0], /VAT facts: Swiss MWST CHE-111\.222\.333 — 8\.1% → suffix 81, gross 50, vat 3\.75/);
+  assert.match(prompts[0], /VAT facts: Swiss MWST CHE-111\.222\.333 — 8\.1%, gross 50, vat 3\.75/);
 });
 
 test('ten transactions per model call, and an unanswered one stays unbooked', async () => {
@@ -368,7 +368,7 @@ test('a code the firm\'s form does not take is left off, not refused: a firm not
 });
 
 test('the classify prompt names no account the standard chart lacks (#37)', () => {
-  const prompt = buildBatchClassifyPrompt([{ tx: tx({ ref: 'X' }), receipts: [] }], { companyName: 'Test GmbH', chartOfAccounts: kmuChart, historicEntries: '', vatCodes: '' });
+  const prompt = buildBatchClassifyPrompt([{ tx: tx({ ref: 'X' }), receipts: [] }], { companyName: 'Test GmbH', chartOfAccounts: kmuChart, historicEntries: '' });
   const instructions = prompt.slice(prompt.indexOf('## Instructions'));
   const named = [...instructions.matchAll(/(?<![#\d.])\b([1-9]\d{3})\b(?![.\d])/g)].map((m) => m[1]).filter((n) => !/^(19|20)\d\d$/.test(n));
   const chart = chartNames(kmuChart);

@@ -16,6 +16,8 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 export function parseVatFacts(v: unknown, fail: (what: string) => never): VatFacts {
   if (!v || typeof v !== 'object' || Array.isArray(v)) fail('vat fehlt');
   const o = v as Record<string, unknown>;
+  // A receipt states facts; the code is the booking's, derived from them and its accounts (issue #64).
+  if ('vatCode' in o || 'code' in o) fail('vat: ein Steuercode gehört nicht zu den Fakten des Belegs, nur hasSwissVat, vatSummary und vatId');
   if (typeof o.hasSwissVat !== 'boolean') fail('vat.hasSwissVat muss true oder false sein');
   const raw = o.vatSummary ?? [];
   if (!Array.isArray(raw)) fail('vat.vatSummary muss eine Liste sein');

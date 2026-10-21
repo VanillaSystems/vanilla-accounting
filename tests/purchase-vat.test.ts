@@ -81,7 +81,7 @@ function knowledgeWith(company: Record<string, string> = {}) {
 
 function contextOf(k: ReturnType<typeof loadKnowledge>, vat?: VatSetup): ClassifyContext {
   return {
-    companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '',
+    companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '',
     bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }],
     counterparties: k.counterparties, purchaseVat: businessVat(k), ...(vat && { vat }),
   };

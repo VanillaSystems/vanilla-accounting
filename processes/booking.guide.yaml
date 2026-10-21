@@ -171,9 +171,14 @@ steps:
     rules:
       - id: pv-prefix-from-account
         when: always
-        then: "the letter follows the account, not the vendor: 4xxx (material, goods, their freight and customs) → M; investments and operating costs (1xxx assets, 5xxx–6xxx) → I"
-        why: FedEx 4xxx entries were booked I0 and M0 for the same kind of position
-        source: src/llm/prompts.ts CLASSIFY_INSTRUCTIONS § 7a
+        then: >
+          the letter follows the account, not the vendor: 4xxx (material, goods, their freight and customs) → M;
+          investments and operating costs (1xxx assets, 5xxx–6xxx) → I. Computed, never read: the model gives the
+          receipt's facts (Swiss VAT charged or not, the rate, Bezugsteuer, a tax amount) and code derives the
+          letter from the account, the minus from the money's direction and the suffix from the booking pattern
+          (src/booking/line-vat.ts); a code the model or a rule still writes keeps only its rate
+        why: FedEx 4xxx entries were booked I0 and M0 for the same kind of position; models read the facts 92–98 % right but turned them into the wrong letter (issue #64)
+        source: src/accounting/vat-codes.ts codeOfFacts
       - id: pv-charged
         when: the receipt shows Swiss MWST with an explicit amount at 8.1%
         then: >
