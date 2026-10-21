@@ -126,6 +126,9 @@ export function buildVisionPrompt(absPdfPath: string): string {
 /** A line's role in a payout report (rule 9a): the code books it on the rule's accounts whatever sides and sign the model wrote (src/booking/classify.ts payoutLines). */
 export type PayoutKind = 'sale' | 'refund' | 'fee';
 
+/** What a purchase line buys, as the model reads it (rule 7h): code decides Bezugsteuer from it (src/accounting/acquisition-tax.ts). `exempt`: a service exempt from VAT, such as payment processing, banking or insurance. */
+export type Supply = 'goods' | 'service' | 'exempt';
+
 export interface ClassifyEntry {
   accountDebit: string;
   accountCredit: string;
@@ -134,6 +137,10 @@ export interface ClassifyEntry {
   description: string;
   /** Only for a payout report's lines. */
   kind?: PayoutKind;
+  /** On a purchase line with a receipt (rule 7h): what it buys. */
+  supply?: Supply;
+  /** On a purchase line with a receipt (rule 7h): the supplier's country as the receipt gives its seat, ISO 3166 alpha-2 ("IE", "CH"). */
+  supplierCountry?: string;
 }
 
 export interface BatchClassifyResult {
@@ -157,6 +164,9 @@ interface TxInput {
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
 1. Determine the correct expense/revenue account(s) based on the transaction description, receipt text, and historic patterns.
+   Use ONLY account numbers listed in the Chart of Accounts above. The numbers in these instructions are the standard
+   KMU ones: where this company's chart has another account for the same purpose, take its own. A row on an account
+   the chart does not have is refused and the payment is not booked.
 2. The bank account side is already determined — do NOT set it. Leave accountDebit or accountCredit as empty string "" for the bank side. The system will fill it in.
 3. For DBIT (money out): the bank account is credited (leave accountCredit as ""), set accountDebit to the expense account.
 4. For CRDT (money in): the bank account is debited (leave accountDebit as ""), set accountCredit to the revenue account.
@@ -166,7 +176,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    - Each receipt has its own item, its own account, and its own description.
    - Use each receipt's amount (converted to the transaction currency if needed) as the entry amount.
    - Assign each receipt to its correct expense account based on what was purchased (read the receipt text carefully).
-   - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4210/6100/6570.
+   - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4200/6100/6570.
    - If two receipts genuinely go to the same account, they still get separate rows with separate descriptions.
 6. The entries must move the bank account by exactly the transaction amount: the bank paid what the bank paid.
    Every row has both accounts, except the bank side you leave "" (and the single-leg VAT-amount row of rule 9b).
@@ -194,6 +204,14 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    g) A sale whose invoice shows no Swiss MWST because the place of supply of the service is abroad
       ("Leistungsort Deutschland", "nicht der schweizerischen MWST unterstellt") → V0-E (Ziffer 221).
       V0 (Ziffer 220) is the export of goods only.
+   h) Bezugsteuer: a SERVICE (software, online service, advertising, consulting) from a supplier based
+      abroad whose receipt shows no Swiss MWST and no CHE number → B81-1 on the expense line (the amount
+      paid is the net). Not for goods (import VAT instead), not for services exempt from VAT (payment
+      processing, Stripe or card fees, banking, insurance), not when the receipt shows Swiss MWST (I81).
+      On EVERY purchase line with a receipt, also give two facts read off the receipt, which the app
+      decides the code by: "supply": "service", "goods" or "exempt" (a service exempt from VAT), and
+      "supplierCountry": the supplier's country as the receipt gives its address, as the two-letter
+      ISO country code ("IE", "US", "CH").
    d) Refunds invert the code with a minus prefix (e.g. -I81, -M26).
    e) Exception: Coop Pronto receipts can be assumed I81 (always charge 8.1% MWST even if OCR is bad).
    f) MULTI-RATE RECEIPTS: when a receipt's VAT facts list MORE THAN ONE positive rate
@@ -203,7 +221,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       clearly belong to different accounts. The split rows must sum to the receipt total.
 8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen) with VatCode I0.
 9. For Shopify/Stripe sales (Webshop orders): ALWAYS produce exactly 2 journal entry rows. Specify BOTH accountDebit AND accountCredit (do NOT leave one empty):
-   a) Revenue: accountDebit "1093" / accountCredit "3450" — full order amount. Use V81 for Swiss customers, V0 for exports.
+   a) Revenue: accountDebit "1093" / accountCredit the chart's revenue account for goods sold (KMU "3200" Handelserlöse) — full order amount. Use V81 for Swiss customers, V0 for exports.
    b) Shopify fees: accountDebit "6580" / accountCredit "1093" — the fee amount (= order amount minus Stripe payout, as shown on the Shopify receipt)
    The system will automatically add a third entry for the Stripe payout (D=bank C=1093) — do NOT add it yourself.
 9a. Card-terminal and payment-provider payouts (SumUp, Payrexx, Worldline, Stripe Terminal, TWINT): the payout is
@@ -270,7 +288,7 @@ export function vatRateSuffix(rate: number): string {
 // classify prompt — so the rate no longer depends on (truncated) receipt text.
 export function formatVatFacts(r: ReceiptInput): string | null {
   if (r.hasSwissVat === undefined && !r.vatSummary) return null; // not extracted yet
-  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → a purchase: 0-rate code (I0/M0); a sale: see rules 7c, 7g and 9a';
+  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → a purchase: 0-rate code (I0/M0), but a service from a supplier abroad: B81-1 (rule 7h); a sale: see rules 7c, 7g and 9a';
   const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0);
   if (groups.length === 0) {
     return r.hasSwissVat
@@ -305,7 +323,7 @@ The company is NOT registered for VAT. Leave "vatCode" empty ("") on EVERY row a
 The company files with approved flat rates on its gross turnover: ${rates}. Rules for THIS company, which replace the I/M/V rules below:
 - A PURCHASE (expense, material, investment) carries NO VAT code (""), whatever the receipt shows: there is no input tax.
 - A SALE on a revenue account carries ${setup.rates.length > 1 ? 'F1 or F2 (the approved rate that fits the activity)' : 'F1'} with the GROSS amount; an export of goods V0; a service supplied abroad V0-E.
-- Bezugsteuer on a service from abroad: B81.`;
+- Bezugsteuer on a service from a supplier abroad that charged no Swiss MWST: B81-1 (rule 7h), owed without a deduction. Give the "supply" and "supplierCountry" facts of rule 7h on every purchase line with a receipt.`;
   }
   return `## VAT Codes Reference
 ${vatCodes}`;
@@ -365,7 +383,7 @@ Example:
 {
   "WEUR000042": {
     "entries": [
-      { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vatCode": "I81", "description": "DigitalOcean, Webhosting" }
+      { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vatCode": "I81", "description": "DigitalOcean, Webhosting", "supply": "service", "supplierCountry": "US" }
     ],
     "reason": "Beleg DigitalOcean zeigt 8.1 % MWST mit CHE-Nummer: Webhosting auf 6570, I81."
   },

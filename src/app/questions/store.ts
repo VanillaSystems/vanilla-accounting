@@ -1,6 +1,6 @@
 /**
  * The questions in the browser (src/questions/model.ts): one module store, read by Aufgaben, the
- * dock's badge, the status corner and every payment, receipt and booking. It fetches GET
+ * dock's widget, the status corner and every payment, receipt and booking. It fetches GET
  * /api/questions every 15 s and when the window gets focus, so an answer that came in with the
  * shared books folder shows without a reload. Who the viewer is («ich bin …») is a per-viewer
  * preference, kept in this browser.
@@ -48,7 +48,7 @@ export function useQuestions(): State & { questions: Question[]; people: string[
 
 const withDefaults = (s: State) => ({ ...s, me: s.me || s.view?.people[0] || '', questions: s.view?.questions ?? [], people: s.view?.people ?? [] });
 
-/** The store as last fetched, for code outside React (the dock's badge). */
+/** The store as last fetched, for code outside React. */
 export const questionsNow = () => withDefaults(state);
 
 export function setMe(name: string): void {

@@ -125,18 +125,18 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .activity .it:focus-visible { outline: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .activity .it .ic { position: relative; width: 24px; height: 24px; display: grid; place-items: center; }
 .activity svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.activity .it .badge { position: absolute; bottom: -4px; right: -7px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
-.activity .it .badge:empty { display: none; }
-.activity .it .tip { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 12px; padding: 6px 7px 6px 11px; border-radius: 7px;
+.activity .it .mark { position: absolute; top: -2px; right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
+.activity .nm { display: none; }
+.activity .tip { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 12px; padding: 6px 7px 6px 11px; border-radius: 7px;
   background: var(--ink); color: var(--bg); font: 400 12px/1.35 "Instrument Sans"; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 1; }
-.activity .it .tip .tx { display: flex; flex-direction: column; }
-.activity .it .tip .tx b { font-weight: 600; font-size: 12.5px; }
-.activity .it:hover .tip { opacity: 1; transition-delay: .3s; }
-.activity .it:focus-visible .tip, .activity.keys .it .tip { opacity: 1; transition-delay: 0s; }
+.activity .tip .tx { display: flex; flex-direction: column; text-align: left; }
+.activity .tip .tx b { font-weight: 600; font-size: 12.5px; }
+.activity :is(.it, .wopen, .navtoggle):hover .tip { opacity: 1; transition-delay: .3s; }
+.activity :is(.it, .wopen, .navtoggle):focus-visible .tip, .activity.keys :is(.it, .wopen) .tip { opacity: 1; transition-delay: 0s; }
 .activity .tip .kk { display: inline-flex; gap: 3px; }
 .activity .tip .kk span { font: 500 10.5px "Geist Mono"; min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
-.activity.keys .it .tip { padding-left: 7px; }
-.activity.keys .it .tip .tx { display: none; }
+.activity.keys .tip { padding-left: 7px; }
+.activity.keys .tip .tx { display: none; }
 .activity .div { width: 24px; height: 1px; margin: 8px 0; background: var(--line); }
 main { margin-left: var(--abw); }
 
@@ -320,24 +320,92 @@ main.full { display: flex; flex-direction: column; }
 /* While the top bar stands open (new or pinned), the pages start below it instead of under it. */
 body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
 
-/* Automatisierung above the areas (Dock.tsx): a round button wider than the dock, flat, in the accent */
-.activity { padding-top: 96px; }
-.no-titlebar .activity { padding-top: 124px; }
-.activity .it.go { position: absolute; left: 14px; top: 18px; width: 60px; height: 60px; z-index: 2; }
-.no-titlebar .activity .it.go { top: 46px; }
-.activity .it.go::before { top: -4px; bottom: -4px; left: -4px; width: auto; right: -4px; border-radius: 50%; background: var(--bg); }
-.activity .it.go.on::before { background: var(--bg); }
-.activity .it.go .face { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); transition: filter .12s; }
-.activity .it.go .face svg { width: 28px; height: 28px; stroke-width: 1.7; }
-.activity .it.go:hover .face, .activity .it.go:focus-visible .face { filter: brightness(1.1); }
-.activity .it.go.on .face { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
-.activity .it.go:focus-visible { box-shadow: none; }
-.activity .it.go .ring { position: absolute; inset: -6px; width: 72px; height: 72px; stroke-width: 2; fill: none; pointer-events: none; }
-.activity .it.go .ring circle { stroke: transparent; }
-.activity .it.go.running .ring circle { stroke: var(--accent); stroke-dasharray: 50 176; transform-origin: 50% 50%; animation: go-spin 1.3s linear infinite; }
-.activity .it.go .cnt { position: absolute; top: -5px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #d98a00; color: #fff; font: 600 11px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
-@keyframes go-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .activity .it.go.running .ring circle { animation: none; stroke-dasharray: none; } }
+/* Automatisierung at the foot of the bar (Dock.tsx, src/app/automation/widget.ts): the open period's figures, what waits, the summary card. */
+:root { --abw-wide: 212px; }
+html:not(.phone) .activity a.it.bolt { display: none; }
+.autow .wopen[aria-expanded="true"] .tip { display: none; }
+@media (max-height: 800px) { .activity .it { height: 40px; } }
+@media (max-height: 700px) { .activity .it { height: 34px; } .activity .div { margin: 4px 0; } }
+@media (max-height: 620px) { .autow .n span { display: none; } .autow { gap: 6px; padding-top: 6px; } }
+.autow { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
+.autow .wopen { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 2px 0; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.autow .wopen::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; }
+.autow.on .wopen::before { background: var(--accent); }
+.autow .wopen:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.autow .n { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.autow .n b { font: 600 13px/1 "Geist Mono"; color: var(--ink); }
+.autow .n span { font: 500 8.5px/1 "Instrument Sans"; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.autow .n.waiting b { color: var(--faint); }
+.autow.asks .n.waiting { background: var(--warn-soft); border-radius: 7px; padding: 4px 5px; }
+.autow.asks .n.waiting b, .autow.asks .n.waiting span { color: var(--warn); }
+.autow .trig { position: relative; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); transition: filter .12s; }
+.autow .trig svg { width: 18px; height: 18px; stroke-width: 1.8; }
+.autow .wopen:hover .trig { filter: brightness(.96); }
+/* While a run goes, a light runs round the button's border, as round the chat field's (assistant.css .aibox.busy). */
+@property --wang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.autow.running .trig::after { content: ''; position: absolute; inset: -2px; border-radius: inherit; padding: 2px; background: conic-gradient(from var(--wang), transparent 0 45%, var(--accent) 75%, var(--accent) 85%, transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: wspin 1.4s linear infinite; }
+@keyframes wspin { to { --wang: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .autow.running .trig::after { animation: none; background: var(--accent); } }
+.navtoggle { position: relative; display: grid; place-items: center; width: 28px; height: 22px; margin: 2px auto 0; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: pointer; flex: none; }
+.navtoggle svg { width: 14px; height: 14px; stroke-width: 2; }
+.navtoggle:hover, .navtoggle:focus-visible { color: var(--ink); background: var(--hover); outline: none; }
+.activity svg.play { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+
+/* The wide bar (html.navwide, nav-width.ts): icon and name per row; the widget gets a title, the figures in a row, a button. No tooltips but the keys while G is held. */
+html.navwide { --abw: var(--abw-wide); }
+html.navwide:not(.phone) .activity { align-items: stretch; padding-left: 8px; padding-right: 8px; }
+html.navwide:not(.phone) .activity .it { height: 36px; display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 0 10px; border-radius: 8px; }
+html.navwide:not(.phone) .activity .it::before { left: -8px; }
+html.navwide:not(.phone) .activity .it.on { background: var(--hover); }
+html.navwide:not(.phone) .activity .it .ic { width: 20px; height: 20px; flex: none; }
+html.navwide:not(.phone) .activity .it .ic svg { width: 20px; height: 20px; }
+html.navwide:not(.phone) .activity .nm { display: inline; font: 500 13.5px "Instrument Sans"; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.navwide:not(.phone) .activity .div { width: auto; margin: 8px 10px; }
+html.navwide:not(.phone) .activity:not(.keys) .tip { display: none; }
+html.navwide:not(.phone) .autow { padding: 12px 2px 6px; }
+html.navwide:not(.phone) .autow .wopen { align-items: stretch; gap: 10px; padding: 4px; }
+html.navwide:not(.phone) .autow .wopen::before { left: -8px; }
+.autow .wtitle { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; font: 600 12.5px "Instrument Sans"; color: var(--ink); }
+.autow .wtitle .trig { width: 24px; height: 24px; border-radius: 7px; }
+.autow .wtitle .trig svg { width: 14px; height: 14px; }
+.autow .wtitle .trig { flex: none; }
+.autow .wtitle .wname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autow .wtitle em { margin-left: auto; flex: none; font: 500 10.5px "Geist Mono"; font-style: normal; color: var(--muted); white-space: nowrap; }
+.autow.running .wtitle em { color: var(--accent); }
+.autow.waiting .wtitle em { color: var(--warn); }
+.autow .figrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.autow .figrow .n { padding: 6px 0; border-radius: 8px; background: var(--hover); }
+.autow .wbtn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin: 0 4px; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font: 600 12.5px "Instrument Sans"; text-decoration: none; cursor: pointer; }
+.autow .wbtn.ask { background: var(--warn-soft); color: var(--warn); }
+.autow .wbtn:hover:not(:disabled) { filter: brightness(.96); }
+.autow .wbtn:disabled { opacity: .5; cursor: default; }
+.autow .wbtn:focus-visible { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+html.navwide:not(.phone) .navtoggle { margin: 2px 4px 0 auto; }
+
+/* The summary card the widget opens: beside the bar, at its foot; left of the AI sidebar, never over it. */
+.autocard { position: fixed; left: calc(var(--abw) + 8px); bottom: 12px; width: max(240px, min(340px, calc(100vw - var(--abw) - var(--aiw) - 24px))); z-index: 25; display: flex; flex-direction: column; gap: 12px; padding: 14px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow); font: 400 13px/1.35 "Instrument Sans"; animation: pop .12s ease-out; }
+.no-titlebar .autocard { -webkit-app-region: no-drag; }
+.autocard header { display: flex; align-items: center; gap: 8px; }
+.autocard header svg { width: 16px; height: 16px; color: var(--accent); }
+.autocard header b { font: 700 15px "Hanken Grotesk", sans-serif; }
+.autocard header span { margin-left: auto; font: 500 11px "Geist Mono"; color: var(--muted); }
+.autocard .now { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; background: var(--hover); color: var(--ink-2); }
+.autocard .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.autocard.running .ndot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .autocard.running .ndot { animation: none; } }
+.autocard .figs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.autocard .figs div { display: flex; flex-direction: column; }
+.autocard .figs b { font: 600 18px/1.1 "Geist Mono"; }
+.autocard .figs span { color: var(--muted); font-size: 11.5px; }
+.autocard .ask { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-weight: 600; text-decoration: none; }
+.autocard .ask svg { margin-left: auto; width: 15px; height: 15px; stroke-width: 2; }
+.autocard .ask:focus-visible { outline: 1.5px solid var(--warn); outline-offset: 1px; }
+.autocard footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.autocard footer .btn { height: 30px; font-weight: 600; font-size: 12.5px; }
+.autocard footer .btn.ghost { margin-left: auto; padding: 0 8px; border-color: transparent; color: var(--accent); text-decoration: none; }
+.autocard .m { margin: 0; color: var(--muted); font-size: 11.5px; }
 /* A narrow list (a small window with the AI sidebar open): short dates, the add button under the title. */
 .list { container-type: inline-size; }
 .row .ds { display: none; }
@@ -371,11 +439,10 @@ html.phone .corner { right: 12px; }
 html.phone .activity { top: auto; right: 0; bottom: 0; width: auto; height: 56px; padding: 0 6px; flex-direction: row; justify-content: space-around; gap: 0; border-right: 0; border-top: 1px solid var(--line); overflow-x: auto; }
 html.phone .activity .it { width: 44px; height: 56px; }
 html.phone .activity .it::before { left: 10px; right: 10px; top: 0; bottom: auto; width: auto; height: 2px; border-radius: 0 0 2px 2px; }
-html.phone .activity .it.go { position: static; width: 44px; height: 44px; align-self: center; }
-html.phone .activity .it.go .ring { display: none; }
-html.phone .activity .it.go .face svg { width: 22px; height: 22px; }
-html.phone .activity .it.go .cnt { top: -4px; right: -4px; }
-html.phone .activity .div, html.phone .activity .it .tip { display: none; }
+html.phone .activity .div, html.phone .activity .tip { display: none; }
+html.phone :is(.autow, .navtoggle, .autocard) { display: none; }
+html.phone .activity .it.bolt { display: grid; }
+html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--warn); color: var(--bg); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
 /* Files dragged over the window (src/app/shell/Shell.tsx useDrop): the page takes them as receipts, the AI sidebar (closed: the window's right edge, --ai-edge wide) as a message's attachments; the zone under the pointer is lit. */
 :root { --ai-edge: 88px; }
 .drop { right: max(var(--aiw), var(--ai-edge)); }

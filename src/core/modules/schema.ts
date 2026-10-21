@@ -253,6 +253,8 @@ export interface DocumentsData {
   supporting: Record<'order-confirmation' | 'delivery-note' | 'reminder', string[]>;
   /** Documents that are no receipt at all. */
   other: Record<'newsletter' | 'terms' | 'price-list' | 'tracking' | 'no-receipt', string[]>;
+  /** The title of a bank statement: the drop reads such a PDF as a statement, not as a receipt. */
+  statement: string[];
 }
 
 /** A document kept beside an invoice, and a document that is no receipt, by what its words say. */

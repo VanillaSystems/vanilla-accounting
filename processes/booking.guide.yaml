@@ -185,7 +185,7 @@ steps:
         source: owner decision 2026-10-08
       - id: pv-bezugsteuer
         when: a SERVICE (advertising, consulting, software/online service) from a supplier based abroad that is not in the Swiss VAT register and charges no Swiss MWST
-        then: "B81-1 on the expense entry (amount = the net paid): Ziffer 383 declares 8.1%, and the same entry deducts it again at 405 — net 0 for business use. From the first franc: NO CHF 10,000 threshold for us"
+        then: "B81-1 on the expense entry (amount = the net paid): Ziffer 383 declares 8.1%, and the same entry deducts it again at 405 — net 0 for business use (on the net tax rate method 383 only, no deduction). From the first franc: NO CHF 10,000 threshold for us. In code (src/accounting/acquisition-tax.ts): the model reads the line's supply (service, goods, exempt) and the supplier's country; code books B81-1 when every linked receipt was read and shows neither Swiss MWST nor a CHE number, and takes the model's B81 back when a fact says otherwise"
         why: "MWSTG Art. 45 Abs. 1 lit. a (foreign service, place = recipient's seat per Art. 8 Abs. 1) + Abs. 2 lit. a (a VAT-registered recipient owes it, no threshold — the CHF 10,000 of lit. b is only for recipients NOT registered) + Art. 28 Abs. 1 lit. b (deductible as input tax). eCH-0217 acquisitionTax, always net. Not subject: goods (import VAT instead), services exempt under Art. 21 such as payment processing / Stripe fees (Art. 45a), and foreign suppliers registered in CH that invoice 8.1% themselves (Shopify, Google Commerce, OpenAI → I81)"
         source: owner decision 2026-10-08
       - id: pv-otherwise

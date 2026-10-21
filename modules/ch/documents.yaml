@@ -23,3 +23,7 @@ other:
   price-list: [Preisliste, Katalog, Prospekt, Broschüre, Produktbroschüre, Price list, Catalogue, Catalog, Brochure, Liste de prix, Listino prezzi, Listino]
   tracking: [Sendungsverfolgung, Sendung verfolgen, Ihr Paket ist unterwegs, Track your parcel, Track your package, Tracking number, Suivi de colis, Suivre mon colis, Tracciamento, Traccia la spedizione]
   no-receipt: [Kein Beleg, Keine Rechnung, Not a receipt, Not an invoice, Pas un justificatif, Pas une facture, Non è un giustificativo, Non è una fattura]
+
+# A bank statement names itself in its first lines, before any receipt word (src/intake/document-kind.ts
+# namesStatement): «Kontoauszug», «CHF statement» of a currency account, «Relevé de compte».
+statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statement, Relevé de compte, Relevé bancaire, Extrait de compte, Estratto conto]

@@ -23,6 +23,7 @@ import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
+import { acquisitionCodeOf, acquisitionReason, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
@@ -56,6 +57,8 @@ export interface EntryContext {
   money?: ReadonlySet<string>;
   /** The filed period the entries correct (src/accounting/correction.ts correctsFor): a private outlay for a receipt of a filed quarter (r8k-10). */
   corrects?: string;
+  /** The model's lines: their Bezugsteuer is decided in code from the payment's receipts (src/accounting/acquisition-tax.ts). Absent: a rule's lines, whose code is the rule's. */
+  acquisition?: { documents: readonly AcquisitionDocument[]; setup: VatSetup };
 }
 
 /**
@@ -77,14 +80,14 @@ export function moneyAccounts(bankAccounts: readonly LedgerBankAccount[], accoun
  * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
  * in a closed period: then the payment date, because nothing new is ever dated there.
  */
-export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by, money, corrects }: EntryContext): JournalEntry[] {
+export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by, money, corrects, acquisition }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const orderDate = receiptDate && !lock.isClosed(receiptDate) ? receiptDate : tx.date;
-  const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>): JournalEntry =>
-    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(reason && { reason }), ...(corrects && { corrects }), by });
+  const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>, decided?: { reason: string; by: BookedBy }): JournalEntry =>
+    ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 
   const entries = llmEntries.map((e) => {
     let accountDebit = e.accountDebit || (tx.direction === 'CRDT' ? bankAccount : '');
@@ -95,14 +98,15 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
     }
     const onShopify = accountDebit === SHOPIFY_ACCOUNT || accountCredit === SHOPIFY_ACCOUNT;
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
+    const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
     return entry({
       date: onShopify ? orderDate : tx.date,
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: transfer ? undefined : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount),
+      vatCode: transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount),
       description: e.description || tx.description,
-    });
+    }, acquired && { reason: acquisitionReason(acquired), by: { kind: 'code', check: 'acquisitionTax' } });
   });
   const onShopify = entries.some((e) => e.accountDebit === SHOPIFY_ACCOUNT || e.accountCredit === SHOPIFY_ACCOUNT);
   if (onShopify && tx.direction === 'CRDT') {
@@ -121,17 +125,28 @@ const day = (iso: string) => iso.split('-').reverse().join('.');
 
 /**
  * Why the classifier's entries for `tx` must not be booked: an entry without an account (other than
- * a VAT-amount code's one leg), or entries that do not move the bank account by what the bank paid,
- * the rule the AI sidebar's changes keep too (src/server/edits.ts applyAnswer). The payment then
- * stays unbooked for the person, with this reason.
+ * a VAT-amount code's one leg), an entry on an account `chart` does not have (the bank account aside,
+ * which the ledger names), or entries that do not move the bank account by what the bank paid, the
+ * rules the AI sidebar's changes keep too (src/server/edits.ts applyAnswer). The payment then stays
+ * unbooked for the person, with this reason. An empty `chart` checks no account.
  */
-export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEntry[], bankAccount: string): { reason: string; refusal: ClassifyRefusal } | undefined {
+export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEntry[], bankAccount: string, chart: ReadonlySet<string> = new Set()): { reason: string; refusal: ClassifyRefusal } | undefined {
   const legless = entries.find((e) => !e.accountDebit !== !e.accountCredit ? !isVatAmountCode(e.vatCode) : !e.accountDebit);
   if (legless) {
     const description = legless.description ?? '';
     return {
       reason: `Claudes Antwort hat eine Buchung ohne Konto («${description}»): nichts gebucht, die Zahlung bleibt, wie sie war.`,
       refusal: { code: 'classifyAccount', params: { description } },
+    };
+  }
+  const outside = (a: string) => !!a && a !== bankAccount && !chart.has(a);
+  const stray = chart.size ? entries.find((e) => outside(e.accountDebit) || outside(e.accountCredit)) : undefined;
+  if (stray) {
+    const account = outside(stray.accountDebit) ? stray.accountDebit : stray.accountCredit;
+    const description = stray.description ?? '';
+    return {
+      reason: `Claudes Antwort bucht auf Konto ${account} («${description}»), das der Kontenplan nicht hat: nichts gebucht, die Zahlung bleibt, wie sie war.`,
+      refusal: { code: 'classifyUnknownAccount', params: { account, description } },
     };
   }
   const account = { bank: tx.bank, currency: tx.currency, account: bankAccount, label: bankAccount };
@@ -545,6 +560,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const { ask, fx, context, log = () => {}, afterWave, proposeAsked = true } = deps;
   const lock = periodLock(books);
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
+  const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
@@ -653,8 +669,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = fee?.lines ?? llmEntries;
         const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
-        const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
-        const refused = paymentRefusal(tx, entries, bankAccount);
+        const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
+        const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...refused });

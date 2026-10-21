@@ -142,11 +142,13 @@ export type ApiRefusal =
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):
- * an entry without an account, or entries that do not add up to what the bank paid; or a fee line on a
- * payment whose fee the bank debits as its own movement (src/booking/separate-fee.ts).
+ * an entry without an account, an entry on an account the chart does not have, or entries that do
+ * not add up to what the bank paid; or a fee line on a payment whose fee the bank debits as its own
+ * movement (src/booking/separate-fee.ts).
  */
 export type ClassifyRefusal =
   | { code: 'classifyAccount'; params: { description: string } }
+  | { code: 'classifyUnknownAccount'; params: { account: string; description: string } }
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } };
 
@@ -173,7 +175,11 @@ export interface UnknownAccount {
 export type StatementProblem =
   | { kind: 'noAccount'; currency: string; iban?: Iban }
   | { kind: 'otherIban'; currency: string; iban: Iban; account: { bank: string; iban: Iban } }
-  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban };
+  | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban }
+  | AccountChoice;
+
+/** `whichAccount`: several accounts of its currency name no IBAN, so any of them could be it; the person picks one (the drop dialog asks, #25). */
+export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }> }
 
 export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments';
 

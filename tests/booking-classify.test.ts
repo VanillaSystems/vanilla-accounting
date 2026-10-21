@@ -9,12 +9,13 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyTransactions, entriesFor, moneyAccounts, type ClassifyDeps } from '../src/booking/classify.js';
-import { loadChart } from '../src/workspace/chart.js';
+import { chartFor, loadChart } from '../src/workspace/chart.js';
+import { chartNames } from '../src/booking/rule-book.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
 import { workspaceAt, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { ClosedPeriodError, periodLock, type Books } from '../src/books/store.js';
-import type { ClassifyEntry } from '../src/llm/prompts.js';
+import { buildBatchClassifyPrompt, type ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { startApi } from './support/api-server.js';
 import { booksOnDisk } from './support/workspace.js';
@@ -315,4 +316,29 @@ test('UI re-classify books through the classifier: daily rate, VAT facts, origin
   } finally {
     await api.stop();
   }
+});
+
+/** The standard KMU chart of a new goods-selling GmbH (npm run init), in the layout classify reads. */
+const kmuChart = ['Konto\tBeschreibung', ...chartFor(loadChart(), 'goods', 'GmbH').map((a) => `${a.number}\t${a.name}`)].join('\n');
+
+test('a model booking on an account missing from the chart never lands: the payment waits, unbooked, with the account named (#37)', async () => {
+  assert.ok(!chartNames(kmuChart).has('3450'), 'the standard chart has no 3450');
+  const b = books([tx({ ref: 'SHOP', direction: 'CRDT', amount: 100 }), tx({ ref: 'OK', amount: 100 })]);
+  const { ask } = stubAsk((ref) => ref === 'SHOP'
+    ? [{ accountDebit: '', accountCredit: '3450', amount: 100, vatCode: 'V81', description: 'Webshop Bestellung #1001, M. Muster, CH' }]
+    : [expense(100)]);
+  const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context: { ...context, chartOfAccounts: kmuChart } });
+  assert.deepEqual(classified, ['OK']);
+  assert.deepEqual(failed.map((f) => [f.ref, f.refusal]), [['SHOP', { code: 'classifyUnknownAccount', params: { account: '3450', description: 'Webshop Bestellung #1001, M. Muster, CH' } }]]);
+  assert.match(failed[0].reason, /3450.*nichts gebucht/);
+  assert.ok(!b.journalEntries.some((e) => e.accountDebit === '3450' || e.accountCredit === '3450'), 'nothing on 3450');
+});
+
+test('the classify prompt names no account the standard chart lacks (#37)', () => {
+  const prompt = buildBatchClassifyPrompt([{ tx: tx({ ref: 'X' }), receipts: [] }], { companyName: 'Test GmbH', chartOfAccounts: kmuChart, historicEntries: '', vatCodes: '' });
+  const instructions = prompt.slice(prompt.indexOf('## Instructions'));
+  const named = [...instructions.matchAll(/(?<![#\d.])\b([1-9]\d{3})\b(?![.\d])/g)].map((m) => m[1]).filter((n) => !/^(19|20)\d\d$/.test(n));
+  const chart = chartNames(kmuChart);
+  assert.ok(named.length > 0, 'the instructions name accounts');
+  assert.deepEqual([...new Set(named.filter((n) => !chart.has(n)))], []);
 });
