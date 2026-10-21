@@ -228,12 +228,12 @@ test('a Wise card fee is booked once, on its FEE-CARD payment, never again insid
 });
 
 test('any bank: a payment whose fee is its own movement keeps no fee line, the fee goes back to the expense at its code (#24)', async () => {
-  // Not Wise: a CHF card payment on another bank, whose foreign-use fee the bank debits apart, linked to it as the books link a separate fee.
-  const charge = tx({ ref: 'KART-48151623', bank: 'Raiffeisen', amount: 86.4, description: 'Kartenzahlung Hotel Beispiel Lyon, Fremdwaehrungszuschlag 1.30 CHF' });
+  // Not Wise: a CHF card payment on another bank, whose card fee the bank debits apart, linked to it as the books link a separate fee.
+  const charge = tx({ ref: 'KART-48151623', bank: 'Raiffeisen', amount: 86.4, description: 'Kartenzahlung Seminarhaus Beispiel Basel, Kartenzuschlag 1.30 CHF' });
   const fee = tx({ ref: 'FEE-KART-48151623', bank: 'Raiffeisen', amount: 1.3, description: 'Spesen Kartenzahlung KART-48151623', type: 'wise-fee' });
-  const b = books([charge, fee]);
+  const b = books([charge, fee], [{ id: 'r1', ref: 'KART-48151623', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 6.38, gross: 85.1 }] }]);
   const { ask, prompts } = stubAsk((ref) => ref === 'KART-48151623'
-    ? [{ ...expense(85.1), accountDebit: '6640', vatCode: 'I81', description: 'Hotel Beispiel, Übernachtung' }, { accountDebit: '6900', accountCredit: '', amount: 1.3, vatCode: '', description: 'Bank, Kartenspesen' }]
+    ? [{ ...expense(85.1), accountDebit: '6640', vatCode: 'I81', description: 'Seminarhaus Beispiel, Kurs' }, { accountDebit: '6900', accountCredit: '', amount: 1.3, vatCode: '', description: 'Bank, Kartenspesen' }]
     : [{ accountDebit: '6900', accountCredit: '', amount: 1.3, vatCode: '', description: 'Bank, Kartenspesen' }]);
   const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
   assert.deepEqual([classified.sort(), failed], [['FEE-KART-48151623', 'KART-48151623'], []]);
