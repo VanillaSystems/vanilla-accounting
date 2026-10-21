@@ -63,6 +63,14 @@ test('«Jetzt ausführen» is offered only when the collection workflow is decla
   assert.equal(dockWidget(figures(), undefined, 0, now).canRun, false);
 });
 
+test('before the automation is loaded the widget knows the figures and nothing about runs or schedules', () => {
+  const w = dockWidget(figures(), undefined, 0, now);
+  assert.equal(w.loaded, false);
+  assert.deepEqual([w.run, w.next, w.paused], [undefined, undefined, false]);
+  assert.deepEqual(keys(w.stack), ['read', 'booked', 'waiting']);
+  assert.equal(dockWidget(figures(), view(), 0, now).loaded, true);
+});
+
 function withStorage(storage: Partial<Storage> | 'throws', body: () => void) {
   const had = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, get: () => { if (storage === 'throws') throw new Error('SecurityError'); return storage; } });

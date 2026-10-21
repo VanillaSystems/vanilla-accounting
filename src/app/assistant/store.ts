@@ -62,7 +62,7 @@ if (state.conversation) {
 export const useAssistant = (): AssistantState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
 
 /** The shell sets the page's width at start, from the remembered state. */
-export function syncSidebarWidth(): void { document.documentElement.style.setProperty('--aiw', widthOf(state)); }
+export function syncSidebarWidth(): void { document.documentElement.style.setProperty('--aiw', widthOf(state)); dispatchEvent(new Event('resize')); }
 
 export function toggleAssistant(): void { set({ open: !state.open }); }
 export function openAssistant(): void { set({ open: true, listing: false }); }

@@ -32,6 +32,8 @@ export interface DockWidget {
   paused: boolean;
   /** «Jetzt ausführen» can start RUN_NOW: it is declared and every step of it can execute. */
   canRun: boolean;
+  /** The automation's view is loaded: only then does anything about runs and schedules hold. */
+  loaded: boolean;
 }
 
 type View = Pick<AutomationView, 'runs' | 'tasks' | 'paused' | 'pending' | 'workflows'>;
@@ -57,5 +59,6 @@ export function dockWidget(f: HomeFigures, view: View | undefined, forMe: number
     ...(next ? { next } : {}),
     paused: !!view?.paused,
     canRun: !!view?.workflows.some((w) => w.id === RUN_NOW && w.runnable.ok),
+    loaded: !!view,
   };
 }

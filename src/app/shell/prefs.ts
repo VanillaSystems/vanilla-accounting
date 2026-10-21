@@ -56,7 +56,12 @@ export function useZoom(): [number, (step: -1 | 0 | 1) => void] {
     store('zoom', String(zoom));
     dispatchEvent(new Event('resize'));
     // A media query does not see the page zoom: the page says itself when the room left is small (shell.css `.tight`).
-    const fit = () => { root.classList.toggle('tight', tight(innerWidth, zoom)); root.classList.toggle('phone', phone(innerWidth, zoom)); };
+    const besides = () => (document.querySelector<HTMLElement>('.activity')?.offsetWidth ?? 0) + (document.querySelector<HTMLElement>('.aside')?.offsetWidth ?? 0);
+    const fit = () => {
+      const narrow = phone(innerWidth, zoom);
+      root.classList.toggle('tight', narrow || tight(innerWidth, zoom, besides()));
+      root.classList.toggle('phone', narrow);
+    };
     fit();
     addEventListener('resize', fit);
     return () => removeEventListener('resize', fit);

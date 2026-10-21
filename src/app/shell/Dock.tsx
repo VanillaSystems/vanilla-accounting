@@ -40,7 +40,9 @@ function wordsOf(w: DockWidget, view: AutomationView | undefined, now: Date): Wo
   const workflow = (id: string) => { const d = view?.workflows.find((x) => x.id === id); return d ? textIn(d.label, language()) : id; };
   const step = w.run?.at ? view?.workflows.find((x) => x.id === w.run!.workflow) : undefined;
   const stepLabel = step && w.run?.at ? stepOf(step, w.run.at)?.label : undefined;
-  const nowLine = w.run ? t('dock.now.running', { what: [workflow(w.run.workflow), stepLabel ? textIn(stepLabel, language()) : ''].filter(Boolean).join(' · ') })
+  // Before the automation is loaded nothing is known about runs or schedules: the card says nothing about them.
+  const nowLine = !w.loaded ? ''
+    : w.run ? t('dock.now.running', { what: [workflow(w.run.workflow), stepLabel ? textIn(stepLabel, language()) : ''].filter(Boolean).join(' · ') })
     : w.paused ? t('dock.now.paused')
     : w.next ? t('dock.now.next', { when: whenText(w.next.at, now), workflow: workflow(w.next.workflow) })
     : t('dock.now.none');
@@ -80,17 +82,20 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
 
   const click = (id: AreaId) => (e: MouseEvent) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); onGo(id); };
   const goTo = (loc: Location) => (e: MouseEvent) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); setOpen(false); nav.go(loc); };
+  const [starting, setStarting] = useState(false);
   const runNow = async () => {
     setOpen(false);
+    opener.current?.focus();
+    setStarting(true);
     const workflow = words.workflow(RUN_NOW);
     try {
       const r = await automationCommand({ kind: 'start', workflow: RUN_NOW, item: { kind: 'company', id: 'company' } });
       if (!r.ok) nav.toast(r.refusal === 'not-approved' ? t('marks.waitsSwitchOn', { workflow }) : t('marks.refused', { workflow, why: commandRefusalText(r) }));
       else nav.toast(t('dock.started', { workflow }));
-    } catch (e) { nav.toast(errorText(e)); }
+    } catch (e) { nav.toast(errorText(e)); } finally { setStarting(false); }
   };
   const runnable = w.canRun && canEdit;
-  const busyRunNow = w.run?.workflow === RUN_NOW;
+  const busyRunNow = starting || w.run?.workflow === RUN_NOW;
 
   const tipLines = [w.stack.map((f) => `${figure(f)} ${figureLabel(f)}`).join(' · '), words.now];
   const stack = w.stack.map((f) => (
@@ -135,7 +140,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
           {wide ? (
             <>
               <span className="wtitle"><span className="trig">{ICONS.automation}</span>{AREAS[AUTOMATION].label()}{words.word ? <em>{words.word}</em> : null}</span>
-              <span className="row">{stack}</span>
+              <span className="figrow">{stack}</span>
             </>
           ) : (
             <>
@@ -157,7 +162,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
       </button>
       {open ? (
         <SummaryCard opener={opener} w={w} words={words} period={period} onClose={() => setOpen(false)}
-          runnable={runnable} explain={canEdit && !w.canRun} busy={busyRunNow} onRun={() => void runNow()} goTo={goTo} />
+          runnable={runnable} explain={w.loaded && canEdit && !w.canRun} busy={busyRunNow} onRun={() => void runNow()} goTo={goTo} />
       ) : null}
     </nav>
   );
@@ -173,7 +178,8 @@ function SummaryCard({ opener, w, words, period, onClose, runnable, explain, bus
   useEffect(() => {
     card.current?.querySelector<HTMLElement>('a[href], button:not(:disabled)')?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      // The palette or a dialog opened over the card takes its own Escape first.
+      if (e.key !== 'Escape' || document.querySelector('.palette, .scrim')) return;
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -190,7 +196,7 @@ function SummaryCard({ opener, w, words, period, onClose, runnable, explain, bus
   return (
     <div ref={card} className={`autocard ${w.state}`} role="dialog" aria-label={t('area.automation')} data-testid="dock-card">
       <header>{ICONS.automation}<b>{t('area.automation')}</b><span>{periodName(period)}</span></header>
-      <div className="now"><span className="ndot" />{words.now}</div>
+      {words.now ? <div className="now"><span className="ndot" />{words.now}</div> : null}
       <div className="figs">
         {w.card.map((f) => <div key={f.key}><b>{figure(f)}</b><span>{cardLabel(f)}</span></div>)}
       </div>
