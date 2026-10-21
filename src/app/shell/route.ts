@@ -4,6 +4,7 @@
  * the period is parsed here by src/accounting/periods.ts and leaves as a Period, never a token.
  */
 import { localToday, parsePeriod, type IsoDate, type Period } from '../../accounting/periods.js';
+import { KNOWLEDGE_PAGES, type KnowledgePage } from '../../knowledge/topics.js';
 
 export const REPORTS = ['income', 'balance', 'trial'] as const;
 export type Report = typeof REPORTS[number];
@@ -47,7 +48,12 @@ export type Route =
   | { area: 'automation'; view: 'queue' }
   | { area: 'automation'; view: 'tasks'; run?: string }
   /** Änderungen: the AI's draft, edits made outside the app, or one save of Verlauf; `file` one file of it. */
-  | { area: 'changes'; commit?: string; file?: string };
+  | { area: 'changes'; commit?: string; file?: string }
+  /** Geschäftspartner (docs/0.4.0/knowledge.md): the list, and one partner's page by its id. */
+  | { area: 'partners'; id?: string }
+  /** Wissen: Lücken, Von der App, or (absent) the area's first page; a topic of Arbeitsweise by its slug. */
+  | { area: 'knowledge'; page?: KnowledgePage }
+  | { area: 'knowledge'; topic: string };
 
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
@@ -65,6 +71,8 @@ export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
   company: { area: 'company', section: 'profile' },
   automation: { area: 'automation', view: 'runs' },
   changes: { area: 'changes' },
+  partners: { area: 'partners' },
+  knowledge: { area: 'knowledge' },
 };
 
 export interface Query {
@@ -124,6 +132,8 @@ function segmentsOf(r: Route): Array<string | undefined> {
     case 'invoices': return ['invoices', r.view === 'list' ? undefined : r.view, r.id];
     case 'automation': return automationSegments(r);
     case 'changes': return ['changes', r.commit, r.commit ? r.file : undefined];
+    case 'partners': return ['partners', r.id];
+    case 'knowledge': return ['knowledge', 'topic' in r ? r.topic : r.page];
   }
 }
 
@@ -140,6 +150,8 @@ function routeOf([a, b, c, d]: string[]): Route {
     case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
     case 'automation': return automationRoute(b, c, d);
     case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
+    case 'partners': return defined({ area: 'partners', id: b });
+    case 'knowledge': return !b ? { area: 'knowledge' } : isOneOf(KNOWLEDGE_PAGES, b) ? { area: 'knowledge', page: b } : { area: 'knowledge', topic: b };
     default: return { area: 'receipts' };
   }
 }

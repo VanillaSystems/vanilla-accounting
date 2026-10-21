@@ -183,14 +183,63 @@ from the index and the runs; they add no file to the workspace.
 
 ## Decisions for the owner
 
-1. **Dock order and shortcuts.** The prototype puts Geschäftspartner (G P) and Wissen (G E) below
-   the divider, above Änderungen and Firma. They could sit with the work areas instead.
-2. **Partners and customers.** Rechnungen has its own customer list (`/invoices/customers`). One
-   list of partners with a «Kunden» filter could replace it, or link to it.
-3. **Where the rail step leads.** The setup's step «Wissen» opens Geschäftspartner; Wissen is one
+1. **Dock order and shortcuts.** Decided 2026-10-21: as in the prototype, Geschäftspartner (G P)
+   and Wissen (G E) below the divider, above Änderungen and Firma.
+2. **Partners and customers.** Decided 2026-10-21: one partner, two views. A customer is a
+   Geschäftspartner with the role customer; the «Kunden» filter shows the same customers as
+   Rechnungen. Rechnungen keeps its customer list as a working tool for invoicing (pick a customer,
+   its address, language and payment term), and each customer there links to its partner page,
+   which links back to its invoices. There is one record per customer, never two lists to keep in
+   step.
+3. **Routes.** Decided 2026-10-21: English slugs as docs/urls.md requires: `/partners`,
+   `/partners/<id>`, `/knowledge/<topic>`, `/knowledge/gaps`, `/knowledge/app`.
+4. **Where the rail step leads.** The setup's step «Wissen» opens Geschäftspartner; Wissen is one
    dock click away. It could open Wissen › Lücken instead.
-4. **Notes and the private workspace.** The `.md` files hold names and terms of private suppliers,
+5. **Notes and the private workspace.** The `.md` files hold names and terms of private suppliers,
    so the leak guard must cover them, as it covers the YAML.
-5. **Where a run records who decided.** The figures in Lücken need it per item. The index records
+6. **Where a run records who decided.** The figures in Lücken need it per item. The index records
    an entry's origin today, not why the AI asked.
-6. **Thresholds for a proposal.** «3 cases decided alike» and «9 of 12 answers» are guesses.
+7. **Thresholds for a proposal.** «3 cases decided alike» and «9 of 12 answers» are guesses.
+8. **Saving notes.** Decided 2026-10-21 (first cut): «Speichern» on a page is the person's own save,
+   like «Behalten» on a rule card. It writes the `.md` file and saves it in git at once
+   (`Vanilla-Kind: customizing`), keeps the workflows switched on, and the toast offers
+   «Rückgängig». A text that changed since the page was read is refused (409, «Die Notizen wurden
+   inzwischen geändert»). «zuletzt geändert von … am … · Verlauf» comes from the file's last
+   commit; Verlauf opens that save in Änderungen. The read-only mode refuses every write.
+9. **Who is a partner.** Decided 2026-10-21 (first cut): a business file of the workspace, a public
+   business of `processes/` only when the open year's payments or receipts route to it (or it has
+   notes or rules), and every customer of Rechnungen. A partner's id is its file's id; a customer
+   without a file keeps its Rechnungen id (`cu_…`), and its notes go to
+   `knowledge/customers/<cu_…>.md`. A knowledge file and a customer are one partner only when they
+   share the id; nothing is matched by name.
+10. **Which records a page links.** Decided 2026-10-21 (first cut): those of the open year (the
+    year of the open filing period), whatever period the other areas show, so both areas have no
+    period picker. A payment belongs to the partner the booking's own routing names
+    (`identify`); a Sammelzahlung's parts route one by one, and an entry belongs to the part of its
+    amount. A customer's payments are those its invoices record.
+11. **Rules on a page.** Decided 2026-10-21 (first cut): a partner page shows the executable rules
+    of its file with how often they booked, «Ausschalten» and a link to Firma › Regeln, which
+    stays as it is until the rules page goes. A topic page shows the company rules (not of one
+    partner) of the steps its front matter names; `booking#private` names
+    `booking.guide.yaml#private`. «Neue Regel für diesen Partner» opens Firma › Regeln' form on the
+    partner's newest payment.
+12. **Lücken, first cut.** Decided 2026-10-21: only what the books and the questions already hold:
+    who decided each payment's booking in the open year (from the entry's `by`, else its `origin`;
+    most demo entries predate `by` and show as «nicht vermerkt»), the payments that route to no
+    partner (src/knowledge/gaps.ts) with «Regel anlegen», the open questions per partner, and the
+    payments an ask rule holds. Shares per step beyond booking wait for decision 6.
+13. **Von der App.** Decided 2026-10-21 (first cut): as the table above says, the public layer:
+    every business of `processes/` (its sentences and facts, with a link to the partner page when
+    the company works with it) and every step's rules from `processes/*.guide.yaml`, folded. What
+    the app learned from corrections and wishes shows where it acts, under «Das macht die App
+    selbst» of each page, with its count.
+
+**Not in the first cut** (2026-10-21):
+
+- **The AI does not read the notes yet.** The classifier's prompt still takes the partner's YAML
+  section only; reading `<id>.md` with it, and a topic page whose front matter names the step, is
+  the next step.
+- Open questions show as a line with a link to their payment, not as answerable cards; the AI's
+  proposals («Vorschläge der KI»), the examples from the imported history, «Ausschalten» of a
+  partner's note sentences, deleting a topic page and `npm run migrate-knowledge` are not built.
+- The static audit export has no API for these pages: both areas say they cannot be read there.

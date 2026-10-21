@@ -24,6 +24,7 @@ import { router as quarantine } from './routes/quarantine.js';
 import { router as rules } from './routes/rules.js';
 import { router as questions } from './routes/questions.js';
 import { router as reports } from './routes/reports.js';
+import { router as knowledge } from './routes/knowledge.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
@@ -70,6 +71,7 @@ app.get('/api/status', (_req, res) => {
 });
 
 app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);
+app.use(knowledge);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);

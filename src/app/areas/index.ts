@@ -19,6 +19,8 @@ import { reports } from './reports/reports.js';
 import { vat } from './vat/vat.js';
 import { automation } from './automation/automation.js';
 import { changes } from './changes/changes.js';
+import { partners } from './partners/partners.js';
+import { knowledge } from './knowledge/knowledge.js';
 import { ICONS } from './icons.js';
 
 export interface Nav {
@@ -99,10 +101,12 @@ export const AREAS: Registry = {
   company,
   automation,
   changes,
+  partners,
+  knowledge,
 };
 
 /** The dock's order; a divider stands before the last group. */
-export const DOCK: AreaId[][] = [['receipts', 'invoices', 'bank', 'journal', 'vat', 'reports', 'close'], ['automation', 'changes', 'company']];
+export const DOCK: AreaId[][] = [['receipts', 'invoices', 'bank', 'journal', 'vat', 'reports', 'close'], ['automation', 'partners', 'knowledge', 'changes', 'company']];
 
 /** The area of a route, typed for its own route: the registry pairs them, a lookup cannot show it to the compiler. */
 export const areaOf = <R extends Route>(route: R) => AREAS[route.area] as unknown as Area<R>;

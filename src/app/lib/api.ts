@@ -44,6 +44,9 @@ import { refusalText } from '../../reports/words.js';
 import type { ReportResult } from '../../reports/result.js';
 import type { SavedReport, SavedWrite } from '../../reports/saved.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
+import type { PartnerDetail, PartnersView } from '../../knowledge/partners.js';
+import type { Note, NoteCommand, NoteResult, TopicRow } from '../../knowledge/notes.js';
+import type { AppLayerView, GapsView } from '../../knowledge/wissen.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
 
@@ -141,6 +144,10 @@ export function errorText(e: unknown): string {
     case 'attachment': return t(`error.attachment.${b.params.reason}`, { name: b.params.name, mb: 'mb' in b.params ? b.params.mb : 0, limit: ATTACHMENT_MAX_MB });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
+    case 'partnerGone': return t('partners.gone');
+    case 'topicGone': return t('knowledge.topicGone');
+    case 'notesChanged': return t('partners.notes.changed');
+    case 'notesTitle': return t('knowledge.newPage.needsTitle');
     case 'gone': return t(`error.gone.${b.params.what}`);
     case 'secretStore': return t('error.secretStore');
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
@@ -314,6 +321,13 @@ export const api = {
   deleteReport: (slug: string) => request<SavedWrite>('POST', '/api/reports/saved', { kind: 'delete', slug }),
   restoreReport: (w: SavedWrite) => request<SavedWrite>('POST', '/api/reports/saved', { kind: 'restore', slug: w.slug, text: w.before, now: w.after }),
   rules: () => request<RulesView>('GET', '/api/rules'),
+  partners: () => request<PartnersView>('GET', '/api/partners'),
+  partner: (id: string) => request<PartnerDetail>('GET', `/api/partners/${encodeURIComponent(id)}`),
+  topics: () => request<{ topics: TopicRow[] }>('GET', '/api/knowledge').then((r) => r.topics),
+  topic: (slug: string) => request<{ slug: string; note: Note }>('GET', `/api/knowledge/topics/${encodeURIComponent(slug)}`),
+  knowledgeGaps: () => request<GapsView>('GET', '/api/knowledge/gaps'),
+  knowledgeApp: () => request<AppLayerView>('GET', '/api/knowledge/app'),
+  saveNote: (c: NoteCommand) => request<NoteResult>('POST', '/api/notes', c),
   ruleCommand: (c: RuleCommand) => request<RuleCommandResult>('POST', '/api/rules', c),
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),

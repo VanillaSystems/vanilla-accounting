@@ -50,6 +50,10 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/invoices/new?customer=<id>` | a new draft for that customer (app only) |
 | `/invoices/customers` and `/invoices/customers/<id>` | customers and one customer |
 | `/invoices/sent` and `/invoices/sent/<document-id>` | the log of sent documents and one of them, exactly as sent |
+| `/partners` and `/partners/<id>` | Geschäftspartner and one partner's page; the id is its knowledge file's (`gruenkaffee-muster`) or, for a customer of Rechnungen without one, the customer's (`cu_…`) |
+| `/knowledge` | Wissen, opening on its first page (Lücken) |
+| `/knowledge/gaps`, `/knowledge/app` | Lücken and Von der App |
+| `/knowledge/<topic>` | one page of Arbeitsweise, by its file's name (`knowledge/company/<topic>.md`); a topic is never named `gaps` or `app` |
 
 ## Query parameters
 

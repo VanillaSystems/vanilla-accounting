@@ -27,6 +27,7 @@ import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, releasePayment, saveDraft, send, sendReminder } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
 import { Sheet } from './Sheet.js';
+import { hrefOf } from '../../shell/history.js';
 import { countryName } from './address.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
@@ -467,6 +468,7 @@ function CustomerDetail({ d, route, nav, canEdit }: Props & { d: InvoiceList }) 
         <span>{c.vatId || t('invoices.noVatId')}</span>
         <span>{t('invoices.nDays', { n: c.paymentTermsDays })}</span>
         <span>{t(`invoices.lang.${c.language}`)}</span>
+        <span><a className="linkbtn" data-act="partner-page" href={hrefOf({ route: { area: 'partners', id: c.id }, query: {} })} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go({ route: { area: 'partners', id: c.id }, query: {} }); }}>{t('partners.openPage')}</a></span>
       </div>
       {canEdit && (
         <div className="ivacts">

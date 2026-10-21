@@ -16,13 +16,15 @@ import { join, sep } from 'node:path';
 import { parse } from 'yaml';
 import { hasBooks, loadBooks } from '../books/store.js';
 import {
-  identify, claims, merchantOf, signalsOfReceipt, signalsOfTransaction, uidsIn, TIERS, type Counterparty,
+  identify, claims, merchantOf, signalsOfReceipt, signalsOfTransaction, uidsIn, TIERS, type Counterparty, type Role,
 } from '../knowledge/counterparties.js';
 import {
   loadKnowledge, companySpecific, homeOf, RULES_DIR,
   type Knowledge, type CounterpartyFile, type Rule, type Section, type Guide,
 } from '../knowledge/layers.js';
 import { GATE_TESTS } from '../knowledge/gates.js';
+import { notesProblems } from '../knowledge/notes.js';
+import { loadInvoices } from '../invoices/store.js';
 import { loadCaseChart, loadCases, validateCase } from '../knowledge/cases.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { namesOf, mentionIn, counterpartiesNamedIn } from '../knowledge/mentions.js';
@@ -307,6 +309,15 @@ for (const f of counterpartyFiles) {
     checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root });
     if (section.gates) err(`steps."${ref}": gates hold for every counterparty — they live in the guide`);
   }
+}
+
+// ─── Notes (docs/0.4.0/knowledge.md "Files"): each belongs to a partner or is a topic with a title ───
+
+{
+  const partnerRoles = new Map<string, Role>(counterparties.map((c) => [c.id, c.role]));
+  for (const c of loadInvoices(ws).customers) if (!c.deleted && !partnerRoles.has(c.id)) partnerRoles.set(c.id, 'customer');
+  const known = (step: string) => { const [p, id] = step.split('#'); return stepRefs.has(`${p.endsWith('.guide.yaml') ? p : `${p}.guide.yaml`}#${id ?? ''}`); };
+  for (const problem of notesProblems(ws, partnerRoles, known)) errors.push(problem);
 }
 
 // ─── Routing, proven on the current index ───────────────────────────────────
