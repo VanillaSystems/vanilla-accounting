@@ -213,7 +213,6 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       "supplierCountry": the supplier's country as the receipt gives its address, as the two-letter
       ISO country code ("IE", "US", "CH").
    d) Refunds invert the code with a minus prefix (e.g. -I81, -M26).
-   e) Exception: Coop Pronto receipts can be assumed I81 (always charge 8.1% MWST even if OCR is bad).
    f) MULTI-RATE RECEIPTS: when a receipt's VAT facts list MORE THAN ONE positive rate
       (e.g. Coop fuel "8.1% + 0%", or a mixed cart "8.1% + 2.6%"), SPLIT it into one journal
       entry per rate group. Use each group's gross as that entry's amount and the group's

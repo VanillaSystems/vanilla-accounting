@@ -32,6 +32,7 @@ import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
+import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
@@ -185,6 +186,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   moneyAccounts?: ReadonlySet<string>;
   /** The firm's own payout split (payoutDefault) for a payout report no rule names the provider of. */
   payout?: RuleBooking;
+  /** What the app's business files state about input tax (src/booking/purchase-vat.ts): code decides it on the model's lines. */
+  purchaseVat?: BusinessVat;
 }
 
 /**
@@ -262,7 +265,8 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
   const read = (dir: string, file: string) => readFileSync(join(dir, file), 'utf8');
   const prior = priorYearExport(ws.paths.history);
   const chartOfAccounts = chartOf(ws);
-  const { counterparties } = loadKnowledge(APP_ROOT, ws.paths.root);
+  const knowledge = loadKnowledge(APP_ROOT, ws.paths.root);
+  const { counterparties } = knowledge;
   const facts = factsOf(chartNames(chartOfAccounts), new Set(counterparties.map((c) => c.id)));
   return {
     companyName: ws.company.name,
@@ -273,6 +277,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     casebook: loadCases(),
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
+    purchaseVat: businessVat(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
     vat: ws.company.vat,
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
@@ -678,7 +683,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = fee?.lines ?? llmEntries;
         const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
-        const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
+        const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
