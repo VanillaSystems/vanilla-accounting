@@ -200,8 +200,9 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
   return (
     <div className="runshome">
       <div className="rhead">
-        <h1>{t('area.automation')}</h1>
+        <h1>{t('area.automation')} · {t('automation.home.runs')}</h1>
         <span className="racts">
+          <button type="button" className="btn ghost" onClick={() => nav.select({ area: 'automation', view: 'home' })}>{t('automation.home.title')}</button>
           <button type="button" className="btn ghost" onClick={() => nav.select({ area: 'automation', view: 'workflow', tab: 'graph' })}>{t('automation.workflows')}</button>
           <button type="button" className="btn ghost" onClick={() => nav.select({ area: 'automation', view: 'map', map: 'phases' })}>{t('automation.map')}</button>
           <button type="button" className="btn ghost" onClick={() => nav.select({ area: 'automation', view: 'queue' })}>{t('automation.queue')}</button>

@@ -17,6 +17,8 @@ import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { BotIcon, Graph } from './Graph.js';
 import { RunsHome } from './Runs.js';
+import { HomePage, whenText } from './Home.js';
+import { workflowState } from '../../automation/home.js';
 import { QueuePage } from './Queue.js';
 import type { Index, JournalEntry } from '../../../types/index.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
@@ -50,6 +52,7 @@ type WorkflowRoute = Extract<R, { view: 'workflow' }>;
 
 const tx = (v: Text) => textIn(v, language());
 const label = (w: WorkflowDecl) => tx(w.label);
+const stepLabel = (w: WorkflowDecl, id: string) => { const s = stepOf(w, id); return s ? tx(s.label) : id; };
 const forLabel = (kind: string) => t(`automation.for.${kind}` as 'automation.for.transaction');
 const status = (s: RunSummary['status']) => t(`automation.status.${s}` as 'automation.status.done');
 const phaseLabel = (p: string) => t(`automation.phase.${p}` as 'automation.phase.book');
@@ -66,14 +69,24 @@ const TRIGGER_ICON: Record<Trigger['kind'], ReactNode> = {
 
 /** The rows of the list, in order: what J and K move through. */
 function rowsOf(view: AutomationView | undefined): R[] {
-  const ws = view?.workflows ?? [];
+  const groups = groupsOf(view);
   return [
+    { area: 'automation', view: 'home' },
     { area: 'automation', view: 'runs' },
     { area: 'automation', view: 'map', map: 'phases' },
     { area: 'automation', view: 'queue' },
     { area: 'automation', view: 'tasks' },
-    ...PHASES.flatMap((p) => ws.filter((w) => w.phase === p).map((w): R => ({ area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph' }))),
+    ...groups.flatMap((g) => g.workflows.map((w): R => ({ area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph' }))),
   ];
+}
+
+/** The list's workflow groups: one per phase of those that can run, then «Einrichten» for those that cannot yet. */
+function groupsOf(view: AutomationView | undefined): Array<{ key: string; label: string; workflows: WorkflowDecl[] }> {
+  const ws = view?.workflows.filter(forThisFirm) ?? [];
+  return [
+    ...PHASES.map((p) => ({ key: p, label: phaseLabel(p), workflows: ws.filter((w) => w.phase === p && w.runnable.ok) })),
+    { key: 'setup', label: t('automation.home.setup'), workflows: ws.filter((w) => !w.runnable.ok) },
+  ].filter((g) => g.workflows.length);
 }
 
 const sameRow = (a: R, b: R) => a.view === b.view && (a.view !== 'workflow' || (b.view === 'workflow' && a.workflow === b.workflow));
@@ -89,6 +102,7 @@ function List({ route, nav, books }: Props) {
   const { view, error } = useAutomation();
   if (route.view === 'runs') return view ? <RunsHome view={view} books={books} nav={nav} /> : <><h1>{t('area.automation')}</h1>{error ? <p className="warnline">{error}</p> : <p className="m">{t('automation.empty')}</p>}</>;
   const sel = selectedRow(route, view);
+  const now = new Date();
   const waiting = view?.tasks ?? [];
   const q = useQuestions();
   const asked = forMe(q.questions, q.me).length;
@@ -105,26 +119,27 @@ function List({ route, nav, books }: Props) {
       <h1>{t('area.automation')}</h1>
       {error ? <p className="warnline">{error}</p> : null}
       <div className="rows" role="listbox" aria-label={t('area.automation')}>
-        <div className="group"><span>{t('automation.overview')}</span></div>
-        {row({ area: 'automation', view: 'runs' }, <span className="t">{t('runs.latest')}</span>)}
+        {row({ area: 'automation', view: 'home' }, <><span className="t">{t('automation.home.title')}</span>{view && openCount(view) + asked ? <span className="a"><span className="wfpill warn">{t('automation.home.waitCount', { n: openCount(view) + asked })}</span></span> : null}</>)}
+        {row({ area: 'automation', view: 'runs' }, <span className="t">{t('automation.home.runs')}</span>)}
         {row({ area: 'automation', view: 'map', map: 'phases' }, <span className="t">{t('automation.map')}</span>)}
         {row({ area: 'automation', view: 'queue' }, <span className="t">{t('automation.queue')}</span>)}
         {row({ area: 'automation', view: 'tasks' }, <><span className="t">{t('automation.tasks')}</span>{waiting.length + asked ? <span className="a"><span className="wfpill warn">{waiting.length + asked}</span></span> : null}</>)}
         <div className="row" role="option" aria-selected={false} tabIndex={-1} data-to="rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}><span className="t">{t('automation.toRules')}</span><span className="a">→</span></div>
-        {PHASES.map((p) => {
-          const ws = view?.workflows.filter((w) => w.phase === p && forThisFirm(w)) ?? [];
-          if (!ws.length) return null;
+        {groupsOf(view).map((g) => {
           return (
-            <Fragment key={p}>
-              <div className="group"><span>{phaseLabel(p)}</span></div>
-              {ws.map((w) => {
-                const open = view!.tasks.filter((x) => x.workflow === w.id).length + view!.runs.filter((r) => r.workflow === w.id && r.status === 'stuck').length;
+            <Fragment key={g.key}>
+              <div className="group"><span>{g.label}</span>{g.key === 'setup' ? <span className="m">{t('automation.home.setupCount', { n: g.workflows.length })}</span> : null}</div>
+              {g.workflows.map((w) => {
+                const st = workflowState(w, view!, now);
                 const on = w.triggers.filter((tr) => !tr.off);
                 return row({ area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph' }, (
                   <>
-                    <span className="t">{label(w)}{hasAi(w, view!.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}</span>
+                    <span className="t"><span className={`ahdot ${st.dot}`} title={t(`automation.home.dot.${st.dot}` as 'automation.home.dot.ok')} />{label(w)}{hasAi(w, view!.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}</span>
                     <span className="a">
-                      {!w.runnable.ok ? <span className="wfpill muted">{t('automation.notRunnable')}</span> : open ? <span className="wfpill warn">{t('automation.openCount', { n: open })}</span> : null}
+                      {st.dot === 'off' ? <span className="wfpill muted">{t('automation.home.missing', { n: st.missing })}</span>
+                        : st.dot === 'run' ? <span className="wfpill st-running">{st.at ? t('automation.home.runningAt', { step: stepLabel(w, st.at) }) : t('automation.status.running')}</span>
+                        : st.open ? <span className="wfpill warn">{t('automation.openCount', { n: st.open })}</span>
+                        : st.next ? <span className="wfnext mono">{whenText(st.next, now)}</span> : null}
                     </span>
                     {on.length ? <span className="wftrig">{on.map((tr, i) => <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>)}</span> : null}
                   </>
@@ -141,11 +156,12 @@ function List({ route, nav, books }: Props) {
   );
 }
 
-function Detail({ route, nav, books, canEdit }: Props) {
+function Detail({ route, nav, books, canEdit, query }: Props) {
   const { view } = useAutomation();
   if (!view) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   switch (route.view) {
     case 'runs': return null;
+    case 'home': return <HomePage view={view} books={books} nav={nav} query={query} canEdit={canEdit} />;
     case 'workflow': {
       if (!route.workflow) return <div className="detail-empty"><div>{t('automation.pick')}</div></div>;
       const w = view.workflows.find((x) => x.id === route.workflow);

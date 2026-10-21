@@ -54,6 +54,8 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/knowledge` | Wissen, opening on its first page (Lücken) |
 | `/knowledge/gaps`, `/knowledge/app` | Lücken and Von der App |
 | `/knowledge/<topic>` | one page of Arbeitsweise, by its file's name (`knowledge/company/<topic>.md`); a topic is never named `gaps` or `app` |
+| `/automation` | Automatisierung's home: the open period's receipts from collected to filed, what waits for you, what runs; `?period=` another filing period |
+| `/automation/runs` and `/automation/runs/<run-id>` | Läufe, the latest runs, and one run |
 
 ## Query parameters
 

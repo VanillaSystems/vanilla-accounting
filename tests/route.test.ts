@@ -58,6 +58,7 @@ const CANONICAL = [
   '/automation/booking',
   '/automation/booking/runs',
   '/automation/booking/graph/classify',
+  '/automation/runs',
   '/automation/runs/booking-1a2b3c4d',
   '/automation/map',
   '/automation/map/events',
@@ -89,7 +90,8 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/company/banks'), { area: 'company', section: 'banks' });
   assert.deepEqual(route('/invoices/2026-006'), { area: 'invoices', view: 'list', id: '2026-006' });
   assert.deepEqual(route('/invoices/sent/d-42'), { area: 'invoices', view: 'sent', id: 'd-42' });
-  assert.deepEqual(route('/automation'), { area: 'automation', view: 'runs' });
+  assert.deepEqual(route('/automation'), { area: 'automation', view: 'home' });
+  assert.deepEqual(route('/automation/runs'), { area: 'automation', view: 'runs' });
   assert.deepEqual(route('/automation/workflows'), { area: 'automation', view: 'workflow', tab: 'graph' });
   assert.deepEqual(route('/automation/booking/triggers'), { area: 'automation', view: 'workflow', workflow: 'booking', tab: 'triggers' });
   assert.deepEqual(route('/automation/booking/graph/classify'), { area: 'automation', view: 'workflow', workflow: 'booking', tab: 'graph', step: 'classify' });

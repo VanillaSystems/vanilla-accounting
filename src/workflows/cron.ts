@@ -21,6 +21,21 @@ export function cronMatches(cron: string, at: Date): boolean {
   return fields.every((f, i) => fieldMatches(f, values[i], RANGES[i]));
 }
 
+/**
+ * The first whole minute after `from` the schedule matches, looked for up to `days` ahead
+ * (a minute at a time: 8 days are 11 520 checks); undefined for an invalid schedule or none so near.
+ */
+export function nextRun(cron: string, from: Date, days = 8): Date | undefined {
+  if (!cronValid(cron)) return undefined;
+  const at = new Date(from);
+  at.setSeconds(0, 0);
+  for (let i = 0; i < days * 1440; i++) {
+    at.setMinutes(at.getMinutes() + 1);
+    if (cronMatches(cron, at)) return at;
+  }
+  return undefined;
+}
+
 /** Whether a schedule is five fields of numbers, `*`, lists, ranges and steps, each within its range. */
 export function cronValid(cron: string): boolean {
   const fields = cron.trim().split(/\s+/);
