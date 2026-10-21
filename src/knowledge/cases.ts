@@ -17,6 +17,7 @@ import { APP_ROOT } from '../workspace/workspace.js';
 import { loadChart } from '../workspace/chart.js';
 import { vat, baseCurrency } from '../engines/index.js';
 import { derivePeriod } from '../accounting/periods.js';
+import { factsOfCode } from '../accounting/vat-codes.js';
 
 export const CASES_DIR = join(APP_ROOT, 'examples', 'cases');
 /** The KMU accounts the casebook books on (Kontenrahmen KMU), number → name. */
@@ -274,6 +275,16 @@ export function validateCase(c: BookingCase, ctx: { chart: ReadonlyMap<string, s
 
 const first = (s: string) => s.trim().split(/(?<=\.)\s/)[0];
 
+/** A case line's VAT as the facts the model gives (rule 7 of src/llm/prompts.ts), since code derives the code; a code facts cannot state as written. */
+function factsTag(code: string | undefined): string {
+  if (!code) return 'no VAT';
+  const f = factsOfCode(code);
+  if (!f) return code;
+  if (f.charge === 'acquisition') return 'vat: acquisition';
+  if (f.charge === 'none') return `vat: none${f.supply ? `, supply: ${f.supply}` : ''}`;
+  return `vat: charged, vatRate: ${f.rate}${f.amountIs ? ', amountIs: tax' : ''}`;
+}
+
 /**
  * The case as a few compact prompt lines. The transaction's own account is written "bank":
  * the classifier leaves that side empty for the system to fill.
@@ -282,7 +293,7 @@ export function formatCase(c: BookingCase): string {
   const side = (a: string) => (a === '' ? '(VAT leg)' : a === c.transaction?.account ? 'bank' : a);
   const lines = c.lines.map((l) => {
     const fx = l.currency ? ` ${l.currency}` : '';
-    const tags = [l.vatCode ?? 'no code', l.corrects ? `corrects ${l.corrects}` : ''].filter(Boolean).join(', ');
+    const tags = [factsTag(l.vatCode), l.corrects ? `corrects ${l.corrects}` : ''].filter(Boolean).join(', ');
     return `  D ${side(l.debit)} / C ${side(l.credit)} ${l.amount}${fx} [${tags}] "${l.description}"`;
   });
   const tx = c.transaction;

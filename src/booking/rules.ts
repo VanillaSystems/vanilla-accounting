@@ -7,7 +7,7 @@
  * executable when its `then` is a map:
  *
  *   - id: swisscom-telefon
- *     then: { account: "6510", vat: I81 }              # book: this account, this VAT code
+ *     then: { account: "6510", vat: 81 }               # book: this account at this rate (I81: the account gives the letter)
  *     source: wish 2026-10-15
  *   - id: barbezug-gross
  *     when: { text: "Bargeldbezug|Bancomat", direction: out, amount: { over: 500 } }
@@ -29,6 +29,7 @@
 import type { BankTransaction } from '../types/index.js';
 import { ibanKey, isGenericText, isPayer } from '../knowledge/payer.js';
 import { chart, withoutInputTax } from '../engines/index.js';
+import { codeOfFacts, codeOnAccount, rateOf } from '../accounting/vat-codes.js';
 
 export const RULE_STEP = 'booking.guide.yaml#classify';
 /** The step's id inside knowledge/rules/booking.guide.yaml. */
@@ -141,12 +142,23 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
   if (!inBusiness && !Object.keys(when).length) return no({ code: 'noCondition' });
 
   // The code before the account: a code this firm cannot book with is the reason the person must hear, whatever the account (r7f-32).
+  // A rate («81», «8.1») names no code until the account does (issue #64).
+  const rated = (v: string | undefined) => (v && facts.vat(v) === 'unknown' ? rateOf(v) : undefined);
   const code = (v: string | undefined): RuleRefusal | undefined => {
     if (!v) return { code: 'vat', params: { vat: '' } };
+    if (rated(v) !== undefined) return undefined;
     const taken = facts.vat(v);
     if (taken === 'unknown') return { code: 'vat', params: { vat: v } };
     if (taken === 'notTaken') return { code: 'codeNotTaken', params: { vat: v, method: withoutInputTax() ?? 'none' } };
     return undefined;
+  };
+  // What the rule books on its account: a rate's code there, or its code with the letter the account takes (pv-prefix-from-account).
+  const onAccount = (v: string, account: string): { code: string } | { refusal: RuleRefusal } => {
+    const rate = rated(v);
+    const derived = rate === undefined ? codeOnAccount(v, account, account) ?? v : codeOfFacts({ charge: rate > 0 ? 'charged' : 'none', rate }, account, account);
+    if (!derived) return { refusal: { code: 'vat', params: { vat: v } } };
+    const refused = code(derived);
+    return refused ? { refusal: refused } : { code: derived };
   };
   let booking: RuleBooking | undefined;
   if (t.account !== undefined || t.vat !== undefined) {
@@ -156,7 +168,9 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     const account = text(t.account);
     if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.account ?? '') } });
     if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
-    booking = { account, vat: v!.toLowerCase() === 'none' ? null : v! };
+    const vat = v!.toLowerCase() === 'none' ? null : onAccount(v!, account);
+    if (vat && 'refusal' in vat) return no(vat.refusal);
+    booking = { account, vat: vat && vat.code };
   }
   if (t.private !== undefined) {
     const share = typeof t.private === 'number' ? t.private : Number(String(t.private).replace(/\s*%$/, ''));
@@ -172,7 +186,9 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     const account = text(t.fees.account);
     if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.fees.account ?? '') } });
     if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
-    booking.fees = { account, vat: v! };
+    const vat = onAccount(v!, account);
+    if ('refusal' in vat) return no(vat.refusal);
+    booking.fees = { account, vat: vat.code };
   }
   let then: RuleThen;
   if (t.ask !== undefined) {

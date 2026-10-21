@@ -8,7 +8,8 @@
  * (vatCodes.kind.<kind>.*), so the app, docs/vat-codes.md and the CLI explain a code alike.
  */
 import { BANANA_VAT_CODES, VAT_CODE_EXAMPLES, type VatCodeExample } from './vat-codes.source.js';
-import { chart, statements, vat, vatSetup } from '../engines/index.js';
+import { chart, invoicing, statements, vat, vatSetup } from '../engines/index.js';
+import { normalRate } from './sales-without-vat.js';
 import { methodOf } from '../workspace/vat-setup.js';
 import { inGroup } from '../engines/chart.js';
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
@@ -208,4 +209,80 @@ export function codeOnAccount(code: string | undefined, accountDebit: string, ac
   const probe = info.rate > 0 ? info.rate : vat().rateRows.find((r) => r.kind === 'supply' && !r.superseded)?.rate;
   const family = probe ? codeForRate(probe, accountDebit, accountCredit)?.replace(/^-/, '')[0] : undefined;
   return family === 'M' || family === 'I' ? `${m[1]}${family}${m[3]}` : undefined;
+}
+
+/**
+ * What a line states of its VAT: the facts a reader sees on the document, never a code (issue #64).
+ * Code derives the code from them and the line's accounts (codeOfFacts), so the letter and the sign
+ * follow the accounts and the amount suffix the booking pattern, whoever read the document.
+ */
+export interface VatLineFacts {
+  /** The supplier charged the jurisdiction's VAT, charged none, or charged none on a service from abroad on which the firm owes acquisition tax (Bezugsteuer). */
+  charge: 'charged' | 'none' | 'acquisition';
+  /** The rate charged, in percent (8.1); absent: the normal rate. */
+  rate?: number;
+  /** The amount is the tax itself: a single-leg entry whose code supplies its other leg. */
+  amountIs?: 'tax';
+  /** On a sale without VAT: a service supplied abroad, else an export of goods. */
+  supply?: 'goods' | 'service' | 'exempt';
+}
+
+/**
+ * A rate as a rule or the model writes it: 8.1, «8.1», «8,1 %», or a code's suffix «81» for 8.1.
+ * Undefined for a rate the jurisdiction and the firm's form do not know (a foreign 19 %) and for
+ * anything that is no rate.
+ */
+export function rateOf(v: unknown): number | undefined {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? parseRate(v)?.rate : undefined;
+  if (n === undefined || !Number.isFinite(n) || n < 0) return undefined;
+  const known = (r: number) => r === 0 || vat().isDomesticRate(r) || vat().rateRows.some((row) => row.rate === r);
+  return known(n) ? n : known(n / 10) ? n / 10 : undefined;
+}
+
+/**
+ * The code `facts` stand for on a line with these accounts (one of them empty on a tax amount), or
+ * undefined when the accounts take none:
+ * - charged: the input-tax or sales code of the account at the rate (codeForRate,
+ *   pv-prefix-from-account), the minus on money back; on a tax amount the account's code with the
+ *   tax-amount suffix (M81-2);
+ * - acquisition: the acquisition-tax code on the net amount (B81-1), the minus on money back;
+ * - none: a sale's exemption code (a service supplied abroad V0-E, else the export V0), a
+ *   purchase's zero code of its account (M0, I0).
+ */
+export function codeOfFacts(facts: VatLineFacts, accountDebit: string, accountCredit: string): string | undefined {
+  const type = (a: string) => (a ? chart().typeOf(a) : undefined);
+  const neg = vat().codes.negativePrefix;
+  const rate = facts.rate ?? normalRate();
+  if (facts.charge === 'acquisition') {
+    const code = vat().codes.acquisitionAt(rate);
+    return code && (type(accountCredit) === 'expense' && type(accountDebit) !== 'expense' ? neg + code : code);
+  }
+  if (facts.charge === 'charged' && rate > 0) {
+    if (facts.amountIs !== 'tax') return codeForRate(rate, accountDebit, accountCredit) ?? undefined;
+    const gross = [accountDebit, accountCredit].filter(Boolean).map((a) => codeForRate(rate, a, a)).find((c) => c);
+    return gross ? vat().codes.taxAmountCode(gross) : undefined;
+  }
+  if (type(accountCredit) === 'revenue' || type(accountDebit) === 'revenue') {
+    const code = vat().codes.deductedIn(invoicing().exemptions[facts.supply === 'service' ? 'abroad' : 'export']);
+    return code && (type(accountDebit) === 'revenue' && type(accountCredit) !== 'revenue' ? neg + code : code);
+  }
+  return codeOnAccount('I0', accountDebit, accountCredit);
+}
+
+/**
+ * The facts a code states, read back: what a model that still writes a code meant, and what a
+ * casebook example shows the model. Undefined for a code facts cannot state (a correction, a net
+ * tax rate, another exemption, a reversed tax amount): such a code stays as written.
+ */
+export function factsOfCode(code: string | undefined): VatLineFacts | undefined {
+  const info = code ? vat().codes.parse(code) : null;
+  if (!info || info.flatOnGross || info.correctionZiffer) return undefined;
+  if (info.acquisitionZiffer) return info.amountIs === 'net' ? { charge: 'acquisition', rate: info.rate } : undefined;
+  if (info.amountIs === 'tax') return info.isNegative || !(info.rate > 0) ? undefined : { charge: 'charged', rate: info.rate, amountIs: 'tax' };
+  if (info.amountIs !== 'gross') return undefined;
+  if (info.rate > 0) return info.revenueZiffer || info.inputTaxZiffer ? { charge: 'charged', rate: info.rate } : undefined;
+  const { abroad, export: goods } = invoicing().exemptions;
+  if (info.deductionZiffer === abroad) return { charge: 'none', supply: 'service' };
+  if (info.deductionZiffer === goods) return { charge: 'none', supply: 'goods' };
+  return info.deductionZiffer ? undefined : { charge: 'none' };
 }

@@ -11,7 +11,7 @@ and the providers.
 | core | 56 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 89 | 26 |
+| split | 90 | 26 |
 | infrastructure | 42 | 4 |
 | workflow | 20 | 0 |
 | view | 264 | 57 |
@@ -121,9 +121,9 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/index.ts` | Ziffer 1 |
 | `src/accounting/reconcile-bank.ts` | CHF 3, camt.053 2 |
 | `src/accounting/vat-codes.source.ts` | MWST 3, ESTV 1, Ziffer 4, tax code 90 |
-| `src/accounting/vat-codes.ts` | MWST 3, ESTV 2, Ziffer 6 |
+| `src/accounting/vat-codes.ts` | MWST 3, ESTV 2, Ziffer 6, tax code 1 |
 | `src/accounting/year-close.ts` | CHF 12, MWST 2, ESTV 3, Ziffer 1, form 0535 3, camt.053 1, Rappen 1 |
-| `src/booking/classify.ts` | MWST 1, ESTV 1, Rappen 1 |
+| `src/booking/classify.ts` | ESTV 1, Rappen 1 |
 | `src/collect/tutti.ts` | CHF 8, MWST 1 |
 | `src/intake/match.ts` | CHF 1, Rappen 1 |
 | `src/intake/read.ts` | camt.053 4 |
@@ -145,7 +145,7 @@ Layers are assigned by path prefix, most specific first:
 | File | Swiss specifics (lines) |
 |---|---|
 | `src/audit/sources.ts` | ESTV 1 |
-| `src/llm/prompts.ts` | CHF 6, MWST 20, Ziffer 2, tax code 4, Rappen 1 |
+| `src/llm/prompts.ts` | CHF 6, MWST 23, Rappen 1 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
 | `src/reconcile/vat-consistency.ts` | MWST 5 |
 

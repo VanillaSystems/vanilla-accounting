@@ -15,7 +15,7 @@ import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
-import { APP_ROOT, REFERENCE_DIR, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { baseCurrency, chart, filing, invoicing, setup, vat } from '../engines/index.js';
 import { roundCHF, toRappen } from '../accounting/rappen.js';
 import { correctsFor } from '../accounting/correction.js';
@@ -34,6 +34,7 @@ import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBookin
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
+import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { payoutByOrders, type OrderHold } from './payout-orders.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
@@ -92,12 +93,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
     ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 
   const entries = llmEntries.map((e) => {
-    let accountDebit = e.accountDebit || (tx.direction === 'CRDT' ? bankAccount : '');
-    let accountCredit = e.accountCredit || (tx.direction === 'DBIT' ? bankAccount : '');
-    if (!isVatAmountCode(e.vatCode)) {
-      accountDebit ||= e.accountCredit && bankAccount;
-      accountCredit ||= e.accountDebit && bankAccount;
-    }
+    const { accountDebit, accountCredit } = sidesOf(e, tx.direction, bankAccount, isVatAmountCode(e.vatCode));
     const onShopify = accountDebit === SHOPIFY_ACCOUNT || accountCredit === SHOPIFY_ACCOUNT;
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
     const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
@@ -274,7 +270,6 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     bankAccounts: ws.bankAccounts,
     chartOfAccounts,
     historicEntries: prior ? read(ws.paths.history, `${prior}.Buchungen-sample.tsv`) : '',
-    vatCodes: read(REFERENCE_DIR, 'MWST-codes.txt'),
     casebook: loadCases(),
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
@@ -717,14 +712,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
           continue;
         }
+        const derived = withDerivedCodes(llmEntries, tx.direction, bankAccount);
         const separate = read ? undefined : separateFeeOf(tx, books.transactions);
-        const fee = separate && withoutSeparateFee(tx, separate, llmEntries, { booked: books.journalEntries, answered: result[separate.ref]?.entries });
+        const fee = separate && withoutSeparateFee(tx, separate, derived, { booked: books.journalEntries, answered: result[separate.ref]?.entries });
         if (fee && 'refused' in fee) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${fee.refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...fee.refused });
           continue;
         }
-        const lines = fee?.lines ?? llmEntries;
+        const lines = fee?.lines ?? derived;
         const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
         const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);

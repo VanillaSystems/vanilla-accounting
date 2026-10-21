@@ -15,7 +15,7 @@ import './support/jurisdiction.js';
 
 const fx = loadFxResolver();
 const bankAccounts: LedgerBankAccount[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }];
-const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', vatCodes: '', bankAccounts };
+const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts };
 
 const pay = (ref: string, description: string, direction: 'DBIT' | 'CRDT', amount: number): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date: '2026-10-17', amount, currency: 'CHF', direction, description });
