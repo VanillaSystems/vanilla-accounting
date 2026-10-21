@@ -76,6 +76,45 @@ function metaOf(r: DropRow): string {
   ].filter(Boolean).join(' · ');
 }
 
+/**
+ * A statement several accounts of its currency could take, none naming an IBAN (#25): one button
+ * per account reads it into that one; the IBAN can be kept on it, so the next statement lands by
+ * itself. An account the books lack and a private one stay possible.
+ */
+function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
+  const choice = r.chooseAccount!;
+  const [keep, setKeep] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const pick = async (a: (typeof choice.accounts)[number]) => {
+    setBusy(true);
+    try {
+      if (keep && choice.iban) await api.patchWorkspace({ banks: [{ bank: a.bank, currency: choice.currency, iban: choice.iban }] });
+      await act(session, r, { kind: 'account', account: a.account });
+    } catch (e) {
+      set({ error: errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <small>{choice.iban ? t('drop.whichAccountIban', { currency: choice.currency, iban: groupIban(choice.iban) }) : t('drop.whichAccount', { currency: choice.currency })}</small>
+      <span className="dacts dchoose">
+        {choice.accounts.map((a) => (
+          <button key={a.account} type="button" className="btn" disabled={busy} onClick={() => void pick(a)}>{a.label} <span className="mono">{a.account}</span></button>
+        ))}
+      </span>
+      {choice.iban ? <label className="dkeep"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> {t('drop.keepIban')}</label> : null}
+      {r.unknownAccount ? (
+        <span className="dacts">
+          <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.otherAccount')}</button>
+          <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
@@ -89,7 +128,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
       </div>
       <div className="dgo">
         <span className={`dchip c-${r.state}`}>{chip}</span>
-        {r.unknownAccount ? (
+        {r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
           <>
             <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
             <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>

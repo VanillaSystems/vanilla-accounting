@@ -142,6 +142,13 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
     case 'private':
       setAsidePrivate(s, row);
       break;
+    case 'account':
+      if (!row.chooseAccount?.accounts.some((x) => x.account === a.account)) throw new RequestError(400, 'Nur eines der angebotenen Konten nimmt diesen Auszug.');
+      delete row.chooseAccount;
+      delete row.unknownAccount;
+      delete row.message;
+      Object.assign(row, { account: a.account, state: 'take', reason: undefined });
+      break;
     case 'undo':
       if (row.state !== 'taken') throw new RequestError(400, 'Nur eine übernommene Datei lässt sich zurücknehmen.');
       if (undo(row).length) await bookAgain(row.name);
@@ -207,13 +214,14 @@ async function takeWaiting(s: DropSession): Promise<void> {
     if (row.kind === 'camt' || row.kind === 'statement-pdf') {
       const had = new Set(readBooks().transactions.map((t) => t.ref));
       try {
-        const { month: _month, ...done } = await importStatement(bytes, row.name);
+        const { month: _month, ...done } = await importStatement(bytes, row.name, row.account);
         row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) };
         arrival = { kind: 'statement', ...done };
       } catch (e) {
         const refusal = e instanceof RequestError ? e.refusal : undefined;
         const unknown = refusal?.code === 'statement' ? refusal.params.unknown : undefined;
-        Object.assign(row, { state: 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}) });
+        const problem = refusal?.code === 'statement' ? refusal.params.problem : undefined;
+        Object.assign(row, { state: 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(problem?.kind === 'whichAccount' ? { chooseAccount: problem } : {}) });
         continue;
       }
     } else {

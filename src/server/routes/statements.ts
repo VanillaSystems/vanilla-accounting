@@ -61,6 +61,7 @@ function wordsOf(p: StatementProblem): string {
     case 'noAccount': return `Kein Bankkonto der Firma nimmt diesen Auszug (${p.currency}${p.iban ? `, IBAN ${p.iban}` : ''}). Das Konto unter Firma › Bankkonten anlegen.`;
     case 'otherIban': return `Der Auszug ist vom Konto IBAN ${p.iban}; das Bankkonto ${p.account.bank} ${p.currency} hat die IBAN ${p.account.iban}. Das Konto fehlt in den Büchern: unter Firma › Bankkonten anlegen.`;
     case 'twoAccounts': return `Unter ${p.bank} liegen Auszüge zweier ${p.currency}-Konten: IBAN ${p.ibans[0]} und IBAN ${p.ibans[1]}. Das zweite Konto unter Firma › Bankkonten anlegen.`;
+    case 'whichAccount': return `Zu welchem ${p.currency}-Konto gehört der Auszug${p.iban ? ` (IBAN ${p.iban})` : ''}? ${p.accounts.map((a) => a.label).join(', ')} haben keine IBAN.`;
   }
 }
 
@@ -78,7 +79,9 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   const transactions: BankTransaction[] = [];
   let iban: string | undefined;
   for (const statement of camt.statements) {
-    const match = accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
+    // The account the person named takes a statement of its currency unless it names another IBAN: two accounts of one bank and currency are told apart by it.
+    const chosen = hint?.statements && hint.currency === statement.currency && (!hint.iban || !statement.iban || hint.iban === parseIban(statement.iban)) ? { ...hint, statements: hint.statements } : undefined;
+    const match = chosen ? { account: chosen } : accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
     if ('problem' in match) throw refusedAccount(match.refusal, match.unknown, statement.bankName, statement.ownerName);
     const found = match.account;
     if (account && account.bank !== found.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
@@ -150,7 +153,13 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
   const wise = named.currency ? imported().find((a) => a.statements === 'wise' && a.currency === named.currency) : undefined;
   const chf = imported().filter((a) => a.statements !== 'wise' && a.currency === baseCurrency());
   const account = byIban ?? wise ?? hint ?? (chf.length === 1 ? chf[0] : undefined);
-  if (!account) return refuse(400, 'Zu welchem Konto gehört der Auszug? Aus dem fehlenden Monat hinzufügen.', 'account');
+  if (!account) {
+    const currency = named.currency ?? baseCurrency();
+    // A PDF's name rarely gives its IBAN: then any account of its currency could be it.
+    const open = imported().filter((a) => a.currency === currency && (!iban || !a.iban));
+    if (open.length > 1) throw refusedAccount({ kind: 'whichAccount', currency, accounts: open.map((a) => ({ account: a.account, bank: a.bank, label: a.label })) });
+    return refuse(400, 'Zu welchem Konto gehört der Auszug? Aus dem fehlenden Monat hinzufügen.', 'account');
+  }
   return { account, filename, first: named.fromDate, last: named.toDate };
 }
 
