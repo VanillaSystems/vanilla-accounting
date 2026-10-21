@@ -70,10 +70,32 @@ export interface Receipt {
   filedPayment?: string;
   /** A payout report's figures, read once at the match step: the booking step splits every payout it is linked to by them, in code (r10f-29). */
   payout?: PayoutFacts;
+  /** An order document's facts (a shop's order page), read once at the match step: the booking step books a payout per order by them (src/booking/payout-orders.ts). */
+  order?: OrderFacts;
 }
 
 /** What a card terminal's or payment provider's report states, all positive: sales − refunds − fees = paidOut. */
 export interface PayoutFacts { sales: number; refunds: number; fees: number; paidOut: number }
+
+/** A part of an order in one payout, named by the payout's date as the order document gives it; positive. */
+export interface PayoutShare { date: string; amount: number }
+
+/** What an order document states about one order, every amount positive and in the currency of the payouts it names. */
+export interface OrderFacts {
+  number: string;
+  date: string;
+  currency: string;
+  /** What the customer paid. */
+  gross: number;
+  /** The delivery address's country (ISO 3166 alpha-2): it decides a domestic sale or an export. */
+  shipTo: string;
+  /** The order's own tax line, when it shows one: the country whose VAT it charges, and the rate. */
+  tax?: { country: string; rate: number };
+  /** What the provider added to which payout. */
+  payouts: PayoutShare[];
+  /** Refunds the provider deducted from a payout. */
+  refunds: PayoutShare[];
+}
 
 export interface ReceiptTitle { vendor: string; what: string }
 
@@ -186,8 +208,8 @@ export interface JournalEntry {
   receipts?: string[];
 }
 
-/** The app's checks that set a booking's code themselves: a sale's VAT code (src/accounting/sales-without-vat.ts saleCodeOf), a payout report's lines, a credit note's from the invoice it names (src/accounting/credit-note-code.ts), Bezugsteuer on a service from abroad (src/accounting/acquisition-tax.ts), a purchase's input tax from its receipt and the app's business files (src/booking/purchase-vat.ts). */
-export const CODE_CHECKS = ['saleCode', 'payoutReport', 'creditNote', 'acquisitionTax', 'purchaseVat'] as const;
+/** The app's checks that set a booking's code themselves: a sale's VAT code (src/accounting/sales-without-vat.ts saleCodeOf), a payout report's lines, a payout's lines per order (src/booking/payout-orders.ts), a credit note's from the invoice it names (src/accounting/credit-note-code.ts), Bezugsteuer on a service from abroad (src/accounting/acquisition-tax.ts), a purchase's input tax from its receipt and the app's business files (src/booking/purchase-vat.ts). */
+export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat'] as const;
 export type CodeCheck = typeof CODE_CHECKS[number];
 
 /** The booking fields a person's change keeps the old values of. */

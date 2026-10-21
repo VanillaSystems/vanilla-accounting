@@ -20,7 +20,6 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { promisify } from 'node:util';
-import { parseOrderPage } from '../../src/cli/extract-shopify-orders.js';
 import { FOREIGN_HINT, loadCases } from '../../src/knowledge/cases.js';
 import { documentTypeOf, uidsIn, type Counterparty } from '../../src/knowledge/counterparties.js';
 import { loadKnowledge } from '../../src/knowledge/layers.js';
@@ -41,7 +40,7 @@ async function poppler(file: string, mode: TextMode): Promise<string> {
 
 type Verdicts = Record<string, unknown>;
 
-/** What src/cli/extract.ts, extract-vat, match, the knowledge layer and the Shopify parser read off a receipt's text. */
+/** What src/cli/extract.ts, extract-vat, match and the knowledge layer read off a receipt's text. */
 function receiptVerdicts(file: string, text: string, counterparties: readonly Counterparty[], keywords: readonly string[]): Verdicts {
   const t = text.trim();
   const lower = t.toLowerCase();
@@ -57,7 +56,6 @@ function receiptVerdicts(file: string, text: string, counterparties: readonly Co
     foreignHint: FOREIGN_HINT.test(t),
     documentType: documentTypeOf({ extractedText: t }, counterparties),
     caseKeywords: keywords.filter((kw) => lower.includes(kw)),
-    ...(/shopify-order-\d+/.test(basename(file)) ? { shopify: parseOrderPage(basename(file), t) } : {}),
   };
 }
 

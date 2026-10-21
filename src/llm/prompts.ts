@@ -1,4 +1,4 @@
-import type { BankTransaction, PayoutFacts, VatRateGroup, ReceiptLine } from "../types/index.js";
+import type { BankTransaction, OrderFacts, PayoutFacts, PayoutShare, VatRateGroup, ReceiptLine } from "../types/index.js";
 import { vat } from "../engines/index.js";
 import type { VatSetup } from "../workspace/vat-setup.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
@@ -9,6 +9,8 @@ export interface MatchResult {
   title?: { vendor: string; what: string };
   /** A payout report's figures (PAYOUT_RULES), kept only when they add up. */
   payout?: PayoutFacts;
+  /** An order document's facts (ORDER_RULES), kept only when they hold together. */
+  order?: OrderFacts;
   matchedTransactionRefs: string[];
   date: string;
   description: string;
@@ -34,6 +36,32 @@ export function parsePayoutFacts(x: unknown): PayoutFacts | undefined {
   const [sales, refunds, fees, paidOut] = [n('sales'), n('refunds') ?? 0, n('fees') ?? 0, n('paidOut')];
   if (sales === undefined || paidOut === undefined) return undefined;
   return Math.abs(sales - refunds - fees - paidOut) < 0.05 ? { sales, refunds, fees, paidOut } : undefined;
+}
+
+/** What an order document states, for the booking step's split of the payout it names (src/booking/payout-orders.ts). */
+export const ORDER_RULES = `only for the page of ONE order of the company's own shop or sales platform (an order page, a sales record of one order): "number" (the order number without #), "date" (YYYY-MM-DD), "currency" (the currency of the amounts paid out, e.g. "EUR" when the page says what was added to a EUR payout), "gross" (what the customer paid, in that currency), "shipTo" (the DELIVERY address's country as its ISO 3166 two-letter code, never the billing address), "tax" (only when the order shows a tax line: { "country": the two-letter code of the country whose VAT it charges, "rate": the percent }), "payouts" (every payout the page says the order went into: { "date": the payout's date as the page names it, "amount": what was added to it }) and "refunds" (every refund the page says was deducted from a payout: { "date", "amount" }), amounts positive. Leave "order" out for any other document.`;
+
+const isoDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+const positive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/** An order's facts when they hold together: a number, a day, a currency, ISO countries, positive amounts, and no more paid out than paid. */
+export function parseOrderFacts(x: unknown): OrderFacts | undefined {
+  const o = x as Record<string, unknown> | undefined;
+  if (!o || typeof o !== 'object') return undefined;
+  const shares = (v: unknown): PayoutShare[] | undefined => {
+    const list = v === undefined ? [] : v;
+    if (!Array.isArray(list)) return undefined;
+    const out = list.map((s) => (s && isoDay(s.date) && positive(s.amount) ? { date: s.date, amount: s.amount } : undefined));
+    return out.every(Boolean) ? (out as PayoutShare[]) : undefined;
+  };
+  const number = typeof o.number === 'string' || typeof o.number === 'number' ? String(o.number).replace(/^#/, '').trim() : '';
+  const country = (v: unknown) => typeof v === 'string' && /^[A-Z]{2}$/.test(v);
+  const t = o.tax as Record<string, unknown> | undefined;
+  const tax = t === undefined || t === null ? undefined : country(t.country) && positive(t.rate) ? { country: t.country as string, rate: t.rate as number } : null;
+  const [payouts, refunds] = [shares(o.payouts), shares(o.refunds)];
+  if (!number || !isoDay(o.date) || typeof o.currency !== 'string' || !/^[A-Z]{3}$/.test(o.currency) || !positive(o.gross) || !country(o.shipTo) || tax === null || !payouts || !refunds) return undefined;
+  if (payouts.reduce((s, p) => s + p.amount, 0) > o.gross + 0.005) return undefined;
+  return { number, date: o.date, currency: o.currency, gross: o.gross, shipTo: o.shipTo as string, ...(tax ? { tax } : {}), payouts, refunds };
 }
 
 export function parseTitle(x: unknown): { vendor: string; what: string } | undefined {
@@ -101,12 +129,15 @@ Return ONLY a valid JSON object with these fields:
   "currency": "CHF",
   "confidence": 0.95,
   "title": { "v": "Coop Pronto", "w": "Benzin" },
-  "payout": { "sales": 1480.00, "refunds": 40.00, "fees": 27.65, "paidOut": 1412.35 }
+  "payout": { "sales": 1480.00, "refunds": 40.00, "fees": 27.65, "paidOut": 1412.35 },
+  "order": { "number": "1001", "date": "2026-08-10", "currency": "EUR", "gross": 120.00, "shipTo": "CH", "tax": { "country": "CH", "rate": 8.1 }, "payouts": [{ "date": "2026-08-12", "amount": 116.20 }], "refunds": [] }
 }
 
 Rules for title: ${TITLE_RULES}
 
 Rules for payout: ${PAYOUT_RULES}
+
+Rules for order: ${ORDER_RULES}
 
 Rules for suggestedFilename: YYYYMMDD prefix, lowercase, hyphens instead of spaces, no special chars, end with .pdf.
 
@@ -542,9 +573,11 @@ export function parseMatchResult(raw: string): MatchResult | null {
   }
   const title = parseTitle((parsed as { title?: unknown }).title);
   const payout = parsePayoutFacts((parsed as { payout?: unknown }).payout);
+  const order = parseOrderFacts((parsed as { order?: unknown }).order);
   delete parsed.title;
   delete parsed.payout;
-  return { ...parsed, ...(title ? { title } : {}), ...(payout ? { payout } : {}) };
+  delete parsed.order;
+  return { ...parsed, ...(title ? { title } : {}), ...(payout ? { payout } : {}), ...(order ? { order } : {}) };
 }
 
 /**

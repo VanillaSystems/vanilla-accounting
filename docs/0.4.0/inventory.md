@@ -11,10 +11,10 @@ and the providers.
 | core | 56 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 87 | 26 |
+| split | 89 | 26 |
 | infrastructure | 42 | 4 |
 | workflow | 20 | 0 |
-| view | 266 | 59 |
+| view | 264 | 57 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -194,12 +194,10 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |
 | `src/cli/evidence.ts` | camt.053 1, QR-bill 1 |
-| `src/cli/extract-shopify-orders.ts` | CHF 8 |
 | `src/cli/fetch-estv-rates.ts` | CHF 3, MWST 2, ESTV 6 |
 | `src/cli/import-board.ts` | UID 3, camt.053 1 |
 | `src/cli/import-opening-balances.ts` | CHF 13 |
 | `src/cli/init.ts` | CHF 4, ESTV 2 |
-| `src/cli/rebook-shopify-orders.ts` | CHF 5, MWST 3, ESTV 2, tax code 4 |
 | `src/cli/reconcile-balances.ts` | camt.053 3 |
 | `src/cli/restamp-fx-rates.ts` | CHF 2, ESTV 3 |
 | `src/cli/vat-ech0217.ts` | CHF 1, MWST 2, ESTV 1, eCH-0217 1, form 0535 1 |

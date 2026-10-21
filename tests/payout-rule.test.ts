@@ -33,7 +33,7 @@ import './support/jurisdiction.js';
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'payout-runs-'));
 
 const GUIDE = 'knowledge/rules/booking.guide.yaml';
-const QUESTION = 'Auszahlungsbericht fehlt: Bericht verknüpfen, oder die ganze Auszahlung als Umsatz buchen?';
+const QUESTION = 'Auszahlungsbericht oder Bestellungen fehlen: verknüpfen, oder die ganze Auszahlung als Umsatz buchen?';
 const SUMUP = `      - id: sumup-umsatz
         when: { text: "SumUp" }
         then: { account: "3400", vat: V81, fees: { account: "6840", vat: I0 } }
@@ -184,7 +184,7 @@ async function heldPayout() {
 
 const booked = (ws: Workspace) => loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'REF-PO-88213').map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode, e.rule]);
 
-test('r4c-21: the inbox run books no payout without its report; it asks «Frag: Auszahlungsbericht fehlt …» with the whole payout as the proposal, and «Übernehmen» books that, stamped with the rule', async () => {
+test('r4c-21: the inbox run books no payout without its report; it asks «Frag: Auszahlungsbericht oder Bestellungen fehlen …» with the whole payout as the proposal, and «Übernehmen» books that, stamped with the rule', async () => {
   const { ws, engine, ask } = await heldPayout();
   assert.deepEqual(booked(ws), [], 'nothing booked: no sale question can be asked about it either');
   const task = taskOf(loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'ask')!, ask)!;

@@ -217,6 +217,17 @@ steps:
         when: always
         then: "the code follows the tax the order or invoice itself states: Swiss 8.1% → swiss (V81); no Swiss tax and delivered abroad → export (V0) with the country as the recorded reason; anything else → new_case"
         source: booking.flow.yaml sale_vat expect
+      - id: sv-payout-orders
+        when: a payment provider's payout with the order documents it holds linked (each names the payout by date and amount)
+        then: >
+          in code (src/booking/payout-orders.ts), by the payout rule's accounts (its `fees`) or the firm's payout answer:
+          each order's gross on the sales account, delivered in the VAT territory at the firm's sale code, abroad at
+          V0; a refund deducted from the payout with the code's minus; what the provider kept as its fees. The lines
+          add up to the payout. Orders that do not add up to it, or an order whose tax line disagrees with its
+          delivery (sv-order-tax), book nothing: the payout waits for the person, as without its documents. The
+          match step links the documents to the one payout they add up to (src/intake/order-links.ts)
+        why: one payout mixes domestic orders and exports, which no single code fits (issue #26)
+        source: decision 2026-10-22, owner
       - id: sv-no-invoice
         when: a customer payment with no invoice or order linked
         then: >
