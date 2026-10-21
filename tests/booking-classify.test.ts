@@ -242,21 +242,25 @@ test('any bank: a payment whose fee is its own movement keeps no fee line, the f
   assert.deepEqual(lines('FEE-KART-48151623'), [['6900', 1.3, undefined]], 'the fee once, on its own movement');
 });
 
-test('a fee line the code cannot put back unambiguously is refused: nothing booked, the payment waits (#24)', async () => {
+test('a line of the fee\'s amount the code cannot tell apart or put back is refused: nothing booked, the payment waits (#24)', async () => {
   const charge = tx({ ref: 'KART-1', bank: 'Raiffeisen', amount: 60 });
   const fee = tx({ ref: 'FEE-KART-1', bank: 'Raiffeisen', amount: 2, type: 'wise-fee' });
   const feeLine: ClassifyEntry = { accountDebit: '6900', accountCredit: '', amount: 2, vatCode: 'I0', description: 'Bank, Spesen' };
-  for (const [why, answer] of [
-    ['two expense lines it could go back to', [expense(40), { ...expense(18), accountDebit: '6500' }, feeLine]],
-    ['a fee line with a VAT rate', [{ ...expense(58), vatCode: 'I81' }, { ...feeLine, vatCode: 'I81' }]],
+  const feeBooked = { id: 'f', transactionRef: 'FEE-KART-1', date: '2026-08-14', accountDebit: '6900', accountCredit: '1021', amount: 2, description: 'Bank, Spesen', origin: 'classify' };
+  for (const [why, answer, booked] of [
+    ['two expense lines it could go back to', [expense(40), { ...expense(18), accountDebit: '6500' }, feeLine], [feeBooked]],
+    ['a fee line with a VAT rate', [{ ...expense(58), vatCode: 'I81' }, { ...feeLine, vatCode: 'I81' }], [feeBooked]],
+    ['the fee\'s amount on another account than the fee\'s: maybe a real item', [expense(58), { ...feeLine, accountDebit: '6500' }], [feeBooked]],
+    ['the fee movement booked nowhere yet: its account unknown', [expense(58), feeLine], []],
   ] as const) {
     const b = books([charge]);
     b.transactions.push(fee);
+    b.journalEntries.push(...(booked as unknown as Books['journalEntries']));
     const { ask } = stubAsk(() => [...answer]);
     const { classified, failed } = await classifyTransactions(b, [charge], { ask, fx, context });
     assert.deepEqual(classified, [], why);
     assert.deepEqual(failed.map((f) => [f.ref, f.refusal]), [['KART-1', { code: 'classifySeparateFee', params: { fee: 'FEE-KART-1', currency: 'CHF', amount: 2 } }]], why);
-    assert.deepEqual(b.journalEntries, [], why);
+    assert.deepEqual(b.journalEntries.filter((e) => e.transactionRef === 'KART-1'), [], why);
   }
 });
 

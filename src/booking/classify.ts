@@ -644,7 +644,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
           continue;
         }
-        const fee = read ? undefined : withoutSeparateFee(tx, separateFeeOf(tx, books.transactions), llmEntries);
+        const separate = read ? undefined : separateFeeOf(tx, books.transactions);
+        const fee = separate && withoutSeparateFee(tx, separate, llmEntries, { booked: books.journalEntries, answered: result[separate.ref]?.entries });
         if (fee && 'refused' in fee) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${fee.refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...fee.refused });

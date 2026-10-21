@@ -411,7 +411,7 @@ export default {
     'journal.byHand.submit': 'Book by hand',
     'journal.byHand.booked': '{n} lines booked on {ref}',
     'error.classifyAccount': 'Claude’s answer had an entry without an account («{description}»): nothing was booked, the payment stays as it was.',
-    'error.classifySeparateFee': 'Claude’s answer books the fee of {amount} inside the payment, but the bank debits it separately ({fee}): nothing was booked, the payment stays as it was.',
+    'error.classifySeparateFee': 'Claude’s answer has a line of {amount} in the payment, as much as the fee the bank debits separately ({fee}): nothing was booked, the payment stays as it was.',
     'error.classifyBalance': 'Claude’s entries for the payment of {date} for {paid} would have added up to {booked}: nothing was booked, the payment stays as it was.',
     'error.personsBooking': { one: 'This payment has an entry made by hand: it stays.', other: 'This payment has {n} entries made by hand: they stay.' },
     'journal.keepTitle': 'Keep your entry?',
