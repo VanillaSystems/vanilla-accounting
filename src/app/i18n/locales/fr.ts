@@ -411,6 +411,7 @@ export default {
     'journal.byHand.submit': 'Comptabiliser à la main',
     'journal.byHand.booked': '{n} lignes comptabilisées sur {ref}',
     'error.classifyAccount': 'La réponse de Claude contenait une écriture sans compte («{description}») : rien n’a été comptabilisé, le paiement reste tel quel.',
+    'error.classifySeparateFee': 'La réponse de Claude a dans le paiement une ligne de {amount}, autant que les frais que la banque débite à part ({fee}) : rien n’a été comptabilisé, le paiement reste tel quel.',
     'error.classifyUnknownAccount': 'La réponse de Claude comptabilisait sur le compte {account} («{description}»), absent du plan comptable : rien n’a été comptabilisé, le paiement reste tel quel. Créez le compte (Firma › Kontenplan) ou comptabilisez à la main.',
     'error.classifyBalance': 'Les écritures de Claude pour le paiement du {date} de {paid} auraient fait ensemble {booked} : rien n’a été comptabilisé, le paiement reste tel quel.',
     'error.personsBooking': { one: 'Ce paiement a une écriture saisie à la main : elle reste.', other: 'Ce paiement a {n} écritures saisies à la main : elles restent.' },

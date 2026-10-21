@@ -117,6 +117,7 @@ export function errorText(e: unknown): string {
       const { date, currency, paid, booked } = b.params;
       return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
+    case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'notInTrash': return t('error.notInTrash');

@@ -18,9 +18,9 @@ steps:
     reads: [ extracted text, VAT facts, filename, the email or portal it came from ]
     rules:
       - id: kind-statement
-        when: a Wise or Raiffeisen monthly statement
+        when: a bank's monthly statement
         then: statement
-        source: AGENTS.md § Special cases (Wise statements carry the original foreign amount)
+        source: AGENTS.md § Special cases
       - id: kind-return-label
         when: return labels, customs paperwork without amounts, Retourenbelege
         then: supporting

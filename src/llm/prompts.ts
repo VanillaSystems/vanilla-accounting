@@ -158,6 +158,8 @@ interface TxInput {
   bank: string;
   /** Who paid or was paid, as the bank names them; the description often leaves it out. */
   counterparty?: string;
+  /** The payment's fee, which the bank debited as a movement of its own (src/booking/separate-fee.ts). */
+  separateFee?: { ref: string; amount: number; currency: string };
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -350,7 +352,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 
