@@ -39,7 +39,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   const { paths } = ws;
   const root = paths.root;
   mkdirSync(paths.history);
-  writeFileSync(join(paths.history, 'prior-year.Konten.txt'), '1021\tBank\n6570\tInformatikaufwand\n');
+  writeFileSync(join(paths.history, 'prior-year.Konten.txt'), '1021\tBank\n4400\tAufwand für bezogene Dienstleistungen\n6570\tInformatikaufwand\n');
   writeFileSync(join(paths.history, 'prior-year.Buchungen-sample.tsv'), 'Datum\tBeschreibung\tKtSoll\tKtHaben\tBetrag\n');
   // A fixture is an index (books.json's content before ADR 0013), or a workspace whose books are copied.
   const source = join(REPO, fixture);

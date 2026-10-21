@@ -162,6 +162,9 @@ interface TxInput {
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
 1. Determine the correct expense/revenue account(s) based on the transaction description, receipt text, and historic patterns.
+   Use ONLY account numbers listed in the Chart of Accounts above. The numbers in these instructions are the standard
+   KMU ones: where this company's chart has another account for the same purpose, take its own. A row on an account
+   the chart does not have is refused and the payment is not booked.
 2. The bank account side is already determined — do NOT set it. Leave accountDebit or accountCredit as empty string "" for the bank side. The system will fill it in.
 3. For DBIT (money out): the bank account is credited (leave accountCredit as ""), set accountDebit to the expense account.
 4. For CRDT (money in): the bank account is debited (leave accountDebit as ""), set accountCredit to the revenue account.
@@ -171,7 +174,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    - Each receipt has its own item, its own account, and its own description.
    - Use each receipt's amount (converted to the transaction currency if needed) as the entry amount.
    - Assign each receipt to its correct expense account based on what was purchased (read the receipt text carefully).
-   - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4210/6100/6570.
+   - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4200/6100/6570.
    - If two receipts genuinely go to the same account, they still get separate rows with separate descriptions.
 6. The entries must move the bank account by exactly the transaction amount: the bank paid what the bank paid.
    Every row has both accounts, except the bank side you leave "" (and the single-leg VAT-amount row of rule 9b).
@@ -205,8 +208,8 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       processing, Stripe or card fees, banking, insurance), not when the receipt shows Swiss MWST (I81).
       On EVERY purchase line with a receipt, also give two facts read off the receipt, which the app
       decides the code by: "supply": "service", "goods" or "exempt" (a service exempt from VAT), and
-      "supplierCountry": the supplier's country as the receipt gives its address, ISO 3166 alpha-2
-      ("IE", "US", "CH").
+      "supplierCountry": the supplier's country as the receipt gives its address, as the two-letter
+      ISO country code ("IE", "US", "CH").
    d) Refunds invert the code with a minus prefix (e.g. -I81, -M26).
    e) Exception: Coop Pronto receipts can be assumed I81 (always charge 8.1% MWST even if OCR is bad).
    f) MULTI-RATE RECEIPTS: when a receipt's VAT facts list MORE THAN ONE positive rate
@@ -216,7 +219,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       clearly belong to different accounts. The split rows must sum to the receipt total.
 8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen) with VatCode I0.
 9. For Shopify/Stripe sales (Webshop orders): ALWAYS produce exactly 2 journal entry rows. Specify BOTH accountDebit AND accountCredit (do NOT leave one empty):
-   a) Revenue: accountDebit "1093" / accountCredit "3450" — full order amount. Use V81 for Swiss customers, V0 for exports.
+   a) Revenue: accountDebit "1093" / accountCredit the chart's revenue account for goods sold (KMU "3200" Handelserlöse) — full order amount. Use V81 for Swiss customers, V0 for exports.
    b) Shopify fees: accountDebit "6580" / accountCredit "1093" — the fee amount (= order amount minus Stripe payout, as shown on the Shopify receipt)
    The system will automatically add a third entry for the Stripe payout (D=bank C=1093) — do NOT add it yourself.
 9a. Card-terminal and payment-provider payouts (SumUp, Payrexx, Worldline, Stripe Terminal, TWINT): the payout is
