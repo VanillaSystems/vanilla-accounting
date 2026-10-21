@@ -9,7 +9,7 @@ import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
-import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, refsHeldWithout, statementPdf, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
+import { legOf, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, refsHeldWithout, statementPdf, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
@@ -212,10 +212,10 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       assertOpen(books, [placed.last], 'newStatement');
       const before = new Set(books.transactions.map((t) => t.ref));
       const fresh = assignUniqueRefs(withinBooks(bank.transactions, books.config).kept);
-      const freshRefs = new Set(fresh.map((t) => t.ref));
+      const freshLegs = new Set(fresh.map(legOf));
       // An upload adds: a payment no file holds any more stays until extract's rebuild decides.
       const lock = periodLock(books);
-      const stay = books.transactions.filter((t) => t.source !== 'manual' && !freshRefs.has(t.ref) && !lock.isClosed(t.date));
+      const stay = books.transactions.filter((t) => t.source !== 'manual' && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
       const files = readStatementFiles(WS);
       const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: files.statements, camtBalances: files.balances });
       // The books keep their order; the new payments come after them.

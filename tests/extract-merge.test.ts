@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeIndex, withinBooks, type Scan } from '../src/books/bank-import.js';
+import { moduleActor, update, type Books } from '../src/books/store.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 
 const CLOSED_THROUGH = '2026-06-30';
@@ -192,4 +193,31 @@ test('bank rows dated before the books open (first opening-balance year) stay ou
   assert.deepEqual(opened.kept.map((t) => t.ref), ['T-first']);
   assert.equal(opened.before, '2026-01-01');
   assert.deepEqual(withinBooks(rows, undefined).kept.map((t) => t.ref), ['T-prior', 'T-first']);
+});
+
+// ─── A Wise card charge split over two currencies: two legs, one ref (#23) ───
+
+const wiseLeg = (date: string, currency: string, amount: number, extra: Partial<BankTransaction> = {}) =>
+  tx('CARD-123', date, { bank: `Wise ${currency}`, currency, amount, description: `Card charge ${currency}`, ...extra });
+
+for (const [period, date] of [['closed', '2026-05-12'], ['open', '2026-08-12']] as const) {
+  test(`both legs of a split card charge in ${period === "open" ? "an" : "a"} ${period} period survive a bank re-read, each as itself`, () => {
+    const legs = [wiseLeg(date, 'EUR', 40, { remarks: 'EUR leg' }), wiseLeg(date, 'CHF', 2.5, { noReceiptNeeded: true })];
+    const books = previousIndex({ transactions: [...previousIndex().transactions, ...legs] }) as Books;
+    const fresh = [wiseLeg(date, 'EUR', 40), wiseLeg(date, 'CHF', 2.5)];
+    // The write door refuses any change to a closed transaction: the re-read must not trip it.
+    update(books, moduleActor('intake'), (b) => {
+      Object.assign(b, mergeIndex(b, scan({ bankTransactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10'), ...fresh] })).index);
+    });
+    const merged = books.transactions.filter((t) => t.ref === 'CARD-123').sort((a, b) => a.currency.localeCompare(b.currency));
+    assert.deepEqual(merged, [legs[1], legs[0]]);
+  });
+}
+
+test('a vanished leg of a closed split card charge is kept and reported while its other leg is still read', () => {
+  const legs = [wiseLeg('2026-05-12', 'EUR', 40), wiseLeg('2026-05-12', 'CHF', 2.5)];
+  const prev = previousIndex({ transactions: [...previousIndex().transactions, ...legs] });
+  const out = mergeIndex(prev, scan({ bankTransactions: [...scan().bankTransactions, legs[1]] }));
+  assert.deepEqual(out.index.transactions.filter((t) => t.ref === 'CARD-123').sort((a, b) => a.currency.localeCompare(b.currency)), [legs[1], legs[0]]);
+  assert.deepEqual(out.vanishedClosedTransactions, [legs[0]]);
 });

@@ -201,6 +201,13 @@ function keptFields(t: BankTransaction): Partial<BankTransaction> {
   );
 }
 
+/**
+ * What names one bank transaction across re-reads. A Wise card charge split over two currencies is
+ * two transactions with one ref (assignUniqueRefs keeps it shared: one payment), so a transaction
+ * is matched to its previous self by ref and currency, never by the ref alone (#23).
+ */
+export const legOf = (t: BankTransaction) => `${t.ref} ${t.currency}`;
+
 export interface Merged {
   index: Index;
   /** Links in a filed quarter whose receipt file is gone. Kept: a person must re-link them. */
@@ -214,17 +221,17 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   const lock = periodLock(previous);
   const isClosed = (t: BankTransaction | undefined) => lock.isClosed(t?.date);
 
-  const previousByRef = new Map(previous.transactions.map((t) => [t.ref, t]));
-  const freshRefs = new Set(scan.bankTransactions.map((t) => t.ref));
+  const previousByLeg = new Map(previous.transactions.map((t) => [legOf(t), t]));
+  const freshLegs = new Set(scan.bankTransactions.map(legOf));
   // A filed transaction is what the books hold, whatever the camt053 says now: the counterparty,
   // reference and parts it was filed with stay, and a later export's wording changes nothing.
   const fromBank = scan.bankTransactions.map((t) => {
-    const before = previousByRef.get(t.ref);
+    const before = previousByLeg.get(legOf(t));
     if (!before) return t;
     return isClosed(before) ? before : { ...t, ...keptFields(before) };
   });
   const vanishedClosedTransactions = previous.transactions.filter(
-    (t) => t.source !== 'manual' && !freshRefs.has(t.ref) && isClosed(t),
+    (t) => t.source !== 'manual' && !freshLegs.has(legOf(t)) && isClosed(t),
   );
   const manual = previous.transactions.filter((t) => t.source === 'manual');
 
