@@ -88,7 +88,6 @@ Receipt collection / vendor scraping:
 VAT code rules:
 - A VAT code with a rate (I81, M81, V81) may ONLY be used when the receipt explicitly shows Swiss MWST was charged. Always check the receipt — the receipt is the source of truth. Do not assume based on vendor country — foreign vendors (Amazon.de, Google, Anthropic) can be registered for Swiss MWST and charge 8.1%.
 - No receipt = no VAT refund = use I0/M0/V0.
-- Exception: Coop Pronto receipts with bad OCR can be assumed I81 (always charges 8.1% MWST).
 - Refunds invert the original VAT code: if the original was I81, the refund is -I81. If original was I0, refund is -I0.
 - I-codes are for investment/operating expenses, M-codes for materials/goods, V-codes for sales revenue.
 - Items under ~CHF 150 should be expensed (6xxx accounts), not capitalized (1xxx asset accounts).

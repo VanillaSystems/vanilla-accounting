@@ -176,7 +176,10 @@ steps:
         source: src/llm/prompts.ts CLASSIFY_INSTRUCTIONS § 7a
       - id: pv-charged
         when: the receipt shows Swiss MWST with an explicit amount at 8.1%
-        then: charged — M81 for goods and material, I81 for investments and operating costs
+        then: >
+          charged — M81 for goods and material, I81 for investments and operating costs. In code
+          (src/booking/purchase-vat.ts) on the model's one coded purchase line when the receipts show that one
+          rate on its whole amount; a receipt that taxes part of the payment stays the model's to split
         source: AGENTS.md § VAT code rules
       - id: pv-import-vat-evv
         when: a courier bill passes on Swiss IMPORT VAT for goods imported for the company, and the BAZG Veranlagungsverfügung MWST (eVV) names the company as importer
@@ -190,7 +193,10 @@ steps:
         source: owner decision 2026-10-08
       - id: pv-otherwise
         when: otherwise
-        then: zero_rated
+        then: >
+          zero_rated. In code (src/booking/purchase-vat.ts): the model's rate code falls to the zero code of its
+          account when no linked purchase document shows Swiss VAT and every one was read (a receipt not read yet
+          decides nothing)
         source: AGENTS.md § VAT code rules
     ask_human_when:
       - the receipt shows a reduced rate (2.6%) or a special rate (3.8%)

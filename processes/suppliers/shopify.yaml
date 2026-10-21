@@ -42,6 +42,7 @@ steps:
         then: >
           the fee entries stay at the payout; the month's Vorsteuer is one single-leg entry — empty Soll / C 6580 / M81-2, amount = fees × 8.1 / 108.1
         why: the proof is the monthly Shopify bill, not the payout
+        apply: { inputTax: none, direction: in }
         source: docs/runbooks/booking-patterns.md § Shopify
     precedents: []
 
