@@ -411,6 +411,7 @@ export default {
     'journal.byHand.submit': 'Book by hand',
     'journal.byHand.booked': '{n} lines booked on {ref}',
     'error.classifyAccount': 'Claude’s answer had an entry without an account («{description}»): nothing was booked, the payment stays as it was.',
+    'error.classifyUnknownAccount': 'Claude’s answer booked on account {account} («{description}»), which the chart of accounts does not have: nothing was booked, the payment stays as it was. Add the account (Firma › Kontenplan) or book it by hand.',
     'error.classifyBalance': 'Claude’s entries for the payment of {date} for {paid} would have added up to {booked}: nothing was booked, the payment stays as it was.',
     'error.personsBooking': { one: 'This payment has an entry made by hand: it stays.', other: 'This payment has {n} entries made by hand: they stay.' },
     'journal.keepTitle': 'Keep your entry?',

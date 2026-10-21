@@ -142,10 +142,12 @@ export type ApiRefusal =
 
 /**
  * The classifier's answer would have booked a payment wrong (src/booking/classify.ts paymentRefusal):
- * an entry without an account, or entries that do not add up to what the bank paid.
+ * an entry without an account, an entry on an account the chart does not have, or entries that do
+ * not add up to what the bank paid.
  */
 export type ClassifyRefusal =
   | { code: 'classifyAccount'; params: { description: string } }
+  | { code: 'classifyUnknownAccount'; params: { account: string; description: string } }
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } };
 
 /**

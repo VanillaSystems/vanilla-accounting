@@ -120,17 +120,28 @@ const day = (iso: string) => iso.split('-').reverse().join('.');
 
 /**
  * Why the classifier's entries for `tx` must not be booked: an entry without an account (other than
- * a VAT-amount code's one leg), or entries that do not move the bank account by what the bank paid,
- * the rule the AI sidebar's changes keep too (src/server/edits.ts applyAnswer). The payment then
- * stays unbooked for the person, with this reason.
+ * a VAT-amount code's one leg), an entry on an account `chart` does not have (the bank account aside,
+ * which the ledger names), or entries that do not move the bank account by what the bank paid, the
+ * rules the AI sidebar's changes keep too (src/server/edits.ts applyAnswer). The payment then stays
+ * unbooked for the person, with this reason. An empty `chart` checks no account.
  */
-export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEntry[], bankAccount: string): { reason: string; refusal: ClassifyRefusal } | undefined {
+export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEntry[], bankAccount: string, chart: ReadonlySet<string> = new Set()): { reason: string; refusal: ClassifyRefusal } | undefined {
   const legless = entries.find((e) => !e.accountDebit !== !e.accountCredit ? !isVatAmountCode(e.vatCode) : !e.accountDebit);
   if (legless) {
     const description = legless.description ?? '';
     return {
       reason: `Claudes Antwort hat eine Buchung ohne Konto («${description}»): nichts gebucht, die Zahlung bleibt, wie sie war.`,
       refusal: { code: 'classifyAccount', params: { description } },
+    };
+  }
+  const outside = (a: string) => !!a && a !== bankAccount && !chart.has(a);
+  const stray = chart.size ? entries.find((e) => outside(e.accountDebit) || outside(e.accountCredit)) : undefined;
+  if (stray) {
+    const account = outside(stray.accountDebit) ? stray.accountDebit : stray.accountCredit;
+    const description = stray.description ?? '';
+    return {
+      reason: `Claudes Antwort bucht auf Konto ${account} («${description}»), das der Kontenplan nicht hat: nichts gebucht, die Zahlung bleibt, wie sie war.`,
+      refusal: { code: 'classifyUnknownAccount', params: { account, description } },
     };
   }
   const account = { bank: tx.bank, currency: tx.currency, account: bankAccount, label: bankAccount };
@@ -543,6 +554,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const { ask, fx, context, log = () => {}, afterWave, proposeAsked = true } = deps;
   const lock = periodLock(books);
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
+  const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
@@ -643,7 +655,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           continue;
         }
         const entries = read ?? withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, llmEntries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped);
-        const refused = paymentRefusal(tx, entries, bankAccount);
+        const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...refused });

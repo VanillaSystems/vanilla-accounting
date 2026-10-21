@@ -111,6 +111,7 @@ export function errorText(e: unknown): string {
       return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
     case 'classifyAccount': return t('error.classifyAccount', b.params);
+    case 'classifyUnknownAccount': return t('error.classifyUnknownAccount', b.params);
     case 'classifyBalance': {
       const { date, currency, paid, booked } = b.params;
       return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
