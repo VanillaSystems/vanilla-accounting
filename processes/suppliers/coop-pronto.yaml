@@ -27,5 +27,6 @@ steps:
         when: a Coop Pronto receipt whose OCR is unreadable
         then: charged — I81
         why: Coop Pronto always charges 8.1%
+        apply: { unreadReceipt: 8.1 }
         source: AGENTS.md § VAT code rules
     precedents: []

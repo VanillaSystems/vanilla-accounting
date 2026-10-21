@@ -39,6 +39,8 @@ export type Layer = 'app' | 'workspace';
 export type Rule = {
   id?: string; when?: string; then?: string; why?: string; source?: string;
   status?: string; procedure?: string; test?: string;
+  /** What code carries out of a rule of an app business file (src/booking/purchase-vat.ts parseApply). */
+  apply?: unknown;
   /** The sentence of the notes an executable rule carries out (src/booking/rules.ts BookingRule.note). */
   note?: unknown;
 };

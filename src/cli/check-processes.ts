@@ -11,6 +11,7 @@
  */
 
 import { isExecutable } from '../booking/rules.js';
+import { parseApply, PURCHASE_VAT_STEP } from '../booking/purchase-vat.js';
 import { noteRuleProblems } from '../knowledge/note-rules.js';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
@@ -189,7 +190,7 @@ function checkProcedure(where: string, procedure: string, err: (m: string) => vo
   }
 }
 
-function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string } = {}) {
+function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string; apply?: boolean } = {}) {
   for (const rule of rules ?? []) {
     const at = `${where}/${rule.id ?? '(no id)'}`;
     // An executable rule (src/booking/rules.ts) in a business's file needs no when: its business is its condition.
@@ -202,6 +203,11 @@ function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) =
     if (rule.test !== undefined) {
       if (!opts.gates) err(`${at}: only a gate can carry test:`);
       else if (!(GATE_TESTS as readonly string[]).includes(rule.test)) err(`${at}: test "${rule.test}" is not in src/knowledge/gates.ts — add it there or fix the name`);
+    }
+    if (rule.apply !== undefined) {
+      const parsed = parseApply(rule.apply);
+      if (!opts.apply) err(`${at}: apply: is for a rule of ${PURCHASE_VAT_STEP} in an app business file (processes/<role>/<id>.yaml); a company's own rule is a booking rule with then: { account, vat }`);
+      else if (!parsed.ok) err(`${at}: ${parsed.problem}`);
     }
     if (rule.procedure) checkProcedure(at, rule.procedure, err, opts.root ?? APP_ROOT);
     if (rule.id) {
@@ -308,7 +314,7 @@ for (const f of counterpartyFiles) {
     if (!stepRefs.has(ref)) err(`steps."${ref}" is not the with.guide of any flow step — use the exact string, e.g. "booking.guide.yaml#classify"`);
     const section = raw as Section;
     if (section.goal) err(`steps."${ref}": goal belongs to the step's guide, not to a counterparty`);
-    checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root });
+    checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root, apply: f.layer === 'app' && ref === PURCHASE_VAT_STEP });
     if (section.gates) err(`steps."${ref}": gates hold for every counterparty — they live in the guide`);
   }
 }

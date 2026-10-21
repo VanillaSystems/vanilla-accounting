@@ -146,6 +146,27 @@ whole mechanism. It is why the next quarter is quieter than this one.
   advisor. An item it matches is parked in `new-case`, not decided. Asking
   again does not help.
 
+## A rule code carries out
+
+A business's facts that decide a code without judgment are carried out by code,
+not left to a model that may miss them (src/booking/purchase-vat.ts). A rule of
+an app business file under `booking.guide.yaml#purchase_vat` states its fact as
+`apply:` beside its prose:
+
+- `apply: { inputTax: none, direction: in }`: the business's purchase lines on
+  such a payment claim no input tax (a platform's payout, whose fees a monthly
+  bill proves);
+- `apply: { unreadReceipt: 8.1 }`: its receipt that could not be read counts as
+  showing Swiss VAT at that rate on its whole amount.
+
+Only the app layer carries `apply:`, and only what is true for every company:
+an account is one company's chart, so a business file never books one. A rule
+that leaves a choice («CHE number → I81, none → B81-1») has no `apply:` and
+stays the model's. The company's word goes first: a business whose file in
+`knowledge/` has rules of its own for the step keeps the model's codes, and a
+company's executable booking rule books before any of this. `npm run
+check-processes` checks every `apply:`.
+
 ## The contract
 
 `npm run check-processes` enforces rules 1–3 and the graph's wiring, and prints

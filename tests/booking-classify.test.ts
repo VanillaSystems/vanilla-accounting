@@ -189,7 +189,7 @@ test('an answer with an entry without an account, or one that does not add up to
 });
 
 test('Skonto answered as the model did (invoice total, and a discount line with the bank left empty) books balanced on the bank', async () => {
-  const b = books([tx({ ref: 'FM', bank: 'Raiffeisen', amount: 1506.45 })]);
+  const b = books([tx({ ref: 'FM', bank: 'Raiffeisen', amount: 1506.45 })], [{ id: 'r1', ref: 'FM', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 115.18, gross: 1537.22 }] }]);
   const { ask } = stubAsk(() => [
     { accountDebit: '4400', accountCredit: '', amount: 1537.22, vatCode: 'M81', description: 'Farbmix, Material' },
     { accountDebit: '', accountCredit: '4400', amount: 30.77, vatCode: '-M81', description: 'Farbmix, Skonto 2 %' },
