@@ -17,6 +17,7 @@ import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { ClosedPeriodError, periodLock, type Books } from '../src/books/store.js';
 import { buildBatchClassifyPrompt, type ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
+import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { startApi } from './support/api-server.js';
 import { booksOnDisk } from './support/workspace.js';
 import { loadBooks } from '../src/books/store.js';
@@ -229,6 +230,23 @@ test('a Wise card fee is booked once, on its FEE-CARD payment, never again insid
   assert.deepEqual(on('6940'), [['FEE-CARD-7200000001', 0.02]], 'the fee once, on its own payment');
   assert.deepEqual(on('6570'), [['CARD-7200000001', 9.5]], 'the charge whole on the expense');
   assert.match(b.journalEntries.find((e) => e.transactionRef === 'CARD-7200000001')?.reason ?? '', /separat \(FEE-CARD-7200000001\)/, 'the booking says why the fee line went');
+});
+
+test('a Wise card fee read from camt.053 is linked to its charge by the bank ids, not the refs (#69)', async () => {
+  // Wise's camt053 names both entries by AcctSvcrRef (WUSD…) and pairs them only in BkTxCd/Prtry (CARD-… / FEE-CARD-…).
+  const xml = readFileSync(join(import.meta.dirname, 'fixtures/camt053/uuid_statement_wise_USD.xml'), 'utf8');
+  const [charge, fee] = readCamt(xml).statements.flatMap((s) => transactionsOf(s, { bank: 'Wise', statements: 'wise' }))
+    .slice(0, 2).map((t) => ({ ...t, date: '2026-08-14' }));
+  assert.deepEqual([charge.ref, fee.ref, fee.type], ['WUSD000001', 'WUSD000002', 'wise-fee']);
+  const b = books([charge, fee]);
+  const feeLine = (amount: number): ClassifyEntry => ({ accountDebit: '6940', accountCredit: '', amount, vatCode: 'I0', description: 'Wise, Kartengebühren' });
+  const { ask, prompts } = stubAsk((ref) => (ref === fee.ref ? [feeLine(0.02)] : [expense(9.48), feeLine(0.02)]));
+  const { classified, failed } = await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual([classified.sort(), failed], [['WUSD000001', 'WUSD000002'], []]);
+  assert.match(prompts[0], /debited separately as WUSD000002/, 'the model is told the fee is its own movement');
+  const on = (account: string) => b.journalEntries.filter((e) => e.accountDebit === account).map((e) => [e.transactionRef, e.amount]);
+  assert.deepEqual(on('6940'), [['WUSD000002', 0.02]], 'the fee once, on its own movement');
+  assert.deepEqual(on('6570'), [['WUSD000001', 9.5]], 'the charge whole on the expense');
 });
 
 test('any bank: a payment whose fee is its own movement keeps no fee line, the fee goes back to the expense at its code (#24)', async () => {
