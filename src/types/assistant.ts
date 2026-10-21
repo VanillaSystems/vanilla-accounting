@@ -9,6 +9,7 @@ import type { Choice, Question, QuestionTarget } from '../questions/model.js';
 import type { ReportSpec } from '../reports/spec.js';
 import type { ReportResult } from '../reports/result.js';
 import type { Attachment } from './attachment.js';
+import type { AnswerValue, QuestionId, SetupTopic, TopicState } from '../onboarding/model.js';
 
 /** The invoices' languages and own texts (src/invoices/model.ts INVOICE_LANGUAGES, OWN_TEXTS), which the invoicing settings change. */
 type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
@@ -98,7 +99,14 @@ export type WorkspaceChange =
    */
   | { kind: 'source'; id: string }
   /** The undo of a source taken in: the folder as it was before (`previous`), or gone with its switch and secrets. */
-  | { kind: 'dropSource'; id: string; previous?: Record<string, string> };
+  | { kind: 'dropSource'; id: string; previous?: Record<string, string> }
+  /** A topic of the setup checklist marked (src/onboarding/model.ts); its undo marks it as it was. */
+  | { kind: 'setupTopic'; topic: SetupTopic; state: TopicState }
+  /**
+   * The person's words answer the setup conversation's open question (src/onboarding/conversation.ts):
+   * recorded as a click would be, so the app shows that step's card. `null` only in an undo: no answer before.
+   */
+  | { kind: 'setupAnswer'; question: QuestionId; value: AnswerValue | null };
 
 /**
  * What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's
@@ -175,12 +183,13 @@ export interface MadeChange {
 
 /** POST /api/assistant. Without `conversation` a new one starts. */
 /**
- * Why a button started the conversation («Mit KI einrichten»: setting up receipt collection). A
- * conversation with a purpose starts without the page's reference and gets only its own context;
- * the AI stays on it (src/assistant/claude.ts). Kept with the conversation.
+ * Why a button started the conversation («Mit KI einrichten»: setting up receipt collection;
+ * `onboarding`: the setup of the books, shown wide, docs/0.4.0/onboarding.md). A conversation with
+ * a purpose starts without the page's reference and gets only its own context; the AI stays on it
+ * (src/assistant/claude.ts). Kept with the conversation.
  */
-export type Purpose = 'collection-setup';
-export const PURPOSES: readonly Purpose[] = ['collection-setup'];
+export type Purpose = 'collection-setup' | 'onboarding';
+export const PURPOSES: readonly Purpose[] = ['collection-setup', 'onboarding'];
 
 export interface AssistantSend {
   conversation?: string;

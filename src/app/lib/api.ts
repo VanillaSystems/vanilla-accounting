@@ -9,6 +9,9 @@ import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
 import type { CompanyInfo } from '../../books/company.js';
 import type { ManifestPatch } from '../../workspace/manifest-write.js';
+import type { QuestionId } from '../../onboarding/model.js';
+import type { SetupView } from '../../onboarding/facts.js';
+import type { VatSetup } from '../../workspace/vat-setup.js';
 import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
@@ -294,6 +297,9 @@ export const api = {
   automationSchedule: (workflow: string, schedule: string | null) => request<{ ok: true }>('PATCH', `/api/automation/workflows/${encodeURIComponent(workflow)}`, { schedule }),
   changes: (since?: string) => request<ChangesView | { unchanged: true }>('GET', `/api/changes${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
+  onboarding: () => request<SetupView>('GET', '/api/onboarding'),
+  onboardingStart: () => request<SetupView>('POST', '/api/onboarding/start'),
+  onboardingAnswer: (q: QuestionId, value: string | null, kept?: VatSetup | null) => request<SetupView>('PUT', `/api/onboarding/answers/${q}`, { value, ...(kept !== undefined ? { kept } : {}) }),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   /** A file for the next message (src/types/attachment.ts): kept beside the conversations, never in the books. */
   assistantAttach: async (file: File): Promise<Attachment> => {

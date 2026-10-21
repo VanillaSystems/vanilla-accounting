@@ -12,12 +12,15 @@ import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { reloadInvoices } from '../areas/invoices/data.js';
 import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Purpose, Turn } from '../../types/assistant.js';
-import { KEPT_CONVERSATION, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
+import { KEPT_CONVERSATION, KEPT_PURPOSE, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
 import { attachmentRefusal, attachmentType, showsAsImage, type Attachment, type AttachmentType } from '../../types/attachment.js';
 import { MAX_FOLDER_FILES, type Dropped } from './folder-drop.js';
 
 /** 400 px, less on a small window, so the page keeps room for its list and its detail. */
 export const SIDEBAR_WIDTH = 'min(400px, 34vw)';
+/** The setup conversation (docs/0.4.0/onboarding.md) is about twice as wide: a card with its evidence fits, and the page stays usable beside it. */
+export const SETUP_WIDTH = 'min(760px, 52vw)';
+const widthOf = (s: Pick<AssistantState, 'open' | 'purpose'>) => (!s.open ? '0px' : s.purpose === 'onboarding' ? SETUP_WIDTH : SIDEBAR_WIDTH);
 
 export interface AssistantState extends Thread {
   /** The conversations list instead of a conversation. */
@@ -40,11 +43,10 @@ let stop: AbortController | undefined;
 
 function set(patch: Partial<AssistantState>): void {
   state = { ...state, ...patch };
-  if ('open' in patch) {
-    remember('assistant.open', state.open ? '1' : null);
-    document.documentElement.style.setProperty('--aiw', state.open ? SIDEBAR_WIDTH : '0px');
-  }
+  if ('open' in patch) remember('assistant.open', state.open ? '1' : null);
+  if ('open' in patch || 'purpose' in patch) syncSidebarWidth();
   if ('conversation' in patch) remember(KEPT_CONVERSATION, state.conversation ?? null);
+  if ('conversation' in patch || 'purpose' in patch) remember(KEPT_PURPOSE, state.conversation ? null : state.purpose ?? null);
   for (const l of listeners) l();
 }
 
@@ -60,7 +62,7 @@ if (state.conversation) {
 export const useAssistant = (): AssistantState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
 
 /** The shell sets the page's width at start, from the remembered state. */
-export const syncSidebarWidth = () => document.documentElement.style.setProperty('--aiw', state.open ? SIDEBAR_WIDTH : '0px');
+export function syncSidebarWidth(): void { document.documentElement.style.setProperty('--aiw', widthOf(state)); }
 
 export function toggleAssistant(): void { set({ open: !state.open }); }
 export function openAssistant(): void { set({ open: true, listing: false }); }

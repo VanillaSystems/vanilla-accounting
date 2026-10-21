@@ -14,6 +14,7 @@ import { PRESETS } from '../export/model.js';
 import { parseSpec } from '../reports/spec.js';
 import { questionChoices, TARGET_KINDS, type QuestionTarget } from '../questions/model.js';
 import { domainOf } from '../platform/sources/mail-host.js';
+import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState } from '../onboarding/model.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
 
@@ -188,6 +189,16 @@ function change(v: unknown): Change {
       if (extra.some((k) => /pass|secret|token|key|credential/i.test(k))) throw new ChangesError('kein Geheimnis im Block: die Karte fragt es', { code: 'sourceSecret', params: { id, file: 'block' } });
       if (extra.length) throw new ChangesError(`source: nur die id; die Dateien stehen in data/draft/sources/${id}/`);
       return { kind: 'source', id };
+    }
+    case 'setupTopic': {
+      if (!isSetupTopic(c.topic)) throw new ChangesError(`topic: eines von ${SETUP_TOPICS.join(', ')}`);
+      if (!isTopicState(c.state)) throw new ChangesError(`state: eines von ${TOPIC_STATES.join(', ')}`);
+      return { kind: 'setupTopic', topic: c.topic, state: c.state };
+    }
+    case 'setupAnswer': {
+      if (!isQuestion(c.question)) throw new ChangesError(`question: eine von ${Object.keys(QUESTIONS).join(', ')}`);
+      if (!isAnswerOf(c.question, c.value)) throw new ChangesError(`value: eine von ${QUESTIONS[c.question].join(', ')}`);
+      return { kind: 'setupAnswer', question: c.question, value: c.value };
     }
     default: throw new ChangesError(`unbekannte Änderung ${String(c.kind)}`);
   }

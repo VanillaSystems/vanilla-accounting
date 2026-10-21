@@ -32,6 +32,7 @@ import { SourcesSection } from './SourcesSection.js';
 import { PhoneSection } from './PhoneSection.js';
 import { desktop } from '../../desktop/bridge.js';
 import { RulesSection } from './RulesSection.js';
+import { SetupEntry } from '../../onboarding/SetupEntry.js';
 import { baseCurrency, chargesVat, chart, filing } from '../../../engines/index.js';
 import { openingLock } from '../../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../../accounting/year-close.js';
@@ -88,6 +89,7 @@ function List({ route, books, nav }: Props) {
     <>
       <h1>{ws?.company.name ?? t('area.company')}</h1>
       <div className="counts"><span>{ws?.company.owner}</span></div>
+      <SetupEntry />
       <div className="rows" role="listbox" aria-label={t('company.list')}>
         {GROUPS.map(([group, sections]) => (
           <Fragment key={group}>

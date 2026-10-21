@@ -4,7 +4,7 @@
  * at another page still knows what it refers to. A new one starts only on «Neu», or when «Mit KI …»
  * on an object opens the sidebar while it is closed. Pure, so a test can walk it without a browser.
  */
-import type { ContextRef, Purpose, Turn } from '../../types/assistant.js';
+import { PURPOSES, type ContextRef, type Purpose, type Turn } from '../../types/assistant.js';
 
 export interface Thread {
   open: boolean;
@@ -21,10 +21,15 @@ export interface Thread {
 /** Where the open conversation's id is remembered in this browser. */
 export const KEPT_CONVERSATION = 'assistant.conversation';
 
-/** At start: the conversation open before the window was loaded again; its turns are read from the server. */
-export const startThread = (stored: (key: string) => string | null): Pick<Thread, 'conversation'> => {
+/** The purpose of a new conversation not sent yet (the setup before «Los geht's»); a sent one keeps its purpose on the server. */
+export const KEPT_PURPOSE = 'assistant.purpose';
+
+/** At start: the conversation open before the window was loaded again (its turns and purpose are read from the server), else the purpose of the one not sent yet. */
+export const startThread = (stored: (key: string) => string | null): Partial<Pick<Thread, 'conversation' | 'purpose' | 'pageOff'>> => {
   const id = stored(KEPT_CONVERSATION);
-  return id ? { conversation: id } : {};
+  if (id) return { conversation: id };
+  const purpose = PURPOSES.find((p) => p === stored(KEPT_PURPOSE));
+  return purpose ? { purpose, pageOff: true } : {};
 };
 
 /** A new conversation; one with a purpose starts without the page's reference. */

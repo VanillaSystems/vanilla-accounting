@@ -24,6 +24,8 @@ import { domainOf, lookupMailHost } from '../platform/sources/mail-host.js';
 import { restoreSource, SourceDraftError, takeSourceDraft } from '../platform/sources/draft.js';
 import { secretKey } from '../platform/sources/model.js';
 import { resolveMx } from 'node:dns/promises';
+import { answerQuestion, markTopic } from '../onboarding/store.js';
+import type { Answer } from '../onboarding/model.js';
 
 export interface Applied { undo?: WorkspaceChange; note?: ChangeNote }
 
@@ -201,5 +203,14 @@ export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceCh
     case 'dropMailbox': return dropMailbox(ws, c.id);
     case 'source': return source(ws, c);
     case 'dropSource': return dropSource(ws, c.id, c.previous);
+    case 'setupTopic': {
+      const { was } = markTopic(ws, c.topic, c.state, new Date().toISOString());
+      return { undo: { kind: 'setupTopic', topic: c.topic, state: was } };
+    }
+    case 'setupAnswer': {
+      const now = new Date().toISOString();
+      const { was } = answerQuestion(ws, c.question, c.value === null ? undefined : { value: c.value, at: now } as Answer, now);
+      return { undo: { kind: 'setupAnswer', question: c.question, value: was?.value ?? null } };
+    }
   }
 }

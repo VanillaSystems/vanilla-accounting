@@ -89,7 +89,7 @@ export const LAYOUT = {
   top: {
     'belege.workspace.yaml': 'company', 'mail.yaml': 'company', 'secret-terms.txt': 'company', 'AGENTS.md': 'company', 'CLAUDE.md': 'company',
     knowledge: 'company', modules: 'company', workflows: 'company', sources: 'company', 'beleg-import': 'company', history: 'company',
-    VERSION: 'app', collected: 'app', 'ledger.json': 'app', 'invoices.json': 'app', logos: 'app', data: 'app', 'master-data': 'app', 'transactional-data': 'app',
+    VERSION: 'app', collected: 'app', 'ledger.json': 'app', 'invoices.json': 'app', 'onboarding.json': 'app', logos: 'app', data: 'app', 'master-data': 'app', 'transactional-data': 'app',
   },
   masterData: { 'accounts.json': 'company' },
   year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', 'runs.jsonl': 'app', 'questions.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },

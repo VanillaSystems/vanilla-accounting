@@ -35,6 +35,10 @@ import { factsRefusal, refused, runSpec } from './reports.js';
 import { previewOf } from '../../reports/run.js';
 import { AttachmentError, attachmentFile, dropPending, findAttachments, saveAttachment } from '../../assistant/attachments.js';
 import { ATTACHMENT_MAX_MB } from '../../types/attachment.js';
+import { readProgress, rememberConversation } from '../../onboarding/store.js';
+import { setupFacts } from './onboarding.js';
+import { SETUP_PURPOSE, setupNote } from '../../onboarding/prompt.js';
+import { wordsIn } from '../../export/texts.js';
 
 export const router = Router();
 
@@ -82,6 +86,10 @@ router.get('/api/assistant/:id', (req, res) => {
  */
 async function waitingNow(language: string, purpose: Purpose | undefined): Promise<string> {
   if (purpose === 'collection-setup') return [PURPOSE_NOTE[purpose], await collectionNow(WS, language, readBooks().receipts)].join('\n\n');
+  if (purpose === 'onboarding') {
+    const books = readBooks();
+    return [PURPOSE_NOTE[purpose], setupNote(readProgress(WS), setupFacts(), wordsIn(language).t), await collectionNow(WS, language, books.receipts)].join('\n\n');
+  }
   const runs = new Map(engine().runs().map((r) => [r.id, r]));
   const tasks = automationView().tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
   const books = readBooks();
@@ -90,6 +98,7 @@ async function waitingNow(language: string, purpose: Purpose | undefined): Promi
 
 const PURPOSE_NOTE: Record<Purpose, string> = {
   'collection-setup': 'This conversation\'s purpose: setting up how receipts come in (the person started it with «Mit KI einrichten»). Stay on it.',
+  onboarding: SETUP_PURPOSE,
 };
 
 /** An attachment refused at the boundary: its words, and its code for the UI's. */
@@ -126,7 +135,9 @@ router.post('/api/assistant', async (req, res) => {
   res.on('close', () => { if (!res.writableFinished) stop.abort(); });
   const known = send.conversation ? readConversation(WS, send.conversation) : undefined;
   const purpose = known ? known.purpose : send.purpose;
-  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose), attachments }, emit, stop.signal);
+  // The setup conversation is kept with the checklist, so reopening the setup continues it.
+  const told = purpose === 'onboarding' ? (e: AssistantEvent) => { if (e.type === 'conversation') rememberConversation(WS, e.id, new Date().toISOString()); emit(e); } : emit;
+  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose), attachments }, told, stop.signal);
   res.end();
 });
 

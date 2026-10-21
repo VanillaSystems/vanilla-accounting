@@ -16,7 +16,7 @@ import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
 import { dictationLang, recognizer, withHeard, type DictationError } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
-import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange } from '../../types/assistant.js';
+import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
 import { ApiError, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
@@ -25,6 +25,10 @@ import type { Route } from './route.js';
 import { PRESETS } from '../../export/model.js';
 import { postDownload } from '../areas/export/state.js';
 import { ReportView } from '../areas/reports/custom/ReportView.js';
+import { SetupRail, SetupTitle } from '../onboarding/SetupRail.js';
+import { answerTyped, openSetupOnFirstStart } from '../onboarding/state.js';
+import { SetupConversation } from '../onboarding/SetupConversation.js';
+import { TOPIC_HAND } from '../../onboarding/hand.js';
 import { spanOf } from '../../reports/words.js';
 import { specData } from '../../reports/spec.js';
 import type { ReportResult } from '../../reports/result.js';
@@ -131,6 +135,11 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     }
     case 'bookAgain': return { text: failed ? `${t('assistant.c.bookAgainNot')} · ${failed}` : t('assistant.c.bookAgain'), go: { area: 'automation', view: 'runs' } };
     case 'report': return { text: failed ? `${t('assistant.report.not')} · ${failed}` : `${c.spec.title} · ${note?.report ? spanOf(note.report) : c.period ?? c.spec.period}` };
+    case 'setupTopic': {
+      const go = TOPIC_HAND[c.topic];
+      return { text: t('assistant.c.setupTopic', { topic: t(`onboarding.topic.${c.topic}`), state: t(`onboarding.state.${c.state}`) }), ...(go ? { go } : {}) };
+    }
+    case 'setupAnswer': return { text: t('assistant.c.setupAnswer', { question: t(`onboarding.question.${c.question}`) }) };
   }
 }
 
@@ -353,13 +362,21 @@ export function Sidebar({ page, books, onGo }: Props) {
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [s.turns]);
   useEffect(() => () => listening?.(), [listening]);
   useEffect(() => { if (!s.open) listening?.(); }, [s.open, listening]);
+  useEffect(() => { void openSetupOnFirstStart(); }, []);
+  const setup = s.purpose === 'onboarding';
   if (!s.open) return null;
 
   const at = /(?:^|\s)@(\S*)$/.exec(text);
   const offered = at ? search(automationCandidates(), at[1], 8).map((c) => c.ref) : [];
   const choose = (r: ContextRef) => { addContext(r); setText(text.replace(/@(\S*)$/, '')); setPick(0); area.current?.focus(); };
   const waiting = uploading(s);
-  const send = () => { if (!s.sending && !waiting && text.trim()) { listening?.(); void sendMessage(text, page); setText(''); } };
+  const send = () => {
+    if (s.sending || waiting || !text.trim()) return;
+    listening?.();
+    // In the setup, typed words that name one of the open question's answers answer it as a click would: no AI call.
+    if (!(setup && !s.files.length && answerTyped(text))) void sendMessage(text, page);
+    setText('');
+  };
   const listen = () => {
     if (!ear) return;
     if (listening) { listening(); return; }
@@ -369,11 +386,47 @@ export function Sidebar({ page, books, onGo }: Props) {
     setListening(() => stop);
   };
   const empty = !text.trim() || waiting;
+  const turnView = (turn: Turn, i: number) => (turn.role === 'me' ? (
+    <div key={i} className="msg me">
+      {turn.text}
+      {turn.context.length ? <small>{turn.context.map((r) => r.label).join(' · ')}</small> : null}
+      {turn.attachments?.length ? <span className="aisentfiles">{turn.attachments.map((a) => <SentFile key={a.id} a={a} conversation={s.conversation} />)}</span> : null}
+    </div>
+  ) : (
+    <Fragment key={i}>
+      <div className="msg ai">
+        <BotIcon />
+        <div>
+          {turn.tools.length ? (
+            <details className="aitools">
+              <summary>{t('assistant.details')}</summary>
+              {turn.tools.map((u, j) => <div key={j} className={`aitool${u.denied ? ' denied' : ''}`}>{u.name}{u.detail ? ` · ${u.detail}` : ''}{u.denied ? ` · ${t('assistant.denied')}` : ''}</div>)}
+            </details>
+          ) : null}
+          {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
+          {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
+          {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
+          {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
+          {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
+          {turn.error ? <div className="warnline">{turn.error}</div> : null}
+        </div>
+      </div>
+      {turn.done && wroteDraft(turn) ? (() => {
+        const d = draftsOf(turn);
+        return (
+          <>
+            {d.rules.map((path) => <RuleDraft key={path} path={path} onRules={() => onGo({ area: 'company', section: 'rules' })} />)}
+            {d.other || !d.rules.length ? <button type="button" className="linkbtn aidraft" onClick={() => onGo({ area: 'changes' })}>{t('assistant.toChanges')}</button> : null}
+          </>
+        );
+      })() : null}
+    </Fragment>
+  ));
 
   return (
-    <aside className="aside" aria-label={t('assistant.title')}>
+    <aside className={setup ? 'aside setup' : 'aside'} aria-label={t(setup ? 'onboarding.title' : 'assistant.title')}>
       <header className="aihead">
-        <b><BotIcon /> {t('assistant.title')}</b>
+        {setup ? <SetupTitle /> : <b><BotIcon /> {t('assistant.title')}</b>}
         <span className="aiacts">
           <button
             type="button" className="aiact" aria-pressed={s.listing} title={t(s.listing ? 'assistant.backToConversation' : 'assistant.pastConversations')}
@@ -383,6 +436,7 @@ export function Sidebar({ page, books, onGo }: Props) {
           <button type="button" className="aiact icon" aria-label={t('assistant.close')} title={`${t('assistant.close')} · ⌘J`} onClick={closeAssistant}>×</button>
         </span>
       </header>
+      {setup && !s.listing ? <SetupRail onGo={onGo} /> : null}
 
       {s.listing ? (
         <div className="ailist">
@@ -398,42 +452,7 @@ export function Sidebar({ page, books, onGo }: Props) {
       ) : (
         <div className="aiturns">
           {s.turns.length === 0 ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
-          {s.turns.map((turn, i) => (turn.role === 'me' ? (
-            <div key={i} className="msg me">
-              {turn.text}
-              {turn.context.length ? <small>{turn.context.map((r) => r.label).join(' · ')}</small> : null}
-              {turn.attachments?.length ? <span className="aisentfiles">{turn.attachments.map((a) => <SentFile key={a.id} a={a} conversation={s.conversation} />)}</span> : null}
-            </div>
-          ) : (
-            <Fragment key={i}>
-              <div className="msg ai">
-                <BotIcon />
-                <div>
-                  {turn.tools.length ? (
-                    <details className="aitools">
-                      <summary>{t('assistant.details')}</summary>
-                      {turn.tools.map((u, j) => <div key={j} className={`aitool${u.denied ? ' denied' : ''}`}>{u.name}{u.detail ? ` · ${u.detail}` : ''}{u.denied ? ` · ${t('assistant.denied')}` : ''}</div>)}
-                    </details>
-                  ) : null}
-                  {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
-                  {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
-                  {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
-                  {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
-                  {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
-                  {turn.error ? <div className="warnline">{turn.error}</div> : null}
-                </div>
-              </div>
-              {turn.done && wroteDraft(turn) ? (() => {
-                const d = draftsOf(turn);
-                return (
-                  <>
-                    {d.rules.map((path) => <RuleDraft key={path} path={path} onRules={() => onGo({ area: 'company', section: 'rules' })} />)}
-                    {d.other || !d.rules.length ? <button type="button" className="linkbtn aidraft" onClick={() => onGo({ area: 'changes' })}>{t('assistant.toChanges')}</button> : null}
-                  </>
-                );
-              })() : null}
-            </Fragment>
-          )))}
+          {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}
           <div ref={end} />
         </div>
@@ -464,7 +483,7 @@ export function Sidebar({ page, books, onGo }: Props) {
             {s.fileError ? <div className="warnline aifileerror" role="alert">{s.fileError}</div> : null}
             {heardError ? <div className="warnline aifileerror" role="alert">{t(`assistant.dictation.${heardError}`)}</div> : null}
             <textarea
-              ref={area} rows={3} value={text} placeholder={t('assistant.placeholder')} aria-label={t('assistant.message')}
+              ref={area} rows={3} value={text} placeholder={t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
               onChange={(e) => { setText(e.target.value); setPick(0); }}
               onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); attachFiles(files); } }}
               onKeyDown={(e) => {
