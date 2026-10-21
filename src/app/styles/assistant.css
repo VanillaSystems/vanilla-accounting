@@ -161,6 +161,8 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .rulepreview { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
 .rulepreview ul { gap: 2px; font-size: 12px; }
 .rulepreview li { overflow-wrap: anywhere; }
+.noteoffer { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
+.noteoffer ul { gap: 2px; font-size: 12px; }
 .ruledraft.done { flex-direction: row; align-items: center; gap: 10px; color: var(--muted); }
 .aiheld { margin-left: 0; }
 .aiheld ul { gap: 6px; }

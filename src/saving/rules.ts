@@ -17,6 +17,7 @@ import { chartOf, loadClassifyContext, ruleLine } from '../booking/classify.js';
 import { loadKnowledge, KNOWLEDGE_DIR } from '../knowledge/layers.js';
 import { loneWords, type BookingRule, type RuleFacts } from '../booking/rules.js';
 import { previewRules, ruleKey, type PlacedRow, type RulePreview } from '../booking/rule-preview.js';
+import { noteOffer, type NoteOffer } from '../knowledge/note-rules.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { hasBooks, loadBooks } from '../books/store.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
@@ -129,6 +130,8 @@ export interface DraftRules extends RuleDiff {
   confirm: boolean;
   /** What each added or changed rule would do on this year's payments, in the order of `added` then `changed`. */
   preview: RulePreview[];
+  /** For each added or changed rule drafted from a sentence of the notes, by ruleKey: whether code offers it (src/knowledge/note-rules.ts). Keeping refuses one not offered as it is. */
+  offers: Record<string, NoteOffer>;
 }
 
 /** Every rule of the workspace with `rows` standing for the file at `path`, each as the classifier places it. */
@@ -143,9 +146,24 @@ export function draftRules(ws: Workspace, path: string): DraftRules | undefined 
   if (!existsSync(draft)) return undefined;
   const after = read(draft);
   const { diff: d, preview } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
-  const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0);
-  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0), preview };
+  const offers = offersOf(ws, d, preview, after);
+  const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0) && !notOffered(offers).length;
+  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0 || rebooking(offers).length > 0), preview, offers };
 }
+
+/** The checks of each added or changed rule drafted from the notes, against every rule of the workspace with the draft applied. */
+function offersOf(ws: Ws, d: RuleDiff, preview: readonly RulePreview[], after: string): Record<string, NoteOffer> {
+  const targets = [...d.added, ...d.changed].filter((r) => r.rule?.note);
+  if (!targets.length || d.broken) return {};
+  const rows = rulesWith(ws, d.path, rulesIn(d.path, after, ruleFactsOf(ws, d.path.startsWith(`${KNOWLEDGE_DIR}/rules/`) ? undefined : basename(d.path, '.yaml')))).map((r) => r.row);
+  const adjusting = (r: RuleRow) => d.changed.includes(r) && !!d.before[d.changed.indexOf(r)].rule?.note;
+  return Object.fromEntries(targets.flatMap((r) => { const o = noteOffer(r, preview.find((p) => p.key === ruleKey(r)), rows, adjusting(r)); return o ? [[ruleKey(r), o]] : []; }));
+}
+
+/** The rules from the notes code does not offer as drafted: they stay a note, or only an ask rule may carry them out. */
+const notOffered = (offers: Record<string, NoteOffer>): string[] => Object.entries(offers).filter(([, o]) => o.offer !== 'rule').map(([k]) => k);
+/** Rules adjusted to a changed sentence that book this year's payments otherwise than they are booked: keeping them asks for confirmation. */
+const rebooking = (offers: Record<string, NoteOffer>): string[] => Object.entries(offers).filter(([, o]) => o.offer === 'rule' && o.otherwise).map(([k]) => k);
 
 /** A diff with what its added and changed rules would do on this year's payments, and which of them spread over decisions made (RulePreview.spread). */
 export function withPreview(ws: Workspace, d: RuleDiff, after: string): { diff: RuleDiff; preview: RulePreview[] } {
@@ -169,7 +187,7 @@ function preview(ws: Workspace, path: string, after: string, targets: RuleRow[])
 
 export type KeepResult =
   | { ok: true; committed: boolean }
-  | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed'; message: string };
+  | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
 
 const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
 
@@ -185,7 +203,8 @@ function subjectOf(ws: Workspace, d: RuleDiff): string {
   return (parts.join('; ') || `Regeln: ${d.path}`).slice(0, 200);
 }
 
-async function commit(ws: Ws, message: string, path: string): Promise<boolean> {
+/** Saves one file of the company's customizing at once, as the person's save (a rule kept, notes written). */
+export async function commit(ws: Ws, message: string, path: string): Promise<boolean> {
   const repo = await repositoryAt(ws.paths.repository);
   if (!repo) return false;
   return commitExactly(repo, `${message}\n\n${CUSTOMIZING.join('\n')}`, [relative(repo, join(ws.paths.root, path))]);
@@ -202,7 +221,12 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   if (!existsSync(draft)) return { ok: false, refusal: 'gone', message: 'Diesen Entwurf gibt es nicht mehr.' };
   const after = read(draft);
   if (hashOf(after) !== basis) return { ok: false, refusal: 'stale', message: 'Der Entwurf hat sich seit der Anzeige geändert.' };
-  const { diff: d } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
+  const { diff: d, preview } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
+  const offers = offersOf(ws, d, preview, after);
+  const stays = notOffered(offers);
+  if (stays.length && !d.broken && !d.refused.length) return { ok: false, refusal: 'note', message: `Aus den Notizen nicht als Regel angeboten: ${stays.map((k) => k.split('#').at(-1)).join(', ')} (bleibt eine Notiz oder wird eine Frage-Regel)` };
+  const rebooks = rebooking(offers);
+  if (rebooks.length && !confirmed) return { ok: false, refusal: 'wide', message: `Regel ${rebooks.map((k) => k.split('#').at(-1)).join(', ')} bucht Zahlungen dieses Jahres anders, als sie heute gebucht sind: auf ihrer Karte ansehen und bestätigen` };
   const why = rulesRefusal([d], confirmed);
   if (why) return { ok: false, refusal: (d.wide.length || d.spread.length) && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
   const to = join(ws.paths.root, path);

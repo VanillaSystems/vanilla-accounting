@@ -11,6 +11,7 @@
  *   POST /api/rules/correction        { ref }: that change drafted into the rule's file; the answer names the file for its card
  *   GET  /api/rules/hand?payment=     the form of a rule made by hand, started from that payment
  *   POST /api/rules/hand              a HandRule: drafted into its file for the same card; refused when the app cannot carry it out
+ *   POST /api/rules/note              a NoteRuleCommand: the rule of a sentence of a partner's notes (or its adjustment) drafted into the partner's file for the card
  *
  * A rule the person keeps here takes effect at once: the click is their switching on
  * (docs/0.4.0/workflows.md "Changing a workflow"), so a workflow that ran as switched on before is
@@ -28,6 +29,8 @@ import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { correctionOffer, draftCorrectionRule } from '../../saving/correction-rule.js';
 import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.js';
+import { draftNoteRule, type NoteRuleCommand } from '../../saving/note-rule.js';
+import type { RuleRefusal } from '../../booking/rules.js';
 import { keepSwitchedOn, openSwitch } from '../../workflows/switch-on.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { engine, queueCommit } from './automation.js';
@@ -79,7 +82,7 @@ function held(waiting: boolean): Record<string, number> {
 }
 
 /** Runs `change` in the commit queue; the workflows that ran as switched on before it run switched on after it. */
-function keepingSwitchedOn<T>(change: () => Promise<T>): Promise<T> {
+export function keepingSwitchedOn<T>(change: () => Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     void queueCommit(async () => {
       try {
@@ -158,7 +161,26 @@ router.post('/api/rules/hand', (req, res) => {
   if (!h || !h.match || !MATCHES.has(h.match.kind) || typeof h.account !== 'string' || (h.vat !== null && typeof h.vat !== 'string')) throw new RequestError(400, 'Regel erwartet.');
   const out = draftHandRule(WS, h);
   if (out.ok) { res.json({ path: out.path }); return; }
+  throw refused(out.refusal);
+});
+
+/** A rule the app cannot carry out, as the UI says it. */
+function refused(r: RuleRefusal): RequestError {
+  if (r.code === 'codeNotTaken') return new RequestError(400, `Den Steuercode ${r.params.vat} nimmt das Formular dieser Firma nicht.`, { code: 'codeNotTaken', params: { code: r.params.vat, method: r.params.method } });
+  return new RequestError(400, `Diese Regel kann die App nicht ausführen (${r.code}).`, { code: 'rule', params: { refusal: r } });
+}
+
+router.post('/api/rules/note', (req, res) => {
+  const c = req.body as NoteRuleCommand;
+  const share = c?.then?.private;
+  if (!c || typeof c.partner !== 'string' || typeof c.sentence !== 'string' || !c.then || typeof c.then.account !== 'string' || (c.then.vat !== null && typeof c.then.vat !== 'string')
+    || (share !== undefined && typeof share !== 'number') || (c.then.ask !== undefined && typeof c.then.ask !== 'string') || (c.replaces !== undefined && typeof c.replaces !== 'string')) {
+    throw new RequestError(400, 'partner, sentence und then { account, vat } erwartet.');
+  }
+  const out = draftNoteRule(WS, c);
+  if (out.ok) { res.json({ path: out.path }); return; }
   const r = out.refusal;
-  if (r.code === 'codeNotTaken') throw new RequestError(400, `Den Steuercode ${r.params.vat} nimmt das Formular dieser Firma nicht.`, { code: 'codeNotTaken', params: { code: r.params.vat, method: r.params.method } });
-  throw new RequestError(400, `Diese Regel kann die App nicht ausführen (${r.code}).`, { code: 'rule', params: { refusal: r } });
+  if (r.code === 'sentence') throw new RequestError(400, 'Kein Satz aus den Notizen.');
+  if (r.code === 'replaces') throw new RequestError(404, `Regel ${r.params.id} gibt es in der Datei des Partners nicht.`);
+  throw refused(r);
 });

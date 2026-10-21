@@ -63,6 +63,8 @@ export interface BookingRule {
   off: boolean;
   source?: string;
   why?: string;
+  /** The sentence of the partner's notes the rule carries out, quoted as it stood when the rule was kept (`source: notes <date>`). */
+  note?: string;
 }
 
 import type { RuleRefusal } from '../types/rule-refusal.js';
@@ -186,6 +188,7 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
       id, when, then, off: raw.off === true,
       ...(text(raw.source) ? { source: text(raw.source) } : {}),
       ...(text(raw.why) ? { why: text(raw.why) } : {}),
+      ...(typeof raw.note === 'string' && raw.note.trim() ? { note: raw.note.trim() } : {}),
     },
   };
 }

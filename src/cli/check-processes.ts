@@ -11,6 +11,7 @@
  */
 
 import { isExecutable } from '../booking/rules.js';
+import { noteRuleProblems } from '../knowledge/note-rules.js';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { parse } from 'yaml';
@@ -197,6 +198,7 @@ function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) =
       if (!rule[field] && !(executable && field === 'when')) err(`${at}: rule has no ${field}`);
     }
     if (rule.status && !RULE_STATUSES.has(rule.status)) err(`${at}: status must be one of ${[...RULE_STATUSES].join(', ')}`);
+    for (const problem of noteRuleProblems(rule)) err(`${at}: ${problem}`);
     if (rule.test !== undefined) {
       if (!opts.gates) err(`${at}: only a gate can carry test:`);
       else if (!(GATE_TESTS as readonly string[]).includes(rule.test)) err(`${at}: test "${rule.test}" is not in src/knowledge/gates.ts — add it there or fix the name`);

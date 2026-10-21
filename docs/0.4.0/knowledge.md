@@ -67,6 +67,18 @@ and keeps the machine parts small or folded.
    a sentence in the notes that a rule could carry out («Jutesäcke und Verpackung auf 4210 mit
    8.1 %», «zur Hälfte privat»), it offers the rule here: «Aus den Notizen: … als Regel?
    Behalten». Keeping it goes through the rule card as today (preview, refusals).
+   - **When the AI offers one** (decided 2026-10-21). Not by a confidence score, but by checks
+     the code makes: the sentence says one thing for one partner (or payer) and fits a rule's
+     shape whole (account, VAT code, private share, fees, ask); no rule already says it; and the
+     rule's preview over the open year's payments books them as they are booked today, or as a
+     person corrected them. When the preview shows payments booked otherwise
+     (RulePreview.spread) or the sentence leaves a choice open («meistens», «je nach Beleg»), the
+     sentence stays a note, or the AI offers an ask rule («frag mich bei …»).
+   - **The sentence is marked** (decided 2026-10-21). A kept rule marks its sentence in the notes
+     with a small sign «führt die App aus», linked to the rule. The notes stay the source: when
+     the person changes a marked sentence, the app never changes the rule by itself; the rule
+     card asks «Notiz geändert: Regel anpassen?» with the rule as it is and as the new sentence
+     would make it. Switching the rule off or deleting it removes the mark, never the sentence.
 4. **Vorschläge der KI (n)**, one folded batch: sentences the AI drew from payments and receipts,
    with what it read them from. «In die Notizen übernehmen» merges the sentence into the prose;
    «Verwerfen» drops it. Proposals never become separate items.
@@ -233,6 +245,26 @@ from the index and the runs; they add no file to the workspace.
     the company works with it) and every step's rules from `processes/*.guide.yaml`, folded. What
     the app learned from corrections and wishes shows where it acts, under «Das macht die App
     selbst» of each page, with its count.
+
+14. **Rules from the notes.** Built 2026-10-21 (issue #10, part 1). A rule kept from a sentence
+    quotes it, `note: "…"` beside `when` and `then`, with `source: notes <date>`; the lint
+    (src/knowledge/note-rules.ts `noteRuleProblems`) wants both together, on a rule with a `then`
+    map. On a partner page, pointing at a sentence offers «Als Regel vorschlagen»: a form starts
+    with the account, code and private share the sentence names (`guessBooking`, a first guess
+    only), «Vorschau» drafts the rule into the partner's file (src/saving/note-rule.ts, POST
+    /api/rules/note) for the usual card, «Die KI fragen» hands the sentence to the AI sidebar,
+    whose draft gets the same card. The card's checks (`noteOffer`) decide as «When the AI offers
+    one» says: no partner or payer, a rule switched on that already says it, or payments of the
+    open year booked otherwise today (RulePreview.otherwise, payments the rule booked itself not
+    counted) keep it a note; open-choice words offer it only as an ask rule («Als Frage-Regel
+    entwerfen»). «Behalten» refuses what is not offered. A rule switched on marks the sentence
+    «führt die App aus», linked to its line under «Das macht die App selbst». A changed sentence
+    shows «Notiz geändert: Regel anpassen?» on that line with the sentence before and the most
+    similar sentence now; «Regel anpassen» drafts the rule as the new sentence makes it (its
+    condition and id kept), and the card shows it as it is and as it would be. An adjustment is
+    the person's decision, so payments booked otherwise ask «Trotzdem behalten» instead of
+    keeping it a note. Switching off or deleting removes the mark; the notes are never written by
+    a rule command.
 
 **Not in the first cut** (2026-10-21):
 

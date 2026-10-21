@@ -73,7 +73,17 @@ export interface RulePreview {
   loneWords: string[];
   /** The payments it holds for are booked today on several other accounts or privately: keeping asks for confirmation. */
   spread?: RuleSpread;
+  /**
+   * A booking rule's payments booked today (as decided before the AI sidebar moved them) otherwise
+   * than it would book them: account, code or amount. Payments the rule itself booked do not count.
+   * A rule from the notes is offered only when there are none (src/knowledge/note-rules.ts).
+   */
+  otherwise?: number;
 }
+
+const lineKey = (l: RuleLine) => `${l.account}|${l.vat ?? ''}|${Math.abs(l.amount).toFixed(2)}`;
+/** Whether two bookings of a payment are the same lines, in any order. */
+export const sameLines = (a: readonly RuleLine[], b: readonly RuleLine[]): boolean => JSON.stringify(a.map(lineKey).sort()) === JSON.stringify(b.map(lineKey).sort());
 
 /** A rule of the books with the draft applied, and the row it reads as. */
 export interface PlacedRow { row: RuleRow; placed: PlacedRule }
@@ -159,6 +169,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
     const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : []), ...(t.booking.fees ? [t.booking.fees.account] : [])] : []);
     const others: string[] = [];
     const elsewhere: BankTransaction[] = [];
+    let otherwise = 0;
     for (const tx of hits) {
       const p = facts.get(tx.ref)!;
       for (const other of on) {
@@ -171,9 +182,12 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       }
       // An ask rule asks first: it overrules nobody.
       if (t.kind === 'book') {
-        const off = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts), true).map((l) => l.account).filter((a) => a && !own.has(a));
+        const decided = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts), true);
+        const off = decided.map((l) => l.account).filter((a) => a && !own.has(a));
         if (off.length) elsewhere.push(tx);
         for (const a of off) if (!others.includes(a)) others.push(a);
+        const byItself = books.journalEntries.filter((e) => e.transactionRef === tx.ref).every((e) => e.rule === target.row.id && e.origin !== 'manual');
+        if (decided.length && !byItself && !sameLines(decided, wouldBook(books, tx, t.booking, context))) otherwise++;
       }
       if (examples.length < PREVIEW_EXAMPLES) examples.push(payment(tx, p));
     }
@@ -183,6 +197,10 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       private: isPrivate,
       payments: elsewhere.filter((tx) => !examples.some((x) => x.ref === tx.ref)).slice(0, PREVIEW_EXAMPLES).map((tx) => payment(tx, facts.get(tx.ref)!)),
     } : undefined;
-    return { key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed), ...(spread ? { spread } : {}) };
+    return {
+      key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed),
+      ...(spread ? { spread } : {}),
+      ...(t.kind === 'book' ? { otherwise } : {}),
+    };
   });
 }

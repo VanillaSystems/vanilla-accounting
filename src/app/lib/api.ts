@@ -39,6 +39,7 @@ import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResul
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
+import type { NoteRuleCommand } from '../../saving/note-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
 import { refusalText } from '../../reports/words.js';
 import type { ReportResult } from '../../reports/result.js';
@@ -338,6 +339,8 @@ export const api = {
   draftCorrection: (ref: string) => request<{ path: string }>('POST', '/api/rules/correction', { ref }),
   handStart: (payment: string) => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}`),
   draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
+  /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */
+  draftNoteRule: (c: NoteRuleCommand) => request<{ path: string }>('POST', '/api/rules/note', c),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
     const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });

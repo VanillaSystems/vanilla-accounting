@@ -14,6 +14,7 @@ import type { RuleNames, RuleWords } from '../../../booking/rules.js';
 import type { RuleLine } from '../../../booking/classify.js';
 import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
 import type { DraftView, RulesView } from '../../../saving/rules.js';
+import type { NoteOffer, NoteReason } from '../../../knowledge/note-rules.js';
 import type { ShareOffer } from '../../../saving/share-rule.js';
 import type { CorrectionOffer as CorrectionOfferView } from '../../../saving/correction-rule.js';
 import type { Nav } from '../index.js';
@@ -284,6 +285,10 @@ export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string;
         ))}
       </ul>
       {d.preview.map((p) => <Preview key={p.key} p={p} names={names} />)}
+      {[...d.added, ...d.changed].map((r) => {
+        const offer = d.offers[`${r.step}#${r.id}`];
+        return offer && r.rule?.note ? <NoteOfferLine key={`n${r.step}${r.id}`} row={r} offer={offer} onDrafted={() => void api.draftRules(path).then(setD, () => setD(null))} /> : null;
+      })}
       {d.others && business ? <span className="m">{t('rules.draft.others', { name: names.business(business) ?? business })}</span> : null}
       {d.broken ? <span className="warnline">{t('rules.draft.broken', { why: d.broken })}</span> : null}
       {d.refused.map((r) => <span key={`x${r.id}`} className="warnline">{t('rules.draft.refused', { id: r.id || '?', why: refusalText(r) })}</span>)}
@@ -293,6 +298,43 @@ export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string;
         <button type="button" className="btn ghost" disabled={busy} onClick={() => void go('discard')}>{t('rules.draft.discard')}</button>
         {nav && !d.keepable ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes', commit: 'draft', file: path }, query: {} })}>{t('rules.draft.diff')}</button> : null}
       </span>
+    </div>
+  );
+}
+
+/** Why a rule from the notes is not offered, in words. */
+const reasonText = (w: NoteReason) => (w.code === 'openChoice' ? t('rules.note.why.openChoice', { words: w.words.map((x) => `«${x}»`).join(', ') })
+  : w.code === 'bookedOtherwise' ? t('rules.note.why.bookedOtherwise', { n: w.n })
+    : w.code === 'alreadySaid' ? t('rules.note.why.alreadySaid', { rule: w.rule }) : t('rules.note.why.notOnePartner'));
+
+/**
+ * A rule drafted from a sentence of the notes: the sentence it quotes, and, when code does not offer
+ * it as drafted, why (src/knowledge/note-rules.ts): it stays a note, or only an ask rule may carry it
+ * out, which «Als Frage-Regel entwerfen» drafts. A rule adjusted to its changed sentence says how
+ * many of this year's payments it would book otherwise than they are booked.
+ */
+function NoteOfferLine({ row, offer, onDrafted }: { row: RuleRow; offer: NoteOffer; onDrafted(): void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const rule = row.rule!;
+  const toAsk = async () => {
+    const b = rule.then.booking;
+    if (!b || !row.business) return;
+    setBusy(true);
+    try {
+      await api.draftNoteRule({ partner: row.business, sentence: rule.note!, replaces: row.id, then: { account: b.account, vat: b.vat, ...(b.private ? { private: b.private } : {}), ask: t('rules.note.askQuestion', { sentence: rule.note! }) } });
+      onDrafted();
+    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="noteoffer" data-offer={offer.offer}>
+      <span className="m">{t('rules.note.from', { sentence: rule.note! })}</span>
+      {offer.offer !== 'rule' ? (
+        <span className="warnline" data-testid="note-offer">{t(offer.offer === 'ask' ? 'rules.note.onlyAsk' : 'rules.note.stays')} {offer.why.map(reasonText).join(' ')}</span>
+      ) : null}
+      {offer.offer === 'rule' && offer.otherwise ? <span className="warnline" data-testid="note-rebooks">{t('rules.note.rebooks', { n: offer.otherwise })}</span> : null}
+      {error ? <span className="warnline">{error}</span> : null}
+      {offer.offer === 'ask' && row.business ? <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-act="note-to-ask" onClick={() => void toAsk()}>{t('rules.note.toAsk')}</button></span> : null}
     </div>
   );
 }

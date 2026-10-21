@@ -39,6 +39,8 @@ export type Layer = 'app' | 'workspace';
 export type Rule = {
   id?: string; when?: string; then?: string; why?: string; source?: string;
   status?: string; procedure?: string; test?: string;
+  /** The sentence of the notes an executable rule carries out (src/booking/rules.ts BookingRule.note). */
+  note?: unknown;
 };
 export type Section = {
   goal?: string; gates?: Rule[]; rules?: Rule[]; precedents?: unknown[]; ask_human_when?: string[];
