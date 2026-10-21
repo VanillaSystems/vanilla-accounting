@@ -3081,7 +3081,7 @@ export default {
     'drop.privateAccount': 'Non, privé',
     'drop.whichAccount': 'À quel compte {currency} appartient ce relevé ?',
     'drop.whichAccountIban': 'À quel compte {currency} appartient le relevé de {iban} ?',
-    'drop.keepIban': 'Enregistrer l’IBAN sur le compte : le prochain relevé le trouvera tout seul',
+    'drop.keepIban': 'Enregistrer l’IBAN sur le compte',
     'drop.otherAccount': 'Ajouter un autre compte',
     'drop.reason.private': 'mis de côté : un compte privé n’a pas sa place dans la comptabilité de l’entreprise',
     'drop.toRuns': 'Voir dans les exécutions →',

@@ -66,7 +66,7 @@ export function documentKind(text: string, words: DocumentsData): DocumentVerdic
 
 /**
  * A bank statement says so in its first lines, before any word of a receipt, of a document beside
- * one or of one that is none: «Kontoauszug», «CHF statement», «Relevé de compte». A «Gutschrift»
+ * one or of one that is none: «Kontoauszug», a currency account's «… statement», «Relevé de compte». A «Gutschrift»
  * line below the title leaves it a statement; an invoice that mentions a statement stays an invoice.
  */
 export function namesStatement(text: string, words: DocumentsData): boolean {

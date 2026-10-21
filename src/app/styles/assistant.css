@@ -119,7 +119,8 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .droprow .dx { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; }
 .droprow .dacts.dchoose { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .droprow .dchoose .btn .mono { color: var(--muted); margin-left: 4px; }
-.droprow .dkeep { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; cursor: pointer; }
+.droprow .dkeep { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; white-space: nowrap; cursor: pointer; }
+.droprow .dkeep input { width: auto; margin: 0; }
 .dpw { display: flex; gap: 6px; }
 .dpw input { width: 150px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .dropdlg .dfoot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }

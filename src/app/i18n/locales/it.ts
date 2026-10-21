@@ -3081,7 +3081,7 @@ export default {
     'drop.privateAccount': 'No, privato',
     'drop.whichAccount': 'A quale conto {currency} appartiene l’estratto?',
     'drop.whichAccountIban': 'A quale conto {currency} appartiene l’estratto di {iban}?',
-    'drop.keepIban': 'Salvare l’IBAN sul conto: il prossimo estratto lo trova da solo',
+    'drop.keepIban': 'Salvare l’IBAN sul conto',
     'drop.otherAccount': 'Aggiungere un altro conto',
     'drop.reason.private': 'messo da parte: un conto privato non va nella contabilità della ditta',
     'drop.toRuns': 'Vedi nelle esecuzioni →',

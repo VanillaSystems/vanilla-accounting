@@ -82,7 +82,8 @@ export function accountForStatement(accounts: readonly LedgerBankAccount[], s: S
   const folderKnown = imported.some((a) => a.bank.toLowerCase() === s.folder.toLowerCase());
   const inCurrency = imported.filter((a) => a.currency === s.currency && !a.iban);
   if (!folderKnown && inCurrency.length === 1) return { account: inCurrency[0], by: 'currency' };
-  if (!folderKnown && inCurrency.length > 1) {
+  // A file in no bank's folder (an upload, a drop) is asked; a folder named for a bank the books lack says it is that bank's.
+  if (!s.folder && inCurrency.length > 1) {
     const refusal: StatementProblem = { kind: 'whichAccount', currency: s.currency, ...(iban ? { iban } : {}), accounts: inCurrency.map((a) => ({ account: a.account, bank: a.bank, label: a.label })) };
     return { problem: `statement of ${of} could be any of ${inCurrency.length} accounts in ${s.currency} without IBAN (${inCurrency.map((a) => `${a.bank} ${a.account}`).join(', ')}). Add its IBAN${iban ? ` ${iban}` : ''} to the right one in bankAccounts of belege.workspace.yaml, or put the file into that bank's folder.`, refusal, ...unknownOf(refusal) };
   }

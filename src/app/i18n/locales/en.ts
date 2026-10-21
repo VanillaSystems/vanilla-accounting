@@ -3081,7 +3081,7 @@ export default {
     'drop.privateAccount': 'No, private',
     'drop.whichAccount': 'Which {currency} account is this statement for?',
     'drop.whichAccountIban': 'Which {currency} account is the statement of {iban} for?',
-    'drop.keepIban': 'Save the IBAN on the account: the next statement finds it by itself',
+    'drop.keepIban': 'Save the IBAN on the account',
     'drop.otherAccount': 'Add another account',
     'drop.reason.private': 'set aside: a private account does not belong in the firm’s books',
     'drop.toRuns': 'See it in the runs →',

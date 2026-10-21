@@ -3078,7 +3078,7 @@ export const messages = {
   'drop.privateAccount': 'Nein, privat',
   'drop.whichAccount': 'Zu welchem {currency}-Konto gehört der Auszug?',
   'drop.whichAccountIban': 'Zu welchem {currency}-Konto gehört der Auszug von {iban}?',
-  'drop.keepIban': 'IBAN auf dem Konto speichern: der nächste Auszug findet es selbst',
+  'drop.keepIban': 'IBAN auf dem Konto speichern',
   'drop.otherAccount': 'Ein anderes Konto hinzufügen',
   'drop.reason.private': 'beiseitegelegt: ein privates Konto gehört nicht in die Bücher der Firma',
   'drop.toRuns': 'In den Läufen ansehen →',
