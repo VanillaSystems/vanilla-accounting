@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 import { mergeIndex, withinBooks, type Scan } from '../src/books/bank-import.js';
 import { moduleActor, update, type Books } from '../src/books/store.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
+import { sealOf } from '../src/books/seal.js';
 
 const CLOSED_THROUGH = '2026-06-30';
 
@@ -220,4 +224,18 @@ test('a vanished leg of a closed split card charge is kept and reported while it
   const out = mergeIndex(prev, scan({ bankTransactions: [...scan().bankTransactions, legs[1]] }));
   assert.deepEqual(out.index.transactions.filter((t) => t.ref === 'CARD-123').sort((a, b) => a.currency.localeCompare(b.currency)), [legs[1], legs[0]]);
   assert.deepEqual(out.vanishedClosedTransactions, [legs[0]]);
+});
+
+test('re-reading a Wise camt053 gives open transactions their Wise id and leaves filed ones, and their seal, as filed (#69)', () => {
+  const xml = readFileSync(join(import.meta.dirname, 'fixtures/camt053/uuid_statement_wise_USD.xml'), 'utf8');
+  const read = readCamt(xml).statements.flatMap((s) => transactionsOf(s, { bank: 'Wise', statements: 'wise' })).slice(0, 2);
+  const open = read.map((t) => ({ ...t, ref: `${t.ref}-OPEN`, date: '2026-08-07' }));
+  const asFiled = [...read, ...open].map(({ bankTxId: _, ...t }) => t);
+  const prev = previousIndex({ transactions: asFiled });
+  const sealed = sealOf(prev, '2026-Q2', '2026-07-01').sha256;
+  const merged = merge(prev, scan({ bankTransactions: [...read, ...open], wiseRefs: new Map([['CARD-7200000001', 'Rechnung 4711']]) }));
+  assert.equal(sealOf(merged, '2026-Q2', '2026-07-01').sha256, sealed, 'the seal of the filed quarter holds');
+  assert.deepEqual(read.map((t) => byRef(merged, t.ref)?.bankTxId), [undefined, undefined], 'a filed transaction keeps what it was filed with');
+  assert.deepEqual(open.map((t) => byRef(merged, t.ref)?.bankTxId), ['CARD-7200000001', 'FEE-CARD-7200000001']);
+  assert.equal(byRef(merged, open[0].ref)?.reference, 'Rechnung 4711', 'the statement PDF\'s reference is found by the Wise id too');
 });

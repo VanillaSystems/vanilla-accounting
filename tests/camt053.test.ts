@@ -66,15 +66,16 @@ test('a single TxDtls lends its remittance text and QR reference to the entry', 
   assert.deepEqual(txs.find((t) => t.ref === '90000000001')?.direction, 'CRDT');
 });
 
-test('Wise entries: AcctSvcrRef, DtTm date, native currency, fee type', () => {
+test('Wise entries: AcctSvcrRef, DtTm date, native currency, fee type, the Wise id beside the ref (#69)', () => {
   const txs = parseFile(WISE_USD);
   assert.equal(txs.length, 6);
   assert.deepEqual(txs.slice(0, 2), [
     { ref: 'WUSD000001', bank: 'Wise', date: '2026-01-07', amount: 9.5, currency: 'USD', direction: 'DBIT',
-      description: 'Card transaction of 7.60 CHF issued by Example Hosting INTERNET (fee: 0.02 USD)' },
+      description: 'Card transaction of 7.60 CHF issued by Example Hosting INTERNET (fee: 0.02 USD)', bankTxId: 'CARD-7200000001' },
     { ref: 'WUSD000002', bank: 'Wise', date: '2026-01-07', amount: 0.02, currency: 'USD', direction: 'DBIT',
-      description: 'Wise Charges for: CARD-7200000001', type: 'wise-fee' },
+      description: 'Wise Charges for: CARD-7200000001', type: 'wise-fee', bankTxId: 'FEE-CARD-7200000001' },
   ]);
+  assert.equal(parse(read(WISE_USD), 'Other', 'camt053').filter((t) => t.bankTxId).length, 0, 'another bank\'s transaction code is no id');
   assert.equal(txs.filter((t) => t.type === 'wise-fee').length, 2);
 });
 

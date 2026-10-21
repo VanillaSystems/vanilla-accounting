@@ -165,6 +165,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const counterpartyIban = String(sideAccount?.Id?.IBAN ?? '').replace(/\s+/g, '').toUpperCase();
     // Kept even when the text repeats it («Belastung Marco Rossi»): routing and rules read this field.
     const counterparty = named;
+    const wiseId = account.statements === 'wise' ? String(entry.BkTxCd?.Prtry?.Cd ?? '').trim() : '';
 
     return {
       ref,
@@ -178,6 +179,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       ...(reference !== undefined && String(reference).trim() ? { reference: String(reference).trim() } : {}),
       ...(counterparty ? { counterparty } : {}),
       ...(counterpartyIban ? { counterpartyIban } : {}),
+      ...(wiseId && wiseId !== ref ? { bankTxId: wiseId } : {}),
       ...(account.statements === 'wise' && description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
     };
   });

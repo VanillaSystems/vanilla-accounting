@@ -367,6 +367,13 @@ export interface BankTransaction {
    */
   counterpartyIban?: string;
   /**
+   * The bank's own id of the movement when the ref is another one: Wise names its transactions
+   * CARD-…, FEE-CARD-… on its statements while the ref is its statement reference (WEUR…). It pairs a
+   * fee with its payment (src/booking/separate-fee.ts). Only open-period transactions get it: a
+   * filed one keeps what it was filed with.
+   */
+  bankTxId?: string;
+  /**
    * The payment waits for a person (r10h-5): its booking was deleted on purpose, by hand or on a
    * wish in the KI sidebar, so no run books it again. The mark goes with the next booking on it,
    * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
