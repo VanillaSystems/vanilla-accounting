@@ -268,10 +268,11 @@ export function workspaceAt(root: string): Workspace {
  *      the home directory), from
  *      the environment or else from the app's own .env (an empty value skips both)
  *   2. walking up from the cwd to the first such directory
- * Memoized: every CLI and the API resolve it once per process.
+ * Memoized: every CLI and the API resolve it once per process, and books the desktop app opened
+ * first (openWorkspaceAt) are the ones it returns. `locate` finds the root when nothing is open yet.
  */
-export function openWorkspace(): Workspace {
-  return (opened ??= workspaceAt(locateWorkspace()));
+export function openWorkspace(locate: () => string = locateWorkspace): Workspace {
+  return (opened ??= workspaceAt(locate()));
 }
 let opened: Workspace | undefined;
 
