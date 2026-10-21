@@ -2,7 +2,9 @@
  * A workflow drawn from its declarations (graphOf in src/workflows/model.ts, the mockup's layout):
  * one card per step, coloured by kind, the AI's steps marked, edges labelled with their outcome,
  * back edges routed below. A run's path is drawn hot when `path` is given.
+ * A graph wider than its frame scrolls inside it, the hidden side faded so it never reads as cut off.
  */
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { graphOf, END, textIn, type GraphNode, type WorkflowDecl } from '../../../workflows/model.js';
 import { language, t } from '../../i18n/index.js';
 
@@ -41,47 +43,66 @@ export function Graph({ workflow, selected, path, at, onSelect }: {
   const lang = language();
   const label = (n: GraphNode) => (n.id === END ? t('automation.end') : textIn(workflow.steps.find((s) => s.id === n.id)!.label, lang));
   return (
-    <div className="wfgraph" style={{ width, height }}>
-      <svg width={width} height={height} aria-hidden="true">
-        <defs>
-          <marker id="wf-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" /></marker>
-        </defs>
-        {lines.map((e) => {
-          const a = pos.get(e.from)!, b = pos.get(e.to)!;
-          const hot = walked.has(`${e.from}>${e.to}`);
-          const arc = Math.min(a.y, b.y) - 26;
-          const d = e.back
-            ? `M${a.x + W / 2} ${a.y + H} C${a.x + W / 2} ${height - PAD - 6} ${b.x + W / 2} ${height - PAD - 6} ${b.x + W / 2} ${b.y + H + 2}`
-            : skips(e)
-              ? `M${a.x + W / 2} ${a.y} C${a.x + W / 2} ${arc} ${b.x + W / 2} ${arc} ${b.x + W / 2} ${b.y - 2}`
-              : `M${a.x + W} ${a.y + H / 2} C${(a.x + W + b.x) / 2} ${a.y + H / 2} ${(a.x + W + b.x) / 2} ${b.y + H / 2} ${b.x - 2} ${b.y + H / 2}`;
-          const k = sourceSide.get(e.from)!.indexOf(e);
-          const lx = e.back || skips(e) ? (a.x + b.x + W) / 2 : atSource(e) ? a.x + W + 6 : b.x - 6;
-          const ly = e.back ? height - PAD - 10 : skips(e) ? arc + 16 : atSource(e) ? a.y + H / 2 + 14 + k * 13 : b.y + H / 2 - 7;
-          return (
-            <g key={`${e.from}>${e.to}`} className={`wfedge${hot ? ' hot' : ''}${e.back ? ' back' : ''}`}>
-              <path d={d} markerEnd="url(#wf-ah)" />
-              <text x={lx} y={ly} textAnchor={e.back || skips(e) ? 'middle' : atSource(e) ? 'start' : 'end'}>{e.outcome}</text>
-            </g>
+    <ScrollFrame>
+      <div className="wfgraph" style={{ width, height }}>
+        <svg width={width} height={height} aria-hidden="true">
+          <defs>
+            <marker id="wf-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" /></marker>
+          </defs>
+          {lines.map((e) => {
+            const a = pos.get(e.from)!, b = pos.get(e.to)!;
+            const hot = walked.has(`${e.from}>${e.to}`);
+            const arc = Math.min(a.y, b.y) - 26;
+            const d = e.back
+              ? `M${a.x + W / 2} ${a.y + H} C${a.x + W / 2} ${height - PAD - 6} ${b.x + W / 2} ${height - PAD - 6} ${b.x + W / 2} ${b.y + H + 2}`
+              : skips(e)
+                ? `M${a.x + W / 2} ${a.y} C${a.x + W / 2} ${arc} ${b.x + W / 2} ${arc} ${b.x + W / 2} ${b.y - 2}`
+                : `M${a.x + W} ${a.y + H / 2} C${(a.x + W + b.x) / 2} ${a.y + H / 2} ${(a.x + W + b.x) / 2} ${b.y + H / 2} ${b.x - 2} ${b.y + H / 2}`;
+            const k = sourceSide.get(e.from)!.indexOf(e);
+            const lx = e.back || skips(e) ? (a.x + b.x + W) / 2 : atSource(e) ? a.x + W + 6 : b.x - 6;
+            const ly = e.back ? height - PAD - 10 : skips(e) ? arc + 16 : atSource(e) ? a.y + H / 2 + 14 + k * 13 : b.y + H / 2 - 7;
+            return (
+              <g key={`${e.from}>${e.to}`} className={`wfedge${hot ? ' hot' : ''}${e.back ? ' back' : ''}`}>
+                <path d={d} markerEnd="url(#wf-ah)" />
+                <text x={lx} y={ly} textAnchor={e.back || skips(e) ? 'middle' : atSource(e) ? 'start' : 'end'}>{e.outcome}</text>
+              </g>
+            );
+          })}
+        </svg>
+        {g.nodes.map((n) => {
+          const p = pos.get(n.id)!;
+          const step = workflow.steps.find((s) => s.id === n.id);
+          const notBuilt = step?.body.kind === 'action' && !workflow.runnable.ok && workflow.runnable.missing.some((m) => m.step === n.id);
+          const cls = ['wfnode', `k-${n.kind}`, n.id === END ? 'end' : '', selected === n.id ? 'sel' : '', path?.includes(n.id) ? 'walked' : '', at === n.id ? 'at' : '', notBuilt ? 'notbuilt' : ''].filter(Boolean).join(' ');
+          return n.id === END ? (
+            <div key={n.id} className={cls} style={{ left: p.x, top: p.y + H / 2 - 14 }}>{label(n)}</div>
+          ) : (
+            <button key={n.id} type="button" className={cls} style={{ left: p.x, top: p.y, width: W, height: H }} onClick={() => onSelect?.(n.id)} title={notBuilt ? t('automation.step.notBuilt') : undefined}>
+              <span className="kind">{n.kind === 'agent' ? <BotIcon /> : null}{t(`automation.kind.${n.kind}` as 'automation.kind.step')}</span>
+              <span className="lbl">{label(n)}</span>
+            </button>
           );
         })}
-      </svg>
-      {g.nodes.map((n) => {
-        const p = pos.get(n.id)!;
-        const step = workflow.steps.find((s) => s.id === n.id);
-        const notBuilt = step?.body.kind === 'action' && !workflow.runnable.ok && workflow.runnable.missing.some((m) => m.step === n.id);
-        const cls = ['wfnode', `k-${n.kind}`, n.id === END ? 'end' : '', selected === n.id ? 'sel' : '', path?.includes(n.id) ? 'walked' : '', at === n.id ? 'at' : '', notBuilt ? 'notbuilt' : ''].filter(Boolean).join(' ');
-        return n.id === END ? (
-          <div key={n.id} className={cls} style={{ left: p.x, top: p.y + H / 2 - 14 }}>{label(n)}</div>
-        ) : (
-          <button key={n.id} type="button" className={cls} style={{ left: p.x, top: p.y, width: W, height: H }} onClick={() => onSelect?.(n.id)} title={notBuilt ? t('automation.step.notBuilt') : undefined}>
-            <span className="kind">{n.kind === 'agent' ? <BotIcon /> : null}{t(`automation.kind.${n.kind}` as 'automation.kind.step')}</span>
-            <span className="lbl">{label(n)}</span>
-          </button>
-        );
-      })}
-    </div>
+      </div>
+    </ScrollFrame>
   );
+}
+
+/** Which sides of a horizontal scroller hide content: the frame fades those. */
+function ScrollFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState('');
+  useLayoutEffect(() => {
+    const el = ref.current!;
+    const update = () => setMore([el.scrollLeft > 1 ? 'l' : '', el.scrollLeft + el.clientWidth < el.scrollWidth - 1 ? 'r' : ''].join(''));
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    ro.observe(el.firstElementChild!);
+    return () => { el.removeEventListener('scroll', update); ro.disconnect(); };
+  }, []);
+  return <div className="wfscroll" data-more={more || undefined}><div ref={ref} className="wfpan">{children}</div></div>;
 }
 
 /** The mark of an AI (views.md "AI is always marked"): Lucide's bot. */

@@ -20,7 +20,14 @@
 .wftabs button { border: 0; background: none; padding: 6px 10px; color: var(--muted); cursor: pointer; font: inherit; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .wftabs button.on { color: var(--ink); border-bottom-color: var(--accent); }
 
-.wfscroll { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--desk); }
+.wfscroll { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--desk); }
+.wfpan { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: auto; scrollbar-color: auto; }
+/* No standard scrollbar properties here, so the styled bar below shows always, also where macOS hides overlay bars. */
+.wfpan::-webkit-scrollbar-thumb { border-color: var(--desk); }
+.wfscroll::before, .wfscroll::after { content: ''; position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; opacity: 0; transition: opacity .15s; z-index: 1; }
+.wfscroll::before { left: 0; background: linear-gradient(to right, var(--desk), transparent); }
+.wfscroll::after { right: 0; background: linear-gradient(to left, var(--desk), transparent); }
+.wfscroll[data-more*="l"]::before, .wfscroll[data-more*="r"]::after { opacity: 1; }
 .wfgraph { position: relative; }
 .wfgraph > svg { position: absolute; inset: 0; overflow: visible; }
 .wfedge path { fill: none; stroke: var(--line-2); stroke-width: 1.5; }

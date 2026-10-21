@@ -179,7 +179,7 @@ function WorkflowPage({ w, view, route, nav }: { w: WorkflowDecl; view: Automati
       </div>
       {route.tab === 'graph' ? (
         <>
-          <div className="wfscroll"><Graph workflow={w} selected={route.step} onSelect={(s) => go({ tab: 'graph', step: s })} /></div>
+          <Graph workflow={w} selected={route.step} onSelect={(s) => go({ tab: 'graph', step: s })} />
           {step ? <StepPanel w={w} step={step} view={view} nav={nav} /> : null}
         </>
       ) : route.tab === 'triggers' ? (
@@ -549,7 +549,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         </div>
       ) : null}
       {runDocuments(data, books).slice(0, 3).map((r) => <RunDocument key={r.id} r={r} nav={nav} />)}
-      {w ? <div className="wfscroll"><Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /></div> : null}
+      {w ? <Graph workflow={w} path={data.path} at={data.at} onSelect={(s) => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph', step: s }, query: {} })} /> : null}
       <ol className="wfsteps">
         {data.steps.map((s, i) => {
           const decl = w ? stepOf(w, s.step) : undefined;
