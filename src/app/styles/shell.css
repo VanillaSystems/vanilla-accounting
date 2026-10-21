@@ -84,11 +84,15 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .detail-in { max-width: 980px; animation: fade .22s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(3px); } }
 
-.btn { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
-.btn.primary { background: var(--accent); color: var(--on-accent); }
-.btn.primary:hover { filter: brightness(1.08); }
-.btn.ghost { color: var(--ink-2); }
-.btn.ghost:hover { background: var(--bg); color: var(--ink); }
+/* A button reads as one on any surface: a frame for the plain one, a fill for the main one, a light frame for the quiet one; never the text it sits in (italics). */
+.btn { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-style: normal; white-space: nowrap; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); }
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.btn.ghost { border-color: var(--line); background: transparent; color: var(--ink-2); }
+.btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .btn .k { font: 500 11px "Geist Mono"; opacity: .75; }
 /* A button that reads as a link (accent, underlined on hover); an area's own rule may size it. */
 .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
@@ -294,6 +298,8 @@ main.full { display: flex; flex-direction: column; }
 :root { --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }
 .bartip .btn { background: transparent; color: var(--bg); border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); }
 .bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
+.bartip .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--bg) 16%, transparent); color: var(--bg); }
+.bartip .btn:last-child:hover:not(:disabled) { background: var(--bg); color: var(--ink); filter: brightness(.94); }
 
 /* the status corner (docs/0.4.0/views.md "Status, top right") */
 .corner { position: fixed; top: 14px; right: calc(16px + var(--aiw)); z-index: 22; display: flex; align-items: flex-start; gap: 8px; }

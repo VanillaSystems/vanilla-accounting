@@ -34,7 +34,6 @@ button.chk:hover { background: var(--hover); }
 .ye .st .i { width: 13px; height: 13px; }
 .ye-inv { margin: 0 12px 6px; font-size: 12.5px; color: var(--muted); }
 .btn.big { font-size: 14px; height: auto; padding: 9px 18px; margin: 4px 0 12px; }
-.btn:disabled { opacity: .45; cursor: default; }
 .blk { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .prev, .gv { max-width: 560px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .prev { margin-bottom: 14px; }

@@ -19,9 +19,6 @@
 .srcpw input { min-width: 0; width: 220px; max-width: 100%; }
 .srccheck { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
 /* «Verbindung prüfen» and «Speichern» beside the password: framed, so they read as buttons on a card. */
-.srccheck .btn, .srcpw .btn:not(.primary) { height: 30px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); cursor: pointer; }
-.srccheck .btn:hover:not(:disabled), .srcpw .btn:not(.primary):hover:not(:disabled) { background: var(--hover); }
-.srccheck .btn:disabled, .srcpw .btn:disabled { color: var(--faint); cursor: default; }
 .srcmails { list-style: none; margin: 0; padding: 0; font-size: 12.5px; display: grid; gap: 3px; }
 .srcmails li { overflow-wrap: anywhere; }
 /* A source's reach in plain words (SourceCard.tsx): what the person approves. */
@@ -50,11 +47,8 @@
 .rulelist .rule .ruleline { font-weight: 600; }
 .rulelist .rule.off .ruleline, .rulelist .rule.note .ruleline { color: var(--muted); font-weight: 500; }
 
-/* Firma › Handy keeps readable in a narrow column (the AI sidebar open): the labels go above the values, the QR code above its words (r4c-39). */
+/* Firma › Handy keeps readable in a narrow column (the AI sidebar open): the QR code above its words (r4c-39); the labels above the values: detail.css. */
 .phone { container-type: inline-size; }
-.phone .kv2 dd { overflow-wrap: anywhere; }
 @container (max-width: 560px) {
-  .phone .kv2 { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
-  .phone .kv2 dd { margin-bottom: 8px; }
   .phone .phonepair { flex-direction: column; }
 }

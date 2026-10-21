@@ -158,7 +158,7 @@
 .confirm p { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
 .confirm .file { font: 12px "Geist Mono"; color: var(--ink-2); margin: 10px 0 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; }
-.confirm .btn.danger { background: var(--neg); color: #fff; }
+.confirm .btn.danger { background: var(--neg); border-color: var(--neg); color: #fff; }
 
 /* Pages of text (Abschluss, Firma): a lead, key/value rows, quarter cards, small tables, inline forms */
 .docbody { max-width: 760px; margin-top: 18px; }
@@ -172,6 +172,12 @@
 .kv2 dt { color: var(--muted); }
 .kv2 dd { margin: 0; }
 .kv2 .m { color: var(--muted); font-size: 12.5px; }
+/* A narrow detail (the AI sidebar open, wide in setup mode): the labels go above the values. */
+.kv2 dd { overflow-wrap: anywhere; }
+@container (max-width: 560px) {
+  .kv2 { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  .kv2 dd { margin-bottom: 8px; }
+}
 .quiet2 { font-size: 12px; color: var(--muted); }
 .quiet2:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .clink { font-size: 13px; color: var(--accent); }
