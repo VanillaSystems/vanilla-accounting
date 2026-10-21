@@ -126,6 +126,9 @@ export function buildVisionPrompt(absPdfPath: string): string {
 /** A line's role in a payout report (rule 9a): the code books it on the rule's accounts whatever sides and sign the model wrote (src/booking/classify.ts payoutLines). */
 export type PayoutKind = 'sale' | 'refund' | 'fee';
 
+/** What a purchase line buys, as the model reads it (rule 7h): code decides Bezugsteuer from it (src/accounting/acquisition-tax.ts). `exempt`: a service exempt from VAT, such as payment processing, banking or insurance. */
+export type Supply = 'goods' | 'service' | 'exempt';
+
 export interface ClassifyEntry {
   accountDebit: string;
   accountCredit: string;
@@ -134,6 +137,10 @@ export interface ClassifyEntry {
   description: string;
   /** Only for a payout report's lines. */
   kind?: PayoutKind;
+  /** On a purchase line with a receipt (rule 7h): what it buys. */
+  supply?: Supply;
+  /** On a purchase line with a receipt (rule 7h): the supplier's country as the receipt gives its seat, ISO 3166 alpha-2 ("IE", "CH"). */
+  supplierCountry?: string;
 }
 
 export interface BatchClassifyResult {
@@ -192,6 +199,14 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    g) A sale whose invoice shows no Swiss MWST because the place of supply of the service is abroad
       ("Leistungsort Deutschland", "nicht der schweizerischen MWST unterstellt") → V0-E (Ziffer 221).
       V0 (Ziffer 220) is the export of goods only.
+   h) Bezugsteuer: a SERVICE (software, online service, advertising, consulting) from a supplier based
+      abroad whose receipt shows no Swiss MWST and no CHE number → B81-1 on the expense line (the amount
+      paid is the net). Not for goods (import VAT instead), not for services exempt from VAT (payment
+      processing, Stripe or card fees, banking, insurance), not when the receipt shows Swiss MWST (I81).
+      On EVERY purchase line with a receipt, also give two facts read off the receipt, which the app
+      decides the code by: "supply": "service", "goods" or "exempt" (a service exempt from VAT), and
+      "supplierCountry": the supplier's country as the receipt gives its address, ISO 3166 alpha-2
+      ("IE", "US", "CH").
    d) Refunds invert the code with a minus prefix (e.g. -I81, -M26).
    e) Exception: Coop Pronto receipts can be assumed I81 (always charge 8.1% MWST even if OCR is bad).
    f) MULTI-RATE RECEIPTS: when a receipt's VAT facts list MORE THAN ONE positive rate
@@ -268,7 +283,7 @@ export function vatRateSuffix(rate: number): string {
 // classify prompt — so the rate no longer depends on (truncated) receipt text.
 export function formatVatFacts(r: ReceiptInput): string | null {
   if (r.hasSwissVat === undefined && !r.vatSummary) return null; // not extracted yet
-  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → a purchase: 0-rate code (I0/M0); a sale: see rules 7c, 7g and 9a';
+  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → a purchase: 0-rate code (I0/M0), but a service from a supplier abroad: B81-1 (rule 7h); a sale: see rules 7c, 7g and 9a';
   const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0);
   if (groups.length === 0) {
     return r.hasSwissVat
@@ -303,7 +318,7 @@ The company is NOT registered for VAT. Leave "vatCode" empty ("") on EVERY row a
 The company files with approved flat rates on its gross turnover: ${rates}. Rules for THIS company, which replace the I/M/V rules below:
 - A PURCHASE (expense, material, investment) carries NO VAT code (""), whatever the receipt shows: there is no input tax.
 - A SALE on a revenue account carries ${setup.rates.length > 1 ? 'F1 or F2 (the approved rate that fits the activity)' : 'F1'} with the GROSS amount; an export of goods V0; a service supplied abroad V0-E.
-- Bezugsteuer on a service from abroad: B81.`;
+- Bezugsteuer on a service from a supplier abroad that charged no Swiss MWST: B81-1 (rule 7h), owed without a deduction. Give the "supply" and "supplierCountry" facts of rule 7h on every purchase line with a receipt.`;
   }
   return `## VAT Codes Reference
 ${vatCodes}`;
@@ -363,7 +378,7 @@ Example:
 {
   "WEUR000042": {
     "entries": [
-      { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vatCode": "I81", "description": "DigitalOcean, Webhosting" }
+      { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vatCode": "I81", "description": "DigitalOcean, Webhosting", "supply": "service", "supplierCountry": "US" }
     ],
     "reason": "Beleg DigitalOcean zeigt 8.1 % MWST mit CHE-Nummer: Webhosting auf 6570, I81."
   },
