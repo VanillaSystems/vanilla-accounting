@@ -21,7 +21,8 @@ export type AcquisitionDocument = Pick<Receipt, 'hasSwissVat' | 'vatId' | 'vatSu
 export type AcquisitionWhy = 'foreignService' | 'swissVat' | 'swissUid' | 'goods' | 'exempt' | 'domestic';
 export interface AcquisitionCode { code: string | undefined; why: AcquisitionWhy; country?: string }
 
-type Line = Pick<ClassifyEntry, 'vatCode' | 'supply' | 'supplierCountry' | 'accountDebit' | 'accountCredit'>;
+/** `abroad`: the supplier sits outside the territory, its country not known here (the app booked Bezugsteuer on the payment before, src/booking/national-vat.ts). */
+type Line = Pick<ClassifyEntry, 'vatCode' | 'supply' | 'supplierCountry' | 'accountDebit' | 'accountCredit'> & { abroad?: true };
 
 const SUPPLIES: readonly string[] = ['goods', 'service', 'exempt'] satisfies Supply[];
 const SWISS_UID = /^CHE/i;
@@ -58,7 +59,7 @@ export function acquisitionCodeOf(line: Line, documents: readonly AcquisitionDoc
   if (!shown && !documents.every((d) => d.hasSwissVat === false)) return undefined;
   const uids = documents.filter((d) => SWISS_UID.test(d.vatId ?? '')).length;
   if (!shown && uids && uids < documents.length) return undefined;
-  const domestic = country ? invoicing().territory.includes(country) : undefined;
+  const domestic = country ? invoicing().territory.includes(country) : line.abroad ? false : undefined;
   const against: AcquisitionWhy | undefined = shown ? 'swissVat'
     : uids ? 'swissUid'
     : supply === 'goods' || supply === 'exempt' ? supply
