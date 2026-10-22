@@ -3324,6 +3324,7 @@ export default {
     'rules.say.noPayoutReport': 'without the payout report: the whole payout as sales, on your taking it over',
     'rules.say.payoutAsk': 'Payout report or orders missing: link them, or book the whole payout as sales?',
     'rules.say.payoutOrders': 'the payout by its {orders} orders: each gross, domestic or abroad by the delivery country, refunds {refunds}, fees {fees}',
+    'rules.say.ordersForeignTax': 'exports without Swiss VAT, the foreign tax the buyer paid within the gross: {orders}',
     'rules.say.ordersAsk': 'The payout\'s orders: {why}. Link the missing ones, or book the whole payout as sales?',
     'rules.say.ordersMissing': 'the linked orders add up to {orders}, the payout is {paid}',
     'rules.say.ordersTax': 'the tax on order #{order} does not fit its delivery country',

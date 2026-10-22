@@ -61,7 +61,7 @@ steps:
     rules:
       - id: sv-delivery-decides
         when: always
-        then: the DELIVERY (shipping) address decides Swiss or export — never the billing address. If the order’s Taxes line disagrees with the delivery country (Swiss MwSt on a delivery abroad, or no Swiss MwSt on a delivery to Switzerland), new_case
+        then: the DELIVERY (shipping) address decides Swiss or export — never the billing address. If the order’s Taxes line disagrees with the delivery country (Swiss MwSt on a delivery abroad, or no Swiss MwSt on a delivery to Switzerland), new_case. A foreign Taxes line on a delivery abroad is no disagreement (sv-eu-vat)
         why: "an order billed to an address abroad but delivered in Switzerland carries Swiss VAT, correctly"
         source: decision 2026-10-07, owner
       - id: sv-swiss
@@ -73,10 +73,9 @@ steps:
         then: export — V0, with the delivery country as the recorded reason
         source: docs/runbooks/receipt-collection.md § Shopify order pages
       - id: sv-eu-vat
-        status: open
-        when: "the Taxes line names an EU VAT (e.g. DE MwSt 19%)"
+        when: "the Taxes line names a foreign VAT on a delivery abroad (e.g. DE MwSt 19%, GB VAT 20%)"
         then: >
-          new_case — park the order. Known so far: zero-rated for Swiss purposes, and the EU VAT in the gross is not revenue. Which account carries it, and whether Shopify remits it as deemed supplier under IOSS, is with the tax advisor.
-        why: booking the gross as Swiss-taxable turnover overstates turnover and misstates the return
-        source: docs/runbooks/receipt-collection.md § Shopify order pages (found 2026-10-01)
+          export — V0 on the order's whole gross, the foreign tax line named in the booking's reason (booking.guide.yaml#sale_vat sv-order-tax). Shopify Payments collects that tax in the price and pays it out with the order (what it keeps is its fee of a few percent): the shop, not Shopify, owes it abroad, so the shop's gross stays its consideration. What the shop pays abroad for it (the courier's import VAT on a DDP shipment, an IOSS return) is its own expense entry without Swiss input tax.
+        why: "an export is exempt (MWSTG Art. 23); a foreign VAT is not Swiss turnover tax, so it neither holds the order nor makes it taxable in Switzerland"
+        source: MWSTG Art. 23 Abs. 2 Ziff. 1; decision 2026-10-22, owner
     precedents: []
