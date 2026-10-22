@@ -14,7 +14,6 @@
 import type { BankTransaction, OrderFacts, PayoutShare } from '../types/index.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
-import type { Key } from '../app/i18n/types.js';
 
 /** How many days the bank's date of a payout may lie from the date its order documents name. */
 export const PAYOUT_DAYS = 3;
@@ -48,7 +47,7 @@ export type OrderHold =
 export interface HeldPayout { date: string; amount: number; currency: string; hold: OrderHold }
 
 /** Why a payout's orders book nothing, in the dictionaries' words (src/app/i18n): the question says it in German, the run's note in the reader's language. */
-export function holdWords(hold: OrderHold): { key: Key; vars: Record<string, string> } {
+export function holdWords(hold: OrderHold): { key: `rules.say.orders${'Missing' | 'Tax' | 'Split' | 'Part' | 'Currency'}`; vars: Record<string, string> } {
   switch (hold.why) {
     case 'missing': return { key: 'rules.say.ordersMissing', vars: { orders: hold.orders.toFixed(2), paid: hold.paid.toFixed(2) } };
     case 'tax': return { key: 'rules.say.ordersTax', vars: { order: hold.order } };
