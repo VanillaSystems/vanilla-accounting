@@ -14,6 +14,8 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyTransactions, loadClassifyContext } from '../src/booking/classify.js';
+import { classifyStep } from '../src/intake/classify.js';
+import { noteLines, type IntakeNote } from '../src/intake/pipeline.js';
 import { linkOrdersToPayouts } from '../src/intake/order-links.js';
 import { parseMatchResult } from '../src/llm/prompts.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
@@ -170,7 +172,7 @@ test('an order of which the payout holds less than half is taken for a part paym
   const books = booksOf({ ...ORDERS, o1003: { ...ORDERS.o1003, gross: 400 } });
   const out = await classifyTransactions(books, [PAYOUT], { fx, context: loadClassifyContext(ws) });
   assert.deepEqual([out.classified, books.journalEntries], [[], []]);
-  assert.match(out.asked[0].question, /#1003 steht in mehreren Auszahlungen/);
+  assert.match(out.asked[0].question, /von Bestellung #1003 ist weniger als die Hälfte/);
 });
 
 test('without any order document the payout stays as today: the rule\'s question about the missing report', async () => {
@@ -179,6 +181,24 @@ test('without any order document the payout stays as today: the rule\'s question
   const out = await classifyTransactions(books, [PAYOUT], { fx, context: loadClassifyContext(ws) });
   assert.deepEqual([out.classified, books.journalEntries, out.asked.length], [[], [], 1]);
   assert.match(out.asked[0].question, /Auszahlungsbericht/);
+});
+
+test('the run\'s note names every payout its orders hold, each with its own reason (issue #76)', async () => {
+  const ws = company();
+  const books = booksOf({ ...ORDERS, o1003: { ...ORDERS.o1003, tax: { country: 'CH', rate: 8.1 } } });
+  const september: BankTransaction = { ...PAYOUT, ref: 'PAY-3', date: '2026-09-14', amount: 90 };
+  books.transactions.push(september);
+  books.receipts.push(page('o2001', order('2001', { date: '2026-09-10', gross: 100, tax: { country: 'CH', rate: 8.1 }, payouts: [{ date: '2026-09-12', amount: 96 }] })));
+  books.mappings.push({ transactionRef: september.ref, receiptId: 'o2001' });
+  books.transactions = books.transactions.filter((t) => t.ref !== OTHER.ref);
+  const port = { read: () => structuredClone(books), update: <T>(fn: (b: Books) => T) => fn(books) };
+  const { notes } = await classifyStep()({ ws, books: port, progress: () => {}, log: () => {} });
+  const held = notes.find((n): n is Extract<IntakeNote, { code: 'payoutsHeld' }> => n.code === 'payoutsHeld');
+  assert.deepEqual(held?.payouts.map((p) => [p.date, p.amount, p.hold.why]), [['2026-08-14', 357.5, 'tax'], ['2026-09-14', 90, 'missing']]);
+  assert.equal(notes.some((n) => n.code === 'asked'), false, 'not counted again as payments a rule asks about');
+  const [line] = noteLines([held!]);
+  assert.match(line, /2026-08-14 CHF 357\.50: the tax on order #1003 does not fit its delivery country/);
+  assert.match(line, /2026-09-14 CHF 90\.00: the linked orders add up to 96\.00, the payout is 90\.00/);
 });
 
 test('the match step links the orders to the one payout they add up to, within days of the date they name, and only that', () => {

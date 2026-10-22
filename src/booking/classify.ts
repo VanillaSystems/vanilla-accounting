@@ -35,7 +35,7 @@ import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
-import { payoutByOrders, type OrderHold } from './payout-orders.js';
+import { holdWords, payoutByOrders, type OrderHold } from './payout-orders.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
@@ -441,13 +441,8 @@ export function payoutFromOrders(books: Books, tx: BankTransaction, booking: Rul
 
 /** Why a payout's orders book nothing, as its question says it (booking texts stay German). */
 function orderHoldWords(hold: OrderHold): string {
-  const de = wordsIn('de');
-  switch (hold.why) {
-    case 'missing': return de.t('rules.say.ordersMissing', { orders: hold.orders.toFixed(2), paid: hold.paid.toFixed(2) });
-    case 'tax': return de.t('rules.say.ordersTax', { order: hold.order });
-    case 'split': return de.t('rules.say.ordersSplit', { order: hold.order });
-    case 'currency': return de.t('rules.say.ordersCurrency', { order: hold.order, currency: hold.currency });
-  }
+  const { key, vars } = holdWords(hold);
+  return wordsIn('de').t(key, vars);
 }
 
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
@@ -593,6 +588,8 @@ export interface ClassifyOutcome {
   unasked: string[];
   /** Collective payments booked in part, one line per part a rule decided; the rest is the person's (r10h-14). Also in `classified`. */
   partly: string[];
+  /** Payouts their order documents hold (also in `asked` or `failed`), each with why: the run's note names every one. */
+  held: Array<{ ref: string; hold: OrderHold }>;
 }
 
 /**
@@ -606,7 +603,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const lock = periodLock(books);
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
   const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
-  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
+  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [], held: [] };
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
@@ -632,6 +629,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         // Its order documents do not book it, and no model may guess past them: under a rule the payout waits as its question, the whole payout as sales to take over; else it is the person's to book.
         log(`  ${tx.ref}  waits for its orders${placed ? ` (rule ${placed.rule.id})` : ''}`);
         const why = wordsIn('de').t('rules.say.ordersAsk', { why: orderHoldWords(byOrders) });
+        outcome.held.push({ ref: tx.ref, hold: byOrders });
         if (placed) outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: why, entries: ruleEntries(books, tx, placed, split, context, fx) });
         else outcome.failed.push({ ref: tx.ref, reason: why });
         continue;

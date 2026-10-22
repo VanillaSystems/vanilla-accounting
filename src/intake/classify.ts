@@ -76,7 +76,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     };
     scratch.journalEntries.forEach((je) => applied.add(je));
     const todoRefs = new Set(todo.map((tx) => tx.ref));
-    const { classified, failed, asked, unasked } = await classifyTransactions(scratch, todo, {
+    const { classified, failed, asked, unasked, held: heldPayouts } = await classifyTransactions(scratch, todo, {
       ask,
       proposeAsked: false,
       fx: loadFxResolver(),
@@ -99,10 +99,17 @@ export function classifyStep({ force = false } = {}): StepRun {
     if (classified.length) release?.(classified);
     // A payment a rule holds has its question under Aufgaben; the app's own VAT question about it would ask twice (r7h-27).
     closeSaleQuestionsHeld(ws, asked.map((a) => a.ref), scratch.config.closedThrough);
+    // A payout its orders hold is named in its own note with its reason, not counted as failed or asked by a rule.
+    const byOrders = new Set(heldPayouts.map((h) => h.ref));
+    const failedElse = failed.filter((f) => !byOrders.has(f.ref));
+    const askedElse = asked.filter((a) => !byOrders.has(a.ref));
+    const tx = new Map(todo.map((t) => [t.ref, t]));
+    const payouts = heldPayouts.flatMap((h) => { const t = tx.get(h.ref); return t ? [{ date: t.date, amount: t.amount, currency: t.currency, hold: h.hold }] : []; });
     const notes: IntakeNote[] = [
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
-      ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),
-      ...(asked.length ? [{ code: 'asked' as const, count: asked.length }] : []),
+      ...(failedElse.length ? [{ code: 'failed' as const, count: failedElse.length, detail: failedElse[0].reason.slice(0, 300) }] : []),
+      ...(payouts.length ? [{ code: 'payoutsHeld' as const, payouts }] : []),
+      ...(askedElse.length ? [{ code: 'asked' as const, count: askedElse.length }] : []),
       ...askSales(ws, books, log),
     ];
     return { notes };
