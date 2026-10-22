@@ -3321,6 +3321,7 @@ export const messages = {
   'rules.say.noPayoutReport': 'ohne Auszahlungsbericht: die ganze Auszahlung als Umsatz, auf deine Übernahme hin',
   'rules.say.payoutAsk': 'Auszahlungsbericht oder Bestellungen fehlen: verknüpfen, oder die ganze Auszahlung als Umsatz buchen?',
   'rules.say.payoutOrders': 'die Auszahlung nach ihren {orders} Bestellungen: jede brutto, Inland oder Ausland nach dem Lieferland, Rückerstattungen {refunds}, Gebühren {fees}',
+  'rules.say.ordersForeignTax': 'Exporte ohne Schweizer MWST, die ausländische Steuer, die der Käufer bezahlt hat, im Brutto: {orders}',
   'rules.say.ordersAsk': 'Bestellungen der Auszahlung: {why}. Fehlende verknüpfen, oder die ganze Auszahlung als Umsatz buchen?',
   'rules.say.ordersMissing': 'die verknüpften Bestellungen ergeben {orders}, ausbezahlt sind {paid}',
   'rules.say.ordersTax': 'die Steuer auf Bestellung #{order} passt nicht zum Lieferland',

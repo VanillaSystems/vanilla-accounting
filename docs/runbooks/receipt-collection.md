@@ -443,11 +443,12 @@ regime applied. Orders fall into three buckets, and treating them as a simple
 | Rest of world | no `Taxes` line at all (orders in other currencies) | export, no VAT — V0 |
 
 **The EU bucket is the trap.** Shopify collects German/French/etc. VAT at the destination rate
-on those orders. That tax is **not Swiss output tax** and must never be booked as V81; the sale
-is an export from Switzerland (zero-rated), and the EU VAT portion of the gross is not revenue.
-Whether Shopify remits it as deemed supplier/IOSS or whether it falls to the company is a
-question for the tax advisor — but it has to be separated out either way, because booking the
-full gross as Swiss-taxable turnover would both overstate turnover and misstate the return.
+on those orders. That tax is **not Swiss output tax** and must never be booked as V81: the sale
+is an export from Switzerland, V0 on the order's whole gross, the foreign tax line named in the
+booking's reason (processes/booking.guide.yaml#sale_vat sv-order-tax, issue #74). The gross is the
+export's consideration (MWSTG Art. 24 Abs. 1), declared in Ziffer 200 and deducted again in 220,
+so the Swiss tax is 0 either way; the foreign VAT the company pays abroad (the courier's import
+VAT on a DDP shipment, an IOSS return) is its own expense entry without Swiss input tax.
 
 The measured split is in the workspace runbook.
 
@@ -457,8 +458,8 @@ unbekannt"), which carry no country or tax breakdown — so every revenue entry 
 back **V0**, and the Swiss output tax of the Swiss orders is then **not** recognised. Understating output tax is
 an error against the authority, so after every `classify` run: cross-check the order pages' `Taxes`
 lines against the V-codes actually booked, and reallocate the Swiss portion to V81. The EU-VAT
-orders stay zero-rated for Swiss purposes, but their EU VAT is not revenue
-either — confirm with the tax advisor whether Shopify remits it as deemed supplier under IOSS.
+orders stay V0. With the order pages linked, the booking step does this per order in code
+(src/booking/payout-orders.ts).
 
 **Each order page also carries the payout linkage**, which is how per-order fees are derived:
 

@@ -3324,6 +3324,7 @@ export default {
     'rules.say.noPayoutReport': 'senza rendiconto di versamento: l\'intero versamento come cifra d\'affari, se lo accetti',
     'rules.say.payoutAsk': 'Mancano il rendiconto di versamento o gli ordini: collegarli, o registrare l\'intero versamento come cifra d\'affari?',
     'rules.say.payoutOrders': 'il versamento secondo i suoi {orders} ordini: ciascuno lordo, Svizzera o estero secondo il paese di consegna, rimborsi {refunds}, commissioni {fees}',
+    'rules.say.ordersForeignTax': 'esportazioni senza IVA svizzera, l\'imposta estera pagata dall\'acquirente compresa nel lordo: {orders}',
     'rules.say.ordersAsk': 'Ordini del versamento: {why}. Collegare quelli mancanti, o registrare l\'intero versamento come cifra d\'affari?',
     'rules.say.ordersMissing': 'gli ordini collegati danno {orders}, il versamento è di {paid}',
     'rules.say.ordersTax': 'l\'imposta dell\'ordine #{order} non corrisponde al paese di consegna',
