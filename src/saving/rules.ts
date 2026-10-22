@@ -54,6 +54,8 @@ export interface RuleDiff {
   wide: RuleRow[];
   /** Added or changed rules whose payments are booked today on several other accounts or privately (RulePreview.spread): keeping them asks for confirmation. Filled by withPreview. */
   spread: RuleRow[];
+  /** Added or changed rules that book payments against a national VAT rule (RulePreview.overrides, issue #75): keeping them asks for confirmation. Filled by withPreview. */
+  overrides: RuleRow[];
   /** The knowledge would not load with this file (it names the reason). */
   broken?: string;
 }
@@ -100,7 +102,7 @@ export function ruleDiff(ws: Ws, path: string, before: string, after: string): R
     try { others = withoutRules(before) !== withoutRules(after); } catch (e) { broken = (e as Error).message; }
   }
   if (!broken && after) { const k = knowledgeWith(ws, path, after); if ('error' in k) broken = k.error; }
-  return { path, added, changed, before: was, removed, others, refused: [...added, ...changed].filter((r) => r.kind !== 'rule'), wide, spread: [], ...(broken ? { broken } : {}) };
+  return { path, added, changed, before: was, removed, others, refused: [...added, ...changed].filter((r) => r.kind !== 'rule'), wide, spread: [], overrides: [], ...(broken ? { broken } : {}) };
 }
 
 const placedOf = (r: RuleRow) => ({ rule: r.rule as BookingRule, ...(r.business ? { business: r.business } : {}) });
@@ -116,6 +118,7 @@ export function rulesRefusal(diffs: RuleDiff[], confirmed = false): string | und
     ...d.refused.map((r) => `${d.path}: Regel «${r.id || '?'}» kann die App nicht ausführen (${r.kind === 'note' ? 'in Sätzen geschrieben' : r.refusal?.code ?? '?'})`),
     ...(confirmed ? [] : d.wide.map((r) => `${d.path}: Regel «${r.id}» erkennt Zahlungen nur an einzelnen Wörtern (${loneWords(placedOf(r)).join(', ')}): auf ihrer Karte die passenden Zahlungen ansehen und bestätigen`)),
     ...(confirmed ? [] : d.spread.filter((r) => !d.wide.includes(r)).map((r) => `${d.path}: Regel «${r.id}» trifft Zahlungen, die heute auf verschiedenen Konten oder privat gebucht sind: auf ihrer Karte ansehen und bestätigen`)),
+    ...(confirmed ? [] : d.overrides.map((r) => `${d.path}: Regel «${r.id}» bucht Zahlungen anders, als es die Steuerregeln des Landes verlangen: auf ihrer Karte ansehen und bestätigen`)),
   ]);
   return lines.length ? lines.join('; ') : undefined;
 }
@@ -126,7 +129,7 @@ export interface DraftRules extends RuleDiff {
   basis: string;
   /** One click keeps it: the file loads, every rule in it is one the app carries out, and a rule changes. */
   keepable: boolean;
-  /** Keeping it needs the person's confirmation (`wide` or `spread` is not empty): the button says «Trotzdem behalten». */
+  /** Keeping it needs the person's confirmation (`wide`, `spread` or `overrides` is not empty): the button says «Trotzdem behalten». */
   confirm: boolean;
   /** What each added or changed rule would do on this year's payments, in the order of `added` then `changed`. */
   preview: RulePreview[];
@@ -148,7 +151,7 @@ export function draftRules(ws: Workspace, path: string): DraftRules | undefined 
   const { diff: d, preview } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
   const offers = offersOf(ws, d, preview, after);
   const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0) && !notOffered(offers).length;
-  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0 || rebooking(offers).length > 0), preview, offers };
+  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0 || d.overrides.length > 0 || rebooking(offers).length > 0), preview, offers };
 }
 
 /** The checks of each added or changed rule drafted from the notes, against every rule of the workspace with the draft applied. */
@@ -165,12 +168,12 @@ const notOffered = (offers: Record<string, NoteOffer>): string[] => Object.entri
 /** Rules adjusted to a changed sentence that book this year's payments otherwise than they are booked: keeping them asks for confirmation. */
 const rebooking = (offers: Record<string, NoteOffer>): string[] => Object.entries(offers).filter(([, o]) => o.offer === 'rule' && o.otherwise).map(([k]) => k);
 
-/** A diff with what its added and changed rules would do on this year's payments, and which of them spread over decisions made (RulePreview.spread). */
+/** A diff with what its added and changed rules would do on this year's payments, which of them spread over decisions made (RulePreview.spread) and which book against a national VAT rule (RulePreview.overrides). */
 export function withPreview(ws: Workspace, d: RuleDiff, after: string): { diff: RuleDiff; preview: RulePreview[] } {
   const targets = [...d.added, ...d.changed];
   const shown = d.broken || !after ? [] : preview(ws, d.path, after, targets);
-  const spread = targets.filter((r) => shown.some((p) => p.key === ruleKey(r) && p.spread));
-  return { diff: { ...d, spread }, preview: shown };
+  const flagged = (has: (p: RulePreview) => unknown) => targets.filter((r) => shown.some((p) => p.key === ruleKey(r) && has(p)));
+  return { diff: { ...d, spread: flagged((p) => p.spread), overrides: flagged((p) => p.overrides) }, preview: shown };
 }
 
 /** The preview of `targets` (rules of the draft at `path`) on the books, with the draft's businesses routing the payments. */
@@ -228,7 +231,7 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   const rebooks = rebooking(offers);
   if (rebooks.length && !confirmed) return { ok: false, refusal: 'wide', message: `Regel ${rebooks.map((k) => k.split('#').at(-1)).join(', ')} bucht Zahlungen dieses Jahres anders, als sie heute gebucht sind: auf ihrer Karte ansehen und bestätigen` };
   const why = rulesRefusal([d], confirmed);
-  if (why) return { ok: false, refusal: (d.wide.length || d.spread.length) && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
+  if (why) return { ok: false, refusal: (d.wide.length || d.spread.length || d.overrides.length) && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
   const to = join(ws.paths.root, path);
   mkdirSync(dirname(to), { recursive: true });
   if (after.trim()) writeFileSync(to, after); else rmSync(to, { force: true });

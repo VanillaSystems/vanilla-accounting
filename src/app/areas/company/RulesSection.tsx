@@ -4,7 +4,7 @@
  * rule made by hand, without the AI (r8k-4). RuleDraft is the card of a drafted rule (the AI's, the
  * form's, «Immer so?»): the sidebar, Änderungen and the form show it, «Behalten» saves it at once.
  */
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { language, t } from '../../i18n/index.js';
 import { textIn } from '../../../workflows/model.js';
 import { api, errorText } from '../../lib/api.js';
@@ -187,7 +187,7 @@ type Done = 'kept' | 'removedDone' | 'discarded';
 /** A booking line as the card names it: account and name, VAT code, amount. */
 const lineText = (l: RuleLine, names: RuleNames) => [names.account(l.account) ? `${l.account} ${names.account(l.account)}` : l.account, l.vat, fmt(l.amount)].filter(Boolean).join(' · ');
 
-function PaymentLine({ p, names }: { p: PreviewPayment; names: RuleNames }) {
+function PaymentLine({ p, names, national }: { p: PreviewPayment; names: RuleNames; national?: RuleLine[] }) {
   const would = p.would.lines.map((l) => lineText(l, names)).join(' + ');
   return (
     <li>
@@ -196,16 +196,20 @@ function PaymentLine({ p, names }: { p: PreviewPayment; names: RuleNames }) {
       <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : would}</b>
       <span className="m">{' · '}{p.decidedBy ? t('rules.preview.otherFirst') : p.now.length ? t('rules.preview.now', { booking: p.now.map((l) => lineText(l, names)).join(' + ') }) : t('rules.preview.unbooked')}</span>
       {p.beforeAi && !p.decidedBy ? <span className="m" data-testid="before-ai">{' · '}{t('rules.preview.beforeAi', { booking: p.beforeAi.map((l) => lineText(l, names)).join(' + ') })}</span> : null}
+      {national ? <span className="m" data-testid="national">{' · '}{t('rules.preview.national', { booking: national.map((l) => l.vat ?? '–').join(' + ') })}</span> : null}
     </li>
   );
 }
 
 /** What one drafted rule would do on this year's payments, and the rules it meets there. */
 function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
+  // A payment booked against a national VAT rule says, on its own line, which code that rule gives.
+  const national = new Map(p.overrides?.flatMap((o) => o.payments.map((x) => [x.ref, x.national] as const)));
+  const shown = new Set(p.examples.map((x) => x.ref));
   return (
     <div className="rulepreview" data-preview={p.key}>
       <span className="m">{p.matches ? t('rules.preview.matches', { n: p.matches, year: p.year }) : t('rules.preview.none', { year: p.year })}</span>
-      {p.examples.length ? <ul>{p.examples.map((x) => <PaymentLine key={x.ref} p={x} names={names} />)}</ul> : null}
+      {p.examples.length ? <ul>{p.examples.map((x) => <PaymentLine key={x.ref} p={x} names={names} national={national.get(x.ref)} />)}</ul> : null}
       {p.matches > p.examples.length ? <span className="m">{t('rules.preview.more', { n: p.matches - p.examples.length })}</span> : null}
       {p.overlaps.map((o) => (
         <span key={`${o.row.file}#${o.row.step}#${o.row.id}`} className="warnline">
@@ -220,6 +224,15 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
           {p.spread.payments.length ? <ul>{p.spread.payments.map((x) => <PaymentLine key={x.ref} p={x} names={names} />)}</ul> : null}
         </>
       ) : null}
+      {p.overrides?.map((o) => {
+        const others = o.payments.filter((x) => !shown.has(x.ref));
+        return (
+          <Fragment key={o.kind}>
+            <span className="warnline" data-testid="rule-override" data-override={o.kind}>{t(`rules.preview.override.${o.kind}`, { n: o.count })} {t('rules.preview.overrideKeep')}</span>
+            {others.length ? <ul>{others.map((x) => <PaymentLine key={x.ref} p={x} names={names} national={x.national} />)}</ul> : null}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

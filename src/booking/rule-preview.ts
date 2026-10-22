@@ -13,6 +13,7 @@ import { chart } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import type { RuleRow } from './rule-book.js';
 import { holds, loneWords, ruleFor, type PlacedRule, type RuleBooking } from './rules.js';
+import { nationalCodes, overrideOf, supplierFacts, type NationalOverride, type SideLine } from './national-vat.js';
 
 /** How many matching payments the card names one by one; the rest it counts. */
 export const PREVIEW_EXAMPLES = 5;
@@ -59,6 +60,19 @@ export interface RuleSpread {
   payments: PreviewPayment[];
 }
 
+/**
+ * Payments of the year a booking rule books against a national VAT rule the code would otherwise
+ * apply (issue #75): Bezugsteuer, the receipt rules, the app's business files. Keeping the rule
+ * asks for «Trotzdem behalten».
+ */
+export interface RuleOverride {
+  kind: NationalOverride;
+  /** Payments the rule books so, of those it decides. */
+  count: number;
+  /** The newest of them, at most PREVIEW_EXAMPLES, each with the lines the national rules give. */
+  payments: Array<PreviewPayment & { national: RuleLine[] }>;
+}
+
 export interface RulePreview {
   /** The drafted rule: `${step}#${id}`. */
   key: string;
@@ -73,6 +87,8 @@ export interface RulePreview {
   loneWords: string[];
   /** The payments it holds for are booked today on several other accounts or privately: keeping asks for confirmation. */
   spread?: RuleSpread;
+  /** The national VAT rules it books against, each with its payments: keeping asks for confirmation. */
+  overrides?: RuleOverride[];
   /**
    * A booking rule's payments booked today (as decided before the AI sidebar moved them) otherwise
    * than it would book them: account, code or amount. Payments the rule itself booked do not count.
@@ -118,14 +134,39 @@ function bookedNow(books: Books, tx: BankTransaction, bank: string, decided = fa
  * payment is booked with today and puts them on its accounts and codes (payoutLines); without a
  * report, or not booked yet, the lines are the proposal: the whole payout on its account.
  */
-function wouldBook(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): RuleLine[] {
+function wouldEntries(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): SideLine[] {
   const mapped = mappedReceipts(books, tx);
   const bank = bankAccountFor(tx, context.bankAccounts);
   const today = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   const read = today.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '' }));
   const split = booking.fees && mapped.length && today.length ? payoutLines(read, bank, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue') : undefined;
-  if (split) return split.map((e) => ({ account: e.accountDebit === bank ? e.accountCredit : e.accountDebit, ...(e.vatCode ? { vat: e.vatCode } : {}), amount: e.amount }));
-  return ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount);
+  if (split) return split.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, ...(e.vatCode ? { vatCode: e.vatCode } : {}) }));
+  return ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount).map((l) => ({
+    accountDebit: tx.direction === 'DBIT' ? l.account : bank,
+    accountCredit: tx.direction === 'DBIT' ? bank : l.account,
+    amount: l.amount,
+    ...(l.vat ? { vatCode: l.vat } : {}),
+  }));
+}
+
+/** A line as the card names it: the side opposite the bank. */
+const asRuleLine = (bank: string) => (e: SideLine): RuleLine => ({ account: e.accountDebit === bank ? e.accountCredit : e.accountDebit, ...(e.vatCode ? { vat: e.vatCode } : {}), amount: e.amount });
+
+function wouldBook(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): RuleLine[] {
+  return wouldEntries(books, tx, booking, context).map(asRuleLine(bankAccountFor(tx, context.bankAccounts)));
+}
+
+/**
+ * How the rule's booking of `tx` departs from the national VAT rules, each kind once, with the
+ * lines they give; nothing where they agree.
+ */
+function departures(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): { kinds: NationalOverride[]; national: RuleLine[] } {
+  const lines = wouldEntries(books, tx, booking, context);
+  const entries = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+  const codes = nationalCodes(tx, lines, mappedReceipts(books, tx), supplierFacts(tx, entries), context);
+  const kinds = [...new Set(lines.flatMap((l, i) => overrideOf(l.vatCode, codes[i]) ?? []))];
+  const line = asRuleLine(bankAccountFor(tx, context.bankAccounts));
+  return { kinds, national: lines.map((l, i) => line({ ...l, vatCode: codes[i] })) };
 }
 
 /**
@@ -170,6 +211,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
     const others: string[] = [];
     const elsewhere: BankTransaction[] = [];
     let otherwise = 0;
+    const against = new Map<NationalOverride, { count: number; payments: RuleOverride['payments'] }>();
     for (const tx of hits) {
       const p = facts.get(tx.ref)!;
       for (const other of on) {
@@ -188,6 +230,18 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         for (const a of off) if (!others.includes(a)) others.push(a);
         const byItself = books.journalEntries.filter((e) => e.transactionRef === tx.ref).every((e) => e.rule === target.row.id && e.origin !== 'manual');
         if (decided.length && !byItself && !sameLines(decided, wouldBook(books, tx, t.booking, context))) otherwise++;
+        // Only where it books: another rule deciding first, or a payout waiting for its report, books nothing by this one.
+        const decider = ruleFor(placed, p);
+        const asked = t.booking.fees && !mappedReceipts(books, tx).length;
+        if (!asked && decider && ruleKey(pool[placed.indexOf(decider)].row) === key) {
+          const { kinds, national } = departures(books, tx, t.booking, context);
+          for (const kind of kinds) {
+            const o = against.get(kind) ?? { count: 0, payments: [] };
+            o.count++;
+            if (o.payments.length < PREVIEW_EXAMPLES) o.payments.push({ ...payment(tx, p), national });
+            against.set(kind, o);
+          }
+        }
       }
       if (examples.length < PREVIEW_EXAMPLES) examples.push(payment(tx, p));
     }
@@ -200,6 +254,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
     return {
       key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed),
       ...(spread ? { spread } : {}),
+      ...(against.size ? { overrides: [...against].map(([kind, o]) => ({ kind, ...o })) } : {}),
       ...(t.kind === 'book' ? { otherwise } : {}),
     };
   });
