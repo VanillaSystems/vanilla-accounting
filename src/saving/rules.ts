@@ -118,7 +118,7 @@ export function rulesRefusal(diffs: RuleDiff[], confirmed = false): string | und
     ...d.refused.map((r) => `${d.path}: Regel «${r.id || '?'}» kann die App nicht ausführen (${r.kind === 'note' ? 'in Sätzen geschrieben' : r.refusal?.code ?? '?'})`),
     ...(confirmed ? [] : d.wide.map((r) => `${d.path}: Regel «${r.id}» erkennt Zahlungen nur an einzelnen Wörtern (${loneWords(placedOf(r)).join(', ')}): auf ihrer Karte die passenden Zahlungen ansehen und bestätigen`)),
     ...(confirmed ? [] : d.spread.filter((r) => !d.wide.includes(r)).map((r) => `${d.path}: Regel «${r.id}» trifft Zahlungen, die heute auf verschiedenen Konten oder privat gebucht sind: auf ihrer Karte ansehen und bestätigen`)),
-    ...(confirmed ? [] : d.overrides.map((r) => `${d.path}: Regel «${r.id}» bucht Zahlungen anders, als die MWST-Regeln des Landes es verlangen (Bezugsteuer oder Vorsteuer nach Beleg): auf ihrer Karte ansehen und bestätigen`)),
+    ...(confirmed ? [] : d.overrides.map((r) => `${d.path}: Regel «${r.id}» bucht Zahlungen anders, als es die Steuerregeln des Landes verlangen: auf ihrer Karte ansehen und bestätigen`)),
   ]);
   return lines.length ? lines.join('; ') : undefined;
 }
