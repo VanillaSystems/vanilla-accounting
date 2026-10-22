@@ -9,7 +9,7 @@ import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
-import { isKey, language, t, tData } from '../../i18n/index.js';
+import { isKey, language, t, tData, tWith } from '../../i18n/index.js';
 import { Go } from '../vat/links.js';
 import { automationCommand, automationNow, setSchedule, useAutomation, useRun } from '../../automation/store.js';
 import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunDetail, type RunSummary, type StepDecl, type StepRecord, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
@@ -21,6 +21,8 @@ import { HomePage, whenText } from './Home.js';
 import { workflowState } from '../../automation/home.js';
 import { QueuePage } from './Queue.js';
 import type { Index, JournalEntry } from '../../../types/index.js';
+import type { IntakeNote } from '../../../intake/pipeline.js';
+import { holdWords } from '../../../booking/payout-orders.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
@@ -477,8 +479,7 @@ function XmlFile({ x }: { x: PreparedXml }) {
 }
 
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
-type StepNote = { code: 'noModel'; waiting: number } | { code: 'failed'; count: number; detail: string } | { code: 'unmatched'; files: string[] } | { code: 'filedKept'; count: number } | { code: 'poorScan'; files: string[] } | { code: 'sameBytes'; files: Array<{ file: string; of: string }> } | { code: 'asked'; count: number } | { code: 'saleAsked'; count: number } | { code: 'error'; detail: string };
-function noteText(n: StepNote): string {
+function noteText(n: IntakeNote): string {
   switch (n.code) {
     case 'noModel': return t('automation.note.noModel', { n: n.waiting });
     case 'failed': return t('automation.note.failed', { n: n.count, detail: n.detail });
@@ -488,6 +489,10 @@ function noteText(n: StepNote): string {
     case 'sameBytes': return t('automation.note.sameBytes', { n: n.files.length, files: n.files.map((f) => `${f.file} = ${f.of}`).join(', ') });
     case 'asked': return t('automation.note.asked', { n: n.count });
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
+    case 'payoutsHeld': return t('automation.note.payoutsHeld', { n: n.payouts.length, payouts: n.payouts.map((p) => {
+      const w = holdWords(p.hold);
+      return t('automation.note.payoutHeld', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, why: tWith(w.key, w.vars) });
+    }).join('; ') });
     case 'error': return n.detail;
   }
 }
@@ -581,7 +586,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
                 <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
               </div>
               {s.error ? <div className="warnline">{refusalText(s.error, s.why)}</div> : null}
-              {((s.output?.notes as StepNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
+              {((s.output?.notes as IntakeNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
               {s.effects.filter((e) => e.refused || (!e.applied && e.would !== undefined)).map((e, j) => (
                 <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.skippedEffect')}</div>
               ))}

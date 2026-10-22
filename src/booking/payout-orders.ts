@@ -14,6 +14,7 @@
 import type { BankTransaction, OrderFacts, PayoutShare } from '../types/index.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
+import type { Key } from '../app/i18n/types.js';
 
 /** How many days the bank's date of a payout may lie from the date its order documents name. */
 export const PAYOUT_DAYS = 3;
@@ -37,8 +38,25 @@ export interface OrderAccounts { bank: string; sales: string; fees: { account: s
 export type OrderHold =
   | { why: 'missing'; orders: number; paid: number }
   | { why: 'tax'; order: string }
-  | { why: 'split'; order: string }
+  /** The order document names several payouts for it. */
+  | { why: 'several'; order: string }
+  /** The payout holds less than half the order: a part whose other part the document did not name. */
+  | { why: 'part'; order: string }
   | { why: 'currency'; order: string; currency: string };
+
+/** A payout its orders hold, as the run's note names it: the bank's date and amount, and why. */
+export interface HeldPayout { date: string; amount: number; currency: string; hold: OrderHold }
+
+/** Why a payout's orders book nothing, in the dictionaries' words (src/app/i18n): the question says it in German, the run's note in the reader's language. */
+export function holdWords(hold: OrderHold): { key: Key; vars: Record<string, string> } {
+  switch (hold.why) {
+    case 'missing': return { key: 'rules.say.ordersMissing', vars: { orders: hold.orders.toFixed(2), paid: hold.paid.toFixed(2) } };
+    case 'tax': return { key: 'rules.say.ordersTax', vars: { order: hold.order } };
+    case 'several': return { key: 'rules.say.ordersSplit', vars: { order: hold.order } };
+    case 'part': return { key: 'rules.say.ordersPart', vars: { order: hold.order } };
+    case 'currency': return { key: 'rules.say.ordersCurrency', vars: { order: hold.order, currency: hold.currency } };
+  }
+}
 
 /** An export's own tax line: the foreign tax the platform charged the buyer, kept to be named in the booking's reason. */
 export interface ForeignTax { order: string; country: string; rate: number }
@@ -79,7 +97,8 @@ export function payoutByOrders(tx: Pick<BankTransaction, 'date' | 'amount' | 'cu
   for (const { o, added, back } of inPayout) {
     if (o.currency !== tx.currency) return { hold: { why: 'currency', order: o.number, currency: o.currency } };
     // A provider keeps a few percent; a share below half the gross is more likely a part of the order whose other part the document did not name, which would land in the fees.
-    if (added.length && (o.payouts.length > 1 || added.some((s) => toRappen(s.amount) > toRappen(o.gross) || 2 * toRappen(s.amount) < toRappen(o.gross)))) return { hold: { why: 'split', order: o.number } };
+    if (added.length && o.payouts.length > 1) return { hold: { why: 'several', order: o.number } };
+    if (added.some((s) => toRappen(s.amount) > toRappen(o.gross) || 2 * toRappen(s.amount) < toRappen(o.gross))) return { hold: { why: 'part', order: o.number } };
     const code = codesOf(o, codes);
     if (code === 'tax') return { hold: { why: 'tax', order: o.number } };
     if (o.tax && !codes.territory.includes(o.shipTo)) foreign.push({ order: o.number, country: o.tax.country, rate: o.tax.rate });
