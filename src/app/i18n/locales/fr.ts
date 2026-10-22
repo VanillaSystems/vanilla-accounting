@@ -3324,6 +3324,7 @@ export default {
     'rules.say.noPayoutReport': 'sans décompte de versement : tout le versement comme chiffre d\'affaires, si vous le reprenez',
     'rules.say.payoutAsk': 'Décompte de versement ou commandes manquants : les lier, ou comptabiliser tout le versement comme chiffre d\'affaires ?',
     'rules.say.payoutOrders': 'le versement selon ses {orders} commandes : chacune brute, Suisse ou étranger selon le pays de livraison, remboursements {refunds}, frais {fees}',
+    'rules.say.ordersForeignTax': 'exportations sans TVA suisse, la taxe étrangère payée par l\'acheteur comprise dans le brut : {orders}',
     'rules.say.ordersAsk': 'Commandes du versement : {why}. Lier celles qui manquent, ou comptabiliser tout le versement comme chiffre d\'affaires ?',
     'rules.say.ordersMissing': 'les commandes liées font {orders}, le versement est de {paid}',
     'rules.say.ordersTax': 'la taxe de la commande #{order} ne correspond pas à son pays de livraison',

@@ -123,9 +123,38 @@ test('an order missing from the payout books nothing: the payout waits for the p
   assert.deepEqual(held.entries.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode]), [['1021', '3400', 357.5, 'V81']]);
 });
 
+test('exports book at V0 whatever foreign tax their page shows (issue #74): the gross on sales, the foreign tax named in the reason, never a hold', async () => {
+  const ws = company();
+  const eu = order('1004', { gross: 119, shipTo: 'DE', tax: { country: 'DE', rate: 19 }, payouts: [{ date: '2026-08-12', amount: 115.2 }] });
+  const uk = order('1005', { gross: 60, shipTo: 'GB', tax: { country: 'GB', rate: 20 }, payouts: [{ date: '2026-08-12', amount: 57.9 }] });
+  const { o1003: _us, ...rest } = ORDERS;
+  const books = booksOf({ ...rest, o1004: eu, o1005: uk });
+  const payout = { ...PAYOUT, amount: 336.7 };
+  books.transactions = [OTHER, payout];
+  const out = await classifyTransactions(books, [payout], { fx, context: loadClassifyContext(ws) });
+  assert.deepEqual([out.classified, out.asked, out.failed], [['PAY-1'], [], []]);
+  assert.deepEqual(lines(books, 'PAY-1'), [
+    ['1021', '3400', 120, 'V81'],
+    ['1021', '3400', 80, 'V81'],
+    ['3400', '1021', 30, '-V81'],
+    ['1021', '3400', 119, 'V0'],
+    ['1021', '3400', 60, 'V0'],
+    ['6840', '1021', 12.3, 'I0'],
+  ]);
+  const signed = books.journalEntries.reduce((s, e) => s + (e.accountDebit === '1021' ? e.amount : -e.amount), 0);
+  assert.equal(Math.round(signed * 100) / 100, payout.amount, 'the lines add up to the payout');
+  assert.match(books.journalEntries[0].reason ?? '', /#1004 DE 19 %, #1005 GB 20 %/, 'the foreign tax lines kept as facts in the reason');
+
+  const untaxed = booksOf({ ...rest, o1004: eu, o1005: uk, o1001: { ...ORDERS.o1001, tax: undefined } });
+  untaxed.transactions = [OTHER, payout];
+  const held = await classifyTransactions(untaxed, [payout], { fx, context: loadClassifyContext(ws) });
+  assert.deepEqual([held.classified, untaxed.journalEntries], [[], []], 'a domestic delivery without the Swiss tax still holds');
+  assert.match(held.asked[0].question, /#1001/);
+});
+
 test('an order whose own tax line disagrees with its delivery country is the person\'s: nothing booked, the question names the order', async () => {
   const ws = company();
-  const books = booksOf({ ...ORDERS, o1003: { ...ORDERS.o1003, tax: { country: 'DE', rate: 19 } } });
+  const books = booksOf({ ...ORDERS, o1003: { ...ORDERS.o1003, tax: { country: 'CH', rate: 8.1 } } });
   const out = await classifyTransactions(books, [PAYOUT], { fx, context: loadClassifyContext(ws) });
   assert.deepEqual([out.classified, books.journalEntries], [[], []]);
   assert.match(out.asked[0].question, /#1003/);

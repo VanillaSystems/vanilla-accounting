@@ -432,7 +432,9 @@ export function payoutFromOrders(books: Books, tx: BankTransaction, booking: Rul
   const split = payoutByOrders(tx, orders, { bank: bankAccount, sales: booking.account, fees: booking.fees },
     { territory: invoicing().territory, domestic, ...(domestic && abroad ? { abroad: { sale: abroad, refund: refund(abroad) } } : {}) }, merchantOf(tx.description));
   if (!split || 'hold' in split) return split?.hold;
-  const said = wordsIn('de').t('rules.say.payoutOrders', { orders: split.orders, refunds: split.refunds.toFixed(2), fees: split.fees.toFixed(2) });
+  const de = wordsIn('de');
+  const foreign = split.foreign.length ? `; ${de.t('rules.say.ordersForeignTax', { orders: split.foreign.map((f) => `#${f.order} ${f.country} ${f.rate} %`).join(', ') })}` : '';
+  const said = `${de.t('rules.say.payoutOrders', { orders: split.orders, refunds: split.refunds.toFixed(2), fees: split.fees.toFixed(2) })}${foreign}`;
   const lock = periodLock(books);
   return entriesFor(tx, split.lines, { fx, receiptDate: undefined, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by, reason: `${reason}${said}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
 }

@@ -6,7 +6,10 @@
  * books each order's gross on the sales account, at the firm's sale code when delivered in the VAT
  * territory and at the export code when delivered abroad, each refund deducted from the payout with
  * its code's minus, and what the provider kept (gross less what it paid out) as its fees. The lines
- * add up to the payout, or nothing is booked. Browser-safe and pure; provider facts stay data.
+ * add up to the payout, or nothing is booked. An export's foreign tax line (the destination's VAT the
+ * platform charged the buyer) is kept as a fact, never a reason to hold: the whole gross is the
+ * export's consideration (processes/booking.guide.yaml#sale_vat sv-order-tax). Browser-safe and pure;
+ * provider facts stay data.
  */
 import type { BankTransaction, OrderFacts, PayoutShare } from '../types/index.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
@@ -37,21 +40,25 @@ export type OrderHold =
   | { why: 'split'; order: string }
   | { why: 'currency'; order: string; currency: string };
 
+/** An export's own tax line: the foreign tax the platform charged the buyer, kept to be named in the booking's reason. */
+export interface ForeignTax { order: string; country: string; rate: number }
+
 export type OrderSplit =
-  | { lines: ClassifyEntry[]; orders: number; refunds: number; fees: number }
+  | { lines: ClassifyEntry[]; orders: number; refunds: number; fees: number; foreign: ForeignTax[] }
   | { hold: OrderHold };
 
 /**
  * The code an order's sale takes, or 'tax' when its own tax line disagrees with where it was
- * delivered: a domestic delivery must show the domestic tax at the normal rate, an export none.
- * A domestic order without a tax line is such a disagreement, a new case for the person, never a
- * sale without output tax (processes/booking.guide.yaml#sale_vat sv-order-tax).
+ * delivered: a domestic delivery must show the domestic tax at the normal rate, an export no
+ * domestic tax. A domestic order without a tax line is such a disagreement, a new case for the
+ * person, never a sale without output tax. An export takes the export code whatever foreign tax it
+ * shows: that tax is not domestic turnover (processes/booking.guide.yaml#sale_vat sv-order-tax).
  */
 function codesOf(o: OrderFacts, codes: OrderCodes): { sale: string; refund: string } | undefined | 'tax' {
   if (!codes.domestic) return undefined;
-  const domestic = codes.territory.includes(o.shipTo);
-  if (domestic) return o.tax && codes.territory.includes(o.tax.country) && o.tax.rate === codes.domestic.rate ? codes.domestic : 'tax';
-  return o.tax ? 'tax' : codes.abroad;
+  const taxedHere = !!o.tax && codes.territory.includes(o.tax.country);
+  if (codes.territory.includes(o.shipTo)) return taxedHere && o.tax?.rate === codes.domestic.rate ? codes.domestic : 'tax';
+  return taxedHere ? 'tax' : codes.abroad;
 }
 
 /**
@@ -68,12 +75,14 @@ export function payoutByOrders(tx: Pick<BankTransaction, 'date' | 'amount' | 'cu
   let total = 0;
   let fees = 0;
   let refunds = 0;
+  const foreign: ForeignTax[] = [];
   for (const { o, added, back } of inPayout) {
     if (o.currency !== tx.currency) return { hold: { why: 'currency', order: o.number, currency: o.currency } };
     // A provider keeps a few percent; a share below half the gross is more likely a part of the order whose other part the document did not name, which would land in the fees.
     if (added.length && (o.payouts.length > 1 || added.some((s) => toRappen(s.amount) > toRappen(o.gross) || 2 * toRappen(s.amount) < toRappen(o.gross)))) return { hold: { why: 'split', order: o.number } };
     const code = codesOf(o, codes);
     if (code === 'tax') return { hold: { why: 'tax', order: o.number } };
+    if (o.tax && !codes.territory.includes(o.shipTo)) foreign.push({ order: o.number, country: o.tax.country, rate: o.tax.rate });
     if (added.length) {
       lines.push({ accountDebit: accounts.bank, accountCredit: accounts.sales, amount: o.gross, vatCode: code?.sale ?? '', description: `${name}, Bestellung #${o.number}, ${o.shipTo}` });
       total += toRappen(added[0].amount);
@@ -87,5 +96,5 @@ export function payoutByOrders(tx: Pick<BankTransaction, 'date' | 'amount' | 'cu
   }
   if (total !== toRappen(tx.amount)) return { hold: { why: 'missing', orders: fromRappen(total), paid: tx.amount } };
   if (fees > 0) lines.push({ accountDebit: accounts.fees.account, accountCredit: accounts.bank, amount: fromRappen(fees), vatCode: accounts.fees.vat, description: `${name}, Gebühren` });
-  return { lines, orders: inPayout.filter((x) => x.added.length).length, refunds: fromRappen(refunds), fees: fromRappen(fees) };
+  return { lines, orders: inPayout.filter((x) => x.added.length).length, refunds: fromRappen(refunds), fees: fromRappen(fees), foreign };
 }

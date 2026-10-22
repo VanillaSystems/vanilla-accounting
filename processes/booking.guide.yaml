@@ -220,16 +220,32 @@ steps:
         source: MWSTG Art. 8 Abs. 1; ESTV form 0550 Ziffer 221
       - id: sv-order-tax
         when: always
-        then: "the code follows the tax the order or invoice itself states: Swiss 8.1% → swiss (V81); no Swiss tax and delivered abroad → export (V0) with the country as the recorded reason; anything else → new_case"
-        source: booking.flow.yaml sale_vat expect
+        then: >
+          the DELIVERY country decides, the order's own tax line checks it. Delivered in the VAT territory
+          (Switzerland, Liechtenstein: modules/ch/invoicing.yaml territory) → swiss (V81) only when the order shows
+          the Swiss tax at that rate; a domestic delivery without it, or with another country's tax → new_case.
+          Delivered abroad → export (V0; V0-E where the invoicing exemptions say so) with the country as the
+          recorded reason, whatever foreign tax line the order shows (EU or UK VAT the platform charged the
+          buyer): that tax is kept as a fact and named in the booking's reason, never a reason to hold. The whole
+          gross the buyer paid is the export's consideration, foreign tax included. Swiss tax on a delivery
+          abroad → new_case (tax invoiced is owed, Art. 27 Abs. 2)
+        why: >
+          an export of goods is exempt with the right to deduct (MWSTG Art. 23 Abs. 1 and 2 Ziff. 1); a foreign
+          VAT is not Swiss turnover tax and no durchlaufender Posten (Art. 24 Abs. 6 lit. b: it is not paid out in
+          the buyer's name), so it stays in the consideration (Art. 24 Abs. 1), declared in Ziffer 200 and
+          deducted again in Ziffer 220, net 0. Where the seller pays that tax abroad (an import VAT invoice of the
+          courier, an IOSS return), that payment is its own expense entry without Swiss input tax
+        source: booking.flow.yaml sale_vat expect; issue #74
       - id: sv-payout-orders
         when: a payment provider's payout with the order documents it holds linked (each names the payout by date and amount)
         then: >
           in code (src/booking/payout-orders.ts), by the payout rule's accounts (its `fees`) or the firm's payout answer:
           each order's gross on the sales account, delivered in the VAT territory at the firm's sale code, abroad at
-          V0; a refund deducted from the payout with the code's minus; what the provider kept as its fees. The lines
-          add up to the payout. Orders that do not add up to it, or an order whose tax line disagrees with its
-          delivery (sv-order-tax), book nothing: the payout waits for the person, as without its documents. The
+          V0 whatever foreign tax line it shows (named in the reason); a refund deducted from the payout with the
+          code's minus; what the provider kept as its fees. The lines add up to the payout. Orders that do not add
+          up to it, or an order whose tax line disagrees with its delivery (sv-order-tax: a domestic delivery
+          without the Swiss tax, Swiss tax on an export), book nothing: the payout waits for the person, as
+          without its documents. The
           match step links the documents to the one payout they add up to (src/intake/order-links.ts)
         why: one payout mixes domestic orders and exports, which no single code fits (issue #26)
         source: decision 2026-10-22, owner
