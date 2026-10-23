@@ -253,6 +253,29 @@ is «Behalten» on its card, never «Speichern» under Änderungen, and until th
 is drafted, not set (tests/assistant-app-map.test.ts; wishes test 3 told the person to press
 «Speichern»).
 
+### At a limit: «Im Terminal öffnen» (issue #146)
+
+The sidebar's AI reads the folder, writes its block and drafts; it runs no program (Bash is
+disallowed). A wish that needs more (one PDF of a quarter's receipts, a converted file, a
+script) is never refused: the answer ends with a `vanilla-terminal` block, the request written
+out, and its card offers **Im Terminal öffnen**. The button opens Terminal in the books folder
+with Claude Code or Codex started on the request (passed through a file as one argument, never
+as shell code), offers the other CLI as «oder mit …» when both are installed (the one chosen in
+Firma › KI first, Claude without a choice), says first when the CLI will ask to sign in (Codex:
+`codex login status`; Claude: the app's own last call answered), shows the command to copy, and
+with neither installed links the vendors' installation pages (src/assistant/terminal.ts,
+src/assistant/terminal-open.ts, src/app/assistant/TerminalCard.tsx). The app never checks a plan
+and never reads a CLI's login.
+
+The terminal AI reads `vanilla-accounting/AGENTS.md` (Claude Code through `CLAUDE.md`), whose
+marked section the app writes on create, on `npm run update` and before each opening
+(src/workspace/terminal-agents.ts): read freely, write what it makes into `output/` (ignored by
+git), never edit the books, and change them only by a proposal in `data/terminal/<name>.json`
+(`{ title, summary, changes }`, the sidebar's change format). The app takes each proposal into
+the sidebar as a conversation whose changes wait for **Übernehmen** whatever they change (hold
+reason `terminal`, src/assistant/terminal-drafts.ts), and makes them through the sidebar's own
+door: the period lock, the seals, the person as author.
+
 ## Questions between the people who keep the books
 
 The accountant and the owner ask each other what only the other knows, on the item itself:

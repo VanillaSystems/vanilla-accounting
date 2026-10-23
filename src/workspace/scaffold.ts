@@ -11,6 +11,7 @@ import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import { VAT_QUESTIONS, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
+import { OUTPUT_DIR, withAgentsImport, withSection } from './terminal-agents.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
 
@@ -252,6 +253,9 @@ export function planWorkspace(input: InitInput, chart: Chart, root: string, appR
       [app('master-data/accounts.json'), JSON.stringify(accounts, null, 2) + '\n'],
       [app('ledger.json'), JSON.stringify({ schema: BOOKS_SCHEMA, config: {} }, null, 2) + '\n'],
       [app('sources/README.md'), SOURCES_README],
+      [app('AGENTS.md'), withSection(undefined)],
+      [app('CLAUDE.md'), withAgentsImport(undefined)],
+      [app(`${OUTPUT_DIR}/.gitignore`), '*\n'],
       ['AGENTS.md', agentsMd(input, appRel)],
       ['CLAUDE.md', '@AGENTS.md\n'],
       ['.gitignore', GITIGNORE],

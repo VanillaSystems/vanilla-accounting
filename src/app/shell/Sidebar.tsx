@@ -39,6 +39,7 @@ import type { InvoiceLanguage, OWN_TEXTS } from '../../invoices/model.js';
 import { api } from '../lib/api.js';
 import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
 import { MailboxCard } from '../areas/company/MailboxCard.js';
+import { TerminalCard } from '../assistant/TerminalCard.js';
 import { SourceCard } from '../areas/company/SourceCard.js';
 import { questionText } from '../questions/Questions.js';
 import { dropFiles } from './DropDialog.js';
@@ -249,12 +250,13 @@ function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; tu
   const payments = new Set(held.rows.filter((r) => r.before).map((r) => r.ref)).size;
   const deleted = held.rows.filter((r) => r.before && !r.after).length;
   const different = new Set(held.rows.filter((r) => r.before).map((r) => `${r.before!.accountDebit}/${r.before!.accountCredit}`)).size > 1;
-  const why = held.why.map((w) => (w === 'payments' ? t(different ? 'assistant.held.payments' : 'assistant.held.many', { n: payments }) : w === 'deletes' ? t('assistant.held.deletes', { n: deleted }) : t('assistant.held.rateWithoutReceipt')));
+  const why = held.why.map((w) => (w === 'payments' ? t(different ? 'assistant.held.payments' : 'assistant.held.many', { n: payments })
+    : w === 'deletes' ? t('assistant.held.deletes', { n: deleted }) : w === 'terminal' ? t('assistant.held.terminal') : t('assistant.held.rateWithoutReceipt')));
   const others = held.changes.filter((c) => !isBookChange(c)).map((c, i) => describe({ id: String(i), change: c }, books).text);
   const settle = (take: boolean) => { setBusy(true); void settleHeld(turn, take).finally(() => setBusy(false)); };
   return (
     <div className={`ruledraft aiheld ${held.status}`} data-testid="held" data-status={held.status}>
-      <b>{t('assistant.held.title', { n: held.rows.length })}</b>
+      <b>{held.rows.length ? t('assistant.held.title', { n: held.rows.length }) : t('assistant.held.titleOther', { n: held.changes.length })}</b>
       {held.status === 'held' ? <span className="m">{t('assistant.held.lead')}</span> : null}
       {why.map((w) => <span key={w} className="warnline">{w}</span>)}
       <ul>
@@ -415,6 +417,7 @@ export function Sidebar({ page, books, onGo }: Props) {
           {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
           {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
           {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
+          {turn.done && turn.terminal ? <TerminalCard request={turn.terminal} /> : null}
           {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
           {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
           {turn.error ? <div className="warnline">{turn.error}</div> : null}

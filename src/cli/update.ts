@@ -5,7 +5,8 @@
  *   1. the app's folder has no uncommitted change
  *   2. git pull --ff-only
  *   3. npm ci, when package-lock.json differs from the last install
- *   4. the books and belege.workspace.yaml written at the new schema and layout (backups in data/backups/)
+ *   4. the books and belege.workspace.yaml written at the new schema and layout (backups in data/backups/),
+ *      and the terminal AI's instructions (src/workspace/terminal-agents.ts)
  *   5. npm run doctor
  *   6. npm run test:books: no filed figure moved (skipped while the workspace has no expected/)
  *
@@ -17,6 +18,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
+import { ensureTerminalAgents } from '../workspace/terminal-agents.js';
 import { convertMail, mailConfigured } from '../platform/sources/mail.js';
 import { config as loadEnv } from 'dotenv';
 import { APP_ROOT, openWorkspace, openWorkspaceAt, partDirs } from '../workspace/workspace.js';
@@ -110,6 +112,14 @@ const afterPull: Step[] = [
       } catch (e) {
         return failed((e as Error).message.split('\n')[0], 'Each file is written whole, and a rerun finishes the rest: fix what the message names, then run npm run update again.');
       }
+    },
+  },
+  {
+    name: 'Instructions for an AI in the terminal (vanilla-accounting/AGENTS.md)',
+    run() {
+      const ws = openWorkspace();
+      const written = ensureTerminalAgents(ws.paths);
+      return done(written.length ? `${written.join(', ')} written; commit them with the workspace` : 'up to date');
     },
   },
   {

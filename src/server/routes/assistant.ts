@@ -21,6 +21,7 @@ import { applyWorkspaceChange, withMailHosts } from '../workspace-edits.js';
 import { collectionNow } from '../collection-now.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import { heldRows, holdReasons, withoutProof } from '../../assistant/held.js';
+import { takeInProposals } from '../../assistant/terminal-drafts.js';
 import { appMap } from '../app-map.js';
 import { automationView, bookAgain, engine } from './automation.js';
 import { openWork } from '../open-work.js';
@@ -69,7 +70,9 @@ function ndjson(res: Response): (e: AssistantEvent) => void {
   return (e) => { res.write(JSON.stringify(e) + '\n'); };
 }
 
-router.get('/api/assistant', (_req, res) => {
+router.get('/api/assistant', async (_req, res) => {
+  // What an AI in the terminal proposed comes in as a conversation, held for «Übernehmen» (issue #146).
+  await takeInProposals(WS, apply);
   res.json(listConversations(WS));
 });
 
@@ -209,7 +212,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
   let books: Array<Omit<MadeChange, 'id'>> = [];
   const asked = changes.filter(isBookChange);
   const chart = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
-  if (hold && asked.length) {
+  if (hold === 'always' || (hold && asked.length)) {
     const added = changes.flatMap((c) => (c.kind === 'account' && c.name !== null ? [c.number] : []));
     const before = readBooks();
     const trial = readBooks();
@@ -219,7 +222,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
       throw new RefusedChanges((e as Error).message, refusalOf(e));
     }
     const rows = heldRows(before, trial);
-    const why = holdReasons(rows);
+    const why = [...(hold === 'always' ? ['terminal' as const] : []), ...holdReasons(rows)];
     if (why.length) return { held: { why, rows } };
   }
   try {

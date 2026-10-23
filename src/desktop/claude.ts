@@ -20,10 +20,12 @@ export function loginPath(shell = process.env.SHELL || '/bin/zsh', timeoutMs = 8
   });
 }
 
-/** The first executable `claude` on `path`. A shell alias of that name is not a program and is not found. */
-export function claudeOn(path: string): string | undefined {
-  return path.split(':').filter(isAbsolute).map((dir) => join(dir, 'claude')).find(executable);
+/** The first executable `name` on `path`. A shell alias of that name is not a program and is not found. */
+export function programOn(path: string, name: string): string | undefined {
+  return path.split(':').filter(isAbsolute).map((dir) => join(dir, name)).find(executable);
 }
+
+export const claudeOn = (path: string): string | undefined => programOn(path, 'claude');
 
 export async function findClaude(shell?: string): Promise<string | undefined> {
   const path = await loginPath(shell);

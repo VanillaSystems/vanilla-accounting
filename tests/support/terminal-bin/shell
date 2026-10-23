@@ -1,0 +1,3 @@
+#!/bin/sh
+# A login shell whose PATH is $TERMINAL_STUB_PATH (src/desktop/claude.ts loginPath runs `$SHELL -ilc <command>`).
+PATH="$TERMINAL_STUB_PATH" exec /bin/sh -c "$2"

@@ -173,6 +173,7 @@ function apply(e: AssistantEvent): void {
     case 'error': withAi((t) => ({ ...t, error: e.message, done: true })); break;
     case 'changes': withAi((t) => ({ ...t, changes: e.changes })); booksChanged(); break;
     case 'held': withAi((t) => ({ ...t, held: e.held })); break;
+    case 'terminal': withAi((t) => ({ ...t, terminal: e.request })); break;
     case 'refused': withAi((t) => ({ ...t, text: '', withdrawn: t.text, refused: e.message, ...(e.refusal ? { refusal: e.refusal } : {}) })); break;
     case 'replace': withAi((t) => ({ ...t, text: e.text })); break;
     case 'done': withAi((t) => ({ ...t, done: true })); break;

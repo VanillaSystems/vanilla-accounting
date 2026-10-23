@@ -17,9 +17,17 @@ import { domainOf } from '../platform/sources/mail-host.js';
 import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState } from '../onboarding/model.js';
 
 const BLOCK = /```vanilla-changes\s*([\s\S]*?)(?:```|$)/;
+/** «Im Terminal öffnen» (issue #146): the request, written out for an AI in the terminal, that the answer offers to continue there. */
+const TERMINAL = /```vanilla-terminal\s*([\s\S]*?)(?:```|$)/;
 
-/** The text without the block; also while it streams in, an unfinished block is not shown. */
-export const withoutChanges = (text: string): string => text.replace(BLOCK, '').trimEnd();
+/** The text without the blocks; also while it streams in, an unfinished block is not shown. */
+export const withoutChanges = (text: string): string => text.replace(BLOCK, '').replace(TERMINAL, '').trimEnd();
+
+/** The request the answer offers to continue in the terminal; none without a block (or an empty one). */
+export function terminalRequest(text: string): string | undefined {
+  const request = TERMINAL.exec(text)?.[1].trim();
+  return request || undefined;
+}
 
 /** A block the app cannot read as changes; `refusal` when a person can be told in plain words what is wrong. */
 export class ChangesError extends Error {
@@ -219,6 +227,11 @@ export function changesIn(text: string): Change[] {
   if (!m) return [];
   let raw: unknown;
   try { raw = JSON.parse(m[1]); } catch { throw new ChangesError('kein gültiges JSON'); }
+  return changesOf(raw);
+}
+
+/** A list of changes as JSON gives it (a block, a proposal from the terminal), each checked; throws at the first that is wrong. */
+export function changesOf(raw: unknown): Change[] {
   if (!Array.isArray(raw)) throw new ChangesError('keine Liste');
   return raw.map(change);
 }

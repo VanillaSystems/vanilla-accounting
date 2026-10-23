@@ -1,3 +1,4 @@
+import type { TerminalCli, TerminalView } from '../../assistant/terminal.js';
 import type { StatementProblem } from '../../types/api-error.js';
 import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
@@ -178,6 +179,8 @@ export function errorText(e: unknown): string {
     case 'attachment': return t(`error.attachment.${b.params.reason}`, { name: b.params.name, mb: 'mb' in b.params ? b.params.mb : 0, limit: ATTACHMENT_MAX_MB });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
+    case 'terminalNotMac': return t('error.terminalNotMac');
+    case 'terminalNoCli': return t('error.terminalNoCli');
     case 'aiModelUnfit': return t('error.aiModelUnfit', b.params);
     case 'aiKeyRefused': return t('error.aiKeyRefused');
     case 'aiKeyWhere': return t('error.aiKeyWhere', b.params);
@@ -493,6 +496,9 @@ export const api = {
   ai: () => request<AiView>('GET', '/api/ai'),
   setAiStep: (step: StepId, choice: { provider: ProviderId; model: string } | { provider: null }) => request<AiView>('PUT', `/api/ai/steps/${step}`, choice),
   setAiKey: (provider: ProviderId, key: string | null) => request<AiView>('PUT', `/api/ai/keys/${provider}`, { key }),
+  terminal: () => request<TerminalView>('GET', '/api/terminal'),
+  setTerminal: (preferred: TerminalCli | null) => request<TerminalView>('PUT', '/api/terminal', { preferred }),
+  openTerminal: (text: string, cli?: TerminalCli) => request<{ cli: TerminalCli }>('POST', '/api/terminal/open', { request: text, ...(cli ? { cli } : {}) }),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),

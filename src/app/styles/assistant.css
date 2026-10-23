@@ -193,3 +193,12 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .aipickfile { display: flex; align-items: center; gap: 8px; margin: 0 4px 4px; padding: 7px 8px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; font-size: 13px; text-align: left; cursor: pointer; border-radius: 0 0 8px 8px; }
 .aipickfile:hover { background: var(--hover); }
 .aipickfile .ic { width: 16px; height: 16px; color: var(--muted); }
+
+/* «Im Terminal öffnen» (src/app/assistant/TerminalCard.tsx, issue #146). */
+.aiterminal { margin-left: 0; }
+.aiterminalreq { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; border-radius: 6px; background: var(--hover); }
+.aiterminalreq p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.aiterminalcmd summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.aiterminalcmd code { display: block; margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--hover); font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.aiterminalinstall { display: flex; flex-direction: column; gap: 4px; }
+.aiterminalinstall ul { list-style: disc; padding-left: 18px; }

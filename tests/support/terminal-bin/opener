@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stands in for `open -a Terminal <script>` (VANILLA_TERMINAL_OPENER): runs the .command script as Terminal would.
+[ "$1" = -a ] && [ "$2" = Terminal ] || exit 2
+exec /bin/sh "$3"

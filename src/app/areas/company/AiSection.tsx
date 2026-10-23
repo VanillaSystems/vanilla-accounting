@@ -3,12 +3,13 @@
  * that are there (the Claude subscription through Claude Code, an API key kept in the keychain),
  * and a model per step; a step's list holds only the models that can do what it needs.
  */
-import { useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { t } from '../../i18n/index.js';
 import { api, errorText } from '../../lib/api.js';
 import type { AiProviderView, AiStepView, AiView } from '../../../llm/view.js';
 import type { ProviderId } from '../../../llm/provider.js';
 import type { Nav } from '../index.js';
+import { chooseCli, type TerminalCli, type TerminalView } from '../../../assistant/terminal.js';
 
 const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) => can.includes(n));
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';
@@ -78,7 +79,44 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
         })}
       </div>
       <p className="m src-note">{t('ai.fallback')}</p>
+      <TerminalSection nav={nav} canEdit={canEdit} />
     </div>
+  );
+}
+
+/** «Im Terminal öffnen» (issue #146): which of Claude Code and Codex this computer has, and the one the button starts when both are there. */
+function TerminalSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
+  const [view, setView] = useState<TerminalView>();
+  useEffect(() => { api.terminal().then(setView, (e) => nav.toast(errorText(e))); }, []);
+  if (!view) return null;
+  const installed = view.clis.filter((c) => c.installed).map((c) => c.cli);
+  const chosen = chooseCli(view.clis, view.preferred);
+  const prefer = async (cli: TerminalCli) => {
+    try { setView(await api.setTerminal(cli)); nav.toast(t('ai.terminal.saved', { cli: t(`terminal.cli.${cli}`) })); } catch (e) { nav.toast(errorText(e)); }
+  };
+  return (
+    <>
+      <h3>{t('ai.terminal.title')}</h3>
+      <p className="m">{t('ai.terminal.intro')}</p>
+      <dl className="kv2 wide">
+        {view.clis.map((c) => (
+          <Fragment key={c.cli}>
+            <dt>{t(`terminal.cli.${c.cli}`)}</dt>
+            <dd>{t(!c.installed ? 'ai.terminal.missing' : c.signedIn === false ? 'ai.terminal.signedOut' : 'ai.terminal.installed')}</dd>
+          </Fragment>
+        ))}
+        {installed.length > 1 && chosen.kind === 'open' ? (
+          <>
+            <dt>{t('ai.terminal.opensWith')}</dt>
+            <dd>
+              <select aria-label={t('ai.terminal.opensWith')} value={chosen.cli} disabled={!canEdit} onChange={(e) => void prefer(e.target.value as TerminalCli)}>
+                {installed.map((cli) => <option key={cli} value={cli}>{t(`terminal.cli.${cli}`)}</option>)}
+              </select>
+            </dd>
+          </>
+        ) : null}
+      </dl>
+    </>
   );
 }
 
