@@ -1,7 +1,7 @@
 /**
  * «Rückgängig» after a receipt was deleted restores exactly: the receipt, its links, and the entries
  * the deletion took with it, as they were (same ids, same fields), without asking the model again.
- * The entries booked meanwhile without the receipt go; a person's entry booked meanwhile stays, and
+ * Meanwhile the payment waits for its receipt (issue #29); a person's entry booked meanwhile stays, and
  * the deleted entry of that payment is not brought back.
  */
 import { test } from 'node:test';
@@ -62,7 +62,7 @@ test('restoring a deleted receipt puts its entries back as they were, without a 
     assert.equal(deleted.status, 200, JSON.stringify(deleted.json));
     await rest();
     assert.deepEqual(await links(), []);
-    assert.deepEqual((await onL()).map((e) => [e.vatCode, e.receipts]), [['I0', []]], 'booked again without the receipt: no input tax');
+    assert.deepEqual(await onL(), [], 'no booking without the receipt: the payment waits for it (issue #29)');
     const calls = bookingCalls();
 
     const restored = await api.send('POST', `/api/receipts/${receipt.id}/restore`);
@@ -82,8 +82,10 @@ test('a hand booking made meanwhile stays; the deleted entry of that payment is 
   try {
     assert.equal((await api.send('DELETE', `/api/receipts/${receipt.id}`)).status, 200);
     await rest();
+    assert.deepEqual(await onL(), []);
+    const byHand = await api.send('POST', '/api/transactions/REF-L/entries', { lines: [{ accountDebit: '6510', accountCredit: '1021', amount: 217.75, vatCode: 'I0', description: 'Post, von Hand' }] });
+    assert.equal(byHand.status, 200, JSON.stringify(byHand.json));
     const [rebooked] = await onL();
-    assert.equal((await api.send('PATCH', `/api/journal-entries/${rebooked.id}`, { accountDebit: '6510' })).status, 200);
     const calls = bookingCalls();
 
     assert.equal((await api.send('POST', `/api/receipts/${receipt.id}/restore`)).status, 200);

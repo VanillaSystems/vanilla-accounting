@@ -19,3 +19,14 @@ facts:
   - id: salary-report
     fact: after the year ends, the employer reports each employee's salary (Lohnbescheinigung) by 30 January; the fund then bills or refunds the difference to the Akonto payments
     source: AHVV Art. 36
+
+steps:
+  evidence.guide.yaml#rules:
+    rules:
+      - id: ev-ausgleichskasse-notice
+        when: a payment to or from the compensation fund
+        then: "booked at once, without waiting for a receipt: the payment settles the fund's contribution invoice, kept with the payroll documents"
+        apply: { receipt: none }
+        why: it carries no input tax, so no receipt changes its booking (issue #29)
+        source: decision 2026-10-21, owner
+    precedents: []

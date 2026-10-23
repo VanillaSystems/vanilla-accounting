@@ -8,6 +8,7 @@
  * while it is not read yet.
  */
 import { addDays, type IsoDate } from '../../accounting/periods.js';
+import { waitingForReceipt } from '../../accounting/receipt-due.js';
 import type { Index, JournalEntry, Receipt } from '../../types/index.js';
 import { nextRun } from '../../workflows/cron.js';
 import type { AutomationView, WorkflowDecl } from '../../workflows/model.js';
@@ -91,6 +92,8 @@ export interface HomeFigures {
    * author the books record; undefined when none of them records it.
    */
   withoutYou?: number;
+  /** Payments of the period the app does not book yet because their receipt has not come (issue #29): the app's work, not the person's. */
+  waitingReceipt: number;
   filing: FilingStage;
 }
 
@@ -131,6 +134,8 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext,
     booked,
     authors,
     ...(known > 0 ? { withoutYou: Math.round((authors.app / known) * 100) } : {}),
+    waitingReceipt: waitingForReceipt(books, (ref) => entriesOf.has(ref), ctx.today)
+      .filter((w) => w.tx.date >= period.from && w.tx.date <= period.to).length,
     filing: filingStage(books.config?.closedThrough, period, ctx),
   };
 }

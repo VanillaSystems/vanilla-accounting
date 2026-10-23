@@ -161,7 +161,7 @@ test('without a working claude CLI the run reads and imports, and says what wait
     assert.equal(run.status, 'done');
     const notes = notesOf(run);
     assert.deepEqual(notes.match, [{ code: 'noModel', waiting: 1 }]);
-    assert.deepEqual(notes.book, [{ code: 'noModel', waiting: 1 }]);
+    assert.deepEqual(notes.book, [{ code: 'waitingReceipt', count: 1 }], 'its receipt is not linked without the model: the payment waits for it, asking no model');
     const b: Books = loadBooks(workspaceAt(noModel.ws.paths.root));
     const r = b.receipts.find((x) => x.filename === DROPPED);
     assert.equal(r?.location, 'staged', 'read, and waiting in the inbox for the model to name it');

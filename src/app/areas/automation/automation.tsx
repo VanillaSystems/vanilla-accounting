@@ -40,12 +40,13 @@ import { useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
-import { EvidenceTasks, FiledEvidence, PeriodIssues, ThresholdTasks, thresholdPassed, TwinTasks } from './Issues.js';
+import { EvidenceTasks, FiledEvidence, PeriodIssues, ReceiptDueTasks, ThresholdTasks, thresholdPassed, TwinTasks } from './Issues.js';
 import { openTwins } from '../receipts/model.js';
 import { ledgerFor } from '../receipts/view.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
+import { waitingForReceipt } from '../../../accounting/receipt-due.js';
 import { periodName } from '../../lib/period-label.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
@@ -489,6 +490,7 @@ function noteText(n: IntakeNote): string {
     case 'sameBytes': return t('automation.note.sameBytes', { n: n.files.length, files: n.files.map((f) => `${f.file} = ${f.of}`).join(', ') });
     case 'asked': return t('automation.note.asked', { n: n.count });
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
+    case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
     case 'payoutsHeld': return t('automation.note.payoutsHeld', { n: n.payouts.length, payouts: n.payouts.map((p) => {
       const w = holdWords(p.hold);
       return t('automation.note.payoutHeld', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, why: tWith(w.key, w.vars) });
@@ -707,7 +709,11 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const tasks = view.tasks.filter((task) => !bookedMeanwhile(task));
   // A payment nobody booked waits for the person even when no run asked about it (corner-9).
   const inTasks = new Set(tasks.map(unbooked).filter(Boolean));
-  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref));
+  // A payment that waits for its receipt is the app's work until its return comes near, then a task of its own (issue #29).
+  const forReceipt = waitingForReceipt(books, (ref) => booked(ref) === 'booked', localToday());
+  const receiptDue = forReceipt.filter((w) => w.kind === 'asks');
+  const held = new Set(forReceipt.map((w) => w.tx.ref));
+  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0;
   // A firm not registered whose turnover passed the threshold has a task without any run (r5f-9).
   const threshold = thresholdPassed(books, useWorkspace()?.company.vat.registered);
@@ -715,6 +721,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
       <ThresholdTasks nav={nav} passed={threshold} />
+      <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} />
       {tasks.length ? (
         <div className="wftasks">
           {tasks.map((task) => {
@@ -760,7 +767,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             );
           })}
         </div>
-      ) : asked || waiting.length || evidence || threshold.length ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      ) : asked || waiting.length || evidence || threshold.length || receiptDue.length ? null : <p className="lead">{t('automation.tasksEmpty')}</p>}
       <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
       <FiledEvidence books={books} nav={nav} />
       <TwinTasks books={books} nav={nav} canEdit={canEdit} />
