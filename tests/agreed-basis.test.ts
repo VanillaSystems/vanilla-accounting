@@ -21,7 +21,9 @@ import { periodLock, type Books } from '../src/books/store.js';
 import { ech0217Xml } from '../src/providers/ech0217/xml.js';
 import { parseFiledReturn } from '../src/accounting/filed-return.js';
 import { chfAmount } from '../src/accounting/ledger.js';
-import type { BankTransaction, JournalEntry, QuarterKey } from '../src/types/index.js';
+import type { BankTransaction, JournalEntry, QuarterKey, Receipt } from '../src/types/index.js';
+import { classifyTransactions, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
+
 
 const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 const AGREED: VatSetup = { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' };
@@ -165,6 +167,26 @@ test('the switch: open invoices of the year before count in the first open perio
   const entries = bookPayment(b, p, old, { transactionRef: 'p1', date: '2026-02-03', amount: 581, by: 'confirmed' }, ctx, { files: [] });
   assert.deepEqual(entries.map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']), [['1021', '1100', 581, '']]);
   assert.deepEqual(bookInvoiceEvents(b, book, ctx).booked, [], 'the cash basis books no events');
+});
+
+test('the classifier books a supplier\'s payment on the agreed basis: the bill\'s input tax on its date, the payment settles the payable', async () => {
+  setJurisdiction(ch, AGREED);
+  const context: ClassifyContext = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank', role: 'bank' }], vat: AGREED };
+  const answer: ClassifyDeps['ask'] = async (prompt) => {
+    const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
+    return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries: [{ accountDebit: '6500', accountCredit: '1021', amount: 108.1, vatCode: 'I81', description: 'Swisscom' }], reason: 'Telefon.' }])));
+  };
+  const run = async (billDate: string) => {
+    const pay = tx('B1', '2026-10-17', 108.1, 'DBIT', { description: 'Swisscom' });
+    const bill = { id: 'r1', filename: 'swisscom.pdf', originalFilename: 'swisscom.pdf', extractedText: 'Swisscom Rechnung', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: `${billDate}T08:00:00Z`, location: 'archived', date: billDate, amount: 108.1, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 100, vat: 8.1, gross: 108.1 }] } as Receipt;
+    const b = { ...books('2026-09-30', [pay]), receipts: [bill], mappings: [{ transactionRef: 'B1', receiptId: 'r1' }] };
+    const out = await classifyTransactions(b, [pay], { ask: answer, fx: { daily: () => undefined, flat: () => undefined }, context });
+    assert.deepEqual(out.classified, ['B1'], JSON.stringify(out.failed));
+    return b.journalEntries.map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '', e.corrects ?? '']);
+  };
+  assert.deepEqual(await run('2026-10-02'), [['2026-10-02', '6500', '2000', 108.1, 'I81', ''], ['2026-10-17', '2000', '1021', 108.1, '', '']]);
+  assert.deepEqual(await run('2026-09-20'), [['2026-10-17', '6500', '1021', 108.1, 'I81', '2026-Q3']], 'the bill of the filed Q3: its input tax into Q3\'s correction');
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
 });
 
 test('settlement lines: a debit left on the open item is a loss, a credit a gain; nothing in the books\' currency', () => {

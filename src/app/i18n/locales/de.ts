@@ -1765,7 +1765,7 @@ export const messages = {
   'company.noneFiled': 'noch keine Abrechnung',
   'company.toVat': 'Zur MWST-Abrechnung →',
   'company.toCodes': 'MWST-Codes erklärt →',
-  'company.vatRule': 'Eintragung, Methode, Periode und Satz gelten für ganze Jahre: ein Wechsel ist nur in einem Jahr ohne Buchungen möglich, also auf den 1. Januar nach dem Jahresabschluss. Tätigkeit und Tätigkeitscode eines Satzes kannst du jederzeit ergänzen.',
+  'company.vatRule': 'Eintragung, Methode, Abrechnungsart, Periode und Satz gelten für ganze Jahre: ein Wechsel ist nur in einem Jahr ohne Buchungen möglich, also auf den 1. Januar nach dem Jahresabschluss. Tätigkeit und Tätigkeitscode eines Satzes kannst du jederzeit ergänzen.',
   'company.bank': 'Bank',
   'company.iban': 'IBAN',
   'company.currency': 'Währung',

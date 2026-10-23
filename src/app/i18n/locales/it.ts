@@ -1768,7 +1768,7 @@ export default {
     'company.noneFiled': 'ancora nessun rendiconto',
     'company.toVat': 'Al rendiconto IVA →',
     'company.toCodes': 'Codici IVA spiegati →',
-    'company.vatRule': 'Iscrizione, metodo, periodo e aliquota valgono per anni interi: un cambio è possibile solo in un anno senza registrazioni, cioè al 1° gennaio dopo la chiusura. Attività e codice attività di un’aliquota si possono aggiungere in ogni momento.',
+    'company.vatRule': 'Iscrizione, metodo, modalità di rendiconto, periodo e aliquota valgono per anni interi: un cambio è possibile solo in un anno senza registrazioni, cioè al 1° gennaio dopo la chiusura. Attività e codice attività di un’aliquota si possono aggiungere in ogni momento.',
     'company.bank': 'Banca',
     'company.iban': 'IBAN',
     'company.currency': 'Valuta',

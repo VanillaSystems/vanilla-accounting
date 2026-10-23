@@ -1768,7 +1768,7 @@ export default {
     'company.noneFiled': 'no return yet',
     'company.toVat': 'To the VAT return →',
     'company.toCodes': 'VAT codes explained →',
-    'company.vatRule': 'Registration, method, period and rate hold for whole years: a change is possible only in a year without entries, that is on 1 January after the year-end close. A rate’s activity and activity code can be added any time.',
+    'company.vatRule': 'Registration, method, basis, period and rate hold for whole years: a change is possible only in a year without entries, that is on 1 January after the year-end close. A rate’s activity and activity code can be added any time.',
     'company.bank': 'Bank',
     'company.iban': 'IBAN',
     'company.currency': 'Currency',

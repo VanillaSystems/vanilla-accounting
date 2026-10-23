@@ -1768,7 +1768,7 @@ export default {
     'company.noneFiled': 'aucun décompte encore',
     'company.toVat': 'Vers le décompte TVA →',
     'company.toCodes': 'Codes TVA expliqués →',
-    'company.vatRule': 'Inscription, méthode, période et taux valent pour des années entières: un changement n’est possible que dans une année sans écritures, soit au 1er janvier après la clôture. L’activité et le code d’activité d’un taux se complètent à tout moment.',
+    'company.vatRule': 'Inscription, méthode, mode de décompte, période et taux valent pour des années entières: un changement n’est possible que dans une année sans écritures, soit au 1er janvier après la clôture. L’activité et le code d’activité d’un taux se complètent à tout moment.',
     'company.bank': 'Banque',
     'company.iban': 'IBAN',
     'company.currency': 'Monnaie',
