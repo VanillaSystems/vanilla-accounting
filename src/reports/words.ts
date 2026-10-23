@@ -7,7 +7,7 @@ import type { Words } from '../export/tables.js';
 
 /** A key of the UI's dictionaries, as the words take it. */
 type Key = Parameters<Words['t']>[0];
-import { COLUMNS, FILTERS, GROUPINGS, accountRangeText, type ReportRefusal, type ReportSection } from './spec.js';
+import { COLUMNS, FILTERS, GROUPINGS, accountRangeText, groupDimension, type ReportRefusal, type ReportSection } from './spec.js';
 import type { ReportGroup, ReportResult } from './result.js';
 import { vatParts } from '../accounting/vat-in-figures.js';
 
@@ -22,6 +22,7 @@ export const sectionName = (s: ReportSection, i: number, w: Words): string => s.
 export function fieldName(what: string, t: T): string {
   if ((FILTERS as readonly string[]).includes(what)) return t(`custom.filter.${what}` as Key);
   if ((GROUPINGS as readonly string[]).includes(what)) return t(`custom.group.${what}` as Key);
+  if (what.startsWith('tag:')) return t('custom.group.tag', { dimension: what.slice(4) });
   if ((COLUMNS as readonly string[]).includes(what)) return t(`custom.col.${what}` as Key);
   return what;
 }
@@ -33,6 +34,7 @@ export function refusalText(r: ReportRefusal, t: T): string {
     case 'period': return t('custom.refusal.period', r.params);
     case 'unknownAccount': return t('custom.refusal.unknownAccount', r.params);
     case 'unknownVatCode': return t('custom.refusal.unknownVatCode', r.params);
+    case 'unknownDimension': return t('custom.refusal.unknownDimension', r.params);
     case 'placeholder': return t('custom.refusal.placeholder', r.params);
     case 'figureInComment': return t('custom.refusal.figureInComment', r.params);
   }
@@ -53,7 +55,8 @@ export function filtersInWords(s: ReportSection, w: Words): string {
     f.origins && t('custom.f.origins', { list: f.origins.map((o) => t(`custom.origin.${o}` as Key)).join(', ') }),
     f.receipt && t(f.receipt === 'with' ? 'custom.f.receiptWith' : 'custom.f.receiptWithout'),
     f.currencies && t('custom.f.currencies', { list: f.currencies.join(', ') }),
-    s.group !== 'none' && t(`custom.group.${s.group}` as Key),
+    f.tags && t('custom.f.tags', { list: Object.entries(f.tags).map(([d, vs]) => `${d}: ${vs.map((v) => v || t('custom.none')).join(', ')}`).join('; ') }),
+    s.group !== 'none' && (groupDimension(s.group) ? t('custom.group.tag', { dimension: groupDimension(s.group)! }) : t(`custom.group.${s.group}` as Key)),
   ].filter(Boolean).join(' · ');
 }
 

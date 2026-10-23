@@ -11,6 +11,7 @@
  */
 import type { Index, JournalEntry, QuarterKey } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
+import type { MoneyRole } from '../workspace/banks.js';
 import type { LegalForm } from '../workspace/setup.js';
 import { bookedStates } from './payment-entries.js';
 import type { SealReport } from '../books/seal.js';
@@ -500,6 +501,8 @@ export interface YearCloseState {
   templates: Record<string, TemplateState>;
   closedAt?: string;
   openedAt?: string;
+  /** The cash the person counted on 31.12., per cash account, in its own currency: a cash box's proof of its balance (#119). */
+  cashCounts?: Record<string, number>;
 }
 
 export const emptyState = (year: string): YearCloseState => ({ year, templates: {} });
@@ -543,6 +546,9 @@ export type Problem =
   | { code: 'sealBroken'; quarter: QuarterKey; problem: string }
   | { code: 'noYearEndBalance'; account: string; label: string }
   | { code: 'balanceDiffers'; account: string; label: string; currency: string; bank: number; book: number; date: string }
+  | { code: 'noCashCount'; account: string; label: string }
+  /** The cash counted on 31.12. against the books: shown, never booked by the app; the person books the difference or counts again. */
+  | { code: 'cashDiffers'; account: string; label: string; currency: string; counted: number; book: number }
   | { code: 'statementGap'; account: string; label: string; from: string; to: string }
   | { code: 'unbooked'; count: number; refs: string[] }
   | { code: 'doctor'; label: string }
@@ -575,7 +581,14 @@ export interface Check {
 export const unbookedRefs = (checks: readonly Check[]): string[] => checks.flatMap((c) => c.problems.flatMap((p) => (p.code === 'unbooked' ? p.refs : [])));
 
 /** A bank's balance at a date, in the account's own currency, as its statement shows it. */
-export interface BankBalance { account: string; date: string; amount: number; source: string }
+export interface BankBalance {
+  account: string;
+  date: string;
+  amount: number;
+  source: string;
+  /** The bank's year-end confirmation a person attached (#119), not a statement. */
+  document?: true;
+}
 
 export interface YearCloseInput {
   year: string;
@@ -610,6 +623,8 @@ export interface YearClose {
   templates: Array<EntryTemplate & { state?: TemplateState; booked?: BookedEntry[]; stale?: StaleFigure }>;
   receivables: Receivables;
   ledger: ClosingLedger;
+  /** Every bank, card and cash account's balance on 31.12. against its proof: what the «bankReconciled» check reads. */
+  balances: YearEndBalance[];
   /** Why "Jahr abschliessen" refuses; empty when it may run. */
   blockers: Problem[];
   state: YearCloseState;
@@ -640,10 +655,7 @@ function preconditions(input: YearCloseInput): Check[] {
     else if (!sealed.has(q) && dates.some((d) => d >= from && d <= to)) sealProblems.push({ code: 'unsealed', quarter: q });
   }
 
-  const rows = reconciliationAtYearEnd(input);
-  const bankProblems: Problem[] = rows.flatMap((r): Problem[] => r.bank === undefined
-    ? [{ code: 'noYearEndBalance', account: r.account, label: r.label }]
-    : toRappen(r.bank) === toRappen(r.book) ? [] : [{ code: 'balanceDiffers', account: r.account, label: r.label, currency: r.currency, bank: r.bank, book: r.book, date: yearEnd(year) }]);
+  const bankProblems = yearEndBalances(input).flatMap((r) => balanceProblems(r, year));
 
   const gaps = statementGaps(input);
 
@@ -669,29 +681,79 @@ function preconditions(input: YearCloseInput): Check[] {
   ];
 }
 
-interface YearEndRow { account: string; label: string; currency: string; book: number; bank?: number }
+/**
+ * What proves a money account's balance on 31.12. (#119): the bank's word (an imported statement
+ * covering the day, or the year-end confirmation the person attached) for an account at a bank or
+ * a card issuer, the person's count for a cash box. The owner's, an employee's and a clearing
+ * account need no outside confirmation.
+ */
+export type YearEndProof = 'bank' | 'count';
+const PROOF: Record<MoneyRole, YearEndProof | undefined> = { bank: 'bank', card: 'bank', cash: 'count', owner: undefined, employee: undefined, clearing: undefined };
 
-/** Every account with bank statements: its book balance on 31.12. in its own currency, and the bank's. */
-function reconciliationAtYearEnd({ year, books, bankAccounts, bankBalances }: YearCloseInput): YearEndRow[] {
+export const proofOf = (role: MoneyRole): YearEndProof | undefined => PROOF[role];
+
+/** A money account's balance on 31.12. in its own currency: the books', and what its proof states (absent while none is in). */
+export interface YearEndBalance {
+  account: string;
+  label: string;
+  currency: string;
+  proof: YearEndProof;
+  book: number;
+  stated?: number;
+  /** The statement or document the bank's balance was read from. */
+  source?: string;
+  /** The balance is the bank's year-end confirmation the person attached, not a statement's. */
+  document?: true;
+}
+
+/** Every bank, card and cash account of the manifest with its balance on 31.12., as the books and its proof state it. */
+export function yearEndBalances({ year, books, bankAccounts, bankBalances, state }: Pick<YearCloseInput, 'year' | 'books' | 'bankAccounts' | 'bankBalances' | 'state'>): YearEndBalance[] {
   const own = isRevaluationOf(year);
   const entries = books.journalEntries.filter((e) => !own(e));
   const seen = new Set<string>();
-  return bankAccounts.filter((b) => b.statements && !seen.has(b.account) && seen.add(b.account)).map((b) => {
+  return bankAccounts.flatMap((b): YearEndBalance[] => {
+    const proof = PROOF[b.role];
+    if (!proof || seen.has(b.account)) return [];
+    seen.add(b.account);
     const book = bookBalanceNative(entries, b.account, b.currency, year, yearEnd(year), nativeOpening(books, b.account, b.currency, year));
-    const bank = bankBalances.find((x) => x.account === b.account && x.date === yearEnd(year))?.amount;
-    return { account: b.account, label: b.label, currency: b.currency, book, bank };
+    const row: YearEndBalance = { account: b.account, label: b.label, currency: b.currency, proof, book };
+    if (proof === 'count') {
+      const counted = state.cashCounts?.[b.account];
+      return [counted === undefined ? row : { ...row, stated: counted }];
+    }
+    // A statement covering the day is the proof before a confirmation the person attached.
+    const day = bankBalances.filter((x) => x.account === b.account && x.date === yearEnd(year));
+    const bank = day.find((x) => !x.document) ?? day[0];
+    return [bank ? { ...row, stated: bank.amount, source: bank.source, ...(bank.document && { document: true as const }) } : row];
   });
 }
 
-/** Stretches of the year no statement of an account covers, from 1.1. (or its first statement, for an account opened during the year). */
+function balanceProblems(r: YearEndBalance, year: string): Problem[] {
+  const { account, label, currency, book, stated } = r;
+  if (stated === undefined) return [r.proof === 'bank' ? { code: 'noYearEndBalance', account, label } : { code: 'noCashCount', account, label }];
+  if (toRappen(stated) === toRappen(book)) return [];
+  return [r.proof === 'bank'
+    ? { code: 'balanceDiffers', account, label, currency, bank: stated, book, date: yearEnd(year) }
+    : { code: 'cashDiffers', account, label, currency, counted: stated, book }];
+}
+
+/**
+ * Stretches of the year no statement of an account covers, from 1.1. (or its first statement, for
+ * an account opened during the year): on an account with an imported statement, as Kontoauszüge
+ * marks a month «fehlt» (#116), and on the roles the country's law asks it of (year-end.yaml
+ * `moneyAccounts.monthlyStatements`; Switzerland asks it of none).
+ */
 function statementGaps({ year, books, bankAccounts }: YearCloseInput): Problem[] {
   const out: Problem[] = [];
   const seen = new Set<string>();
+  const byLaw = new Set(yearEndData().moneyAccounts?.monthlyStatements ?? []);
   for (const b of bankAccounts) {
-    if (!b.statements || seen.has(b.account)) continue;
+    if (seen.has(b.account)) continue;
+    const statements = books.bankStatements.filter((s) => s.bank === b.bank && (!s.currency || s.currency === b.currency));
+    if (!statements.length && !byLaw.has(b.role)) continue;
     seen.add(b.account);
-    const ranges = books.bankStatements
-      .filter((s) => s.bank === b.bank && (!s.currency || s.currency === b.currency) && s.toDate >= `${year}-01-01` && s.fromDate <= yearEnd(year))
+    const ranges = statements
+      .filter((s) => s.toDate >= `${year}-01-01` && s.fromDate <= yearEnd(year))
       .map((s) => [s.fromDate, s.toDate] as const)
       .sort(([a], [c]) => a.localeCompare(c));
     const openedThisYear = !books.config.openingBalances?.[year]?.[b.account] && !books.config.openingBalancesNative?.[year]?.[b.account];
@@ -755,6 +817,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     templates,
     receivables,
     ledger,
+    balances: yearEndBalances(input),
     blockers: dedupe(blockers),
     state,
   };

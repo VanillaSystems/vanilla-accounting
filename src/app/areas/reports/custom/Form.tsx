@@ -16,6 +16,7 @@ import { draftOf, newDraft, newSection, rawOf, withSource, type FormDraft, type 
 import type { ReportResult } from '../../../../reports/result.js';
 import { ReportView, uiWords } from './ReportView.js';
 import { editing, reloadSaved, undoWrite, useEditing } from './store.js';
+import { useWorkspace } from '../../../hooks/use-workspace.js';
 
 type Props = AreaProps<Extract<RouteOf<'reports'>, { report: 'custom' }>>;
 
@@ -25,6 +26,8 @@ function SectionFields({ s, n, set, remove }: { s: SectionDraft; n: number; set(
   const takes = SOURCE_TAKES[s.source];
   const has = (k: string) => (takes.filters as readonly string[]).includes(k);
   const toggle = <T,>(xs: T[], x: T): T[] => (xs.includes(x) ? xs.filter((y) => y !== x) : [...xs, x]);
+  const declared = useWorkspace()?.dimensions ?? [];
+  const dimensions = takes.tags ? declared : [];
   return (
     <fieldset className="rform-sec" data-testid={`form-section-${n}`}>
       <legend>{t('custom.form.section', { n })}</legend>
@@ -62,9 +65,16 @@ function SectionFields({ s, n, set, remove }: { s: SectionDraft; n: number; set(
             </select>
           </label>
         ) : null}
+        {has('tags') ? dimensions.map((d) => (
+          <label key={d.id} data-dimension={d.id}>{t('custom.form.tagFilter', { dimension: d.label })}
+            <input value={s.tags[d.id] ?? ''} placeholder={t('custom.form.listHint')} list={`f-tags-${d.id}`} onChange={(e) => set({ ...s, tags: { ...s.tags, [d.id]: e.target.value } })} />
+            <datalist id={`f-tags-${d.id}`}>{d.values.map((v) => <option key={v.value} value={v.value}>{v.label ?? ''}</option>)}</datalist>
+          </label>
+        )) : null}
         <label>{t('custom.form.group')}
           <select value={s.group} data-testid="f-group" onChange={(e) => set({ ...s, group: e.target.value as SectionDraft['group'] })}>
             {takes.groups.map((g) => <option key={g} value={g}>{w(`custom.group.${g}`)}</option>)}
+            {dimensions.map((d) => <option key={d.id} value={`tag:${d.id}`}>{t('custom.group.tag', { dimension: d.label })}</option>)}
           </select>
         </label>
       </div>

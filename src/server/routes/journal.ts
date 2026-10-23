@@ -3,7 +3,7 @@ import { madeByHand } from '../../workspace/money-accounts.js';
 import { correctionCaseFor, type CorrectionKind } from '../../accounting/correction.js';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
 import { isIsoDate } from '../../accounting/periods.js';
-import { patchBody, stringField, updateBooks, withBooks, RequestError, WS } from '../books.js';
+import { patchBody, stringField, tagsField, updateBooks, withBooks, RequestError, WS } from '../books.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
@@ -27,9 +27,11 @@ const ORIGINS: readonly Origin[] = ['manual', 'classify', 'invoice', 'year-close
 
 /** A change by hand. `origin`, `reason` and `by` come only from its undo, which puts the booking back as it was (null: it had none). */
 router.patch('/api/journal-entries/:id', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount', 'receipts', 'origin', 'reason', 'by']);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'vatCode', 'description', 'amount', 'receipts', 'origin', 'reason', 'by', 'tags']);
   const set = b as EntrySet;
   if ('amount' in b) set.amount = amountField(b);
+  // The whole map: null or {} clears every tag.
+  if ('tags' in b) set.tags = tagsField(b.tags) ?? null;
   if ('receipts' in b && !(Array.isArray(b.receipts) && b.receipts.every((id) => typeof id === 'string'))) throw new RequestError(400, 'receipts muss eine Liste von Beleg-Ids sein.');
   if ('origin' in b && b.origin !== null && !ORIGINS.includes(b.origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
   if ('reason' in b && b.reason !== null && typeof b.reason !== 'string') throw new RequestError(400, 'reason ist ein Text.');
@@ -55,7 +57,7 @@ router.patch('/api/journal-entries/:id', (req, res) => {
  * back as it was (r8f-46); the provenance is taken only with `id`.
  */
 router.post('/api/journal-entries', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', 'receipt', ...UNDO_FIELDS]);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', 'receipt', 'tags', ...UNDO_FIELDS]);
   const date = stringField(b, 'date');
   if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
   const amount = amountField(b);
@@ -83,6 +85,7 @@ router.post('/api/journal-entries', (req, res) => {
   const origin = optional('origin') ?? (id ? undefined : 'manual');
   if (origin && !ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
   const provenance = provenanceOf(b, !!id);
+  const tags = tagsField(b.tags);
 
   return withBooks(res, (books) => {
     const original = correctsEntry ? books.journalEntries.find((e) => e.id === correctsEntry) : undefined;
@@ -98,6 +101,7 @@ router.post('/api/journal-entries', (req, res) => {
       description,
       ...(exchangeCurrency && { exchangeCurrency, exchangeRate }),
       ...(corrects && { corrects }),
+      ...(tags && { tags }),
       ...(origin && { origin: origin as Origin }),
       // Booked by hand now, not put back by an undo: a person decided it (Änderungen lists it).
       ...(id ? provenance : { by: { kind: 'person' as const, at: new Date().toISOString() } }),

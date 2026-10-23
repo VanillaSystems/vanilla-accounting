@@ -59,7 +59,8 @@ export function workspaceChecks(ws: Workspace): Result[] {
     const years = yearsOf(ws.paths);
     if (b.statements && !b.iban && years.length && !partDirs(ws.paths, 'statements').some((d) => existsSync(join(d, b.bank)))) {
       const dir = join(yearPaths(ws.paths, years.at(-1)!).statements, b.bank);
-      results.push(fail(`${label}: bank-statements/${b.bank}/ missing`, `mkdir "${dir}" and put its camt.053 files there.`));
+      // Statements are optional on every account (#88); the year end asks a bank for its balance on 31.12. only (#119).
+      results.push(warn(`${label}: no statements yet`, `to import them, mkdir "${dir}" and put its camt.053 files there.`));
       continue;
     }
     const mine = statements.filter((f): f is Extract<StatementFile, { status: 'read' }> => f.status === 'read' && f.account === b);

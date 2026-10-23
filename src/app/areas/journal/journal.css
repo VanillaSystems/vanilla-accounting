@@ -139,3 +139,8 @@ html.phone .counts .origins { padding-left: 0; border-left: 0; flex-basis: 100%;
 .jnew .jcorr p { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
 .jnew .notice.warn { margin: 4px 0 0; font-size: 12.5px; }
 .jlearn .ruledraft { margin: 10px 0 4px; }
+
+/* A booking's reporting dimensions (#127, TagFields): one field each, side by side. */
+.form .tags { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.form.pbook .pbl .pbg { grid-column: 1 / 5; }
+@container (max-width: 520px) { .form.pbook .pbl .pbg { grid-column: 1 / -1; } }

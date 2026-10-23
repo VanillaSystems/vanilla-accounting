@@ -45,6 +45,8 @@ import { CorrectionOffer } from '../company/RulesSection.js';
 import { LearnOffer } from '../company/LearnOffer.js';
 import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
+import { TagFields, tagField, tagsOfForm } from './TagFields.js';
+import { sameTags, valueLabel } from '../../../books/tags.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -95,6 +97,9 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const seen = whySeen(e, props.books.receipts);
   // Input tax on other proof than a receipt (#134): the person's words, kept on the payment.
   const proof = !v.receipts.length && e.vatCode ? tx?.inputTaxProof : undefined;
+  const ws = useWorkspace();
+  // The tags in the order the firm lists its dimensions; one it no longer lists last.
+  const rank = (d: string) => { const i = ws?.dimensions?.findIndex((x) => x.id === d) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
 
   return (
     <div className="detail-in" data-for={e.id}>
@@ -119,6 +124,10 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           </span>
         </div>}
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
+        {Object.entries(e.tags ?? {}).sort(([a], [b]) => rank(a) - rank(b)).map(([d, value]) => {
+          const dim = ws?.dimensions?.find((x) => x.id === d);
+          return <div key={d} role="row" data-tag={d}><span className="k">{dim?.label ?? d}</span><span /><span className="nm">{valueLabel(dim, value)}</span></div>;
+        })}
       </div>
 
       {bookingWarnings(props.books, e).map((w) => (
@@ -325,6 +334,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
   const { v, nav, edit } = props;
   const { e } = v;
   const s = useUi();
+  const dimensions = useWorkspace()?.dimensions ?? [];
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
@@ -336,12 +346,15 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     setUi({ focus: undefined });
   }, [s.open.buchung, s.focus]);
 
-  const field = (name: Field) => form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
+  const field = (name: string) => form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
 
   /** The fields as the books hold the booking; the field being edited is left alone unless `force` (a refused save puts the booked value back, r8h-27). */
   const reset = (force = false) => {
-    const values: Record<Field, string> = { accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '' };
-    for (const [name, value] of Object.entries(values) as [Field, string][]) {
+    const values: Record<string, string> = {
+      accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '',
+      ...Object.fromEntries(dimensions.map((d) => [tagField(d.id), e.tags?.[d.id] ?? ''])),
+    };
+    for (const [name, value] of Object.entries(values)) {
       const el = field(name);
       if (el && (force || el !== document.activeElement) && el.value !== value) el.value = value;
     }
@@ -350,7 +363,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
   useEffect(() => {
     if (wrong.current) return;
     reset();
-  }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description]);
+  }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description, JSON.stringify(e.tags ?? {})]);
 
   function fail(message: string) { wrong.current = true; setErr(message); setNote(''); nav.dismissToast(); }
 
@@ -376,10 +389,16 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
       setNote(t('journal.vatFromRate', { rate: String(vatCode.fromRate), code: vatCode.code, text: lookupVatCode(vatCode.code)?.entry.bananaText ?? '' }));
     }
     const el = field('amount'); if (el) el.value = fmt(next.amount);
-    const changed = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as Field[]).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
+    const changed: Field[] = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
+    const tags = tagsOfForm(new FormData(form.current), dimensions);
+    // Tags of dimensions the firm no longer declares stay as they are: only the declared ones are in the form.
+    const kept = Object.fromEntries(Object.entries(e.tags ?? {}).filter(([d]) => !dimensions.some((x) => x.id === d)));
+    const nextTags = Object.keys(kept).length || tags ? { ...kept, ...tags } : undefined;
+    if (!sameTags(nextTags, e.tags)) changed.push('tags');
     if (!changed.length) return;
+    const patch = Object.fromEntries(changed.map((k) => [k, k === 'tags' ? nextTags ?? null : next[k as Exclude<Field, 'tags'>]]));
     // Refused (a held period, a code against the money's direction): the field shows the booked value again, not the refused one.
-    void saveEntry(nav, e, Object.fromEntries(changed.map((k) => [k, next[k]])), changed).then((saved) => { if (!saved) reset(true); });
+    void saveEntry(nav, e, patch, changed).then((saved) => { if (!saved) reset(true); });
   }
 
   return (
@@ -401,6 +420,8 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
           <label>{t('journal.amountIn', { currency: e.exchangeCurrency || baseCurrency() })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
         <label>{t('journal.field.description')}<input name="description" defaultValue={e.description ?? ''} readOnly={!edit} /></label>
+        <TagFields dimensions={dimensions} entries={props.books.journalEntries ?? []} tags={e.tags} readOnly={!edit} onPick={save} />
+        {v.locked && dimensions.length > 0 && <div className="fhint" data-testid="tags-locked">{t('tags.locked')}</div>}
         <VatCodeList />
         <div className="err" role="alert">{err}</div>
         {note && <div className="fhint" data-testid="vat-from-rate">{note}</div>}

@@ -19,6 +19,7 @@ import { vatInFigures, type VatInFigures } from '../../../accounting/vat-in-figu
 export { vatParts } from '../../../accounting/vat-in-figures.js';
 import type { Report } from '../../shell/route.js';
 import { chart, statements } from '../../../engines/index.js';
+import { matchesTags, type Dimension, type TagFilter } from '../../../books/tags.js';
 
 /** The account of entries booked on one side only (a code that books the VAT itself, M81-2): no number. */
 export const NO_ACCOUNT = '';
@@ -132,6 +133,29 @@ export function reportView(report: Report, books: Index, period: Period, names: 
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+/** The books with only the entries that carry the tags the filter asks for (#127): every report and ledger of them reads only those. */
+export function slicedBooks(books: Index, filter: TagFilter | undefined): Index {
+  if (!filter || !Object.values(filter).some((v) => v.length)) return books;
+  return { ...books, journalEntries: entriesOf(books).filter((e) => matchesTags(e.tags, filter)) };
+}
+
+/** The value of `by` an entry carries; '' none. */
+const valueOf = (e: JournalEntry, by: Dimension) => e.tags?.[by.id] ?? '';
+
+/**
+ * The Erfolgsrechnung in columns, one per value of `by` the period's entries carry (the declared
+ * values first, in their order, then the others; '' for the entries without one, last): each the
+ * report of only those entries, so the columns add up to the report of all of them.
+ */
+export function incomeColumns(books: Index, period: Period, names: Record<string, string>, by: Dimension): Array<{ value: string; view: ReportView }> {
+  const inPeriod = entriesOf(books).filter((e) => e.date >= period.from && e.date <= period.to);
+  const used = new Set(inPeriod.map((e) => valueOf(e, by)));
+  const declared = by.values.map((v) => v.value).filter((v) => used.has(v));
+  const others = [...used].filter((v) => v && !declared.includes(v)).sort((a, b) => a.localeCompare(b));
+  const values = [...declared, ...others, ...(used.has('') ? [''] : [])];
+  return values.map((value) => ({ value, view: reportView('income', { ...books, journalEntries: entriesOf(books).filter((e) => valueOf(e, by) === value) }, period, names, true) }));
+}
 
 /** The accounts a search finds: number and name contain every word. */
 export function matches(q: string, account: string, names: Record<string, string>, none: string): boolean {

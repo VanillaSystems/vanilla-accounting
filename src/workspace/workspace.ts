@@ -18,6 +18,7 @@ import type { LegalForm, Preset, QuestionKey, SupportedAnswers, VatQuestionKey }
 import type { VatSetup } from './vat-setup.js';
 import type { Iban, MoneyRole, StatementKind } from './banks.js';
 import type { Address, InvoicingSettings, OutgoingMail } from '../invoices/model.js';
+import type { Dimension } from '../books/tags.js';
 
 declare const brand: unique symbol;
 type Brand<T, B> = T & { readonly [brand]: B };
@@ -170,6 +171,8 @@ export interface Workspace {
   readonly invoicing?: InvoicingSettings;
   /** Absent until the company sends documents by e-mail (the manifest's outgoingMail block). */
   readonly outgoingMail?: OutgoingMail;
+  /** The reporting dimensions bookings may carry a tag of (#127, src/books/tags.ts); absent: none. */
+  readonly dimensions?: readonly Dimension[];
   readonly paths: WorkspacePaths;
 }
 

@@ -126,6 +126,10 @@ export function errorText(e: unknown): string {
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
+    case 'tagShape': return t('error.tagShape');
+    case 'tagDimension': return t('error.tagDimension', b.params);
+    case 'tagValue': return t('error.tagValue', b.params);
+    case 'dimensionInUse': return t('error.dimensionInUse', { dimension: b.params.dimension, n: b.params.entries });
     case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
       const { date, currency, paid, booked } = b.params;
@@ -254,7 +258,7 @@ type Ok = { ok: true };
 type Link = { receiptId: string; transactionRef: string; confirm?: true };
 type Linked = Ok & { again: string[]; kept?: string[] };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
-export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>
+export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>> & { tags?: JournalEntry['tags'] | null }
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };
 /** A new entry by hand; `id`, `transactionRef` and the provenance put a deleted one back (undo): src/books/entry-input.ts. */
 export type { JournalEntryInput };
@@ -394,6 +398,13 @@ export const api = {
   /** `state: null` opens the step again and removes the booking it made; `removed` lists it for the undo (r9c-16). */
   markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<{ removed?: JournalEntry[] }>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),
   bookYearEndEntry: (year: string, input: YearEndEntryInput) => request<{ entry: JournalEntry }>('POST', `/api/year-close/${year}/entries`, input),
+  /** A bank or card account's balance on 31.12. with the bank's year-end confirmation attached (#119). */
+  setYearEndBalance: (year: string, account: string, amount: number, file: File) =>
+    upload<{ balance: unknown }>(`/api/year-close/${year}/balances/${encodeURIComponent(account)}?${new URLSearchParams({ amount: String(amount), name: file.name })}`, file, 'application/octet-stream'),
+  removeYearEndBalance: (year: string, account: string) => request<Ok>('DELETE', `/api/year-close/${year}/balances/${encodeURIComponent(account)}`),
+  yearEndDocumentUrl: (year: string, account: string) => `/api/year-close/${year}/balances/${encodeURIComponent(account)}/document`,
+  /** The cash counted on 31.12.; null takes it back. */
+  setCashCount: (year: string, account: string, amount: number | null) => request<Ok>('PUT', `/api/year-close/${year}/cash/${encodeURIComponent(account)}`, { amount }),
   rebookYearEndEntry: (year: string, id: string, description: string) => request<{ removed: JournalEntry[]; entry?: JournalEntry }>('POST', `/api/year-close/${year}/templates/${id}/rebook`, { description }),
   closeYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/close`),
   openYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/open`),

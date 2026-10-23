@@ -172,6 +172,12 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
           </select>
         </label>
       ) : null}
+      {(view.names.dimensions ?? []).map((d) => (
+        <label key={d.id} data-dimension={d.id}>{d.label}
+          <input list={`rule-tag-${d.id}`} value={f.tags[d.id] ?? ''} placeholder={t('tags.none')} onChange={(e) => setF({ ...f, tags: { ...f.tags, [d.id]: e.target.value } })} />
+          <datalist id={`rule-tag-${d.id}`}>{d.values.filter((v) => v.active).map((v) => <option key={v.value} value={v.value}>{v.label ?? ''}</option>)}</datalist>
+        </label>
+      ))}
       {error ? <span className="warnline wide">{error}</span> : null}
       <div className="acts">
         <button type="submit" className="btn primary" disabled={busy}>{t('rules.hand.preview')}</button>

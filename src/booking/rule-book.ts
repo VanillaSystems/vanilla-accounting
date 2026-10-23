@@ -77,12 +77,13 @@ export function chartNames(chartText: string): Map<string, string> {
   return new Map(chartText.split('\n').map((l) => l.split('\t')).filter((c) => /^\d/.test(c[0]?.trim() ?? '') && c[1]).map((c) => [c[0].trim(), c[1].trim()]));
 }
 
-/** What a rule may name in this workspace: its chart, the VAT codes the app knows and this firm's form takes, its businesses. */
-export function factsOf(accounts: ReadonlyMap<string, string>, businesses: ReadonlySet<string>): RuleFacts {
+/** What a rule may name in this workspace: its chart, the VAT codes the app knows and this firm's form takes, its businesses, its reporting dimensions. */
+export function factsOf(accounts: ReadonlyMap<string, string>, businesses: ReadonlySet<string>, dimensions: readonly { id: string }[] = []): RuleFacts {
   return {
     account: (n) => accounts.has(n),
     vat: (code) => (!lookupVatCode(code) ? 'unknown' : formTakes(code) ? 'taken' : 'notTaken'),
     counterparty: (id) => businesses.has(id),
+    dimension: (id) => dimensions.some((d) => d.id === id),
   };
 }
 

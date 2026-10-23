@@ -54,6 +54,30 @@ The list under «Steps» is the earlier, finer proposal; where it differs, this 
 - **Reconciliation against a closing balance** covers the periods a statement covers. An account
   or a month without a statement shows its balance from the movements, marked as not reconciled.
 
+## At the year end (#119, owner's decision of 23.10.2026)
+
+«The rules should be just compliant.» The base every country gets, in
+`yearEndBalances` (src/accounting/year-close.ts):
+
+| Role | Proof of the balance on 31.12. |
+|---|---|
+| `bank`, `card` | A document: an imported statement covering 31.12., or the bank's year-end confirmation the person attaches (Abschluss › Prüfungen › Saldi per 31.12., or `npm run year:close -- <year> --balance <account>=<amount> --document <file>`) |
+| `cash` | The amount the person counted (`--cash <account>=<amount>`); a difference is shown and blocks, never booked by the app |
+| `owner`, `employee`, `clearing` | None |
+
+- The confirmation's balance is a `StatementClosingBalance` with `source: pdf`, whose `sourceFile`
+  is `year-end/<account>-<date>.<ext>` under `transactional-data/<year>/filings/`. A statement
+  covering the day is the proof before it, and the app refuses a hand balance where one exists.
+  `npm run extract-balances` keeps these balances.
+- The cash count is `cashCounts` in the year's close record (`filings/year-close.json`), not in
+  the books.
+- «Every month has its statement» holds only for an account with at least one imported
+  statement, as Kontoauszüge marks a month «fehlt» (#116).
+- **Stricter rules belong to the country module.** `moneyAccounts.monthlyStatements` in
+  `modules/<country>/year-end.yaml` lists the roles whose accounts need a statement for every
+  month, imported or not. Switzerland lists none (OR Art. 957a, 958c ask for the inventory and
+  its proof at the year end, no monthly statement). No other country's rules are modelled yet.
+
 ## Built in step 3 (#88): money accounts and the format
 
 **The manifest (schema 2).** Each entry of `bankAccounts` is a money account and names its `role`:
