@@ -60,6 +60,7 @@ docs/versioning.md
 docs/mail-setup.md
 docs/quarter-workflow.md
 docs/year-end.md
+docs/data-model.md
 docs/adr/**
 docs/personas/**
 docs/usecases/**
