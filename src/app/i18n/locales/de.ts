@@ -2867,7 +2867,7 @@ export const messages = {
   'assistant.held.many': "Bucht {n} Zahlungen auf einmal um.",
   'assistant.held.deletes': "Löscht {n} Buchungen.",
   'assistant.held.rateWithoutReceipt': "Setzt einen MWST-Satz, wo kein Beleg Schweizer MWST zeigt: Vorsteuer ohne Nachweis.",
-  'assistant.held.terminal': "Ein Vorschlag aus dem Terminal: nichts davon ist gemacht, bis du ihn übernimmst.",
+  'assistant.held.terminal': "Ein Vorschlag der KI im Terminal.",
   'assistant.held.titleOther': { one: "Vorschlag: {n} Änderung", other: "Vorschlag: {n} Änderungen" },
   'error.terminalNotMac': "Das Terminal öffnet die App nur auf dem Mac: kopier den Befehl in dein Terminal.",
   'error.terminalNoCli': "Auf diesem Mac ist weder Claude Code noch Codex installiert.",

@@ -2870,7 +2870,7 @@ export default {
     'assistant.held.many': "Riregistra {n} pagamenti in una volta.",
     'assistant.held.deletes': "Elimina {n} registrazioni.",
     'assistant.held.rateWithoutReceipt': "Imposta un'aliquota IVA dove nessun giustificativo mostra IVA svizzera: imposta precedente senza prova.",
-    'assistant.held.terminal': "Una proposta dal Terminale: niente è fatto finché non la accetti.",
+    'assistant.held.terminal': "Una proposta dell'IA nel Terminale.",
     'assistant.held.titleOther': { one: "Proposta: {n} modifica", other: "Proposta: {n} modifiche" },
     'error.terminalNotMac': "L'app apre il Terminale solo su Mac: copia il comando nel tuo terminale.",
     'error.terminalNoCli': "Su questo Mac non è installato né Claude Code né Codex.",

@@ -2870,7 +2870,7 @@ export default {
     'assistant.held.many': "Recomptabilise {n} paiements d'un coup.",
     'assistant.held.deletes': "Supprime {n} écritures.",
     'assistant.held.rateWithoutReceipt': "Met un taux de TVA là où aucun justificatif ne montre de TVA suisse : impôt préalable sans preuve.",
-    'assistant.held.terminal': "Une proposition venue du Terminal : rien n'est fait tant que tu ne l'acceptes pas.",
+    'assistant.held.terminal': "Une proposition de l'IA dans le Terminal.",
     'assistant.held.titleOther': { one: "Proposition : {n} modification", other: "Proposition : {n} modifications" },
     'error.terminalNotMac': "L'app n'ouvre le Terminal que sur Mac : copie la commande dans ton terminal.",
     'error.terminalNoCli': "Ni Claude Code ni Codex n'est installé sur ce Mac.",

@@ -2870,7 +2870,7 @@ export default {
     'assistant.held.many': "Rebooks {n} payments at once.",
     'assistant.held.deletes': "Deletes {n} bookings.",
     'assistant.held.rateWithoutReceipt': "Sets a VAT rate where no receipt shows Swiss VAT: input tax without proof.",
-    'assistant.held.terminal': "A proposal from the terminal: nothing of it is made until you take it.",
+    'assistant.held.terminal': "A proposal from the AI in the terminal.",
     'assistant.held.titleOther': { one: "Proposal: {n} change", other: "Proposal: {n} changes" },
     'error.terminalNotMac': "The app opens Terminal only on a Mac: copy the command into your terminal.",
     'error.terminalNoCli': "Neither Claude Code nor Codex is installed on this Mac.",
