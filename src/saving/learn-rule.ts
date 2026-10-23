@@ -17,6 +17,7 @@
  *   warns when it books against a national VAT rule (#75).
  */
 import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { loadBooks, periodLock, type Books } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type ClassifyContext, type RuleLine } from '../booking/classify.js';
@@ -77,17 +78,16 @@ const opposite = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit'>, bank:
 /** The rule's booking for a correction: its code as a rule names it (a refund's minus left to the rule, the zero code widened to the standard rate where receipts decide), unless that would book this payment otherwise. */
 function bookingOf(books: Books, tx: BankTransaction, booked: Booked, owner: string | undefined): RuleBooking {
   const base = booked.vat?.replace(/^-/, '') ?? null;
-  const swiss = mappedReceipts(books, tx).some((r) => r.hasSwissVat);
   const wide = { account: booked.account, vat: ruleCode(base ?? undefined) };
   const asBooked: RuleLine[] = [{ account: booked.account, ...(booked.vat ? { vat: booked.vat } : {}), amount: tx.amount }];
-  return sameLines(ruleBookingLines(tx, wide, swiss, owner), asBooked) ? wide : { account: booked.account, vat: base };
+  return sameLines(ruleBookingLines(tx, wide, mappedReceipts(books, tx), owner), asBooked) ? wide : { account: booked.account, vat: base };
 }
 
 /** How many of `txs` `booking` books as they are booked today. */
 function agreeing(books: Books, txs: readonly BankTransaction[], booking: RuleBooking, context: ClassifyContext): number {
   return txs.filter((tx) => {
     const now = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts));
-    return now.length > 0 && sameLines(now, ruleBookingLines(tx, booking, mappedReceipts(books, tx).some((r) => r.hasSwissVat), context.ownerAccount));
+    return now.length > 0 && sameLines(now, ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount));
   }).length;
 }
 
@@ -138,7 +138,7 @@ function learnPrompt(c: Corrected, books: Books, context: ClassifyContext): stri
   const acc = (a: string) => (names.get(a) ? `${a} ${names.get(a)}` : a);
   const bk = (b: Booked) => `account ${acc(b.account)}, VAT code ${b.vat ?? 'none'}`;
   const pay = (tx: BankTransaction) => `${tx.date} ${tx.direction === 'DBIT' ? 'paid' : 'received'} ${tx.amount.toFixed(2)} ${tx.currency} «${[tx.description, tx.counterparty].filter(Boolean).join(' · ')}»`;
-  const receipts = mappedReceipts(books, c.tx).map((r) => `- ${[r.description, r.vatId ? `UID ${r.vatId}` : '', r.hasSwissVat ? 'shows Swiss VAT' : 'shows no Swiss VAT', ...(r.vatSummary ?? []).map((g) => `${g.ratePercent} %: ${g.vat}`)].filter(Boolean).join(', ')}`);
+  const receipts = mappedReceipts(books, c.tx).map((r) => `- ${[r.description, isPurchaseDocument(r) ? '' : `a ${r.kind} document, no proof of VAT`, r.vatId ? `UID ${r.vatId}` : '', r.hasSwissVat ? 'shows Swiss VAT' : 'shows no Swiss VAT', ...(r.vatSummary ?? []).map((g) => `${g.ratePercent} %: ${g.vat}`)].filter(Boolean).join(', ')}`);
   const past = c.partnerTxs.filter((t) => t.ref !== c.tx.ref).sort((a, b) => b.date.localeCompare(a.date)).slice(0, MAX_PAST).map((t) => {
     const now = bookedNow(books, t, bankAccountFor(t, context.bankAccounts));
     return `- ${pay(t)} → ${now.length ? now.map((l) => `${acc(l.account)} ${l.vat ?? 'none'}`).join(' + ') : 'not booked'}`;
@@ -192,9 +192,8 @@ function checkAnswer(ws: Workspace, books: Books, c: Corrected, answer: LearnAns
   const booking: RuleBooking = { account: answer.then.account, vat: answer.then.vat };
   const raw = { id: 'learn', ...(partner.kind === 'payer' ? { when: { payer: partner.payer } } : {}), then: { account: booking.account, vat: booking.vat ?? 'none' } };
   if (!parseRule(raw, ruleFactsOf(ws), partner.kind === 'business').ok) return { kind: 'none', why: 'invalid' };
-  const swiss = mappedReceipts(books, c.tx).some((r) => r.hasSwissVat);
   const asBooked: RuleLine[] = [{ account: c.offer.booked.account, ...(c.offer.booked.vat ? { vat: c.offer.booked.vat } : {}), amount: c.tx.amount }];
-  if (!sameLines(ruleBookingLines(c.tx, booking, swiss, context.ownerAccount), asBooked)) return { kind: 'none', why: 'contradicts' };
+  if (!sameLines(ruleBookingLines(c.tx, booking, mappedReceipts(books, c.tx), context.ownerAccount), asBooked)) return { kind: 'none', why: 'contradicts' };
   if (agreeing(books, c.partnerTxs, booking, context) < GENERAL) return { kind: 'none', why: 'oneOff' };
   return { kind: 'rule', match: partner.kind === 'business' ? { kind: 'business', id: partner.id } : { kind: 'payer', payer: partner.payer }, booking };
 }
