@@ -22,7 +22,7 @@ export class NoClaudeError extends Error {
 }
 
 /**
- * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/desktop/claude.ts),
+ * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/platform/login-path.ts),
  * else `claude` on the PATH. Its own folder joins the PATH, so an npm-installed claude finds its node.
  */
 export function claudeCommand(): { bin: string; env: NodeJS.ProcessEnv } {

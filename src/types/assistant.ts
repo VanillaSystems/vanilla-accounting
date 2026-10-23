@@ -153,8 +153,11 @@ export interface ChangeNote {
   report?: ReportResult;
 }
 
-/** Why the app holds an answer's changes for the person's «Übernehmen» (src/assistant/held.ts). */
-export type HoldReason = 'payments' | 'deletes' | 'rateWithoutReceipt';
+/**
+ * Why the app holds an answer's changes for the person's «Übernehmen» (src/assistant/held.ts);
+ * `terminal`: a proposal an AI in the terminal wrote (src/assistant/terminal-drafts.ts), always held.
+ */
+export type HoldReason = 'payments' | 'deletes' | 'rateWithoutReceipt' | 'terminal';
 
 /** A booking's lines as a held card shows them. */
 export interface HeldLine { accountDebit: string; accountCredit: string; vatCode?: string; amount: number }
@@ -220,6 +223,8 @@ export type Turn =
     held?: HeldChanges;
     /** What the answer said before the app refused its changes; `text` is then what it says now that nothing was changed. */
     withdrawn?: string;
+    /** The request the answer offers to continue in the terminal, written out (issue #146): its card has «Im Terminal öffnen». */
+    terminal?: string;
   };
 
 /** data/assistant/<id>.json: one conversation, its Claude session continued by every message. */
@@ -246,6 +251,8 @@ export type AssistantEvent =
   | { type: 'changes'; changes: MadeChange[] }
   /** The answer's changes, held for the person's «Übernehmen»: nothing is made yet. */
   | { type: 'held'; held: HeldChanges }
+  /** The answer offers to continue in the terminal with this request (issue #146). */
+  | { type: 'terminal'; request: string }
   /** `refusal`: its code, so the UI says why in the person's language. */
   | { type: 'refused'; message: string; refusal?: ApiRefusal }
   /** The answer's text, whole, in place of what streamed: after a refusal, what was not done and why; after changes made, with the app's line on what it made. */

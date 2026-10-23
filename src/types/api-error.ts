@@ -97,6 +97,9 @@ export type ApiRefusal =
   | { code: 'aiModelUnfit'; params: { model: string } }
   | { code: 'aiKeyRefused' }
   | { code: 'aiKeyWhere'; params: { where: string } }
+  /** «Im Terminal öffnen» (src/server/routes/terminal.ts): the app opens Terminal only on a Mac; neither Claude Code nor Codex is installed. */
+  | { code: 'terminalNotMac' }
+  | { code: 'terminalNoCli' }
   /** Geschäftspartner and Wissen (src/server/routes/knowledge.ts): a partner or a topic page that does not exist, notes changed since they were opened, a new page without a title. */
   | { code: 'partnerGone' }
   | { code: 'topicGone' }

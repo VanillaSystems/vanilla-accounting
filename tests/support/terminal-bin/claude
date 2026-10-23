@@ -1,0 +1,6 @@
+#!/bin/sh
+# Stands in for Claude Code started in Terminal (tests/terminal.test.ts): it writes where it runs and its arguments, one file each.
+printf %s "$PWD" > "$TERMINAL_STUB_OUT.cwd"
+printf %s "$#" > "$TERMINAL_STUB_OUT.argc"
+printf %s "$1" > "$TERMINAL_STUB_OUT.arg"
+printf %s claude > "$TERMINAL_STUB_OUT.cli"

@@ -9,6 +9,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ProviderId } from './provider.js';
 import { isStepId, type StepId } from './steps.js';
+import { isTerminalCli, type TerminalCli } from '../platform/terminal.js';
 
 export interface StepChoice {
   provider: ProviderId;
@@ -18,6 +19,8 @@ export interface StepChoice {
 
 export interface AiSettings {
   steps: Partial<Record<StepId, StepChoice>>;
+  /** «Im Terminal öffnen» with both CLIs installed: this one, the other offered (issue #146). */
+  terminal?: TerminalCli;
 }
 
 export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'anthropic', 'openai', 'jev'];
@@ -37,7 +40,8 @@ export function parseSettings(raw: unknown): AiSettings {
       steps[step] = { provider: choice.provider, ...(typeof choice.model === 'string' && choice.model ? { model: choice.model } : {}) };
     }
   }
-  return { steps };
+  const terminal = (raw as { terminal?: unknown } | null)?.terminal;
+  return { steps, ...(isTerminalCli(terminal) ? { terminal } : {}) };
 }
 
 export function readSettings(): AiSettings {
@@ -52,10 +56,20 @@ export function readSettings(): AiSettings {
 
 /** Sets or clears (null) the choice for one step; the other steps keep theirs. */
 export function writeChoice(step: StepId, choice: StepChoice | null): AiSettings {
-  const path = settingsPath();
-  if (!path) throw new Error('No settings file in a test run: set VANILLA_AI_SETTINGS.');
   const next = readSettings();
   if (choice) next.steps[step] = choice; else delete next.steps[step];
+  return write(next);
+}
+
+/** The terminal CLI chosen, or none (null): Claude then, when both are installed. */
+export function writeTerminal(cli: TerminalCli | null): AiSettings {
+  const { terminal: _was, ...next } = readSettings();
+  return write(cli ? { ...next, terminal: cli } : next);
+}
+
+function write(next: AiSettings): AiSettings {
+  const path = settingsPath();
+  if (!path) throw new Error('No settings file in a test run: set VANILLA_AI_SETTINGS.');
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(`${path}.tmp`, JSON.stringify(next, null, 2) + '\n');
   renameSync(`${path}.tmp`, path);

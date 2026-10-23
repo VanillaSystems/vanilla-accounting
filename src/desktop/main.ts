@@ -17,7 +17,7 @@ import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
 import { setupPath } from '../app/desktop/bridge.js';
-import { findClaude } from './claude.js';
+import { findClaude } from '../platform/login-path.js';
 import { sameOrigin, saveFile } from './save-file.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';

@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationSummary, HeldChanges, MadeChange, Turn } from '../types/assistant.js';
-import { ChangesError, changesIn, withoutChanges } from './changes.js';
+import { ChangesError, changesIn, terminalRequest, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude } from './claude.js';
 import { contextText } from './context.js';
 import { attachmentsNote, keepAttachments } from './attachments.js';
@@ -28,7 +28,7 @@ export function readConversation(ws: Pick<Workspace, 'paths'>, id: string): Conv
   try { return JSON.parse(readFileSync(join(dir(ws), `${id}.json`), 'utf8')) as Conversation; } catch { return undefined; }
 }
 
-function store(ws: Pick<Workspace, 'paths'>, c: Conversation): void {
+export function storeConversation(ws: Pick<Workspace, 'paths'>, c: Conversation): void {
   mkdirSync(dir(ws), { recursive: true });
   writeFileSync(join(dir(ws), `${c.id}.json`), JSON.stringify(c, null, 2) + '\n');
 }
@@ -51,7 +51,9 @@ export function listConversations(ws: Pick<Workspace, 'paths'>): ConversationSum
  * `conversation`: whose changes they are. With `hold`, changes that rebook the books rather than
  * fix one booking are not made: their rows come back for the card (src/assistant/held.ts).
  */
-export type ApplyChanges = (changes: Change[], earlier: MadeChange[], language: string, how: { conversation: string; hold: boolean }) => Promise<Applied>;
+export type ApplyChanges = (changes: Change[], earlier: MadeChange[], language: string, how: { conversation: string; hold: Hold }) => Promise<Applied>;
+/** `always`: held whatever they change (a proposal from the terminal); true: held when they rebook rather than fix; false: made. */
+export type Hold = boolean | 'always';
 export type Applied = { made: MadeChange[] } | { held: Pick<HeldChanges, 'why' | 'rows'> };
 
 /** The changes the conversation's answers made and that stand, but those of `except`. */
@@ -78,7 +80,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   const ai: Extract<Turn, { role: 'ai' }> = { role: 'ai', text: '', at, tools: [], done: false };
   c.turns.push(me, ai);
   c.at = at;
-  store(ws, c);
+  storeConversation(ws, c);
   onEvent({ type: 'conversation', id: c.id });
   const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(last?.role === 'ai' && last.held ? [heldNote(last.held.status)] : []), waiting, ...(attachments.length ? [attachmentsNote(attachments, paths)] : [])]);
   let done: AssistantEvent | undefined;
@@ -96,6 +98,8 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   });
   const said = ai.text;
   ai.text = withoutChanges(said);
+  const terminal = terminalRequest(said);
+  if (terminal) { ai.terminal = terminal; onEvent({ type: 'terminal', request: terminal }); }
   if (done?.type === 'done' && !done.isError) {
     try {
       const asked = changesIn(said);
@@ -132,7 +136,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   }
   if (done) onEvent(done);
   ai.done = true;
-  store(ws, c);
+  storeConversation(ws, c);
 }
 
 /** What the next message tells the model about the changes of its last answer the app held for the person (HeldChanges). */
@@ -157,7 +161,7 @@ export async function settleHeld(ws: Pick<Workspace, 'paths'>, id: string, turn:
     if ('made' in applied) ai.changes = applied.made;
   }
   ai.held.status = take ? 'taken' : 'dropped';
-  store(ws, c);
+  storeConversation(ws, c);
   return ai;
 }
 
@@ -221,6 +225,6 @@ export function undoChange(ws: Pick<Workspace, 'paths'>, id: string, change: str
   const together = open.filter((x) => on.has(x));
   revert(together.map((x) => x.undo!).reverse());
   for (const x of together) x.undone = true;
-  store(ws, c);
+  storeConversation(ws, c);
   return together;
 }
