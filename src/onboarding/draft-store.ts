@@ -11,7 +11,7 @@ import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Cr
 import { QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
 import { methodOf, parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
-import { APP_FOLDER, APP_ROOT, appLanguages, workspaceAt } from '../workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
 import { DRAFT_FILE, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
 import { sellsAnswer, type AnswerValue } from './model.js';
@@ -122,6 +122,8 @@ export async function createFromDraft(root: string, now: string): Promise<Create
   const draft = readDraft(root);
   const request = draft && requestOf(draft);
   if (!draft || !request) throw new SetupError('The setup is not complete yet.', { reason: 'required', field: 'root' });
+  // Books that came into the folder meanwhile are opened as they are: neither the draft nor their setup is touched.
+  if (appFolderIn(resolve(root))) return createWorkspace({ root, ...request });
   rmSync(draftFile(root));
   let created: Created;
   try {

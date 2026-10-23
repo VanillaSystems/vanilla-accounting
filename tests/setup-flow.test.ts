@@ -171,3 +171,17 @@ test('the conversation and the form write the same manifest; the conversation\'s
   assert.equal(setupView(ws, empty).opensItself, false, 'after «Los geht\'s» the books open as books');
   assert.equal(setupView(workspaceAt(byHand), { ...empty, transactions: [{}] as never }).opensItself, false, 'books set up by the form never open the setup once in use');
 });
+
+test('books that came into the folder of a setup are opened as they are, their setup untouched', async () => {
+  const { call } = await start();
+  const root = join(home, 'Beides');
+  await call('POST', '/api/desktop/setup', { root, language: 'de' });
+  for (const patch of [{ step: 'firm', value: FIRM }, { step: 'preset', value: 'freelancer' }, { step: 'question', key: 'vatRegistered', value: 'no' }, { step: 'banks', value: BANKS }]) await call('PUT', '/api/desktop/setup', { root, patch });
+  const other = join(home, 'Andere');
+  assert.equal((await call('POST', '/api/desktop/create', { root: other, preset: 'consultant', ...FIRM, name: 'Andere GmbH', language: 'de', answers: ANSWERS, banks: BANKS })).status, 200);
+  fs.cpSync(join(other, APP_FOLDER), join(root, APP_FOLDER), { recursive: true, filter: (f) => !f.endsWith('setup-draft.json') });
+  const opened = await call('POST', '/api/desktop/setup/create', { root });
+  assert.equal(opened.status, 200);
+  assert.equal(opened.json.name, 'Andere GmbH');
+  assert.equal(readProgress(workspaceAt(root)).created, undefined, 'books the conversation did not create are not marked as created by it');
+});
