@@ -69,6 +69,11 @@ steps:
         when: exactly one transaction has the same amount and currency within 10 days of the receipt date, and no other receipt claims it
         then: link it
         source: proposed 2026-10-07 by Claude — confirm or replace
+      - id: ev-receipt-set
+        when: "several receipts of one vendor (its UID, else its name) owe one open payment exactly: to the centime, in the payment's currency, dated up to a month before it or a week after, together with the receipts linked to it already"
+        then: "link them all when no other set fits that payment and none of the receipts fits another payment (src/intake/receipt-sets.ts); the payment is then booked one line per receipt, each with its own account and VAT. A sum off by a centime, or two sets that fit, is a proposal on the payment's line, never a link"
+        why: "a marketplace's or courier's several invoices are paid in one charge (issue #27)"
+        source: decision 2026-10-23, owner
       - id: ev-duplicate
         status: proposed
         when: two receipts of the same vendor, amount and date, or the same invoice number
