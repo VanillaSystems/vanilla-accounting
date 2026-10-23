@@ -24,7 +24,7 @@ import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { normalRate, saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
-import { acquisitionCodeOf, acquisitionReason, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
+import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
@@ -100,6 +100,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
     const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
     return entry({
+      ...(acquisition && readSupplier(e)),
       date: onShopify ? orderDate : tx.date,
       accountDebit,
       accountCredit,

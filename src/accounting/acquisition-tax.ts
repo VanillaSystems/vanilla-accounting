@@ -9,8 +9,8 @@
  */
 import { chart, invoicing, vat } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
-import type { ClassifyEntry, Supply } from '../llm/prompts.js';
-import type { Receipt } from '../types/index.js';
+import type { ClassifyEntry } from '../llm/prompts.js';
+import type { JournalEntry, Receipt, Supply } from '../types/index.js';
 import type { VatSetup } from '../workspace/vat-setup.js';
 import { normalRate } from './sales-without-vat.js';
 import { codeForRate, codeOnAccount } from './vat-codes.js';
@@ -25,6 +25,13 @@ export interface AcquisitionCode { code: string | undefined; why: AcquisitionWhy
 type Line = Pick<ClassifyEntry, 'vatCode' | 'supply' | 'supplierCountry' | 'accountDebit' | 'accountCredit'> & { abroad?: true };
 
 const SUPPLIES: readonly string[] = ['goods', 'service', 'exempt'] satisfies Supply[];
+
+/** The model's supply and supplier country of a line, kept only when they are what rule 7h asks: a known supply, a two-letter country (upper case). */
+export function readSupplier(line: Pick<ClassifyEntry, 'supply' | 'supplierCountry'>): Pick<JournalEntry, 'supply' | 'supplierCountry'> {
+  const supply = SUPPLIES.includes(line.supply ?? '') ? line.supply : undefined;
+  const country = /^[A-Za-z]{2}$/.test(line.supplierCountry ?? '') ? line.supplierCountry!.toUpperCase() : undefined;
+  return { ...(supply && { supply }), ...(country && { supplierCountry: country }) };
+}
 const SWISS_UID = /^CHE/i;
 
 /** The one positive rate the receipt shows, else the normal rate (a receipt with Swiss VAT whose rate was not read). */
@@ -52,8 +59,7 @@ export function acquisitionCodeOf(line: Line, documents: readonly AcquisitionDoc
   const expense = (a: string) => !!a && chart().typeOf(a) === 'expense';
   const refund = expense(line.accountCredit) && !expense(line.accountDebit);
   if (!refund && !(expense(line.accountDebit) && !expense(line.accountCredit))) return undefined;
-  const supply = SUPPLIES.includes(line.supply ?? '') ? line.supply : undefined;
-  const country = /^[A-Za-z]{2}$/.test(line.supplierCountry ?? '') ? line.supplierCountry!.toUpperCase() : undefined;
+  const { supply, supplierCountry: country } = readSupplier(line);
   // A line cannot be told apart from its payment's other receipts: receipts that disagree (one with Swiss VAT, one without, or one not read) decide nothing.
   const shown = documents.every((d) => d.hasSwissVat === true) ? documents[0] : undefined;
   if (!shown && !documents.every((d) => d.hasSwissVat === false)) return undefined;
