@@ -27,7 +27,7 @@ const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'r
 const fx = loadFxResolver();
 const context = {
   companyName: 'Malerei Test GmbH', chartOfAccounts: '', historicEntries: '',
-  bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' }],
+  bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' as const }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' as const }],
 };
 const pay = (ref: string, amount: number, o: Partial<BankTransaction> = {}): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date: '2026-08-14', amount, currency: 'CHF', direction: 'CRDT', description: `Gutschrift ${ref}`, ...o });

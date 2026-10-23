@@ -4,6 +4,7 @@
  * correction of the VAT code or of the account leaves the bank alone; only a storno takes the
  * whole entry back, bank side included. Pure: Buchungen opens its correction form with these.
  */
+import { byStatement } from '../workspace/money-accounts.js';
 import type { BankTransaction, CorrectionCase, JournalEntry, Receipt } from '../types/index.js';
 import { chart, vat, yearEnd, baseCurrency } from '../engines/index.js';
 import { reversalOf, sameMoney, turned, type Draft, type Money } from './reversal.js';
@@ -139,11 +140,11 @@ export function correctionOf(e: Corrected, kind: CorrectionKind, date: string, d
  * The filed period a payment's bookings correct, or undefined: a private outlay (a manual payment,
  * «Privat oder bar bezahlt») for a receipt dated in a filed period was paid on the receipt's day,
  * so its booking in the open period is a correction of that period, declared on its correction return (golden
- * rule 1, r8k-10). A bank payment never is: an invoice of March paid in July is a July booking
- * (cash basis). The earliest filed receipt date names the period.
+ * rule 1, r8k-10). A payment a statement confirms never is: an invoice of March paid in July is a
+ * July booking (cash basis). The earliest filed receipt date names the period.
  */
-export function correctsFor(tx: Pick<BankTransaction, 'source'>, receipts: ReadonlyArray<Pick<Receipt, 'date'>>, isClosed: (date: string) => boolean, length: FilingLength): string | undefined {
-  if (tx.source !== 'manual') return undefined;
+export function correctsFor(tx: Pick<BankTransaction, 'source' | 'statement'>, receipts: ReadonlyArray<Pick<Receipt, 'date'>>, isClosed: (date: string) => boolean, length: FilingLength): string | undefined {
+  if (byStatement(tx)) return undefined;
   const filed = receipts.map((r) => r.date).filter((d): d is string => !!d && isClosed(d)).sort()[0];
   return filed ? filingKeyOf(filed, length) : undefined;
 }

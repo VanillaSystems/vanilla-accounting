@@ -1,4 +1,6 @@
 /** What the list, the detail and the keys of Belege share: the ledger of the loaded books, and the list as last shown. */
+import { roleOf } from '../../../workspace/money-accounts.js';
+import { workspaceNow } from '../../hooks/use-workspace.js';
 import type { BankTransaction, Index } from '../../../types/index.js';
 import { localToday, booksOpenPeriod, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -21,9 +23,9 @@ export const listed: { ids: string[]; suggestions: Map<string, Candidate> } = { 
 /** A payment's amount with its direction: money out is negative. */
 export const signed = (tx: BankTransaction) => (tx.direction === 'DBIT' ? -1 : 1) * Math.abs(tx.amount);
 
-/** The account a payment moved on: the bank's label, its currency when not CHF; a private outlay is "Privat". */
+/** The account a payment moved on: its label, its currency when not CHF; one on the owner's account is "Privat". */
 export const bankOf = (tx: BankTransaction) =>
-  tx.bank === 'manual' ? t('receipts.private') : tx.currency !== baseCurrency() ? `${tx.bank} ${tx.currency}` : tx.bank;
+  roleOf(tx, workspaceNow()?.bankAccounts ?? []) === 'owner' ? t('receipts.private') : tx.currency !== baseCurrency() ? `${tx.bank} ${tx.currency}` : tx.bank;
 
 export const amountOf = (tx: BankTransaction) => `${tx.currency !== baseCurrency() ? `${tx.currency} ` : ''}${fmt(signed(tx))}`;
 

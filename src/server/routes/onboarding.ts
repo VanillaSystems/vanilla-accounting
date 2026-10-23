@@ -32,7 +32,7 @@ export function setupFacts(): SetupFacts {
   const today = localToday();
   const year = booksOpenPeriod(books, today, filing().length).from.slice(0, 4);
   const chart = new Map((accountsOf(WS) as Array<{ number?: unknown; name?: unknown }>).map((a) => [String(a.number), String(a.name ?? '')]));
-  const banks = WS.bankAccounts.filter((b) => b.bank !== 'manual');
+  const banks = WS.bankAccounts.filter((b) => b.role !== 'owner');
   const { view, books: partnerBooks } = partnersNow();
   const c = WS.company;
   return {

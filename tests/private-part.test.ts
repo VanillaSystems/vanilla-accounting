@@ -22,9 +22,9 @@ import './support/jurisdiction.js';
 const fx = loadFxResolver();
 /** The bank first: a payment of the owner in EUR is still booked on the owner's account, never on the manifest's first account. */
 const bankAccounts: LedgerBankAccount[] = [
-  { bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' },
-  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' },
-  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Kontokorrent Inhaber' },
+  { bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' },
+  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' },
+  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Kontokorrent Inhaber', role: 'owner' },
 ];
 const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts };
 const DAY = '2026-08-12';

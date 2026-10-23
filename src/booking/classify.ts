@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext, type PayoutKind } from '../llm/prompts.js';
 import { NoClaudeError, type AskOptions } from '../llm/ask.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
-import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
+import { ownerAccount } from '../accounting/bank-accounts.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
@@ -68,14 +69,16 @@ export interface EntryContext {
 }
 
 /**
- * The accounts that hold the company's money: its bank accounts and every account the chart puts
- * on the same line (cash, the transfer account). Money moved between two of them is no purchase
- * and no sale: code decides that it carries no VAT code (r4w-9: a cash withdrawal `1000 / 1020`).
+ * The accounts that hold the company's money or what it owes through them: every money account of
+ * the manifest (#88: the owner's, an employee's and a card's too), and every account the chart puts
+ * on the line of a bank or the cash box (cash, the transfer account). Money moved between two of
+ * them is no purchase and no sale: code decides that it carries no VAT code (r4w-9: a cash
+ * withdrawal `1000 / 1020`; a bank payment that pays the owner back).
  */
 export function moneyAccounts(bankAccounts: readonly LedgerBankAccount[], accounts: readonly ChartAccount[]): Set<string> {
-  const banks = bankAccounts.filter((a) => a.bank !== 'manual').map((a) => a.account);
-  const lines = new Set(accounts.filter((a) => banks.includes(a.number)).map((a) => a.line));
-  return new Set([...banks, ...accounts.filter((a) => lines.has(a.line)).map((a) => a.number)]);
+  const held = bankAccounts.filter((a) => a.role === 'bank' || a.role === 'cash').map((a) => a.account);
+  const lines = new Set(accounts.filter((a) => held.includes(a.number)).map((a) => a.line));
+  return new Set([...bankAccounts.map((a) => a.account), ...accounts.filter((a) => lines.has(a.line)).map((a) => a.number)]);
 }
 
 /**
@@ -161,7 +164,7 @@ export function paymentRefusal(tx: BankTransaction, entries: readonly JournalEnt
       refusal: { code: 'classifyUnknownVatCode', params: { code, description } },
     };
   }
-  const account = { bank: tx.bank, currency: tx.currency, account: bankAccount, label: bankAccount };
+  const account = { bank: tx.bank, currency: tx.currency, account: bankAccount, label: bankAccount, role: 'bank' as const };
   const [side] = paymentSides({ transactions: [tx], journalEntries: [...entries] }, tx.ref, [account]);
   if (side.booked === side.paid) return undefined;
   const sign = side.paid < 0 ? -1 : 1;

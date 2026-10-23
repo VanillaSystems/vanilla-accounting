@@ -12,11 +12,18 @@
  * A books step never changes a record dated on or before closedThrough: the seals of the filed
  * quarters (src/books/seal.ts) are checked after it and refuse books it changed.
  */
-import type { Document } from 'yaml';
+import { isMap, isSeq, type Document } from 'yaml';
+import { roleBefore } from './banks.js';
 
-/** 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts). */
-export const BOOKS_SCHEMA = 2;
-export const WORKSPACE_SCHEMA = 1;
+/**
+ * 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts).
+ * 3: money accounts as equals (#88): a movement on any money account, a hand movement a statement
+ * confirmed (BankTransaction.statement). An app of schema 2 would book a cash box's movement onto
+ * its first bank account and import a confirmed row a second time, so it must refuse these books.
+ */
+export const BOOKS_SCHEMA = 3;
+/** 2: every money account names its `role` (#88). */
+export const WORKSPACE_SCHEMA = 2;
 export const INVOICES_SCHEMA = 1;
 
 /** Step n: schema n → n + 1. */
@@ -25,9 +32,31 @@ export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
 export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // The records stay as they are; only where they lie changed.
   1: (doc) => doc,
+  // The origin was stored already (`source: 'manual'`, absent for a statement row) and a filed
+  // record keeps every byte: the records stay; the number makes an older app refuse the books.
+  2: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
-export const MANIFEST_MIGRATIONS: Ladder<Document> = {};
+export const MANIFEST_MIGRATIONS: Ladder<Document> = {
+  // Each account gets the role it had implicitly: the owner's for `manual`, a card for a card issuer, else a bank.
+  1: (doc) => {
+    const seq = doc.get('bankAccounts');
+    if (!isSeq(seq)) return doc;
+    for (const item of seq.items) if (isMap(item) && !item.has('role')) item.set('role', roleBefore(String(item.get('bank'))));
+    return doc;
+  },
+};
+
+/** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */
+export function stampManifest(doc: Document): Document {
+  if (!isMap(doc.contents)) throw new Error('belege.workspace.yaml: not a YAML mapping');
+  if (doc.contents.has('schema')) doc.contents.set('schema', WORKSPACE_SCHEMA);
+  else doc.contents.items.unshift(doc.createPair('schema', WORKSPACE_SCHEMA));
+  return doc;
+}
+
+/** The manifest as text, written as the Firma page writes it: a one-line `{ … }` stays one line. */
+export const manifestText = (doc: Document): string => doc.toString({ lineWidth: 0, doubleQuotedAsJSON: true });
 export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {};
 
 /** A file written by a newer version of the app than this one. */

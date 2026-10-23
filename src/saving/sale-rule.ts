@@ -10,7 +10,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { loadBooks, type Books } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleOfPayment, type ClassifyContext } from '../booking/classify.js';

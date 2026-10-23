@@ -116,7 +116,7 @@ test('the split keeps the sign of the model\'s line: a refund booked as one nega
 });
 
 const fx = loadFxResolver();
-const context: ClassifyContext = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' }] };
+const context: ClassifyContext = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' }] };
 const model = (entries: ClassifyEntry[]): ClassifyDeps['ask'] => async (prompt) => {
   const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
   return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries, reason: 'Die Lesung des Modells.' }])));

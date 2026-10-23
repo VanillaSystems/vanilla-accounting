@@ -114,7 +114,7 @@ export function missingOpenings(
   const lock = openingLock({ config: books.config, journalEntries: books.journalEntries }, year);
   if (lock === 'notFirstYear') return [];
   return accounts.flatMap((a): MissingOpening[] => {
-    if (a.bank === 'manual' || a.currency !== baseCurrency() || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
+    if (a.currency !== baseCurrency() || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
     const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
     if (!first) return [];
     const moved = books.transactions.filter((t) => t.bank === a.bank && t.currency === a.currency && t.date >= `${year}-01-01` && t.date <= first.date)

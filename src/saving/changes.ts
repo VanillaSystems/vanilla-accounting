@@ -4,6 +4,7 @@
  * changed outside the app against git's HEAD, and Verlauf. Only this module and saving.ts read or
  * write git (and the year close, which commits itself as a locked save).
  */
+import { madeByHand } from '../workspace/money-accounts.js';
 import fs, { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, relative } from 'node:path';
@@ -228,7 +229,7 @@ export async function receiptChanges(ws: Ws): Promise<ReceiptChange[]> {
     const txNow = new Map((await now<BankTransaction>('transactions')).map((t) => [t.ref, t]));
     const txSaved = new Set((await saved<BankTransaction>('transactions')).map((t) => t.ref));
     const entriesNow = await now<JournalEntry>('journalEntries');
-    const outlays = new Set([...txNow.values()].filter((t) => t.source === 'manual' && !txSaved.has(t.ref)).map((t) => t.ref));
+    const outlays = new Set([...txNow.values()].filter((t) => madeByHand(t) && !txSaved.has(t.ref)).map((t) => t.ref));
 
     for (const r of receiptsNow.values()) {
       const was = receiptsSaved.get(r.id);

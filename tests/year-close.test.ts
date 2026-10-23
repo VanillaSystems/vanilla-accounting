@@ -223,7 +223,7 @@ test('a booking split over several one-leg lines balances under its ref; an acco
   const b = books();
   b.journalEntries.push(e('s1', '2026-06-01', '6570', '', 30, { transactionRef: 'split' }), e('s2', '2026-06-01', '', '1020', 30, { transactionRef: 'split' }));
   assert.deepEqual(closingLedger(b, '2026', CHART, ACCOUNTS).causes, []);
-  const manual = (currency: string): LedgerBankAccount => ({ bank: 'manual', currency, account: '2451', label: 'Kontokorrent' });
+  const manual = (currency: string): LedgerBankAccount => ({ bank: 'manual', currency, account: '2451', label: 'Kontokorrent', role: 'owner' });
   assert.deepEqual(foreignAccounts([...BANKS, manual('CHF'), manual('EUR')]).map((f) => f.account), ['1021']);
 });
 
@@ -390,7 +390,7 @@ test('a payment that names an open invoice without being linked to it blocks the
 });
 
 test('r9k-1: a bank account whose ledger account the chart lacks is a typed problem of the checklist (said in the person\'s language), not doctor\'s English line', () => {
-  const close = yearClose(input(books(), { bankAccounts: [...BANKS, { bank: 'Raiffeisen 2', currency: 'CHF', account: '1022', label: 'Coiffure Nachbar GmbH', statements: 'camt053' }] }));
+  const close = yearClose(input(books(), { bankAccounts: [...BANKS, { bank: 'Raiffeisen 2', currency: 'CHF', account: '1022', label: 'Coiffure Nachbar GmbH', statements: 'camt053', role: 'bank' }] }));
   const doctor = close.checks.find((c) => c.id === 'doctor')!;
   assert.deepEqual(doctor.problems, [{ code: 'bankNotInChart', account: '1022', label: 'Coiffure Nachbar GmbH' }]);
   assert.equal(doctor.status, 'fail');

@@ -2,6 +2,7 @@
  * One receipt: who and what, the amount, one line of facts, its payment (or the suggestion, or
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
+import { byStatement } from '../../../workspace/money-accounts.js';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import type { BankTransaction, InboxFile, JournalEntry, Receipt } from '../../../types/index.js';
@@ -181,8 +182,8 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
 /** A booking without a payment in a toast (#89): its day, text and amount. */
 const entryLine = (e: JournalEntry) => `${formatDate(e.date)} · ${e.description ?? e.transactionRef} · ${fmt(e.amount)}`;
 
-/** A private payment only this receipt holds: releasing it deletes the payment, as unlinking would leave it orphaned. */
-const ownPrivate = (l: Ledger, tx: BankTransaction) => tx.bank === 'manual' && (l.receiptsByRef.get(tx.ref)?.length ?? 0) <= 1;
+/** A payment made by hand only this receipt holds: releasing it deletes the payment, as unlinking would leave it orphaned. */
+const ownPrivate = (l: Ledger, tx: BankTransaction) => !byStatement(tx) && (l.receiptsByRef.get(tx.ref)?.length ?? 0) <= 1;
 
 function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   const { v, l, nav, canEdit } = props;

@@ -4,6 +4,7 @@
  * sheet. Saved in belege.workspace.yaml's invoicing block; an issued invoice keeps the layout it
  * was issued with.
  */
+import { banksOf } from '../../../workspace/money-accounts.js';
 import { useMemo, useState } from 'react';
 import { INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
@@ -138,7 +139,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
  * takes it here, in the same change, as the setup does.
  */
 function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
-  const banks = ws.bankAccounts.filter((a) => a.bank !== 'manual');
+  const banks = banksOf(ws.bankAccounts);
   const [pending, setPending] = useState<Partial<Record<InvoiceCurrency, string>>>({});
   const [ibans, setIbans] = useState<Partial<Record<InvoiceCurrency, string>>>({});
   async function set(currency: InvoiceCurrency, account: string, iban?: string) {
@@ -218,7 +219,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
  * writes the invoicing block; the layout editor takes over.
  */
 function InvoicingSetup({ ws, nav, canEdit, onDone }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; onDone(layout: InvoiceLayout | undefined): void }) {
-  const banks = ws.bankAccounts.filter((a) => a.bank !== 'manual');
+  const banks = banksOf(ws.bankAccounts);
   const names = getAccountMap();
   const revenue = Object.keys(names).filter((n) => n.startsWith('3')).sort();
   const first = (banks.find((a) => a.currency === 'CHF') ?? banks[0])?.account ?? '';

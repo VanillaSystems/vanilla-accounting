@@ -10,7 +10,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rea
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
-import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
+import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from '../src/workspace/schema.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { writeOldLayout } from './support/old-layout.js';
 
@@ -46,7 +46,7 @@ for (const p of readdirSync(join(APP_ROOT, 'node_modules')).filter((p) => p !== 
 const ws = join(tmp, 'ws');
 writeOldLayout(DEMO_ROOT, ws, join(APP_ROOT, 'tests/golden/demo'));
 const unversioned = readFileSync(join(ws, 'books.json'), 'utf8');
-writeFileSync(join(ws, 'belege.workspace.yaml'), readFileSync(join(ws, 'belege.workspace.yaml'), 'utf8').replace(/^schema: 1\n/m, ''));
+writeFileSync(join(ws, 'belege.workspace.yaml'), readFileSync(join(ws, 'belege.workspace.yaml'), 'utf8').replace(/^schema: \d+\n/m, '').replace(/, role: \w+/g, ''));
 const app_ = (f: string) => `${APP_FOLDER}/${f}`;
 
 // Tools doctor looks for, and an npm whose `ci` only logs.
@@ -97,14 +97,15 @@ test('update pulls a release, prints its changelog, writes the workspace at the 
   assert.ok(r.out.includes(`version ${current} → ${next}`), r.out);
   assert.match(r.out, /A stand-in fix/);
   assert.match(r.out, new RegExp(`books\\.json: schema \\(none\\) → ${BOOKS_SCHEMA}, backup ${APP_FOLDER}/data/backups/books\\.json\\.schema-none; \\d+ files and folders moved into vanilla-accounting/`));
-  assert.match(r.out, /vanilla-accounting\/belege\.workspace\.yaml: schema \(none\) → 1/);
+  assert.match(r.out, new RegExp(`vanilla-accounting/belege\\.workspace\\.yaml: schema \\(none\\) → ${WORKSPACE_SCHEMA}`));
   assert.match(r.out, /^(# |ℹ )pass [1-9]\d*$/m, 'the golden master ran its tests');
   assert.match(r.out, /✓ npm run test:books/);
   assert.match(r.out, /Up to date\./);
   assert.equal(ciCalls(), 0, 'the lockfile did not change');
   assert.equal(existsSync(join(ws, 'books.json')), false, 'the books moved into vanilla-accounting/');
   assert.equal(JSON.parse(read(app_('ledger.json'))).schema, BOOKS_SCHEMA);
-  assert.match(read(app_('belege.workspace.yaml')), /^schema: 1\n/);
+  assert.match(read(app_('belege.workspace.yaml')), new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`));
+  assert.match(read(app_('belege.workspace.yaml')), /bank: manual, currency: CHF, account: "2451", label: Kontokorrent Anna Muster, role: owner \}/, 'the 0.3 manifest\'s accounts gained their roles (#88)');
   assert.equal(read(app_('data/backups/books.json.schema-none')), unversioned);
 });
 

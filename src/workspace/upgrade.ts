@@ -7,9 +7,9 @@
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { isMap, parseDocument } from 'yaml';
+import { parseDocument } from 'yaml';
 import { loadBooks, saveBooks } from '../books/store.js';
-import { BOOKS_SCHEMA, MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
+import { BOOKS_SCHEMA, MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, manifestText, schemaOf, stampManifest } from './schema.js';
 import { workspaceAt, type Workspace } from './workspace.js';
 import { applyLayout, isOldLayout, planLayout } from './layout.js';
 
@@ -47,11 +47,8 @@ export async function upgradeWorkspace(opened: Workspace): Promise<{ ws: Workspa
   const named = doc.get('schema') as number | undefined;
   if (named !== WORKSPACE_SCHEMA) {
     const copy = backup(ws, manifest, named);
-    const next = climb(doc, schemaOf(named, manifest), WORKSPACE_SCHEMA, MANIFEST_MIGRATIONS, manifest, (d) => d.clone());
-    if (!isMap(next.contents)) throw new Error(`${manifest}: not a YAML mapping`);
-    next.contents.items = next.contents.items.filter((p) => String(p.key) !== 'schema');
-    next.contents.items.unshift(next.createPair('schema', WORKSPACE_SCHEMA));
-    writeFileSync(manifest, next.toString());
+    const next = stampManifest(climb(doc, schemaOf(named, manifest), WORKSPACE_SCHEMA, MANIFEST_MIGRATIONS, manifest, (d) => d.clone()));
+    writeFileSync(manifest, manifestText(next));
     done.push({ file: manifest, from: named, to: WORKSPACE_SCHEMA, backup: copy });
   }
 

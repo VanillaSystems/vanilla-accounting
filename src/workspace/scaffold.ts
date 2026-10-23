@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { stringify } from 'yaml';
-import { bankKind, type Iban } from './banks.js';
+import { bankKind, roleBefore, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import { VAT_QUESTIONS, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -51,13 +51,13 @@ export interface Plan {
 function ownerAccount(input: InitInput): LedgerBankAccount {
   const { setup, manifest } = ch();
   const owner = setup.owner[input.answers.legalForm] ?? setup.owner.otherwise;
-  return { bank: 'manual', currency: manifest.baseCurrency, account: owner.account, label: `${owner.label} ${input.owner}` };
+  return { bank: 'manual', currency: manifest.baseCurrency, account: owner.account, label: `${owner.label} ${input.owner}`, role: 'owner' };
 }
 
 export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
   const banks = input.banks.map((b): LedgerBankAccount => {
     const { statements } = bankKind(b.bank);
-    return { bank: b.bank, currency: b.currency, account: b.account, label: `${b.bank} ${b.currency}`, ...(statements ? { statements } : {}), ...(b.iban ? { iban: b.iban } : {}) };
+    return { bank: b.bank, currency: b.currency, account: b.account, label: `${b.bank} ${b.currency}`, role: roleBefore(b.bank), ...(statements ? { statements } : {}), ...(b.iban ? { iban: b.iban } : {}) };
   });
   return input.answers.ownerPaysPrivately === 'yes' ? [...banks, ownerAccount(input)] : banks;
 }
@@ -73,7 +73,7 @@ export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   for (const b of bankAccountsOf(input)) {
     const added = bankAccounts.byClass[b.account[0]] ?? bankAccounts.byClass.otherwise;
     const known = byNumber.get(b.account);
-    byNumber.set(b.account, known && b.bank === 'manual'
+    byNumber.set(b.account, known && b.role === 'owner'
       ? known
       : { number: b.account, name: b.label, type: added.type, line: known?.line ?? added.line });
   }

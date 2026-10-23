@@ -3,6 +3,7 @@
  * manifest, the books and their seals, the layout (ADR 0013), chart, bank accounts and their statements. Apart
  * from doctor's tool and mailbox checks, so the app (year close) does not load the mail client.
  */
+import { ownerOf } from './money-accounts.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { loadBooks, OldLayoutError, sealsOf, type Books } from '../books/store.js';
@@ -78,9 +79,8 @@ export function workspaceChecks(ws: Workspace): Result[] {
   }
 
   if (profile) {
-    const manual = ws.bankAccounts.some((b) => b.bank === 'manual');
-    if (profile.ownerPaysPrivately === 'yes' && !manual) {
-      results.push(fail('The owner pays business costs privately, but no bank account is `manual`', 'Add { bank: manual, currency: CHF, account: "2451", label: Kontokorrent <owner> } to bankAccounts (2850 Privat for an Einzelfirma).'));
+    if (profile.ownerPaysPrivately === 'yes' && !ownerOf(ws.bankAccounts)) {
+      results.push(fail('The owner pays business costs privately, but no money account has the role owner', 'Add { bank: manual, currency: CHF, account: "2451", label: Kontokorrent <owner>, role: owner } to bankAccounts (2850 Privat for an Einzelfirma).'));
     }
     if (profile.payouts === 'yes' && !numbers.has('1093')) {
       results.push(fail('Payouts from a webshop or payment provider need the clearing account 1093', 'Add { "number": "1093", "name": "Guthaben Zahlungsanbieter" } to master-data/accounts.json.'));

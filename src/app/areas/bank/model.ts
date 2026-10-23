@@ -1,6 +1,7 @@
 /**
  * Kontoauszüge as the list and detail show them, derived from the books and never stored: each
- * bank account's monthly statements in a period, a month that ended without one as missing, the
+ * bank account's monthly statements in a period, a month that ended without one as a month whose
+ * balance comes from the movements alone (#88: statements are optional, never required), the
  * payments of a statement (a Wise fee folded into its payment), and the balance checks. Pure, so
  * the list, the keys, the dock badge and the tests read the same statements.
  */
@@ -13,7 +14,7 @@ import { bookedStates } from '../../../accounting/payment-entries.js';
 import { splitTitle } from '../receipts/model.js';
 import { baseCurrency } from '../../../engines/index.js';
 
-export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'statements'>;
+export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements'>;
 
 export interface Statement {
   /**
@@ -124,7 +125,7 @@ export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEnt
 }
 
 export interface Bank {
-  /** The accounts statements come for, in the manifest's order (not the private `manual` one). */
+  /** The accounts at a bank, and every account that takes statements, in the manifest's order. */
   accounts: Account[];
   closedThrough?: string;
   /** Statements and missing months of every account overlapping [from, to], newest last day first. */
@@ -156,7 +157,7 @@ export interface Bank {
 }
 
 export function bankOf(books: Index, accounts: readonly Account[], today: IsoDate): Bank {
-  const banked = accounts.filter((a) => a.statements);
+  const banked = accounts.filter((a) => a.statements || a.role === 'bank');
   const accountOf = (bank: string, currency: string) => banked.find((a) => a.bank === bank && a.currency === currency);
   const txByRef = new Map(books.transactions.map((t) => [t.ref, t]));
   const byAccount = new Map<string, BankTransaction[]>(banked.map((a) => [a.account, []]));
@@ -225,7 +226,8 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     const own = byAccount.get(s.account.account)!;
     if (!s.file?.refs) return own.filter((t) => t.date >= s.from && t.date <= s.to);
     const refs = new Set(s.file.refs);
-    return own.filter((t) => refs.has(t.ref));
+    // A movement made by hand a row of this statement confirmed stands for that row (#88).
+    return own.filter((t) => refs.has(t.ref) || (t.statement !== undefined && refs.has(t.statement)));
   };
   /** The account's statement before `s`: the latest one that ends by the day `s` starts. */
   const before = (s: Statement) => files.get(s.account.account)!.filter((x) => x !== s && x.to <= s.from && x.from < s.from).sort((x, y) => y.to.localeCompare(x.to) || y.from.localeCompare(x.from))[0];
@@ -281,7 +283,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
       // The file that holds the payment; else the narrowest statement that holds the day: a statement of some days before the month's.
       const days = (s: Statement) => Date.parse(s.to) - Date.parse(s.from);
       const own = files.get(a.account)!;
-      return own.find((s) => s.file?.refs?.includes(t.ref))
+      return own.find((s) => s.file?.refs?.includes(t.ref) || (t.statement !== undefined && s.file?.refs?.includes(t.statement)))
         ?? own.filter((s) => !s.file?.refs && t.date >= s.from && t.date <= s.to).sort((x, y) => days(x) - days(y) || y.from.localeCompare(x.from))[0]
         ?? forAccount(a, t.date, t.date)[0];
     },
@@ -305,9 +307,13 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   };
 }
 
-/** A statement with a problem: missing, or its payments do not add up to the bank's balance. */
+/**
+ * A statement with a problem: its payments do not add up to the bank's balance, or a statement is
+ * missing between two that do not chain. A month without a statement is none (#88): its balance
+ * comes from the movements, reconciled with no statement, and a statement may follow any time.
+ */
 export const troubled = (b: Bank, s: Statement) => {
-  if (!s.file) return !s.running;
+  if (!s.file) return false;
   const c = b.check(s);
   return c.gap !== undefined || (c.diff != null && !c.ok);
 };

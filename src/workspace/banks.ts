@@ -35,8 +35,19 @@ export const BANKS: Record<string, BankKind> = {
   Kreditkarte: { range: 'card', tested: false, note: 'Credit card statements are not imported yet: book the monthly card bill by hand, or pay with a Wise card.' },
 };
 
-/** The label of the owner's private payments: never imported from a statement. */
+/**
+ * What a money account is (#88). `bank`: an account at a bank or a payment provider; `cash`: the
+ * cash box; `owner`: the owner's current or private account; `employee`: what the firm owes one
+ * person for outlays; `card`: a credit card; `clearing`: a clearing account for set-offs.
+ */
+export type MoneyRole = 'bank' | 'cash' | 'owner' | 'employee' | 'card' | 'clearing';
+export const MONEY_ROLES: readonly MoneyRole[] = ['bank', 'cash', 'owner', 'employee', 'card', 'clearing'];
+
+/** The label of the owner's account, which every filed outlay carries as its `bank`. */
 export const MANUAL_BANK = 'manual';
+
+/** The role an account of the manifest before roles had (schema 1): the owner's for `manual`, a card for a card issuer, else a bank. */
+export const roleBefore = (bank: string): MoneyRole => (bank === MANUAL_BANK ? 'owner' : BANKS[bank]?.range === 'card' ? 'card' : 'bank');
 
 export function bankKind(bank: string): BankKind {
   if (bank === MANUAL_BANK) return { range: 'bank', tested: true };

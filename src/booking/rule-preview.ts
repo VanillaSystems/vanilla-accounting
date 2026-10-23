@@ -4,7 +4,7 @@
  * the other rules that hold for the same payments. Code, never the model: the card shows this so
  * a rule drafted too wide is seen on the payments it would book.
  */
-import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction } from '../types/index.js';

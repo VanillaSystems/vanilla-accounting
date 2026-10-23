@@ -33,7 +33,7 @@ test('books of a newer schema are refused with what to do', () => {
 
 test('a manifest without schema reads as schema 1', () => {
   const ws = tempWorkspace('schema-');
-  writeFileSync(ws.paths.manifest, readFileSync(ws.paths.manifest, 'utf8').replace(/^schema: 1\n/m, ''));
+  writeFileSync(ws.paths.manifest, readFileSync(ws.paths.manifest, 'utf8').replace(/^schema: \d+\n/m, ''));
   assert.doesNotMatch(readFileSync(ws.paths.manifest, 'utf8'), /^schema:/m);
   assert.equal(workspaceAt(ws.paths.root).bankAccounts.length > 0, true);
 });

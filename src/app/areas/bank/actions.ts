@@ -122,6 +122,8 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
   }
   const last = read.at(-1);
   const added = read.reduce((n, r) => n + r.added, 0);
+  const confirmed = read.reduce((n, r) => n + (r.confirmed ?? 0), 0);
+  const imported = [t('bank.imported', { n: added }), confirmed ? t('bank.importConfirmed', { n: confirmed }) : ''].filter(Boolean).join(' · ');
   const undo = last ? async () => {
     for (const r of [...read].reverse()) {
       try { await api.deleteStatement(r.file); } catch (e) { nav.toast(errorText(e)); break; }
@@ -129,8 +131,8 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
     forgetPages();
     nav.refresh();
   } : undefined;
-  if (skipped.length) nav.toast([last && t('bank.imported', { n: added }), t('bank.importSkipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '), undo);
-  else if (last) nav.toast(t('bank.imported', { n: added }), undo);
+  if (skipped.length) nav.toast([last && imported, t('bank.importSkipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '), undo);
+  else if (last) nav.toast(imported, undo);
   if (!last) return;
   void startIntake();
   forgetPages();

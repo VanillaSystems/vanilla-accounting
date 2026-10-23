@@ -20,7 +20,7 @@ import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, type VatSetup } from '../src/works
 const jurisdiction = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 const NET_RATE: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }] };
 const fx = loadFxResolver();
-const bankAccounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }];
+const bankAccounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' as const }];
 
 const foreignInvoice = { id: 'r1', filename: 'wincher.pdf', extractedText: 'Wincher ApS, Copenhagen, Denmark. VAT DK12345678. Invoice. Total CHF 200.00. Reverse charge.', hasSwissVat: false, vatSummary: [] } as unknown as Receipt;
 const swissVatInvoice = { id: 'r1', filename: 'saas.pdf', extractedText: 'Cloud Ltd, Dublin, Ireland. CHE-123.456.789 MWST. Total CHF 200.00 incl. 8.1% MWST 14.98', hasSwissVat: true, vatId: 'CHE-123.456.789', vatSummary: [{ ratePercent: 8.1, gross: 200, vat: 14.98 }] } as unknown as Receipt;

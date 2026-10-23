@@ -6,9 +6,10 @@ The owner follows accounting best practice with one simple question for the pers
 chosen; B and C stay as the alternatives considered.
 
 1. **Underneath (option A).** Money accounts are equals: bank, cash box, owner current account,
-   employee accounts, credit card, PayPal. Only bank movements (later card movements) come from
-   statements and are reconciled; the others come from receipts. A later payment between two money
-   accounts is a transfer, carries no VAT, and settles the balance.
+   employee accounts, credit card, PayPal. Every one of them, a bank account included, takes
+   movements from receipts, answers and hand entries, and statement imports when the person has
+   them (owner's correction of 23.10.2026, below). A later payment between two money accounts is a
+   transfer, carries no VAT, and settles the balance.
 2. **On top, one quiet question** on a receipt with no fitting bank movement: «Wer hat bezahlt? ·
    Firma (Bank) · Kasse · Ich privat · Mitarbeiter … · Karte · Noch offen (Rechnung)».
    - «Firma (Bank)» waits for the payment (#29).
@@ -38,6 +39,84 @@ chosen; B and C stay as the alternatives considered.
 7. Card statements as a source.
 
 The list under «Steps» is the earlier, finer proposal; where it differs, this order wins.
+
+## Owner's correction (23.10.2026): statements are optional on every account
+
+«The bank statements are not always imported. They should be importable, but it's not required.»
+
+- **No fixed mode per account.** There is no `movements: statement | receipts` field. Every money
+  account, a bank account included, gets movements from receipts, answers and hand entries, and
+  takes statement imports when the person has them. The manifest names only each account's `role`.
+- **A statement imported later is matched, not added.** Rows of the statement that fit a movement
+  already known are paired with it; only the rest become new movements. No duplicates.
+- **Each movement keeps its origin**, statement or receipt/hand, and says whether a statement
+  confirms it.
+- **Reconciliation against a closing balance** covers the periods a statement covers. An account
+  or a month without a statement shows its balance from the movements, marked as not reconciled.
+
+## Built in step 3 (#88): money accounts and the format
+
+**The manifest (schema 2).** Each entry of `bankAccounts` is a money account and names its `role`:
+`bank`, `cash`, `owner`, `employee`, `card` or `clearing` (`src/workspace/banks.ts` `MoneyRole`).
+`statements` stays: how the account's statements are read when imported, from the bank registry when
+not named; it is no mode. An owner's or employee's account may carry the person's own `iban`. The
+label `manual` is the owner's account (every filed outlay carries it), so its role must be `owner`,
+and at most one account is the owner's. The key stays `bankAccounts`, to keep every manifest and
+every reader as they are.
+
+```yaml
+schema: 2
+bankAccounts:
+  - { bank: Raiffeisen, currency: CHF, account: "1021", label: Bank Raiffeisen, statements: camt053, iban: CH…, role: bank }
+  - { bank: Kasse, currency: CHF, account: "1000", label: Kasse, role: cash }
+  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent Anna Muster, role: owner }
+```
+
+The step 1 → 2 (`MANIFEST_MIGRATIONS[1]`, on the YAML document, so comments stay) gives each account
+the role it had implicitly: `owner` for `manual`, `card` for a card issuer of the bank registry,
+`bank` otherwise. A change from the Firma page climbs an older manifest first and writes it at
+schema 2; `npm run update` does the same with a backup.
+
+**A movement (books schema 3).** `BankTransaction` stays the record of a movement on any money
+account. Its `bank` is the money account's label. Two fields carry the origin:
+
+- `source`: absent for a row of an imported statement (every record without it has been one);
+  `manual` when a receipt, an answer or a hand entry made it. Unchanged from before.
+- `statement` (new): on a movement made by hand, the ref of the statement row that confirmed it.
+
+The step 2 → 3 changes no record: the origin was stored already, and a filed record keeps every
+byte, so every seal holds. The version number exists so that an app of schema 2 refuses these books
+(`SchemaTooNewError`): it would import a confirmed row a second time and book a cash box's movement
+on its first bank account.
+
+**One predicate and a role lookup** (`src/workspace/money-accounts.ts`) replace the scattered
+`manual` checks: `byStatement(tx)` (a statement row, or a hand movement a row confirmed),
+`madeByHand(tx)`, `accountOf(tx, accounts)` and `roleOf`, `ownerOf`, `banksOf`. `bankAccountFor`
+refuses a movement on an account the manifest lacks (`UnknownMoneyAccountError`) instead of booking
+it on the first bank account. Every money account is a money account for VAT: a booking between two
+of them is a transfer and carries no code (`moneyAccounts`); only a bank's or the cash box's chart
+line brings its neighbours along.
+
+**A statement imported later** (`src/books/bank-import.ts` `matchStatementRows`). A row confirms an
+open movement made by hand on the same account (label and currency), in the same direction, for the
+same amount, within 7 days (`MATCH_DAYS`); when both name a counterparty, the names share a word.
+Each row takes one movement, the closest day first, then the pair whose texts share a word. The
+movement keeps its ref, its bookings, its links and its origin, and gains `statement`; the row is no
+new movement. A re-import finds the row on the movement and adds nothing. Taking the statement back
+removes `statement` again, and the movement stays. A filed movement is never matched (it keeps every
+byte), so a row whose only fit is a filed hand movement becomes a new movement.
+
+**Reconciliation.** The Bank area lists every account at a bank and every account that takes
+statements. A month without a statement is no problem and no badge: «ohne Auszug», with the balance
+from the movements, reconciled with no statement, and the well to import one. A statement's own
+checks are as before; a hand movement a row confirmed counts as that row. Firma › Geldkonten shows
+each money account with its role; an account no statement covers shows the sum of its movements up
+to today, «aus den Bewegungen, nicht abgestimmt».
+
+**Accounts appear when first used.** `POST /api/transactions/manual` makes a movement on any money
+account (`account`, `direction`, the owner's when none is named). For an account the manifest lacks,
+`role` and `label` add it in the same request. No screen calls it yet; «Wer hat bezahlt?» (#91 #92
+#94 #95) is its button and the AI's change kind.
 
 Status: direction decided by the owner (23.10.2026, #88); the analysis below is the proposal it rests on. Found by the audit after #87: a receipt
 the owner paid privately got stuck because the AI said «a booking needs a payment», although the
@@ -114,8 +193,10 @@ Generalise the anchor from «bank movement» to «movement on a money account».
   cash box, the owner's current account, an employee's account, a credit card, a clearing account
   for set-offs. Each says where its movements come from: `statement` (a reader exists) or
   `receipts` (made from receipts, or typed by hand).
-- **Bank movements still come only from statements.** Reconciliation against the closing balance
-  stays strict, and the Bank area stays bank-only.
+- **Statements confirm, they are not required** (owner's correction). Any account takes
+  movements by hand and statements when the person has them; a statement row confirms a movement
+  already known instead of adding a second one. Reconciliation against the closing balance stays
+  strict where a statement exists.
 - On every other money account a **receipt makes the movement**: «Bezahlt mit: Firma per Bank /
   Kasse / du privat / Mitarbeiter X / Kreditkarte / noch offen». The movement is dated on the
   receipt, for its amount or the business share (#87), linked with the existing `Mapping`.
@@ -141,23 +222,25 @@ Generalise the anchor from «bank movement» to «movement on a money account».
 ### A. Reuse `BankTransaction`, a money account per label (chosen)
 
 The manifest's `bankAccounts` become money accounts: each entry gains `role` (`bank`, `cash`,
-`owner`, `employee`, `card`, `clearing`) and `movements` (`statement` | `receipts`), and an owner
-or employee entry may name the person's own IBANs, so a bank payment to them is recognised as a
-settlement. `manual` stays the owner's label, so every filed `bank: 'manual'` transaction stays
+`owner`, `employee`, `card`, `clearing`), and an owner or employee entry may name the person's own
+IBANs, so a bank payment to them is recognised as a settlement. (The `movements: statement |
+receipts` field first proposed here was dropped by the owner's correction: statements are optional
+on every account.) `manual` stays the owner's label, so every filed `bank: 'manual'` transaction stays
 byte-identical and no seal changes. A receipt-born movement is a `BankTransaction` with `bank` set
 to the money account's label, `source: 'manual'`, a manual ref, and `direction` from the receipt
 (money out for a purchase, money in for a cash sale).
 
 - For: everything keyed on a payment works unchanged: classify, rules, `receiptWait`,
   `bookPayment`, `attachEntries`, `relinked`, undo by deleting the movement, seals, the period
-  lock. The 24 `manual` checks collapse into one predicate in src/accounting/bank-accounts.ts
-  (`fromStatements(account)`), which makes the domain explicit instead of a magic string.
-- Against: the type's name lies («BankTransaction» on the cash box). Every bank-only view must
-  filter by `movements: 'statement'`, which today's `manual` checks already do.
-- Schema: the manifest climbs to schema 2 (the `manual` entry gains `role: owner, movements:
-  receipts`); the books climb to schema 3 with an identity step, because an older app would book a
-  cash movement onto its first bank account (`bankAccountFor` falls back to it) and must refuse
-  such books (`SchemaTooNewError`).
+  lock. The 24 `manual` checks collapse into one per-movement predicate and a role lookup
+  (src/workspace/money-accounts.ts `byStatement`, `roleOf`), which makes the domain explicit
+  instead of a magic string.
+- Against: the type's name lies («BankTransaction» on the cash box). Every bank-only view filters
+  by role.
+- Schema: the manifest climbs to schema 2 (each entry gains its `role`); the books climb to schema
+  3, because an older app would book a cash movement onto its first bank account (`bankAccountFor`
+  fell back to it) and import a confirmed row twice, and must refuse such books
+  (`SchemaTooNewError`).
 
 ### B. A new `MoneyMovement` collection (considered, not chosen)
 
@@ -199,8 +282,8 @@ step. B is the same behaviour at many times the cost and risk to seals.
   and employees' included, is a transfer and never waits. A receipt-born movement is linked from
   birth and never waits. The «Beleg fehlt» item may offer «Wer hat bezahlt?» when the payment was
   in fact a settlement.
-- **Reconciliation.** The Bank area and the balance check stay statement accounts only. Each other
-  money account gets a list with its running balance: Kassenbuch (with the `cashNegative` check),
+- **Reconciliation.** The balance check runs where a statement exists; elsewhere the balance comes
+  from the movements, marked as not reconciled. Each money account gets a list with its running balance: Kassenbuch (with the `cashNegative` check),
   Kontokorrent Inhaber, each employee, the card, the clearing account. What is open there is what
   is still owed.
 - **Existing paths folded in.** `privatePayment` becomes «Bezahlt mit…» with the owner chosen.
@@ -222,8 +305,9 @@ Each step ships alone, smallest first.
    receipt show the link; the AI's `link` takes it too. Seals unchanged.
 3. **#29 settlements** (#90): a bank payment booked onto the owner's account, or to the owner's IBAN,
    never waits; the second-payment guard covers a receipt paid privately.
-4. **Money accounts in the manifest** (#88): `role`, `movements`, own IBANs; manifest schema 2, books
-   schema 3; one predicate replaces the `manual` checks. No behaviour change.
+4. **Money accounts in the manifest** (#88): `role`, own IBANs; manifest schema 2, books schema 3;
+   one predicate and a role lookup replace the `manual` checks; a statement imported later is
+   matched to movements made by hand. Built: see «Built in step 3» above.
 5. **«Bezahlt mit…»** on a receipt (#91 cash, #92 employees, #94 card, #95 other accounts) (Kasse, privat, Mitarbeiter, Kreditkarte, another account,
    noch offen), with the business share from #87; AI change kind `paidWith`.
 6. **Per-account lists**: Kassenbuch, Kontokorrent, employees, card, with running balance and what
@@ -231,7 +315,7 @@ Each step ships alone, smallest first.
 7. **Cash sales** (#91): a sales record paid in cash makes a money-in movement on the cash box.
 8. **Open bills, credit notes, set-off** (#93): due dates and the open-bills list; a credit note against
    the next invoice; a set-off on a clearing account.
-9. **Card statements** (#94): when a reader exists, the card account switches to `statement` and its
-   receipt-born movements are matched to the imported ones.
+9. **Card statements** (#94): when a reader exists, the card's statement is imported like any
+   other, and its rows are matched to the receipt-born movements (the matching of step 3).
 
 Tracked in #88. Related: #87, #29, #27, #8.

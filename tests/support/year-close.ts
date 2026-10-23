@@ -12,8 +12,8 @@ import { tempWorkspace, writeIndex } from './workspace.js';
 export const CHART = ['1020', '1021', '1170', '1171', '2201', '2800', '2970', '3400', '6570', '6960'];
 
 export const BANKS: LedgerBankAccount[] = [
-  { bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', statements: 'camt053' },
-  { bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise EUR', statements: 'wise' },
+  { bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', statements: 'camt053', role: 'bank' },
+  { bank: 'Wise', currency: 'EUR', account: '1021', label: 'Wise EUR', statements: 'wise', role: 'bank' },
 ];
 
 export const e = (id: string, date: string, accountDebit: string, accountCredit: string, amount: number, more: Partial<JournalEntry> = {}): JournalEntry =>

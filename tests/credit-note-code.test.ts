@@ -14,7 +14,7 @@ import type { LedgerBankAccount } from '../src/workspace/workspace.js';
 import './support/jurisdiction.js';
 
 const fx = loadFxResolver();
-const bankAccounts: LedgerBankAccount[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }];
+const bankAccounts: LedgerBankAccount[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' }];
 const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts };
 
 const pay = (ref: string, description: string, direction: 'DBIT' | 'CRDT', amount: number): BankTransaction =>

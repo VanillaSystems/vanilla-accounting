@@ -10,6 +10,7 @@
  * best payments, the bookings without a payment of the open period of the receipt's amount (a
  * search finds the others: a depreciation, an accrual, #89) take the receipt as a payment does.
  */
+import { ownerOf } from '../../../workspace/money-accounts.js';
 import { useMemo, useState } from 'react';
 import type { RouteOf } from '../../shell/route.js';
 import { useFx } from '../../hooks/use-fx.js';
@@ -47,7 +48,7 @@ const noCorrection = (c: Candidate): boolean => !!c.filed && !!withoutInputTax()
 export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const { r } = v;
   const { rates } = useFx();
-  const owner = useWorkspace()?.bankAccounts.find((b) => b.bank === 'manual')?.account;
+  const owner = ownerOf(useWorkspace()?.bankAccounts ?? [])?.account;
   const [q, setQ] = useState('');
   /** undefined: nothing picked yet; ↓ or ↵ picks the first row. */
   const [idx, setIdx] = useState<number | undefined>();

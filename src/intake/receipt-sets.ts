@@ -7,6 +7,7 @@
  * Kontoauszüge), never a link. Never more than the payment: a set owes what it paid, or it is no
  * link. Browser-safe and pure.
  */
+import { madeByHand } from '../workspace/money-accounts.js';
 import type { BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { baseCurrency } from '../engines/index.js';
 import { creditSigned } from '../accounting/credit-signed.js';
@@ -70,10 +71,10 @@ export interface Fit { exact: Receipt[][]; close?: { set: Receipt[]; sum: number
 /**
  * The sets of `free` receipts that pay `tx` together with the receipts linked to it already: from one
  * vendor (the linked receipts' too), in its currency, near its date. None for a payment of a filed
- * period, a private outlay, or one whose linked receipts are in another currency or owe it all.
+ * period, a movement made by hand (from its receipt), or one whose linked receipts are in another currency or owe it all.
  */
 export function fitOf(books: Books, tx: BankTransaction, free: readonly Receipt[], isOpen: (date: string) => boolean): Fit | undefined {
-  if (tx.amount === 0 || tx.type === 'wise-fee' || tx.bank === 'manual' || !isOpen(tx.date)) return undefined;
+  if (tx.amount === 0 || tx.type === 'wise-fee' || madeByHand(tx) || !isOpen(tx.date)) return undefined;
   const linked = books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => books.receipts.find((r) => r.id === m.receiptId));
   if (linked.some((r) => !r || r.amount === undefined || (r.currency ?? baseCurrency()) !== tx.currency)) return undefined;
   const linkedCents = linked.reduce((s, r) => s + owedCents(r!), 0);

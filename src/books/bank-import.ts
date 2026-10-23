@@ -4,6 +4,7 @@
  * extract` and the statement upload (POST /api/statements) both read the folder through here and
  * merge with mergeIndex, so a statement imported from the UI lands exactly as extract would put it.
  */
+import { madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
@@ -191,7 +192,7 @@ export interface Scan {
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
   description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank', counterpartyIban: 'bank', bankTxId: 'bank',
-  source: 'kept', businessPart: 'kept', replaced: 'kept', remarks: 'kept', noReceiptNeeded: 'kept', waitsForPerson: 'kept', waitsForReceipt: 'kept',
+  source: 'kept', statement: 'kept', businessPart: 'kept', replaced: 'kept', remarks: 'kept', noReceiptNeeded: 'kept', waitsForPerson: 'kept', waitsForReceipt: 'kept',
 } as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
 
 function keptFields(t: BankTransaction): Partial<BankTransaction> {
@@ -206,6 +207,48 @@ function keptFields(t: BankTransaction): Partial<BankTransaction> {
  * is matched to its previous self by ref and currency, never by the ref alone (#23).
  */
 export const legOf = (t: BankTransaction) => `${t.ref} ${t.currency}`;
+
+/** How many days a statement row may lie from the day of a movement made by hand: a receipt's day and the bank's booking day. */
+export const MATCH_DAYS = 7;
+
+const dayGap = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
+const words = (t: Pick<BankTransaction, 'description' | 'counterparty'>) =>
+  new Set(`${t.description} ${t.counterparty ?? ''}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3));
+const shares = (a: Set<string>, b: Set<string>) => [...a].some((w) => b.has(w));
+
+/**
+ * The statement rows that confirm movements made by hand (#88): a payment typed in, made from a
+ * receipt or an answer before its statement was imported. A row confirms a movement on the same
+ * account (label and currency) in the same direction for the same amount within MATCH_DAYS days;
+ * when both name a counterparty, the names share a word. Each row confirms one movement and each
+ * movement takes one row: the closest day first, then the pair whose texts share a word. Only open
+ * movements without a row yet take part: a filed record keeps every byte. Returns movement ref →
+ * the row's ref; the rows it names are no new movements.
+ */
+export function matchStatementRows(rows: readonly BankTransaction[], books: readonly BankTransaction[], isClosed: (date: string) => boolean): Map<string, string> {
+  const open = books.filter((t) => madeByHand(t) && t.statement === undefined && t.amount !== 0 && !isClosed(t.date));
+  const pairs: { row: BankTransaction; hand: BankTransaction; gap: number; alike: boolean }[] = [];
+  for (const row of rows) {
+    if (row.amount === 0 || isClosed(row.date)) continue;
+    for (const hand of open) {
+      if (hand.bank !== row.bank || hand.currency !== row.currency || hand.direction !== row.direction) continue;
+      if (Math.round(Math.abs(hand.amount) * 100) !== Math.round(Math.abs(row.amount) * 100)) continue;
+      const gap = dayGap(hand.date, row.date);
+      if (gap > MATCH_DAYS) continue;
+      if (hand.counterparty && row.counterparty && !shares(words({ description: '', counterparty: hand.counterparty }), words({ description: '', counterparty: row.counterparty }))) continue;
+      pairs.push({ row, hand, gap, alike: shares(words(hand), words(row)) });
+    }
+  }
+  pairs.sort((a, b) => a.gap - b.gap || Number(b.alike) - Number(a.alike) || a.row.date.localeCompare(b.row.date) || a.row.ref.localeCompare(b.row.ref) || a.hand.ref.localeCompare(b.hand.ref));
+  const out = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const { row, hand } of pairs) {
+    if (out.has(hand.ref) || taken.has(legOf(row))) continue;
+    out.set(hand.ref, row.ref);
+    taken.add(legOf(row));
+  }
+  return out;
+}
 
 export interface Merged {
   index: Index;
@@ -222,17 +265,33 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
 
   const previousByLeg = new Map(previous.transactions.map((t) => [legOf(t), t]));
   const freshLegs = new Set(scan.bankTransactions.map(legOf));
+  // A row a movement made by hand took already is that movement (#88); a new row may confirm one now.
+  const claimedLeg = (t: BankTransaction) => (t.statement === undefined ? undefined : `${t.statement} ${t.currency}`);
+  const claimed = new Set(previous.transactions.map(claimedLeg).filter((l): l is string => l !== undefined));
+  const unclaimed = scan.bankTransactions.filter((t) => !claimed.has(legOf(t)));
+  const confirmed = matchStatementRows(unclaimed.filter((t) => !previousByLeg.has(legOf(t))), previous.transactions, lock.isClosed);
+  const confirming = new Set([...confirmed.values()]);
+  const confirmingLegs = new Set(unclaimed.filter((t) => confirming.has(t.ref)).map(legOf));
   // A filed transaction is what the books hold, whatever the camt053 says now: the counterparty,
   // reference and parts it was filed with stay, and a later export's wording changes nothing.
-  const fromBank = scan.bankTransactions.map((t) => {
+  const fromBank = unclaimed.filter((t) => !confirmingLegs.has(legOf(t))).map((t) => {
     const before = previousByLeg.get(legOf(t));
     if (!before) return t;
     return isClosed(before) ? before : { ...t, ...keptFields(before) };
   });
   const vanishedClosedTransactions = previous.transactions.filter(
-    (t) => t.source !== 'manual' && !freshLegs.has(legOf(t)) && isClosed(t),
+    (t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && isClosed(t),
   );
-  const manual = previous.transactions.filter((t) => t.source === 'manual');
+  // A movement made by hand keeps its row while a statement holds it, takes a row that confirms it now, and loses one no file holds any more.
+  const manual = previous.transactions.filter(madeByHand).map((t): BankTransaction => {
+    if (isClosed(t)) return t;
+    const row = confirmed.get(t.ref);
+    if (row !== undefined) return { ...t, statement: row };
+    const leg = claimedLeg(t);
+    if (leg === undefined || freshLegs.has(leg)) return t;
+    const { statement: _, ...rest } = t;
+    return rest;
+  });
 
   const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual].map((t) => {
     if (isClosed(t)) return t;

@@ -11,9 +11,9 @@ import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
 
 const ACCOUNTS: Account[] = [
-  { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053' },
-  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', statements: 'wise' },
-  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Privat' },
+  { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053', role: 'bank' },
+  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', statements: 'wise', role: 'bank' },
+  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Privat', role: 'owner' },
 ];
 
 const tx = (ref: string, date: string, amount: number, extra: Partial<BankTransaction> = {}): BankTransaction =>
@@ -146,7 +146,8 @@ test('two statements starting the same day get keys of their own', () => {
 
 test('the dock counts statements with a problem from the open quarter on', () => {
   const b = bankOf(books(), ACCOUNTS, '2026-09-15');
-  assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), 2, 'the two missing Augusts; July adds up, September is running');
+  assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), 0, 'an August without its statement is no problem (#88: statements are optional); July adds up, September is running');
+  assert.equal(b.statements('2026-08-01', '2026-08-31').filter((s) => !s.file).length, 2, 'the two Augusts stay listed, as months without a statement');
 });
 
 test('a bank text as name and note', () => {
