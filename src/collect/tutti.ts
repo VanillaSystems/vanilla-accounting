@@ -19,11 +19,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import type { Index } from '../types/index.js';
 import { loadBooks, periodLock, saveBooks, type Books, update, moduleActor } from '../books/store.js';
 import { ask } from '../llm/ask.js';
 import { openWorkspace, yearPaths } from '../workspace/workspace.js';
 import { openYear } from '../books/years.js';
+import { nextManualRef } from '../books/next-ref.js';
 
 const execFileAsync = promisify(execFile);
 const ws = openWorkspace();
@@ -230,14 +230,6 @@ ${c.messages.map((m) => `<div class="m ${m.from}"><span class="at">${m.from === 
   writeFileSync(join(tmp, 'chat.html'), html);
   execFileSync(CHROME, ['--headless=new', '--disable-gpu', '--no-pdf-header-footer', `--print-to-pdf=${out}`, `file://${join(tmp, 'chat.html')}`], { stdio: 'ignore' });
   if (statSync(out).size < 2000) throw new Error(`${out} is a blank print`);
-}
-
-function nextManualRef(index: Index, year: string): string {
-  // Same rule as POST /api/transactions/manual: a ref is taken if anything points at it.
-  const taken = [...index.transactions.map((t) => t.ref), ...(index.journalEntries ?? []).map((j) => j.transactionRef), ...index.mappings.map((m) => m.transactionRef)]
-    .filter((ref) => ref.startsWith(`M${year}-`));
-  const max = taken.reduce((mx, ref) => Math.max(mx, parseInt(ref.slice(6), 10) || 0), 0);
-  return `M${year}-${String(max + 1).padStart(3, '0')}`;
 }
 
 function importApproved(apply: boolean) {
