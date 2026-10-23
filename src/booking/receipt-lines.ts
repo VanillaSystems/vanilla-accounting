@@ -10,6 +10,7 @@
  */
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { baseCurrency } from '../engines/index.js';
+import { creditSigned } from '../accounting/credit-signed.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
 import type { BankTransaction, Receipt } from '../types/index.js';
 
@@ -20,7 +21,7 @@ export function splitByReceipts(tx: Pick<BankTransaction, 'amount' | 'currency' 
   if (receipts.length < 2 || lines.length !== 1 || receipts.length !== documents.length) return lines;
   const [line] = lines;
   const out = tx.direction === 'DBIT' ? 1 : -1;
-  const owed = receipts.map((r) => (r.currency ?? baseCurrency()) === tx.currency && r.amount !== undefined ? out * cents(r.amount) : undefined);
+  const owed = receipts.map((r) => (r.currency ?? baseCurrency()) === tx.currency && r.amount !== undefined ? out * cents(creditSigned(r)!) : undefined);
   if (owed.some((c) => c === undefined || c <= 0)) return lines;
   const paid = cents(Math.abs(tx.amount));
   if (cents(Math.abs(line.amount)) !== paid || owed.reduce((s, c) => s! + c!, 0) !== paid) return lines;

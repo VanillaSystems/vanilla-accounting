@@ -83,6 +83,9 @@ test('a receipt that completes the one linked already is linked; never one that 
 test('a refund paid back as one payment: the credit notes that add up to it are linked; a filed payment never', () => {
   const back = booksOf([pay(55, { direction: 'CRDT' })], [receipt(-20), receipt(-35)]);
   assert.equal(receiptSetsToLink(back, open).length, 1);
+  const credit = (gross: number) => receipt(gross, { vatSummary: [{ ratePercent: 8.1, vat: -Math.round(gross * 8.1 / 108.1 * 100) / 100, gross: -gross }] });
+  const unsigned = booksOf([pay(55, { direction: 'CRDT' })], [credit(20), credit(35)]);
+  assert.equal(receiptSetsToLink(unsigned, open).length, 1, 'credit notes whose amount came unsigned count by their VAT (creditSigned)');
   const filed = booksOf([pay(87.4, { date: '2026-06-20' })], [receipt(30, { date: '2026-06-18' }), receipt(57.4, { date: '2026-06-18' })]);
   assert.deepEqual(receiptSetsToLink(filed, open), []);
 });

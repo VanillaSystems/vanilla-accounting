@@ -9,6 +9,7 @@
  */
 import type { BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { baseCurrency } from '../engines/index.js';
+import { creditSigned } from '../accounting/credit-signed.js';
 
 /** At most this many receipts of one vendor are tried for one payment, nearest first: every subset of them (4096 at most). A vendor with more near the payment is only proposed, never linked, since a set among the others could fit as well. */
 const MAX_TRIED = 12;
@@ -26,8 +27,8 @@ type Books = Pick<Index, 'receipts' | 'transactions' | 'mappings'>;
 
 const cents = (n: number) => Math.round(n * 100);
 
-/** What the receipt asks to be paid, in centimes, money out positive: a credit note below zero (its amount is signed at the match step, creditSigned). */
-const owedCents = (r: Receipt): number => cents(r.amount ?? 0);
+/** What the receipt asks to be paid, in centimes, money out positive: a credit note below zero (creditSigned). */
+const owedCents = (r: Receipt): number => cents(creditSigned(r) ?? 0);
 
 /** What the payment paid, in centimes, money out positive. */
 const paidCents = (tx: BankTransaction): number => (tx.direction === 'DBIT' ? 1 : -1) * cents(Math.abs(tx.amount));

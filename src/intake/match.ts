@@ -23,6 +23,7 @@ import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
 import { linkOrdersToPayouts } from './order-links.js';
 import { linkReceiptSets } from './receipt-sets.js';
+import { creditSigned } from '../accounting/credit-signed.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -85,15 +86,6 @@ function factsOf(r: Receipt): { date?: string; amount?: number; currency?: strin
 export const BANK_WORDS = new Set(['zahlung', 'gutschrift', 'belastung', 'lastschrift', 'einkauf', 'karte', 'debit', 'kredit', 'transfer', 'payment', 'rechnung', 'auftrag', 'dauerauftrag', 'ebanking', 'twint', 'mastercard', 'visa', 'august', 'september', 'oktober', 'november', 'dezember', 'januar', 'februar', 'april', 'juni', 'juli']);
 export const nameWords = (tx: BankTransaction) => [...new Set([tx.description, tx.counterparty ?? '', ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference ?? ''])].join(' ').toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !BANK_WORDS.has(w));
 
-/**
- * A credit note's total is money back: when the receipt's VAT says so (its tax, or its net and
- * gross, below zero), its amount is negative too, whatever sign the reader gave it (corner-34).
- */
-export function creditSigned(r: Pick<Receipt, 'amount' | 'vatSummary'>): number | undefined {
-  const groups = r.vatSummary ?? [];
-  const back = groups.length > 0 && (groups.reduce((sum, g) => sum + g.vat, 0) < 0 || groups.every((g) => (g.gross ?? g.net ?? 0) < 0));
-  return r.amount !== undefined && back && r.amount > 0 ? -r.amount : r.amount;
-}
 
 /**
  * What code links without the model (MISSION: a payment that matches a receipt by amount and
