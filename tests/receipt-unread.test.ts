@@ -31,7 +31,7 @@ const SCAN = (id: string, over: Partial<Receipt> = {}): Receipt =>
 const READ = (id: string, rate: number | undefined): Receipt =>
   SCAN(id, { needsVisionReview: undefined, vatExtractedAt: '2026-10-01T00:00:00Z', hasSwissVat: rate !== undefined, vatSummary: rate ? [{ ratePercent: rate, gross: 23.5, vat: 1.76 }] : [] });
 
-const CTX: WaitContext = { free: new Set(), assumesUnread: new Set(['kiosk']), ownIbans: new Set(), settles: () => false, inputTax: true };
+const CTX: WaitContext = { free: new Set(), wordings: [], assumesUnread: new Set(['kiosk']), ownIbans: new Set(), settles: () => false, inputTax: true };
 
 test('a receipt the app tried and failed to read is unreadable; a person\'s facts, or a receipt never tried, are not', () => {
   assert.equal(isUnreadable(SCAN('a')), true, 'a scan too poor for its text');
