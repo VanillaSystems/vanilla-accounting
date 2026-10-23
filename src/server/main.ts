@@ -5,7 +5,8 @@ import { app, READONLY } from './api.js';
 import { closeBrowser } from '../invoices/pdf.js';
 import { startBackground } from './background.js';
 import { pairingUrl, phoneToken } from './phone.js';
-import { WS } from './books.js';
+import { readBooks, WS } from './books.js';
+import { hasBooks } from '../books/store.js';
 import { locateWorkspace } from '../workspace/workspace.js';
 import { bundledDemo } from '../workspace/demo-copy.js';
 import { useKeychain } from '../secrets/keychain-store.js';
@@ -25,6 +26,8 @@ function listening() {
   console.log(`\nAPI server running on port ${port}`);
   if (READONLY) console.log('🔒 READ-ONLY mode — all writes are blocked');
   if (bundledDemo(locateWorkspace())) console.log(`Demo: working on a copy in ${WS.paths.repository} (npm run demo:reset starts it afresh)`);
+  // The first load logs the books' dangling references (#126), before any request comes.
+  if (hasBooks(WS)) readBooks();
 
   // Every IPv4 address, so the phone can be pointed at the right one.
   const token = phoneToken();
