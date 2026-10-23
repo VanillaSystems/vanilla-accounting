@@ -50,6 +50,7 @@ export function problemText(p: ShownProblem, year: string): string {
   switch (p.code) {
     case 'q4NotFiled': return tx('yearClose.problem.q4NotFiled', { quarter: p.quarter, year });
     case 'balanceDiffers': return tx('yearClose.problem.balanceDiffers', { ...p, book: fmt(p.book), bank: fmt(p.bank), date: formatDate(p.date) });
+    case 'cashDiffers': return tx('yearClose.problem.cashDiffers', { ...p, counted: fmt(p.counted), book: fmt(p.book) });
     case 'statementGap': return tx('yearClose.problem.statementGap', { ...p, from: formatDate(p.from), to: formatDate(p.to) });
     case 'unbooked': return tx('yearClose.problem.unbooked', { n: p.count, refs: p.refs.join(', ') + (p.count > p.refs.length ? ', …' : '') });
     case 'unbookedLinked': return tx('yearClose.problem.unbookedLinked', { n: p.count });

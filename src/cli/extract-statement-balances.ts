@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
 import { extractStatementBalances } from '../providers/statement-pdf/statement-pdf-balances.js';
 import { withCamtBalances } from '../books/bank-import.js';
+import { fromYearEndDocument } from '../books/year-close.js';
 import { reconcileMonthly } from '../accounting/reconcile-bank.js';
 import { openWorkspace, partDirs } from '../workspace/workspace.js';
 
@@ -19,8 +20,11 @@ async function main() {
   const index = loadBooks(ws);
 
   const { balances, warnings } = await extractStatementBalances(partDirs(ws.paths, 'statements'), ws.bankAccounts);
-  // The XML statements' balances stay: extract reads them from those files.
-  update(index, PERSON, (books) => { books.statementBalances = withCamtBalances(balances, (books.statementBalances ?? []).filter((b) => b.source === 'camt')); });
+  // The XML statements' balances stay: extract reads them from those files. So do the year-end confirmations a person attached (#119).
+  update(index, PERSON, (books) => {
+    const kept = books.statementBalances ?? [];
+    books.statementBalances = withCamtBalances([...kept.filter(fromYearEndDocument), ...balances], kept.filter((b) => b.source === 'camt'));
+  });
   saveBooks(ws, index);
 
   console.log(`Extracted ${balances.length} month-end closing balances from statement PDFs.`);

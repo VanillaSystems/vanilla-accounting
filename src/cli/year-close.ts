@@ -1,5 +1,5 @@
 /**
- * npm run year:close -- <YYYY> [--dry-run] [--done a,b] [--na c,d] [--rates-dir <dir>]
+ * npm run year:close -- <YYYY> [--dry-run] [--done a,b] [--na c,d] [--balance <account>=<amount> --document <file>] [--cash <account>=<amount>] [--rates-dir <dir>]
  *
  * The year-end close (docs/year-end.md). Prints the checklist, every item computed from the
  * books: the preconditions, the Kursdifferenz per foreign-currency account, the VAT closing
@@ -12,17 +12,22 @@
  *   --dry-run      writes nothing: shows what is open and what would be booked
  *   --done a,b     marks guided entries as booked (ids as the checklist lists them)
  *   --na c,d       marks guided entries as not needed this year
+ *   --balance 1020=12345.60 --document Saldobestaetigung.pdf
+ *                  a bank or card account's balance on 31.12. from the bank's year-end
+ *                  confirmation, for an account without a statement covering the day (#119)
+ *   --cash 1000=250.50  the cash counted on 31.12. on a cash account
  *   --rates-dir    reads the ESTV rates from another folder (a rehearsal's stand-in 31.12. rate)
  */
 import { parseArgs } from 'node:util';
 import type { Revaluation, YearClose } from '../accounting/year-close.js';
 import { causeText, chf, problemText } from './year-close-text.js';
-import { bookRevaluation, closeYear, markTemplate, ratesOf, YearCloseRefused, yearCloseOf } from '../books/year-close.js';
+import { readFileSync } from 'node:fs';
+import { bookRevaluation, closeYear, markTemplate, ratesOf, setCashCount, setYearEndBalance, YearCloseRefused, yearCloseOf } from '../books/year-close.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { 'dry-run': { type: 'boolean' }, done: { type: 'string' }, na: { type: 'string' }, 'rates-dir': { type: 'string' } },
+  options: { 'dry-run': { type: 'boolean' }, done: { type: 'string' }, na: { type: 'string' }, balance: { type: 'string' }, document: { type: 'string' }, cash: { type: 'string' }, 'rates-dir': { type: 'string' } },
 });
 const year = positionals[0] ?? '';
 if (!/^\d{4}$/.test(year)) {
@@ -33,13 +38,20 @@ const dryRun = values['dry-run'] === true;
 const ws = openWorkspace();
 const rates = ratesOf(values['rates-dir']);
 
+/** `1020=12345.60` as the account and the amount. */
+function accountAmount(flag: string, value: string): [string, number] {
+  const m = /^(\w+)=(-?\d+(?:\.\d+)?)$/.exec(value.replace(/['’]/g, ''));
+  if (!m) { console.error(`--${flag} takes <account>=<amount>, e.g. --${flag} 1020=12345.60`); process.exit(2); }
+  return [m[1], Number(m[2])];
+}
+
 const list = (s: string | undefined) => (s ? s.split(',').map((x) => x.trim()).filter(Boolean) : []);
 const say = problemText;
 
 const CHECK_TITLE: Record<YearClose['checks'][number]['id'], string> = {
   q4Filed: 'The fourth quarter is filed',
   quartersSealed: 'Q1 to Q3 are closed and sealed',
-  bankReconciled: 'Every bank account matches its statement on 31.12.',
+  bankReconciled: 'Every bank and card account matches its statement or year-end confirmation on 31.12., every cash box its count',
   statementsComplete: 'Statements cover the whole year',
   allBooked: 'Every transaction of the year is booked',
   doctor: 'npm run doctor finds nothing to fix',
@@ -95,7 +107,18 @@ async function main(): Promise<number> {
   if (!dryRun) {
     for (const id of list(values.done)) markTemplate(ws, year, id, 'done');
     for (const id of list(values.na)) markTemplate(ws, year, id, 'na');
-  } else if (values.done || values.na) console.log('--dry-run: --done and --na are not recorded.');
+    if (values.balance) {
+      if (!values.document) { console.error('--balance needs --document: the bank\'s year-end confirmation (PDF or image).'); return 2; }
+      const [account, amount] = accountAmount('balance', values.balance);
+      const b = setYearEndBalance(ws, year, account, amount, { name: values.document, body: readFileSync(values.document) });
+      console.log(`Recorded ${account}'s balance on 31.12.: ${b.currency} ${chf(b.amount)}, proof filings/${year}/${b.sourceFile}`);
+    }
+    if (values.cash) {
+      const [account, amount] = accountAmount('cash', values.cash);
+      setCashCount(ws, year, account, amount);
+      console.log(`Recorded the cash count of ${account} on 31.12.: ${chf(amount)}`);
+    }
+  } else if (values.done || values.na || values.balance || values.cash) console.log('--dry-run: --done, --na, --balance and --cash are not recorded.');
 
   let close = yearCloseOf(ws, year, rates);
   const toBook = close.revaluations.some((r) => r.status === 'to-book');
