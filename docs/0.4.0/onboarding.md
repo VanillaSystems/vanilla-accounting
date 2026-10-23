@@ -106,7 +106,25 @@ through createWorkspace, removes the draft before the first commit and records t
 first answers (company, VAT, what the firm sells) in `onboarding.json` with `created`; the
 conversation goes on in the books at the next question. Such books open into the setup until
 «Los geht's» sets `ready`. A folder with a draft opens into the draft's conversation at the step it
-stopped, from the folder dialog, the recent list or at the next start. Without an AI provider on the
+stopped, from the folder dialog, the recent list or at the next start.
+
+**Typed words before the books exist** (#145, src/onboarding/draft-talk.ts). Below the conversation
+is a field for the person's own words. The AI (step `setup-conversation` of src/llm/steps.ts, the
+provider and model the person set for it) reads them with the draft, the step waiting, every value
+of src/workspace/setup.ts and the turns typed before (kept in the server's memory per folder,
+never taken from the screen), and answers one JSON object: `say` (an answer
+to a question, then one short question back) and the answers the words state (`firm`, `preset`,
+`answers`, `netRates`, `banks`). Code is the authority: each answer goes through `checkPatch` and
+`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them;
+an answer refused is not saved and the reply says why; the AI's words are left out beside a refusal,
+because it wrote them before the check. Non-VAT answers without a preset make it
+«custom», so a preset picked later cannot replace them. Answers taken from the words are kept in the
+draft's `fromText` and carry «aus deiner Nachricht» until the person changes them, in the
+conversation and on the last card. A firm without its UID is not saved; its card starts with what was
+said. A model that answers no JSON, or none, changes nothing. The call is ledgered in the folder's
+`data/llm-ledger.jsonl`, which becomes the books' own.
+
+Without an AI provider on the
 computer, «Neue Buchhaltung anlegen» opens the form with the reason; «Ohne KI einrichten» opens it
 too. The form and `npm run init` stay the way by hand and write the same manifest.
 
@@ -127,7 +145,8 @@ PUT  /api/onboarding/answers/:question   { value: <one of its answers> | null, k
 The desktop server adds the setup before the books exist: `GET /api/desktop/ai` (whether an AI
 answers), `GET /api/desktop/setup?root=`, `POST /api/desktop/setup { root, language }` (start or
 continue; a folder with books opens them), `PUT /api/desktop/setup { root, patch }` (one answer or
-`null`), `POST /api/desktop/setup/create { root }`.
+`null`), `POST /api/desktop/setup/talk { root, text }` (typed words: `{ view, reply }`),
+`POST /api/desktop/setup/create { root }`.
 
 `facts` (src/onboarding/facts.ts) is read fresh on every call: today and the open year, the company,
 the bank accounts, the sources switched on, the open year's opening balances, `closedThrough`, the

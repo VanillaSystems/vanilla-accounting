@@ -139,3 +139,21 @@
 .obrow3 { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px; gap: 8px; }
 .obbankrow { display: grid; grid-template-columns: minmax(0, 1.3fr) 64px minmax(0, 2fr) 32px; gap: 8px; align-items: end; }
 .obreview dd { margin: 0; }
+
+/* Words typed in the setup before the books exist (#145): a field kept at the bottom, the turns where they were typed. */
+.obflow:has(.obtalk) { padding-bottom: 0; }
+.obturn { display: flex; flex-direction: column; gap: 8px; }
+.obflow .obrefused { color: var(--warn); }
+.obme .obbadge { flex: none; }
+.obreview dd .obbadge { margin-left: 4px; vertical-align: 1px; }
+.obtalk { position: sticky; bottom: 0; padding: 10px 0 20px; background: linear-gradient(to bottom, transparent, var(--bg) 14px); }
+.obtalkbox { display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); }
+.obtalkbox:focus-within { border-color: var(--accent); }
+.obtalkbox.busy { border-color: var(--ai); }
+.obtalkbox textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: none; color: var(--ink); font: inherit; font-size: 14px; line-height: 1.5; }
+.obtalkbox textarea::placeholder { color: var(--faint); }
+.obtalkbox .aisend:disabled { background: var(--line-2); color: var(--faint); cursor: default; filter: none; }
+.obend { scroll-margin-bottom: 110px; }
+.obfilled { margin: 4px 0 8px; font-size: 13px; }
+.obfilled dd { margin: 0; }
+.obflow .obfilled { grid-template-columns: minmax(110px, 220px) 1fr; }

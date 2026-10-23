@@ -37,6 +37,8 @@ export const STEPS = {
   sidebar: { ledger: 'assistant', tier: 'standard', needs: ['agent'] },
   // A source's code asks whether a mail brings a receipt (io.mail.triage): sender, subject and attachment names only.
   'mail-triage': { ledger: 'receipt-collection.guide.yaml#triage', tier: 'fast', needs: ['typed'], confident: 0.8 },
+  // The setup before the books exist (#145): the person's words read into the draft's answers, against the draft and the values code accepts.
+  'setup-conversation': { ledger: 'setup.conversation', tier: 'standard', needs: ['json'] },
 } as const satisfies Record<string, Step>;
 
 export type StepId = keyof typeof STEPS;

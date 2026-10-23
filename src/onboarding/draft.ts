@@ -29,7 +29,12 @@ export interface SetupDraft {
   answers: Partial<Answers>;
   netRates?: NetRate[];
   banks?: BankSpec[];
+  /** The answers the AI took from the person's own words (#145), shown «aus deiner Nachricht» until the person changes them. */
+  fromText?: StepMark[];
 }
+
+/** One answer of the draft, as the setup conversation marks it: a step, or a question by its key. */
+export type StepMark = 'firm' | 'preset' | QuestionKey | 'netRates' | 'banks';
 
 export type QuestionValue = string | readonly string[];
 
@@ -50,6 +55,11 @@ export type DraftPatch =
   | { step: 'question'; key: QuestionKey; value: QuestionValue | null }
   | { step: 'netRates'; value: NetRate[] | null }
   | { step: 'banks'; value: BankSpec[] | null };
+
+export const isStepMark = (m: unknown): m is StepMark =>
+  typeof m === 'string' && (['firm', 'preset', 'netRates', 'banks'].includes(m) || Object.hasOwn(QUESTIONS, m));
+
+export const markOf = (p: DraftPatch): StepMark => (p.step === 'question' ? p.key : p.step);
 
 /** A setup in progress before its books exist, as /api/desktop/setup returns it; `baseCurrency`: the jurisdiction's, a bank account's first proposal. */
 export interface SetupDraftView { root: string; draft: SetupDraft; baseCurrency: string }
@@ -125,6 +135,15 @@ export function draftSteps(d: SetupDraft): DraftStep[] {
  * that question is asked in the conversation, with the others the preset answered shown as given.
  */
 export function withPatch(d: SetupDraft, patch: DraftPatch): SetupDraft {
+  const next = answer(d, patch);
+  // A person's answer is theirs, no longer one taken from their words; a preset replaces the answers it gives.
+  const replaced = patch.step === 'preset' && patch.value && patch.value !== 'custom' ? Object.keys(presetAnswers(patch.value)).filter((k) => !isVat(k as QuestionKey)) : [];
+  const marks = (d.fromText ?? []).filter((m) => m !== markOf(patch) && !replaced.includes(m));
+  delete next.fromText;
+  return marks.length ? { ...next, fromText: marks } : next;
+}
+
+function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
   const without = <K extends keyof SetupDraft>(k: K): SetupDraft => { const next = { ...d }; delete next[k]; return next; };
   switch (patch.step) {
     case 'firm': return patch.value ? { ...d, firm: patch.value } : without('firm');

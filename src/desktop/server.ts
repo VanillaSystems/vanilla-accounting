@@ -18,6 +18,7 @@ import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, 
 import { bundledDemo } from '../workspace/demo-copy.js';
 import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
+import { MAX_TEXT, parseTalkRequest, talkDraft, type Ask, type SetupTalked } from '../onboarding/draft-talk.js';
 import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import type { ApiErrorBody } from '../types/api-error.js';
@@ -42,6 +43,8 @@ export interface DesktopServerOptions {
   inboxEveryMs?: number;
   /** Whether an AI provider answers on this computer (the setup conversation needs one); by default the providers of src/llm are asked. */
   aiAvailable?: () => Promise<boolean>;
+  /** The model the setup conversation's typed words go to (src/onboarding/draft-talk.ts); by default src/llm's `ask`, the step's configured provider. */
+  ask?: Ask;
 }
 
 /** The claude CLI or a provider with its key: the first that answers. */
@@ -257,6 +260,18 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       const { root: raw, patch } = (req.body ?? {}) as { root?: unknown; patch?: unknown };
       const root = rootOf(raw);
       res.json(draftView(root, patchDraft(root, patch)));
+    } catch (e) { refuse(res, e); }
+  });
+  // Words typed in the setup conversation (#145): read by the AI, checked and saved by code.
+  app.post('/api/desktop/setup/talk', async (req, res) => {
+    try {
+      const root = rootOf((req.body ?? {}).root);
+      const message = parseTalkRequest(req.body);
+      if (!message) { res.status(400).json({ error: 'A message is needed.' } satisfies ApiErrorBody); return; }
+      if ('tooLong' in message) { res.status(400).json({ error: `A message has at most ${MAX_TEXT} characters.` } satisfies ApiErrorBody); return; }
+      const ask = opts.ask ?? (await import('../llm/ask.js')).ask;
+      const { draft, reply } = await talkDraft(root, message.text, ask);
+      res.json({ view: draftView(root, draft), reply } satisfies SetupTalked);
     } catch (e) { refuse(res, e); }
   });
   app.post('/api/desktop/setup/create', async (req, res) => {

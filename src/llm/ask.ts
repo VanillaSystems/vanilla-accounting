@@ -27,6 +27,8 @@ export interface AskOptions {
   /** Absolute paths of the files the model reads. Absent: the model reads no file. */
   attachments?: string[];
   timeoutMs?: number;
+  /** Where the call is ledgered, when no books are open yet (the setup before they exist): their own data/llm-ledger.jsonl to be. */
+  ledger?: string;
   /** Told which provider and model gave the answer (an entry names the model that booked it). */
   answered?: (by: { provider: ProviderId; model: string }) => void;
 }
@@ -46,9 +48,9 @@ const DEFAULT_SYSTEM =
 /** Every model call's cost, appended to the workspace's data/ (gitignored). */
 export const ledgerPath = (): string => join(openWorkspace().paths.data, 'llm-ledger.jsonl');
 
-export function record(row: LedgerRow): void {
+export function record(row: LedgerRow, file?: string): void {
   try {
-    const path = ledgerPath();
+    const path = file ?? ledgerPath();
     mkdirSync(dirname(path), { recursive: true });
     appendFileSync(path, JSON.stringify(row) + '\n');
   } catch {
@@ -79,7 +81,7 @@ export async function ask(prompt: string, opts: AskOptions): Promise<string> {
 async function askOne(prompt: string, opts: AskOptions, provider: Provider, model: string): Promise<string> {
   const step = opts.detail ? `${STEPS[opts.step].ledger}#${opts.detail}` : STEPS[opts.step].ledger;
   const started = Date.now();
-  const row = (ok: boolean, usage: Usage) => record({ at: new Date().toISOString(), step, provider: provider.id, model, ok, ms: Date.now() - started, ...usage });
+  const row = (ok: boolean, usage: Usage) => record({ at: new Date().toISOString(), step, provider: provider.id, model, ok, ms: Date.now() - started, ...usage }, opts.ledger);
   try {
     const { text, usage } = await provider.ask({
       prompt, model, system: opts.system ?? DEFAULT_SYSTEM, attachments: opts.attachments ?? [], timeoutMs: opts.timeoutMs ?? 360_000,
