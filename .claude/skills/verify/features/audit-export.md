@@ -33,5 +33,5 @@ grep -a -v '^GET /sub-path/' <scratch>/audit/requests.log   # must print nothing
 - `goto` to a URL that differs only in its `#` part relies on the app's hashchange reload; wait a second before reading the DOM.
 - Headless Chromium shows a PDF iframe blank. Prove the PDF with `$B js "fetch(document.querySelector('iframe').src).then(r => r.status + ' ' + r.headers.get('content-type'))"`.
 - The export's origin (another port) has its own localStorage: the language starts as the browser's (English) until set.
-- Product bug seen 2026-10-21: a walk over every area logged `GET /api/onboarding` (`loadSetup`, src/app/onboarding/state.ts) and `GET /api/quarantine` (Belege's quarantine list, src/app/areas/receipts/receipts.tsx), once per app load, with no `STATIC_EXPORT` guard. Until fixed, the grep prints those two lines; anything else is new.
+- Every call to `/api/` is refused in the export before it is sent (`apiFetch`, src/app/lib/api.ts; issues #66, #67), so the grep prints nothing. tests/audit-export.test.ts walks every area in headless Chrome and fails on any `/api/` request, a console error, or an area that keeps the main thread busy (Änderungen did, until 2026-10-23).
 - Delete the export folder and stop the static server when done. Never build an export of real books into the repo.
