@@ -78,7 +78,12 @@ function knowledgeCheck(ws: Workspace): Result[] {
 /** The references of the books that name no record (#126), a line per kind with its first few: doctor only reports, it repairs nothing. */
 function integrityCheck(ws: Workspace): Result[] {
   if (!hasBooks(ws)) return [];
-  const groups = byKind(danglingRefsOf(ws, loadBooks(ws)));
+  let groups: ReturnType<typeof byKind>;
+  try {
+    groups = byKind(danglingRefsOf(ws, loadBooks(ws)));
+  } catch (e) {
+    return [warn(`Books: the reference check did not run (${(e as Error).message.split('\n')[0]})`, 'it reads the books, invoices.json and the questions: fix the one that does not read, then run npm run doctor again')];
+  }
   if (!groups.length) return [ok('Books: every reference names a record')];
   return groups.map(({ label, found }) => warn(`Books: ${found.length} ${label}`, `${found.slice(0, 3).map((d) => `${d.record} → ${d.missing}`).join('; ')}${found.length > 3 ? `; and ${found.length - 3} more` : ''}`));
 }
