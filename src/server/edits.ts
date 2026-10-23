@@ -196,13 +196,14 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
   assertOpen(books, [date], 'newTransaction');
   const exchangeRate = currency === baseCurrency() ? undefined : fx.daily(currency, date) ?? fx.flat(currency);
   const held = bookedByHand(books, r, [...new Set([amount, total])], currency, exchangeRate);
-  const replaced = ask.replace ? books.journalEntries.filter((e) => e.transactionRef === ask.replace && e.origin === 'manual' && !books.transactions.some((t) => t.ref === e.transactionRef)) : [];
+  // Only the booking found to book this receipt gives way: a stale or wrong ref deletes nothing.
+  const replaced = ask.replace && held?.ref === ask.replace ? held.entries : [];
   if (held && held.ref !== ask.replace) {
     const line = held.entries[0];
     const params = { entry: held.ref, date: line.date, amount: line.amount, currency: line.exchangeCurrency ?? baseCurrency() };
     throw new RequestError(409, `Die Buchung ${held.ref} vom ${day(line.date)} über ${params.currency} ${line.amount.toFixed(2)} bucht diesen Beleg schon von Hand. Eine private Zahlung dazu buchte ihn doppelt: die Buchung ersetzen oder zuerst löschen.`, { code: 'bookedByHand', params });
   }
-  if (ask.replace && !replaced.length) throw new RequestError(404, `${ask.replace} ist keine Buchung von Hand ohne Zahlung.`, { code: 'gone', params: { what: 'entry' } });
+  if (ask.replace && !replaced.length) throw new RequestError(400, `${ask.replace} bucht diesen Beleg nicht (kein Betrag des Belegs oder seines Teils, weder sein Tag noch seine Worte): sie bleibt. Ist sie doch dieselbe Auslage, zuerst in Buchungen löschen.`);
   if (replaced.length) assertOpen(books, replaced.map((e) => e.date), 'deleteEntry');
   // The ref before the replaced booking goes: the payment never takes the number of the booking it replaces.
   const ref = nextManualRef(books, date.slice(0, 4));

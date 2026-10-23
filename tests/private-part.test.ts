@@ -137,6 +137,12 @@ test('the guard knows the receipt\'s whole amount too, and a booking of the same
   assert.equal(refusal(() => privatePayment(whole, 'cafe', { amount: 17.99 }, fx)).code, 'bookedByHand');
 });
 
+test('replace deletes only the booking found to book this receipt: another booking by hand named as replace is refused, nothing written', () => {
+  const b = booksWith(cafe(), [byHand(55)]);
+  assert.equal(refusal(() => privatePayment(b, 'cafe', { amount: 17.99, replace: 'M2026-063' }, fx)).status, 400);
+  assert.deepEqual([b.transactions.length, b.journalEntries.length], [0, 1]);
+});
+
 test('a booking by hand of another amount, or of the same amount on another day with other words, does not hold the payment', () => {
   privatePayment(booksWith(cafe(), [byHand(55)]), 'cafe', { amount: 17.99 }, fx);
   privatePayment(booksWith(cafe(), [byHand(17.99, '2026-08-20', 'Bürobedarf')]), 'cafe', { amount: 17.99 }, fx);
