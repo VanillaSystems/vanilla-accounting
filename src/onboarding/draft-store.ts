@@ -13,7 +13,7 @@ import { methodOf, parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
-import { DRAFT_FILE, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
+import { DRAFT_FILE, isStepMark, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
 import { sellsAnswer, type AnswerValue } from './model.js';
 import { seedCreated } from './store.js';
 
@@ -92,25 +92,27 @@ export function readDraft(root: string): SetupDraft | undefined {
   for (const [key, value] of Object.entries(answers)) replay({ step: 'question', key, value });
   if (raw.netRates) replay({ step: 'netRates', value: raw.netRates });
   if (raw.banks) replay({ step: 'banks', value: raw.banks });
-  return draft;
+  const marks = Array.isArray(raw.fromText) ? raw.fromText.filter(isStepMark) : [];
+  return marks.length ? { ...draft, fromText: marks } : draft;
 }
 
 /** The draft with what the start screen proposes from the jurisdiction new books get (src/workspace/scaffold.ts). */
 export const draftView = (root: string, draft: SetupDraft): SetupDraftView =>
   ({ root, draft, baseCurrency: loadJurisdiction(APP_ROOT, 'ch').jurisdiction.manifest.baseCurrency });
 
-const write = (root: string, d: SetupDraft): SetupDraft => { writeAtomic(draftFile(root), JSON.stringify({ schema: 1, ...d }, null, 2) + '\n'); return d; };
+/** The draft written whole, atomically. */
+export const writeDraft = (root: string, d: SetupDraft): SetupDraft => { writeAtomic(draftFile(root), JSON.stringify({ schema: 1, ...d }, null, 2) + '\n'); return d; };
 
 /** «Weiter» after the folder and the language: the draft in that folder, the one there already when the setup was broken off. */
 export function beginDraft(root: string, language: string, now: string): SetupDraft {
   if (!appLanguages().includes(language)) throw new SetupError(`The language must be one of ${appLanguages().join(', ')}.`, { reason: 'language', detail: language });
-  return readDraft(root) ?? write(root, newDraft(language, now));
+  return readDraft(root) ?? writeDraft(root, newDraft(language, now));
 }
 
 export function patchDraft(root: string, raw: unknown): SetupDraft {
   const draft = readDraft(root);
   if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
-  return write(root, withPatch(draft, checkPatch(raw)));
+  return writeDraft(root, withPatch(draft, checkPatch(raw)));
 }
 
 /**
@@ -129,7 +131,7 @@ export async function createFromDraft(root: string, now: string): Promise<Create
   try {
     created = await createWorkspace({ root, ...request });
   } catch (e) {
-    write(root, draft);
+    writeDraft(root, draft);
     throw e;
   }
   const ws = workspaceAt(created.root);
