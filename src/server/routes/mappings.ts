@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { readBooks, updateBooks, RequestError, WS } from '../books.js';
+import { readBooks, updateBooksWithEffects, RequestError, WS } from '../books.js';
 import { assertNotSecondPayment, link, relinked, unlink } from '../edits.js';
 import type { BookChange } from '../../types/assistant.js';
 import { bookAgain, engine } from './automation.js';
@@ -54,7 +54,7 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
   // A booking without a payment (#89) is a person's and never booked again: only a payment's booking is kept or rebooked.
   const booked = kind === 'link' && now.transactions.some((t) => t.ref === payment) && now.journalEntries.some((e) => e.transactionRef === payment);
   const keep = booked && !(await modelReady());
-  const { payments, file } = updateBooks((books) => {
+  const { payments, file } = updateBooksWithEffects((books) => {
     if (kind === 'link') {
       if (!confirm) assertNotSecondPayment(books, receipt, payment);
       const had = books.journalEntries.filter((e) => e.transactionRef === payment);

@@ -25,7 +25,7 @@ import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js'
 import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
-import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, withBooks } from '../books.js';
+import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { addEntry } from '../edits.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../accounting/year-close.js';
@@ -220,7 +220,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     const balances = xml ? undefined : (await extractStatementBalances(partDirs(WS.paths, 'statements'), WS.bankAccounts)).balances;
     const invoices = loadInvoices(WS);
     const payments = paymentContext(WS);
-    return updateBooks((books): StatementImport => {
+    return updateBooksWithEffects((books): StatementImport => {
       assertOpen(books, [placed.last], 'newStatement');
       const before = new Set(books.transactions.map((t) => t.ref));
       const confirmedBefore = new Set(books.transactions.filter((t) => t.statement !== undefined).map((t) => t.ref));

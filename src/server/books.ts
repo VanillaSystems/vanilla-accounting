@@ -4,7 +4,7 @@
  */
 import type { Response } from 'express';
 import type { Index, Receipt } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, update, PERSON, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, StaleBooksError, update, PERSON, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
@@ -52,8 +52,25 @@ type Sync<T> = T extends PromiseLike<unknown> ? never : T;
  * One change to the books by the person using the app: load, run `fn` through the write door, save, and return what `fn`
  * returns. Nothing is saved when `fn` throws. `fn` is synchronous: a route that asks a model
  * awaits it first and applies the answer here, to books loaded after the answer came.
+ * When another process saved the books between the load and the save (StaleBooksError, #123),
+ * `fn` runs once more on books loaded afresh, so it changes nothing but its `books`: a route whose
+ * `fn` also writes elsewhere (a file, the invoice book) uses updateBooksWithEffects.
  */
 export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
+  for (let again = false; ; again = true) {
+    const books = readBooks();
+    const result = update(books, PERSON, fn);
+    try {
+      saveBooks(WS, books);
+      return result;
+    } catch (e) {
+      if (again || !(e instanceof StaleBooksError)) throw e;
+    }
+  }
+}
+
+/** updateBooks for an `fn` that writes outside the books too: never run twice, a stale save is refused (409 booksChanged). */
+export function updateBooksWithEffects<T>(fn: (books: Books) => Sync<T>): T {
   const books = readBooks();
   const result = update(books, PERSON, fn);
   saveBooks(WS, books);
@@ -111,6 +128,7 @@ export function receiptDates(books: Pick<Index, 'transactions' | 'journalEntries
 
 /** The code of a refusal (src/types/api-error.ts) the UI says in the person's language; none for one without. */
 export function refusalOf(err: unknown): ApiRefusal | undefined {
+  if (err instanceof StaleBooksError) return { code: 'booksChanged' };
   if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}), ...(err.approved ? { approved: err.approved } : {}), ...(err.filed ? { filed: err.filed } : {}) } };
   return err instanceof RequestError ? err.refusal : undefined;
 }

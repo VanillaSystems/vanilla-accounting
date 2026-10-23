@@ -149,7 +149,7 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   if (!edit) throw new RequestError(404, 'Diese Buchung hat seit dem letzten Speichern keine Änderung von Hand.', { code: 'gone', params: { what: 'handEdit' } });
   if (edit.answer) { undoAnswer(edit.answer, WS.company.owner); res.json({ ok: true, answer: edit.answer }); return; }
   const unbooked = updateBooks((books) => {
-    restoreSaved(books, edit.id, edit.saved, edit.kept);
+    restoreSaved(books, edit.id, structuredClone(edit.saved), edit.kept);
     // Not booked any more: no entry left, or the lines left fall short of the payment (one line of a split undone, r9k-2).
     return books.transactions.some((t) => t.ref === edit.ref && !madeByHand(t)) && bookedState(books, edit.ref, WS.bankAccounts) !== 'booked';
   });
@@ -158,8 +158,11 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
 });
 
 /** A deletion by hand: the booking goes, and is recorded for Änderungen's «Rückgängig» also when no save held it (r7h-31). */
-router.delete('/api/journal-entries/:id', (req, res) => withBooks(res, (books) => {
-  const gone = deleteEntry(books, req.params.id);
-  recordDeletion(WS, gone, books.journalEntries.filter((e) => e.transactionRef === gone.transactionRef).map((e) => e.id));
-  return { ok: true };
-}));
+router.delete('/api/journal-entries/:id', (req, res) => {
+  const { gone, left } = updateBooks((books) => {
+    const gone = deleteEntry(books, req.params.id);
+    return { gone, left: books.journalEntries.filter((e) => e.transactionRef === gone.transactionRef).map((e) => e.id) };
+  });
+  recordDeletion(WS, gone, left);
+  res.json({ ok: true });
+});

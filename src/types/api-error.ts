@@ -31,6 +31,8 @@ export type ApiRefusal =
    */
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason; approved?: string; filed?: string } }
   | { code: 'manualOnly' }
+  /** Another process saved the books between this request's load and its save, twice (#123): nothing was saved. */
+  | { code: 'booksChanged' }
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
   /** Änderungen › «Rückgängig» of a deletion while the payment has bookings it did not have then (src/server/edits.ts restoreSaved): how many stand, and whether a person or the app booked them. */
