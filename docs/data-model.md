@@ -20,7 +20,6 @@ A diamond is a value nested inside its owner's record.
 | [4. Knowledge and rules](#4-knowledge-and-rules) | Business files, their matchers, guides, executable booking rules, notes |
 | [5. Invoices](#5-invoices) | Customers, invoices, payments of an invoice, reminders, sent documents |
 | [6. Logs](#6-questions-and-the-run-log) | Questions to people and the run log |
-| [Pending: PR #116](#pending-money-accounts-as-equals-pr-116) | Money accounts with a role (not yet merged) |
 
 ## Schema versions
 
@@ -29,8 +28,8 @@ one place, `src/workspace/schema.ts`.
 
 | File | Version now | Migration ladder |
 |---|---|---|
-| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 2` (2: books split by fiscal year, ADR 0013) | `BOOKS_MIGRATIONS` |
-| `belege.workspace.yaml` | `WORKSPACE_SCHEMA = 1` | `MANIFEST_MIGRATIONS` (on the YAML document, comments survive) |
+| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 3` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes) | `BOOKS_MIGRATIONS` |
+| `belege.workspace.yaml` | `WORKSPACE_SCHEMA = 2` (2: each money account names its `role`, #88) | `MANIFEST_MIGRATIONS` (on the YAML document, comments survive) |
 | `invoices.json` | `INVOICES_SCHEMA = 1` | `INVOICES_MIGRATIONS` |
 | `questions.jsonl` lines | `QUESTION_LINE_VERSION = 1` (`v` on each line) | none |
 
@@ -95,6 +94,7 @@ classDiagram
     +label: string
     +statements: StatementKind [0..1]
     +iban: Iban [0..1]
+    +role: bank | cash | owner | employee | card | clearing
   }
   class WorkspaceProfile {
     +preset: Preset
@@ -117,7 +117,7 @@ classDiagram
   }
   class Ledger {
     <<ledger.json>>
-    +schema: number = 2
+    +schema: number = 3
     +config: AccountingConfig
   }
   class AccountingConfig {
@@ -191,8 +191,12 @@ Notes on the diagram:
   effective method, or the net tax rate method with one or two `NetRate`s. A manifest without
   `registered` and `period` means effective and quarterly.
 - A money account is found by `bank` and `currency` together, or by `iban` and `currency` when a
-  statement names an IBAN. The manifest refuses the same key twice. The label `manual` is the
-  owner's account for payments made privately.
+  statement names an IBAN. The manifest refuses the same key twice. Every money account names its
+  `role` (#88). At most one is the owner's, and the label `manual` must be the owner's account, for
+  payments made privately. `statements` is the reader for a statement when one is imported, not a
+  mode: any account takes movements by hand and statements alike. The Bilanz places a money account
+  by its chart account, never by its role, so the owner's account and a card account stay
+  liabilities.
 - `AccountType` is `asset`, `liability`, `equity`, `revenue`, `expense` or `closing`
   (src/workspace/chart.ts). `line` names the line of the Bilanz or Erfolgsrechnung the account is
   shown on.
@@ -234,6 +238,7 @@ classDiagram
     +direction: CRDT | DBIT
     +description: string
     +source: manual [0..1]
+    +statement: string [0..1] «ref of the statement row that confirmed a hand movement»
     +reference: string [0..1]
     +counterparty: string [0..1]
     +counterpartyIban: string [0..1]
@@ -862,47 +867,6 @@ classDiagram
   Answered ..> "*" JournalEntry : acted.booked
   RunLogLine ..> "*" JournalEntry : wrote.entries
   JournalEntry ..> "0..1" RunLogLine : run
-```
-
-## Pending: money accounts as equals (PR #116)
-
-> **Not current state.** PR #116 (issue #88) is open and changes the data format. It needs the
-> owner's OK before merge. When it lands, fold this section into diagrams 1 and 2 and update the
-> schema table.
-
-What it changes:
-
-- Manifest schema 1 → 2. Each money account gets a `role`: `bank`, `cash`, `owner`, `employee`,
-  `card` or `clearing`. The migration gives `manual` the role `owner`, a card issuer `card`, and every
-  other account `bank`. At most one account is the owner's.
-- Books schema 2 → 3. No record changes. The new number makes an older app refuse the books.
-- `BankTransaction` gets one optional field, `statement`: the ref of the statement row that confirmed
-  a movement made by hand.
-
-```mermaid
-classDiagram
-  direction LR
-  class LedgerBankAccount {
-    <<belege.workspace.yaml schema 2, pending>>
-    +bank: string
-    +currency: string
-    +account: string
-    +label: string
-    +statements: StatementKind [0..1]
-    +iban: Iban [0..1]
-    +role: bank | cash | owner | employee | card | clearing
-  }
-  class BankTransaction {
-    <<books schema 3, pending>>
-    +ref: string
-    +bank: string
-    +source: manual [0..1]
-    +statement: string [0..1] «confirming row ref»
-  }
-  BankTransaction ..> "1" LedgerBankAccount : bank + currency
-  BankTransaction ..> "0..1" BankTransaction : statement
-  note for LedgerBankAccount "PENDING PR 116: role is new"
-  note for BankTransaction "PENDING PR 116: statement is new"
 ```
 
 ## Sources in the code
