@@ -11,9 +11,9 @@ import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, 
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
-import { api, errorText } from '../lib/api.js';
+import { ApiError, api, errorText } from '../lib/api.js';
 import { START_PATH, desktop, setupPath } from './bridge.js';
-import { NewBooks } from './NewBooks.js';
+import { NewBooks, freeName } from './NewBooks.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
 import './start.css';
 
@@ -72,6 +72,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   const [mode, setModeState] = useState<Mode>(modeOfUrl);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** Books refused for their layout before 0.4.0: the folder the app offers to move into the current one. */
+  const [upgradable, setUpgradable] = useState<string>();
 
   useEffect(() => { void api.desktop.info().then(setInfo, (e) => setError(errorText(e))); }, [mode.kind]);
   const setMode = (next: Mode) => {
@@ -93,12 +95,14 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   const run = async (open: () => Promise<KnownBooks>) => {
     setBusy(true);
     setError('');
+    setUpgradable(undefined);
     try {
       const books = await open();
       if (books.setup) { setBusy(false); setMode({ kind: 'setup', root: books.root }); return; }
       location.assign('/');
     } catch (e) {
       setError(errorText(e));
+      if (e instanceof ApiError && e.body.code === 'oldLayout') setUpgradable(e.body.params.root);
       setBusy(false);
     }
   };
@@ -136,12 +140,20 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               </button>
             </div>
             {error && <p className="warnline" role="alert">{error}</p>}
+            {upgradable && (
+              <p className="st-upgrade">
+                <button type="button" className="st-choice" data-act="upgrade" disabled={busy} onClick={() => void run(() => api.desktop.upgrade(upgradable))}>
+                  <b>{t('desktop.upgrade')}</b><span>{t('desktop.upgradeHint')}</span>
+                </button>
+              </p>
+            )}
             {!!info?.recent.length && (
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" disabled={busy || !(b.name || b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
-                    <b>{b.demo ? t('desktop.demoName') : b.name ?? (b.setup ? t('desktop.flow.unnamed') : t('desktop.missing'))}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
+                  <button key={b.root} type="button" className="st-book" title={b.root} disabled={busy || (!b.name && !b.problem && !b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
+                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
+                    {b.problem && <small className="st-problem">{b.problem}</small>}
                   </button>
                 ))}
               </section>
@@ -165,7 +177,7 @@ function CreateForm({ info, busy, error, notice, onCancel, onCreate }: {
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const setBank = (i: number, patch: Partial<BankRow>) => set('banks', f.banks.map((b, j) => (j === i ? { ...b, ...patch } : b)));
 
-  const root = f.root || (info ? `${info.booksHome}/${t('desktop.folderName', { name: f.name.trim() || t('desktop.folderDefault') }).replace(/[/:]/g, '-')}` : '');
+  const root = f.root || (info ? `${info.booksHome}/${freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info.folders)}` : '');
   const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
   const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
   const complete = firstMissing(f.answers) === undefined;
@@ -187,7 +199,8 @@ function CreateForm({ info, busy, error, notice, onCancel, onCreate }: {
   ].filter(Boolean);
   const invalid = !!(errors.name || errors.uid || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
 
-  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? x.answers : { ...PRESETS[preset].answers } }));
+  // «Etwas anderes» keeps what is answered so far and takes its own defaults (not registered for VAT) on top.
+  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? { ...x.answers, ...PRESETS.custom.answers } : { ...PRESETS[preset].answers } }));
   const pick = (key: QuestionKey, value: string) => setF((x) => {
     const multi = 'multi' in QUESTIONS[key];
     const now = answerList(x.answers, key);

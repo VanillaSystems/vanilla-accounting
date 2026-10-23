@@ -104,6 +104,8 @@ export type ApiRefusal =
   | { code: 'notesTitle' }
   | { code: 'noWorkspace' }
   | { code: 'notWorkspace' }
+  /** The folder holds books in the layout before 0.4.0 (books.json at the top): POST /api/desktop/upgrade moves them. */
+  | { code: 'oldLayout'; params: { root: string } }
   | { code: 'setup'; params: SetupRefusal }
   /** An opening balance typed for an account that takes none by hand (Firma › Eröffnung). */
   | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' } }

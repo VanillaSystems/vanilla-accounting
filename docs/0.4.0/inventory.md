@@ -79,7 +79,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/banks.ts` | camt.053 7 |
 | `src/workspace/checks.ts` | CHF 1, camt.053 1 |
 | `src/workspace/create.ts` | CHF 2 |
-| `src/workspace/manifest.ts` | CHF 2, QR-bill 7 |
+| `src/workspace/manifest.ts` | CHF 3, QR-bill 7 |
 | `src/workspace/migrate.ts` | ESTV 1 |
 | `src/workspace/reads.ts` | ESTV 1 |
 | `src/workspace/scaffold.ts` | MWST 1, ESTV 1, form 0535 1 |

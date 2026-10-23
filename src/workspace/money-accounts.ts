@@ -46,7 +46,7 @@ export const byStatement = (tx: Pick<BankTransaction, 'source' | 'statement'>): 
 /** Whether a receipt, an answer or a hand entry made the movement (not a statement row). */
 export const madeByHand = (tx: Pick<BankTransaction, 'source'>): boolean => tx.source === 'manual';
 
-/** The owner's account of the manifest, if it has one. */
+/** The owner's account of the manifest, if it has one: its first currency's row (one ledger account, a row per currency). */
 export const ownerOf = (accounts: readonly LedgerBankAccount[]): LedgerBankAccount | undefined => accounts.find((a) => a.role === 'owner');
 
 /** The accounts at a bank or a payment provider: what an invoice is paid to. */

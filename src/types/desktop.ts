@@ -33,10 +33,12 @@ export interface SmokeBridge {
 
 /**
  * Books the app knows: their folder and, when it still holds a workspace, the company's name.
+ * `problem`: the folder is there, but its manifest cannot be read (why, in the reader's words);
+ * neither name nor problem: the folder is gone.
  * `setup`: the folder holds a setup broken off before the books were created (src/onboarding/draft.ts);
  * opening it continues the setup conversation, and `name` is the firm's once it was answered.
  */
-export interface KnownBooks { root: string; name?: string; demo: boolean; setup?: true }
+export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true }
 
 /** A setup in progress before its books exist, as /api/desktop/setup returns it. */
 export interface SetupDraftView { root: string; draft: SetupDraft }
@@ -54,6 +56,8 @@ export interface DesktopInfo {
   recent: KnownBooks[];
   /** Where new books go unless the person picks another folder. */
   booksHome: string;
+  /** The folders already in booksHome, so a new default name steps aside from one that is taken. */
+  folders: string[];
 }
 
 /** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */

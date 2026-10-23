@@ -9,6 +9,13 @@ import { LOCALES, t } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
 import { desktop } from './bridge.js';
 
+/** `name`, or `name 2`, `name 3`, … when a folder of that name is there already. */
+export function freeName(name: string, taken: readonly string[]): string {
+  let free = name;
+  for (let n = 2; taken.includes(free); n++) free = `${name} ${n}`;
+  return free;
+}
+
 export function NewBooks({ info, language, onCancel, onSetup, onForm }: {
   info: DesktopInfo | null; language: string; onCancel(): void; onSetup(root: string): void; onForm(): void;
 }) {
@@ -16,7 +23,7 @@ export function NewBooks({ info, language, onCancel, onSetup, onForm }: {
   const [lang, setLang] = useState(language);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const folder = root || (info ? `${info.booksHome}/${t('desktop.flow.folderName', { year: new Date().getFullYear() }).replace(/[/:]/g, '-')}` : '');
+  const folder = root || (info ? `${info.booksHome}/${freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info.folders)}` : '');
 
   const choose = async () => {
     const dir = await desktop?.chooseFolder(t('desktop.chooseNew'));

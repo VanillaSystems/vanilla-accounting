@@ -1,5 +1,6 @@
 /* The desktop app's start screen (StartScreen.tsx): the mockup's tokens, type and form fields. */
-.st { min-height: 100vh; overflow: auto; background: var(--bg); color: var(--ink); }
+/* The body never scrolls (tokens.css); the screen is the viewport's height and scrolls itself, so a long setup form is reached at any window height. */
+.st { height: 100%; overflow: auto; background: var(--bg); color: var(--ink); }
 .st-top { display: flex; justify-content: flex-end; padding: 18px 24px 0; }
 .st-main { max-width: 640px; margin: 0 auto; padding: 56px 24px 96px; }
 .st-main h1 { margin-bottom: 8px; }
@@ -12,10 +13,12 @@
 .st-choice:disabled, .st-book:disabled { opacity: .55; cursor: default; }
 .st-recent { margin-top: 36px; }
 .st-recent h2, .st-form h2 { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 0 0 8px; }
-.st-book { display: flex; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 8px 10px; margin-left: -10px; border-radius: 8px; }
+.st-book { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; width: 100%; text-align: left; padding: 8px 10px; margin-left: -10px; border-radius: 8px; }
 .st-book:hover:not(:disabled) { background: var(--hover); }
 .st-book b { font-weight: 600; font-size: 14px; white-space: nowrap; }
 .st-book .mono { font: 12px "Geist Mono"; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-book .st-problem { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--warn); }
+.st-upgrade { margin: 12px 0 0; }
 .st-back { margin-top: 28px; font-size: 13px; }
 .st-back a { color: var(--accent); }
 
