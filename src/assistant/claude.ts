@@ -19,7 +19,9 @@ import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
-import { claudeCommand, NoClaudeError, record, type Model } from '../llm/ask.js';
+import { record, resolveStep } from '../llm/ask.js';
+import { claudeCommand, NoClaudeError } from '../llm/providers/claude-cli.js';
+import { STEPS } from '../llm/steps.js';
 import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { firmCodes } from '../accounting/vat-codes.js';
@@ -172,7 +174,7 @@ export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: st
   const never = NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   return [
     '-p',
-    '--model', 'sonnet',
+    '--model', resolveStep('sidebar').model,
     '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--append-system-prompt', assistantSystem(send.language, owner, map, term),
     '--setting-sources', '',
@@ -266,7 +268,7 @@ export function streamParser(roots: string[]): (line: string) => AssistantEvent[
 }
 
 /** The ledger's model name of a model id such as claude-opus-4-x; sonnet when it names none of the three. */
-function modelOf(usage: Record<string, unknown> | undefined): Model {
+function modelOf(usage: Record<string, unknown> | undefined): string {
   const id = Object.keys(usage ?? {})[0] ?? '';
   return (['opus', 'haiku', 'sonnet'] as const).find((m) => id.includes(m)) ?? 'sonnet';
 }
@@ -329,7 +331,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
     try { m = JSON.parse(line) as Line; } catch { return; }
     const u = m.usage ?? {};
     record({
-      at: new Date().toISOString(), step: 'assistant', model: modelOf(m.modelUsage), ok: !m.is_error, ms: Date.now() - started,
+      at: new Date().toISOString(), step: STEPS.sidebar.ledger, provider: 'claude-cli', model: modelOf(m.modelUsage), ok: !m.is_error, ms: Date.now() - started,
       input: u.input_tokens ?? 0, cacheCreate: u.cache_creation_input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0,
       output: u.output_tokens ?? 0, turns: m.num_turns ?? 0,
     });

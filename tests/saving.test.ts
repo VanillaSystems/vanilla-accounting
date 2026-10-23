@@ -42,8 +42,8 @@ async function company(): Promise<{ ws: Workspace; repo: string; git: (...a: str
 /** A model that puts each file the prompt shows into a save of its own, and holds back what the owner names. */
 function fakeModel(): { ask: Ask; calls: string[] } {
   const calls: string[] = [];
-  const ask: Ask = async (prompt, { step }) => {
-    calls.push(step);
+  const ask: Ask = async (prompt, { step, detail }) => {
+    calls.push(`${step}#${detail}`);
     const paths = [...prompt.matchAll(/^### (\S+) \(/gm)].map((m) => m[1]);
     const said = prompt.match(/The owner says: (.*)$/m)?.[1] ?? '';
     return JSON.stringify({ reply: said ? 'Gut.' : 'Vorbereitet.', saves: paths.map((p) => ({ message: `Geändert: ${p}`, why: 'Test.', files: [p], held: said.includes('noch nicht') && said.includes(p.split('/')[0]) })) });

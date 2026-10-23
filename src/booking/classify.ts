@@ -6,7 +6,8 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext, type PayoutKind } from '../llm/prompts.js';
-import { NoClaudeError, type AskOptions } from '../llm/ask.js';
+import { resolveStep, type AskOptions } from '../llm/ask.js';
+import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
@@ -44,8 +45,6 @@ import { loadChart, type ChartAccount } from '../workspace/chart.js';
 export const BATCH_SIZE = 10;
 export const CONCURRENCY = 3;
 const CALL_TIMEOUT_MS = 360_000;
-/** The model that books what no rule decides; its entries name it (JournalEntry.by). */
-const CLASSIFY_MODEL = 'sonnet';
 
 export interface EntryContext {
   fx: FxResolver;
@@ -692,7 +691,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
       const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context, examples);
-      const raw = await ask(prompt, { step: 'booking.guide.yaml#classify', model: CLASSIFY_MODEL, timeoutMs: CALL_TIMEOUT_MS });
+      const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS });
       const result = parseBatchClassifyResult(raw);
       if (!result) {
         log(`  [Batch ${batchNum}/${batches.length}]  could not parse response`);
@@ -730,7 +729,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
-        const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
+        const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: resolveStep('classify').model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

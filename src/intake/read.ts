@@ -10,7 +10,7 @@
  * file in beleg-import/ with the SHA-256 of a receipt or of another inbox file is removed, with a note.
  */
 import { closeSync, openSync, readSync, readdirSync, readFileSync, statSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, basename, resolve, dirname } from 'node:path';
+import { join, basename, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
@@ -52,7 +52,7 @@ async function extractTextFast(
   try {
     const text = await ask(
       buildVisionPrompt(absPath),
-      { step: 'receipt-intake.guide.yaml#vision', model: 'sonnet', timeoutMs: 120_000, read: [dirname(absPath)] },
+      { step: 'receipt-vision', timeoutMs: 120_000, attachments: [absPath] },
     );
     return { text, method: 'claude-vision' };
   } catch (e: any) {

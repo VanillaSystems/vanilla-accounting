@@ -30,7 +30,7 @@ export function titlesStep({ force = false } = {}): StepRun {
     for (let i = 0; i < todo.length; i += BATCH) {
       const batch = todo.slice(i, i + BATCH);
       try {
-        const raw = await ask(titlesPrompt(batch), { step: 'receipt-intake.guide.yaml#titles', model: 'haiku', timeoutMs: 180_000 });
+        const raw = await ask(titlesPrompt(batch), { step: 'receipt-titles', timeoutMs: 180_000 });
         const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as Record<string, unknown>;
         const titles = new Map(batch.flatMap((r) => { const t = parseTitle(json[r.id]); return t ? [[r.id, t] as const] : []; }));
         books.update((b) => { for (const r of b.receipts) { const t = titles.get(r.id); if (t) r.title = t; } });

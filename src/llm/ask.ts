@@ -1,95 +1,46 @@
 /**
- * The one way the app calls a model through the `claude` CLI (subscription).
+ * The one way the app asks a model for a single answer. A call names its step (steps.ts); the
+ * resolver picks the provider and the model, and the provider delivers the prompt and the
+ * attachments its own way.
  *
- * A plain `claude -p` from the repo loads Claude Code's system prompt, tool
- * schemas, CLAUDE.md, AGENTS.md, auto-memory, hooks and skills: ~36,000 tokens
- * before the prompt (measured 2026-10-07). This caller runs from an empty
- * directory with its own short system prompt, no tools unless a step needs to
- * read a file, no MCP servers, no settings and no session: ~630 tokens.
- * `--bare` would also do it, but it requires an API key, and the app runs on
- * the subscription. See docs/adr/0002-counterparty-knowledge-and-lean-calls.md.
- *
- * Every call appends its real usage to data/llm-ledger.jsonl, tagged with the
- * step it served, so `npm run llm-usage` reports measured cost, not estimates.
+ * Every call appends its real usage to data/llm-ledger.jsonl, tagged with the step it served and
+ * the provider, so `npm run llm-usage` reports measured cost, not estimates.
  */
 
-import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { delimiter, dirname, join } from 'node:path';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
-
-export type Model = 'haiku' | 'sonnet' | 'opus';
+import { CallFailed, NO_USAGE, type ProviderId, type Usage } from './provider.js';
+import { claudeCli } from './providers/claude-cli.js';
+import { resolve, type Resolved } from './resolve.js';
+import { readSettings } from './settings.js';
+import { STEPS, type StepId } from './steps.js';
 
 export interface AskOptions {
-  /** Which process step this call serves, e.g. "booking.guide.yaml#classify". Tags the ledger. */
-  step: string;
-  model?: Model;
+  step: StepId;
+  /** Which part of the step, for the ledger only: `saving` with `talk` is ledgered as `saving#talk`. */
+  detail?: string;
   /** Replaces the default system prompt. */
   system?: string;
-  /** Directories the Read tool may open. Absent: the model gets no tools at all. */
-  read?: string[];
+  /** Absolute paths of the files the model reads. Absent: the model reads no file. */
+  attachments?: string[];
   timeoutMs?: number;
 }
 
-export interface LedgerRow {
+export interface LedgerRow extends Usage {
   at: string;
   step: string;
-  model: Model;
+  provider: ProviderId;
+  model: string;
   ok: boolean;
   ms: number;
-  input: number;
-  cacheCreate: number;
-  cacheRead: number;
-  output: number;
-  turns: number;
 }
 
 const DEFAULT_SYSTEM =
   'You are a careful assistant for a Swiss GmbH\'s bookkeeping. Follow the instructions in the message exactly and answer only in the format they ask for.';
 
-/** No `claude` CLI to run: model features say what to install, everything else works without them. */
-export class NoClaudeError extends Error {
-  constructor() {
-    super('Für Belege lesen und Buchungsvorschläge braucht die App Claude Code: von claude.com/claude-code installieren und einmal im Terminal mit "claude" anmelden.');
-  }
-}
-
-/**
- * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/desktop/claude.ts),
- * else `claude` on the PATH. Its own folder joins the PATH, so an npm-installed claude finds its node.
- */
-export function claudeCommand(): { bin: string; env: NodeJS.ProcessEnv } {
-  const bin = process.env.CLAUDE_BIN;
-  if (!bin) return { bin: 'claude', env: process.env };
-  return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
-}
-
 /** Every model call's cost, appended to the workspace's data/ (gitignored). */
 export const ledgerPath = (): string => join(openWorkspace().paths.data, 'llm-ledger.jsonl');
-
-let emptyCwd: string | undefined;
-function cwd(): string {
-  // An empty directory: no CLAUDE.md, no project settings, nothing to discover.
-  emptyCwd ??= mkdtempSync(join(tmpdir(), 'belege-llm-'));
-  return emptyCwd;
-}
-
-function args(opts: AskOptions): string[] {
-  const a = [
-    '-p',
-    '--model', opts.model ?? 'sonnet',
-    '--output-format', 'json',
-    '--system-prompt', opts.system ?? DEFAULT_SYSTEM,
-    '--strict-mcp-config',
-    '--disable-slash-commands',
-    '--setting-sources', '',
-    '--no-session-persistence',
-  ];
-  if (opts.read?.length) a.push('--tools', 'Read', '--permission-mode', 'dontAsk', '--add-dir', ...opts.read);
-  else a.push('--tools', '');
-  return a;
-}
 
 export function record(row: LedgerRow): void {
   try {
@@ -101,60 +52,29 @@ export function record(row: LedgerRow): void {
   }
 }
 
-/**
- * Ask the model. The prompt goes on stdin (no argument-length limit). Resolves
- * with the model's text answer. Rejects with an error whose message carries the
- * CLI's own output, so isRateLimitSignal() in adaptive-pool still sees it.
- */
-export function ask(prompt: string, opts: AskOptions): Promise<string> {
-  const model = opts.model ?? 'sonnet';
+/** The provider and model that serve `step` on this machine now. */
+export const resolveStep = (step: StepId): Resolved => resolve(step, readSettings(), [claudeCli]);
+
+/** Resolves with the model's text answer; rejects with the provider's reason. */
+export async function ask(prompt: string, opts: AskOptions): Promise<string> {
+  const { provider, model } = resolveStep(opts.step);
+  const step = opts.detail ? `${STEPS[opts.step].ledger}#${opts.detail}` : STEPS[opts.step].ledger;
   const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const { bin, env } = claudeCommand();
-    const child = spawn(bin, args(opts), { cwd: cwd(), env });
-    let out = '';
-    let err = '';
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
-      reject(new Error(`claude timed out after ${opts.timeoutMs ?? 360_000} ms`));
-    }, opts.timeoutMs ?? 360_000);
-    child.stdout.on('data', (d) => (out += d));
-    child.stderr.on('data', (d) => (err += d));
-    child.on('error', (e: NodeJS.ErrnoException) => { clearTimeout(timer); reject(e.code === 'ENOENT' ? new NoClaudeError() : e); });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      let parsed: {
-        result?: string; is_error?: boolean; num_turns?: number;
-        usage?: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number };
-      } | undefined;
-      try { parsed = JSON.parse(out); } catch { /* not JSON: the CLI failed before answering */ }
-      const u = parsed?.usage ?? {};
-      const ok = code === 0 && !!parsed && !parsed.is_error;
-      record({
-        at: new Date().toISOString(), step: opts.step, model, ok, ms: Date.now() - started,
-        input: u.input_tokens ?? 0, cacheCreate: u.cache_creation_input_tokens ?? 0,
-        cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0, turns: parsed?.num_turns ?? 0,
-      });
-      if (ok) resolve((parsed!.result ?? '').trim());
-      else reject(new Error(`claude exited ${code}: ${(parsed?.result ?? (err || out)).slice(0, 300)}`));
+  const row = (ok: boolean, usage: Usage) => record({ at: new Date().toISOString(), step, provider: provider.id, model, ok, ms: Date.now() - started, ...usage });
+  try {
+    const { text, usage } = await provider.ask({
+      prompt, model, system: opts.system ?? DEFAULT_SYSTEM, attachments: opts.attachments ?? [], timeoutMs: opts.timeoutMs ?? 360_000,
     });
-    child.stdin.on('error', () => { /* the child's 'error' or 'close' settles the call, with the reason */ });
-    child.stdin.write(prompt);
-    child.stdin.end();
-  });
+    row(true, usage);
+    return text;
+  } catch (e) {
+    row(false, e instanceof CallFailed ? e.usage : NO_USAGE);
+    throw e;
+  }
 }
 
 /**
- * Whether a working `claude` CLI answers here (CLAUDE_BIN, else on PATH) and exits 0 for
- * `--version`. Steps that need the model skip their model part without it and say so, instead of
- * failing each call.
+ * Whether a working `claude` CLI answers here. Steps that need the model skip their model part
+ * without it and say so, instead of failing each call.
  */
-export function modelReady(timeoutMs = 15_000): Promise<boolean> {
-  return new Promise((resolve) => {
-    const { bin, env } = claudeCommand();
-    const child = spawn(bin, ['--version'], { cwd: cwd(), env, stdio: ['ignore', 'ignore', 'ignore'] });
-    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(false); }, timeoutMs);
-    child.on('error', () => { clearTimeout(timer); resolve(false); });
-    child.on('close', (code) => { clearTimeout(timer); resolve(code === 0); });
-  });
-}
+export const modelReady = (timeoutMs?: number): Promise<boolean> => claudeCli.ready(timeoutMs);

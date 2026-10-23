@@ -168,7 +168,7 @@ router.post('/api/vision/extract', async (req, res) => {
   if (!existsSync(pdfPath)) throw new RequestError(404, 'PDF file not found on disk');
 
   const text = await ask(buildVisionPrompt(pdfPath), {
-    step: 'receipt-intake.guide.yaml#vision', model: 'sonnet', timeoutMs: 120_000, read: [dirname(pdfPath)],
+    step: 'receipt-vision', timeoutMs: 120_000, attachments: [pdfPath],
   });
   withBooks(res, (books) => {
     const receipt = books.receipts.find((r) => r.id === receiptId);
