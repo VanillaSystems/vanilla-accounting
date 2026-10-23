@@ -58,6 +58,12 @@ steps:
         when: our own bank's account fee or quarterly close row (Raiffeisen "Gebührenbelastung Kontoführung", "Abschlussbetreffnis", often CHF 0.00)
         then: settled, exempt — the bank's monthly statement PDF is the evidence; book 6940 Bankspesen without a VAT code
         source: proposed 2026-10-08 by Claude — confirm or replace
+      - id: ev-exempt-cash-withdrawal
+        when: a cash withdrawal from a bank account at a cash machine or a counter
+        then: "booked at once, without waiting for a receipt: the money moves onto the cash box (1000), a money account, without a VAT code. What the cash pays for has its own receipt, booked from the cash box. A company rule that asks about withdrawals (booking.guide.yaml#classify) still asks"
+        apply: { receipt: none, text: "Bancomat|Postomat|Geldautomat|\\bATM\\b|Bargeld|Barbezug|\\bRetrait\\b|\\bPrelievo\\b" }
+        why: "a withdrawal is a transfer between two money accounts: no purchase, no VAT, no receipt of its own (issue #99)"
+        source: docs/0.4.0/money-movements.md
       - id: ev-unique-amount
         status: proposed
         when: exactly one transaction has the same amount and currency within 10 days of the receipt date, and no other receipt claims it

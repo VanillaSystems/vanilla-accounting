@@ -7,12 +7,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyStep } from '../src/intake/classify.js';
 import type { IntakeNote } from '../src/intake/pipeline.js';
-import { parseReceiptApply, receiptFree, receiptWait, settlementAccount, type WaitContext } from '../src/booking/receipt-wait.js';
+import { parseReceiptApply, receiptFree, receiptKnowledge, receiptWait, settlementAccount, type WaitContext } from '../src/booking/receipt-wait.js';
 import { receiptDue, waitingForReceipt } from '../src/accounting/receipt-due.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
@@ -25,9 +25,9 @@ import './support/jurisdiction.js';
 const OUT = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Telefonie Muster AG Rechnung 10/2026', ...over });
 
-const CTX: WaitContext = { free: new Set(['estv']), assumesUnread: new Set(['coop']), ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
+const CTX: WaitContext = { free: new Set(['estv']), assumesUnread: new Set(['coop']), wordings: [/Bancomat/i], ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
 
-test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business or a firm without input tax book at once', () => {
+test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business, a withdrawal's wording or a firm without input tax book at once', () => {
   assert.deepEqual(receiptWait(OUT('a'), { linked: 'none' }, CTX), { wait: true });
   const why = (tx: BankTransaction, facts = {}, ctx = CTX) => { const w = receiptWait(tx, { linked: 'none', ...facts }, ctx); return w.wait ? 'wait' : w.why; };
   assert.equal(why(OUT('a'), { linked: 'read' }), 'receipt');
@@ -44,6 +44,8 @@ test('the decision: a purchase without a receipt waits; a receipt, a mark, money
   assert.equal(why(OUT('a'), { ruleAccount: '6510', ruleAsks: true }), 'ruleAsks', 'a rule that asks first asks at once');
   assert.equal(why(OUT('a'), { business: 'estv' }), 'business');
   assert.equal(why(OUT('a'), { business: 'telefonie' }), 'wait');
+  assert.equal(why(OUT('a', { description: 'BANCOMAT Bezug Zürich HB' })), 'wording', 'a cash withdrawal moves money onto the cash box');
+  assert.equal(why(OUT('a', { description: 'Zahlung', counterparty: 'Bancomat Bahnhof' })), 'wording', 'the bank may put it in the counterparty field');
   assert.equal(why(OUT('a'), {}, { ...CTX, inputTax: false }), 'noInputTax');
 });
 
@@ -54,6 +56,17 @@ test('apply: { receipt: none } on evidence.guide.yaml#rules: the shipped authori
   assert.deepEqual(parseReceiptApply({ receipt: 'none' }), { ok: true });
   assert.match((parseReceiptApply({ receipt: 'later' }) as { problem: string }).problem, /receipt must be none/);
   assert.match((parseReceiptApply({ receipt: 'none', inputTax: 'none' }) as { problem: string }).problem, /apply\.inputTax is unknown/);
+});
+
+test('apply: { receipt: none, text } on a guide\'s evidence.guide.yaml#rules: the shipped cash-withdrawal wording in any language, never a word inside another', () => {
+  const { wordings } = receiptKnowledge(loadKnowledge(APP_ROOT, DEMO_ROOT));
+  const free = (s: string) => wordings.some((w) => w.test(s));
+  for (const s of ['BANCOMAT Bezug ZKB Zürich HB', 'Bargeldbezug Postomat Bern', 'ATM withdrawal Lisbon', 'Retrait Bancomat Genève', 'Prelievo contanti Lugano', 'Geldautomat Konstanz']) assert.ok(free(s), s);
+  for (const s of ['Telefonie Muster AG Rechnung 10/2026', 'Treatment Klinik AG', 'Batmobil Garage', 'Caisse de retraite BVG']) assert.equal(free(s), false, s);
+  assert.deepEqual(parseReceiptApply({ receipt: 'none', text: 'Bancomat' }, 'guide'), { ok: true, text: 'Bancomat' });
+  assert.match((parseReceiptApply({ receipt: 'none' }, 'guide') as { problem: string }).problem, /apply\.text/, 'a guide holds for every payment: it names the wording');
+  assert.match((parseReceiptApply({ receipt: 'none', text: '(' }, 'guide') as { problem: string }).problem, /apply\.text/);
+  assert.match((parseReceiptApply({ receipt: 'none', text: 'Bancomat' }) as { problem: string }).problem, /apply\.text/, 'in a business file the business is the condition');
 });
 
 test('the person is asked two weeks before the return is due; until then the waiting is the app\'s', () => {
@@ -70,12 +83,16 @@ test('the person is asked two weeks before the return is due; until then the wai
   assert.deepEqual(waitingForReceipt({ ...books, config: { closedThrough: '2026-09-30' } }, () => false, '2026-12-01'), [], 'a filed quarter holds nothing open');
 });
 
-/** The demo company (its rules, its knowledge, the effective method) with an employees' clearing account. */
-function company(): Workspace {
+/** The demo company (its rules, its knowledge, the effective method) with an employees' clearing account and a cash box; `rules`: its knowledge/rules/booking.guide.yaml. */
+function company(rules?: string): Workspace {
   const dir = mkdtempSync(join(tmpdir(), 'receipt-wait-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const accounts = join(dir, 'master-data/accounts.json');
-  writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '2270', name: 'Kontokorrent Mitarbeitende' }]));
+  writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '2270', name: 'Kontokorrent Mitarbeitende' }, { number: '1000', name: 'Kasse' }]));
+  if (rules) {
+    mkdirSync(join(dir, 'knowledge', 'rules'), { recursive: true });
+    writeFileSync(join(dir, 'knowledge', 'rules', 'booking.guide.yaml'), rules);
+  }
   return workspaceAt(dir);
 }
 
@@ -88,20 +105,21 @@ function booksOf(txs: BankTransaction[]): Books {
   return { transactions: txs, receipts: [], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
 }
 
-const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1', 'OWNER-1', 'STAFF-1'];
+const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1', 'OWNER-1', 'STAFF-1', 'ATM-1'];
 /** The model's answer: a payment out on 6570 with I81, the one in as a sale, the bank on the other side. */
 const model = async (prompt: string) => {
   const refs = REFS.filter((ref) => prompt.includes(ref));
   const line = (ref: string) => (ref === 'IN-1' ? { accountDebit: '', accountCredit: '3200', amount: 89, vatCode: 'V81', description: 'Verkauf' }
     : ref === 'OWNER-1' ? { accountDebit: '2451', accountCredit: '', amount: 89, vatCode: '', description: 'Spesen Inhaberin' }
       : ref === 'STAFF-1' ? { accountDebit: '2270', accountCredit: '', amount: 89, vatCode: '', description: 'Spesen Mitarbeiter' }
+        : ref === 'ATM-1' ? { accountDebit: '1000', accountCredit: '', amount: 89, vatCode: '', description: 'Barbezug' }
         : { accountDebit: '6570', accountCredit: '', amount: 89, vatCode: 'I81', description: 'Telefon' });
   return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries: [line(ref)], reason: 'Telefonrechnung' }])));
 };
 
-async function run(ws: Workspace, books: Books, ask: typeof model | undefined = model) {
+async function run(ws: Workspace, books: Books, ask: typeof model | 'no model' = model) {
   const port = { read: () => structuredClone(books), update: <T>(fn: (b: Books) => T) => fn(books) };
-  return (await classifyStep()({ ws, books: port, ask, progress: () => {}, log: () => {} })).notes;
+  return (await classifyStep()({ ws, books: port, ask: ask === 'no model' ? undefined : ask, progress: () => {}, log: () => {} })).notes;
 }
 
 const entries = (books: Books, ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
@@ -126,7 +144,7 @@ test('a payment without its receipt is not booked and waits; the receipt linked 
 test('without a model a waiting payment still waits for its receipt, not for a booking by hand', async () => {
   const ws = company();
   const books = booksOf([OUT('TEL-10')]);
-  const notes = await run(ws, books, undefined);
+  const notes = await run(ws, books, 'no model');
   assert.ok(tx(books, 'TEL-10').waitsForReceipt);
   assert.equal(notes.some((n) => n.code === 'noModel'), false);
 });
@@ -179,4 +197,47 @@ test('the reimbursement of an outlay is booked at once: onto the owner\'s accoun
   let asked = 0;
   await run(ws, books, async (p) => { asked++; return model(p); });
   assert.equal(asked, 0, 'a waiting payment goes to the model once, not on every run');
+});
+
+const ATM = (ref: string, amount = 89) => OUT(ref, { description: 'BANCOMAT Bezug Zürich HB', amount });
+const CASH_ASK = `process: booking
+steps:
+  classify:
+    rules:
+      - id: barbezug-gross
+        when: { text: "Bargeldbezug|Bancomat", direction: out, amount: { over: 500 } }
+        then: { ask: "Wofür war der Barbezug?", account: "1000", vat: none }
+        source: wish 2026-10-15
+`;
+
+test('a cash withdrawal with no rule is booked at once onto the cash box, without a VAT code and without waiting; a supplier payment beside it still waits (issue #99)', async () => {
+  const ws = company();
+  const books = booksOf([ATM('ATM-1'), OUT('TEL-10')]);
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'ATM-1'), [['1000', '1021', 89, '']]);
+  assert.deepEqual(books.transactions.filter((t) => t.waitsForReceipt).map((t) => t.ref), ['TEL-10']);
+});
+
+test('without a model a cash withdrawal does not wait for a receipt: it is the person\'s to book now; a withdrawal marked waiting before is freed and booked', async () => {
+  const ws = company();
+  const books = booksOf([ATM('ATM-1'), OUT('TEL-10')]);
+  const notes = await run(ws, books, 'no model');
+  assert.equal(tx(books, 'ATM-1').waitsForReceipt, undefined);
+  assert.ok(notes.some((n) => n.code === 'noModel'), 'it waits for a booking by hand, at once');
+  tx(books, 'ATM-1').waitsForReceipt = { since: '2026-10-06T06:00:00Z' };
+  await run(ws, books);
+  assert.equal(tx(books, 'ATM-1').waitsForReceipt, undefined);
+  assert.deepEqual(entries(books, 'ATM-1'), [['1000', '1021', 89, '']]);
+});
+
+test('«frag mich bei Barbezügen über 500»: the company\'s ask rule still asks about a big withdrawal; a small one is booked', async () => {
+  const ws = company(CASH_ASK);
+  const books = booksOf([ATM('ATM-BIG', 600), ATM('ATM-1')]);
+  const held: string[] = [];
+  const port = { read: () => structuredClone(books), update: <T>(fn: (b: Books) => T) => fn(books) };
+  await classifyStep()({ ws, books: port, ask: model, progress: () => {}, log: () => {}, hold: (refs) => held.push(...refs) });
+  assert.deepEqual(held, ['ATM-BIG'], 'asked');
+  assert.deepEqual(entries(books, 'ATM-BIG'), []);
+  assert.equal(tx(books, 'ATM-BIG').waitsForReceipt, undefined);
+  assert.deepEqual(entries(books, 'ATM-1'), [['1000', '1021', 89, '']]);
 });

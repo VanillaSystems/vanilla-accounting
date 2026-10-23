@@ -10,13 +10,16 @@
  * payment a person marked as needing none, a firm that claims no input tax, and a business whose
  * file says so as `apply: { receipt: none }` on a rule of evidence.guide.yaml#rules (in the app's
  * file a fact for every company, such as an authority whose notice is filed apart; in the
- * company's file its own choice, such as its bank or its rent). A payment booked onto a settlement
+ * company's file its own choice, such as its bank or its rent), and wording a guide's rule there
+ * names as `apply: { receipt: none, text }` (in the app's guide the cash withdrawal, which only
+ * moves money onto the cash box; issue #99). A payment booked onto a settlement
  * account (the owner's, a money account, a debt) pays what was booked elsewhere and never waits
  * (settlementAccount): by a rule, decided here; by the model, decided on its answer (onlySettles).
  * Any other company rule that books waits for the receipt like the model: the receipt decides its
  * rate (ruleVatCode). A rule that asks first is the person's
  * wish to be asked: its question comes at once, and her answer books it.
  */
+import { basename } from 'node:path';
 import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
 import type { Knowledge } from '../knowledge/layers.js';
 import { chart, withoutInputTax } from '../engines/index.js';
@@ -52,6 +55,8 @@ export type NoWait =
   | 'ruleAsks'
   /** Its business's file says its payments need no receipt. */
   | 'business'
+  /** Its wording is one a guide's rule says needs no receipt (a cash withdrawal: money onto the cash box). */
+  | 'wording'
   /** The firm claims no input tax (not registered, or the net tax rate method): a receipt changes no code. */
   | 'noInputTax';
 
@@ -73,6 +78,8 @@ export interface WaitFacts {
 export interface WaitContext {
   /** The businesses whose payments need no receipt (receiptFree). */
   free: ReadonlySet<string>;
+  /** The wordings of payments that need no receipt (receiptWordings), matched against the text and the counterparty. */
+  wordings: readonly RegExp[];
   /** The businesses whose unread receipt the company counts at a rate (purchase-vat.ts, `apply: { unreadReceipt }`). */
   assumesUnread: ReadonlySet<string>;
   /** The IBANs of the firm's own bank accounts, as ibanOf writes them. */
@@ -94,6 +101,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (facts.ruleAccount && ctx.settles(facts.ruleAccount)) return book('settlement');
   if (facts.ruleAsks) return book('ruleAsks');
   if (facts.business && ctx.free.has(facts.business)) return book('business');
+  if (ctx.wordings.some((w) => w.test(`${tx.description} ${tx.counterparty ?? ''}`))) return book('wording');
   if (!ctx.inputTax) return book('noInputTax');
   if (facts.linked === 'unread') return facts.business && ctx.assumesUnread.has(facts.business) ? book('companyRate') : { wait: true, unread: true };
   return { wait: true };
@@ -118,23 +126,41 @@ export function onlySettles(entries: readonly Pick<JournalEntry, 'accountDebit' 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
-/** A rule's `apply:` on evidence.guide.yaml#rules in a business file: `{ receipt: none }`, in either layer. */
-export function parseReceiptApply(raw: unknown): { ok: true } | { ok: false; problem: string } {
-  if (!isMap(raw)) return { ok: false, problem: 'apply must be a map: { receipt: none }' };
-  const { receipt, ...rest } = raw;
+/**
+ * A rule's `apply:` on evidence.guide.yaml#rules, in either layer: `{ receipt: none }` in a
+ * business file (the business is the condition), `{ receipt: none, text: "<pattern>" }` in a guide
+ * (it holds for every payment, so it names the wording: a pattern over the payment's text and
+ * counterparty, ignoring case).
+ */
+export function parseReceiptApply(raw: unknown, where: 'business' | 'guide' = 'business'): { ok: true; text?: string } | { ok: false; problem: string } {
+  if (!isMap(raw)) return { ok: false, problem: `apply must be a map: { receipt: none${where === 'guide' ? ', text: "<pattern>"' : ''} }` };
+  const { receipt, text, ...rest } = raw;
   const extra = Object.keys(rest)[0];
-  if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply on ${RECEIPT_STEP} takes receipt` };
-  return receipt === 'none' ? { ok: true } : { ok: false, problem: 'apply.receipt must be none: the business\'s payments need no receipt to be booked' };
+  if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply on ${RECEIPT_STEP} takes receipt${where === 'guide' ? ' and text' : ''}` };
+  if (receipt !== 'none') return { ok: false, problem: 'apply.receipt must be none: the payments need no receipt to be booked' };
+  if (where === 'business') return text === undefined ? { ok: true } : { ok: false, problem: 'apply.text is for a guide\'s rule; in a business file the business is the condition' };
+  if (typeof text !== 'string' || !text.trim()) return { ok: false, problem: 'apply.text must name the wording of the payments that need no receipt, a pattern such as "Bancomat|Bargeldbezug"' };
+  try { new RegExp(text, 'i'); } catch { return { ok: false, problem: `apply.text "${text}" is no valid pattern` }; }
+  return { ok: true, text };
 }
 
 type Rules = { rules?: Array<{ id?: string; status?: string; apply?: unknown }> } | undefined;
 
-/** What the business files say to the decision: whose payments need no receipt, and whose unread receipt the company counts at a rate. */
-export interface ReceiptKnowledge { free: ReadonlySet<string>; assumesUnread: ReadonlySet<string> }
+/** What the knowledge says to the decision: whose payments and which wordings need no receipt, and whose unread receipt the company counts at a rate. */
+export interface ReceiptKnowledge { free: ReadonlySet<string>; wordings: readonly RegExp[]; assumesUnread: ReadonlySet<string> }
 
-export function receiptKnowledge(k: Pick<Knowledge, 'counterpartyFiles'>): ReceiptKnowledge {
+export function receiptKnowledge(k: Pick<Knowledge, 'counterpartyFiles' | 'guides'>): ReceiptKnowledge {
   const { facts } = businessVat(k);
-  return { free: receiptFree(k), assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
+  return { free: receiptFree(k), wordings: receiptWordings(k), assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
+}
+
+/** The wordings the guides' rules of evidence.guide.yaml#rules, in either layer, say need no receipt; a rule whose question is open says nothing. */
+export function receiptWordings(k: Pick<Knowledge, 'guides'>): RegExp[] {
+  const [file, section] = RECEIPT_STEP.split('#');
+  return k.guides.filter((g) => basename(g.path) === file).flatMap((g) => (g.body.steps?.[section] as Rules)?.rules ?? []).flatMap((r) => {
+    const parsed = r.apply !== undefined && r.status !== 'open' ? parseReceiptApply(r.apply, 'guide') : undefined;
+    return parsed?.ok && parsed.text ? [new RegExp(parsed.text, 'i')] : [];
+  });
 }
 
 /** The businesses whose file, in either layer, says their payments need no receipt; a rule whose question is open says nothing. */
