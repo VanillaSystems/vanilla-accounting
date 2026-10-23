@@ -7,12 +7,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyStep } from '../src/intake/classify.js';
 import type { IntakeNote } from '../src/intake/pipeline.js';
-import { parseReceiptApply, receiptFree, receiptWait, type WaitContext } from '../src/booking/receipt-wait.js';
+import { parseReceiptApply, receiptFree, receiptWait, settlementAccount, type WaitContext } from '../src/booking/receipt-wait.js';
 import { receiptDue, waitingForReceipt } from '../src/accounting/receipt-due.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
@@ -25,7 +25,7 @@ import './support/jurisdiction.js';
 const OUT = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Telefonie Muster AG Rechnung 10/2026', ...over });
 
-const CTX: WaitContext = { free: new Set(['estv']), ownIbans: new Set(['CH6580808000000000001']), money: new Set(['1020', '1000']), inputTax: true };
+const CTX: WaitContext = { free: new Set(['estv']), ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
 
 test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business or a firm without input tax book at once', () => {
   assert.deepEqual(receiptWait(OUT('a'), { linked: false }, CTX), { wait: true });
@@ -36,9 +36,12 @@ test('the decision: a purchase without a receipt waits; a receipt, a mark, money
   assert.equal(why(OUT('a', { direction: 'CRDT' })), 'incoming');
   assert.equal(why(OUT('a', { type: 'wise-fee' })), 'separateFee');
   assert.equal(why(OUT('a', { counterpartyIban: 'ch65 8080 8000 0000 0000 1' })), 'ownTransfer');
-  assert.equal(why(OUT('a'), { ruleAccount: '1000' }), 'ownTransfer', 'a rule that books onto cash is a transfer');
+  assert.equal(why(OUT('a'), { ruleAccount: '1000' }), 'settlement', 'a rule that books onto cash is a transfer');
+  assert.equal(why(OUT('a'), { ruleAccount: '2850' }), 'settlement', 'the owner\'s outlays paid back');
+  assert.equal(why(OUT('a'), { ruleAccount: '2270' }), 'settlement', 'an employee\'s outlays or a card\'s bill: a debt of the chart');
   assert.equal(why(OUT('a'), { ruleAccount: '6510' }), 'wait', 'a rule that books an expense waits like the model');
-  assert.equal(why(OUT('a'), { ruleAccount: '2451', ruleAsks: true }), 'ruleAsks', 'a rule that asks first asks at once');
+  assert.equal(why(OUT('a'), { ruleAccount: '1510' }), 'wait', 'a machine bought: its input tax needs the receipt');
+  assert.equal(why(OUT('a'), { ruleAccount: '6510', ruleAsks: true }), 'ruleAsks', 'a rule that asks first asks at once');
   assert.equal(why(OUT('a'), { business: 'estv' }), 'business');
   assert.equal(why(OUT('a'), { business: 'telefonie' }), 'wait');
   assert.equal(why(OUT('a'), {}, { ...CTX, inputTax: false }), 'noInputTax');
@@ -67,10 +70,12 @@ test('the person is asked two weeks before the return is due; until then the wai
   assert.deepEqual(waitingForReceipt({ ...books, config: { closedThrough: '2026-09-30' } }, () => false, '2026-12-01'), [], 'a filed quarter holds nothing open');
 });
 
-/** The demo company: its rules, its knowledge, the effective method. */
+/** The demo company (its rules, its knowledge, the effective method) with an employees' clearing account. */
 function company(): Workspace {
   const dir = mkdtempSync(join(tmpdir(), 'receipt-wait-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
+  const accounts = join(dir, 'master-data/accounts.json');
+  writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '2270', name: 'Kontokorrent Mitarbeitende' }]));
   return workspaceAt(dir);
 }
 
@@ -83,11 +88,14 @@ function booksOf(txs: BankTransaction[]): Books {
   return { transactions: txs, receipts: [], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
 }
 
-const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1'];
+const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1', 'OWNER-1', 'STAFF-1'];
 /** The model's answer: a payment out on 6570 with I81, the one in as a sale, the bank on the other side. */
 const model = async (prompt: string) => {
   const refs = REFS.filter((ref) => prompt.includes(ref));
-  const line = (ref: string) => (ref === 'IN-1' ? { accountDebit: '', accountCredit: '3200', amount: 89, vatCode: 'V81', description: 'Verkauf' } : { accountDebit: '6570', accountCredit: '', amount: 89, vatCode: 'I81', description: 'Telefon' });
+  const line = (ref: string) => (ref === 'IN-1' ? { accountDebit: '', accountCredit: '3200', amount: 89, vatCode: 'V81', description: 'Verkauf' }
+    : ref === 'OWNER-1' ? { accountDebit: '2451', accountCredit: '', amount: 89, vatCode: '', description: 'Spesen Inhaberin' }
+      : ref === 'STAFF-1' ? { accountDebit: '2270', accountCredit: '', amount: 89, vatCode: '', description: 'Spesen Mitarbeiter' }
+        : { accountDebit: '6570', accountCredit: '', amount: 89, vatCode: 'I81', description: 'Telefon' });
   return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries: [line(ref)], reason: 'Telefonrechnung' }])));
 };
 
@@ -149,7 +157,26 @@ test('«Buchen» of one payment holds a payment that waits for its receipt, with
   const ws = company();
   const books = booksOf([OUT('TEL-10')]);
   let asked = 0;
-  const out = await ACTIONS['accounting.expenses.classification'].run!({ transaction: tx(books, 'TEL-10'), books }, {}, { ws, ask: async (p, o) => { asked++; return model(p); }, now: () => '2026-10-23T08:00:00Z' });
-  assert.deepEqual(out, { outcome: 'held', output: { why: 'waitsForReceipt' } });
-  assert.equal(asked, 0);
+  const book = (ref: string) => ACTIONS['accounting.expenses.classification'].run!({ transaction: tx(books, ref), books }, {}, { ws, ask: async (p) => { asked++; return model(p); }, now: () => '2026-10-23T08:00:00Z' });
+  assert.deepEqual(await book('TEL-10'), { outcome: 'held', output: { why: 'waitsForReceipt' } }, 'the model books an expense: it waits');
+  tx(books, 'TEL-10').waitsForReceipt = { since: '2026-10-23T08:00:00Z' };
+  asked = 0;
+  assert.deepEqual(await book('TEL-10'), { outcome: 'held', output: { why: 'waitsForReceipt' } });
+  assert.equal(asked, 0, 'once marked, no model call');
+  books.transactions.push(OUT('OWNER-1', { description: 'Spesen Juli Anna Muster' }));
+  const owner = await book('OWNER-1');
+  assert.equal(owner.outcome, 'decided', 'the owner\'s outlays paid back are booked at once');
+});
+
+test('the reimbursement of an outlay is booked at once: onto the owner\'s account or an employee\'s, it settles and has no receipt of its own (issue #90); a supplier payment still waits', async () => {
+  const ws = company();
+  const books = booksOf([OUT('OWNER-1', { description: 'Spesen Juli Anna Muster' }), OUT('STAFF-1', { description: 'Spesen Juli Beat Beispiel' }), OUT('TEL-10')]);
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'OWNER-1'), [['2451', '1021', 89, '']]);
+  assert.deepEqual(entries(books, 'STAFF-1'), [['2270', '1021', 89, '']]);
+  assert.deepEqual(entries(books, 'TEL-10'), [], 'the model would book an expense: it waits for the receipt');
+  assert.deepEqual(books.transactions.filter((t) => t.waitsForReceipt).map((t) => t.ref), ['TEL-10']);
+  let asked = 0;
+  await run(ws, books, async (p) => { asked++; return model(p); });
+  assert.equal(asked, 0, 'a waiting payment goes to the model once, not on every run');
 });

@@ -10,7 +10,8 @@
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { BATCH_SIZE, CONCURRENCY, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
-import { receiptFree, receiptWaitOf } from '../booking/receipt-wait.js';
+import { onlySettles, receiptFree, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
+import { bankAccountFor } from '../accounting/bank-accounts.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -34,29 +35,23 @@ const unbooked = (books: Books) => {
   return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson);
 };
 
-/**
- * The payments that wait for their receipt (src/booking/receipt-wait.ts): marked so, and every
- * other open payment's mark taken away (a receipt came, a person marked it as needing none, it was
- * booked). Returns the refs that wait.
- */
-function holdForReceipts(ws: Workspace, books: BooksPort, context: ClassifyContext, fx: FxResolver): Set<string> {
+/** The open payments that need a receipt and have none (src/booking/receipt-wait.ts). */
+function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx: FxResolver): Set<string> {
   const free = receiptFree(loadKnowledge(APP_ROOT, ws.paths.root));
-  const snapshot = books.read();
-  const open = new Set(unbooked(snapshot).map((tx) => tx.ref));
-  const waiting = new Set(snapshot.transactions.filter((tx) => open.has(tx.ref) && receiptWaitOf(snapshot, tx, context, free, fx).wait).map((tx) => tx.ref));
+  return new Set(unbooked(books).filter((tx) => receiptWaitOf(books, tx, context, free, fx).wait).map((tx) => tx.ref));
+}
+
+/** Marks the payments that wait for their receipt, and takes the mark off every other open payment (a receipt came, it was booked, a person marked it as needing none). */
+function markWaiting(books: BooksPort, waiting: ReadonlySet<string>): void {
   const since = new Date().toISOString();
-  const lock = periodLock(snapshot);
-  const changed = snapshot.transactions.some((tx) => !lock.isClosed(tx.date) && !!tx.waitsForReceipt !== waiting.has(tx.ref));
-  if (changed) {
-    books.update((index) => {
-      for (const tx of index.transactions) {
-        if (periodLock(index).isClosed(tx.date)) continue;
-        if (!waiting.has(tx.ref)) delete tx.waitsForReceipt;
-        else tx.waitsForReceipt ??= { since };
-      }
-    });
-  }
-  return waiting;
+  const open = (index: Books) => { const lock = periodLock(index); return index.transactions.filter((tx) => !lock.isClosed(tx.date)); };
+  if (!open(books.read()).some((tx) => !!tx.waitsForReceipt !== waiting.has(tx.ref))) return;
+  books.update((index) => {
+    for (const tx of open(index)) {
+      if (!waiting.has(tx.ref)) delete tx.waitsForReceipt;
+      else tx.waitsForReceipt ??= { since };
+    }
+  });
 }
 
 export function classifyStep({ force = false } = {}): StepRun {
@@ -89,13 +84,24 @@ export function classifyStep({ force = false } = {}): StepRun {
     }
     const context = loadClassifyContext(ws);
     const fx = loadFxResolver();
-    const waiting = holdForReceipts(ws, books, context, fx);
-    const waitNote: IntakeNote[] = waiting.size ? [{ code: 'waitingReceipt', count: waiting.size }] : [];
-    if (waiting.size) log(`Waiting   : ${waiting.size} payment(s) need a receipt that has not come: booked once it is linked.`);
+    // A payment that needs a receipt waits for it. One not marked yet goes to the model once: an answer
+    // that only settles (the owner's outlays paid back, a card's bill) is booked, any other waits (issue #90).
+    const need = needReceipts(ws, scratch, context, fx);
+    const probe = new Set(ask ? [...need].filter((ref) => !scratch.transactions.find((tx) => tx.ref === ref)?.waitsForReceipt) : []);
+    const waiting = new Set([...need].filter((ref) => !probe.has(ref)));
+    const settles = settlementAccount(context);
+    const bankOf = new Map(scratch.transactions.map((tx) => [tx.ref, bankAccountFor(tx, context.bankAccounts)]));
+    const keeps = (ref: string) => !probe.has(ref) || onlySettles(scratch.journalEntries.filter((je) => je.transactionRef === ref), bankOf.get(ref) ?? '', settles);
+    const done = (notes: IntakeNote[]) => {
+      for (const ref of probe) if (!keeps(ref) && scratch.journalEntries.some((je) => je.transactionRef === ref)) waiting.add(ref);
+      markWaiting(books, waiting);
+      if (waiting.size) log(`Waiting   : ${waiting.size} payment(s) need a receipt that has not come: booked once it is linked.`);
+      return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...askSales(ws, books, log)] };
+    };
     const todo = unbooked(scratch).filter((tx) => !waiting.has(tx.ref));
     if (todo.length === 0) {
       log('All transactions are already classified.');
-      return { notes: [...waitNote, ...askSales(ws, books, log)] };
+      return done([]);
     }
     progress(0, todo.length);
     log(`Classifying ${todo.length} transactions in ${Math.ceil(todo.length / BATCH_SIZE)} batches of ${BATCH_SIZE} (${CONCURRENCY} concurrent)...\n`);
@@ -105,7 +111,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       fresh.forEach((je) => applied.add(je));
       books.update((index) => {
         const open = new Set(unbooked(index).map((tx) => tx.ref));
-        index.journalEntries.push(...fresh.filter((je) => open.has(je.transactionRef)));
+        index.journalEntries.push(...fresh.filter((je) => open.has(je.transactionRef) && keeps(je.transactionRef)));
       });
     };
     scratch.journalEntries.forEach((je) => applied.add(je));
@@ -130,7 +136,8 @@ export function classifyStep({ force = false } = {}): StepRun {
     log(`  Asked     : ${asked.length}`);
     const held = [...asked.map((a) => a.ref), ...unasked];
     if (held.length) hold?.(held);
-    if (classified.length) release?.(classified);
+    const booked = classified.filter(keeps);
+    if (booked.length) release?.(booked);
     // A payment a rule holds has its question under Aufgaben; the app's own VAT question about it would ask twice (r7h-27).
     closeSaleQuestionsHeld(ws, asked.map((a) => a.ref), scratch.config.closedThrough);
     // A payout its orders hold is named in its own note with its reason, not counted as failed or asked by a rule.
@@ -144,9 +151,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       ...(failedElse.length ? [{ code: 'failed' as const, count: failedElse.length, detail: failedElse[0].reason.slice(0, 300) }] : []),
       ...(payouts.length ? [{ code: 'payoutsHeld' as const, payouts }] : []),
       ...(askedElse.length ? [{ code: 'asked' as const, count: askedElse.length }] : []),
-      ...waitNote,
-      ...askSales(ws, books, log),
     ];
-    return { notes };
+    return done(notes);
   };
 }

@@ -306,7 +306,7 @@ test('deleting a receipt takes its payment\'s booking away, the payment waits fo
   }
 });
 
-test('«Rückgängig» of a delete: the run of the delete asks no model and books nothing, the payment waits for its receipt; the restore books it with it', async () => {
+test('«Rückgängig» of a delete while the run of the delete still asks the model: the payment ends booked with its receipt', async () => {
   const gate = join(tmpdir(), `restore-gate-${process.pid}-${Date.now()}`);
   writeFileSync(gate, '');
   const { api, session, rc, onG } = await bookedWithReceipt({ CLAUDE_STUB_GATE: gate });
@@ -314,14 +314,13 @@ test('«Rückgängig» of a delete: the run of the delete asks no model and book
     rmSync(gate);
     rmSync(`${gate}.started`, { force: true });
     assert.equal((await api.send('DELETE', `/api/receipts/${rc.id}`)).status, 200);
-    await session.rest();
-    assert.equal(existsSync(`${gate}.started`), false, 'no model call for a payment without its receipt');
-    assert.deepEqual(await onG(), []);
-    writeFileSync(gate, '');
+    for (let i = 0; i < 200 && !existsSync(`${gate}.started`); i++) await new Promise((r) => setTimeout(r, 25));
+    assert.ok(existsSync(`${gate}.started`), 'the run asks the model once how it would book the payment');
     const back = await api.send('POST', `/api/receipts/${rc.id}/restore`);
     assert.equal(back.status, 200, back.json.error as string);
+    writeFileSync(gate, '');
     await session.rest();
-    assert.deepEqual(await onG(), [[rc.id]], 'booked with the receipt');
+    assert.deepEqual(await onG(), [[rc.id]], 'booked with the receipt, not left as the run of the delete decided it');
   } finally {
     writeFileSync(gate, '');
     await session.rest().catch(() => {});

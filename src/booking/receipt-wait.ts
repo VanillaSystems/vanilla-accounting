@@ -10,16 +10,18 @@
  * payment a person marked as needing none, a firm that claims no input tax, and a business whose
  * file says so as `apply: { receipt: none }` on a rule of evidence.guide.yaml#rules (in the app's
  * file a fact for every company, such as an authority whose notice is filed apart; in the
- * company's file its own choice, such as its bank or its rent). A company rule that books waits
- * for the receipt like the model: the receipt decides its rate (ruleVatCode), unless it books onto
- * one of the firm's money accounts, which is a transfer. A rule that asks first is the person's
+ * company's file its own choice, such as its bank or its rent). A payment booked onto a settlement
+ * account (the owner's, a money account, a debt) pays what was booked elsewhere and never waits
+ * (settlementAccount): by a rule, decided here; by the model, decided on its answer (onlySettles).
+ * Any other company rule that books waits for the receipt like the model: the receipt decides its
+ * rate (ruleVatCode). A rule that asks first is the person's
  * wish to be asked: its question comes at once, and her answer books it.
  */
 import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
 import type { Knowledge } from '../knowledge/layers.js';
-import { withoutInputTax } from '../engines/index.js';
+import { chart, withoutInputTax } from '../engines/index.js';
 import type { Books } from '../books/store.js';
-import type { BankTransaction } from '../types/index.js';
+import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { isSeparateFee } from './separate-fee.js';
@@ -38,8 +40,10 @@ export type NoWait =
   | 'incoming'
   /** The bank's own fee row of another payment: the statement is the evidence. */
   | 'separateFee'
-  /** Money to one of the firm's own accounts, or a rule books it onto a money account. */
+  /** Money to one of the firm's own accounts. */
   | 'ownTransfer'
+  /** It is booked onto a settlement account (settlementAccount): the owner's, a money account, a debt such as an employee's or a card's. */
+  | 'settlement'
   /** A company rule says to ask about it first (a wish such as «frag mich bei Barbezügen»): its question comes at once. */
   | 'ruleAsks'
   /** Its business's file says its payments need no receipt. */
@@ -66,8 +70,8 @@ export interface WaitContext {
   free: ReadonlySet<string>;
   /** The IBANs of the firm's own bank accounts, as ibanOf writes them. */
   ownIbans: ReadonlySet<string>;
-  /** The accounts that hold money (src/booking/classify.ts moneyAccounts). */
-  money: ReadonlySet<string>;
+  /** Whether a booking onto this account settles money owed or moves money (settlementAccount). */
+  settles: (account: string) => boolean;
   /** The firm claims input tax (the effective method). */
   inputTax: boolean;
 }
@@ -79,11 +83,28 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (tx.amount === 0) return book('zero');
   if (tx.direction === 'CRDT') return book('incoming');
   if (isSeparateFee(tx)) return book('separateFee');
-  if ((tx.counterpartyIban && ctx.ownIbans.has(ibanOf(tx.counterpartyIban))) || (facts.ruleAccount && ctx.money.has(facts.ruleAccount))) return book('ownTransfer');
+  if (tx.counterpartyIban && ctx.ownIbans.has(ibanOf(tx.counterpartyIban))) return book('ownTransfer');
+  if (facts.ruleAccount && ctx.settles(facts.ruleAccount)) return book('settlement');
   if (facts.ruleAsks) return book('ruleAsks');
   if (facts.business && ctx.free.has(facts.business)) return book('business');
   if (!ctx.inputTax) return book('noInputTax');
   return { wait: true };
+}
+
+/**
+ * Whether a booking onto `account` settles: the owner's account (an outlay paid back, booking.guide.yaml
+ * cls-owner-account), a money account (cash, a bank, a transfer), or any debt of the chart (an
+ * employee's outlays, a card's bill, a loan). Such a payment pays what was booked or owed
+ * elsewhere: it carries no VAT and has no receipt of its own (issue #90). Read off the chart and
+ * the manifest, never a list of businesses.
+ */
+export function settlementAccount(context: Pick<ClassifyContext, 'moneyAccounts' | 'ownerAccount'>): (account: string) => boolean {
+  return (account) => !!context.moneyAccounts?.has(account) || account === context.ownerAccount || chart().typeOf(account) === 'liability';
+}
+
+/** Whether the classifier's entries of a payment only settle (settlementAccount): each line's other side than the bank is such an account. */
+export function onlySettles(entries: readonly Pick<JournalEntry, 'accountDebit' | 'accountCredit'>[], bankAccount: string, settles: (account: string) => boolean): boolean {
+  return entries.length > 0 && entries.every((e) => [e.accountDebit, e.accountCredit].filter((a) => a && a !== bankAccount).every(settles));
 }
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
@@ -119,7 +140,7 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   return receiptWait(tx, { linked: linked.length > 0, ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }) }, {
     free,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
-    money: context.moneyAccounts ?? new Set(),
+    settles: settlementAccount(context),
     inputTax: withoutInputTax() === undefined,
   });
 }
