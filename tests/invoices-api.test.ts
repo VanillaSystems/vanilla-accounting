@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { findBrowser } from '../src/invoices/pdf.js';
+import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -69,7 +70,7 @@ test('issue, the PDF as issued, frozen, sent, commented, reminded, cancelled', {
   assert.deepEqual([issued.json.number, issued.json.dueDate], ['2026-001', '2026-12-01']);
   const pdf = (issued.json as { pdf: { file: string; sha256: string } }).pdf;
 
-  const res = await api.fetch('/invoices/2026-001.pdf');
+  const res = await api.fetch(issuedPdfUrl('2026-001'));
   const bytes = Buffer.from(await res.arrayBuffer());
   assert.equal(res.headers.get('content-type'), 'application/pdf');
   assert.equal(createHash('sha256').update(bytes).digest('hex'), pdf.sha256);
@@ -81,6 +82,9 @@ test('issue, the PDF as issued, frozen, sent, commented, reminded, cancelled', {
 
   const sent = await api.send('POST', `/api/invoices/${d.id}/send`, {});
   assert.deepEqual([sent.json.kind, sent.json.to, sent.json.title], ['invoice', 'compta@cafe.example', 'Facture 2026-001']);
+  const sentRes = await api.fetch(sentPdfUrl(String(sent.json.id)));
+  assert.equal(sentRes.status, 200, 'the link the UI builds for a sent document serves its PDF (#61)');
+  assert.equal(createHash('sha256').update(Buffer.from(await sentRes.arrayBuffer())).digest('hex'), sent.json.sha256);
   const note = await api.send('POST', `/api/invoices/${d.id}/comments`, { text: 'paie fin octobre' });
   assert.equal(note.json.author, 'Anna Muster');
   const reminder = await api.send('GET', `/api/invoices/${d.id}/reminder?date=2026-12-10`);

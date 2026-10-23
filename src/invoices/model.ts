@@ -184,6 +184,13 @@ export interface SentDocument extends Envelope {
   messageId?: string;
 }
 
+/**
+ * Where the app serves an issued invoice's PDF and a sent document (src/server/routes/invoices.ts).
+ * The stored `file` is a path under the workspace, never a URL.
+ */
+export const issuedPdfUrl = (number: string) => `/invoices/${encodeURIComponent(number)}.pdf`;
+export const sentPdfUrl = (id: string) => `/invoices/sent/${encodeURIComponent(id)}.pdf`;
+
 /** invoices.json. */
 export interface InvoiceBook {
   schema: number;

@@ -2,7 +2,7 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import type { Customer, CustomerFields, Draft, Invoice, InvoiceLine, Issued } from '../../../invoices/model.js';
+import { issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import { api, errorText, type CreditInput, type DraftChange } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
@@ -102,7 +102,7 @@ function download(href: string, name: string): void {
  */
 export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<boolean> {
   // Cancelled in the Save dialog: nothing went out, nothing is recorded.
-  if (!email && !(await savePdf(api.documentUrl(inv.pdf.file), `${inv.number}.pdf`))) return false;
+  if (!email && !(await savePdf(issuedPdfUrl(inv.number), `${inv.number}.pdf`))) return false;
   const doc = await run(nav, api.recordSend(inv.id, email ? { email } : { to: 'download' }));
   if (!doc) return false;
   await reloadInvoices();
@@ -120,7 +120,7 @@ export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
 export async function cancel(nav: Nav, inv: Issued, input: { date: string; reason: string; notify: boolean }, email?: MailMessage): Promise<boolean> {
   const done = await run(nav, api.cancelInvoice(inv.id, { ...input, ...(input.notify ? (email ? { email } : { to: 'download' }) : {}) }));
   if (!done) return false;
-  if (done.sent && !email) download(api.documentUrl(done.sent.file), `${done.sent.title}.pdf`);
+  if (done.sent && !email) download(sentPdfUrl(done.sent.id), `${done.sent.title}.pdf`);
   await reloadInvoices();
   nav.toast(done.sent && email ? t('invoices.cancelledMailed', { number: inv.number, to: done.sent.to }) : t(done.sent ? 'invoices.cancelledNotice' : 'invoices.cancelled', { number: inv.number }));
   return true;
@@ -138,7 +138,7 @@ export async function creditNote(nav: Nav, inv: Issued, input: CreditInput): Pro
 export async function sendReminder(nav: Nav, inv: Issued, input: { fee?: number; intro?: string; closing?: string }, email?: MailMessage): Promise<boolean> {
   const done = await run(nav, api.sendReminder(inv.id, { ...input, ...(email ? { email } : { to: 'download' }) }));
   if (!done) return false;
-  if (!email) download(api.documentUrl(done.sent.file), `${done.sent.title}.pdf`);
+  if (!email) download(sentPdfUrl(done.sent.id), `${done.sent.title}.pdf`);
   await reloadInvoices();
   nav.toast(email ? t('invoices.reminderMailed', { level: done.reminder.level, number: inv.number, to: done.sent.to }) : t('invoices.reminderSent', { level: done.reminder.level, number: inv.number }));
   return true;

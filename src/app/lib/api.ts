@@ -464,7 +464,6 @@ export const api = {
   /** «Lösen» (r10c-3): the payment leaves the invoice, the link's bookings go, what the link replaced is back. */
   releasePayment: (id: string, transactionRef: string) => request<PaymentReleased>('DELETE', `/api/invoices/${id}/payments/${encodeURIComponent(transactionRef)}`),
   /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */
-  documentUrl: (file: string) => `/${file.split('/').map(encodeURIComponent).join('/')}`,
   filingXmlUrl: (period: string) => `/api/filing/${encodeURIComponent(period)}`,
 
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),

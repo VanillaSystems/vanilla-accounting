@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
+import { issuedPdfUrl, sentPdfUrl, type Draft, type Invoice, type Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
 import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
@@ -276,7 +276,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
   const { d, ws, inv, state, reminderLevel, nav, canEdit } = props;
   const s = useUi();
   const dl = inv.status === 'issued'
-    ? <a className="dl inline" href={api.documentUrl(inv.pdf.file)} download={`${inv.number}.pdf`} title={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.download')}</span></a>
+    ? <a className="dl inline" href={issuedPdfUrl(inv.number)} download={`${inv.number}.pdf`} title={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.download')}</span></a>
     : null;
   if (!canEdit) return <div className="ivacts">{dl}</div>;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
@@ -494,7 +494,7 @@ function SentDetail({ d, route, nav }: Props & { d: InvoiceList }) {
   const doc = d.sent.find((x) => x.id === route.id);
   if (!doc) return <div className="detail-empty"><div>{route.id ? t('invoices.docGone') : t('invoices.nothingSent')}</div></div>;
   const inv = d.invoices.find((i) => i.id === doc.invoiceId);
-  const src = api.documentUrl(doc.file);
+  const src = sentPdfUrl(doc.id);
   return (
     <div className="detail-in" data-for={doc.id}>
       <div className="head"><h2 className="who">{doc.title}<small>{inv ? customerOf(d, inv)?.name : ''}</small></h2></div>
