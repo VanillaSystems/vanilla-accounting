@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import fs from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import git from 'isomorphic-git';
-import { parse, stringify } from 'yaml';
+import { parse, parseDocument } from 'yaml';
 import type { Workspace } from '../workspace/workspace.js';
 import { repositoryAt } from '../workspace/git.js';
 import { KNOWLEDGE_DIR, ROLE_DIRS } from './layers.js';
@@ -56,8 +56,11 @@ export const basisOf = (raw: string | null): string => (raw === null ? 'none' : 
 const full = (ws: Ws, path: string) => join(ws.paths.root, path);
 const read = (p: string): string | null => (existsSync(p) ? readFileSync(p, 'utf8') : null);
 
-/** Pure. A notes file split into its front matter (title, steps) and its prose. */
-export function splitNote(raw: string): { title?: string; steps: string[]; text: string; front: Record<string, unknown> } {
+/**
+ * Pure. A notes file split into its front matter (title, steps) and its prose. `head` is the front
+ * matter's YAML as the author wrote it ('' when there is none), so a save writes it back unchanged.
+ */
+export function splitNote(raw: string): { title?: string; steps: string[]; text: string; head: string } {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(raw);
   let front: Record<string, unknown> = {};
   if (m) {
@@ -66,17 +69,25 @@ export function splitNote(raw: string): { title?: string; steps: string[]; text:
       if (p && typeof p === 'object' && !Array.isArray(p)) front = p as Record<string, unknown>;
     } catch { /* a front matter that does not parse is kept as prose */ }
   }
-  const text = (m && Object.keys(front).length ? raw.slice(m[0].length) : raw).replace(/^\n+/, '').replace(/\s+$/, '');
+  const head = m && Object.keys(front).length ? m[1] : '';
+  const text = (m && head ? raw.slice(m[0].length) : raw).replace(/^\n+/, '').replace(/\s+$/, '');
   const steps = Array.isArray(front.steps) ? front.steps.filter((s): s is string => typeof s === 'string') : [];
-  return { ...(typeof front.title === 'string' ? { title: front.title } : {}), steps, text, front };
+  return { ...(typeof front.title === 'string' ? { title: front.title } : {}), steps, text, head };
 }
 
-/** Pure. The file's text: the front matter when it has any, then the prose. */
-export function joinNote(front: Record<string, unknown>, text: string): string {
+/** Pure. The front matter with a new title, every other line, comment and flow list as the author wrote it. */
+function retitled(head: string, title: string): string {
+  const doc = parseDocument(head);
+  doc.set('title', title);
+  return doc.toString({ lineWidth: 0, flowCollectionPadding: false }).trimEnd();
+}
+
+/** Pure. The file's text: the front matter (YAML, '' for none) when it has any, then the prose. */
+export function joinNote(head: string, text: string): string {
   const body = text.replace(/\r\n/g, '\n').replace(/\s+$/, '');
-  const keys = Object.keys(front).filter((k) => front[k] !== undefined);
-  const head = keys.length ? `---\n${stringify(Object.fromEntries(keys.map((k) => [k, front[k]])), { lineWidth: 0 }).trimEnd()}\n---\n\n` : '';
-  return body ? `${head}${body}\n` : head ? `${head.trimEnd()}\n` : '';
+  const yaml = head.replace(/\r\n/g, '\n').trimEnd();
+  const top = yaml ? `---\n${yaml}\n---\n\n` : '';
+  return body ? `${top}${body}\n` : top ? `${top.trimEnd()}\n` : '';
 }
 
 export function readNote(ws: Ws, ref: NoteRef): Note | undefined {
@@ -123,10 +134,11 @@ export function saveNote(ws: Ws, ref: NoteRef, text: string, basis: string, titl
   const p = full(ws, notePath(ref));
   const before = read(p);
   if (basisOf(before) !== basis) return { ok: false, refusal: 'changed' };
-  const old = before === null ? { front: {} as Record<string, unknown>, title: undefined } : splitNote(before);
-  const front = { ...old.front, ...(title?.trim() ? { title: title.trim() } : {}) };
-  if (ref.kind === 'topic' && typeof front.title !== 'string') return { ok: false, refusal: 'title' };
-  const after = ref.kind === 'partner' && !text.trim() ? null : joinNote(front, text);
+  const old = before === null ? { head: '', title: undefined } : splitNote(before);
+  const next = title?.trim();
+  if (ref.kind === 'topic' && !next && old.title === undefined) return { ok: false, refusal: 'title' };
+  const head = next && next !== old.title ? retitled(old.head, next) : old.head;
+  const after = ref.kind === 'partner' && !text.trim() ? null : joinNote(head, text);
   if (after === null) rmSync(p, { force: true });
   else { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, after); }
   return { ok: true, write: { path: notePath(ref), before, after } };
