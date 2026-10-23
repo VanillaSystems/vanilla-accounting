@@ -59,9 +59,10 @@ change made beside it is found, and books whose filed part changed open read-onl
 
 ## Changing the books: a proposal
 
-Write one JSON file into \`${PROPOSALS_DIR}/\` and tell the person to open the app's AI sidebar:
-the proposal shows there as a conversation with your title, each booking as it is and as it would
-be, and nothing changes until the person presses «Übernehmen». The app checks every change as it
+Write one JSON file into \`${PROPOSALS_DIR}/\` and tell the person to open «Verlauf» in the app's
+AI sidebar: the proposal shows there as a conversation with your title, each booking as it is and
+as it would be, and nothing changes until the person presses «Übernehmen». The app takes the
+file in and removes it; a proposal it cannot read shows there with the reason. The app checks every change as it
 checks its own and refuses all of them when one is wrong.
 
 \`\`\`json
@@ -69,12 +70,12 @@ checks its own and refuses all of them when one is wrong.
   "title": "Kaffee Juli auf Material",
   "summary": "Two plain sentences for the person: what changes and why.",
   "changes": [
-    { "kind": "entry", "id": "<booking id>", "set": { "accountDebit": "4000", "vatCode": "M81" } },
-    { "kind": "newEntry", "entry": { "transactionRef": "<payment ref>", "date": "2026-07-03", "accountDebit": "6500", "accountCredit": "1020", "amount": 12.5, "vatCode": "I81", "description": "Kaffee" } },
+    { "kind": "entry", "id": "<booking id>", "set": { "accountDebit": "4000", "vatCode": "<code>" } },
+    { "kind": "newEntry", "entry": { "transactionRef": "<payment ref>", "date": "2026-07-03", "accountDebit": "6500", "accountCredit": "1020", "amount": 12.5, "vatCode": "<code>", "description": "Kaffee" } },
     { "kind": "deleteEntry", "id": "<booking id>" },
     { "kind": "link", "receipt": "<receipt id>", "payment": "<payment ref>" },
     { "kind": "unlink", "receipt": "<receipt id>", "payment": "<payment ref>" },
-    { "kind": "receipt", "id": "<receipt id>", "set": { "date": "2026-07-03", "amount": 12.5, "currency": "CHF" } },
+    { "kind": "receipt", "id": "<receipt id>", "set": { "date": "2026-07-03", "amount": 12.5 } },
     { "kind": "receiptKind", "id": "<receipt id>", "as": "duplicate" },
     { "kind": "account", "number": "6575", "name": "Software-Abos" },
     { "kind": "question", "on": { "kind": "payment", "id": "<payment ref>" }, "text": "Privat oder geschäftlich?" }
@@ -83,7 +84,8 @@ checks its own and refuses all of them when one is wrong.
 \`\`\`
 
 - Ids come from the books files above; never invent one.
-- A booking's \`vatCode\` with a rate (I81, M81, V81) only when the receipt shows Swiss VAT.
+- A booking's \`vatCode\` is one the books already use (read \`entries.jsonl\`); a code with
+  a rate only when the receipt shows that VAT charged.
 - \`receiptKind\` \`as\`: invoice, sales-record, supporting, statement, noise, duplicate, or null.
 
 ## Filed periods are set in stone

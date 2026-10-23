@@ -9,7 +9,7 @@ import { api, errorText } from '../../lib/api.js';
 import type { AiProviderView, AiStepView, AiView } from '../../../llm/view.js';
 import type { ProviderId } from '../../../llm/provider.js';
 import type { Nav } from '../index.js';
-import { chooseCli, type TerminalCli, type TerminalView } from '../../../assistant/terminal.js';
+import { chooseCli, type TerminalCli, type TerminalView } from '../../../platform/terminal.js';
 
 const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) => can.includes(n));
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';

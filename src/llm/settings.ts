@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ProviderId } from './provider.js';
 import { isStepId, type StepId } from './steps.js';
-import { isTerminalCli, type TerminalCli } from '../assistant/terminal.js';
+import { isTerminalCli, type TerminalCli } from '../platform/terminal.js';
 
 export interface StepChoice {
   provider: ProviderId;

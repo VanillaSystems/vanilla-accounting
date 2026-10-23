@@ -1,6 +1,7 @@
 /**
- * The `claude` CLI for the desktop app. An app started from the Finder gets a PATH of
- * /usr/bin:/bin, not the one the person's terminal has, so the CLI is looked up through their
+ * A program as the person's terminal finds it: the desktop app's claude (src/desktop/main.ts) and
+ * the terminal CLIs (src/platform/terminal-open.ts). An app started from the Finder gets a PATH of
+ * /usr/bin:/bin, not the one the person's terminal has, so a CLI is looked up through their
  * login shell. Only its path is taken: the app's own PATH stays as it is, so nothing else comes to
  * depend on what a terminal happens to have installed.
  */

@@ -1,4 +1,4 @@
-import type { TerminalCli, TerminalView } from '../../assistant/terminal.js';
+import type { TerminalCli, TerminalView } from '../../platform/terminal.js';
 import type { StatementProblem } from '../../types/api-error.js';
 import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';

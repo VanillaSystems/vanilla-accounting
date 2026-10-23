@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
-import { chooseCli, copyCommand, type TerminalCli, type TerminalView } from '../../assistant/terminal.js';
+import { chooseCli, copyCommand, type TerminalCli, type TerminalView } from '../../platform/terminal.js';
 
 /** The vendors' own installation pages. */
 const INSTALL: Record<TerminalCli, string> = {

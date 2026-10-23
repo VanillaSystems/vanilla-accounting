@@ -8,8 +8,8 @@ import { join } from 'node:path';
 import { Router } from 'express';
 import { WS, patchBody, RequestError } from '../books.js';
 import { readSettings, writeTerminal } from '../../llm/settings.js';
-import { chooseCli, isTerminalCli, type TerminalView } from '../../assistant/terminal.js';
-import { detectClis, openInTerminal, stateOf, terminalPath } from '../../assistant/terminal-open.js';
+import { chooseCli, isTerminalCli, type TerminalView } from '../../platform/terminal.js';
+import { detectClis, openInTerminal, stateOf, terminalPath } from '../../platform/terminal-open.js';
 import { ensureTerminalAgents } from '../../workspace/terminal-agents.js';
 
 export const router = Router();

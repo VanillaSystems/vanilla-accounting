@@ -263,8 +263,8 @@ with Claude Code or Codex started on the request (passed through a file as one a
 as shell code), offers the other CLI as «oder mit …» when both are installed (the one chosen in
 Firma › KI first, Claude without a choice), says first when the CLI will ask to sign in (Codex:
 `codex login status`; Claude: the app's own last call answered), shows the command to copy, and
-with neither installed links the vendors' installation pages (src/assistant/terminal.ts,
-src/assistant/terminal-open.ts, src/app/assistant/TerminalCard.tsx). The app never checks a plan
+with neither installed links the vendors' installation pages (src/platform/terminal.ts,
+src/platform/terminal-open.ts, src/app/assistant/TerminalCard.tsx). The app never checks a plan
 and never reads a CLI's login.
 
 The terminal AI reads `vanilla-accounting/AGENTS.md` (Claude Code through `CLAUDE.md`), whose

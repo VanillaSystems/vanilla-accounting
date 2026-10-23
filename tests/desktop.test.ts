@@ -12,7 +12,7 @@ import { request as httpRequest, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
-import { claudeOn } from '../src/desktop/claude.js';
+import { claudeOn } from '../src/platform/login-path.js';
 import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
 import { ask, modelReady } from '../src/llm/ask.js';

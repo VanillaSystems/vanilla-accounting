@@ -1,13 +1,13 @@
 /**
  * Which terminal CLIs this computer has and opening one (issue #146; the shared part is
- * src/assistant/terminal.ts). A CLI is found on the login shell's PATH, as the desktop app finds
- * claude (src/desktop/claude.ts): an app started from the Finder has only /usr/bin:/bin.
+ * src/platform/terminal.ts). A CLI is found on the login shell's PATH, as the desktop app finds
+ * claude (src/platform/login-path.ts): an app started from the Finder has only /usr/bin:/bin.
  */
 import { execFile } from 'node:child_process';
 import { closeSync, existsSync, mkdtempSync, openSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
-import { loginPath, programOn } from '../desktop/claude.js';
+import { loginPath, programOn } from './login-path.js';
 import { CLI_PROGRAM, REQUEST_MAX, TERMINAL_CLIS, launchScript, type CliState } from './terminal.js';
 
 let pathOnce: Promise<string> | undefined;
@@ -76,7 +76,7 @@ const run: Run = (command, args, done) => { execFile(command === 'open' ? proces
 
 /**
  * Opens a Terminal window in `folder` with `bin` started on `request`. The request goes into a file
- * of a new private folder, which the script reads and removes (src/assistant/terminal.ts
+ * of a new private folder, which the script reads and removes (src/platform/terminal.ts
  * launchScript); `open -a Terminal` runs the .command file and needs no permission to control Terminal.
  */
 export function openInTerminal(folder: string, bin: string, request: string, start: Run = run): Promise<string> {

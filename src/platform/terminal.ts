@@ -2,7 +2,7 @@
  * «Im Terminal öffnen» (issue #146): a request the sidebar cannot do (it has no shell) goes to
  * Claude Code or Codex in a terminal in the books folder. This module is the part the UI shares:
  * which CLI opens, the command a person copies, the script Terminal runs. Detecting and opening
- * are src/assistant/terminal-open.ts. The app never checks a plan or a subscription and never
+ * are src/platform/terminal-open.ts. The app never checks a plan or a subscription and never
  * reads a CLI's login: it starts the program, which uses whatever account it is signed into.
  */
 
