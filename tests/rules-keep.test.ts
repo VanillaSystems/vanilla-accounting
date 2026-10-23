@@ -26,6 +26,7 @@ import { formatIn } from '../src/app/i18n/core.js';
 import de from '../src/app/i18n/locales/de.js';
 import { startApi } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { isPurchaseDocument } from '../src/accounting/evidence-check.js';
 
 process.env.GIT_AUTHOR_NAME = 'Erika Beispiel';
 process.env.GIT_AUTHOR_EMAIL = 'erika@example.com';
@@ -188,7 +189,7 @@ test('the card shows what a drafted rule would do: the payments of the open year
   const [p] = d.preview;
   assert.deepEqual([p.key, p.year, p.matches, p.examples.map((x) => x.ref)], ['booking.guide.yaml#classify#rechnung-it', '2026', expected.length, expected.slice(0, 5).map((t) => t.ref)]);
   const first = expected[0];
-  const swiss = books.mappings.some((m) => m.transactionRef === first.ref && books.receipts.find((r) => r.id === m.receiptId)?.hasSwissVat);
+  const swiss = books.mappings.some((m) => { const r = books.receipts.find((x) => x.id === m.receiptId); return m.transactionRef === first.ref && !!r && isPurchaseDocument(r) && r.hasSwissVat; });
   assert.deepEqual(p.examples[0].would, { kind: 'book', lines: [{ account: '6570', vat: `${first.direction === 'CRDT' ? '-' : ''}${swiss ? 'I81' : 'I0'}`, amount: first.amount }] });
   assert.deepEqual(p.examples[0].now.map((l) => l.account).sort(), books.journalEntries.filter((e) => e.transactionRef === first.ref).map((e) => (e.accountDebit === '1021' ? e.accountCredit : e.accountDebit)).sort());
 });

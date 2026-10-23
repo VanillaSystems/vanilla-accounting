@@ -141,7 +141,7 @@ function wouldEntries(books: Books, tx: BankTransaction, booking: RuleBooking, c
   const read = today.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '' }));
   const split = booking.fees && mapped.length && today.length ? payoutLines(read, bank, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue') : undefined;
   if (split) return split.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, ...(e.vatCode ? { vatCode: e.vatCode } : {}) }));
-  return ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount).map((l) => ({
+  return ruleBookingLines(tx, booking, mapped, context.ownerAccount).map((l) => ({
     accountDebit: tx.direction === 'DBIT' ? l.account : bank,
     accountCredit: tx.direction === 'DBIT' ? bank : l.account,
     amount: l.amount,
