@@ -16,6 +16,10 @@ import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import type { Books } from '../src/books/store.js';
 import type { ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../src/types/index.js';
+import { startApi } from './support/api-server.js';
+import { loadBooks, moduleActor, saveBooks } from '../src/books/store.js';
+import { classifyStep } from '../src/intake/classify.js';
+import { runIntake, storePort } from '../src/intake/pipeline.js';
 import './support/jurisdiction.js';
 
 const open = (d: string) => d > '2026-06-30';
@@ -141,4 +145,25 @@ test('a currency case: EUR receipts on a EUR payment are split; EUR receipts on 
   assert.deepEqual(split.map((e) => e.exchangeCurrency), ['EUR', 'EUR']);
   const chf = await book(pay(42.1), [receipt(19.99, { currency: 'EUR' }), receipt(25, { currency: 'EUR' })], [line('4200', 42.1, 'M0')]);
   assert.deepEqual(rows(chf), [['4200', 42.1, 'M0']]);
+});
+
+test('with the wait for receipts (#29): the payment waits until the set is linked, then the run books it one line per receipt', async () => {
+  const api = await startApi('tests/fixtures/sale-vat-index.json');
+  try {
+    const run = (steps: Parameters<typeof runIntake>[0]['steps']) => runIntake({ ws: api.ws, books: storePort(api.ws, moduleActor('intake')), ask: model([line('6570', 87.4, 'I81')]), steps });
+    const b = loadBooks(api.ws);
+    b.transactions.push(pay(87.4, { ref: 'W-1', date: '2026-08-12' }));
+    saveBooks(api.ws, b);
+    await run([['classify', classifyStep()]]);
+    const waited = loadBooks(api.ws);
+    assert.deepEqual([waited.journalEntries.filter((e) => e.transactionRef === 'W-1'), !!waited.transactions.find((t) => t.ref === 'W-1')!.waitsForReceipt], [[], true], 'no receipt yet: it waits');
+    const rs = [receipt(30, vat81(30)), receipt(45.5, vat81(45.5)), receipt(11.9, { hasSwissVat: false })];
+    waited.receipts.push(...rs);
+    saveBooks(api.ws, waited);
+    await run([['match', matchStep], ['classify', classifyStep()]]);
+    const after = loadBooks(api.ws);
+    assert.deepEqual(after.mappings.filter((m) => m.transactionRef === 'W-1').map((m) => m.receiptId).sort(), rs.map((r) => r.id).sort(), 'the match step linked the set');
+    assert.deepEqual(rows(after.journalEntries.filter((e) => e.transactionRef === 'W-1')).sort((a, b) => Number(a[1]) - Number(b[1])), [['6570', 11.9, 'I0'], ['6570', 30, 'I81'], ['6570', 45.5, 'I81']]);
+    assert.equal(after.transactions.find((t) => t.ref === 'W-1')!.waitsForReceipt, undefined, 'it waits no more');
+  } finally { await api.stop(); }
 });
