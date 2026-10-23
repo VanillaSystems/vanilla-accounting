@@ -178,6 +178,7 @@ export default {
     'error.closed.editEntry': 'Registrate la correzione come nuova registrazione nel periodo aperto.',
     'error.closed.deleteEntry': 'Le registrazioni di un periodo chiuso non possono essere eliminate.',
     'error.closed.newEntry': 'Una nuova registrazione deve essere datata nel periodo aperto.',
+    'error.booksChanged': 'I libri sono appena stati modificati da un altro programma, non è stato salvato nulla. Riprova.',
     'error.manualOnly': 'Si possono eliminare solo le transazioni manuali. Le transazioni bancarie provengono dall’estratto conto (camt053/Wise).',
     'error.hasEntries': 'Il pagamento è registrato: eliminare prima la sua registrazione in Registrazioni.',
     'error.bookedSince': { one: 'Il pagamento {payment} è stato registrato di nuovo dopo l’eliminazione: 1 registrazione {by}. Resta. Per ripristinare la registrazione eliminata, elimina prima quella di oggi in Registrazioni, poi «Annulla» qui.', other: 'Il pagamento {payment} è stato registrato di nuovo dopo l’eliminazione: {n} registrazioni {by}. Restano. Per ripristinare la registrazione eliminata, elimina prima quelle di oggi in Registrazioni, poi «Annulla» qui.' },

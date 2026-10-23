@@ -4,10 +4,11 @@
  */
 import type { Response } from 'express';
 import type { Index, Receipt } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, update, PERSON, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, StaleBooksError, update, PERSON, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
+import { byKind, danglingRefsOf } from '../accounting/integrity.js';
 
 /**
  * Live: a route that changes the manifest reopens it, the desktop app opens other books, and every
@@ -22,7 +23,27 @@ export function reopenWorkspace(root: string = WS.paths.root): void {
 
 export const receiptPath = (books: Books, receipt: Receipt): string => receiptFile(WS, books, receipt);
 
-export const readBooks = (): Books => loadBooks(WS);
+/** The books whose references were checked in this process: each is checked at its first load only. */
+const checked = new Set<string>();
+
+/** One line in the log when the books hold references that name no record (#126); npm run doctor lists them. Never stops a load. */
+function warnDangling(books: Books): void {
+  const root = WS.paths.root;
+  if (checked.has(root)) return;
+  checked.add(root);
+  try {
+    const groups = byKind(danglingRefsOf(WS, books));
+    if (groups.length) console.warn(`Books ${root}: ${groups.map((g) => `${g.found.length} ${g.label}`).join(', ')}. npm run doctor lists them.`);
+  } catch (e) {
+    console.warn(`Books ${root}: the reference check did not run (${(e as Error).message.split('\n')[0]}).`);
+  }
+}
+
+export const readBooks = (): Books => {
+  const books = loadBooks(WS);
+  warnDangling(books);
+  return books;
+};
 
 /** An async `fn` would hold loaded books across an await and save over every edit made meanwhile. */
 type Sync<T> = T extends PromiseLike<unknown> ? never : T;
@@ -31,8 +52,25 @@ type Sync<T> = T extends PromiseLike<unknown> ? never : T;
  * One change to the books by the person using the app: load, run `fn` through the write door, save, and return what `fn`
  * returns. Nothing is saved when `fn` throws. `fn` is synchronous: a route that asks a model
  * awaits it first and applies the answer here, to books loaded after the answer came.
+ * When another process saved the books between the load and the save (StaleBooksError, #123),
+ * `fn` runs once more on books loaded afresh, so it changes nothing but its `books`: a route whose
+ * `fn` also writes elsewhere (a file, the invoice book) uses updateBooksWithEffects.
  */
 export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
+  for (let again = false; ; again = true) {
+    const books = readBooks();
+    const result = update(books, PERSON, fn);
+    try {
+      saveBooks(WS, books);
+      return result;
+    } catch (e) {
+      if (again || !(e instanceof StaleBooksError)) throw e;
+    }
+  }
+}
+
+/** updateBooks for an `fn` that writes outside the books too: never run twice, a stale save is refused (409 booksChanged). */
+export function updateBooksWithEffects<T>(fn: (books: Books) => Sync<T>): T {
   const books = readBooks();
   const result = update(books, PERSON, fn);
   saveBooks(WS, books);
@@ -90,6 +128,7 @@ export function receiptDates(books: Pick<Index, 'transactions' | 'journalEntries
 
 /** The code of a refusal (src/types/api-error.ts) the UI says in the person's language; none for one without. */
 export function refusalOf(err: unknown): ApiRefusal | undefined {
+  if (err instanceof StaleBooksError) return { code: 'booksChanged' };
   if (err instanceof ClosedPeriodError) return { code: 'periodClosed', params: { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}), ...(err.approved ? { approved: err.approved } : {}), ...(err.filed ? { filed: err.filed } : {}) } };
   return err instanceof RequestError ? err.refusal : undefined;
 }

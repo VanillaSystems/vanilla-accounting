@@ -5,12 +5,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DuplicateFileError, findFile, yearPaths, yearsOf, type Workspace } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { booksOnDisk, tempWorkspace, writeIndex } from './support/workspace.js';
-import { BeforeBooksError, ClosedPeriodError, loadBooks, moduleActor, OldLayoutError, OwnershipError, PERSON, periodLock, saveBooks, update, type Actor, type Books } from '../src/books/store.js';
+import { BeforeBooksError, ClosedPeriodError, loadBooks, moduleActor, OldLayoutError, OwnershipError, PERSON, periodLock, saveBooks, StaleBooksError, update, type Actor, type Books } from '../src/books/store.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
@@ -31,7 +32,8 @@ test('saveBooks writes ledger.json and each year\'s books/*.jsonl, one record pe
   assert.deepEqual(JSON.parse(before['ledger.json']), { schema: BOOKS_SCHEMA, config: JSON.parse(readFileSync(FIXTURE, 'utf8')).config });
   saveBooks(dir, loadBooks(dir));
   assert.deepEqual(booksOnDisk(dir), before, 'load + save is a fixed point');
-  assert.deepEqual(readdirSync(dir.paths.root).sort(), ['belege.workspace.yaml', 'ledger.json', 'transactional-data']);
+  assert.deepEqual(readdirSync(dir.paths.root).sort(), ['belege.workspace.yaml', 'data', 'ledger.json', 'transactional-data']);
+  assert.deepEqual(readdirSync(dir.paths.data), [], 'the write lock is gone');
 });
 
 test('loadBooks reads every year, and saveBooks writes a record into the year of its date', () => {
@@ -215,4 +217,121 @@ test('update passes open-period changes and a reorder, and returns fn’s result
   });
   assert.equal(result, 42);
   assert.equal(books.journalEntries.length, 3);
+});
+
+const entry = (id: string, amount = 1) => ({ id, transactionRef: 'O1', date: '2026-07-01', accountDebit: '6500', accountCredit: '1021', amount });
+
+test('a save over books another process saved since the load is refused, and the other\'s edit survives (#123)', () => {
+  const dir = root();
+  const first = loadBooks(dir);
+  const second = loadBooks(dir);
+  first.journalEntries.push(entry('first'));
+  saveBooks(dir, first);
+  const saved = booksOnDisk(dir);
+  second.journalEntries.push(entry('second'));
+  assert.throws(() => saveBooks(dir, second), StaleBooksError);
+  assert.deepEqual(booksOnDisk(dir), saved, 'nothing written');
+  assert.deepEqual(loadBooks(dir).journalEntries.map((e) => e.id).sort(), ['first', 'jc', 'jo']);
+});
+
+test('a stale save writes none of its files, though only one of them changed underneath it', () => {
+  const dir = root();
+  const other = loadBooks(dir);
+  const books = loadBooks(dir);
+  other.receipts[0].remarks = 'other';
+  saveBooks(dir, other);
+  const saved = booksOnDisk(dir);
+  books.journalEntries.push(entry('mine'));
+  books.receipts[1].remarks = 'mine';
+  assert.throws(() => saveBooks(dir, books), StaleBooksError);
+  assert.deepEqual(booksOnDisk(dir), saved);
+});
+
+test('a save is refused when ledger.json changed since the load, though the save leaves it as it is', () => {
+  const dir = root();
+  const books = loadBooks(dir);
+  const ledger = JSON.parse(readFileSync(dir.paths.ledger, 'utf8'));
+  writeFileSync(dir.paths.ledger, JSON.stringify({ ...ledger, config: { ...ledger.config, closedThrough: '2026-09-30' } }, null, 2) + '\n');
+  const saved = booksOnDisk(dir);
+  books.journalEntries.push(entry('mine'));
+  assert.throws(() => saveBooks(dir, books), StaleBooksError);
+  assert.deepEqual(booksOnDisk(dir), saved);
+});
+
+test('a save is refused when a file it would create was created by another process meanwhile', () => {
+  const dir = root(JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [] }));
+  const other = loadBooks(dir);
+  const books = loadBooks(dir);
+  other.journalEntries.push({ ...entry('other'), date: '2027-01-03' });
+  saveBooks(dir, other);
+  books.journalEntries.push({ ...entry('mine'), date: '2027-01-04' });
+  assert.throws(() => saveBooks(dir, books), StaleBooksError);
+  assert.deepEqual(loadBooks(dir).journalEntries.map((e) => e.id), ['other']);
+});
+
+test('one process saves the same books again and again, and edits to other files of another process survive', () => {
+  const dir = root();
+  const books = loadBooks(dir);
+  for (const id of ['a', 'b', 'c']) {
+    books.journalEntries.push(entry(id));
+    saveBooks(dir, books);
+  }
+  const other = loadBooks(dir);
+  other.receipts[0].remarks = 'other';
+  saveBooks(dir, other);
+  books.journalEntries.push(entry('d'));
+  saveBooks(dir, books);
+  const now = loadBooks(dir);
+  assert.deepEqual(now.journalEntries.map((e) => e.id).sort(), ['a', 'b', 'c', 'd', 'jc', 'jo']);
+  assert.equal(now.receipts[0].remarks, 'other');
+});
+
+test('a save waits while another live process holds the write lock, and takes over a lock whose process is gone', () => {
+  const dir = root();
+  const lock = join(dir.paths.data, 'books.lock');
+  mkdirSync(dir.paths.data, { recursive: true });
+  const holder = spawn(process.execPath, ['-e', `setTimeout(() => require('fs').rmSync(${JSON.stringify(lock)}, { force: true }), 300)`]);
+  writeFileSync(lock, String(holder.pid));
+  const books = loadBooks(dir);
+  books.journalEntries.push(entry('waited'));
+  const started = Date.now();
+  saveBooks(dir, books);
+  assert.ok(Date.now() - started >= 200, 'waited for the holder');
+  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'waited'));
+  const gone = spawnSync(process.execPath, ['-e', '0']).pid!;
+  writeFileSync(lock, String(gone));
+  books.journalEntries.push(entry('took-over'));
+  saveBooks(dir, books);
+  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'took-over'));
+  writeFileSync(lock, 'no pid');
+  books.journalEntries.push(entry('unreadable-lock'));
+  saveBooks(dir, books);
+  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'unreadable-lock'));
+  assert.deepEqual(readdirSync(dir.paths.data), []);
+});
+
+test('the server runs a change once more on books loaded afresh when another process saved meanwhile; a change with effects elsewhere runs once', async () => {
+  const { reopenWorkspace, updateBooks, updateBooksWithEffects } = await import('../src/server/books.js');
+  const dir = root();
+  reopenWorkspace(dir.paths.root);
+  const otherSaves = (id: string) => { const b = loadBooks(dir); b.journalEntries.push(entry(id)); saveBooks(dir, b); };
+  let runs = 0;
+  const count = updateBooks((books) => {
+    if (runs++ === 0) otherSaves('other');
+    books.journalEntries.push(entry('mine'));
+    return books.journalEntries.length;
+  });
+  assert.deepEqual([runs, count], [2, 4]);
+  assert.deepEqual(loadBooks(dir).journalEntries.map((e) => e.id).sort(), ['jc', 'jo', 'mine', 'other']);
+  runs = 0;
+  assert.throws(() => updateBooks(() => { runs++; throw new StaleBooksError(['elsewhere']); }), StaleBooksError);
+  assert.equal(runs, 1, 'only a stale save is retried, not fn\'s own error');
+  runs = 0;
+  assert.throws(() => updateBooksWithEffects((books) => {
+    runs++;
+    otherSaves('other2');
+    books.journalEntries.push(entry('mine2'));
+  }), StaleBooksError);
+  assert.equal(runs, 1);
+  assert.deepEqual(loadBooks(dir).journalEntries.map((e) => e.id).sort(), ['jc', 'jo', 'mine', 'other', 'other2']);
 });

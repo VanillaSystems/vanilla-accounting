@@ -178,6 +178,7 @@ export default {
     'error.closed.editEntry': 'Book the correction as a new entry in the open period.',
     'error.closed.deleteEntry': 'Entries in a closed period cannot be deleted.',
     'error.closed.newEntry': 'A new entry must be dated in the open period.',
+    'error.booksChanged': 'Another program has just changed the books, nothing was saved. Please try again.',
     'error.manualOnly': 'Only manual transactions can be deleted. Bank transactions come from the bank statement (camt053/Wise).',
     'error.hasEntries': 'The payment is booked: delete its entry in Journal first.',
     'error.bookedSince': { one: 'Payment {payment} has been booked again since the deletion: 1 entry {by}. It stands. To bring the deleted entry back, delete today’s entry in Journal first, then “Undo” here.', other: 'Payment {payment} has been booked again since the deletion: {n} entries {by}. They stand. To bring the deleted entry back, delete today’s entries in Journal first, then “Undo” here.' },

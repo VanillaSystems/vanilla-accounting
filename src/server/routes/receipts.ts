@@ -12,7 +12,7 @@ import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { findFile } from '../../workspace/workspace.js';
-import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, withBooks, RequestError, patchBody, stringField } from '../books.js';
+import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, updateBooksWithEffects, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
 
@@ -212,7 +212,7 @@ router.patch('/api/receipts/:id', async (req, res) => {
   let again: string[] = [];
   let receipt: Receipt;
   try {
-    receipt = updateBooks((books) => {
+    receipt = updateBooksWithEffects((books) => {
       const idx = books.receipts.findIndex((r) => r.id === id);
       if (idx === -1) throw new RequestError(404, 'Receipt not found');
       assertOpen(books, receiptDates(books, id), 'editReceipt');

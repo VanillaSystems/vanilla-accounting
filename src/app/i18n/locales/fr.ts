@@ -178,6 +178,7 @@ export default {
     'error.closed.editEntry': 'Saisissez la correction comme nouvelle écriture dans la période ouverte.',
     'error.closed.deleteEntry': 'Les écritures d’une période clôturée ne peuvent pas être supprimées.',
     'error.closed.newEntry': 'Une nouvelle écriture doit être datée dans la période ouverte.',
+    'error.booksChanged': 'Les livres viennent d’être modifiés par un autre programme, rien n’a été enregistré. Veuillez réessayer.',
     'error.manualOnly': 'Seules les transactions manuelles peuvent être supprimées. Les transactions bancaires proviennent de l’extrait de compte (camt053/Wise).',
     'error.hasEntries': 'Le paiement est comptabilisé : supprimer d’abord son écriture dans Écritures.',
     'error.bookedSince': { one: 'Le paiement {payment} a été comptabilisé à nouveau depuis la suppression : 1 écriture {by}. Elle reste. Pour rétablir l’écriture supprimée, supprime d’abord celle d’aujourd’hui dans Écritures, puis « Annuler » ici.', other: 'Le paiement {payment} a été comptabilisé à nouveau depuis la suppression : {n} écritures {by}. Elles restent. Pour rétablir l’écriture supprimée, supprime d’abord celles d’aujourd’hui dans Écritures, puis « Annuler » ici.' },

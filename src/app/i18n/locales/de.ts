@@ -175,6 +175,7 @@ export const messages = {
   'error.closed.editEntry': 'Korrekturen als neue Buchung in der offenen Periode erfassen.',
   'error.closed.deleteEntry': 'Buchungen in geschlossenen Perioden können nicht gelöscht werden.',
   'error.closed.newEntry': 'Neue Buchungen müssen in der offenen Periode liegen.',
+  'error.booksChanged': 'Die Bücher wurden gerade von einem anderen Programm geändert, nichts gespeichert. Bitte noch einmal versuchen.',
   'error.manualOnly': 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).',
   'error.hasEntries': 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.',
   'error.bookedSince': { one: 'Die Zahlung {payment} ist seit dem Löschen wieder gebucht: 1 Buchung {by}. Sie bleibt. Um die gelöschte Buchung zurückzuholen, zuerst die heutige unter Buchungen löschen, dann hier «Rückgängig».', other: 'Die Zahlung {payment} ist seit dem Löschen wieder gebucht: {n} Buchungen {by}. Sie bleiben. Um die gelöschte Buchung zurückzuholen, zuerst die heutigen unter Buchungen löschen, dann hier «Rückgängig».' },
