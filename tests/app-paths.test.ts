@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isAppPath } from '../src/server/app-paths.js';
+import { devProxy, isAppPath } from '../src/server/app-paths.js';
+import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
 test('app paths and data paths', () => {
@@ -16,6 +17,14 @@ test('app paths and data paths', () => {
   }
   for (const p of ['/api', '/api/status', '/scan', '/scan/manifest.json', '/books.json', '/receipts/20260930-coop.pdf', '/bank-statements/zkb/sept.xml', '/invoices/2026-001.pdf', '/invoices/sent/sd_x.pdf', '/assets/index-abc.js', '/favicon.svg']) {
     assert.ok(!isAppPath(p), p);
+  }
+});
+
+test('the invoice PDF links the UI builds are files, which the dev server hands to the API (#61)', () => {
+  const proxied = Object.keys(devProxy('http://api')).map((p) => new RegExp(p));
+  for (const url of [issuedPdfUrl('2026-001'), sentPdfUrl('sd_R-O8clcjxMXw')]) {
+    assert.ok(!isAppPath(url), url);
+    assert.ok(proxied.some((r) => r.test(url)), `${url} reaches the API through vite`);
   }
 });
 
