@@ -6,22 +6,26 @@
 import { test } from 'node:test';
 import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initRepository } from '../src/workspace/git.js';
-import { loadBooks, sealsOf } from '../src/books/store.js';
+import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
+import { writeSeal } from '../src/books/seal.js';
+import { yearEnd as yearEndData } from '../src/engines/index.js';
 import {
   applyRevaluation, closingLedger, dividendSplit, emptyState, foreignAccounts, openingOf, revaluationEntries, revaluations,
   vatPostings, yearClose, yearEndAccounts, yearEndTemplates, RECEIVABLES_ID, type Books, type YearClose, type YearCloseInput,
 } from '../src/accounting/year-close.js';
-import { bookEntry, bookRevaluation, closeYear, markTemplate, openYear, readState, rebookTemplate, reopenTemplate, yearCloseOf, YearCloseRefused } from '../src/books/year-close.js';
+import {
+  bookEntry, bookRevaluation, closeYear, markTemplate, openYear, readState, rebookTemplate, removeYearEndBalance, reopenTemplate, setCashCount, setYearEndBalance, yearCloseOf, YearCloseRefused,
+} from '../src/books/year-close.js';
 import { updateInvoices } from '../src/invoices/store.js';
 import type { Issued } from '../src/invoices/model.js';
 import { bookBalanceNative } from '../src/accounting/reconcile-bank.js';
 import type { LedgerBankAccount, Workspace } from '../src/workspace/workspace.js';
 import { yearPaths } from '../src/workspace/workspace.js';
-import { BANKS, CHART, NO_YEAR_END_RATE, RATES, books, e, readyToClose, workspace } from './support/year-close.js';
+import { BANKS, CHART, NO_YEAR_END_RATE, Q4_FILED, RATES, books, e, readyToClose, workspace } from './support/year-close.js';
 
 const ACCOUNTS = yearEndAccounts(CHART);
 
@@ -437,4 +441,101 @@ test('r10c-1: «Neu buchen» replaces the Debitoren booking with today\'s figure
   assert.deepEqual([gone.removed.map((x) => x.id), gone.entry], [['yc-2026-receivables'], undefined]);
   assert.ok(!loadBooks(ws).journalEntries.some((x) => x.id === 'yc-2026-receivables'));
   assert.equal(readState(ws, '2026').templates.receivables, undefined, 'nothing to book: the step is open again');
+});
+
+/**
+ * #119: a firm that never imports a statement, with a cash box and an employee's account: the year
+ * closes on the bank's year-end confirmations and the cash count, as the law asks (OR Art. 958c),
+ * not a month's statement more.
+ */
+function withoutStatements(): Workspace {
+  const base = workspace();
+  const ws: Workspace = { ...base, bankAccounts: [
+    ...base.bankAccounts,
+    { bank: 'Kasse', currency: 'CHF', account: '1000', label: 'Kasse', role: 'cash' },
+    { bank: 'Lohn', currency: 'CHF', account: '2271', label: 'Mia Muster', role: 'employee' },
+  ] };
+  writeFileSync(ws.paths.accounts, JSON.stringify([...CHART, '1000', '2271', '2451'].map((number) => ({ number, name: number }))));
+  const y = yearPaths(ws.paths, '2026');
+  mkdirSync(y.filings, { recursive: true });
+  writeFileSync(join(y.filings, 'mwst-ech0217-2026-Q4.xml'), Q4_FILED);
+  const b = loadBooks(ws);
+  b.bankStatements = [];
+  b.statementBalances = [];
+  b.journalEntries.push(e('cash', '2026-11-02', '1000', '1020', 200, { description: 'Bargeldbezug' }), e('advance', '2026-11-03', '2271', '1020', 50, { description: 'Vorschuss Mia' }));
+  saveBooks(ws, b);
+  for (const q of ['2026-Q1', '2026-Q2', '2026-Q3'] as const) writeSeal(ws, loadBooks(ws), q, '2026-10-15');
+  bookRevaluation(ws, '2026', RATES);
+  for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
+  return ws;
+}
+
+const LETTER = { name: 'Saldobestaetigung 2026.pdf', body: Buffer.from('%PDF-1.4 year-end confirmation') };
+const codesOf = (c: YearClose) => c.blockers.map((p) => ('account' in p ? `${p.code} ${p.account}` : p.code));
+
+test('#119: without a single imported statement the year closes on the banks\' year-end confirmations and the cash count; the owner\'s and the employee\'s accounts are never asked for', async () => {
+  const ws = withoutStatements();
+  const before = yearCloseOf(ws, '2026', RATES);
+  assert.deepEqual(codesOf(before), ['noYearEndBalance 1020', 'noYearEndBalance 1021', 'noCashCount 1000'], 'no statementGap: no account has an imported statement');
+  assert.deepEqual(before.balances.map((b) => [b.account, b.proof, b.book]), [['1020', 'bank', 10650], ['1021', 'bank', 1500], ['1000', 'count', 200]], 'bank, card and cash only: not 2451 (owner) nor 2271 (employee)');
+  await assert.rejects(() => closeYear(ws, '2026', RATES), YearCloseRefused);
+
+  const balance = setYearEndBalance(ws, '2026', '1020', 10650, LETTER);
+  assert.deepEqual(balance, { account: '1020', bank: 'Raiffeisen', currency: 'CHF', date: '2026-12-31', amount: 10650, source: 'pdf', sourceFile: 'year-end/1020-2026-12-31.pdf' }, 'a StatementClosingBalance read off a PDF, as a statement\'s');
+  assert.equal(readFileSync(join(yearPaths(ws.paths, '2026').filings, balance.sourceFile), 'utf8'), '%PDF-1.4 year-end confirmation', 'the confirmation is kept beside the year\'s filings');
+  setCashCount(ws, '2026', '1000', 200);
+  assert.deepEqual(codesOf(yearCloseOf(ws, '2026', RATES)), ['noYearEndBalance 1021'], 'a bank account without its balance still blocks');
+  await assert.rejects(() => closeYear(ws, '2026', RATES), YearCloseRefused);
+
+  setYearEndBalance(ws, '2026', '1021', 1500, { name: 'wise.png', body: Buffer.from('png') });
+  const ready = yearCloseOf(ws, '2026', RATES);
+  assert.deepEqual(ready.blockers, []);
+  assert.equal(ready.balances.find((b) => b.account === '1021')?.document, true);
+  assert.equal((await closeYear(ws, '2026', RATES, '2027-02-01')).closedThrough, '2026-12-31');
+  assert.throws(() => setCashCount(ws, '2026', '1000', 199), YearCloseRefused, 'a closed year keeps its count');
+  assert.throws(() => setYearEndBalance(ws, '2026', '1020', 1, LETTER), YearCloseRefused, 'and its balances');
+});
+
+test('#119: a cash count off the books is shown with both figures and blocks the close, never booked by the app; a bank\'s confirmation off the books blocks as a statement\'s does', () => {
+  const ws = withoutStatements();
+  setYearEndBalance(ws, '2026', '1020', 10650, LETTER);
+  setYearEndBalance(ws, '2026', '1021', 1490, LETTER);
+  setCashCount(ws, '2026', '1000', 180.5);
+  const entries = loadBooks(ws).journalEntries.length;
+  const close = yearCloseOf(ws, '2026', RATES);
+  assert.deepEqual(close.blockers, [
+    { code: 'balanceDiffers', account: '1021', label: 'Wise EUR', currency: 'EUR', bank: 1490, book: 1500, date: '2026-12-31' },
+    { code: 'cashDiffers', account: '1000', label: 'Kasse', currency: 'CHF', counted: 180.5, book: 200 },
+  ]);
+  assert.equal(loadBooks(ws).journalEntries.length, entries, 'no difference booked');
+  setCashCount(ws, '2026', '1000', null);
+  assert.equal(readState(ws, '2026').cashCounts, undefined, 'taken back');
+});
+
+test('#119: a hand balance is refused where a statement states the day, on an account that is no bank or card, and without a PDF or image; taking it back removes its file', () => {
+  const ws = readyToClose();
+  assert.throws(() => setYearEndBalance(ws, '2026', '1020', 10900, LETTER), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndBalanceStated', 'the statement is the proof');
+  const bare = withoutStatements();
+  assert.throws(() => setYearEndBalance(bare, '2026', '2451', 1, LETTER), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndAccountUnknown', 'the owner\'s account needs no confirmation');
+  assert.throws(() => setCashCount(bare, '2026', '1020', 1), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndAccountUnknown', 'a bank account is not counted');
+  assert.throws(() => setYearEndBalance(bare, '2026', '1020', 1, { name: 'saldo.docx', body: Buffer.from('x') }), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndDocumentType');
+  const { sourceFile } = setYearEndBalance(bare, '2026', '1020', 10650, LETTER);
+  removeYearEndBalance(bare, '2026', '1020');
+  assert.equal(existsSync(join(yearPaths(bare.paths, '2026').filings, sourceFile)), false);
+  assert.ok(codesOf(yearCloseOf(bare, '2026', RATES)).includes('noYearEndBalance 1020'));
+});
+
+test('#119: «every month has its statement» only on an account with an imported statement; a country module can ask it of a role (Switzerland asks it of none)', () => {
+  const b = books();
+  b.bankStatements = [{ bank: 'Raiffeisen', filename: 'r.xml', fromDate: '2026-01-01', toDate: '2026-11-30', currency: 'CHF' }];
+  const gaps = (c: YearClose) => c.checks.find((x) => x.id === 'statementsComplete')!.problems.map((p) => ('account' in p ? p.account : ''));
+  assert.deepEqual(gaps(yearClose(input(b))), ['1020'], '1021 never had a statement: no month of it is missing');
+  assert.deepEqual(yearEndData().moneyAccounts, { monthlyStatements: [] });
+  const swiss = yearEndData().moneyAccounts;
+  yearEndData().moneyAccounts = { monthlyStatements: ['bank'] };
+  try {
+    assert.deepEqual(gaps(yearClose(input(b))), ['1020', '1021'], 'a stricter country asks every bank account for every month');
+  } finally {
+    yearEndData().moneyAccounts = swiss;
+  }
 });

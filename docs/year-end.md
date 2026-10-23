@@ -9,7 +9,7 @@ The examples close 2026 and open 2027. Put in your own year.
 | # | Step | You run | When |
 |---|---|---|---|
 | 1 | [File the fourth quarter, do not close it](#1-file-the-fourth-quarter-do-not-close-it) | `npm run vat-xml -- 2026-Q4` | by end of February |
-| 2 | [Check what is still open](#2-check-what-is-still-open) | `npm run year:close -- 2026 --dry-run` | after the December statements |
+| 2 | [Check what is still open](#2-check-what-is-still-open) | `npm run year:close -- 2026 --dry-run` | once the balances of 31.12. are in |
 | 3 | [Book the year-end entries](#3-book-the-year-end-entries) | Abschluss (`/close`) | with your Treuhänder |
 | 4 | [Close the year](#4-close-the-year) | `npm run year:close -- 2026` | when nothing is open |
 | 5 | [Open the new year](#5-open-the-new-year) | `npm run year:open -- 2027` | right after |
@@ -48,10 +48,18 @@ same list. Every item is computed from the books:
 
 - **The fourth quarter is filed.** Its XML is in `transactional-data/2026/filings/`.
 - **Q1 to Q3 are closed and sealed.** Each closed with `npm run seal -- <quarter> --close`.
-- **Every bank account matches its statement on 31.12.** The December statement must be
-  imported: its closing balance must equal the balance of the books, in the account's own
-  currency.
-- **The statements cover the whole year.** No month is missing.
+- **Bank, cards and cash are confirmed on 31.12.** Each bank and card account needs its
+  balance on 31.12. from a document, and that balance must equal the balance of the books, in
+  the account's own currency. The document is an imported statement that covers 31.12., or the
+  bank's year-end confirmation (Saldobestätigung). Without a statement, enter the balance in
+  Abschluss › Prüfungen › Saldi per 31.12. and attach the confirmation, or run
+  `npm run year:close -- 2026 --balance 1020=<balance> --document Saldobestaetigung.pdf`.
+  Each cash account needs the cash you counted on 31.12. (`--cash 1000=<counted>`). A difference to
+  the books is shown and blocks the close: book it dated 31.12. (Kassendifferenz), or count
+  again. The app never books it. The owner's and employees' accounts need no confirmation.
+- **The statements cover the whole year.** Only on an account with at least one imported
+  statement: no month of it is missing. An account you never imported a statement for is not
+  asked for one.
 - **Every transaction of the year is booked.**
 - **`npm run doctor` finds nothing to fix** in the workspace.
 - **The exchange difference (Kursdifferenz).** A EUR or USD account is booked at the daily
