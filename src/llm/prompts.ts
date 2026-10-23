@@ -1,4 +1,4 @@
-import type { BankTransaction, OrderFacts, PayoutFacts, PayoutShare, VatRateGroup, ReceiptLine } from "../types/index.js";
+import type { BankTransaction, OrderFacts, PayoutFacts, PayoutShare, VatRateGroup, ReceiptLine, Supply } from "../types/index.js";
 import { vat } from "../engines/index.js";
 import type { VatSetup } from "../workspace/vat-setup.js";
 import type { VatLineFacts } from "../accounting/vat-codes.js";
@@ -157,9 +157,6 @@ export function buildVisionPrompt(absPdfPath: string): string {
 
 /** A line's role in a payout report (rule 9a): the code books it on the rule's accounts whatever sides and sign the model wrote (src/booking/classify.ts payoutLines). */
 export type PayoutKind = 'sale' | 'refund' | 'fee';
-
-/** What a purchase line buys, as the model reads it (rule 7h): code decides Bezugsteuer from it (src/accounting/acquisition-tax.ts). `exempt`: a service exempt from VAT, such as payment processing, banking or insurance. */
-export type Supply = 'goods' | 'service' | 'exempt';
 
 export interface ClassifyEntry {
   accountDebit: string;
