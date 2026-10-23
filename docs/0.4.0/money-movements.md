@@ -19,7 +19,7 @@ chosen; B and C stay as the alternatives considered.
 3. **No setup.** Accounts appear when first used: the cash box asks its opening balance once, an
    employee is named, a card asks which card.
 4. **Settling by itself.** A bank payment to the owner, an employee or the card company settles the
-   open balance («Ausgleich: 3 Auslagen von Ken, CHF 84.20»). No second booking.
+   open balance («Ausgleich: 3 Auslagen von «Name», CHF «Betrag»»). No second booking.
 5. **One overview «Wer schuldet wem?»**, shown as facts, no reminders.
 6. **The AI always knows the way**, never answers «geht nicht»; everything works by hand too.
 7. **Input-tax date** per the agent's reading: for an outlay the receipt day, for a card the day
