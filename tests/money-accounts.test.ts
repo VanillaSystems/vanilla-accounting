@@ -55,10 +55,31 @@ test('manifest 2 refuses an account without role, `manual` as anything but the o
   const v2 = patchManifestText(OLD_MANIFEST, {}, 'm').text;
   assert.throws(() => parseManifest(v2.replace(', role: bank', ''), 'm'), /bankAccounts\[0\]\.role must be one of/);
   assert.throws(() => parseManifest(v2.replace('role: owner', 'role: cash'), 'm'), /the label manual is the owner's account/);
-  assert.throws(() => parseManifest(v2.replace('role: card', 'role: owner'), 'm'), /one account at most has the role owner/);
+  assert.throws(() => parseManifest(v2.replace('role: card', 'role: owner'), 'm'), /the owner's accounts \(role owner\) book on one ledger account, not on 2030 and 2451/);
   const own = testIban('00762011623852957');
   const iban = parseManifest(v2.replace('label: Kontokorrent Anna, role: owner', `label: Kontokorrent Anna, role: owner, iban: ${own}`), 'm');
   assert.equal(iban.bankAccounts[2].iban, own, 'the owner\'s account carries the owner\'s own IBAN');
+});
+
+const OWNER_CURRENCIES = ['CHF', 'EUR', 'USD'];
+/** The owner's account run in three currencies, as a schema 1 manifest of real books lists it. */
+const THREE_CURRENCIES = OLD_MANIFEST.replace(/  - \{ bank: manual.*\n/, OWNER_CURRENCIES.map((c) => `  - { bank: manual, currency: ${c}, account: "2451", label: Kontokorrent Anna }\n`).join(''));
+
+test('the owner\'s account in several currencies (manual CHF, EUR, USD on one ledger account) migrates to three owner rows and opens', () => {
+  const m = parseManifest(THREE_CURRENCIES, 'belege.workspace.yaml');
+  assert.deepEqual(m.bankAccounts.filter((a) => a.role === 'owner').map((a) => `${a.currency} ${a.account}`), ['CHF 2451', 'EUR 2451', 'USD 2451']);
+  assert.equal(accountOf({ bank: 'manual', currency: 'USD' }, m.bankAccounts)?.currency, 'USD', 'an outlay in USD moves on the owner\'s USD row');
+  assert.equal(accountOf({ bank: 'manual', currency: 'GBP' }, m.bankAccounts)?.currency, 'CHF', 'a currency the owner has no row for falls back to the first');
+
+  const repo = mkdtempSync(join(tmpdir(), 'owner-currencies-'));
+  cpSync(DEMO_ROOTS[0], join(repo, APP_FOLDER), { recursive: true, filter: (src) => !relative(DEMO_ROOTS[0], src).startsWith('data') });
+  const manifest = join(repo, APP_FOLDER, 'belege.workspace.yaml');
+  const demo = readFileSync(manifest, 'utf8');
+  writeFileSync(manifest, demo.replace(/^schema: 2\n/m, '').replace(/, role: \w+ \}/g, ' }').replace(/  - \{ bank: manual.*\n/, OWNER_CURRENCIES.map((c) => `  - { bank: manual, currency: ${c}, account: "2451", label: Kontokorrent Anna Muster }\n`).join('')));
+  const ws = workspaceAt(repo);
+  assert.deepEqual(ws.bankAccounts.filter((a) => a.role === 'owner').map((a) => a.currency), OWNER_CURRENCIES);
+  assert.ok(loadBooks(ws).journalEntries.length > 0, 'the books of a workspace whose owner pays in three currencies open');
+  rmSync(repo, { recursive: true, force: true });
 });
 
 const ACCOUNTS: LedgerBankAccount[] = [
