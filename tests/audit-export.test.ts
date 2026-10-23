@@ -16,6 +16,8 @@ import type { Index } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { serveStatic, type StaticServer } from './support/static-server.js';
+import { findBrowser } from '../src/invoices/pdf.js';
+import en from '../src/app/i18n/locales/en.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'audit-export-'));
 const dir = join(tmp, 'host', 'snapshot');
@@ -103,4 +105,46 @@ test('a non-empty folder that holds no export is refused, not emptied', async ()
   writeFileSync(join(other, 'keep.txt'), 'mine');
   await assert.rejects(buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), other), /not empty and holds no audit export/);
   assert.equal(readFileSync(join(other, 'keep.txt'), 'utf8'), 'mine');
+});
+
+const AREAS = ['receipts', 'bank', 'journal', 'vat', 'vat/codes', 'reports/income', 'reports/balance', 'reports/custom', 'close', 'company/profile',
+  'company/rules', 'company/sources', 'company/mail', 'invoices', 'automation', 'automation/runs', 'changes', 'partners', 'knowledge', 'receipts'];
+const browserPath = findBrowser();
+
+test('a browser walk over every area asks the host for no /api/, logs no error and leaves the page idle', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 120_000 }, async () => {
+  const { default: puppeteer } = await import('puppeteer-core');
+  const browser = await puppeteer.launch({ executablePath: browserPath, headless: true, args: ['--no-first-run', '--lang=en-US'] });
+  const within = <T>(p: Promise<T>, what: string) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error(`${what}: the page did not answer in 5 s`)), 5000))]);
+  const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+  try {
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(`${m.text()} ${m.location().url ?? ''}`); });
+    page.on('pageerror', (e) => errors.push(String(e)));
+    const cdp = await page.createCDPSession();
+    await cdp.send('Performance.enable');
+    const sample = async () => {
+      const { metrics } = await within(cdp.send('Performance.getMetrics'), 'metrics');
+      const value = (name: string) => metrics.find((m) => m.name === name)?.value ?? 0;
+      return { busy: value('TaskDuration'), at: value('Timestamp') };
+    };
+    const first = server.requests.length;
+    await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
+    const busy: string[] = [];
+    for (const area of AREAS) {
+      await within(page.evaluate((hash) => { location.hash = hash; }, `#/${area}`), area);
+      await pause(700);
+      const a = await sample();
+      await pause(1000);
+      const b = await sample();
+      const share = (b.busy - a.busy) / (b.at - a.at);
+      if (share > 0.5) busy.push(`${area}: main thread ${Math.round(share * 100)} % busy`);
+      if (area === 'changes') assert.ok((await within(page.evaluate(() => document.body.innerText), area)).includes(en.messages['automation.apiOnly']), 'Änderungen says it needs the server');
+    }
+    assert.deepEqual(server.requests.slice(first).filter((p) => !p.startsWith('/snapshot/')), [], 'every request is a file of the export');
+    assert.deepEqual(busy, [], 'no area keeps the page busy');
+    assert.deepEqual(errors, []);
+  } finally {
+    await browser.close();
+  }
 });

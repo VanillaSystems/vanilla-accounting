@@ -17,7 +17,7 @@ import { search } from '../assistant/attach.js';
 import { dictationLang, recognizer, withHeard, type DictationError } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
-import { ApiError, errorText } from '../lib/api.js';
+import { ApiError, apiFetch, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
 import { markdownBlocks, type Span } from '../assistant/markdown.js';
@@ -337,7 +337,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
     if (!url) return;
     setState('busy');
     try {
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await dropFiles([new File([await res.blob()], a.name, { type: a.type })]);
       setState('handed');

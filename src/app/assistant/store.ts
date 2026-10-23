@@ -6,7 +6,7 @@
  * sidebar takes its width from the page (--aiw), and every fixed element centres on what is left.
  */
 import { useSyncExternalStore } from 'react';
-import { ApiError, api, errorText } from '../lib/api.js';
+import { ApiError, api, apiFetch, errorText } from '../lib/api.js';
 import { language, t } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
@@ -193,7 +193,7 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
   });
   stop = new AbortController();
   try {
-    const res = await fetch('/api/assistant', {
+    const res = await apiFetch('/api/assistant', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: stop.signal,
       body: JSON.stringify({ conversation, text, context, ...(state.purpose && !conversation ? { purpose: state.purpose } : {}), ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}), language: language() }),
     });
