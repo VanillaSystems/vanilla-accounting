@@ -411,9 +411,11 @@ export interface BankTransaction {
    * no provisional booking, it is booked once a receipt is linked. The run sets the mark and takes
    * it away again (src/booking/receipt-wait.ts); src/accounting/receipt-due.ts says from when the
    * person is asked about it. `unread`: its receipt came, and its VAT could not be read (issue #57):
-   * the person is asked at once.
+   * the person is asked at once. `decided`: a run with a model judged that it waits (the model's
+   * answer or a company rule books it onto no settlement account); a mark without it was set by a
+   * run without a model, and the next run with one judges the payment again (issue #110).
    */
-  waitsForReceipt?: { since: string; unread?: true };
+  waitsForReceipt?: { since: string; unread?: true; decided?: true };
 }
 
 /** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */

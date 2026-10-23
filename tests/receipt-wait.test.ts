@@ -177,13 +177,49 @@ test('«Buchen» of one payment holds a payment that waits for its receipt, with
   let asked = 0;
   const book = (ref: string) => ACTIONS['accounting.expenses.classification'].run!({ transaction: tx(books, ref), books }, {}, { ws, ask: async (p) => { asked++; return model(p); }, now: () => '2026-10-23T08:00:00Z' });
   assert.deepEqual(await book('TEL-10'), { outcome: 'held', output: { why: 'waitsForReceipt' } }, 'the model books an expense: it waits');
-  tx(books, 'TEL-10').waitsForReceipt = { since: '2026-10-23T08:00:00Z' };
+  tx(books, 'TEL-10').waitsForReceipt = { since: '2026-10-23T08:00:00Z', decided: true };
   asked = 0;
   assert.deepEqual(await book('TEL-10'), { outcome: 'held', output: { why: 'waitsForReceipt' } });
-  assert.equal(asked, 0, 'once marked, no model call');
+  assert.equal(asked, 0, 'once a run with a model judged it, no model call');
   books.transactions.push(OUT('OWNER-1', { description: 'Spesen Juli Anna Muster' }));
   const owner = await book('OWNER-1');
   assert.equal(owner.outcome, 'decided', 'the owner\'s outlays paid back are booked at once');
+});
+
+test('a mark set without a model is provisional: the next run with a model judges the payment, an owner\'s reimbursement is booked and a supplier payment still waits (issue #110)', async () => {
+  const ws = company();
+  const books = booksOf([OUT('OWNER-1', { description: 'Spesen Juli Anna Muster' }), OUT('TEL-10')]);
+  await run(ws, books, 'no model');
+  assert.deepEqual(books.transactions.filter((t) => t.waitsForReceipt).map((t) => t.ref), ['OWNER-1', 'TEL-10'], 'without a model both wait');
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'OWNER-1'), [['2451', '1021', 89, '']], 'the model\'s answer only settles: booked');
+  assert.equal(tx(books, 'OWNER-1').waitsForReceipt, undefined);
+  assert.deepEqual(entries(books, 'TEL-10'), [], 'the model would book an expense: it waits for the receipt');
+  assert.ok(tx(books, 'TEL-10').waitsForReceipt);
+  let asked = 0;
+  await run(ws, books, async (p) => { asked++; return model(p); });
+  await run(ws, books, 'no model');
+  await run(ws, books, async (p) => { asked++; return model(p); });
+  assert.equal(asked, 0, 'judged once by a model, a run without one leaves it judged');
+});
+
+test('a provisional mark the model gave no answer for keeps waiting, and the next run asks again (issue #110)', async () => {
+  const ws = company();
+  const books = booksOf([OUT('OWNER-1', { description: 'Spesen Juli Anna Muster' })]);
+  await run(ws, books, 'no model');
+  await run(ws, books, async () => 'not json');
+  assert.ok(tx(books, 'OWNER-1').waitsForReceipt, 'still waiting');
+  assert.deepEqual(entries(books, 'OWNER-1'), []);
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'OWNER-1'), [['2451', '1021', 89, '']]);
+  assert.equal(tx(books, 'OWNER-1').waitsForReceipt, undefined);
+});
+
+test('«Buchen» of one payment marked by a run without a model asks the model: an owner\'s reimbursement is booked (issue #110)', async () => {
+  const ws = company();
+  const books = booksOf([OUT('OWNER-1', { description: 'Spesen Juli Anna Muster', waitsForReceipt: { since: '2026-10-06T06:00:00Z' } })]);
+  const owner = await ACTIONS['accounting.expenses.classification'].run!({ transaction: tx(books, 'OWNER-1'), books }, {}, { ws, ask: model, now: () => '2026-10-23T08:00:00Z' });
+  assert.equal(owner.outcome, 'decided');
 });
 
 test('the reimbursement of an outlay is booked at once: onto the owner\'s account or an employee\'s, it settles and has no receipt of its own (issue #90); a supplier payment still waits', async () => {
