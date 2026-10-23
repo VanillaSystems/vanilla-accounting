@@ -198,7 +198,7 @@ async function propose() {
     const h = hash(transcript(c));
     const old = purchases.find((p) => p.conversationId === c.id);
     if (old && (old.messagesHash === h || old.business !== null || old.imported)) continue;
-    const raw = await ask(proposePrompt(c), { step: 'receipt-collection.guide.yaml#tutti', model: 'sonnet' });
+    const raw = await ask(proposePrompt(c), { step: 'tutti' });
     const j = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
     const p: Purchase = {
       conversationId: c.id, title: c.title, seller: j.seller ?? '', bought: !!j.bought, item: j.item ?? c.title,

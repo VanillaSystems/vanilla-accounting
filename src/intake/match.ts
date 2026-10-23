@@ -249,7 +249,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const prompt = buildMatchPrompt(receipt.extractedText, candidates(receipt, snapshot.transactions, taken, lock.isClosed), useVision ? srcPath : undefined);
     let result: MatchResult | null;
     try {
-      result = parseMatchResult(await ask!(prompt, { step: 'evidence.guide.yaml#ai', model: 'sonnet', timeoutMs: 120_000, read: useVision ? [IMPORT_DIR] : undefined }));
+      result = parseMatchResult(await ask!(prompt, { step: 'receipt-match', timeoutMs: 120_000, attachments: useVision ? [srcPath] : undefined }));
     } catch (e) {
       completed++;
       failures.push(String(e instanceof Error ? e.message : e));

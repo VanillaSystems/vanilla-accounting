@@ -116,7 +116,7 @@ export function vatStep({ force = false } = {}): StepRun {
       const { stats } = await runAdaptivePool(
         needsLlm,
         async (r) => {
-          const raw = await ask(buildReceiptVatPrompt(r.extractedText), { step: 'receipt-intake.guide.yaml#vat_facts', model: 'sonnet', timeoutMs: 120_000 });
+          const raw = await ask(buildReceiptVatPrompt(r.extractedText), { step: 'receipt-vat', timeoutMs: 120_000 });
           const result = parseReceiptVat(raw);
           // A rate-limit notice can arrive as text in stdout instead of throwing.
           if (!result) throw new Error(isRateLimitSignal(raw) ? 'rate-limit signal in output' : 'could not parse response');

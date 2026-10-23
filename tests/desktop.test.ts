@@ -15,7 +15,8 @@ import { desktopServer } from '../src/desktop/server.js';
 import { claudeOn } from '../src/desktop/claude.js';
 import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
-import { ask, modelReady, NoClaudeError } from '../src/llm/ask.js';
+import { ask, modelReady } from '../src/llm/ask.js';
+import { NoClaudeError } from '../src/llm/providers/claude-cli.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, workspaceAt } from '../src/workspace/workspace.js';
 import { loadBooks } from '../src/books/store.js';
@@ -136,7 +137,7 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
     process.env.PATH = path;
   }
   try {
-    await assert.rejects(ask('hi', { step: 'test' }), NoClaudeError);
+    await assert.rejects(ask('hi', { step: 'receipt-titles' }), NoClaudeError);
     const before = (await call('GET', '/books.json')).text;
     const receipts = JSON.parse(before).receipts as Array<{ id: string }>;
     let answer: Awaited<ReturnType<typeof call>> | undefined;
