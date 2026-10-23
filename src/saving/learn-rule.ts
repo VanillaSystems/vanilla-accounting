@@ -32,10 +32,10 @@ import { ruleFactsOf } from './rules.js';
 import { ruleCode } from './share-rule.js';
 
 /** Payments of a partner a rule must book as they are booked today, the corrected one counted, before the AI may propose it. */
-export const GENERAL = 2;
+const GENERAL = 2;
 
 /** The model that drafts the entry: Haiku proposed as well as Sonnet in the learning-loop eval (#7 M2c), at a fraction of the cost. */
-export const LEARN_MODEL: NonNullable<AskOptions['model']> = 'haiku';
+const LEARN_MODEL: NonNullable<AskOptions['model']> = 'haiku';
 
 /** Whose payments a learned rule books: a business the firm knows (its file), else the payer. */
 export type LearnPartner = { kind: 'business'; id: string; name: string } | { kind: 'payer'; payer: string; name: string };
@@ -133,7 +133,7 @@ export function learnOffer(ws: Workspace, books: Books, ref: string, context: Cl
 const MAX_PAST = 12;
 
 /** Pure. The one small prompt: the correction, the partner's other payments and how they are booked, the receipt's facts. */
-export function learnPrompt(c: Corrected, books: Books, context: ClassifyContext): string {
+function learnPrompt(c: Corrected, books: Books, context: ClassifyContext): string {
   const names = chartNames(context.chartOfAccounts);
   const acc = (a: string) => (names.get(a) ? `${a} ${names.get(a)}` : a);
   const bk = (b: Booked) => `account ${acc(b.account)}, VAT code ${b.vat ?? 'none'}`;
@@ -204,12 +204,12 @@ function checkAnswer(ws: Workspace, books: Books, c: Corrected, answer: LearnAns
  * rule is drafted into its file (the business's, else the company's booking guide with the payer as
  * its condition) with `source: correction <date>`, for the card; undefined when the booking teaches nothing.
  */
-export async function proposeFromCorrection(ws: Workspace, ref: string, today = new Date().toISOString().slice(0, 10), model: (prompt: string, opts: AskOptions) => Promise<string> = ask): Promise<LearnProposal | undefined> {
+export async function proposeFromCorrection(ws: Workspace, ref: string, today = new Date().toISOString().slice(0, 10)): Promise<LearnProposal | undefined> {
   const books = loadBooks(ws);
   const context = loadClassifyContext(ws);
   const c = corrected(ws, books, ref, context);
   if (!c) return undefined;
-  const raw = await model(learnPrompt(c, books, context), { step: 'learn.correction', model: LEARN_MODEL, timeoutMs: 120_000 });
+  const raw = await ask(learnPrompt(c, books, context), { step: 'learn.correction', model: LEARN_MODEL, timeoutMs: 120_000 });
   const verdict = checkAnswer(ws, books, c, parseLearnAnswer(raw), context);
   if (verdict.kind !== 'rule') return verdict;
   const drafted = draftHandRule(ws, { match: verdict.match, direction: c.tx.direction === 'CRDT' ? 'in' : 'out', account: verdict.booking.account, vat: verdict.booking.vat }, today, 'correction');
