@@ -10,9 +10,7 @@
 import type { BankTransaction, Index, Mapping, Receipt } from '../types/index.js';
 import { baseCurrency } from '../engines/index.js';
 
-/** At most this many receipts in one set. */
-const MAX_SET = 6;
-/** At most this many receipts of one vendor are tried for one payment, nearest first. */
+/** At most this many receipts of one vendor are tried for one payment, nearest first: every subset of them (4096 at most). A vendor with more near the payment is only proposed, never linked, since a set among the others could fit as well. */
 const MAX_TRIED = 12;
 /** A receipt dated up to this many days before the payment, or after it, is near it. */
 const DAYS_BEFORE = 31;
@@ -41,12 +39,11 @@ function vendorOf(r: Receipt): string | undefined {
 
 const daysFrom = (r: Receipt, tx: BankTransaction) => (Date.parse(tx.date) - Date.parse(r.date!)) / DAY;
 
-/** Every subset of `items` with `min` to MAX_SET elements, with its sum. */
+/** Every subset of `items` with `min` elements or more, with its sum. */
 function* subsets(items: readonly Receipt[], min: number): Generator<{ set: Receipt[]; sum: number }> {
   const set: Receipt[] = [];
   function* walk(from: number, sum: number): Generator<{ set: Receipt[]; sum: number }> {
     if (set.length >= min) yield { set: [...set], sum };
-    if (set.length === MAX_SET) return;
     for (let i = from; i < items.length; i++) {
       set.push(items[i]);
       yield* walk(i + 1, sum + owedCents(items[i]));
@@ -63,8 +60,8 @@ function freeReceipts(books: Books, isOpen: (date: string) => boolean): Receipt[
     && !!r.amount && !!r.date && isOpen(r.date) && !!vendorOf(r));
 }
 
-/** What fits payment `tx`: its exact sets, and the closest set that does not quite fit. */
-export interface Fit { exact: Receipt[][]; close?: { set: Receipt[]; sum: number }; linkedCents: number }
+/** What fits payment `tx`: its exact sets, and the closest set that does not quite fit. `partial`: a vendor had more receipts near it than were tried. */
+export interface Fit { exact: Receipt[][]; close?: { set: Receipt[]; sum: number }; linkedCents: number; partial: boolean }
 
 /**
  * The sets of `free` receipts that pay `tx` together with the receipts linked to it already: from one
@@ -86,10 +83,11 @@ export function fitOf(books: Books, tx: BankTransaction, free: readonly Receipt[
     if (linked.some((l) => vendorOf(l!) !== v)) continue;
     vendors.set(v, [...(vendors.get(v) ?? []), r]);
   }
-  const fit: Fit = { exact: [], linkedCents };
+  const fit: Fit = { exact: [], linkedCents, partial: false };
   const tolerance = Math.max(CLOSE * Math.abs(need), 100);
   for (const group of vendors.values()) {
     const tried = [...group].sort((a, b) => Math.abs(daysFrom(a, tx)) - Math.abs(daysFrom(b, tx))).slice(0, MAX_TRIED);
+    if (group.length > MAX_TRIED) fit.partial = true;
     // On its own a set is two receipts at least; one receipt that completes those linked already is a set too.
     for (const { set, sum } of subsets(tried, linked.length ? 1 : 2)) {
       const off = Math.abs(sum - need);
@@ -113,15 +111,15 @@ export function proposalsFor(books: Books, tx: BankTransaction, isOpen: (date: s
 }
 
 /**
- * What code links: a payment's set when it is its only exact set and none of its receipts fits
- * another payment's exact set. Every other fit stays a proposal (proposalsFor).
+ * What code links: a payment's set when it is its only exact set, every receipt near it was tried,
+ * and none of its receipts fits another payment's exact set. Every other fit stays a proposal (proposalsFor).
  */
 export function receiptSetsToLink(books: Books, isOpen: (date: string) => boolean): ReceiptSet[] {
   const free = freeReceipts(books, isOpen);
   const fits = books.transactions.flatMap((tx) => { const fit = fitOf(books, tx, free, isOpen); return fit?.exact.length ? [{ tx, fit }] : []; });
   const claims = new Map<string, number>();
   for (const { fit } of fits) for (const id of new Set(fit.exact.flat().map((r) => r.id))) claims.set(id, (claims.get(id) ?? 0) + 1);
-  return fits.filter(({ fit }) => fit.exact.length === 1 && fit.exact[0].every((r) => claims.get(r.id) === 1))
+  return fits.filter(({ fit }) => fit.exact.length === 1 && !fit.partial && fit.exact[0].every((r) => claims.get(r.id) === 1))
     .map(({ tx, fit }) => asSet(tx, fit.exact[0], fit, sumOf(fit.exact[0]), true));
 }
 

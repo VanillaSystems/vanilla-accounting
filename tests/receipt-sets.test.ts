@@ -9,6 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { linkReceiptSets, proposalsFor, receiptSetsToLink } from '../src/intake/receipt-sets.js';
 import { matchStep } from '../src/intake/match.js';
+import { splitByReceipts } from '../src/booking/receipt-lines.js';
 import type { Workspace } from '../src/workspace/workspace.js';
 import { classifyTransactions, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
@@ -84,6 +85,19 @@ test('a refund paid back as one payment: the credit notes that add up to it are 
   assert.equal(receiptSetsToLink(back, open).length, 1);
   const filed = booksOf([pay(87.4, { date: '2026-06-20' })], [receipt(30, { date: '2026-06-18' }), receipt(57.4, { date: '2026-06-18' })]);
   assert.deepEqual(receiptSetsToLink(filed, open), []);
+});
+
+test('a vendor with more receipts near the payment than code tries is only proposed: a set among the others could fit as well', () => {
+  const many = [receipt(30), receipt(57.4), ...Array.from({ length: 11 }, (_, i) => receipt(100 + i, { date: '2026-07-20' }))];
+  const books = booksOf([pay(87.4)], many);
+  assert.deepEqual(receiptSetsToLink(books, open), []);
+  assert.ok(proposalsFor(books, books.transactions[0], open).some((s) => s.exact && s.receipts.length === 2));
+});
+
+test('the split keeps the sign of the model\'s line: a refund booked as one negative line becomes negative lines per credit note', () => {
+  const notes = [receipt(-20), receipt(-35)];
+  const lines = splitByReceipts(pay(55, { direction: 'CRDT' }), [{ accountDebit: '4200', accountCredit: '', amount: -55, vatCode: '-M0', description: 'Rückerstattung' }], notes);
+  assert.deepEqual(lines.map((l) => l.amount), [-20, -35]);
 });
 
 const fx = loadFxResolver();

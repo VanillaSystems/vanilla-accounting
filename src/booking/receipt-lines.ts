@@ -23,6 +23,8 @@ export function splitByReceipts(tx: Pick<BankTransaction, 'amount' | 'currency' 
   const owed = receipts.map((r) => (r.currency ?? baseCurrency()) === tx.currency && r.amount !== undefined ? out * cents(r.amount) : undefined);
   if (owed.some((c) => c === undefined || c <= 0)) return lines;
   const paid = cents(Math.abs(tx.amount));
-  if (cents(line.amount) !== paid || owed.reduce((s, c) => s! + c!, 0) !== paid) return lines;
-  return receipts.map((r, i) => ({ ...line, amount: owed[i]! / 100, description: r.description || line.description }));
+  if (cents(Math.abs(line.amount)) !== paid || owed.reduce((s, c) => s! + c!, 0) !== paid) return lines;
+  // Each part keeps the sign the model gave the line: a refund's lines stay refunds.
+  const sign = Math.sign(line.amount);
+  return receipts.map((r, i) => ({ ...line, amount: (sign * owed[i]!) / 100, description: r.description || line.description }));
 }
