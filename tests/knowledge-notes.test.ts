@@ -36,10 +36,24 @@ test('a notes file splits into its front matter and its prose, and joins back to
   const raw = '---\ntitle: Fahrzeug und Privatanteil\nsteps:\n  - booking#private\n---\n\nDer Lieferwagen ist ein Firmenwagen.\n\n- Treibstoff auf 6200\n';
   const n = splitNote(raw);
   assert.deepEqual([n.title, n.steps, n.text], ['Fahrzeug und Privatanteil', ['booking#private'], 'Der Lieferwagen ist ein Firmenwagen.\n\n- Treibstoff auf 6200']);
-  assert.equal(joinNote(n.front, n.text), raw);
-  assert.deepEqual(splitNote('Nur Prosa, kein Kopf.\n'), { steps: [], text: 'Nur Prosa, kein Kopf.', front: {} });
+  assert.equal(joinNote(n.head, n.text), raw);
+  assert.deepEqual(splitNote('Nur Prosa, kein Kopf.\n'), { steps: [], text: 'Nur Prosa, kein Kopf.', head: '' });
   assert.equal(splitNote('---\nkein: [yaml\n---\nText').text, '---\nkein: [yaml\n---\nText', 'a head that does not parse stays prose');
-  assert.equal(joinNote({ title: 'Leer' }, ''), '---\ntitle: Leer\n---\n');
+  assert.equal(joinNote('title: Leer', ''), '---\ntitle: Leer\n---\n');
+});
+
+test('a topic saved keeps its front matter as the author wrote it; a new title changes only the title (#63)', async () => {
+  const { ws } = await company();
+  const ref = { kind: 'topic', slug: 'fahrzeug' } as const;
+  const file = join(ws.paths.root, 'knowledge/company/fahrzeug.md');
+  const head = '---\ntitle: Fahrzeug und Privatanteil # wie im Fahrtenbuch\nsteps: [booking#eigenverbrauch, booking#private]\nseit:   2026\n---\n\n';
+  writeFileSync(file, `${head}Alt.\n`);
+  const saved = saveNote(ws, ref, 'Neu.', readNote(ws, ref)!.basis, 'Fahrzeug und Privatanteil');
+  assert.ok(saved.ok);
+  assert.equal(readFileSync(file, 'utf8'), `${head}Neu.\n`, 'flow list, comment and spacing stay byte for byte');
+  const renamed = saveNote(ws, ref, 'Neu.', readNote(ws, ref)!.basis, 'Lieferwagen');
+  assert.ok(renamed.ok);
+  assert.equal(readFileSync(file, 'utf8'), '---\ntitle: Lieferwagen # wie im Fahrtenbuch\nsteps: [booking#eigenverbrauch, booking#private]\nseit: 2026\n---\n\nNeu.\n', 'a new title keeps the flow list and the comment');
 });
 
 test('a save writes the notes and answers before and after; an undo puts them back; a stale basis is refused', async () => {
