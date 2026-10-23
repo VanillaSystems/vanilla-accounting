@@ -25,13 +25,17 @@ import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { isSeparateFee } from './separate-fee.js';
+import { businessVat } from './purchase-vat.js';
+import { linkedOf, type Linked } from '../accounting/receipt-due.js';
 
 export const RECEIPT_STEP = 'evidence.guide.yaml#rules';
 
 /** Why a payment is booked without waiting for a receipt. */
 export type NoWait =
-  /** A receipt is linked. */
+  /** A receipt is linked, and its VAT is read. */
   | 'receipt'
+  /** Its receipt could not be read, and the company's rule says at which rate such a receipt of the business counts (`apply: { unreadReceipt }`). */
+  | 'companyRate'
   /** A person marked it: no receipt will come (BankTransaction.noReceiptNeeded); booked without input tax. */
   | 'marked'
   /** Nothing moved. */
@@ -51,11 +55,12 @@ export type NoWait =
   /** The firm claims no input tax (not registered, or the net tax rate method): a receipt changes no code. */
   | 'noInputTax';
 
-export type ReceiptWait = { wait: false; why: NoWait } | { wait: true };
+export type ReceiptWait = { wait: false; why: NoWait } | { wait: true; unread?: true };
 
 /** What the decision reads of one payment beside the payment itself. */
 export interface WaitFacts {
-  linked: boolean;
+  /** What its linked receipts say (src/accounting/receipt-due.ts linkedOf). */
+  linked: Linked;
   /** The business it routes to. */
   business?: string;
   /** The account a company rule books it on. */
@@ -68,6 +73,8 @@ export interface WaitFacts {
 export interface WaitContext {
   /** The businesses whose payments need no receipt (receiptFree). */
   free: ReadonlySet<string>;
+  /** The businesses whose unread receipt the company counts at a rate (purchase-vat.ts, `apply: { unreadReceipt }`). */
+  assumesUnread: ReadonlySet<string>;
   /** The IBANs of the firm's own bank accounts, as ibanOf writes them. */
   ownIbans: ReadonlySet<string>;
   /** Whether a booking onto this account settles money owed or moves money (settlementAccount). */
@@ -78,7 +85,7 @@ export interface WaitContext {
 
 export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitContext): ReceiptWait {
   const book = (why: NoWait): ReceiptWait => ({ wait: false, why });
-  if (facts.linked) return book('receipt');
+  if (facts.linked === 'read') return book('receipt');
   if (tx.noReceiptNeeded) return book('marked');
   if (tx.amount === 0) return book('zero');
   if (tx.direction === 'CRDT') return book('incoming');
@@ -88,6 +95,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (facts.ruleAsks) return book('ruleAsks');
   if (facts.business && ctx.free.has(facts.business)) return book('business');
   if (!ctx.inputTax) return book('noInputTax');
+  if (facts.linked === 'unread') return facts.business && ctx.assumesUnread.has(facts.business) ? book('companyRate') : { wait: true, unread: true };
   return { wait: true };
 }
 
@@ -121,6 +129,14 @@ export function parseReceiptApply(raw: unknown): { ok: true } | { ok: false; pro
 
 type Rules = { rules?: Array<{ id?: string; status?: string; apply?: unknown }> } | undefined;
 
+/** What the business files say to the decision: whose payments need no receipt, and whose unread receipt the company counts at a rate. */
+export interface ReceiptKnowledge { free: ReadonlySet<string>; assumesUnread: ReadonlySet<string> }
+
+export function receiptKnowledge(k: Pick<Knowledge, 'counterpartyFiles'>): ReceiptKnowledge {
+  const { facts } = businessVat(k);
+  return { free: receiptFree(k), assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
+}
+
 /** The businesses whose file, in either layer, says their payments need no receipt; a rule whose question is open says nothing. */
 export function receiptFree(k: Pick<Knowledge, 'counterpartyFiles'>): Set<string> {
   const free = new Set<string>();
@@ -132,13 +148,13 @@ export function receiptFree(k: Pick<Knowledge, 'counterpartyFiles'>): Set<string
 }
 
 /** Whether `tx` waits for its receipt, from the books and what the classifier knows of the firm. */
-export function receiptWaitOf(books: Books, tx: BankTransaction, context: ClassifyContext, free: ReadonlySet<string>, fx: FxResolver): ReceiptWait {
+export function receiptWaitOf(books: Books, tx: BankTransaction, context: ClassifyContext, known: ReceiptKnowledge, fx: FxResolver): ReceiptWait {
   const linked = mappedReceipts(books, tx);
   const routing = identify(signalsOfTransaction(tx, linked), context.counterparties ?? []);
   const then = ruleOfPayment(books, tx, context, fx)?.rule.then;
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
-  return receiptWait(tx, { linked: linked.length > 0, ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }) }, {
-    free,
+  return receiptWait(tx, { linked: linkedOf(linked), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }) }, {
+    ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
     settles: settlementAccount(context),
     inputTax: withoutInputTax() === undefined,

@@ -4,7 +4,7 @@
  * the outputs the step `emits`.
  */
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
-import { onlySettles, receiptFree, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
+import { onlySettles, receiptKnowledge, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
 import { bankAccountFor } from '../accounting/bank-accounts.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
@@ -159,7 +159,9 @@ export const ACTIONS: Record<string, Action> = {
       const context = loadClassifyContext(ws);
       // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).
       // An answer that only settles (the owner's outlays paid back) has no receipt of its own and is booked (issue #90).
-      const waits = receiptWaitOf(scratch, t, context, receiptFree(loadKnowledge(APP_ROOT, ws.paths.root)), fx).wait;
+      const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), fx);
+      const waits = wait.wait;
+      if (wait.wait && wait.unread) return { outcome: 'held', output: { why: 'receiptUnread' } };
       if (waits && (!ask || t.waitsForReceipt)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);

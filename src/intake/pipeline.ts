@@ -38,6 +38,8 @@ export type IntakeNote =
   | { code: 'saleAsked'; count: number }
   /** Payments that need a receipt and have none yet (src/booking/receipt-wait.ts): not booked, booked once it is linked. */
   | { code: 'waitingReceipt'; count: number }
+  /** Payments whose receipt's VAT could not be read (issue #57): not booked, each a question under Aufgaben. */
+  | { code: 'receiptUnread'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -208,6 +210,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;
       case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
       case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;
+      case 'receiptUnread': return `? ${n.count} payment(s) have a receipt whose VAT could not be read: each waits for the person under Aufgaben`;
       case 'payoutsHeld': return `? ${n.payouts.length} payout(s) wait for the person, their orders do not book them:\n${n.payouts.map((p) => { const w = holdWords(p.hold); return `  ${p.date} ${p.currency} ${p.amount.toFixed(2)}: ${wordsIn('en').t(w.key, w.vars)}`; }).join('\n')}`;
       case 'error': return `⛔ ${n.detail}`;
     }
