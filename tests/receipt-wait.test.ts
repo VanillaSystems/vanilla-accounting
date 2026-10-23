@@ -27,7 +27,7 @@ const OUT = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction 
 
 const CTX: WaitContext = { free: new Set(['estv']), assumesUnread: new Set(['coop']), wordings: [/Bancomat/i], ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
 
-test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business, a withdrawal's wording or a firm without input tax book at once', () => {
+test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business, a withdrawal\'s wording or a firm without input tax book at once', () => {
   assert.deepEqual(receiptWait(OUT('a'), { linked: 'none' }, CTX), { wait: true });
   const why = (tx: BankTransaction, facts = {}, ctx = CTX) => { const w = receiptWait(tx, { linked: 'none', ...facts }, ctx); return w.wait ? 'wait' : w.why; };
   assert.equal(why(OUT('a'), { linked: 'read' }), 'receipt');
