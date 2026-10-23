@@ -112,6 +112,21 @@ function taxedWhole(receipts: readonly Receipt[], rate: number, amount: number, 
   return Math.abs(gross - Math.abs(amount)) <= 0.05;
 }
 
+/**
+ * The Swiss rate an owner's business part of its one receipt is taxed at (#87): the receipt's only
+ * rate, or the rate line the person named among several, when the part fits in that line's gross,
+ * in the payment's currency. Undefined when the receipt shows no Swiss VAT (the zero-code rule
+ * decides) or the part does not fit.
+ */
+function partRate(receipts: readonly Receipt[], part: NonNullable<BankTransaction['businessPart']>, amount: number, currency: string): number | undefined {
+  if (receipts.length !== 1) return undefined;
+  const [r] = receipts;
+  const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent));
+  if (!r.hasSwissVat || !groups.length || (r.currency ?? currency) !== currency) return undefined;
+  const line = groups.length === 1 ? groups[0] : groups.find((g) => g.ratePercent === part.rate);
+  return line && Math.abs(amount) <= grossOf(line) + 0.05 ? line.ratePercent : undefined;
+}
+
 /** An unread receipt as the business's fact reads it: Swiss VAT at the fact's rate on its whole amount (the line's, when the receipt names none). */
 function asRead(r: Receipt, rate: number, amount: number): Receipt {
   const gross = r.amount ?? Math.abs(amount);
@@ -153,6 +168,12 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
     // Only a sales record or a supporting document linked: no purchase document, so no input tax (pv-no-receipt).
     const check = evidenceCheck(e, read, undefined);
     if (check?.kind === 'vatWithoutReceipt') return decide(e, check.code, de().t('rules.say.zeroCode', { code: check.code }));
+    const part = tx.businessPart && model.length === 1 ? partRate(read, tx.businessPart, e.amount, tx.currency) : undefined;
+    if (part !== undefined) {
+      const box = vat().codes.purchaseBoxes;
+      const code = vat().codes.purchaseAt(part, family === 'M' ? box.costOfGoods : box.otherwise);
+      return code ? decide(e, sign + code, de().t('rules.say.purchaseVat.receiptShowsVat', { rate: String(part), code: sign + code })) : e;
+    }
     if (check?.kind !== 'receiptShowsVat' || model.length > 1 || !taxedWhole(read, check.rate, e.amount, tx.currency)) return e;
     return decide(e, check.code, assume && purchase.some(unread)
       ? de().t('rules.say.purchaseVat.unreadReceipt', { business: name, rule: assume.rule, rate: String(check.rate), code: check.code })

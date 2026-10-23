@@ -200,6 +200,8 @@ interface TxInput {
   counterparty?: string;
   /** The payment's fee, which the bank debited as a movement of its own (src/booking/separate-fee.ts). */
   separateFee?: { ref: string; amount: number; currency: string };
+  /** An owner's payment of a business part of its receipt (BankTransaction.businessPart): the amount is that part, the rest is private. */
+  businessPart?: { what?: string };
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -357,6 +359,13 @@ The company files with approved flat rates on its gross turnover: ${rates}. Give
   return '';
 }
 
+/** What the model is told of an owner's payment of a business part of its receipt: book the part only, the rest is private. */
+function businessPartLine(tx: TxInput, receipt: ReceiptInput | undefined): string {
+  const of = receipt?.amount != null ? ` of the receipt's ${Math.abs(receipt.amount)} ${receipt.currency ?? tx.currency}` : ' of the receipt';
+  const what = tx.businessPart?.what ? ` (${tx.businessPart.what})` : '';
+  return `Business part: only ${tx.amount} ${tx.currency}${of} was for the business${what}; the owner paid the rest privately and it is not booked. Book exactly this amount, in one entry, with the VAT facts the receipt shows for that part.`;
+}
+
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
   { companyName, chartOfAccounts, historicEntries, vat: setup }: ClassifyPromptContext,
@@ -380,7 +389,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 

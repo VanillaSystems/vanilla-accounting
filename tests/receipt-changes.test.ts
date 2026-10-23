@@ -16,6 +16,7 @@ import { loadBooks, moduleActor, periodLock, receiptFile, saveBooks, update, PER
 import { removeReceipt } from '../src/accounting/classify-force.js';
 import { deletionsOf, trashReceipt } from '../src/books/receipt-trash.js';
 import { addEntry, link, privatePayment, setReceipt, unlink } from '../src/server/edits.js';
+import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import type { Receipt } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
@@ -56,7 +57,7 @@ test('a deletion, a link by hand, an unlink, an edit and a private outlay wait i
   update(books, PERSON, (b) => {
     unlink(b, unlinked.id, unlinkedFrom);
     setReceipt(b, edited.id, { description: 'Neuer Text' });
-    outlayRef = privatePayment(b, outlay.id).ref;
+    outlayRef = privatePayment(b, outlay.id, {}, loadFxResolver()).ref;
     link(b, byHand.id, payment.ref);
   });
   update(books, moduleActor('intake'), (b) => { b.mappings.push({ transactionRef: other.ref, receiptId: byRun.id, by: 'rule', rule: 'r' }); });

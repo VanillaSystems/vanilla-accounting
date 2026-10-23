@@ -96,7 +96,6 @@ src/reconcile/vat-consistency.ts
 src/server/routes/config.ts
 src/server/routes/receipts.ts
 src/server/routes/statements.ts
-src/server/routes/transactions.ts
 src/types/api-error.ts
 src/types/index.ts
 src/workspace/bank-statements.ts

@@ -37,6 +37,14 @@ export type ApiRefusal =
   | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }
   /** «Privat oder bar bezahlt» on a receipt a payment already pays (src/server/edits.ts privatePayment). */
   | { code: 'receiptPaid'; params: { receipt: string; payment: string } }
+  /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
+  | { code: 'partAmount'; params: { total: number; currency: string } }
+  /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */
+  | { code: 'partRate'; params: { rates: number[] } }
+  /** A receipt paid privately (its payment made by hand) is linked to no second payment, confirmed or not (src/server/edits.ts assertNotPaidPrivately, #90). */
+  | { code: 'paidPrivately'; params: { receipt: string; payment: string } }
+  /** A person's booking without a payment books this receipt already (its amount or the part's, the same day or words): a private payment would book it twice, unless it replaces that booking (`entry`: its ref). */
+  | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }

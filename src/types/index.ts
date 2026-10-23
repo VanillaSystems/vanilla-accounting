@@ -351,6 +351,13 @@ export interface BankTransaction {
   direction: 'CRDT' | 'DBIT';
   description: string;
   source?: 'manual';
+  /**
+   * An owner's payment of a business part of its receipt («Privat oder bar bezahlt», nur ein Teil,
+   * src/server/edits.ts privatePayment): `amount` is that part, the rest of the receipt was private
+   * and is never booked. `what`: the part as the person named it («Kaffee»); `rate`: the receipt's
+   * Swiss VAT rate line the part falls under, named when the receipt shows several.
+   */
+  businessPart?: { what?: string; rate?: number };
   type?: 'wise-fee';
   remarks?: string;
   noReceiptNeeded?: boolean;

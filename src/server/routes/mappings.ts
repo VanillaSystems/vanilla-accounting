@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { readBooks, updateBooks, RequestError, WS } from '../books.js';
-import { assertNotSecondPayment, link, relinked, unlink } from '../edits.js';
+import { assertNotPaidPrivately, assertNotSecondPayment, link, relinked, unlink } from '../edits.js';
 import type { BookChange } from '../../types/assistant.js';
 import { bookAgain, engine } from './automation.js';
 import { closeAsksWithoutRule } from '../../workflows/held.js';
@@ -39,7 +39,7 @@ function restoreReplaced(books: Books, payment: string, receipt: string): boolea
  * A link made or taken back by hand: the payment's automatic booking is made again with what is
  * linked now, and a payout that waited for this report as a question stops waiting (r5h-12). The
  * bookings a link replaces are kept, and «Lösen» puts them back as they were (r8h-21). A second
- * bank payment of another payee for a receipt that has one needs `confirm` (assertNotSecondPayment).
+ * bank payment of another payee for a receipt that has one needs `confirm` (assertNotSecondPayment); a receipt paid privately takes none (assertNotPaidPrivately, #90).
  * Without a model on this Mac, a booked payment keeps its booking and the link is the whole change
  * (`kept` names it): a booking that saw no receipt claims nothing too much, and it is never taken
  * away for a rebooking nobody can make (r8f-41). An unlink still takes the booking that claimed the
@@ -53,6 +53,7 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
   const keep = booked && !(await modelReady());
   const { payments, file } = updateBooks((books) => {
     if (kind === 'link') {
+      assertNotPaidPrivately(books, receipt, payment);
       if (!confirm) assertNotSecondPayment(books, receipt, payment);
       const had = books.journalEntries.filter((e) => e.transactionRef === payment);
       link(books, receipt, payment);

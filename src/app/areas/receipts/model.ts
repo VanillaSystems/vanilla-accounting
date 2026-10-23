@@ -342,7 +342,8 @@ export function amountFit(r: Pick<Receipt, 'amount' | 'currency'>, tx: BankTrans
 export function linkFit(v: ReceiptView, l: Ledger, toChf: ToChf): AmountFit | undefined {
   if (v.links.length !== 1) return undefined;
   const tx = l.txByRef.get(v.links[0]);
-  if (!tx || (l.receiptsByRef.get(tx.ref) ?? []).length !== 1) return undefined;
+  // An owner's payment of a business part is less than the receipt on purpose (#87): the rest was private.
+  if (!tx || tx.businessPart || (l.receiptsByRef.get(tx.ref) ?? []).length !== 1) return undefined;
   return amountFit(v.r, tx, toChf);
 }
 
