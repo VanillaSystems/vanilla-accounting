@@ -22,7 +22,7 @@ import { Paper } from '../receipts/Paper.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain, codeText } from '../codes/vat-card.js';
-import { whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
+import { receiptsFor, whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
 import { bookedByText, changesText, reasonText, type Say } from './by.js';
 
 const say: Say = (key, vars) => t(key, vars as never);
@@ -31,7 +31,7 @@ import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { bookingWarnings } from '../../../accounting/booking-warnings.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
-import { createEntry, reclassify, saveEntry, type Field } from './actions.js';
+import { createEntry, linkReceipt, reclassify, saveEntry, type Field } from './actions.js';
 import { undoInput } from '../../../books/entry-input.js';
 import { RunLink } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -134,6 +134,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         {v.receipts.length > 0
           ? <span className="linked">{I.check}{t('journal.receipt')} {v.receipts.map((r, i) => { const [who, what] = splitReceipt(r); return <span key={r.id}>{i > 0 && ' · '}<button type="button" className="golink" data-testid="go-receipt" title={t('journal.openReceiptKey')} onClick={() => nav.go(at({ area: 'receipts', id: r.id }, r.date))}>{who}{what && <span className="m"> {what}</span>}</button></span>; })}</span>
           : v.missing && <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('journal.noReceipt')}</span>}
+        {edit && !tx && !v.receipts.length && <LinkReceipt key={`lr-${e.transactionRef}`} {...props} entries={[e, ...siblings.map((x) => x.e)]} />}
       </div>
 
       {v.evidence && (
@@ -214,6 +215,25 @@ function BookedByText({ e, nav }: { e: JournalEntry; nav: Props['nav'] }) {
   return (
     <>{bookedByText(e, say)}{e.by?.kind === 'rule' && <> · <button type="button" className="golink" data-testid="to-rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('area.company')} › {t('company.rules')}</button></>}
       {e.by?.kind === 'assistant' && <> · <button type="button" className="golink" data-testid="to-conversation" onClick={() => void showConversation((e.by as { conversation: string }).conversation)}>{t('journal.toConversation')}</button></>}</>
+  );
+}
+
+/** A booking without a payment takes its receipt here as a payment does in Belege (#89): the receipts no payment holds, its amount first. */
+function LinkReceipt({ books, nav, entries }: Props & { entries: JournalEntry[] }) {
+  const options = receiptsFor(books, entries);
+  const [pick, setPick] = useState('');
+  if (!options.length) return null;
+  const chosen = options.find((r) => r.id === pick) ?? options[0];
+  const name = (r: (typeof options)[number]) => [r.date ? formatDate(r.date) : '', splitReceipt(r).filter(Boolean).join(' '), r.amount != null ? `${r.currency || baseCurrency()} ${fmt(r.amount)}` : ''].filter(Boolean).join(' · ');
+  return (
+    <span className="linkinv" data-testid="link-receipt">
+      <label>{t('journal.linkReceipt')}{' '}
+        <select value={chosen.id} onChange={(ev) => setPick(ev.target.value)}>
+          {options.map((r) => <option key={r.id} value={r.id}>{name(r)}</option>)}
+        </select>
+      </label>
+      {' '}<button type="button" className="golink" onClick={() => void linkReceipt(nav, chosen.id, entries[0].transactionRef, name(chosen))}>{t('receipts.linkVerbShort')}</button>
+    </span>
   );
 }
 

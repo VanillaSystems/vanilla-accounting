@@ -6,7 +6,9 @@
  * the part that pays the receipt (r8k-5). A receipt that has a payment says so at the top, and a
  * second payment is linked only after ↵ a second time. «Privat oder bar bezahlt» opens its form
  * (PrivateForm): the whole receipt or only its business part (#87). A payment of a filed quarter is marked:
- * ↵ on it opens its correction in the open quarter and links nothing (corner-33).
+ * ↵ on it opens its correction in the open quarter and links nothing (corner-33). Below the
+ * best payments, the bookings without a payment of the open period of the receipt's amount (a
+ * search finds the others: a depreciation, an accrual, #89) take the receipt as a payment does.
  */
 import { useMemo, useState } from 'react';
 import type { RouteOf } from '../../shell/route.js';
@@ -16,7 +18,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import type { BankTransaction } from '../../../types/index.js';
-import { candidates, chfOf, linkKey, type Candidate, type Ledger, type ReceiptView } from './model.js';
+import { bookingsWithoutPayment, candidates, chfOf, linkKey, type Candidate, type Ledger, type ReceiptView, type Unpaid } from './model.js';
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { correctFiled, linkPayment } from './actions.js';
 import { PrivateForm } from './PrivateForm.js';
@@ -24,6 +26,9 @@ import { Kbd } from './commands.js';
 import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClose(): void };
+
+/** A booking without a payment in a toast: its day, text and amount. */
+const bookingLine = (u: Unpaid) => `${formatDate(u.date)} · ${u.description} · ${fmt(u.amount)}`;
 
 function why(c: Candidate): string {
   return [
@@ -51,13 +56,15 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   /** «Privat oder bar bezahlt» picked: its form replaces the list. */
   const [privately, setPrivately] = useState(false);
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q), [v, l, rates, q]);
-  const items: Array<Candidate | 'private'> = [...best, ...more, 'private'];
+  const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q), [v, l, q]);
+  const items: Array<Candidate | Unpaid | 'private'> = [...best, ...unpaid, ...more, 'private'];
   const at = idx === undefined ? -1 : Math.min(idx, items.length - 1);
   const paid = v.links.map((ref) => l.txByRef.get(ref)).filter((tx): tx is BankTransaction => !!tx);
 
-  function choose(item: Candidate | 'private' | undefined) {
+  function choose(item: Candidate | Unpaid | 'private' | undefined) {
     if (!item) return;
     if (item === 'private') { setPrivately(true); return; }
+    if (!('tx' in item)) { onClose(); linkPayment(nav, v, item.ref, bookingLine(item)); return; }
     if (noCorrection(item)) return;
     if (item.filed) { onClose(); correctFiled(nav, books, l, item.tx.ref, r.id); return; }
     if (paid.length && second !== item) { setSecond(item); return; }
@@ -87,11 +94,22 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
       </div>
     );
   };
-  const privateAt = k + best.length + more.length;
+  const booking = (u: Unpaid) => {
+    const i = k++;
+    return (
+      <div key={u.ref} className={`o tx2${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-ref={u.ref} onMouseMove={() => pick(i)} onClick={() => choose(u)}>
+        <span className="d mono">{formatDate(u.date)}</span>
+        <span className="t"><span>{u.description}</span><small>{u.ref}{u.sameAmount && ` · ${t('receipts.whySameAmount')}`}</small></span>
+        <span className="a mono">{u.currency !== baseCurrency() && <i>{u.currency}</i>}{fmt(u.amount)}</span>
+      </div>
+    );
+  };
+  const privateAt = best.length + more.length + unpaid.length;
   const picked = at >= 0 ? items[at] : undefined;
+  const payment = picked && picked !== 'private' && 'tx' in picked ? picked : undefined;
   const enterDoes = at < 0 ? t('receipts.pickFirst')
-    : picked !== 'private' && picked && noCorrection(picked) ? t('receipts.noCorrection')
-      : picked !== 'private' && picked?.filed ? t('receipts.toCorrection')
+    : payment && noCorrection(payment) ? t('receipts.noCorrection')
+      : payment?.filed ? t('receipts.toCorrection')
       : second && second === picked ? t('receipts.confirmVerb') : t('receipts.linkVerbShort');
 
   return (
@@ -112,6 +130,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
         <div className="res" role="listbox">
           {best.length > 0 && <div className="gh">{t('receipts.bestFit')}</div>}
           {best.map(row)}
+          {unpaid.length > 0 && <div className="gh">{t('receipts.bookingsWithoutPayment')}</div>}
+          {unpaid.map(booking)}
           {more.length > 0 && <div className="gh">{q ? t('receipts.hits') : t('receipts.morePayments')}</div>}
           {more.map(row)}
           {!best.length && !more.length && <div className="none">{q ? t('receipts.noPaymentFits', { q }) : t('receipts.noOpenPayment')}</div>}

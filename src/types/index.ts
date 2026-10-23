@@ -204,6 +204,8 @@ export interface JournalEntry {
    * evidence the booking never saw (its VAT above all): the next classify books it again
    * (src/accounting/classify-force.ts entriesWithoutTheirReceipts). Absent: booked before this
    * field existed, or by another writer; such an entry is never booked again for this reason.
+   * On a booking without a payment (a ref of its own, #89) it is the receipts linked to it, kept in
+   * step with its links (src/server/edits.ts carried): deleted and put back, it carries them again.
    */
   receipts?: string[];
   /**
