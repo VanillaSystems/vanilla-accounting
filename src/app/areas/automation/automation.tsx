@@ -491,6 +491,7 @@ function noteText(n: IntakeNote): string {
     case 'asked': return t('automation.note.asked', { n: n.count });
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
     case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
+    case 'receiptUnread': return t('automation.note.receiptUnread', { n: n.count });
     case 'payoutsHeld': return t('automation.note.payoutsHeld', { n: n.payouts.length, payouts: n.payouts.map((p) => {
       const w = holdWords(p.hold);
       return t('automation.note.payoutHeld', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, why: tWith(w.key, w.vars) });
@@ -711,7 +712,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const inTasks = new Set(tasks.map(unbooked).filter(Boolean));
   // A payment that waits for its receipt is the app's work until its return comes near, then a task of its own (issue #29).
   const forReceipt = waitingForReceipt(books, (ref) => booked(ref) === 'booked', localToday());
-  const receiptDue = forReceipt.filter((w) => w.kind === 'asks');
+  const receiptDue = forReceipt.filter((w) => w.kind !== 'waits');
   const held = new Set(forReceipt.map((w) => w.tx.ref));
   const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0;

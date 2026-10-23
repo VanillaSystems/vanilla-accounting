@@ -19,6 +19,9 @@ import { filingKeyOf, localToday, openFilingPeriod, parsePeriod } from '../../..
 import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { payText, signed } from '../bank/model.js';
 import { bookWithoutInputTax } from '../bank/actions.js';
+import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
+import type { UnreadOffer } from '../../../saving/unread-rule.js';
+import { useState } from 'react';
 import { periodName } from '../../lib/period-label.js';
 import { periodIssues, type PeriodIssue } from './period-issues.js';
 import type { Location } from '../../shell/route.js';
@@ -131,26 +134,31 @@ export function ThresholdTasks({ nav, passed }: { nav: Nav; passed: ReturnType<t
 }
 
 /**
- * The payments that waited for their receipt until their return came near (issue #29): now the
- * person's, each with its ways out. The receipt linked books it with its VAT; «Ohne Vorsteuer
+ * The payments that waited for their receipt until their return came near (issue #29), and those
+ * whose receipt could not be read (issue #57, UnreadReceipt.tsx): now the person's, each with its ways out. The receipt linked books it with its VAT; «Ohne Vorsteuer
  * buchen» books it at once with the zero code. An Eigenbeleg (#8) is not built yet.
  */
 export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly WaitingPayment[]; nav: Nav; canEdit: boolean }) {
-  if (!items.length) return null;
+  // The rate answers given here, each with its «Immer so?» while the page stays open: the payment itself is booked and leaves the list.
+  const [answered, setAnswered] = useState<Array<{ offer: UnreadOffer; rate: number }>>([]);
+  if (!items.length && !answered.length) return null;
   const period = (date: string) => { const p = parsePeriod(filingKeyOf(date, filing().length), localToday()); return p ? periodName(p) : date; };
   return (
     <div className="wftasks" data-testid="receipt-due">
-      {items.map(({ tx, due }) => (
-        <div key={tx.ref} className="wftask">
-          <b>{t('receiptDue.title', { name: payText(tx).name, amount: `${tx.currency} ${fmt(signed(tx))}` })}</b>
-          <span className="m">{formatDate(tx.date)} · {t('receiptDue.due', { period: period(tx.date), date: formatDate(due) })}</span>
+      {answered.map((a) => <UnreadRuleOffer key={a.offer.ref} offer={a.offer} rate={a.rate} nav={nav} />)}
+      {items.map((item) => (item.kind === 'unread' ? (
+        <UnreadTask key={item.tx.ref} item={item} nav={nav} canEdit={canEdit} onRate={(offer, rate) => setAnswered((was) => [...was.filter((x) => x.offer.ref !== offer.ref), { offer, rate }])} />
+      ) : (
+        <div key={item.tx.ref} className="wftask">
+          <b>{t('receiptDue.title', { name: payText(item.tx).name, amount: `${item.tx.currency} ${fmt(signed(item.tx))}` })}</b>
+          <span className="m">{formatDate(item.tx.date)} · {t('receiptDue.due', { period: period(item.tx.date), date: formatDate(item.due) })}</span>
           <p>{t('receiptDue.lead')}</p>
           <span className="wfactions">
-            <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('receiptDue.find')}</button>
-            {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
+            <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.find')}</button>
+            {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, item.tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
           </span>
         </div>
-      ))}
+      )))}
     </div>
   );
 }

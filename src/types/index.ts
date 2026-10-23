@@ -408,9 +408,10 @@ export interface BankTransaction {
    * The payment needs a receipt and has none yet, so the inbox run does not book it (issue #29):
    * no provisional booking, it is booked once a receipt is linked. The run sets the mark and takes
    * it away again (src/booking/receipt-wait.ts); src/accounting/receipt-due.ts says from when the
-   * person is asked about it.
+   * person is asked about it. `unread`: its receipt came, and its VAT could not be read (issue #57):
+   * the person is asked at once.
    */
-  waitsForReceipt?: { since: string };
+  waitsForReceipt?: { since: string; unread?: true };
 }
 
 /** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */
