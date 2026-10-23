@@ -143,6 +143,7 @@ export function errorText(e: unknown): string {
       return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
     case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
+    case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'notInTrash': return t('error.notInTrash');

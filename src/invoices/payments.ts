@@ -23,8 +23,8 @@ import { parseReference } from '../providers/qr-bill/reference.js';
 import { allocate, liveInvoices, namesNumber, openAmount, openFees, refundDue, revenueSplit, totals, withPayment, withoutPayment } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
-import { baseCurrency, vat } from '../engines/index.js';
-import { settlementLines, type OpenItemAccounts } from '../accounting/tax-point.js';
+import { agreedBasis, baseCurrency, vat } from '../engines/index.js';
+import { settlementLines, sideOf, type OpenItemAccounts } from '../accounting/tax-point.js';
 import { roundCHF } from '../accounting/rappen.js';
 import { invoiceReceipt } from './events.js';
 import { eventRef, hasEvent } from '../books/refs.js';
@@ -265,7 +265,9 @@ export function paymentProposals(books: Books, book: InvoiceBook): PaymentPropos
       const name = words(inv.customer.name);
       const nameMatches = name.length > 0 && name.some((w) => words(text).includes(w));
       const due = dueOf(inv, book);
-      const fits = due.includes(tx.amount) || (numberMatches && tx.amount < due[0]);
+      // On the agreed basis a part paid by the customer (every word of its name in the payment) is offered too: its revenue is booked with the invoice.
+      const fromCustomer = agreedBasis() && tx.direction === 'CRDT' && name.length > 0 && name.every((w) => words(text).includes(w));
+      const fits = due.includes(tx.amount) || ((numberMatches || fromCustomer) && tx.amount < due[0]);
       // Money out is everyday; only a refund to the customer, or one naming the credit note, is offered.
       if (!fits || (tx.direction === 'DBIT' && !nameMatches && !numberMatches)) continue;
       out.push({
@@ -281,7 +283,9 @@ export function paymentProposals(books: Books, book: InvoiceBook): PaymentPropos
  * A person confirms that `tx` pays `inv` (an incoming payment an invoice, an outgoing one a credit
  * note's refund): the allocation is recorded and booked from the document. Entries the classifier
  * wrote for the transaction are replaced. A payment a person booked already keeps her booking (it
- * is the revenue): the allocation is recorded and the document filed as its receipt (r9c-3).
+ * is the revenue): the allocation is recorded and the document filed as its receipt (r9c-3). On the
+ * agreed basis the document's event is the revenue: a kept booking with a sale code is refused, one
+ * that settles the receivable is kept.
  */
 export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: string, transactionRef: string, ctx: PaymentContext): PaymentOutcome {
   const out: PaymentOutcome = { paid: [], questions: [], files: [] };
@@ -294,6 +298,11 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   if (inv.currency !== tx.currency) throw new PaymentError(`${what} ist in ${inv.currency}, die Zahlung in ${tx.currency}.`);
   if (inv.payments.some((p) => p.transactionRef === tx.ref)) throw new PaymentError(`Die Zahlung ist ${what} schon zugeordnet.`);
   const keep = books.journalEntries.some((e) => e.transactionRef === tx.ref && e.origin !== 'classify');
+  // A document with its event carries its revenue on the receivable already: a kept booking of the payment with a sale code would count it twice.
+  const event = books.journalEntries.find((e) => e.transactionRef === eventRef(inv, 'issue'));
+  if (keep && event && books.journalEntries.some((e) => e.transactionRef === tx.ref && sideOf(e.vatCode) === 'sale')) {
+    throw new PaymentError(`${what} ist am ${event.date} mit Umsatz und MWST auf ${ctx.openItems.receivable} gebucht (${event.transactionRef}), die Zahlung ist mit Umsatz gebucht: zugeordnet zählte der Umsatz doppelt. Die Buchung der Zahlung auf ${ctx.openItems.receivable} ändern oder löschen, dann zuordnen.`);
+  }
   const split = settle(inv, book, tx.amount, tx.date);
   if (split.surplus > 0) throw new PaymentError(`Die Zahlung ist ${tx.currency} ${split.surplus.toFixed(2)} höher als offen.`);
   const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed' };

@@ -109,7 +109,9 @@ type Payment = { ref: string; date: string; currency: string; description?: stri
  * A payment's entries as the agreed basis books them. Each line with a sale or purchase code
  * (sideOf) that the payment's bank pays is dated by its documents: a
  * sale by the earliest (the tax is never declared late), a purchase by the latest (input tax never
- * claimed early), and booked against its open item; the payment settles each open item on its own
+ * claimed early), a minus code by the latest (a credit note or refund counts when it is booked,
+ * MWSTG Art. 41), and booked against its open item. Only a purchase line may move after the payment:
+ * a prepayment's tax arises when it is received (Art. 40 Abs. 1 lit. c); the payment settles each open item on its own
  * date. A document of a filed period of the books' open year leaves the line on the payment's date,
  * declared in that period's correction return (golden rule 1); one of an earlier year leaves it
  * on the payment's date as it is (the switch to the agreed basis, MWSTV Art. 106 Abs. 1: open items
@@ -128,9 +130,13 @@ export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: T
     const bankCredit = e.accountCredit === ctx.bankAccount && e.accountDebit !== ctx.bankAccount;
     const onClearing = e.accountDebit === SHOPIFY_ACCOUNT || e.accountCredit === SHOPIFY_ACCOUNT;
     if (!side || e.corrects || onClearing || (!bankDebit && !bankCredit)) return e;
-    const date = side === 'sale' ? dates[0] : dates[dates.length - 1];
-    // A document dated in a later year than its payment is a prepayment or a misread date: the payment's year keeps it.
-    if (date === tx.date || (date > tx.date && date.slice(0, 4) !== tx.date.slice(0, 4))) return e;
+    // A later change (a minus code: a credit note, a refund) counts when it is booked, by the latest document (Art. 41).
+    const change = e.vatCode!.startsWith(vat().codes.negativePrefix);
+    const date = side === 'sale' && !change ? dates[0] : dates[dates.length - 1];
+    if (date === tx.date) return e;
+    // Only a bill's input tax may wait for a document after the payment. A sale's tax on a prepayment arises when it is
+    // received (Art. 40 Abs. 1 lit. c), a change when it is paid (Art. 41); a document of a later year is a prepayment or a misread date.
+    if (date > tx.date && (side === 'sale' || change || date.slice(0, 4) !== tx.date.slice(0, 4))) return e;
     if (ctx.lock.isClosed(date) || ctx.lock.beforeBooks(date)) {
       return !ctx.lock.beforeBooks(date) && date.slice(0, 4) === openYear ? { ...e, corrects: filingKeyOf(date, ctx.length) } : e;
     }

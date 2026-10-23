@@ -289,6 +289,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).
     const events = payments ? bookInvoiceEvents(index, invoices, payments) : undefined;
     if (events) fileReceipts(ws, index, events.files);
+    if (events?.skipped.length) log(`  VAT of ${events.skipped.map((s) => s.number).join(', ')} not booked: no official rate of the invoice's day yet (npm run fetch-rates); the VAT filing waits for it`);
     // Paid invoices first (ADR 0010): a payment with an invoice's reference or number, or a credit note's refund, is booked from the document before classify sees it.
     const paid = payments ? matchPayments(index, invoices, payments) : undefined;
     if (paid) {

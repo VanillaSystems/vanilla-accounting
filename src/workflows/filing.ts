@@ -22,6 +22,8 @@ import { loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingBasis, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
+import { eventsMissing } from '../invoices/events.js';
+import { loadInvoices } from '../invoices/store.js';
 import { openSaleQuestionsIn } from '../questions/model.js';
 import { readQuestions } from '../questions/store.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
@@ -152,6 +154,9 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // The owner's open VAT questions about the period's payments are hers to answer first: no return is filed over them (r8h-24).
       const open = openSaleQuestionsIn(readQuestions(ws), books, ret.from, ret.to);
       if (open.length) throw refuse('questionsOpen', { period: key, n: String(open.length) }, `${key}: ${open.length} VAT question(s) about its payments are open; answer them before the return is written`);
+      // On the agreed basis an invoice whose event is not booked (no rate of its day yet) would be missing from the return.
+      const unbooked = eventsMissing(books, loadInvoices(ws), ret.to);
+      if (unbooked.length) throw refuse('invoiceEventsMissing', { period: key, invoices: unbooked.join(', ') }, `${key}: the VAT of invoice(s) ${unbooked.join(', ')} is not booked yet (no official rate of its day); the return would leave it out`);
       const missing = ratesWithoutActivityId(ret.figures);
       if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (the company's VAT section), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({

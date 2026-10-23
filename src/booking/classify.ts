@@ -20,7 +20,10 @@ import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { baseCurrency, chart, filing, invoicing, setup, vat } from '../engines/index.js';
+import { agreedBasis, baseCurrency, chart, filing, invoicing, setup, vat } from '../engines/index.js';
+import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
+import { loadInvoices } from '../invoices/store.js';
+import type { InvoiceBook } from '../invoices/model.js';
 import { roundCHF, toRappen } from '../accounting/rappen.js';
 import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
@@ -193,6 +196,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   payout?: RuleBooking;
   /** What the app's business files state about input tax (src/booking/purchase-vat.ts): code decides it on the model's lines. */
   purchaseVat?: BusinessVat;
+  /** The issued invoices, on the agreed basis: a customer payment that could pay an open one is not booked as revenue (openInvoiceOf). */
+  invoices?: InvoiceBook;
 }
 
 /**
@@ -287,7 +292,23 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     ...(ws.profile?.sells.length ? { sells: salesDefaults(ws.profile.sells, setup().sells) } : {}),
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
     ...((p) => (p ? { payout: p } : {}))(payoutDefault(ws, [...chartNames(chartOfAccounts).keys()])),
+    ...(agreedBasis() ? { invoices: loadInvoices(ws) } : {}),
   };
+}
+
+/**
+ * On the agreed basis an issued invoice's event carries its revenue on the receivable
+ * (src/invoices/events.ts): a customer payment that could pay an open invoice (paymentProposals:
+ * its open amount, or a part with its number or from the customer) is never booked as revenue
+ * again, by a rule or the model. It waits unbooked with the invoice it could pay; the person
+ * confirms it on the invoice, which settles the receivable, or books it by hand. Every incoming
+ * payment of each call is matched against the open invoices once; the best match per payment.
+ */
+function openInvoicesPaid(books: Books, context: ClassifyContext): Map<string, PaymentProposal> {
+  const out = new Map<string, PaymentProposal>();
+  if (!agreedBasis() || !context.invoices) return out;
+  for (const p of paymentProposals(books, context.invoices)) if (p.direction === 'CRDT' && !out.has(p.transactionRef)) out.set(p.transactionRef, p);
+  return out;
 }
 
 /** The money a rule names, in the books' currency, as the books write it. */
@@ -621,12 +642,23 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     documents: mappedReceipts(books, tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [], held: [] };
+  const invoicePaid = openInvoicesPaid(books, context);
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
   /** Payouts a rule books from the model's reading of their report (RuleBooking.fees). */
   const payouts = new Map<string, { placed: PlacedRule; booking: RuleBooking; fees: NonNullable<RuleBooking['fees']> }>();
   for (const tx of txs) {
+    const paid = invoicePaid.get(tx.ref);
+    if (paid) {
+      log(`  ${tx.ref}  could pay invoice ${paid.number}: waits for the person to confirm it there`);
+      outcome.failed.push({
+        ref: tx.ref,
+        reason: `Die Zahlung könnte Rechnung ${paid.number} von ${paid.customerName} bezahlen, deren Umsatz mit der Rechnung auf Debitoren gebucht ist: nichts gebucht. Unter Rechnungen › ${paid.number} die Zahlung bestätigen, oder von Hand buchen.`,
+        refusal: { code: 'classifyOpenInvoice', params: { number: paid.number, customer: paid.customerName } },
+      });
+      continue;
+    }
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
     // A payout whose report's figures are read (Receipt.payout) is booked from them in code, by the rule naming the provider, else by the firm's own split (r10f-29).

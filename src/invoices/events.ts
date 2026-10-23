@@ -14,11 +14,11 @@
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import { agreedBasis, baseCurrency, vat } from '../engines/index.js';
-import { openDay } from '../accounting/tax-point.js';
+import { openDay, sideOf } from '../accounting/tax-point.js';
 import { reversalOf } from '../accounting/reversal.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, InvoiceBook, Issued } from './model.js';
-import { creditNotesOf, liveInvoices, openOn, paidAmount, revenueSplit, totals } from './rules.js';
+import { creditNotesOf, liveInvoices, openOn, revenueSplit, totals } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
 import { eventRef, type EventKind } from '../books/refs.js';
@@ -49,10 +49,34 @@ function refundDueOn(cn: Issued, invoices: readonly Invoice[], date: string): nu
 }
 
 /**
+ * What a document's event books: on a day the books take, its whole amount less what its payments
+ * booked as revenue themselves (cash style before the event existed, or a person's booking with a
+ * sale code); an allocation whose booking only settles the receivable took no revenue and takes
+ * none off. On a locked day, what was still open on the locked line.
+ */
+function eventAmount(books: Books, inv: Issued, invoices: readonly Invoice[], lock: ReturnType<typeof periodLock>, day: string): number {
+  if (day !== inv.date) return inv.kind === 'credit-note' ? refundDueOn(inv, invoices, lock.lockedThrough ?? inv.date) : openOn(inv, invoices, lock.lockedThrough ?? inv.date);
+  const revenue = new Set(books.journalEntries.filter((e) => sideOf(e.vatCode) === 'sale').map((e) => e.transactionRef));
+  return fromRappen(gross(inv) - inv.payments.filter((p) => revenue.has(p.transactionRef)).reduce((s, p) => s + toRappen(p.amount), 0));
+}
+
+/**
+ * The issued documents dated on or before `through` whose event the books lack and would book
+ * (a foreign one whose day had no rate yet, EventOutcome.skipped): no return of the agreed basis
+ * is written over them (src/workflows/filing.ts). Empty on the cash basis.
+ */
+export function eventsMissing(books: Books, book: InvoiceBook, through: string): string[] {
+  if (!agreedBasis()) return [];
+  const lock = periodLock(books);
+  const invoices = liveInvoices(book);
+  const refs = new Set(books.journalEntries.map((e) => e.transactionRef));
+  return invoices.flatMap((inv) => (inv.status === 'issued' && !inv.cancelled && inv.date <= through && !refs.has(eventRef(inv, 'issue'))
+    && eventAmount(books, inv, invoices, lock, openDay(lock, inv.date)) > 0 ? [inv.number] : []));
+}
+
+/**
  * Books the events of every issued document the books do not carry yet, on the agreed basis only
- * (call inside the write door, update in src/books/store.ts). A document on a day the books take
- * books its whole amount less what was paid before its event existed (a payment then booked its
- * revenue itself); one on a locked day books what was still open on the locked line.
+ * (call inside the write door, update in src/books/store.ts), each for its eventAmount.
  */
 export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentContext): EventOutcome {
   const out: EventOutcome = { booked: [], skipped: [], files: [] };
@@ -65,9 +89,7 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
     const issueRef = eventRef(inv, 'issue');
     if (!refs.has(issueRef) && !inv.cancelled) {
       const day = openDay(lock, inv.date);
-      const amount = day === inv.date
-        ? fromRappen(gross(inv) - toRappen(paidAmount(inv)))
-        : inv.kind === 'credit-note' ? refundDueOn(inv, invoices, lock.lockedThrough ?? inv.date) : openOn(inv, invoices, lock.lockedThrough ?? inv.date);
+      const amount = eventAmount(books, inv, invoices, lock, day);
       if (amount <= 0) continue;
       const rate = inv.currency === baseCurrency() ? undefined : ctx.fx.daily(inv.currency, day);
       if (inv.currency !== baseCurrency() && rate === undefined) { out.skipped.push({ number: inv.number, reason: 'rate' }); continue; }
