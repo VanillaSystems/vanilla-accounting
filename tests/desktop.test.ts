@@ -5,7 +5,7 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import fs from 'node:fs';
 import git from 'isomorphic-git';
 import { request as httpRequest, type Server } from 'node:http';
@@ -19,7 +19,9 @@ import { ask, modelReady } from '../src/llm/ask.js';
 import { NoClaudeError } from '../src/llm/providers/claude-cli.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, workspaceAt } from '../src/workspace/workspace.js';
-import { loadBooks } from '../src/books/store.js';
+import { loadBooks, sealsOf } from '../src/books/store.js';
+import { readState, writeState } from '../src/desktop/state.js';
+import { writeOldLayout } from './support/old-layout.js';
 import de from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -64,7 +66,7 @@ test('every setup question, option, stop and note has words on the start screen'
 });
 
 test('without books: the start screen is served, the books API answers noWorkspace, a folder without a manifest is refused', async () => {
-  assert.deepEqual((await call('GET', '/api/desktop')).json, { open: null, recent: [], booksHome: join(home, 'Documents') });
+  assert.deepEqual((await call('GET', '/api/desktop')).json, { open: null, recent: [], booksHome: join(home, 'Documents'), folders: [] });
   assert.match((await call('GET', '/start')).text, /<title>app<\/title>/);
   const status = await call('GET', '/api/status');
   assert.deepEqual([status.status, status.json.code], [409, 'noWorkspace']);
@@ -171,4 +173,46 @@ test('the SMTP password: npm start keeps it in .env; the app saves it through Fi
   } finally {
     useSecretStore(envSecrets);
   }
+});
+
+test('the recent list says why books cannot be opened: a folder that is gone has no name, a refused manifest carries the reader\'s words', async () => {
+  const refused = join(home, 'Refused');
+  mkdirSync(join(refused, APP_FOLDER), { recursive: true });
+  writeFileSync(join(refused, APP_FOLDER, MANIFEST_FILE), readFileSync(join(DEMO_ROOT, MANIFEST_FILE), 'utf8').replace('uid: CHE-123.456.789', 'uid: nicht'));
+  const was = readState(join(home, 'desktop.json'));
+  writeState(join(home, 'desktop.json'), { ...was, recent: [refused, join(home, 'Gone'), ...was.recent] });
+  const [problem, gone, ...rest] = (await call('GET', '/api/desktop')).json.recent as { root: string; name?: string; problem?: string }[];
+  assert.equal(problem.name, undefined);
+  assert.match(problem.problem!, /company\.uid "nicht" must look like CHE-/);
+  assert.deepEqual(gone, { root: join(home, 'Gone'), demo: false }, 'neither a name nor a problem: the folder is gone');
+  assert.ok(rest.every((b) => b.name && !b.problem));
+  mkdirSync(join(home, 'Documents', 'Buchhaltung 2026'), { recursive: true });
+  assert.deepEqual((await call('GET', '/api/desktop')).json.folders, ['Buchhaltung 2026'], 'the folders in the books home, so a new default name steps aside');
+});
+
+test('a demo copy an app before 0.4.0 made (books.json at its top) is replaced by a fresh copy when the demo is opened', async () => {
+  rmSync(join(home, 'Demo'), { recursive: true, force: true });
+  writeOldLayout(DEMO_ROOT, join(home, 'Demo'));
+  assert.ok(existsSync(join(home, 'Demo', 'books.json')));
+  const demo = await call('POST', '/api/desktop/demo');
+  assert.equal(demo.status, 200, demo.text);
+  assert.ok(!existsSync(join(home, 'Demo', 'books.json')), 'the old copy is gone');
+  assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT)))));
+});
+
+test('books in the layout before 0.4.0 are refused with oldLayout; /api/desktop/upgrade moves them as npm run update does, seals intact, and opens them', async () => {
+  const repo = join(home, 'Alt');
+  writeOldLayout(DEMO_ROOT, repo);
+  const refused = await call('POST', '/api/desktop/open', { root: repo });
+  assert.deepEqual([refused.status, refused.json.code, refused.json.params], [400, 'oldLayout', { root: repo }]);
+  assert.ok(existsSync(join(repo, 'books.json')), 'a refusal moves nothing');
+  const upgraded = await call('POST', '/api/desktop/upgrade', { root: repo });
+  assert.equal(upgraded.status, 200, upgraded.text);
+  assert.equal(upgraded.json.name, workspaceAt(DEMO_ROOT).company.name);
+  assert.ok(!existsSync(join(repo, 'books.json')) && existsSync(join(repo, APP_FOLDER, 'ledger.json')), 'the books moved into vanilla-accounting/');
+  assert.ok(existsSync(join(repo, APP_FOLDER, 'data', 'backups', 'books.json.schema-none')), 'books.json stays as a backup');
+  const books = loadBooks(workspaceAt(repo));
+  assert.ok(sealsOf(books).checks.length > 0 && sealsOf(books).checks.every((c) => c.status === 'intact'), 'every filed quarter\'s seal holds');
+  assert.deepEqual((await call('GET', '/books.json')).json.journalEntries.length, books.journalEntries.length);
+  assert.equal((await call('GET', '/api/desktop')).json.recent[0].name, upgraded.json.name, 'the moved books lead the recent list');
 });
