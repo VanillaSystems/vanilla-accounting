@@ -81,14 +81,15 @@ export function moneyAccounts(bankAccounts: readonly LedgerBankAccount[], accoun
  * payment out), except on a VAT-amount code (M81-2), whose code is its other leg; whether the bank
  * really was the missing side, paymentRefusal decides. A foreign entry carries the ESTV daily sell
  * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
- * in a closed period: then the payment date, because nothing new is ever dated there.
+ * in a closed period or before the books begin (#39): then the payment date, because nothing new
+ * is ever dated there.
  */
 export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by, money, corrects, acquisition }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
-  const orderDate = receiptDate && !lock.isClosed(receiptDate) ? receiptDate : tx.date;
+  const orderDate = receiptDate && !lock.isClosed(receiptDate) && !lock.beforeBooks(receiptDate) ? receiptDate : tx.date;
   const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>, decided?: { reason: string; by: BookedBy }): JournalEntry =>
     ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 

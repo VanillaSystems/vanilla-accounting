@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { DuplicateFileError, findFile, yearPaths, yearsOf, type Workspace } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { booksOnDisk, tempWorkspace, writeIndex } from './support/workspace.js';
-import { ClosedPeriodError, loadBooks, moduleActor, OldLayoutError, OwnershipError, PERSON, periodLock, saveBooks, update, type Actor, type Books } from '../src/books/store.js';
+import { BeforeBooksError, ClosedPeriodError, loadBooks, moduleActor, OldLayoutError, OwnershipError, PERSON, periodLock, saveBooks, update, type Actor, type Books } from '../src/books/store.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
@@ -77,6 +77,20 @@ test('an unbooked receipt dated before the books begin lies in their first year'
   books.receipts.push({ id: 'old', filename: 'old.pdf', originalFilename: 'old.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-02-01T00:00:00Z', location: 'archived', date: '2024-11-03' });
   saveBooks(dir, books);
   assert.deepEqual(yearsOf(dir.paths), ['2026']);
+});
+
+test('the write door refuses an entry dated before the books begin, and lets one there stay and be moved in (#39)', () => {
+  const opened = (): Books => ({ ...fixtureBooks(), config: { openingBalances: { 2026: { 1020: 100 } } } });
+  const early = { id: 'early', transactionRef: 'O1', date: '2025-12-27', accountDebit: '1093', accountCredit: '3200', amount: 5 };
+  for (const actor of ACTORS) {
+    assert.throws(() => update(opened(), actor, (b) => { b.journalEntries.push({ ...early }); }), BeforeBooksError);
+    assert.throws(() => update(opened(), actor, (b) => { b.journalEntries.find((e) => e.id === 'jo')!.date = '2025-12-31'; }), /Die Bücher beginnen am 2026-01-01/);
+  }
+  const legacy = opened();
+  legacy.journalEntries.push({ ...early });
+  assert.doesNotThrow(() => update(legacy, PERSON, (b) => { b.journalEntries.find((e) => e.id === 'early')!.description = 'alt'; }));
+  assert.doesNotThrow(() => update(legacy, PERSON, (b) => { b.journalEntries.find((e) => e.id === 'early')!.date = '2026-01-02'; }));
+  assert.doesNotThrow(() => update({ ...fixtureBooks(), config: {} }, PERSON, (b) => { b.config.openingBalances = { 2026: {} }; b.transactions.push({ ref: 'N', bank: 'Wise', date: '2025-12-30', amount: 1, currency: 'CHF', direction: 'DBIT', description: '' }); }), 'opening balances set beside an earlier payment change no entry');
 });
 
 test('a receipt\'s file moves to the year of the entry that first books it, open years only, on save and on load', () => {
