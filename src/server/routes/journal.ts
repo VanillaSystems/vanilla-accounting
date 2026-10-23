@@ -141,8 +141,8 @@ const withWarnings = (books: Books, entry: JournalEntry) => ({ entry, warnings: 
  * Änderungen › «Rückgängig» of a booking a person changed or made since the last save: back as
  * saved, or gone. A bank payment the undo leaves without a booking gets its booking run again, so
  * the question the person had answered by booking it is back under Aufgaben (r8k-6). A booking an
- * answer changed is taken back with the answer: the booking as before it, its payer rule and that
- * rule's bookings, the question open again (r9n-20, src/server/questions.ts undoAnswer).
+ * answer changed is taken back with the answer: the booking as before it (and the payer rule an
+ * answer kept before #38, with that rule's bookings), the question open again (r9n-20, src/server/questions.ts undoAnswer).
  */
 router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   const edit = (await handEdits(WS)).find((h) => h.id === req.params.id);

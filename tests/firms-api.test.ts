@@ -7,8 +7,7 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { parse } from 'yaml';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
@@ -112,7 +111,7 @@ test('not registered: a sidebar block that sets a receipt\'s VAT facts and then 
   assert.equal(books.receipts.find((r) => r.id === 'rk')?.hasSwissVat, undefined, 'the receipt is as it was');
 });
 
-test('net tax rate method: «kein Umsatz» on the sale question takes the payment out of the turnover (owner\'s account, no F-code), keeps a payer rule on that account, and the undo puts the sale back (r7f-28)', async () => {
+test('net tax rate method: «kein Umsatz» on the sale question takes the payment out of the turnover (owner\'s account, no F-code), keeps no payer rule (#38), and the undo puts the sale back (r7f-28)', async () => {
   const api = await start('demo-schreinerei');
   // The rule's facts come from the chart: the owner's account and the revenue account must be in it.
   appendFileSync(join(api.ws.paths.history, 'prior-year.Konten.txt'), '2451\tKontokorrent\n3400\tDienstleistungsertrag\n');
@@ -129,8 +128,7 @@ test('net tax rate method: «kein Umsatz» on the sale question takes the paymen
   const e = loadBooks(api.ws).journalEntries.find((x) => x.id === 'e-ch')!;
   assert.deepEqual([e.accountDebit, e.accountCredit, e.vatCode, e.origin], ['1021', '2451', undefined, 'manual'], 'off the revenue account, no F-code: the half year\'s turnover drops by the payment');
   assert.equal(loadBooks(api.ws).transactions.find((t) => t.ref === 'S-CH')?.noReceiptNeeded, true);
-  const rules = (parse(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8')) as { steps: { classify?: { rules?: Array<{ id: string; then: unknown }> } } }).steps.classify?.rules ?? [];
-  assert.deepEqual(rules.find((r) => r.id === `sale-${id}`)?.then, { account: '2451', vat: 'none' }, 'the payer\'s next payment is booked off the turnover too, never on 3000 as «kein Umsatz»');
+  assert.equal(existsSync(join(api.root, 'knowledge/rules/booking.guide.yaml')), false, 'the answer alone keeps no rule');
   const undone = await api.send('POST', `/api/questions/${id}/undo`, { by: 'Reto Beispiel' });
   assert.equal(undone.status, 200, JSON.stringify(undone.json));
   const back = loadBooks(api.ws).journalEntries.find((x) => x.id === 'e-ch')!;
