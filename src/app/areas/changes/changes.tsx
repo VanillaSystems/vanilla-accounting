@@ -74,8 +74,8 @@ function List({ route, nav }: Props) {
 }
 
 function Detail({ route, nav }: Props) {
-  const { view } = useChanges();
-  if (!view) return <div className="detail-empty"><div>{t('changes.loading')}</div></div>;
+  const { view, error } = useChanges();
+  if (!view) return <div className="detail-empty">{error ? null : <div>{t('changes.loading')}</div>}</div>;
   if (!route.commit) return <SavePanel view={view} nav={nav} />;
   const back = <button type="button" className="linkbtn chback" onClick={() => nav.select(route.file && route.commit !== 'draft' && route.commit !== 'outside' ? { area: 'changes', commit: route.commit } : { area: 'changes' })}>{t('changes.back')}</button>;
   if (route.file) return <>{back}<FileView source={route.commit} path={route.file} rev={view.rev} /></>;

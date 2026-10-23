@@ -19,7 +19,7 @@ import { Kbd } from '../receipts/commands.js';
 import { NO_VAT } from '../codes/model.js';
 import { codeText, VatCards } from '../codes/vat-card.js';
 import { codesUi, setCodesUi } from '../codes/state.js';
-import { byMonth, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
+import { byMonth, firstRowTakesOver, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
 import { listed, setUi, toggleMonth, ui, useUi } from './state.js';
 import { journalFor, newEntryDate, runAct } from './commands.js';
 import { Detail, evidenceText } from './Detail.js';
@@ -44,11 +44,10 @@ function List(props: Props) {
 
   // Nothing selected: the first row. A link to an entry elsewhere opens its period, month and filter (urls.md rule 1).
   const seen = useRef<string>();
+  const held = [listed.pending, ui().deleted?.id];
   useEffect(() => {
     const v = route.id ? j.byId.get(route.id) : undefined;
-    // An entry that went away (deleted, undone, booked again) hands the selection to the first row.
-    // A link to an entry that never was here keeps its place, and the detail says so (urls.md rule 5).
-    if (!v) { if (ids[0] && !(route.id && route.id === listed.pending) && route.id !== ui().deleted?.id && (!route.id || seen.current === route.id)) nav.select({ area: 'journal', id: ids[0] }); return; }
+    if (!v) { if (ids[0] && firstRowTakesOver(route.id, held, seen.current)) nav.select({ area: 'journal', id: ids[0] }); return; }
     if (route.id === listed.pending) listed.pending = undefined;
     if (seen.current === route.id) return;
     seen.current = route.id;
@@ -60,7 +59,7 @@ function List(props: Props) {
 
   const select = (id: string) => nav.select({ area: 'journal', id });
   // A pending entry (just booked) and a deleted one (its place kept with «Rückgängig», r6h-28) hold the selection.
-  useSelectionFollowsRows(route.id, ids, select, route.id === listed.pending || route.id === ui().deleted?.id);
+  useSelectionFollowsRows(route.id, ids, select, !!route.id && held.includes(route.id));
   const setFilter = (filter?: JournalFilter) => setUi({ filter });
 
   return (

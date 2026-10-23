@@ -8,7 +8,7 @@ import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index, JournalEntry } from '../src/types/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
-import { journalOf, rowsOf } from '../src/app/areas/journal/model.js';
+import { firstRowTakesOver, journalOf, rowsOf } from '../src/app/areas/journal/model.js';
 import { NO_VAT, codeGroups, splitCodes, vatStats } from '../src/app/areas/codes/model.js';
 
 const tx = (ref: string, date: string, amount: number, x: Partial<BankTransaction> = {}): BankTransaction =>
@@ -114,4 +114,13 @@ test('a booking a company rule or the app\'s code decided counts as theirs in th
   assert.deepEqual(r.origins, { classify: 1, rule: 1, code: 1, manual: 1, assistant: 0, invoice: 0, 'year-close': 0 });
   assert.deepEqual(rowsOf(journalOf(b), q3, undefined, undefined, undefined, name, 'rule').rows.map((v) => v.e.id), ['r1']);
   assert.deepEqual(rowsOf(journalOf(b), q3, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['m1'], 'Claude is only what the model decided');
+});
+
+test('a link that names no entry selects the first row, nothing held or deleted (#62)', () => {
+  assert.equal(firstRowTakesOver(undefined, [undefined, undefined], undefined), true, 'no link, nothing pending, nothing deleted');
+  assert.equal(firstRowTakesOver(undefined, ['j9', 'j8'], undefined), true);
+  assert.equal(firstRowTakesOver('j9', ['j9', undefined], 'j9'), false, 'an entry just booked holds the selection');
+  assert.equal(firstRowTakesOver('j8', [undefined, 'j8'], 'j8'), false, 'an entry just deleted keeps its place');
+  assert.equal(firstRowTakesOver('j7', [undefined, undefined], 'j7'), true, 'an entry shown before that went away hands it on');
+  assert.equal(firstRowTakesOver('j6', [undefined, undefined], undefined), false, 'a link to an entry never here keeps its place');
 });

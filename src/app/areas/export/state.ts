@@ -5,7 +5,7 @@
 import { localToday, parsePeriod, type Period } from '../../../accounting/periods.js';
 import { PRESETS, presetPeriod, type ExportRequest, type PresetId, type Selection } from '../../../export/model.js';
 import type { Route } from '../../shell/route.js';
-import { ApiError } from '../../lib/api.js';
+import { ApiError, apiFetch } from '../../lib/api.js';
 import { language } from '../../i18n/index.js';
 
 export interface DialogConfig {
@@ -62,7 +62,7 @@ export const download = (req: Omit<ExportRequest, 'language'>): Promise<string> 
 
 /** A POST whose answer is a file: saved by the browser under the server's name, which it returns. */
 export async function postDownload(path: string, body: unknown, fallback: string): Promise<string> {
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) {
     const err = await res.json().catch(() => null) as ConstructorParameters<typeof ApiError>[0] | null;
     throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });

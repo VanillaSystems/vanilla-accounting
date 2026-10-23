@@ -65,10 +65,18 @@ export class ApiError extends Error {
   constructor(readonly body: ApiErrorBody) { super(body.error); }
 }
 
-/** Every call throws an ApiError when the response is not ok. The static export refuses every write unsent. */
+/**
+ * The one door to the server. The static export has no server: a call to /api/ is refused there
+ * unsent, read or write, so no area can make the snapshot ask a host for what it cannot serve.
+ */
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  if (STATIC_EXPORT && path.startsWith('/api/')) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
+  return fetch(path, init);
+}
+
+/** Every call throws an ApiError when the response is not ok. */
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  if (STATIC_EXPORT && method !== 'GET') throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-  const res = await fetch(path, body === undefined ? { method } : {
+  const res = await apiFetch(path, body === undefined ? { method } : {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -251,10 +259,9 @@ export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
 export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string; email?: MailMessage }
 
-/** Raw bytes to a route that takes a file; the static export refuses unsent. */
+/** Raw bytes to a route that takes a file. */
 async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
-  if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': type }, body });
+  const res = await apiFetch(path, { method: 'POST', headers: { 'Content-Type': type }, body });
   if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
   return res.json() as Promise<T>;
 }
@@ -314,8 +321,7 @@ export const api = {
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   /** A file for the next message (src/types/attachment.ts): kept beside the conversations, never in the books. */
   assistantAttach: async (file: File): Promise<Attachment> => {
-    if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-    const res = await fetch(`/api/assistant/attachments?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+    const res = await apiFetch(`/api/assistant/attachments?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return res.json() as Promise<Attachment>;
   },
@@ -367,7 +373,7 @@ export const api = {
   draftNoteRule: (c: NoteRuleCommand) => request<{ path: string }>('POST', '/api/rules/note', c),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),
   dropAdd: async (session: string, file: File): Promise<DropSession> => {
-    const res = await fetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+    const res = await apiFetch(`/api/drop/${session}/files?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return res.json() as Promise<DropSession>;
   },
@@ -385,8 +391,7 @@ export const api = {
 
   /** A PDF or photo into the workspace's inbox (beleg-import/), as the phone app sends it. */
   upload: async (file: Blob, type: ReceiptType, capturedAt: Date) => {
-    if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
-    const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': capturedAt.toISOString() }, body: file });
+    const res = await apiFetch('/api/upload', { method: 'POST', headers: { 'Content-Type': type, 'X-Captured-At': capturedAt.toISOString() }, body: file });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return (await res.json()) as { filename: string };
   },
@@ -402,9 +407,8 @@ export const api = {
 
   /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
   importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {
-    if (STATIC_EXPORT) throw new ApiError({ error: 'read-only snapshot', code: 'readonly' });
     const qs = new URLSearchParams({ name, ...into });
-    const res = await fetch(`/api/statements?${qs}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+    const res = await apiFetch(`/api/statements?${qs}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return (await res.json()) as StatementImport;
   },
