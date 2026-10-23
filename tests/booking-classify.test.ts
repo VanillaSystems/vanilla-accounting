@@ -12,14 +12,14 @@ import { classifyTransactions, entriesFor, moneyAccounts, type ClassifyDeps } fr
 import { chartFor, loadChart } from '../src/workspace/chart.js';
 import { chartNames } from '../src/booking/rule-book.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
-import { workspaceAt, type LedgerBankAccount } from '../src/workspace/workspace.js';
+import { workspaceAt, yearsOf, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import { ClosedPeriodError, periodLock, type Books } from '../src/books/store.js';
+import { ClosedPeriodError, periodLock, saveBooks, type Books } from '../src/books/store.js';
 import { buildBatchClassifyPrompt, type ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { startApi } from './support/api-server.js';
-import { booksOnDisk } from './support/workspace.js';
+import { booksOnDisk, tempWorkspace } from './support/workspace.js';
 import { loadBooks } from '../src/books/store.js';
 import './support/jurisdiction.js';
 import { loadJurisdiction } from '../src/core/modules/load.js';
@@ -130,6 +130,21 @@ test('no entry is ever dated in a closed period', () => {
     () => entriesFor(tx({ ref: 'C', date: '2026-06-30' }), [expense(5)], { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } }),
     ClosedPeriodError,
   );
+});
+
+test('an order dated before the books begin books on the payment date: no entry and no year folder before them (#39)', async () => {
+  const b = books([tx({ ref: 'P', bank: 'Raiffeisen', direction: 'CRDT', amount: 95, date: '2027-01-02' })], [{ id: 'order', ref: 'P', date: '2026-12-27' }]);
+  b.config = {};
+  const { ask } = stubAsk(() => [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }]);
+  await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(b.journalEntries.map((e) => e.date), ['2027-01-02', '2027-01-02'], 'the books begin with the first payment\'s year');
+  const ws = tempWorkspace('books-begin-');
+  saveBooks(ws, b);
+  assert.deepEqual(yearsOf(ws.paths), ['2027']);
+
+  const opened = periodLock({ config: { openingBalances: { 2027: { 1020: 100 } } } });
+  const [sale] = entriesFor(tx({ ref: 'Q', direction: 'CRDT', amount: 95, date: '2027-01-02' }), [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }], { fx, receiptDate: '2026-12-27', receipts: [], bankAccount: '1021', lock: opened, by: { kind: 'model', model: 'sonnet' } });
+  assert.equal(sale.date, '2027-01-02', 'the opening balances name the first year');
 });
 
 test('the bank side the model leaves empty is the transaction\'s account, manual ones on 2451', async () => {
