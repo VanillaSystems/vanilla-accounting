@@ -9,12 +9,18 @@
  * answer a typed refusal the UI says in the person's words.
  */
 import { localToday, parsePeriod, type IsoDate } from '../accounting/periods.js';
+import { DIMENSION_ID, tagValue, type TagFilter } from '../books/tags.js';
 
 export const SOURCES = ['entries', 'payments', 'receipts', 'invoices'] as const;
 export type Source = typeof SOURCES[number];
 
 export const GROUPINGS = ['none', 'month', 'quarter', 'account', 'counterparty', 'vatCode'] as const;
-export type Grouping = typeof GROUPINGS[number];
+/** By the value of a reporting dimension the bookings carry (#127): `tag:projekt`. */
+export type TagGrouping = `tag:${string}`;
+export type Grouping = typeof GROUPINGS[number] | TagGrouping;
+export const isTagGrouping = (g: string): g is TagGrouping => g.startsWith('tag:') && DIMENSION_ID.test(g.slice(4));
+/** The dimension a tag grouping groups by. */
+export const groupDimension = (g: Grouping): string | undefined => (isTagGrouping(g) ? g.slice(4) : undefined);
 
 export const COLUMNS = ['date', 'text', 'account', 'counterAccount', 'vatCode', 'amount', 'net', 'tax', 'currency', 'receipt'] as const;
 export type Column = typeof COLUMNS[number];
@@ -23,7 +29,7 @@ export type Column = typeof COLUMNS[number];
 export const ORIGINS = ['classify', 'manual', 'invoice', 'year-close', 'other'] as const;
 export type Origin = typeof ORIGINS[number];
 
-export const FILTERS = ['accounts', 'vatCodes', 'text', 'origins', 'receipt', 'currencies'] as const;
+export const FILTERS = ['accounts', 'vatCodes', 'text', 'origins', 'receipt', 'currencies', 'tags'] as const;
 export type FilterKey = typeof FILTERS[number];
 
 /** One account (`from === to`) or a range of them, both ends included: "6510", "6000-6999". */
@@ -39,6 +45,8 @@ export interface ReportFilter {
   /** With or without a receipt linked to the payment. */
   receipt?: 'with' | 'without';
   currencies?: string[];
+  /** Bookings that carry one of these values per dimension named (#127); '' the bookings without a value. */
+  tags?: TagFilter;
 }
 
 export interface ReportSection {
@@ -59,8 +67,9 @@ export interface ReportSpec {
 }
 
 /** What each source can be asked: the filters, groupings and columns that mean something for it. */
-export const SOURCE_TAKES: Record<Source, { filters: readonly FilterKey[]; groups: readonly Grouping[]; columns: readonly Column[]; default: readonly Column[] }> = {
-  entries: { filters: FILTERS, groups: GROUPINGS, columns: COLUMNS, default: ['date', 'text', 'account', 'counterAccount', 'vatCode', 'amount'] },
+export const SOURCE_TAKES: Record<Source, { filters: readonly FilterKey[]; groups: readonly Grouping[]; columns: readonly Column[]; default: readonly Column[]; tags?: true }> = {
+  // Only bookings carry tags: they alone are grouped by a dimension (`tags`).
+  entries: { filters: FILTERS, groups: GROUPINGS, columns: COLUMNS, default: ['date', 'text', 'account', 'counterAccount', 'vatCode', 'amount'], tags: true },
   payments: {
     filters: ['accounts', 'text', 'receipt', 'currencies'],
     groups: ['none', 'month', 'quarter', 'account', 'counterparty'],
@@ -93,6 +102,8 @@ export type ReportRefusal =
   | { code: 'period'; params: { period: string } }
   | { code: 'unknownAccount'; params: { account: string } }
   | { code: 'unknownVatCode'; params: { code: string } }
+  /** A tag filter or grouping names a dimension the workspace does not declare (#127). */
+  | { code: 'unknownDimension'; params: { dimension: string } }
   /** A filter, grouping or column that the section's source does not have. */
   | { code: 'notForSource'; params: { source: Source; what: string } }
   | { code: 'placeholder'; params: { name: string } }
@@ -142,6 +153,17 @@ function filterOf(v: unknown): ReportFilter {
   if (f.receipt !== undefined) out.receipt = f.receipt === 'with' || f.receipt === 'without' ? f.receipt : shape('filter.receipt');
   const currencies = words(f.currencies, 'filter.currencies').map((c) => (/^[A-Za-z]{3}$/.test(c) ? c.toUpperCase() : shape(`filter.currencies: ${c}`)));
   if (currencies.length) out.currencies = currencies;
+  if (f.tags !== undefined && f.tags !== null) {
+    if (typeof f.tags !== 'object' || Array.isArray(f.tags)) shape('filter.tags');
+    const tags: TagFilter = {};
+    for (const [d, v] of Object.entries(f.tags as Record<string, unknown>)) {
+      if (!DIMENSION_ID.test(d)) shape(`filter.tags.${d}`);
+      // '' asks for the bookings without a value of the dimension.
+      const values = list(v, `filter.tags.${d}`).map((x) => (x === '' ? '' : tagValue(x) ?? shape(`filter.tags.${d}`)));
+      if (values.length) tags[d] = [...new Set(values)];
+    }
+    if (Object.keys(tags).length) out.tags = tags;
+  }
   return out;
 }
 
@@ -152,8 +174,8 @@ function sectionOf(v: unknown, i: number): ReportSection {
   const takes = SOURCE_TAKES[source];
   const filter = filterOf(s.filter);
   for (const k of Object.keys(filter)) if (!takes.filters.includes(k as FilterKey)) refuse({ code: 'notForSource', params: { source, what: k } });
-  const group = s.group === undefined ? 'none' : isOneOf(GROUPINGS, s.group) ? s.group : shape(`sections[${i}].group`);
-  if (!takes.groups.includes(group)) refuse({ code: 'notForSource', params: { source, what: group } });
+  const group: Grouping = s.group === undefined ? 'none' : isOneOf(GROUPINGS, s.group) || (typeof s.group === 'string' && isTagGrouping(s.group)) ? s.group : shape(`sections[${i}].group`);
+  if (isTagGrouping(group) ? !takes.tags : !takes.groups.includes(group)) refuse({ code: 'notForSource', params: { source, what: group } });
   const asked = list(s.columns, `sections[${i}].columns`).map((c) => (isOneOf(COLUMNS, c) ? c : shape(`sections[${i}].columns: ${String(c)}`)));
   for (const c of asked) if (!takes.columns.includes(c)) refuse({ code: 'notForSource', params: { source, what: c } });
   const columns = asked.length ? [...new Set(asked)] : [...takes.default];
@@ -197,11 +219,11 @@ export function parseSpec(raw: unknown, today: IsoDate = localToday()): Parsed<R
 }
 
 /** What a spec is checked against: the firm's chart and whether its form takes a VAT code. */
-export interface SpecFacts { accounts: Record<string, string>; takesCode(code: string): boolean }
+export interface SpecFacts { accounts: Record<string, string>; takesCode(code: string): boolean; dimensions?: readonly { id: string }[] }
 
 /**
  * The firm's facts: an account a filter names is in the chart (a range holds one of its accounts),
- * a VAT code is one the firm's form knows. A workspace without a chart has no accounts to check.
+ * a VAT code is one the firm's form knows, a dimension one it declares. A workspace without a chart has no accounts to check.
  */
 export function checkSpec(spec: ReportSpec, facts: SpecFacts): ReportRefusal | undefined {
   const chart = Object.keys(facts.accounts);
@@ -210,6 +232,9 @@ export function checkSpec(spec: ReportSpec, facts: SpecFacts): ReportRefusal | u
       if (!chart.some((a) => inRange(a, r))) return { code: 'unknownAccount', params: { account: accountRangeText(r) } };
     }
     for (const c of s.filter.vatCodes ?? []) if (!facts.takesCode(c)) return { code: 'unknownVatCode', params: { code: c } };
+    for (const d of [...Object.keys(s.filter.tags ?? {}), ...[groupDimension(s.group)].filter((x): x is string => !!x)]) {
+      if (!facts.dimensions?.some((x) => x.id === d)) return { code: 'unknownDimension', params: { dimension: d } };
+    }
   }
   return undefined;
 }

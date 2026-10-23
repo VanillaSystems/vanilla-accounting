@@ -17,6 +17,7 @@ import { ibanKey, payerKey, payerNames, textKey } from '../knowledge/payer.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
 import { ruleFactsOf } from './rules.js';
+import type { Tags } from '../books/tags.js';
 
 /** Whose payments a hand-made rule books. */
 export type HandMatch =
@@ -35,6 +36,8 @@ export interface HandRule {
   account: string;
   /** null: booked without a VAT code (a firm not registered, a transfer). */
   vat: string | null;
+  /** The reporting dimensions every booking of the rule carries (#127). */
+  tags?: Tags;
 }
 
 /** GET /api/rules/hand?payment=: the form started from a payment (a task «Von Hand buchen»), with the payment's name. */
@@ -57,7 +60,7 @@ function written(h: HandRule, today: string, source: HandSource = 'hand'): { whe
     ...(h.direction ? { direction: h.direction } : {}),
     ...(h.amount && (h.amount.over !== undefined || h.amount.under !== undefined) ? { amount: h.amount } : {}),
   };
-  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none' }, source: `${source} ${today}` };
+  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none', ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}) }, source: `${source} ${today}` };
 }
 
 /** The text of a rules file with the hand-made rule added at the end of its rules, under an id no rule of the file has. */

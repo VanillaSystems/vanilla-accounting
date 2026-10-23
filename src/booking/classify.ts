@@ -33,7 +33,7 @@ import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '.
 import { payerNames } from '../knowledge/payer.js';
 import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
-import { ruleFor, ruleWords, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
+import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
@@ -271,7 +271,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
   const chartOfAccounts = chartOf(ws);
   const knowledge = loadKnowledge(APP_ROOT, ws.paths.root);
   const { counterparties } = knowledge;
-  const facts = factsOf(chartNames(chartOfAccounts), new Set(counterparties.map((c) => c.id)));
+  const facts = factsOf(chartNames(chartOfAccounts), new Set(counterparties.map((c) => c.id)), ws.dimensions);
   return {
     companyName: ws.company.name,
     bankAccounts: ws.bankAccounts,
@@ -472,7 +472,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const noReport = booking.fees ? `; ${wordsIn('de').t('rules.say.noPayoutReport')}` : '';
   const lock = periodLock(books);
   return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
-    .map((e) => ({ ...e, rule: placed.rule.id }));
+    .map((e) => stampRule(e, placed.rule.id, booking));
 }
 
 /**
@@ -630,7 +630,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       const byOrders = payoutFromOrders(books, tx, { ...split, fees: split.fees }, context, fx, placed ? by : { kind: 'code', check: 'payoutOrders' }, reason);
       const read = Array.isArray(byOrders) ? byOrders : payoutFromReport(books, tx, { ...split, fees: split.fees }, context, fx, by, reason);
       if (read) {
-        books.journalEntries.push(...(placed ? read.map((e) => ({ ...e, rule: placed.rule.id })) : read));
+        books.journalEntries.push(...(placed ? read.map((e) => stampRule(e, placed.rule.id, split)) : read));
         log(`  ${tx.ref}  → ${read === byOrders ? 'orders' : 'payout report'}${placed ? ` (rule ${placed.rule.id})` : ''}`);
         outcome.classified.push(tx.ref);
         continue;
@@ -718,7 +718,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const payout = payouts.get(tx.ref);
         const normalised = payout && payoutLines(llmEntries, bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue');
         const read = payout && normalised && entriesFor(tx, normalised, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, { ...context, payers: payerNames([tx]) })}; ${wordsIn('de').t('rules.say.payoutRead')}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
-          .map((e) => ({ ...e, rule: payout.placed.rule.id }));
+          .map((e) => stampRule(e, payout.placed.rule.id, payout.booking));
         if (payout && !read) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: the reading of the payout report is no payout`);
           fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);

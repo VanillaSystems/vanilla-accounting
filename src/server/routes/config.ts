@@ -21,6 +21,7 @@ import type { Address } from '../../invoices/model.js';
 import { changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
 import { filing } from '../../engines/index.js';
+import { readDimensions, usesOf, type Dimension } from '../../books/tags.js';
 
 export const router = Router();
 
@@ -234,6 +235,21 @@ function vatPatch(raw: unknown): VatSetup {
   return next;
 }
 
+/**
+ * Firma › Dimensionen (#127): the whole list as the manifest's reader checks it. A dimension taken
+ * out that bookings still carry a value of is refused with their count: their tags would name a
+ * dimension the firm no longer has. Values come and go freely; a booking keeps the value it carries.
+ */
+function dimensionsPatch(raw: unknown): Dimension[] {
+  const next = readDimensions(raw, (msg) => { throw new RequestError(400, msg); });
+  const entries = readBooks().journalEntries ?? [];
+  for (const d of WS.dimensions ?? []) {
+    const n = next.some((x) => x.id === d.id) ? 0 : usesOf(d.id, entries);
+    if (n) throw new RequestError(400, `Die Dimension ${d.label} tragen noch ${n} Buchungen: erst ihre Werte dort entfernen.`, { code: 'dimensionInUse', params: { dimension: d.label, entries: n } });
+  }
+  return next;
+}
+
 /** The outgoing mailbox; the manifest's reader checks the values. A password is refused: it never goes into the workspace. */
 function mailPatch(raw: unknown): MailPatch | null {
   if (raw === null) return null;
@@ -270,7 +286,7 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
  * A new payment term also goes to every customer who had the old one.
  */
 router.patch('/api/workspace', (req, res) => {
-  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'removeBank', 'invoicing', 'outgoingMail', 'vat', 'sells']);
+  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'removeBank', 'invoicing', 'outgoingMail', 'vat', 'sells', 'dimensions']);
   if (b.banks !== undefined && !Array.isArray(b.banks)) throw new RequestError(400, 'banks: eine Liste erwartet.');
   const patch: ManifestPatch = {
     ...(b.vat === undefined ? {} : { vat: vatPatch(b.vat) }),
@@ -281,6 +297,7 @@ router.patch('/api/workspace', (req, res) => {
     ...(b.invoicing === undefined ? {} : { invoicing: invoicingPatch(b.invoicing) }),
     ...(b.outgoingMail === undefined ? {} : { outgoingMail: mailPatch(b.outgoingMail) }),
     ...(b.sells === undefined ? {} : { sells: sellsPatch(b.sells) }),
+    ...(b.dimensions === undefined ? {} : { dimensions: dimensionsPatch(b.dimensions) }),
   };
   const terms = WS.invoicing?.paymentTermsDays;
   const banksBefore = WS.bankAccounts;

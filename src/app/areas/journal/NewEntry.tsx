@@ -28,6 +28,7 @@ import { baseCurrency, chargesVat, chart, vat, withoutInputTax } from '../../../
 import { correctionName } from '../../lib/vat-words.js';
 import { chfAmount } from '../../../accounting/ledger.js';
 import type { JournalEntry } from '../../../types/index.js';
+import { TagFields, tagsOfForm } from './TagFields.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -45,6 +46,7 @@ export function NewEntry(props: Props) {
   /** The person was told the entry moves a bank account without its payment, and books it anyway with a second ↵. */
   const [sure, setSure] = useState(false);
   const autoCode = useRef<string>();
+  const dimensions = ws?.dimensions ?? [];
   // A form started again (another kind of correction, a payment picked) is read once it is there.
   useEffect(() => redraw((n) => n + 1), [round]);
   if (s.overlay?.kind !== 'new') return null;
@@ -100,7 +102,7 @@ export function NewEntry(props: Props) {
   /** What the fields hold now, so a payment picked (or dropped) keeps what was typed. */
   function typed(): Partial<JournalEntryInput> {
     const f = Object.fromEntries(new FormData(form.current!)) as Record<string, string>;
-    return { ...d, date: parseSwissDate(f.date) ?? d.date, accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), amount: parseAmount(f.amount) ?? undefined, vatCode: (f.vatCode ?? '').trim(), description: f.description };
+    return { ...d, date: parseSwissDate(f.date) ?? d.date, accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), amount: parseAmount(f.amount) ?? undefined, vatCode: (f.vatCode ?? '').trim(), description: f.description, tags: tagsOfForm(new FormData(form.current!), dimensions) };
   }
 
   /** A payment picked: the entry books it, on its date, its amount and bank side filled where empty. */
@@ -123,6 +125,7 @@ export function NewEntry(props: Props) {
     const closed = books.config?.closedThrough;
     const amount = parseAmount(f.amount);
     const [dr, cr, vat, text] = [f.accountDebit.trim(), f.accountCredit.trim(), (f.vatCode ?? '').trim(), f.description.trim()];
+    const tags = tagsOfForm(new FormData(form.current!), dimensions);
     const problem = !date && !tx ? t('journal.errDate')
       : !tx && closed && date! <= closed ? t(chargesVat() ? 'journal.errFiledDate' : 'journal.errClosedDate', { date: formatDate(closed) })
       : [dr, cr].find((n) => n && !accounts[n]) ? t('journal.errAccount', { account: [dr, cr].find((n) => n && !accounts[n])! })
@@ -136,7 +139,7 @@ export function NewEntry(props: Props) {
     if (problem) { setErr(problem); return; }
     if (!tx && banksMoved({ accountDebit: dr, accountCredit: cr }, isBankAccount).length && !sure) { setSure(true); setErr(t('journal.movesBankAgain')); return; }
     if (tx) {
-      const entries = await bookPayment(nav, tx.ref, [{ accountDebit: dr, accountCredit: cr, amount: amount!, ...(vat && { vatCode: vat }), description: text }]);
+      const entries = await bookPayment(nav, tx.ref, [{ accountDebit: dr, accountCredit: cr, amount: amount!, ...(vat && { vatCode: vat }), description: text, ...(tags && { tags }) }]);
       if (!entries?.length) return;
       close();
       listed.pending = entries[0].id;
@@ -145,7 +148,7 @@ export function NewEntry(props: Props) {
     }
     close();
     const input: JournalEntryInput = {
-      date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }),
+      date: date!, accountDebit: dr, accountCredit: cr, amount: amount!, description: text, ...(vat && { vatCode: vat }), ...(d.corrects && { corrects: d.corrects }), ...(tags && { tags }),
       // A correction or reversal of a foreign-currency entry keeps its currency and rate: the amount typed is in that currency (r9c-1).
       ...(fx && { exchangeCurrency: fx.currency, exchangeRate: fx.rate }),
       ...(d.corrects && corrected && as && { correctsEntry: corrected.id, correction: as }),
@@ -153,7 +156,7 @@ export function NewEntry(props: Props) {
       ...(d.corrects && from && { receipt: from }),
     };
     const entry = reverseIt
-      ? await createWithReversal(nav, input, reversalOf(input, newYearAfter(date!), t('journal.accrualText', { text, year: date!.slice(0, 4) })))
+      ? await createWithReversal(nav, input, { ...reversalOf(input, newYearAfter(date!), t('journal.accrualText', { text, year: date!.slice(0, 4) })), ...(tags && { tags }) })
       : await createEntry(nav, input);
     if (!entry) return;
     listed.pending = entry.id;
@@ -206,6 +209,7 @@ export function NewEntry(props: Props) {
             </div>
           ) : null}
           <label>{t('journal.field.description')}<input name="description" defaultValue={d.description ?? ''} /></label>
+          <TagFields dimensions={dimensions} entries={books.journalEntries ?? []} tags={d.tags} />
           {accrual && (
             <label className="jrev" data-testid="reverse-on-new-year">
               <input type="checkbox" checked={reverseIt} onChange={(e) => setReverse(e.target.checked)} />

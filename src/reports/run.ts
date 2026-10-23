@@ -20,12 +20,15 @@ import { vatInFigures } from '../accounting/vat-in-figures.js';
 import { vatPostings } from '../accounting/year-close.js';
 import { statementVatAccount } from '../accounting/statement-postings.js';
 import type { ReportGroup, ReportResult, ReportRow, SectionResult, Totals } from './result.js';
-import { inRange, type Grouping, type ReportFilter, type ReportSection, type ReportSpec } from './spec.js';
+import { GROUPINGS, groupDimension, inRange, type Grouping, type ReportFilter, type ReportSection, type ReportSpec } from './spec.js';
+import { matchesTags, valueLabel, type Dimension } from '../books/tags.js';
 
 export interface ReportInput {
   books: Index;
   invoices: readonly Invoice[];
   names: Record<string, string>;
+  /** The reporting dimensions the workspace declares (#127): a tag group is headed by its value's label. */
+  dimensions?: readonly Dimension[];
 }
 
 const inside = (p: Period, d: string | undefined) => !!d && d >= p.from && d <= p.to;
@@ -78,6 +81,7 @@ function entryRows(s: ReportSection, books: Index, period: Period, files: Map<st
     if (f.vatCodes && !f.vatCodes.includes(e.vatCode ?? '')) continue;
     if (f.origins && !f.origins.includes(e.origin ?? 'other')) continue;
     if (f.currencies && !f.currencies.includes(e.exchangeCurrency || base)) continue;
+    if (f.tags && !matchesTags(e.tags, f.tags)) continue;
     const receipts = files.get(e.transactionRef) ?? [];
     if (f.receipt && (f.receipt === 'with') !== receipts.length > 0) continue;
     const t = tx.get(e.transactionRef);
@@ -94,7 +98,7 @@ function entryRows(s: ReportSection, books: Index, period: Period, files: Map<st
       const amount = l.sign * chfAmount(e);
       out.push({
         date: e.date, text: e.description || e.id, account: l.account, counterAccount: l.counter, vatCode: e.vatCode ?? '',
-        amount, ...vatOf(e, amount, 'whole' in l ? undefined : l.account), currency: base, receipt: receipts.join(' | '), counterparty, link: { kind: 'entry', id: e.id },
+        amount, ...vatOf(e, amount, 'whole' in l ? undefined : l.account), currency: base, receipt: receipts.join(' | '), counterparty, link: { kind: 'entry', id: e.id }, ...(e.tags && { tags: e.tags }),
       });
     }
   }
@@ -177,7 +181,9 @@ export function totalsOf(rows: readonly ReportRow[], first: string): Totals[] {
 const quarterOf = (d: string) => `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}`;
 
 function keyOf(g: Grouping, r: ReportRow): string {
-  switch (g) {
+  const dimension = groupDimension(g);
+  if (dimension) return r.tags?.[dimension] ?? '';
+  switch (g as (typeof GROUPINGS)[number]) {
     case 'none': return '';
     case 'month': return r.date.slice(0, 7);
     case 'quarter': return quarterOf(r.date);
@@ -187,11 +193,13 @@ function keyOf(g: Grouping, r: ReportRow): string {
   }
 }
 
-function groupsOf(g: Grouping, rows: ReportRow[], names: Record<string, string>, first: string): ReportGroup[] {
+function groupsOf(g: Grouping, rows: ReportRow[], names: Record<string, string>, first: string, dimensions: readonly Dimension[] = []): ReportGroup[] {
   const by = new Map<string, ReportRow[]>();
   for (const r of rows) { const k = keyOf(g, r); by.set(k, [...(by.get(k) ?? []), r]); }
   const keys = [...by.keys()].sort((a, b) => Number(a === '') - Number(b === '') || (g === 'counterparty' ? a.localeCompare(b, 'de-CH') : a.localeCompare(b)));
-  return keys.map((key) => ({ key, label: g === 'account' ? names[key] ?? '' : '', rows: by.get(key)!, totals: totalsOf(by.get(key)!, first) }));
+  const dimension = dimensions.find((d) => d.id === groupDimension(g));
+  const label = (key: string) => (g === 'account' ? names[key] ?? '' : dimension && key && valueLabel(dimension, key) !== key ? valueLabel(dimension, key) : '');
+  return keys.map((key) => ({ key, label: label(key), rows: by.get(key)!, totals: totalsOf(by.get(key)!, first) }));
 }
 
 /** The spec run on `period` (its own period when none is given). */
@@ -206,7 +214,7 @@ export function runReport(spec: ReportSpec, input: ReportInput, period: Period):
         : s.source === 'receipts' ? receiptRows(s, books, period)
           : invoiceRows(s, invoices, period);
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.link.id.localeCompare(b.link.id));
-    return { section: s, groups: groupsOf(s.group, rows, names, first), totals: totalsOf(rows, first), count: rows.length };
+    return { section: s, groups: groupsOf(s.group, rows, names, first, input.dimensions), totals: totalsOf(rows, first), count: rows.length };
   });
   const all = sections.flatMap((s) => s.groups.flatMap((g) => g.rows));
   const vatIn = matched.size ? vatInFigures([...matched], period.from, period.to) : undefined;

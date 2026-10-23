@@ -34,7 +34,7 @@ export const refused = (r: ReportRefusal): RequestError =>
 
 /** Why this firm's chart or VAT codes refuse a spec, if they do. */
 export const factsRefusal = (spec: ReportSpec): ReportRefusal | undefined =>
-  checkSpec(spec, { accounts: chartNames(), takesCode: (c) => !!vat().codes.parse(c) });
+  checkSpec(spec, { accounts: chartNames(), takesCode: (c) => !!vat().codes.parse(c), dimensions: WS.dimensions ?? [] });
 
 /** The spec as sent, checked in its shape and against this firm's chart and VAT codes; throws the refusal. */
 export function specOf(raw: unknown): ReportSpec {
@@ -54,7 +54,7 @@ function periodOf(spec: ReportSpec, token: unknown): Period {
 }
 
 export function runSpec(spec: ReportSpec, period?: unknown): ReportResult {
-  return runReport(spec, { books: readBooks(), invoices: loadInvoices(WS).invoices, names: chartNames() }, periodOf(spec, period));
+  return runReport(spec, { books: readBooks(), invoices: loadInvoices(WS).invoices, names: chartNames(), dimensions: WS.dimensions ?? [] }, periodOf(spec, period));
 }
 
 router.post('/api/reports/run', (req, res) => {

@@ -20,8 +20,12 @@ import { roleBefore } from './banks.js';
  * 3: money accounts as equals (#88): a movement on any money account, a hand movement a statement
  * confirmed (BankTransaction.statement). An app of schema 2 would book a cash box's movement onto
  * its first bank account and import a confirmed row a second time, so it must refuse these books.
+ * 4: reporting dimensions (#127): an entry may carry `tags` ({ projekt: "alpha" }) the reports
+ * filter and group by. An app of schema 3 would keep the field it does not know on an entry it
+ * edits, but not offer it, check it or carry it into the bookings it makes from that entry
+ * (a copy, a correction, an undo), so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 3;
+export const BOOKS_SCHEMA = 4;
 /** 2: every money account names its `role` (#88). */
 export const WORKSPACE_SCHEMA = 2;
 export const INVOICES_SCHEMA = 1;
@@ -35,6 +39,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // The origin was stored already (`source: 'manual'`, absent for a statement row) and a filed
   // record keeps every byte: the records stay; the number makes an older app refuse the books.
   2: (doc) => doc,
+  // No record has tags before; the number makes an older app refuse the books.
+  3: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {

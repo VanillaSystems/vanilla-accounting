@@ -8,6 +8,7 @@ import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, updat
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
+import { parseTags, type TagRefusal, type Tags } from '../books/tags.js';
 
 /**
  * Live: a route that changes the manifest reopens it, the desktop app opens other books, and every
@@ -104,6 +105,19 @@ export function patchBody(body: unknown, fields: readonly string[]): Record<stri
   const unknown = Object.keys(body).filter((k) => !fields.includes(k));
   if (unknown.length) throw new RequestError(400, `Unbekannte Felder: ${unknown.join(', ')}`);
   return body as Record<string, unknown>;
+}
+
+const TAG_WORDS: Record<TagRefusal['code'], string> = {
+  tagShape: 'tags: ein Objekt { Dimension: Wert }.',
+  tagDimension: 'tags: Diese Dimension ist in der Firma nicht eingerichtet (Firma › Dimensionen).',
+  tagValue: 'tags: Ein Wert ist ein Text von höchstens 64 Zeichen auf einer Zeile.',
+};
+
+/** A booking's tags as sent (#127), checked against the dimensions the workspace declares; undefined: none. */
+export function tagsField(raw: unknown): Tags | undefined {
+  const p = parseTags(raw, WS.dimensions ?? []);
+  if (!p.ok) throw new RequestError(400, TAG_WORDS[p.refusal.code], p.refusal);
+  return p.tags;
 }
 
 export function stringField(b: Record<string, unknown>, key: string): string {

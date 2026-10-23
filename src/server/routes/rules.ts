@@ -23,7 +23,7 @@
  * switched on again with the new rules. A workflow that waited already keeps waiting.
  */
 import { Router } from 'express';
-import { RequestError, WS } from '../books.js';
+import { RequestError, WS, tagsField } from '../books.js';
 import { loadBooks } from '../../books/store.js';
 import { chartOf } from '../../booking/classify.js';
 import { chartNames, companyRules } from '../../booking/rule-book.js';
@@ -47,13 +47,14 @@ import { payerNames } from '../../knowledge/payer.js';
 
 export const router = Router();
 
-/** What a rule's plain words name: the chart's accounts, the businesses, the books' currency. */
+/** What a rule's plain words name: the chart's accounts, the businesses, the payers, the reporting dimensions, the books' currency. */
 function namesView(): Pick<RulesView, 'names' | 'currency'> {
   return {
     names: {
       accounts: Object.fromEntries(chartNames(chartOf(WS))),
       businesses: Object.fromEntries(loadKnowledge(APP_ROOT, WS.paths.root).counterparties.map((c) => [c.id, c.name])),
       payers: payerNames(loadBooks(WS).transactions),
+      ...(WS.dimensions?.length ? { dimensions: [...WS.dimensions] } : {}),
     },
     currency: baseCurrency(),
   };
@@ -199,6 +200,7 @@ const MATCHES = new Set(['business', 'payer', 'text']);
 router.post('/api/rules/hand', (req, res) => {
   const h = req.body as HandRule;
   if (!h || !h.match || !MATCHES.has(h.match.kind) || typeof h.account !== 'string' || (h.vat !== null && typeof h.vat !== 'string')) throw new RequestError(400, 'Regel erwartet.');
+  if (h.tags !== undefined) h.tags = tagsField(h.tags);
   const out = draftHandRule(WS, h);
   if (out.ok) { res.json({ path: out.path }); return; }
   throw refused(out.refusal);

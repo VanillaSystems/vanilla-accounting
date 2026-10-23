@@ -8,6 +8,7 @@ import type { RuleRefusal } from './rule-refusal.js';
 import type { ReportRefusal } from '../reports/spec.js';
 import type { AttachmentRefusal } from './attachment.js';
 import type { MacMailProblem } from './mac-mail.js';
+import type { TagRefusal } from '../books/tags.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -48,6 +49,10 @@ export type ApiRefusal =
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
+  /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */
+  | TagRefusal
+  /** Firma › Dimensionen: a dimension bookings carry a value of is not taken out (`entries`: how many). */
+  | { code: 'dimensionInUse'; params: { dimension: string; entries: number } }
   /** Cash basis: a booking of a payment keeps the payment's date (src/server/edits.ts applyAnswer). */
   | { code: 'paymentDate'; params: { date: string } }
   /** The bookings of a payment would no longer add up to it: `paid` and `booked` in its currency. */
