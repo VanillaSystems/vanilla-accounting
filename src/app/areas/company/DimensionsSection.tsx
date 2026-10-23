@@ -5,17 +5,9 @@
  * (inactive: no longer offered, the bookings that carry it keep it). Written to belege.workspace.yaml.
  */
 import { useState, type FormEvent } from 'react';
-import { DIMENSION_ID, offeredValues, tagValue, usesOf, type Dimension } from '../../../books/tags.js';
+import { dimensionId, offeredValues, tagValue, usesOf, type Dimension } from '../../../books/tags.js';
 import type { JournalEntry } from '../../../types/index.js';
 import { t } from '../../i18n/index.js';
-
-/** An id from a name: «Kostenstelle» → kostenstelle; one no other dimension has. */
-export function dimensionId(label: string, taken: readonly string[]): string {
-  const base = (label.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '') || 'dimension').slice(0, 28);
-  let id = base;
-  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
-  return DIMENSION_ID.test(id) ? id : 'dimension';
-}
 
 export function DimensionsSection({ dimensions, entries, canEdit, save }: {
   dimensions: readonly Dimension[];

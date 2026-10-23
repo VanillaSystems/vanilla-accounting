@@ -17,6 +17,14 @@ export type Tags = Record<string, string>;
 export const DIMENSION_ID = /^[a-z][a-z0-9-]{0,31}$/;
 const MAX_VALUE = 64;
 
+/** An id from a name: «Kostenstelle» → kostenstelle, «Standort Zürich» → standort-zurich; one no other dimension has. */
+export function dimensionId(label: string, taken: readonly string[]): string {
+  const base = (label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/^[^a-z]+/, '') || 'dimension').slice(0, 28);
+  let id = base;
+  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
+  return DIMENSION_ID.test(id) ? id : 'dimension';
+}
+
 /** A value as bookings carry it: trimmed, on one line, at most 64 characters; undefined when it is none. */
 export function tagValue(v: unknown): string | undefined {
   const s = typeof v === 'string' ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : undefined;

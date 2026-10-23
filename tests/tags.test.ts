@@ -9,7 +9,7 @@ import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, writeFile
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseDocument } from 'yaml';
-import { matchesTags, offeredValues, parseTags, readDimensions, type Dimension } from '../src/books/tags.js';
+import { dimensionId, matchesTags, offeredValues, parseTags, readDimensions, type Dimension } from '../src/books/tags.js';
 import { parseManifest } from '../src/workspace/manifest.js';
 import { patchManifestText } from '../src/workspace/manifest-write.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, SchemaTooNewError, climb } from '../src/workspace/schema.js';
@@ -55,6 +55,13 @@ test('the manifest declares dimensions: a value is a text or { value, label, act
   bad('dimensions:\n  - { id: p, label: P }\n  - { id: p, label: Q }\n', /p is listed twice/);
   bad('dimensions:\n  - { id: p }\n', /label must be a non-empty text/);
   bad('dimensions:\n  - { id: p, label: P, values: [a, a] }\n', /the value a is listed twice/);
+});
+
+test('a new dimension\'s id comes from its name, readable and unique', () => {
+  assert.equal(dimensionId('Kostenstelle', []), 'kostenstelle');
+  assert.equal(dimensionId('Standort Zürich', []), 'standort-zurich');
+  assert.equal(dimensionId('Projekt', ['projekt']), 'projekt-2');
+  assert.equal(dimensionId('2026', []), 'dimension');
 });
 
 test('Firma › Dimensionen writes the whole list into the manifest, keeping its comments; an empty list removes the block', () => {
