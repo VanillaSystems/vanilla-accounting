@@ -197,6 +197,7 @@ function lockBooks(ws: Workspace): () => void {
         if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
         const was = readIfThere(path);
         const pid = Number(was ?? 0);
+        // saveBooks runs start to end without yielding and no worker thread saves, so a lock with this process's pid was left by a crash.
         if (!pid || pid === process.pid || !alive(pid)) takeOver(path, was);
         else if (Date.now() > until) throw new StaleBooksError([relative(ws.paths.root, path)]);
         else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
