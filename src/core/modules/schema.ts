@@ -212,7 +212,8 @@ export interface ResultCloseData {
 
 /** year-end.yaml: the accounts the year close books on, its entry forms, and the close of the result by legal form. */
 export interface YearEndData {
-  accounts: { fxDifference: string[]; vatSettlement: string[]; vat: string[]; receivables: string[] };
+  accounts: { fxDifference: string[]; vatSettlement: string[]; vat: string[]; receivables: string[]; payables: string[] };
+
   templates: YearEndTemplate[];
   byLegalForm: Record<string, ResultCloseData> & { otherwise: ResultCloseData };
 }

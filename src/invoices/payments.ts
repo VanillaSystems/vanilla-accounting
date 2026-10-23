@@ -24,17 +24,25 @@ import { allocate, liveInvoices, namesNumber, openAmount, openFees, refundDue, r
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
 import { baseCurrency, vat } from '../engines/index.js';
+import { settlementLines, type OpenItemAccounts } from '../accounting/tax-point.js';
+import { roundCHF } from '../accounting/rappen.js';
+import { invoiceReceipt } from './events.js';
+import { eventRef, hasEvent } from '../books/refs.js';
+
+
 
 export interface PaymentContext {
   bankAccounts: readonly LedgerBankAccount[];
   revenueAccount: string;
   feeAccount?: string;
+  /** Where an open item lives on the agreed basis (src/accounting/tax-point.ts): the receivable of an invoice with its event. */
+  openItems: OpenItemAccounts;
   fx: Pick<FxResolver, 'daily'>;
   /** The invoice PDF's bytes (from its stored file). */
   pdfOf(inv: Issued): Buffer;
   receiptId(pdf: Buffer): string;
   /** When the invoice PDF of a payment is indexed as its receipt (ISO): now, on import. */
-  indexedAt(tx: BankTransaction): string;
+  indexedAt(at: Pick<BankTransaction, 'date'>): string;
 }
 
 /** A payment that names an invoice but cannot be booked by rule: a person decides. */
@@ -158,9 +166,12 @@ function replace(book: InvoiceBook, inv: Issued): void {
 }
 
 /**
- * The revenue of one allocation as journal entries, the document's PDF as their receipt: an
+ * One allocation as journal entries, the document's PDF as their receipt. On the cash basis an
  * invoice's payment credits revenue with the sale codes, a credit note's refund debits it with the
- * minus codes (the revenue and its VAT go down by what was paid back).
+ * minus codes (the revenue and its VAT go down by what was paid back). A document whose event the
+ * books carry (src/invoices/events.ts, the agreed basis) declared its VAT on its own date: the
+ * payment only settles the receivable, at the payment's rate, the exchange difference to the
+ * Kursdifferenzen account. A paid reminder fee is revenue without VAT either way.
  */
 export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: PaymentAllocation, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): JournalEntry[] {
   const bank = bankAccountFor(tx, ctx.bankAccounts);
@@ -169,58 +180,37 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
   const refund = inv.kind === 'credit-note';
   const word = refund ? TEXTS.de.credit : TEXTS.de.invoice;
   const text = `${word} ${inv.number} ${inv.customer.name}`;
-  const legs = [
-    ...revenueSplit(inv, a.amount, ctx.revenueAccount),
-    ...(a.fee ? [{ account: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, vatCode: undefined, fee: true }] : []),
-  ];
-  const entries: JournalEntry[] = legs.map((l) => ({
-    id: idSource.bytes(8).toString('hex'),
-    transactionRef: tx.ref,
-    date: tx.date,
-    accountDebit: refund ? l.account : bank,
-    accountCredit: refund ? bank : l.account,
-    amount: l.amount,
-    ...(l.vatCode ? { vatCode: refund ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
-    description: 'fee' in l ? `${text}, ${TEXTS.de.fee}` : text,
-    ...(rate !== undefined ? { exchangeCurrency: tx.currency, exchangeRate: rate } : {}),
-    origin: 'invoice',
-  }));
+  const fx = rate !== undefined ? { exchangeCurrency: tx.currency, exchangeRate: rate } : {};
+  const stamp = (l: Omit<JournalEntry, 'id' | 'transactionRef' | 'date' | 'origin'>): JournalEntry => ({ id: idSource.bytes(8).toString('hex'), transactionRef: tx.ref, date: tx.date, ...l, origin: 'invoice' });
+  const fee = a.fee ? [stamp({ accountDebit: bank, accountCredit: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, description: `${text}, ${TEXTS.de.fee}`, ...fx })] : [];
+  const entries: JournalEntry[] = hasEvent(books, inv)
+    ? [...settlementLines({
+      account: ctx.openItems.receivable, bank, amount: refund ? -a.amount : a.amount, currency: tx.currency, rate,
+      booked: (refund ? -1 : 1) * heldFor(books, inv, a.amount), fxDifference: ctx.openItems.fxDifference,
+    }).map(({ fx: diff, ...l }) => stamp({ ...l, description: diff ? `Kursdifferenz ${text}` : text })), ...fee]
+    : [...revenueSplit(inv, a.amount, ctx.revenueAccount).map((l) => stamp({
+      accountDebit: refund ? l.account : bank,
+      accountCredit: refund ? bank : l.account,
+      amount: l.amount,
+      ...(l.vatCode ? { vatCode: refund ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
+      description: text,
+      ...fx,
+    })), ...fee];
   books.journalEntries.push(...entries);
   attachInvoice(books, tx, inv, ctx, out);
   return entries;
 }
 
+/** What the receivable holds in the books' currency for `amount` of the document: at its event's rate (MWSTV Art. 45), the amount itself in the books' currency. */
+function heldFor(books: Books, inv: Issued, amount: number): number {
+  const ref = eventRef(inv, 'issue');
+  const rate = books.journalEntries.find((e) => e.transactionRef === ref)?.exchangeRate;
+  return rate === undefined ? amount : roundCHF(amount * rate);
+}
+
 /** The document's PDF as the payment's receipt, filed and linked once: the payment shows which invoice it paid. */
 function attachInvoice(books: Books, tx: BankTransaction, inv: Issued, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): void {
-  const refund = inv.kind === 'credit-note';
-  const word = refund ? TEXTS.de.credit : TEXTS.de.invoice;
-  const text = `${word} ${inv.number} ${inv.customer.name}`;
-  const pdf = ctx.pdfOf(inv);
-  const id = ctx.receiptId(pdf);
-  if (!books.receipts.some((r) => r.id === id)) {
-    const filename = `${inv.date.replace(/-/g, '')}-${word.toLowerCase()}-${inv.number}.pdf`;
-    const t = totals(inv.lines);
-    const receipt: Receipt = {
-      id,
-      filename,
-      originalFilename: filename,
-      extractedText: [inv.sender.name, `${word} ${inv.number}`, inv.customer.name, ...inv.lines.map((l) => l.text), `Total ${inv.currency} ${t.gross.toFixed(2)}`].join('\n'),
-      extractionMethod: 'pdftotext',
-      fileSize: pdf.length,
-      indexedAt: ctx.indexedAt(tx),
-      location: 'archived',
-      date: inv.date,
-      description: text,
-      amount: t.gross,
-      currency: inv.currency,
-      vatId: inv.sender.uid,
-      hasSwissVat: t.vat > 0,
-      vatSummary: t.byRate.map((r) => ({ ratePercent: r.rate, net: r.net, vat: r.vat, gross: r.gross })),
-      kind: 'sales-record',
-    };
-    books.receipts.push(receipt);
-    out.files.push({ filename, pdf });
-  }
+  const id = invoiceReceipt(books, inv, ctx, out, tx);
   const link: Mapping = { transactionRef: tx.ref, receiptId: id, by: 'rule', rule: 'invoice-reference' };
   if (!books.mappings.some((m) => m.transactionRef === tx.ref && m.receiptId === id)) books.mappings.push(link);
 }

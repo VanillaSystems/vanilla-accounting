@@ -9,6 +9,9 @@ accounts:
   # Debitoren: invoices still open on 31.12. (ADR 0010); the credit is the invoices' revenue account.
   # Proposed only when the chart has one of these; else the person picks or adds the account.
   receivables: ["1100"]
+  # Kreditoren: on the agreed basis (MWSTG Art. 40 Abs. 1) a supplier bill's input tax is booked on
+  # its date against this account, and its payment settles it (src/accounting/tax-point.ts).
+  payables: ["2000"]
 
 # Blank accounts are the user's pick.
 templates:

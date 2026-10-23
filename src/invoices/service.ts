@@ -26,6 +26,8 @@ import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
 import { invoiceRates, invoicing } from '../engines/index.js';
+import { openItemAccounts } from '../accounting/tax-point.js';
+import { accountsOf } from '../workspace/reads.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -419,6 +421,8 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     bankAccounts: ws.bankAccounts,
     revenueAccount: s.revenueAccount,
     ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
+    openItems: openItemAccounts((accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []))),
+
     fx,
     pdfOf: (inv) => readPdf(ws, inv.pdf),
     receiptId: (pdf) => sha256(pdf).slice(0, 16),
