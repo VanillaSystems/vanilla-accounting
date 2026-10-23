@@ -7,7 +7,7 @@
  * answer code refuses is explained back and never saved. `talkDraft` is the one call: the text goes
  * to the provider the person configured for the step (src/llm), and to no one else.
  */
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
 import { SetupError, type BankSpec, type SetupRefusal } from '../workspace/create.js';
 import { BANKS } from '../workspace/banks.js';
@@ -204,6 +204,12 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
 
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
 
+/**
+ * What the person typed per folder, as this server received it: the evidence a UID or an IBAN must
+ * stand in. The turns the start screen sends back are context for the model only, never evidence.
+ */
+const said = new Map<string, string[]>();
+
 const SYSTEM = 'You help set up Swiss bookkeeping. Answer only with the JSON object the message asks for.';
 const MAX_TEXT = 4000;
 const MAX_TURNS = 12;
@@ -230,6 +236,8 @@ export async function talkDraft(root: string, text: string, history: readonly Ta
   const draft = readDraft(root);
   if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
   const { baseCurrency } = draftView(root, draft);
+  const words = [...(said.get(resolve(root)) ?? []), text].slice(-MAX_TURNS);
+  said.set(resolve(root), words);
   let raw: string;
   try {
     raw = await ask(talkPrompt(draft, text, history, baseCurrency), {
@@ -240,7 +248,6 @@ export async function talkDraft(root: string, text: string, history: readonly Ta
   }
   const out = parseTalk(raw);
   if (!out) return { draft, reply: { kind: 'unreadable' } };
-  const words = [text, ...history.filter((t) => t.who === 'me').map((t) => t.text)];
   const next = applyTalk(draft, out, words, baseCurrency);
   return next.reply.kind === 'read' && next.reply.filled.length ? { ...next, draft: writeDraft(root, next.draft) } : next;
 }

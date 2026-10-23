@@ -114,7 +114,8 @@ provider and model the person set for it) reads them with the draft, the step wa
 of src/workspace/setup.ts and the turns typed before, and answers one JSON object: `say` (an answer
 to a question, then one short question back) and the answers the words state (`firm`, `preset`,
 `answers`, `netRates`, `banks`). Code is the authority: each answer goes through `checkPatch` and
-`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words;
+`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them
+(the turns the screen sends back are context for the model, never evidence);
 an answer refused is not saved and the reply says why; the AI's words are left out beside a refusal,
 because it wrote them before the check. Non-VAT answers without a preset make it
 «custom», so a preset picked later cannot replace them. Answers taken from the words are kept in the
