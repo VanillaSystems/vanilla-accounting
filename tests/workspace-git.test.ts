@@ -56,3 +56,13 @@ test('a commit of paths leaves what else was staged (a migration\'s git mv) stag
   assert.deepEqual(git(dir, 'show', '--name-status', '--format=', 'HEAD').split('\n').sort(), ['D\tbooks/old.jsonl', 'M\tbooks/entries.jsonl']);
   assert.deepEqual(git(dir, 'status', '--porcelain').split('\n'), ['R  history.txt -> moved.txt'], 'the move is still staged, not committed');
 });
+
+test('a commit never carries an AI provider\'s API key; the file stays as it was, uncommitted', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ws-git-key-'));
+  writeFileSync(join(dir, 'notes.md'), 'Notizen\n');
+  await initRepository(dir, 'Workspace set up');
+  writeFileSync(join(dir, 'notes.md'), `Schlüssel: ${['sk-ant-', 'api03-', 'x'.repeat(30)].join('')}\n`);
+  await assert.rejects(commitExactly(dir, 'Notizen', ['notes.md']), /notes\.md holds an API key \(sk-ant-api…\): not saved/);
+  assert.equal(git(dir, 'log', '--format=%s'), 'Workspace set up');
+  assert.equal(git(dir, 'status', '--porcelain'), 'M notes.md', 'changed on disk, not staged');
+});

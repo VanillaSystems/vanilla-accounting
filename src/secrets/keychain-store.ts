@@ -2,11 +2,11 @@
  * The secret store of the CLI and `npm start` on a Mac: the login keychain, through the system's
  * `security` program (ADR 0014: no source and no file of the workspace holds a password). A value
  * goes to `security` on its standard input, never as an argument a process list would show. Each
- * secret belongs to the books it was set for, as in the desktop app's store.
+ * secret belongs to the books it was set for, as in the desktop app's store; an AI key to this computer.
  */
 import { spawnSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { envSecrets, layered, useSecretStore, type SecretName, type SecretStore } from './secrets.js';
+import { envSecrets, isMachineSecret, layered, MACHINE, useSecretStore, type SecretName, type SecretStore } from './secrets.js';
 
 const SERVICE = 'Vanilla Accounting';
 
@@ -19,7 +19,7 @@ const decode = (kept: string) => (kept.startsWith(PREFIX) ? Buffer.from(kept.sli
 const quote = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 
 export function keychainStore({ books }: { books: () => string }): Required<SecretStore> {
-  const account = (name: SecretName) => `${realpathSync(books())} · ${name}`;
+  const account = (name: SecretName) => `${isMachineSecret(name) ? MACHINE : realpathSync(books())} · ${name}`;
   return {
     async get(name) {
       const r = spawnSync('security', ['find-generic-password', '-s', SERVICE, '-a', account(name), '-w'], { encoding: 'utf8', timeout: 15_000 });

@@ -86,6 +86,10 @@ export type ApiRefusal =
   | { code: 'payToNeedsIban'; params: { bank: string; currency: string } }
   | { code: 'noBrowser' }
   | { code: 'noClaude' }
+  /** Firma › KI (src/server/routes/ai.ts): a model that cannot serve the step, a key the provider refuses, a key that belongs into .env here. */
+  | { code: 'aiModelUnfit'; params: { model: string } }
+  | { code: 'aiKeyRefused' }
+  | { code: 'aiKeyWhere'; params: { where: string } }
   /** Geschäftspartner and Wissen (src/server/routes/knowledge.ts): a partner or a topic page that does not exist, notes changed since they were opened, a new page without a title. */
   | { code: 'partnerGone' }
   | { code: 'topicGone' }

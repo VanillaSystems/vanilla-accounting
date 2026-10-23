@@ -4,9 +4,9 @@
  * a git repository others share. VANILLA_AI_SETTINGS names another file; a test run reads none
  * unless it names one, so a developer's own choice never changes a test.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { ProviderId } from './provider.js';
 import { isStepId, type StepId } from './steps.js';
 
@@ -20,7 +20,7 @@ export interface AiSettings {
   steps: Partial<Record<StepId, StepChoice>>;
 }
 
-const PROVIDERS: readonly ProviderId[] = ['claude-cli'];
+export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'anthropic', 'openai'];
 const isProvider = (p: unknown): p is ProviderId => PROVIDERS.includes(p as ProviderId);
 
 export const settingsPath = (): string | undefined =>
@@ -48,4 +48,16 @@ export function readSettings(): AiSettings {
   } catch {
     return { steps: {} };
   }
+}
+
+/** Sets or clears (null) the choice for one step; the other steps keep theirs. */
+export function writeChoice(step: StepId, choice: StepChoice | null): AiSettings {
+  const path = settingsPath();
+  if (!path) throw new Error('No settings file in a test run: set VANILLA_AI_SETTINGS.');
+  const next = readSettings();
+  if (choice) next.steps[step] = choice; else delete next.steps[step];
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(`${path}.tmp`, JSON.stringify(next, null, 2) + '\n');
+  renameSync(`${path}.tmp`, path);
+  return next;
 }
