@@ -79,6 +79,11 @@ test('below the step\'s confidence the default model answers instead', async () 
   assert.deepEqual(ledger().slice(-2).map((r) => [r.provider, r.ok]), [['jev', true], ['claude-cli', true]]);
 });
 
+test('a probability outside 0 to 1 is no answer: the default answers', async () => {
+  stub.reply.set('POST /v1/systemone', { status: 200, body: { answers: { q: { type: 'noul', noul: 2 } }, usage: {} } });
+  assert.equal((await judge(MAIL, TRIAGE, { step: 'mail-triage' })).provider, 'claude-cli');
+});
+
 test('when Jev fails the default answers; a choice question works the same way', async () => {
   stub.reply.set('POST /v1/systemone', { status: 503, body: { error: { message: 'busy' } } });
   process.env.CLAUDE_STUB_ANSWER = '{"choice": "receipt", "confidence": 0.7}';

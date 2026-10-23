@@ -41,9 +41,14 @@ function image(path: string, n: number) {
 
 type Answer = { noul?: number; choice?: string; confidence?: number | null };
 
+const probability = (v: unknown): number | undefined => (typeof v === 'number' && v >= 0 && v <= 1 ? v : undefined);
+
+/** Jev's answer as a verdict; a probability outside 0 to 1 is no answer. A choice without its confidence counts as unsure. */
 function verdictOf(call: JudgeCall, a: Answer | undefined): Verdict {
-  if (call.question.type === 'noul' && typeof a?.noul === 'number') return { type: 'noul', yes: a.noul, confidence: Math.max(a.noul, 1 - a.noul) };
-  if (call.question.type === 'choice' && typeof a?.choice === 'string' && a.choice in call.question.options) return { type: 'choice', choice: a.choice, confidence: a.confidence ?? 0 };
+  const yes = probability(a?.noul);
+  if (call.question.type === 'noul' && yes !== undefined) return { type: 'noul', yes, confidence: Math.max(yes, 1 - yes) };
+  const confidence = a?.confidence == null ? 0 : probability(a.confidence);
+  if (call.question.type === 'choice' && typeof a?.choice === 'string' && a.choice in call.question.options && confidence !== undefined) return { type: 'choice', choice: a.choice, confidence };
   throw new CallFailed('Jev gave no answer to the question', NO_USAGE);
 }
 
