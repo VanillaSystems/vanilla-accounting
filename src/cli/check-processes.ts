@@ -194,7 +194,10 @@ function checkProcedure(where: string, procedure: string, err: (m: string) => vo
 /** How a business file's `apply:` on this step reads, in this layer; undefined: the step takes none. */
 type ApplyCheck = (raw: unknown) => { ok: true } | { ok: false; problem: string };
 const applyCheck = (ref: string, layer: Layer): ApplyCheck | undefined =>
-  ref === PURCHASE_VAT_STEP ? (raw) => parseApply(raw, layer) : ref === RECEIPT_STEP ? parseReceiptApply : undefined;
+  ref === PURCHASE_VAT_STEP ? (raw) => parseApply(raw, layer) : ref === RECEIPT_STEP ? (raw) => parseReceiptApply(raw) : undefined;
+/** How a guide's `apply:` in this section reads: only evidence.guide.yaml#rules takes one, the wording of payments that need no receipt. */
+const guideApplyCheck = (file: string, section: string): ApplyCheck | undefined =>
+  `${file}#${section}` === RECEIPT_STEP ? (raw) => parseReceiptApply(raw, 'guide') : undefined;
 
 function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string; apply?: ApplyCheck } = {}) {
   for (const rule of rules ?? []) {
@@ -212,7 +215,7 @@ function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) =
     }
     if (rule.apply !== undefined) {
       const parsed = opts.apply?.(rule.apply);
-      if (!parsed) err(`${at}: apply: is for a rule of ${PURCHASE_VAT_STEP} or ${RECEIPT_STEP} in a business file; a company's booking rule is a rule with then: { account, vat }`);
+      if (!parsed) err(`${at}: apply: is for a rule of ${PURCHASE_VAT_STEP} in a business file or of ${RECEIPT_STEP}; a company's booking rule is a rule with then: { account, vat }`);
       else if (!parsed.ok) err(`${at}: ${parsed.problem}`);
     }
     if (rule.procedure) checkProcedure(at, rule.procedure, err, opts.root ?? APP_ROOT);
@@ -235,7 +238,7 @@ for (const file of readdirSync(DIR).filter((f) => f.endsWith('.guide.yaml')).sor
   for (const [section, body] of Object.entries(guide.steps ?? {})) {
     if (!usedSections.get(file)?.has(section)) err(`section "${section}" is not referenced by any step's with.guide — reference it or delete it`);
     checkRules(section, body.gates, err, { gates: true });
-    checkRules(section, body.rules, err);
+    checkRules(section, body.rules, err, { apply: guideApplyCheck(file, section) });
     checkOneHome(file, section, body, err);
     checkAppLayer(section, body, err, `${RULES_DIR}/${file}`);
     const t = sectionTokens(body);
@@ -285,7 +288,7 @@ for (const companyGuide of companyGuides) {
     if (!generic.steps?.[section]) { err(`section "${section}" is not in processes/${file} — use a step id of that guide`); continue; }
     if (body.goal) err(`${section}: goal belongs to processes/${file}, not to the company's rules`);
     if (body.gates) err(`${section}: gates hold for every company — they live in processes/${file}`);
-    checkRules(`${companyGuide.path}#${section}`, body.rules, err, { root: companyGuide.root });
+    checkRules(`${companyGuide.path}#${section}`, body.rules, err, { root: companyGuide.root, apply: guideApplyCheck(file, section) });
     checkOneHome(companyGuide.path, section, body, err);
   }
 }
