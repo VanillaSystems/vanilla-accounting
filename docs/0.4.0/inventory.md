@@ -8,7 +8,7 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 58 | 22 |
+| core | 59 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
 | split | 96 | 26 |
