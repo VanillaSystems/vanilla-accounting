@@ -1,7 +1,9 @@
 /**
- * The desktop app's first screen (ADR 0009): open existing books, set up new ones with the
- * questions of `npm run init` (src/workspace/setup.ts, checked again by src/workspace/create.ts),
- * or look at a copy of the demo. Shown at /start and whenever no books are open.
+ * The desktop app's first screen (ADR 0009): open existing books, set up new ones, or look at a copy
+ * of the demo. Shown at /start and whenever no books are open. New books are set up in the setup
+ * conversation (#139: NewBooks, then DraftConversation); the form with the questions of `npm run init`
+ * (src/workspace/setup.ts, checked again by src/workspace/create.ts) is the way by hand, and the only
+ * one while no AI answers on this computer. Both end in the same createWorkspace.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
@@ -9,8 +11,10 @@ import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, 
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
-import { api, errorText } from '../lib/api.js';
-import { START_PATH, desktop } from './bridge.js';
+import { ApiError, api, errorText } from '../lib/api.js';
+import { START_PATH, desktop, setupPath } from './bridge.js';
+import { NewBooks, freeName } from './NewBooks.js';
+import { DraftConversation } from '../onboarding/DraftConversation.js';
 import './start.css';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
@@ -54,23 +58,51 @@ export function useStartScreen(): boolean | undefined {
 
 const answerList = (a: Partial<Answers>, key: QuestionKey): string[] => ([] as string[]).concat(a[key] ?? []);
 
+/** What the start screen shows: the choices, the new books' folder, the setup conversation in a folder, or the form (`noAi`: shown because no AI answers). */
+type Mode = { kind: 'home' } | { kind: 'new' } | { kind: 'setup'; root: string } | { kind: 'form'; noAi: boolean };
+
+const modeOfUrl = (): Mode => {
+  const q = new URLSearchParams(location.search);
+  const root = q.get('setup');
+  return root ? { kind: 'setup', root } : q.has('new') ? { kind: 'new' } : { kind: 'home' };
+};
+
 export function StartScreen({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
   const [info, setInfo] = useState<DesktopInfo | null>(null);
-  const [creating, setCreating] = useState(() => new URLSearchParams(location.search).has('new'));
+  const [mode, setModeState] = useState<Mode>(modeOfUrl);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  /** Books refused for their layout before 0.4.0: the folder the app offers to move into the current one. */
+  const [upgradable, setUpgradable] = useState<string>();
 
-  useEffect(() => { void api.desktop.info().then(setInfo, (e) => setError(errorText(e))); }, []);
+  useEffect(() => { void api.desktop.info().then(setInfo, (e) => setError(errorText(e))); }, [mode.kind]);
+  const setMode = (next: Mode) => {
+    setError('');
+    history.replaceState(null, '', next.kind === 'setup' ? setupPath(next.root) : START_PATH);
+    setModeState(next);
+  };
+  /** «Neue Buchhaltung anlegen»: the conversation when an AI answers on this computer, else the form with the reason. */
+  const startNew = async () => {
+    setBusy(true);
+    const ai = await api.desktop.ai().then((r) => r.available, () => false);
+    setBusy(false);
+    setMode(ai ? { kind: 'new' } : { kind: 'form', noAi: true });
+  };
+  // Opened from the menu (/start?new): the same check as the button.
+  useEffect(() => { if (mode.kind === 'new' && new URLSearchParams(location.search).has('new')) void startNew(); }, []);
   useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
 
   const run = async (open: () => Promise<KnownBooks>) => {
     setBusy(true);
     setError('');
+    setUpgradable(undefined);
     try {
-      await open();
+      const books = await open();
+      if (books.setup) { setBusy(false); setMode({ kind: 'setup', root: books.root }); return; }
       location.assign('/');
     } catch (e) {
       setError(errorText(e));
+      if (e instanceof ApiError && e.body.code === 'oldLayout') setUpgradable(e.body.params.root);
       setBusy(false);
     }
   };
@@ -88,8 +120,10 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
           ))}
         </span>
       </header>
-      {creating
-        ? <CreateForm info={info} busy={busy} error={error} onCancel={() => { setCreating(false); setError(''); history.replaceState(null, '', '/start'); }} onCreate={(setup) => run(() => api.desktop.create(setup))} />
+      {mode.kind === 'setup' ? <DraftConversation root={mode.root} onLeave={() => setMode({ kind: 'home' })} />
+        : mode.kind === 'new' ? <NewBooks info={info} language={language} onCancel={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form', noAi: false })} />
+        : mode.kind === 'form'
+        ? <CreateForm info={info} busy={busy} error={error} notice={mode.noAi ? t('desktop.flow.noAi') : undefined} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
             <h1>Vanilla Accounting</h1>
@@ -98,7 +132,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>
                 <b>{t('desktop.open')}</b><span>{t('desktop.openHint')}</span>
               </button>
-              <button type="button" className="st-choice" data-act="new" disabled={busy} onClick={() => { setCreating(true); setError(''); }}>
+              <button type="button" className="st-choice" data-act="new" disabled={busy} onClick={() => void startNew()}>
                 <b>{t('desktop.new')}</b><span>{t('desktop.newHint')}</span>
               </button>
               <button type="button" className="st-choice" data-act="demo" disabled={busy} onClick={() => void run(api.desktop.demo)}>
@@ -106,12 +140,20 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               </button>
             </div>
             {error && <p className="warnline" role="alert">{error}</p>}
+            {upgradable && (
+              <p className="st-upgrade">
+                <button type="button" className="st-choice" data-act="upgrade" disabled={busy} onClick={() => void run(() => api.desktop.upgrade(upgradable))}>
+                  <b>{t('desktop.upgrade')}</b><span>{t('desktop.upgradeHint')}</span>
+                </button>
+              </p>
+            )}
             {!!info?.recent.length && (
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" disabled={busy || !b.name} onClick={() => void run(() => api.desktop.open(b.root))}>
-                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t('desktop.missing')}</b><span className="mono">{b.root}</span>
+                  <button key={b.root} type="button" className="st-book" title={b.root} disabled={busy || (!b.name && !b.problem && !b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
+                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
+                    {b.problem && <small className="st-problem">{b.problem}</small>}
                   </button>
                 ))}
               </section>
@@ -123,8 +165,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   );
 }
 
-function CreateForm({ info, busy, error, onCancel, onCreate }: {
-  info: DesktopInfo | null; busy: boolean; error: string; onCancel(): void;
+function CreateForm({ info, busy, error, notice, onCancel, onCreate }: {
+  info: DesktopInfo | null; busy: boolean; error: string; notice?: string; onCancel(): void;
   onCreate(setup: Parameters<typeof api.desktop.create>[0]): void;
 }) {
   const [f, setF] = useState<Form>(() => ({
@@ -135,7 +177,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const setBank = (i: number, patch: Partial<BankRow>) => set('banks', f.banks.map((b, j) => (j === i ? { ...b, ...patch } : b)));
 
-  const root = f.root || (info ? `${info.booksHome}/${t('desktop.folderName', { name: f.name.trim() || t('desktop.folderDefault') }).replace(/[/:]/g, '-')}` : '');
+  const root = f.root || (info ? `${info.booksHome}/${freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info.folders)}` : '');
   const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
   const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
   const complete = firstMissing(f.answers) === undefined;
@@ -157,7 +199,8 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
   ].filter(Boolean);
   const invalid = !!(errors.name || errors.uid || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
 
-  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? x.answers : { ...PRESETS[preset].answers } }));
+  // «Etwas anderes» keeps what is answered so far and takes its own defaults (not registered for VAT) on top.
+  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? { ...x.answers, ...PRESETS.custom.answers } : { ...PRESETS[preset].answers } }));
   const pick = (key: QuestionKey, value: string) => setF((x) => {
     const multi = 'multi' in QUESTIONS[key];
     const now = answerList(x.answers, key);
@@ -194,6 +237,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
     <div className="st-main st-create">
       <h1>{t('desktop.new')}</h1>
       <p className="st-sub">{t('desktop.newIntro')}</p>
+      {notice && <p className="st-noai" role="status">{notice}</p>}
       <form className="st-form" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <section>
           <h2>{t('desktop.preset')}</h2>

@@ -23,7 +23,8 @@ export interface Choice { value: string; label: Line; sub?: Line; primary?: bool
 export type Origin = 'form' | 'answer' | 'app' | 'later' | 'open';
 
 export type SetupCard =
-  | { kind: 'company'; company: SetupFacts['company'] }
+  /** `origin`: the form saved it, or the person answered it in the conversation that created the books (#139). */
+  | { kind: 'company'; company: SetupFacts['company']; origin: Extract<Origin, 'form' | 'answer'> }
   /** The VAT setup the answer asks for, against the one the app has: `proposed` waits for «Übernehmen», `kept` was taken. */
   | { kind: 'vat'; from: VatSetup; to: VatKind; state: 'proposed' | 'kept' }
   /** What the firm sells as answered, with the default accounts that follow; `proposed` until the profile says the same («Übernehmen»). */
@@ -170,7 +171,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   if (!take({
     id: 'company', topic: 'firm',
     say: [f.company.owner ? L('s.hello', { owner: f.company.owner.split(/\s+/)[0] }) : L('s.helloNoName'), L('s.company')],
-    card: { kind: 'company', company: f.company },
+    card: { kind: 'company', company: f.company, origin: p.created ? 'answer' : 'form' },
     choices: [choice('company', 'ok', { primary: true }), choice('company', 'fix')],
     ...(a.company?.value === 'fix' ? { reply: { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
   })) return steps;

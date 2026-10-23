@@ -253,7 +253,8 @@ export const PRESETS = {
       employees: 'none', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
     },
   },
-  custom: { label: 'Custom: answer every question', answers: {} },
+  // None of the above: every question is asked; a firm that fits no preset is more often not registered for VAT.
+  custom: { label: 'Something else: answer every question', answers: { vatRegistered: 'no' } },
 } as const satisfies Record<string, { label: string; answers: Partial<Answers> }>;
 
 export type Preset = keyof typeof PRESETS;

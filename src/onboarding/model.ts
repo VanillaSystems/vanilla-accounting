@@ -27,6 +27,13 @@ export interface SetupProgress {
   started?: string;
   /** The setup conversation (data/assistant/<id>.json), so reopening continues it. */
   conversation?: string;
+  /**
+   * When the setup conversation created these books (#139, src/onboarding/draft.ts); absent for books
+   * set up by the form or `npm run init`. Until `ready`, opening the books continues the setup.
+   */
+  created?: string;
+  /** When the person ended the setup with «Los geht's»: from then on only «Einrichtung fortsetzen» opens it. */
+  ready?: string;
   topics: Record<SetupTopic, TopicProgress>;
   /** The person's answers to the conversation's questions (src/onboarding/conversation.ts), by question. */
   answers: Answers;
@@ -87,6 +94,8 @@ export function parseProgress(raw: unknown): SetupProgress {
   const r = raw as Record<string, unknown>;
   if (typeof r.started === 'string') out.started = r.started;
   if (typeof r.conversation === 'string' && r.conversation) out.conversation = r.conversation;
+  if (typeof r.created === 'string') out.created = r.created;
+  if (typeof r.ready === 'string') out.ready = r.ready;
   const topics = r.topics && typeof r.topics === 'object' ? (r.topics as Record<string, unknown>) : {};
   for (const topic of SETUP_TOPICS) {
     const p = topics[topic] as Record<string, unknown> | undefined;

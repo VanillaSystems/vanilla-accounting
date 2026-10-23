@@ -29,7 +29,8 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
 import type { JournalEntryInput } from '../../books/entry-input.js';
@@ -208,6 +209,7 @@ export function errorText(e: unknown): string {
     case 'accountOutsideStatements': return t('error.accountOutsideStatements', b.params);
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
+    case 'oldLayout': return t('desktop.oldLayout', { root: b.params.root });
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
@@ -240,6 +242,7 @@ export function setupText(r: SetupRefusal): string {
     case 'required': return t(`desktop.setup.required.${r.field}`);
     case 'uid': case 'language': case 'preset': return t(`desktop.setup.${r.reason}`, { detail: r.detail });
     case 'noBank': return t('desktop.setup.noBank');
+    case 'bankName': return t('desktop.setup.bankName');
     default: return t(`desktop.setup.${r.reason}`, { bank: r.bank, detail: r.detail });
   }
 }
@@ -331,6 +334,7 @@ export const api = {
   changesSave: (oid: string) => request<SaveDetail>('GET', `/api/changes/saves/${encodeURIComponent(oid)}`),
   onboarding: () => request<SetupView>('GET', '/api/onboarding'),
   onboardingStart: () => request<SetupView>('POST', '/api/onboarding/start'),
+  onboardingReady: () => request<SetupView>('POST', '/api/onboarding/ready'),
   onboardingAnswer: (q: QuestionId, value: string | null, kept?: VatSetup | null) => request<SetupView>('PUT', `/api/onboarding/answers/${q}`, { value, ...(kept !== undefined ? { kept } : {}) }),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   /** A file for the next message (src/types/attachment.ts): kept beside the conversations, never in the books. */
@@ -451,6 +455,13 @@ export const api = {
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
+    /** Books in the layout before 0.4.0: moved into vanilla-accounting/ as npm run update does, then opened. */
+    upgrade: (root: string) => request<KnownBooks>('POST', '/api/desktop/upgrade', { root }),
+    ai: () => request<AiAvailability>('GET', '/api/desktop/ai'),
+    setup: (root: string) => request<SetupDraftView>('GET', `/api/desktop/setup?root=${encodeURIComponent(root)}`),
+    setupBegin: (root: string, language: string) => request<SetupBegun>('POST', '/api/desktop/setup', { root, language }),
+    setupPatch: (root: string, patch: SetupPatch) => request<SetupDraftView>('PUT', '/api/desktop/setup', { root, patch }),
+    setupCreate: (root: string) => request<KnownBooks>('POST', '/api/desktop/setup/create', { root }),
     phone: () => request<PhoneInfo>('GET', '/api/desktop/phone'),
     setPhone: (on: boolean) => request<PhoneInfo>('POST', '/api/desktop/phone', { on }),
     renewPhone: () => request<PhoneInfo>('POST', '/api/desktop/phone', { renew: true }),

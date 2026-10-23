@@ -11,10 +11,10 @@ and the providers.
 | core | 61 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 99 | 26 |
+| split | 101 | 26 |
 | infrastructure | 56 | 4 |
 | workflow | 20 | 0 |
-| view | 273 | 56 |
+| view | 275 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -79,7 +79,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/banks.ts` | camt.053 7 |
 | `src/workspace/checks.ts` | CHF 1, camt.053 1 |
 | `src/workspace/create.ts` | CHF 2 |
-| `src/workspace/manifest.ts` | CHF 2, QR-bill 7 |
+| `src/workspace/manifest.ts` | CHF 3, QR-bill 7 |
 | `src/workspace/migrate.ts` | ESTV 1 |
 | `src/workspace/reads.ts` | ESTV 1 |
 | `src/workspace/scaffold.ts` | MWST 1, ESTV 1, form 0535 1 |
@@ -130,7 +130,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/intake/vat.ts` | MWST 3 |
 | `src/invoices/fonts.ts` | QR-bill 1 |
 | `src/invoices/model.ts` | CHF 1, MWST 2, Ziffer 1, QR-bill 7 |
-| `src/invoices/payments.ts` | ESTV 1, camt.053 1, QR-bill 1 |
+| `src/invoices/payments.ts` | MWST 1, ESTV 1, camt.053 1, QR-bill 1 |
 | `src/invoices/pdf.ts` | QR-bill 1 |
 | `src/invoices/rules.ts` | MWST 1, QR-bill 3, Rappen 2 |
 | `src/invoices/service.ts` | CHF 2, MWST 1, Ziffer 1 |
@@ -186,8 +186,8 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 43, MWST 280, ESTV 38, Ziffer 52, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
-| `src/app/i18n/locales/en.ts` | CHF 43, MWST 4, ESTV 25, form 0535 1, UID 1, camt.053 16, QR-bill 4 |
+| `src/app/i18n/locales/de.ts` | CHF 43, MWST 282, ESTV 40, Ziffer 52, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
+| `src/app/i18n/locales/en.ts` | CHF 43, MWST 4, ESTV 26, form 0535 1, UID 1, camt.053 16, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 1 |
