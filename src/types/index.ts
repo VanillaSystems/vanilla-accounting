@@ -358,6 +358,11 @@ export interface BankTransaction {
    * Swiss VAT rate line the part falls under, named when the receipt shows several.
    */
   businessPart?: { what?: string; rate?: number };
+  /**
+   * The person's bookings without a payment this owner's payment replaced («Buchung ersetzen»,
+   * src/server/edits.ts privatePayment), as they were: deleting the payment puts them back.
+   */
+  replaced?: JournalEntry[];
   type?: 'wise-fee';
   remarks?: string;
   noReceiptNeeded?: boolean;

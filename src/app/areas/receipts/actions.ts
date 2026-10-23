@@ -84,7 +84,7 @@ export async function privateOutlay(nav: Nav, v: ReceiptView, part: PrivatePart 
   // A receipt of a filed period: the toast says the payment is dated the first open day and corrects that period (r8k-10).
   const said = () => (made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects })
     : part.amount !== undefined && part.amount < Math.abs(r.amount!) ? t('receipts.privatePartDone', { amount, what: part.part || t('receipts.privatePartUnnamed') }) : t('receipts.privateDone')) + rate();
-  const undo = () => (made.replaced?.length ? api.undoPrivatePayment(r.id, made.ref, made.replaced) : api.deleteTransaction(made.ref));
+  const undo = () => api.deleteTransaction(made.ref);
   const held = (e: unknown) => {
     if (!onHeld || !(e instanceof ApiError) || e.body.code !== 'bookedByHand') return false;
     onHeld(e.body.params);
@@ -93,9 +93,12 @@ export async function privateOutlay(nav: Nav, v: ReceiptView, part: PrivatePart 
   return run(nav, async () => { made = await api.privatePayment(r.id, part); }, said, undo, held);
 }
 
-/** A private payment made by mistake goes with its booking and its link; undo pays the receipt privately again. */
+/** A private payment made by mistake goes with its booking and its link, and a booking by hand it replaced comes back; undo pays the receipt privately again, as it was. */
 export function undoPrivate(nav: Nav, v: ReceiptView, tx: BankTransaction, what: string) {
-  const part: PrivatePart = tx.businessPart ? { amount: tx.amount, ...(tx.businessPart.what && { part: tx.businessPart.what }), ...(tx.businessPart.rate !== undefined && { rate: tx.businessPart.rate }) } : {};
+  const part: PrivatePart = {
+    ...(tx.businessPart && { amount: tx.amount, ...(tx.businessPart.what && { part: tx.businessPart.what }), ...(tx.businessPart.rate !== undefined && { rate: tx.businessPart.rate }) }),
+    ...(tx.replaced?.length && { replace: tx.replaced[0].transactionRef }),
+  };
   return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), () => api.privatePayment(v.r.id, part));
 }
 

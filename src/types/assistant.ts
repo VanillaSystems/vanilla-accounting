@@ -65,8 +65,8 @@ export type BookChange =
   | { kind: 'receiptKind'; id: string; as: ReceiptKind | null; by?: Receipt['kindBy'] | null; rule?: string | null; links?: string[] }
   /** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment of the receipt, or of its business part `amount` («Kaffee»: `part`), linked; `replace`: a booking by hand of it that gives way. */
   | ({ kind: 'privatePayment'; receipt: string } & PrivatePart)
-  /** The undo of a private payment alone: the payment goes with its bookings and link, the bookings it replaced come back. */
-  | { kind: 'deletePayment'; ref: string; receipt: string; restore?: JournalEntry[] };
+  /** The undo of a private payment alone: the payment goes with its bookings and link, the bookings it replaced come back (BankTransaction.replaced). */
+  | { kind: 'deletePayment'; ref: string; receipt: string };
 
 /** What «Privat oder bar bezahlt» takes beside the receipt: the business part in the receipt's currency (none: the whole), what it was, its VAT rate line, the booking by hand it replaces. */
 export interface PrivatePart { amount?: number; part?: string; rate?: number; replace?: string }

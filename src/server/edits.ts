@@ -218,13 +218,17 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
   const named = ask.part?.trim();
   const text = part ? `${what} · ${named || 'Geschäftsanteil'} (Teil von ${currency} ${total.toFixed(2)}, Rest privat)` : what;
   const businessPart = part ? { ...(named && { what: named }), ...(rates.length > 1 && { rate: ask.rate }) } : undefined;
-  books.transactions.push({ ref, bank: 'manual', source: 'manual', date, amount, currency, direction: 'DBIT', description: late ? `${text} · Beleg vom ${day(r.date)}` : text, ...(businessPart && { businessPart }) });
+  books.transactions.push({ ref, bank: 'manual', source: 'manual', date, amount, currency, direction: 'DBIT', description: late ? `${text} · Beleg vom ${day(r.date)}` : text, ...(businessPart && { businessPart }), ...(replaced.length && { replaced }) });
   books.mappings.push({ transactionRef: ref, receiptId });
   const corrects = late ? correctsFor({ source: 'manual' }, [r], lock.isClosed, filing().length) : undefined;
   return { ref, date, ...(corrects ? { corrects } : {}), ...(exchangeRate !== undefined && { exchangeRate }), ...(replaced.length && { replaced }) };
 }
 
-/** A payment made by hand goes with its bookings and its links: without the payment they book nothing (r7h-23: the undo is one step). */
+/**
+ * A payment made by hand goes with its bookings and its links: without the payment they book
+ * nothing (r7h-23: the undo is one step). The bookings by hand an owner's payment replaced come
+ * back as they were, in the same write.
+ */
 export function dropPayment(books: Books, ref: string): BankTransaction {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
@@ -233,15 +237,15 @@ export function dropPayment(books: Books, ref: string): BankTransaction {
   books.transactions = books.transactions.filter((t) => t.ref !== ref);
   books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);
   books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
+  for (const e of tx.replaced ?? []) addEntry(books, e);
   return tx;
 }
 
 /** The undo of a private payment: it goes, the bookings by hand it replaced come back; returns the private payment again, for the undo of the undo. */
 function deletePayment(books: Books, c: Extract<BookChange, { kind: 'deletePayment' }>): BookChange {
   const tx = dropPayment(books, c.ref);
-  for (const e of c.restore ?? []) addEntry(books, e);
   const part = tx.businessPart && { amount: tx.amount, ...(tx.businessPart.what && { part: tx.businessPart.what }), ...(tx.businessPart.rate !== undefined && { rate: tx.businessPart.rate }) };
-  return { kind: 'privatePayment', receipt: c.receipt, ...part, ...(c.restore?.length && { replace: c.restore[0].transactionRef }) };
+  return { kind: 'privatePayment', receipt: c.receipt, ...part, ...(tx.replaced?.length && { replace: tx.replaced[0].transactionRef }) };
 }
 
 export function unlink(books: Books, receipt: string, payment: string): BookChange | undefined {
@@ -529,7 +533,7 @@ export function applyChange(books: Books, c: BookChange, author: Author = BY_HAN
     case 'privatePayment': {
       const { kind: _, receipt, ...ask } = c;
       const made = privatePayment(books, receipt, ask, loadFxResolver());
-      return { kind: 'deletePayment', ref: made.ref, receipt, ...(made.replaced && { restore: made.replaced }) };
+      return { kind: 'deletePayment', ref: made.ref, receipt };
     }
     case 'deletePayment': return deletePayment(books, c);
   }
