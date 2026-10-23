@@ -206,7 +206,20 @@ export interface JournalEntry {
    * field existed, or by another writer; such an entry is never booked again for this reason.
    */
   receipts?: string[];
+  /**
+   * What the line buys (or sells), as the classifier read it off the receipt (ClassifyEntry.supply,
+   * #80): Bezugsteuer is owed on a service from abroad only, so later checks (the rule card's
+   * national VAT rules, src/booking/national-vat.ts) need it after the booking. Stamped on the
+   * entries the model books; absent on older entries and other writers' (a filed entry keeps what
+   * it was filed with).
+   */
+  supply?: Supply;
+  /** The supplier's country as the classifier read it off the receipt, ISO 3166 alpha-2 (#80); absent as `supply` is. */
+  supplierCountry?: string;
 }
+
+/** What a purchase line buys, as the model reads it (rule 7h): code decides Bezugsteuer from it (src/accounting/acquisition-tax.ts). `exempt`: a service exempt from VAT, such as payment processing, banking or insurance. */
+export type Supply = 'goods' | 'service' | 'exempt';
 
 /** The app's checks that set a booking's code themselves: a sale's VAT code (src/accounting/sales-without-vat.ts saleCodeOf), a payout report's lines, a payout's lines per order (src/booking/payout-orders.ts), a credit note's from the invoice it names (src/accounting/credit-note-code.ts), Bezugsteuer on a service from abroad (src/accounting/acquisition-tax.ts), a purchase's input tax from its receipt and the app's business files (src/booking/purchase-vat.ts). */
 export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat'] as const;

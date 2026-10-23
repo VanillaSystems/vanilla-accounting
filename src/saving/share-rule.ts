@@ -39,7 +39,7 @@ export interface ShareOffer {
  * showed VAT that time) names its family's standard rate, since the rule falls back to the zero
  * code for any payment whose receipt shows none (ruleVatCode); any other code as booked.
  */
-function ruleCode(code: string | undefined): string | null {
+export function ruleCode(code: string | undefined): string | null {
   if (!code) return null;
   const found = lookupVatCode(code);
   if (!found || found.negative) return code;
@@ -69,7 +69,7 @@ export function shareOffer(ws: Workspace, books: Books, ref: string, context: Cl
   const percent = Math.round((own.amount / tx.amount) * 100);
   const booking: RuleBooking = { account, vat: ruleCode(biz.vatCode), private: percent };
   if (percent <= 0 || percent >= 100) return undefined;
-  const lines = ruleBookingLines(tx, booking, mappedReceipts(books, tx).some((r) => r.hasSwissVat), owner);
+  const lines = ruleBookingLines(tx, booking, mappedReceipts(books, tx), owner);
   // A whole percent: the rule books the split again, give or take the odd cent of an uneven half.
   if (!lines[1] || Math.abs(Math.round(lines[1].amount * 100) - Math.round(own.amount * 100)) > 1) return undefined;
   const fx = loadFxResolver();

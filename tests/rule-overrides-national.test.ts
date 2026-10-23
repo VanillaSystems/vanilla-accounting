@@ -93,6 +93,23 @@ test('a rule booking a foreign ad platform without Bezugsteuer warns, names the 
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), rule('6570', 'I0'), '«Trotzdem behalten»');
 });
 
+test('the supply and supplier country the model read, kept on its entries, warn on a payment never booked with Bezugsteuer (#80)', async () => {
+  const ws = await company();
+  payments(ws, 2, foreignNoVat, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' }, supply: 'service', supplierCountry: 'IE' }));
+  draft(ws, rule('6570', 'I0'));
+  const [o] = draftRules(ws, GUIDE)!.preview[0].overrides ?? [];
+  assert.deepEqual([o?.kind, o?.count, o?.payments[0].national[0].vat], ['withoutAcquisition', 2, 'B81-1']);
+});
+
+test('the model\'s reading of goods from abroad, or none kept at all, gives no Bezugsteuer warning (#80)', async () => {
+  for (const kept of [{ supply: 'goods', supplierCountry: 'IE' }, {}] as const) {
+    const ws = await company();
+    payments(ws, 1, foreignNoVat, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' }, ...kept }));
+    draft(ws, rule('6570', 'I0'));
+    assert.equal(draftRules(ws, GUIDE)!.preview[0].overrides, undefined, JSON.stringify(kept));
+  }
+});
+
 test('a person who changed the app\'s Bezugsteuer to I0 is warned too: the code was B81-1 before', async () => {
   const ws = await company();
   payments(ws, 2, foreignNoVat, () => ({ vatCode: 'I0', origin: 'manual', by: { kind: 'person', at: '2026-10-20T10:00:00Z', was: { vatCode: 'B81-1' } } }));
@@ -109,15 +126,23 @@ test('a rule that books what the national rules give shows nothing new and keeps
   assert.equal((await keepDraft(ws, GUIDE, d.basis)).ok, true);
 });
 
-test('a rule claiming input tax where no receipt shows Swiss VAT warns', async () => {
+test('a rule claiming input tax where no receipt shows a Swiss rate warns', async () => {
   const ws = await company();
-  // A delivery note shows the MWST; no invoice is linked, so nothing proves the input tax (pv-no-receipt).
-  payments(ws, 2, { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 7.5 }], kind: 'supporting' }, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' } }));
+  // The invoice says MWST but no rate was read from it, so nothing proves the input tax (pv-no-receipt).
+  payments(ws, 2, { hasSwissVat: true, vatSummary: [] }, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' } }));
   draft(ws, rule('6570', 'I81'));
   const d = draftRules(ws, GUIDE)!;
   const [o] = d.preview[0].overrides ?? [];
   assert.deepEqual([o?.kind, o?.count, o?.payments[0].would.lines[0].vat, o?.payments[0].national[0].vat], ['inputTaxWithoutReceipt', 2, 'I81', 'I0']);
   assert.equal(d.confirm, true);
+});
+
+test('a rule\'s rate code with only a delivery note linked books the zero code itself, as the national rules do: no warning (#81)', async () => {
+  const ws = await company();
+  payments(ws, 2, { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 7.5 }], kind: 'supporting' }, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' } }));
+  draft(ws, rule('6570', 'I81'));
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual([d.preview[0].examples[0].would, d.preview[0].overrides ?? [], d.confirm], [{ kind: 'book', lines: [{ account: '6570', vat: 'I0', amount: 101 }] }, [], false]);
 });
 
 test('a rule booking without input tax where the receipt shows Swiss VAT on the whole amount warns', async () => {

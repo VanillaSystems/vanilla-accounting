@@ -217,6 +217,12 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
           {o.theirs ? ` ${t('rules.preview.theirs', { n: o.theirs })}` : ''}
         </span>
       ))}
+      {p.otherwise && p.same ? (
+        <>
+          <span className="m" data-testid="rule-holds">{t('rules.preview.holds', { n: p.otherwise, same: String(p.same), all: String(p.same + p.otherwise) })}</span>
+          {p.differ?.length ? <ul>{p.differ.map((x) => <PaymentLine key={x.ref} p={x} names={names} />)}</ul> : null}
+        </>
+      ) : null}
       {p.loneWords.length ? <span className="warnline">{t('rules.preview.wide', { words: p.loneWords.map((w) => `«${w}»`).join(', ') })}</span> : null}
       {p.spread ? (
         <>

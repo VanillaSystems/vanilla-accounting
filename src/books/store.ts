@@ -29,6 +29,8 @@ export class ClosedPeriodError extends Error {
    */
   constructor(message: string, readonly closedThrough?: string, readonly reason?: ClosedReason, readonly approved?: string, readonly filed?: string) { super(message); }
 }
+/** An entry dated before the books' first day (booksOpen): that year's result is in the opening balances (#39). */
+export class BeforeBooksError extends ClosedPeriodError {}
 /** A filed quarter's seal no longer matches the books: they read, but are never written. */
 export class SealBrokenError extends ClosedPeriodError {}
 /** A workspace in the layout before ADR 0013 (books.json beside the manifest): npm run update moves it. */
@@ -225,9 +227,25 @@ export interface PeriodLock {
   /** «Periode geschlossen bis …» or «… ist freigegeben …»: the words a refusal of `date` begins with. */
   closedText(date: string | undefined): string;
   assertOpen(date: string | undefined, what: string): void;
+  /** The books' first day (booksOpen); nothing is dated before it. */
+  opens: string | undefined;
+  beforeBooks(date: string | undefined): boolean;
 }
 
-export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
+/**
+ * The books' first day: 1 January of the first year with opening balances, else of the year of the
+ * earliest payment; undefined for books with neither. The year before is the opening balances'
+ * (#39): no entry is dated in it and no year folder is made for it.
+ */
+export function booksOpen(books: { config?: Pick<AccountingConfig, 'openingBalances'>; transactions?: readonly { date: string }[] }): string | undefined {
+  const year = Object.keys(books.config?.openingBalances ?? {}).sort()[0]
+    ?? (books.transactions ?? []).reduce<string | undefined>((m, t) => (!m || t.date < m ? t.date : m), undefined)?.slice(0, 4);
+  return year && `${year}-01-01`;
+}
+
+export function periodLock(books: Pick<Index, 'config'> & { transactions?: readonly { date: string }[] }): PeriodLock {
+  let first: { day: string | undefined } | undefined;
+  const opens = () => (first ??= { day: booksOpen(books) }).day;
   const closedThrough = books.config?.closedThrough;
   const approved = books.config?.approvedReturn;
   const lockedThrough = approved && (!closedThrough || approved.through > closedThrough) ? approved.through : closedThrough;
@@ -248,6 +266,8 @@ export function periodLock(books: Pick<Index, 'config'>): PeriodLock {
     assertOpen(date, what) {
       if (isClosed(date)) throw new ClosedPeriodError(`${closedText(date)} ${what}`, closedThrough, undefined, heldBy(date)?.period);
     },
+    get opens() { return opens(); },
+    beforeBooks: (date) => { const day = opens(); return !!day && !!date && date < day; },
   };
 }
 
@@ -316,8 +336,11 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
   const filedPart = filedHold ? closedPart(books, was.closedThrough) : undefined;
   const distanceBefore = filedHold ? filedDistance(books, filedHold) : undefined;
   const persons = actor.kind === 'person' ? undefined : personsEntries(books);
+  const dated = new Map(books.journalEntries.map((e) => [e.id, e.date]));
   const check = () => {
     const lock = periodLock(books);
+    const early = books.journalEntries.filter((e) => lock.beforeBooks(e.date) && dated.get(e.id) !== e.date);
+    if (early.length) throw new BeforeBooksError(`Die Bücher beginnen am ${lock.opens}: ${early.map((e) => `entry ${e.id} dated ${e.date}`).join('; ')}.`, `${Number(lock.opens!.slice(0, 4)) - 1}-12-31`);
     if (lock.lockedThrough !== before.lockedThrough) {
       throw new ClosedPeriodError(`the period lock moved from ${before.lockedThrough} to ${lock.lockedThrough} (closedThrough, approvedReturn).`, lock.closedThrough);
     }

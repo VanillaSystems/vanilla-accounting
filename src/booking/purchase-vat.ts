@@ -16,7 +16,7 @@
  * company's word goes before the app's, unless that file states such a choice itself. The company's executable rules book before the model and
  * a person's booking is never classified, so neither reaches this.
  */
-import { evidenceCheck } from '../accounting/evidence-check.js';
+import { evidenceCheck, isPurchaseDocument } from '../accounting/evidence-check.js';
 import { formTakes } from '../accounting/vat-codes.js';
 import { vat } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
@@ -88,7 +88,6 @@ export function businessVat(k: Pick<Knowledge, 'counterpartyFiles'>): BusinessVa
   return { facts, companyDecides };
 }
 
-const isPurchaseDocument = (r: Receipt): boolean => r.kind === undefined || r.kind === 'invoice';
 const unread = (r: Receipt): boolean => r.hasSwissVat === undefined && !r.vatSummary?.length;
 const ratedCode = /^(-?)([MI])(\d+)$/;
 

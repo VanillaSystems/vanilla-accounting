@@ -42,6 +42,7 @@ import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
 import { isCamt } from '../bank/model.js';
 import { CorrectionOffer } from '../company/RulesSection.js';
+import { LearnOffer } from '../company/LearnOffer.js';
 import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 
@@ -178,6 +179,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             </Sec>
           )}
           <EntryForm {...props} edit={edit} />
+          {edit && (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was ? <div className="jlearn"><LearnOffer payment={e.transactionRef} nav={nav} /></div> : null}
           <Sec k="herkunft" val={e.by ? t(`journal.by.${e.by.kind}`) : t(`journal.origin.${e.origin ?? 'other'}`)}>
             <dl className="kv">
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
