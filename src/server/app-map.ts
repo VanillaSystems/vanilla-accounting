@@ -57,7 +57,7 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   periods: { does: 'the filed periods and their seals' },
   opening: { does: 'the opening balances of the year' },
   display: { does: 'language, theme, the app\'s version' },
-  ai: { does: 'which AI the app asks for each step on this computer: the Claude subscription (Claude Code), an Anthropic or OpenAI API key the person pastes there (kept in the keychain, never in the books; never ask for a key in the chat), and a model per step. The setting belongs to this computer, not to the books' },
+  ai: { does: 'which AI the app asks for each step on this computer: the Claude subscription (Claude Code), an Anthropic, OpenAI or TypeSafe Jev API key the person pastes there (Jev answers only yes/no and choice questions, such as whether a mail brings a receipt) (kept in the keychain, never in the books; never ask for a key in the chat), and a model per step. The setting belongs to this computer, not to the books' },
 };
 
 /** The export dialog (⇧E, «Exportieren»): the presets, each a set of reports, data and originals for a period. */

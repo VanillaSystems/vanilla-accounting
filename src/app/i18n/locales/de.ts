@@ -4222,6 +4222,10 @@ export const messages = {
   'error.aiModelUnfit': '{model} kann diesen Schritt nicht ausführen.',
   'error.aiKeyRefused': 'Der Anbieter lehnt diesen Schlüssel ab: nichts gespeichert.',
   'error.aiKeyWhere': 'Hier speichert die App keine Schlüssel: er gehört nach {where}.',
+  'ai.provider.jev': 'TypeSafe Jev (API-Schlüssel)',
+  'ai.step.mail-triage': 'Mail mit Beleg erkennen',
+  'ai.needs.typed': 'Ja/Nein-Frage; unter {percent} % Sicherheit fragt der Standard',
+  'ai.typedOnly': 'beantwortet nur Ja/Nein- und Auswahlfragen',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

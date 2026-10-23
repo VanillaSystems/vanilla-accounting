@@ -19,6 +19,8 @@ export interface AiStepView {
   id: StepId;
   tier: Tier;
   needs: readonly Capability[];
+  /** A typed step: below this confidence the default answers. */
+  confident?: number;
   choice?: StepChoice;
   /** What serves the step now: the choice, or the default when the choice cannot serve it. */
   resolved: { provider: ProviderId; model: string; source: 'setting' | 'default' };

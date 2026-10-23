@@ -46,10 +46,17 @@ io.mail.messages(cursor?, limit = 50)
   → { messages: Array<{ uid, from, to, subject, date, messageId }>, cursor, done }
 io.mail.attachments(uid)
   → Array<{ file, filename, contentType, size }>   // file: a reference to bytes the host holds
+io.mail.triage(uid)                                // does the mail bring a receipt? (issue #48)
+  → { receipt: 0..1, confidence, by } | { receipt: null, why }
 io.out.document(file, { key, date })               // into the inbox, once per key
 io.out.checkpoint(cursor)                          // the cursor, into the ledger
 io.settings                                        // the source.yaml's settings, frozen
 ```
+
+`triage` asks the model of the step «Mail mit Beleg erkennen» (Firma › KI; TypeSafe Jev when a
+key is set and chosen) with the mail's sender and subject only, never its body or attachments.
+Below 80 % confidence the default model answers instead; with no model it answers `receipt: null`,
+and the code keeps its own rule (every PDF attached, as the app's IMAP source does).
 
 The code never holds a connection, a password or the bytes' path. It yields what it decides is
 a document by the file reference the host gave it.

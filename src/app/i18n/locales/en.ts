@@ -4225,5 +4225,9 @@ export default {
     'error.aiModelUnfit': '{model} cannot do this step.',
     'error.aiKeyRefused': 'The provider refuses this key: nothing saved.',
     'error.aiKeyWhere': 'The app keeps no keys here: it goes into {where}.',
+    'ai.provider.jev': 'TypeSafe Jev (API key)',
+    'ai.step.mail-triage': 'Spot a mail with a receipt',
+    'ai.needs.typed': 'Yes/no question; below {percent} % certainty the default is asked',
+    'ai.typedOnly': 'answers yes/no and choice questions only',
   },
 } satisfies Locale;
