@@ -21,7 +21,7 @@ before(async () => {
   stub = await providerStub();
   dir = mkdtempSync(join(tmpdir(), 'ai-settings-'));
   api = await startApi('tests/fixtures/classify-index.json', {
-    VANILLA_SECRETS_FILE: join(dir, 'secrets.json'), VANILLA_AI_SETTINGS: join(dir, 'ai.json'), VANILLA_ANTHROPIC_URL: stub.url, VANILLA_OPENAI_URL: stub.url,
+    VANILLA_SECRETS_FILE: join(dir, 'secrets.json'), VANILLA_AI_SETTINGS: join(dir, 'ai.json'), VANILLA_ANTHROPIC_URL: stub.url, VANILLA_OPENAI_URL: stub.url, VANILLA_JEV_URL: stub.url,
   });
 });
 after(async () => {
@@ -38,7 +38,7 @@ function everyFile(root: string): string[] {
 
 test('without any key the view offers the Claude subscription and every step its default', async () => {
   const v = await view();
-  assert.deepEqual(v.providers.map((p) => [p.id, p.billing, p.state]), [['claude-cli', 'subscription', 'missing'], ['anthropic', 'key', 'unset'], ['openai', 'key', 'unset']]);
+  assert.deepEqual(v.providers.map((p) => [p.id, p.billing, p.state]), [['claude-cli', 'subscription', 'missing'], ['anthropic', 'key', 'unset'], ['openai', 'key', 'unset'], ['jev', 'key', 'unset']]);
   assert.deepEqual(v.steps.find((s) => s.id === 'classify')!.resolved, { provider: 'claude-cli', model: 'sonnet', source: 'default' });
   assert.equal(v.keysInApp, true, 'the secrets file stands for the keychain');
 });
@@ -82,4 +82,14 @@ test('removing the key gives its steps back to the default', async () => {
   const step = (r.json as unknown as AiView).steps.find((s) => s.id === 'classify')!;
   assert.deepEqual([step.choice?.provider, step.resolved.provider, step.resolved.source], ['anthropic', 'claude-cli', 'default'], 'the choice stays for when the key comes back');
   assert.equal(JSON.parse(readFileSync(join(dir, 'secrets.json'), 'utf8'))['ai:anthropic'], undefined);
+});
+
+test('a Jev key is checked with one synthetic question; Jev serves the typed step and is refused for a text step', async () => {
+  const r = await api.send('PUT', '/api/ai/keys/jev', { key: 'test-key-jev-0006' });
+  assert.equal(r.status, 200, String(r.json.error));
+  assert.equal(stub.seen.at(-1)!.body.state, 'Hallo');
+  assert.equal((await api.send('PUT', '/api/ai/steps/classify', { provider: 'jev', model: 'jev-latest' })).json.code, 'aiModelUnfit');
+  const ok = await api.send('PUT', '/api/ai/steps/mail-triage', { provider: 'jev', model: 'jev-latest' });
+  const step = (ok.json as unknown as AiView).steps.find((s) => s.id === 'mail-triage')!;
+  assert.deepEqual([step.resolved.provider, step.confident], ['jev', 0.8]);
 });

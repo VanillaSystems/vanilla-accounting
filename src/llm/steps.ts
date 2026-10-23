@@ -4,8 +4,12 @@
  * the person's setting for this machine, else the default provider's model for the step's tier.
  */
 
-/** What a model can do: answer in free text, in JSON, read an attached PDF or image, work as an agent with tools and a session. */
-export type Capability = 'text' | 'json' | 'pdf' | 'image' | 'agent';
+/**
+ * What a model can do: answer in free text, in JSON, read an attached PDF or image, work as an
+ * agent with tools and a session, or answer a typed question (yes/no, one of a few choices) with
+ * a confidence. A model that writes JSON answers a typed question through a prompt (judge.ts).
+ */
+export type Capability = 'text' | 'json' | 'pdf' | 'image' | 'agent' | 'typed';
 
 /** How much model a step needs; each provider names its model per tier. */
 export type Tier = 'fast' | 'standard' | 'strong';
@@ -15,6 +19,8 @@ export interface Step {
   ledger: string;
   tier: Tier;
   needs: readonly Capability[];
+  /** A typed step: an answer below this confidence is asked again of the default provider. */
+  confident?: number;
 }
 
 export const STEPS = {
@@ -29,6 +35,8 @@ export const STEPS = {
   saving: { ledger: 'saving', tier: 'standard', needs: ['json'] },
   tutti: { ledger: 'receipt-collection.guide.yaml#tutti', tier: 'standard', needs: ['json'] },
   sidebar: { ledger: 'assistant', tier: 'standard', needs: ['agent'] },
+  // A source's code asks whether a mail brings a receipt (io.mail.triage): sender, subject and attachment names only.
+  'mail-triage': { ledger: 'receipt-collection.guide.yaml#triage', tier: 'fast', needs: ['typed'], confident: 0.8 },
 } as const satisfies Record<string, Step>;
 
 export type StepId = keyof typeof STEPS;
@@ -36,6 +44,9 @@ export type StepId = keyof typeof STEPS;
 export const STEP_IDS = Object.keys(STEPS) as StepId[];
 
 export const isStepId = (s: string): s is StepId => Object.hasOwn(STEPS, s);
+
+/** A typed step's threshold: below it the default provider answers instead. */
+export const confidentOf = (step: StepId): number | undefined => (STEPS[step] as Step).confident;
 
 /** Whether a model with these capabilities can serve the step. */
 export const meets = (can: readonly Capability[], step: StepId): boolean => STEPS[step].needs.every((n) => can.includes(n));

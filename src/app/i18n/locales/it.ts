@@ -4241,5 +4241,9 @@ export default {
     'error.aiModelUnfit': '{model} non può eseguire questo passo.',
     'error.aiKeyRefused': 'Il fornitore rifiuta questa chiave: nulla salvato.',
     'error.aiKeyWhere': 'Qui l’app non custodisce chiavi: va in {where}.',
+    'ai.provider.jev': 'TypeSafe Jev (chiave API)',
+    'ai.step.mail-triage': 'Riconoscere una mail con giustificativo',
+    'ai.needs.typed': 'Domanda sì/no; sotto il {percent} % di certezza si interpella il predefinito',
+    'ai.typedOnly': 'risponde solo a domande sì/no e a scelta',
   },
 } satisfies Locale;

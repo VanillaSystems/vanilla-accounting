@@ -55,7 +55,9 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
             <div className="fr" role="row" key={s.id}>
               <span>
                 {t(`ai.step.${s.id}`)}
-                {s.needs.includes('agent') ? <small>{t('ai.needs.agent')}</small> : s.needs.includes('pdf') ? <small>{t('ai.needs.pdf')}</small> : null}
+                {s.needs.includes('agent') ? <small>{t('ai.needs.agent')}</small>
+                  : s.needs.includes('pdf') ? <small>{t('ai.needs.pdf')}</small>
+                  : s.confident !== undefined ? <small>{t('ai.needs.typed', { percent: Math.round(s.confident * 100) })}</small> : null}
               </span>
               <span>
                 <select aria-label={t(`ai.step.${s.id}`)} value={unavailable ? '' : value} disabled={!canEdit} onChange={(e) => void choose(s, e.target.value)}>
@@ -111,6 +113,7 @@ function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiV
           ) : <span className="m">{t('ai.key.unset')}</span>
         ) : <span className="m">{t('ai.key.where', { where: view.keysWhere[p.id] ?? '' })}</span>}
         <small>{t('ai.key.costs')}</small>
+        {p.id === 'jev' ? <small>{t('ai.typedOnly')}</small> : null}
         {p.listError ? <small className="warnline">{t('ai.listError', { detail: p.listError })}</small> : null}
       </dd>
     </>

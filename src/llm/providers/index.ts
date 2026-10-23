@@ -33,6 +33,7 @@ export function forgetKey(id: KeyedId): void {
 
 /** The provider's listed models, asked once an hour; a failed list is tried again after five minutes and leaves the shipped models. */
 async function listOf(spec: KeyedSpec, key: string): Promise<{ ids: string[]; error?: string }> {
+  if (!spec.list) return { ids: [] };
   const kept = listed.get(spec.id);
   if (kept && kept.key === key && Date.now() - kept.at < (kept.error ? LIST_RETRY : LIST_TTL)) return kept;
   const fresh = await spec.list(key).then((ids) => ({ ids }), (e: Error) => ({ ids: [], error: e.message }));

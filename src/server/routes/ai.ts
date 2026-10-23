@@ -9,7 +9,7 @@ import { forgetKey, keyedStates, keyName } from '../../llm/providers/index.js';
 import { HttpRefused } from '../../llm/providers/http.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
 import { PROVIDERS, readSettings, writeChoice } from '../../llm/settings.js';
-import { isStepId, meets, STEP_IDS, STEPS } from '../../llm/steps.js';
+import { confidentOf, isStepId, meets, STEP_IDS, STEPS } from '../../llm/steps.js';
 import type { Provider, ProviderId } from '../../llm/provider.js';
 import { secrets } from '../../secrets/secrets.js';
 import type { AiProviderView, AiView } from '../../llm/view.js';
@@ -36,7 +36,7 @@ async function view(): Promise<AiView> {
     const d = resolve(id, { steps: {} }, usable);
     const choice = settings.steps[id];
     return {
-      id, tier: STEPS[id].tier, needs: STEPS[id].needs, ...(choice ? { choice } : {}),
+      id, tier: STEPS[id].tier, needs: STEPS[id].needs, ...(confidentOf(id) !== undefined ? { confident: confidentOf(id) } : {}), ...(choice ? { choice } : {}),
       resolved: { provider: r.provider.id, model: r.model, source: r.source }, standard: { provider: d.provider.id, model: d.model },
     };
   });
@@ -77,7 +77,7 @@ router.put('/api/ai/keys/:provider', async (req, res) => {
   if (!secrets.inApp()) throw new RequestError(409, `Der Schlüssel gehört nach ${secrets.where(keyName(id))}.`, { code: 'aiKeyWhere', params: { where: secrets.where(keyName(id)) } });
   if (typeof key === 'string') {
     try {
-      await KEYED.find((s) => s.id === id)!.list(key.trim());
+      await KEYED.find((s) => s.id === id)!.check(key.trim());
     } catch (e) {
       if (e instanceof HttpRefused && (e.status === 401 || e.status === 403)) throw new RequestError(400, 'Der Anbieter lehnt den Schlüssel ab.', { code: 'aiKeyRefused' });
       // Not reachable now: the key is kept, the view says the list failed.

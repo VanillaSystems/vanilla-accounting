@@ -56,7 +56,7 @@ function args(call: Call): string[] {
   return a;
 }
 
-const EVERY = ['text', 'json', 'pdf', 'image', 'agent'] as const;
+const EVERY = ['text', 'json', 'typed', 'pdf', 'image', 'agent'] as const;
 
 export const claudeCli: Provider = {
   id: 'claude-cli',
