@@ -37,6 +37,7 @@ import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.j
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { holdWords, payoutByOrders, type OrderHold } from './payout-orders.js';
+import { splitByReceipts } from './receipt-lines.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
@@ -725,7 +726,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...fee.refused });
           continue;
         }
-        const lines = fee?.lines ?? derived;
+        const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
         const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: CLASSIFY_MODEL }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);

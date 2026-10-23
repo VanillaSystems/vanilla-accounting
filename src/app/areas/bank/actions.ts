@@ -8,6 +8,7 @@ import { automationCommand } from '../../automation/store.js';
 import { commandRefusalText } from '../../automation/refusal.js';
 import type { BankTransaction, StatementImport } from '../../../types/index.js';
 import type { OpeningOffer } from '../../../accounting/opening-balance.js';
+import type { ReceiptSet } from '../../../intake/receipt-sets.js';
 import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { ApiError, api, errorText, sources, type StatementRemoved } from '../../lib/api.js';
@@ -27,6 +28,18 @@ export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, u
   }
   nav.refresh();
   if (!undoing) nav.toast(t(on ? 'bank.noReceiptSet' : 'bank.noReceiptCleared'), () => setNoReceipt(nav, tx, !on, true));
+}
+
+/** The receipts code proposes for one payment (#27), linked in one click; the toast's undo takes every link back. */
+export async function linkReceiptSet(nav: Nav, s: ReceiptSet, undoing = false): Promise<void> {
+  const pairs = s.receipts.map((receiptId) => ({ receiptId, transactionRef: s.payment }));
+  try {
+    for (const p of pairs) await (undoing ? api.removeMapping(p) : api.addMapping(p));
+  } catch (e) {
+    nav.toast(errorText(e));
+  }
+  nav.refresh();
+  if (!undoing) nav.toast(t('bank.receiptSet.linked', { n: s.receipts.length }), () => linkReceiptSet(nav, s, true));
 }
 
 /**

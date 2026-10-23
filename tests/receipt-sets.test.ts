@@ -1,0 +1,127 @@
+/**
+ * #27: several receipts that add up exactly to one payment (to the centime, its currency, one
+ * vendor, near its date) are linked by code (src/intake/receipt-sets.ts) and booked one line per
+ * receipt, each with its own VAT code (src/booking/receipt-lines.ts, the receipt rules per line in
+ * src/booking/purchase-vat.ts). A sum off by a centime, or two sets that fit, is a proposal, never a
+ * link. Synthetic receipts and payments, no real vendor.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { linkReceiptSets, proposalsFor, receiptSetsToLink } from '../src/intake/receipt-sets.js';
+import { matchStep } from '../src/intake/match.js';
+import type { Workspace } from '../src/workspace/workspace.js';
+import { classifyTransactions, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
+import { loadFxResolver } from '../src/accounting/fx-rates.js';
+import type { Books } from '../src/books/store.js';
+import type { ClassifyEntry } from '../src/llm/prompts.js';
+import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../src/types/index.js';
+import './support/jurisdiction.js';
+
+const open = (d: string) => d > '2026-06-30';
+const VENDOR = 'CHE-111.222.333';
+
+const pay = (amount: number, over: Partial<BankTransaction> = {}): BankTransaction =>
+  ({ ref: 'P1', bank: 'Raiffeisen', date: '2026-08-12', amount, currency: 'CHF', direction: 'DBIT', description: 'Marktplatz Beispiel Bestellungen', ...over });
+
+let n = 0;
+const receipt = (amount: number, over: Partial<Receipt> = {}): Receipt => ({
+  id: `r${++n}`, filename: `beleg-${n}.pdf`, location: 'archived', date: '2026-08-10', amount, currency: 'CHF', vatId: VENDOR,
+  description: `Bestellung ${n}`, extractedText: `Marktplatz Beispiel Rechnung ${n}`, ...over,
+}) as Receipt;
+
+const booksOf = (transactions: BankTransaction[], receipts: Receipt[], mappings: Mapping[] = []) =>
+  ({ transactions, receipts, mappings, bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } }) as unknown as Books;
+
+test('three receipts of one vendor that add up to the payment to the centime are linked, by the rule receipt-set', () => {
+  const rs = [receipt(30), receipt(45.5), receipt(11.9)];
+  const books = booksOf([pay(87.4)], rs);
+  const linked = linkReceiptSets(books, open);
+  assert.deepEqual(linked.map((s) => [s.payment, s.receipts, s.sum, s.paid, s.exact]), [['P1', rs.map((r) => r.id).sort(), 87.4, 87.4, true]]);
+  assert.deepEqual(books.mappings, rs.map((r) => ({ transactionRef: 'P1', receiptId: r.id, by: 'rule', rule: 'receipt-set' })));
+  assert.deepEqual(proposalsFor(books, books.transactions[0], open), [], 'nothing left to propose');
+});
+
+test('the inbox run\'s match step links such a set without the model', async () => {
+  const books = booksOf([pay(87.4)], [receipt(30), receipt(45.5), receipt(11.9)]);
+  const lines: string[] = [];
+  await matchStep({ ws: { paths: { inbox: '/nowhere' } } as Workspace, books: { read: () => books, update: <T>(fn: (x: Books) => T) => fn(books) }, progress: () => {}, log: (l) => lines.push(l) });
+  assert.deepEqual(books.mappings.map((m) => m.transactionRef), ['P1', 'P1', 'P1']);
+  assert.ok(lines.some((l) => /3 receipts that add up to the payment/.test(l)), lines.join('\n'));
+});
+
+test('off by a centime: no link, the set is a proposal that names its sum and the payment', () => {
+  const rs = [receipt(30), receipt(45.5), receipt(11.9)];
+  const books = booksOf([pay(87.41)], rs);
+  assert.deepEqual(receiptSetsToLink(books, open), []);
+  assert.deepEqual(proposalsFor(books, books.transactions[0], open).map((s) => [s.receipts, s.sum, s.paid, s.exact]), [[rs.map((r) => r.id).sort(), 87.4, 87.41, false]]);
+});
+
+test('foreign currency: receipts in the payment\'s currency are linked; the same figures against a payment in another currency link and propose nothing', () => {
+  const eur = [receipt(19.99, { currency: 'EUR' }), receipt(25, { currency: 'EUR' })];
+  const wise = booksOf([pay(44.99, { bank: 'Wise', currency: 'EUR' })], eur);
+  assert.equal(receiptSetsToLink(wise, open).length, 1, 'EUR receipts, EUR payment');
+  const chf = booksOf([pay(44.99)], [receipt(19.99, { currency: 'EUR' }), receipt(25, { currency: 'EUR' })]);
+  assert.deepEqual([receiptSetsToLink(chf, open), proposalsFor(chf, chf.transactions[0], open)], [[], []], 'the bank amount in CHF is no sum of EUR amounts');
+});
+
+test('two sets that both fit are proposals, not links; receipts of two vendors make no set', () => {
+  const two = booksOf([pay(50)], [receipt(20), receipt(30), receipt(25), receipt(25)]);
+  assert.deepEqual(receiptSetsToLink(two, open), []);
+  assert.equal(proposalsFor(two, two.transactions[0], open).filter((s) => s.exact).length, 2);
+  const mixed = booksOf([pay(50)], [receipt(20), receipt(30, { vatId: 'CHE-999.888.777' })]);
+  assert.deepEqual([receiptSetsToLink(mixed, open), proposalsFor(mixed, mixed.transactions[0], open)], [[], []]);
+});
+
+test('a receipt that completes the one linked already is linked; never one that would make the receipts owe more than the payment', () => {
+  const first = receipt(60);
+  const rest = receipt(27.4);
+  const books = booksOf([pay(87.4)], [first, rest, receipt(40)], [{ transactionRef: 'P1', receiptId: first.id, by: 'llm' }]);
+  assert.deepEqual(receiptSetsToLink(books, open).map((s) => [s.receipts, s.sum]), [[[rest.id], 87.4]]);
+});
+
+test('a refund paid back as one payment: the credit notes that add up to it are linked; a filed payment never', () => {
+  const back = booksOf([pay(55, { direction: 'CRDT' })], [receipt(-20), receipt(-35)]);
+  assert.equal(receiptSetsToLink(back, open).length, 1);
+  const filed = booksOf([pay(87.4, { date: '2026-06-20' })], [receipt(30, { date: '2026-06-18' }), receipt(57.4, { date: '2026-06-18' })]);
+  assert.deepEqual(receiptSetsToLink(filed, open), []);
+});
+
+const fx = loadFxResolver();
+const context: ClassifyContext = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' }] };
+const model = (entries: ClassifyEntry[]): ClassifyDeps['ask'] => async (prompt) => {
+  const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
+  return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries, reason: 'Die Lesung des Modells.' }])));
+};
+const line = (accountDebit: string, amount: number, vatCode: string): ClassifyEntry => ({ accountDebit, accountCredit: '', amount, vatCode, description: 'Marktplatz' });
+const vat81 = (gross: number) => ({ hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: Math.round(gross * 8.1 / 108.1 * 100) / 100, gross }] });
+
+async function book(tx: BankTransaction, receipts: Receipt[], entries: ClassifyEntry[]): Promise<JournalEntry[]> {
+  const books = booksOf([tx], receipts, receipts.map((r) => ({ transactionRef: tx.ref, receiptId: r.id })));
+  const { classified, failed } = await classifyTransactions(books, [tx], { ask: model(entries), fx, context });
+  assert.deepEqual([classified, failed.map((f) => f.reason)], [[tx.ref], []]);
+  return books.journalEntries;
+}
+
+const rows = (es: JournalEntry[]) => es.map((e) => [e.accountDebit, e.amount, e.vatCode ?? '']);
+
+test('one line for three linked receipts is booked one line per receipt, each with the code its receipt shows', async () => {
+  const rs = [receipt(30, vat81(30)), receipt(45.5, vat81(45.5)), receipt(11.9, { hasSwissVat: false })];
+  const es = await book(pay(87.4), rs, [line('4200', 87.4, 'M81')]);
+  assert.deepEqual(rows(es), [['4200', 30, 'M81'], ['4200', 45.5, 'M81'], ['4200', 11.9, 'M0']]);
+  assert.deepEqual(es.map((e) => e.description), ['Bestellung ' + rs[0].id.slice(1), 'Bestellung ' + rs[1].id.slice(1), 'Bestellung ' + rs[2].id.slice(1)]);
+});
+
+test('the model\'s line per receipt keeps its account; each line\'s code follows its own receipt, not the others\'', async () => {
+  const rs = [receipt(30, vat81(30)), receipt(11.9, { hasSwissVat: false })];
+  const es = await book(pay(41.9), rs, [line('4200', 30, 'M0'), line('6500', 11.9, 'I81')]);
+  assert.deepEqual(rows(es), [['4200', 30, 'M81'], ['6500', 11.9, 'I0']]);
+});
+
+test('a currency case: EUR receipts on a EUR payment are split; EUR receipts on a CHF payment leave the model\'s line as it is', async () => {
+  const eur = [receipt(19.99, { currency: 'EUR', ...vat81(19.99) }), receipt(25, { currency: 'EUR', hasSwissVat: false })];
+  const split = await book(pay(44.99, { bank: 'Wise', currency: 'EUR' }), eur, [line('4200', 44.99, 'M0')]);
+  assert.deepEqual(rows(split), [['4200', 19.99, 'M81'], ['4200', 25, 'M0']]);
+  assert.deepEqual(split.map((e) => e.exchangeCurrency), ['EUR', 'EUR']);
+  const chf = await book(pay(42.1), [receipt(19.99, { currency: 'EUR' }), receipt(25, { currency: 'EUR' })], [line('4200', 42.1, 'M0')]);
+  assert.deepEqual(rows(chf), [['4200', 42.1, 'M0']]);
+});

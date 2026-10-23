@@ -5,7 +5,7 @@
  * (MISSION.md: a correction is never silently overwritten). Filed quarters, corrections, sales
  * codes, Bezugsteuer and VAT-amount codes are never flagged; a receipt not read yet is no evidence.
  */
-import { vat } from '../engines/index.js';
+import { baseCurrency, vat } from '../engines/index.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
 
 /**
@@ -28,7 +28,19 @@ const swissRate = (r: Receipt): number | undefined =>
 export const isPurchaseDocument = (r: Pick<Receipt, 'kind'>): boolean => r.kind === undefined || r.kind === 'invoice';
 
 /**
- * `linked` are the receipts of the entry's payment; `closedThrough` the period lock. Undefined when
+ * The receipts one line of a payment books (#27): of several, the one whose amount, in the line's
+ * currency, is the line's, when exactly one is; else all of them (one line for the whole payment).
+ */
+export function lineReceipts<R extends Pick<Receipt, 'amount' | 'currency'>>(e: Pick<JournalEntry, 'amount' | 'exchangeCurrency'>, linked: readonly R[]): readonly R[] {
+  if (linked.length < 2) return linked;
+  const currency = e.exchangeCurrency ?? baseCurrency();
+  const own = linked.filter((r) => r.amount !== undefined && (r.currency ?? baseCurrency()) === currency && Math.round(Math.abs(r.amount) * 100) === Math.round(Math.abs(e.amount) * 100));
+  return own.length === 1 ? own : linked;
+}
+
+/**
+ * `linked` are the receipts of the entry's payment; each line is checked against its own of them
+ * (lineReceipts); `closedThrough` the period lock. Undefined when
  * the booking fits its evidence, when only a sales record or a supporting document is linked (the
  * payment's purchase side has no evidence either way), or when the entry is out of scope.
  */
@@ -40,7 +52,8 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   const info = m && vat().codes.parse(e.vatCode!);
   if (!m || !info) return undefined;
   const [, sign, family] = m;
-  const shown = receipts.map(swissRate).find((rate) => rate !== undefined);
+  const own = lineReceipts(e, receipts);
+  const shown = own.map(swissRate).find((rate) => rate !== undefined);
   const decided = e.by?.kind === 'person' || e.by?.kind === 'assistant' ? { decided: true as const } : {};
   if (info.rate === 0) {
     if (shown === undefined) return undefined;
@@ -48,6 +61,6 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
     return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;
   }
-  if (sign || shown !== undefined || receipts.some((r) => r.hasSwissVat === undefined)) return undefined;
+  if (sign || shown !== undefined || own.some((r) => r.hasSwissVat === undefined)) return undefined;
   return { kind: 'vatWithoutReceipt', code: `${family}0`, ...decided };
 }

@@ -19,7 +19,8 @@ import type { AreaProps } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
-import { importStatements, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
+import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
+import { proposalsFor } from '../../../intake/receipt-sets.js';
 import { at } from '../receipts/view.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
@@ -234,11 +235,24 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
           {t('bank.entries', { lines })}
         </button></>
       ) : tx.amount ? <> · <NotBooked tx={tx} linked={receipts.length > 0} /></> : null}
+      {edit ? <ReceiptSetOffer {...props} tx={tx} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
       {' '}<button type="button" className="x" title={t('bank.clear')} aria-label={t('bank.clear')} onClick={onClear}>×</button>
       <Parts tx={tx} />
     </>
+  );
+}
+
+/** Receipts that add up to the payment, or nearly (#27): code proposes them, the person links them in one click. */
+function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTransaction }) {
+  const [s] = useMemo(() => proposalsFor(books, tx, (d) => !b.closedThrough || d > b.closedThrough), [books, tx, b.closedThrough]);
+  if (!s) return null;
+  const names = s.receipts.map((id) => b.receiptOf(id)?.name ?? id).join(', ');
+  const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
+  return (
+    <> · <span className="m" data-testid="receipt-set" title={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}</span>
+      {' '}<button type="button" className="golink" data-act="link-receipt-set" title={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></>
   );
 }
 
