@@ -162,7 +162,7 @@ export const ACTIONS: Record<string, Action> = {
       const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), fx);
       const waits = wait.wait;
       if (wait.wait && wait.unread) return { outcome: 'held', output: { why: 'receiptUnread' } };
-      if (waits && (!ask || t.waitsForReceipt)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
+      if (waits && (!ask || t.waitsForReceipt?.decided)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);
       if (waits && !onlySettles(entries, bankAccountFor(t, context.bankAccounts), settlementAccount(context))) return { outcome: 'held', output: { why: 'waitsForReceipt' } };

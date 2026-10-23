@@ -50,18 +50,19 @@ function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx:
 /**
  * Marks the payments that wait for their receipt, and those whose receipt could not be read
  * (`unread`), and takes the mark off every other open payment (a receipt came, it was booked, a
- * person marked it as needing none).
+ * person marked it as needing none). `decided`: the waiting payments a run with a model judged.
  */
-function markWaiting(books: BooksPort, waiting: ReadonlySet<string>, unread: ReadonlySet<string>): void {
+function markWaiting(books: BooksPort, waiting: ReadonlySet<string>, decided: ReadonlySet<string>, unread: ReadonlySet<string>): void {
   const since = new Date().toISOString();
   const open = (index: Books) => { const lock = periodLock(index); return index.transactions.filter((tx) => !lock.isClosed(tx.date)); };
-  const stale = (tx: Books['transactions'][number]) => !!tx.waitsForReceipt !== (waiting.has(tx.ref) || unread.has(tx.ref)) || !!tx.waitsForReceipt?.unread !== unread.has(tx.ref);
+  const stale = (tx: Books['transactions'][number]) => !!tx.waitsForReceipt !== (waiting.has(tx.ref) || unread.has(tx.ref))
+    || !!tx.waitsForReceipt?.unread !== unread.has(tx.ref) || (waiting.has(tx.ref) && !!tx.waitsForReceipt?.decided !== decided.has(tx.ref));
   if (!open(books.read()).some(stale)) return;
   books.update((index) => {
     for (const tx of open(index)) {
       if (!stale(tx)) continue;
       if (unread.has(tx.ref)) tx.waitsForReceipt = { since, unread: true };
-      else if (waiting.has(tx.ref)) tx.waitsForReceipt = { since };
+      else if (waiting.has(tx.ref)) tx.waitsForReceipt = { since: tx.waitsForReceipt?.since ?? since, ...(decided.has(tx.ref) && { decided: true as const }) };
       else delete tx.waitsForReceipt;
     }
   });
@@ -97,18 +98,27 @@ export function classifyStep({ force = false } = {}): StepRun {
     }
     const context = loadClassifyContext(ws);
     const fx = loadFxResolver();
-    // A payment that needs a receipt waits for it. One not marked yet goes to the model once: an answer
-    // that only settles (the owner's outlays paid back, a card's bill) is booked, any other waits (issue #90).
+    // A payment that needs a receipt waits for it. One no run with a model has judged yet goes to the model once:
+    // an answer that only settles (the owner's outlays paid back, a card's bill) is booked, any other waits (issue #90).
+    // Without a model it waits too, and the next run with one judges it (issue #110).
     // A payment whose receipt could not be read waits for the person's word, without a guess (issue #57).
     const { need, unread } = needReceipts(ws, scratch, context, fx);
-    const probe = new Set(ask ? [...need].filter((ref) => !scratch.transactions.find((tx) => tx.ref === ref)?.waitsForReceipt) : []);
+    const judged = new Set(scratch.transactions.filter((tx) => tx.waitsForReceipt?.decided).map((tx) => tx.ref));
+    const probe = new Set(ask ? [...need].filter((ref) => !judged.has(ref)) : []);
     const waiting = new Set([...need].filter((ref) => !probe.has(ref)));
     const settles = settlementAccount(context);
     const bankOf = new Map(scratch.transactions.map((tx) => [tx.ref, bankAccountFor(tx, context.bankAccounts)]));
     const keeps = (ref: string) => !probe.has(ref) || onlySettles(scratch.journalEntries.filter((je) => je.transactionRef === ref), bankOf.get(ref) ?? '', settles);
     const done = (notes: IntakeNote[]) => {
-      for (const ref of probe) if (!keeps(ref) && scratch.journalEntries.some((je) => je.transactionRef === ref)) waiting.add(ref);
-      markWaiting(books, waiting, unread);
+      // A probe the model gave no answer for (it failed) waits unjudged, and the next run asks again.
+      const decided = new Set([...waiting].filter((ref) => judged.has(ref)));
+      for (const ref of probe) {
+        const answered = scratch.journalEntries.some((je) => je.transactionRef === ref);
+        if (answered && keeps(ref)) continue;
+        waiting.add(ref);
+        if (answered) decided.add(ref);
+      }
+      markWaiting(books, waiting, decided, unread);
       if (waiting.size) log(`Waiting   : ${waiting.size} payment(s) need a receipt that has not come: booked once it is linked.`);
       if (unread.size) log(`Unread    : ${unread.size} payment(s) have a receipt whose VAT could not be read: the person is asked.`);
       return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)] };
