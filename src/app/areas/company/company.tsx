@@ -23,7 +23,7 @@ import { addDays, localToday, booksOpenPeriod, parsePeriod } from '../../../acco
 import type { Address } from '../../../invoices/model.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { ManifestPatch } from '../../../workspace/manifest-write.js';
-import { asNetRates, netRatesOf, type NetRate, type VatMethod, type VatPeriod, type VatSetup } from '../../../workspace/vat-setup.js';
+import { asNetRates, netRatesOf, type NetRate, type VatBasis, type VatMethod, type VatPeriod, type VatSetup } from '../../../workspace/vat-setup.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
@@ -231,19 +231,19 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
 const vatSide = (v: VatSetup) => t(!v.registered ? 'company.vatNotRegistered' : v.method === 'net-rate' ? 'company.vatNetRate' : 'company.vatEffective');
 
 interface RateRow { rate: string; label: string; activityId: string }
-interface VatForm { registered: boolean; method: VatMethod; period: VatPeriod; rates: [RateRow, RateRow] }
+interface VatForm { registered: boolean; method: VatMethod; basis: VatBasis; period: VatPeriod; rates: [RateRow, RateRow] }
 
 /** The form's setup, or null while a rate is missing or no percent. */
 function setupOf(f: VatForm): VatSetup | null {
   if (!f.registered) return { registered: false };
-  if (f.method === 'effective') return { registered: true, method: 'effective', reporting: 'received', period: f.period };
+  if (f.method === 'effective') return { registered: true, method: 'effective', reporting: f.basis, period: f.period };
   const rates = f.rates.filter((r) => r.rate.trim()).map((r): NetRate => {
     const rate = Number(r.rate.trim().replace(',', '.').replace(/\s*%$/, ''));
     return { rate, ...(r.label.trim() ? { label: r.label.trim() } : {}), ...(r.activityId.trim() ? { activityId: r.activityId.trim().toUpperCase() } : {}) };
   });
   const approved = asNetRates(rates);
   if (!approved || rates.some((r) => !(r.rate > 0 && r.rate < 100))) return null;
-  return { registered: true, method: 'net-rate', reporting: 'received', period: f.period, rates: approved };
+  return { registered: true, method: 'net-rate', reporting: f.basis, period: f.period, rates: approved };
 }
 
 /**
@@ -257,7 +257,7 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const was = (): VatForm => {
     const rates = netRatesOf(v);
     const row = (i: number): RateRow => ({ rate: rates[i] ? String(rates[i].rate) : '', label: rates[i]?.label ?? '', activityId: rates[i]?.activityId ?? '' });
-    return { registered: v.registered, method: v.registered ? v.method : 'effective', period: v.registered ? v.period : 'quarterly', rates: [row(0), row(1)] };
+    return { registered: v.registered, method: v.registered ? v.method : 'effective', basis: v.registered ? v.reporting : 'received', period: v.registered ? v.period : 'quarterly', rates: [row(0), row(1)] };
   };
   const [f, setF] = useState<VatForm>(was);
   const [err, setErr] = useState('');
@@ -297,7 +297,7 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 ))}
               </Kv>
             )}
-            <Kv k={t('company.vatBasis')}>{t('company.vatReceived')}</Kv>
+            <Kv k={t('company.vatBasis')}>{t(v.reporting === 'agreed' ? 'company.vatAgreed' : 'company.vatReceived')}</Kv>
             <Kv k={t('company.vatPeriod')} note={t(half ? 'company.vatDueHalf' : 'company.vatDue')}>{t(half ? 'company.vatHalfYearly' : 'company.vatQuarterly')}</Kv>
             <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: ws.company.uid })}</span></Kv>
             <Kv k={t('company.filed')}>{ws.filed.length ? ws.filed.map((q) => <span key={q} className="mono" style={{ display: 'block' }}>{q}</span>) : <span className="m">{t('company.noneFiled')}</span>}</Kv>
@@ -315,8 +315,15 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
                   <option value="net-rate">{t('company.vatNetRate')}</option>
                 </select>
               </label>
+              <label>{t('company.vatBasis')}
+                <select name="basis" value={f.basis} onChange={(e) => setF({ ...f, basis: e.target.value as VatBasis })}>
+                  <option value="received">{t('company.vatReceived')}</option>
+                  <option value="agreed">{t('company.vatAgreed')}</option>
+                </select>
+              </label>
               <label>{t('company.vatPeriod')}
-                <select name="period" value={f.period} onChange={(e) => setF({ ...f, period: e.target.value as VatPeriod })}>
+                <select name="period"
+ value={f.period} onChange={(e) => setF({ ...f, period: e.target.value as VatPeriod })}>
                   <option value="quarterly">{t('company.vatQuarterly')}</option>
                   <option value="half-yearly">{t('company.vatHalfYearly')}</option>
                 </select>

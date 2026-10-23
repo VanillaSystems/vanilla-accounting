@@ -5,7 +5,7 @@
  * table, so a newly supported answer is one edit here. A question with `when` is asked only when
  * an earlier answer calls for it: the VAT method, basis and period only of a registered firm.
  */
-import { VAT_PERIODS, asNetRates, type NetRate, type VatPeriod, type VatSetup } from './vat-setup.js';
+import { VAT_BASES, VAT_PERIODS, asNetRates, type NetRate, type VatBasis, type VatPeriod, type VatSetup } from './vat-setup.js';
 
 export const LEGAL_FORMS = ['GmbH', 'AG', 'Einzelfirma'] as const;
 export type LegalForm = (typeof LEGAL_FORMS)[number];
@@ -106,13 +106,13 @@ export const QUESTIONS = {
   },
   basis: {
     ask: 'VAT basis',
-    why: 'Vereinnahmt: VAT is due when the money moves (bank statement). Vereinbart: when you send or receive the invoice.',
+    why: 'Vereinbart (the law\'s default, MWSTG Art. 39): VAT is due when you send the invoice, input tax when you receive the bill. Vereinnahmt (on request): when the money moves.',
     when: registered,
     options: [
       { value: 'received', label: 'vereinnahmt (cash)' },
       {
         value: 'agreed', label: 'vereinbart (invoice)',
-        unsupported: 'Vereinbarte Entgelte are not supported yet: the app books from the bank statement, so the tax point is always the payment date. It needs open invoices (Debitoren/Kreditoren), which it does not keep.',
+        caveat: 'An invoice the app issues is booked on its date as a receivable (1100) with its VAT; the payment only settles it. A supplier bill\'s input tax counts on the bill\'s date once its payment is booked.',
       },
     ],
   },
@@ -301,9 +301,11 @@ export function vatSetupOf(answers: Pick<SupportedAnswers, VatQuestionKey>, rate
   if (answers.vatRegistered === 'no') return { registered: false };
   const period = (answers.period ?? 'quarterly') as VatPeriod;
   if (!VAT_PERIODS.includes(period)) return null;
+  const reporting = (answers.basis ?? 'received') as VatBasis;
+  if (!VAT_BASES.includes(reporting)) return null;
   if (answers.vatMethod === 'net-rate') {
     const approved = asNetRates(rates);
-    return approved && { registered: true, method: 'net-rate', reporting: 'received', period, rates: approved };
+    return approved && { registered: true, method: 'net-rate', reporting, period, rates: approved };
   }
-  return { registered: true, method: 'effective', reporting: 'received', period };
+  return { registered: true, method: 'effective', reporting, period };
 }

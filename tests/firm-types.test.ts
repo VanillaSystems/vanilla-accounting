@@ -62,7 +62,8 @@ test('the manifest refuses what no firm can be', () => {
   assert.equal(reason({ method: 'flat' }), undefined, 'a shape no form sends has no typed reason');
   refused({ method: 'effective', reporting: 'received', rates: [{ rate: 4.5 }] }, /net tax rate method only/);
   refused({ method: 'effective', reporting: 'received', period: 'monthly' }, /quarterly, half-yearly/);
-  refused({ method: 'effective', reporting: 'agreed' }, /cash basis/);
+  refused({ method: 'effective', reporting: 'invoiced' }, /received, agreed/);
+  refused({ method: 'effective' }, /received, agreed/);
   refused({ method: 'flat' }, /effective, net-rate/);
 });
 
@@ -75,6 +76,10 @@ test('the manifest writes the setup back as one explicit block, and the method r
   assert.equal(changesMethod(EFFECTIVE_QUARTERLY, { registered: true, method: 'effective', reporting: 'received', period: 'half-yearly' }), true);
   assert.equal(changesMethod(NET_RATE, { ...NET_RATE, rates: [{ rate: 4.5, label: 'Möbel', activityId: '99902' }] }), false, 'a label or an activity code may change any time');
   assert.equal(changesMethod(NET_RATE, { ...NET_RATE, rates: [{ rate: 5.3 }] }), true);
+  assert.equal(changesMethod(EFFECTIVE_QUARTERLY, { ...EFFECTIVE_QUARTERLY, reporting: 'agreed' }), true, 'the basis holds for a whole tax period (MWSTG Art. 39 Abs. 3)');
+  assert.deepEqual(parseVatSetup({ method: 'effective', reporting: 'agreed' }, fail), { ...EFFECTIVE_QUARTERLY, reporting: 'agreed' });
+  assert.deepEqual(vatSetupYaml({ ...EFFECTIVE_QUARTERLY, reporting: 'agreed' }), { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
+
 });
 
 test('the setup questions skip the method, basis and period of a firm that is not registered', () => {

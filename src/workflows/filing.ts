@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
 import { loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
-import { filing, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
+import { filing, filingBasis, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
 import { openSaleQuestionsIn } from '../questions/model.js';
 import { readQuestions } from '../questions/store.js';
@@ -156,7 +156,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
       if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (the company's VAT section), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({
         uid: ws.company.uid, organisationName: ws.company.name, period: { key: ret.period, from: ret.from, to: ret.to },
-        ziffern: ret.figures as Parameters<typeof ech0217Xml>[0]['ziffern'], payable: ret.payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(),
+        ziffern: ret.figures as Parameters<typeof ech0217Xml>[0]['ziffern'], payable: ret.payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(), basis: filingBasis(),
         generationTime: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
       });
       const path = preparedXml(ws, ret.period);
