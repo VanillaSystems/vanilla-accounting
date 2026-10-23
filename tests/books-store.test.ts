@@ -303,6 +303,10 @@ test('a save waits while another live process holds the write lock, and takes ov
   books.journalEntries.push(entry('took-over'));
   saveBooks(dir, books);
   assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'took-over'));
+  writeFileSync(lock, 'no pid');
+  books.journalEntries.push(entry('unreadable-lock'));
+  saveBooks(dir, books);
+  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'unreadable-lock'));
   assert.deepEqual(readdirSync(dir.paths.data), []);
 });
 

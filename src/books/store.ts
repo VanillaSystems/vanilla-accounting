@@ -159,6 +159,25 @@ const alive = (pid: number): boolean => {
 };
 
 /**
+ * Removes the lock at `path` that read `was`, left by a process that is gone. Another writer may have
+ * taken it over and locked anew since it was read: the lock is moved aside first, and put back
+ * when it turns out to be someone else's.
+ */
+function takeOver(path: string, was: string | undefined): void {
+  const aside = `${path}.${process.pid}.gone`;
+  try {
+    renameSync(path, aside);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw e;
+  }
+  if (readIfThere(aside) !== was) {
+    try { linkSync(aside, path); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; }
+  }
+  rmSync(aside, { force: true });
+}
+
+/**
  * The books' write lock: data/books.lock holding the pid, from saveBooks' stale check to its last
  * write, so two processes' saves never interleave (#123). A lock whose process is gone is taken
  * over; one held longer than a few seconds refuses the save as stale.
@@ -176,8 +195,9 @@ function lockBooks(ws: Workspace): () => void {
         return () => rmSync(path, { force: true });
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
-        const pid = Number(readIfThere(path) ?? 0);
-        if (!pid || pid === process.pid || !alive(pid)) rmSync(path, { force: true });
+        const was = readIfThere(path);
+        const pid = Number(was ?? 0);
+        if (!pid || pid === process.pid || !alive(pid)) takeOver(path, was);
         else if (Date.now() > until) throw new StaleBooksError([relative(ws.paths.root, path)]);
         else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
       }
