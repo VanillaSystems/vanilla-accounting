@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { renameSync, existsSync, createReadStream, mkdirSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
+import { RECEIPT_KINDS, type JournalEntry, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { deletionsOf, dropFromTrash, readTrashed, trashedFile, trashReceipt, type Trashed } from '../../books/receipt-trash.js';
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
 import { parseVatFacts } from '../../accounting/vat-facts.js';
-import { privatePayment, setReceipt, unbookedPayments } from '../edits.js';
+import { applyChange, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
@@ -200,6 +200,18 @@ router.post('/api/receipts/:id/private-payment', async (req, res) => {
   const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id, ask, loadFxResolver()), file: books.receipts.find((r) => r.id === id)!.filename }));
   await bookAgain(file);
   res.json({ ok: true, ...made });
+});
+
+/** The undo of «Privat oder bar bezahlt» that replaced a booking by hand: the payment goes and that booking comes back, in one write. */
+router.post('/api/receipts/:id/private-payment/undo', (req, res) => {
+  const b = patchBody(req.body ?? {}, ['ref', 'restore']);
+  const ref = stringField(b, 'ref');
+  const restore = b.restore === undefined ? [] : b.restore;
+  if (!Array.isArray(restore) || restore.some((e) => !e || typeof e !== 'object' || typeof (e as JournalEntry).id !== 'string')) throw new RequestError(400, 'restore: die Buchungen, wie sie waren.');
+  return withBooks(res, (books) => {
+    applyChange(books, { kind: 'deletePayment', ref, receipt: req.params.id, ...(restore.length && { restore: restore as JournalEntry[] }) });
+    return { ok: true };
+  });
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and

@@ -146,4 +146,10 @@ test('#87: a booking by hand of the receipt\'s amount holds the private payment 
   const books = loadBooks(api.ws);
   assert.equal(books.journalEntries.some((e) => e.transactionRef === ref), false, 'the booking by hand gave way');
   assert.deepEqual(books.mappings.filter((m) => m.receiptId === shop).map((m) => m.transactionRef), [replaced.json.ref]);
+
+  const undone = await api.send('POST', `/api/receipts/${shop}/private-payment/undo`, { ref: replaced.json.ref, restore: replaced.json.replaced });
+  assert.equal(undone.status, 200, JSON.stringify(undone.json));
+  const back = loadBooks(api.ws);
+  assert.equal(back.transactions.some((t) => t.ref === replaced.json.ref), false, 'the private payment gone');
+  assert.deepEqual(back.journalEntries.filter((e) => e.transactionRef === ref).map((e) => e.description), ['Papeterie Zumstein, Büromaterial'], 'the booking by hand back, in the same write');
 });

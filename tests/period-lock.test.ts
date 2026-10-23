@@ -58,6 +58,8 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/transactions/M2026-001', status: 403 },
   { method: 'DELETE', path: '/api/transactions/C1', status: 400 },
   { method: 'DELETE', path: '/api/transactions/O1', status: 400 },
+  { method: 'POST', path: '/api/receipts/rc/private-payment/undo', body: { ref: 'M2026-001' }, status: 403 },
+  { method: 'POST', path: '/api/receipts/rc/private-payment/undo', body: { ref: 'M2026-002', restore: [{ id: 'back', transactionRef: 'M2026-099', date: '2026-06-10', accountDebit: '6500', accountCredit: '2451', amount: 5, description: 'rückdatiert', origin: 'manual' }] }, status: 403 },
   { method: 'POST', path: '/api/transactions/manual', body: { date: '2026-06-20', description: 'rückdatiert', amount: 1, currency: 'CHF' }, status: 403 },
   { method: 'DELETE', path: '/api/receipts/rc', status: 403 },
   { method: 'POST', path: '/api/receipts/rx/restore', status: 403 },

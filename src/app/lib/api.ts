@@ -273,6 +273,7 @@ export const api = {
     request<{ ref: string }>('POST', '/api/transactions/manual', input).then((r) => r.ref),
   /** «Privat oder bar bezahlt»: the owner's payment of the receipt, linked; refused when a payment pays it already. */
   /** The owner's payment made for the receipt: its ref and date, and the filed period it corrects when the receipt lies in one (r8k-10). */
+  undoPrivatePayment: (receiptId: string, ref: string, restore: JournalEntry[]) => request<Ok>('POST', `/api/receipts/${receiptId}/private-payment/undo`, { ref, restore }),
   privatePayment: (receiptId: string, part: PrivatePart = {}) => request<{ ref: string; date: string; corrects?: string; exchangeRate?: number; replaced?: JournalEntry[] }>('POST', `/api/receipts/${receiptId}/private-payment`, part),
 
   bookPayment: (ref: string, lines: BookingLine[]) =>

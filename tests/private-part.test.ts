@@ -104,6 +104,13 @@ test('a receipt with one Swiss rate: the part takes that rate, also when the mod
   assert.deepEqual([e.amount, e.vatCode, e.accountCredit], [17.99, 'I81', '2451']);
 });
 
+test('a receipt with one Swiss rate beside untaxed items: code does not give the part that rate, the model\'s facts stand', async () => {
+  const b = booksWith(cafe({ currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, gross: 40, vat: 3 }] }));
+  const { ref } = privatePayment(b, 'cafe', { amount: 17.99, part: 'Briefmarken' }, fx);
+  await classifyTransactions(b, b.transactions, { ask: model({ vat: 'none' }), fx, context });
+  assert.equal(b.journalEntries.find((x) => x.transactionRef === ref)!.vatCode, 'I0');
+});
+
 test('a receipt with several Swiss rates: the part needs the rate line it falls under; with it, that rate is booked', async () => {
   const mixed = { currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 2.6, gross: 30.57, vat: 0.77 }, { ratePercent: 8.1, gross: 40, vat: 3 }] };
   const asked = booksWith(cafe(mixed));

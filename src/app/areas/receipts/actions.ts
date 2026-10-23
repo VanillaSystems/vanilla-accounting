@@ -6,7 +6,6 @@
 import type { BankTransaction, Index, ReceiptKind, ReceiptPatch, VatFacts } from '../../../types/index.js';
 import { ApiError, api, errorText } from '../../lib/api.js';
 import type { PrivatePart } from '../../../types/assistant.js';
-import { undoInput } from '../../../books/entry-input.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { together, type AmountFit, type Ledger, type ReceiptView, type Saves } from './model.js';
@@ -85,10 +84,7 @@ export async function privateOutlay(nav: Nav, v: ReceiptView, part: PrivatePart 
   // A receipt of a filed period: the toast says the payment is dated the first open day and corrects that period (r8k-10).
   const said = () => (made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects })
     : part.amount !== undefined && part.amount < Math.abs(r.amount!) ? t('receipts.privatePartDone', { amount, what: part.part || t('receipts.privatePartUnnamed') }) : t('receipts.privateDone')) + rate();
-  const undo = async () => {
-    await api.deleteTransaction(made.ref);
-    for (const e of made.replaced ?? []) await api.createJournalEntry(undoInput(e));
-  };
+  const undo = () => (made.replaced?.length ? api.undoPrivatePayment(r.id, made.ref, made.replaced) : api.deleteTransaction(made.ref));
   const held = (e: unknown) => {
     if (!onHeld || !(e instanceof ApiError) || e.body.code !== 'bookedByHand') return false;
     onHeld(e.body.params);

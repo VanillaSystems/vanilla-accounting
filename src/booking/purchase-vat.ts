@@ -114,16 +114,18 @@ function taxedWhole(receipts: readonly Receipt[], rate: number, amount: number, 
 
 /**
  * The Swiss rate an owner's business part of its one receipt is taxed at (#87): the receipt's only
- * rate, or the rate line the person named among several, when the part fits in that line's gross,
- * in the payment's currency. Undefined when the receipt shows no Swiss VAT (the zero-code rule
- * decides) or the part does not fit.
+ * rate when it taxes the whole receipt, or the rate line the person named among several, when the
+ * part fits in that line's gross, in the payment's currency. Undefined when the receipt shows no
+ * Swiss VAT (the zero-code rule decides), holds untaxed items beside its one rate (the part may be
+ * one of them: the model's facts stand), or the part does not fit.
  */
 function partRate(receipts: readonly Receipt[], part: NonNullable<BankTransaction['businessPart']>, amount: number, currency: string): number | undefined {
   if (receipts.length !== 1) return undefined;
   const [r] = receipts;
   const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent));
   if (!r.hasSwissVat || !groups.length || (r.currency ?? currency) !== currency) return undefined;
-  const line = groups.length === 1 ? groups[0] : groups.find((g) => g.ratePercent === part.rate);
+  const whole = groups.length === 1 && r.amount != null && grossOf(groups[0]) >= Math.abs(r.amount) - 0.05;
+  const line = groups.length === 1 ? (whole ? groups[0] : undefined) : groups.find((g) => g.ratePercent === part.rate);
   return line && Math.abs(amount) <= grossOf(line) + 0.05 ? line.ratePercent : undefined;
 }
 
