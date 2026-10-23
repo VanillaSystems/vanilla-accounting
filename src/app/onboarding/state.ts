@@ -94,8 +94,13 @@ export async function openSetup(): Promise<void> {
   openAssistant();
 }
 
-/** At start: an empty workspace never set up opens the setup by itself, once. */
+/** «Los geht's»: books the conversation created open as books from now on. */
+export async function setupReady(): Promise<void> {
+  try { set(withView(await api.onboardingReady())); } catch (e) { set({ ...state, error: errorText(e) }); }
+}
+
+/** At start: an empty workspace never set up opens the setup by itself, once; books the conversation created, until «Los geht's». */
 export async function openSetupOnFirstStart(): Promise<void> {
   const view = await loadSetup();
-  if (view?.firstStart) await openSetup();
+  if (view?.opensItself) await openSetup();
 }

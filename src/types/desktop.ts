@@ -3,6 +3,7 @@
  * `window.vanilla`, and the answers of its routes under /api/desktop. In the browser
  * (`npm start`, the audit export) neither exists.
  */
+import type { SetupDraft } from '../onboarding/draft.js';
 
 /** A menu item the page carries out itself: the zoom is the page's own (src/app/shell/prefs.ts). */
 export type MenuCommand = 'zoomIn' | 'zoomOut' | 'zoomReset';
@@ -30,8 +31,21 @@ export interface SmokeBridge {
   quit(): void;
 }
 
-/** Books the app knows: their folder and, when it still holds a workspace, the company's name. */
-export interface KnownBooks { root: string; name?: string; demo: boolean }
+/**
+ * Books the app knows: their folder and, when it still holds a workspace, the company's name.
+ * `setup`: the folder holds a setup broken off before the books were created (src/onboarding/draft.ts);
+ * opening it continues the setup conversation, and `name` is the firm's once it was answered.
+ */
+export interface KnownBooks { root: string; name?: string; demo: boolean; setup?: true }
+
+/** A setup in progress before its books exist, as /api/desktop/setup returns it. */
+export interface SetupDraftView { root: string; draft: SetupDraft }
+
+/** POST /api/desktop/setup: the setup in that folder, or the books already there, opened. */
+export type SetupBegun = { kind: 'draft'; view: SetupDraftView } | { kind: 'books'; books: KnownBooks };
+
+/** GET /api/desktop/ai: whether the setup conversation can run; without a provider the form takes its place. */
+export interface AiAvailability { available: boolean }
 
 /** GET /api/desktop */
 export interface DesktopInfo {

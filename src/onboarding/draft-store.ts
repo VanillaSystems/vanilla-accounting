@@ -1,0 +1,131 @@
+/**
+ * The setup draft on disk (src/onboarding/draft.ts): DRAFT_FILE in the folder's vanilla-accounting/,
+ * written whole and atomically after each answer, checked as createWorkspace checks it. Turned into
+ * books by `createFromDraft`, which hands the draft's request to createWorkspace, the form's own
+ * path, and removes the draft before the first commit, so the books never hold it.
+ */
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { writeAtomic } from '../invoices/store.js';
+import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Created } from '../workspace/create.js';
+import { QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
+import { methodOf, parseNetRates } from '../workspace/vat-setup.js';
+import { parseUid } from '../workspace/uid.js';
+import { APP_FOLDER, appLanguages, workspaceAt } from '../workspace/workspace.js';
+import { DRAFT_FILE, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft } from './draft.js';
+import { sellsAnswer, type AnswerValue } from './model.js';
+import { seedCreated } from './store.js';
+
+export const draftFile = (root: string): string => join(resolve(root), APP_FOLDER, DRAFT_FILE);
+
+const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+function checkFirm(raw: unknown): Firm {
+  const r = isMap(raw) ? raw : {};
+  const name = text(r.name);
+  const owner = text(r.owner);
+  if (!name) throw new SetupError('The company name is needed.', { reason: 'required', field: 'name' });
+  const uid = parseUid(text(r.uid));
+  if ('error' in uid) throw new SetupError(uid.error, { reason: 'uid', detail: text(r.uid) });
+  if (!owner) throw new SetupError('The owner is needed.', { reason: 'required', field: 'owner' });
+  return { name, uid: uid.uid, owner };
+}
+
+function checkAnswer(key: QuestionKey, raw: unknown): string | string[] {
+  const multi = (QUESTIONS[key] as { multi?: boolean }).multi;
+  const values = multi && Array.isArray(raw) ? raw : !multi && typeof raw === 'string' ? [raw] : undefined;
+  const options = values?.map((v) => (typeof v === 'string' ? optionOf(key, v) : undefined));
+  if (!values || !options || options.some((o) => !o)) throw new SetupError(`${QUESTIONS[key].ask}: an answer is needed.`, { reason: 'missing', question: key });
+  const stop = options.find((o) => o!.unsupported);
+  if (stop) throw new SetupError(stop.unsupported!, { reason: 'unsupported', question: key, value: stop.value });
+  return multi ? (key === 'sells' ? salesKinds(values as string[]) : (values as string[])) : (values[0] as string);
+}
+
+/** One answer as the start screen sent it, checked as createWorkspace will check it; a SetupError names what is wrong. */
+export function checkPatch(raw: unknown): DraftPatch {
+  const r = isMap(raw) ? raw : {};
+  const value = r.value;
+  switch (r.step) {
+    case 'firm': return { step: 'firm', value: value === null ? null : checkFirm(value) };
+    case 'preset': return { step: 'preset', value: value === null ? null : checkPreset(String(value)) };
+    case 'question': {
+      const key = r.key as QuestionKey;
+      if (typeof key !== 'string' || !Object.hasOwn(QUESTIONS, key)) throw new SetupError(`No question ${String(r.key)}.`, { reason: 'preset', detail: String(r.key) });
+      return { step: 'question', key, value: value === null ? null : checkAnswer(key, value) };
+    }
+    case 'netRates': return {
+      step: 'netRates',
+      value: value === null ? null : [...parseNetRates(value, (msg) => { throw new SetupError(msg, { reason: 'netRates', detail: msg }); })],
+    };
+    case 'banks': {
+      if (value === null) return { step: 'banks', value: null };
+      const list = Array.isArray(value) ? value.filter(isMap) : [];
+      if (list.some((b) => !text(b.bank))) throw new SetupError('A bank needs its name.', { reason: 'bankName' });
+      const banks = list.reduce<Bank[]>((before, b) => [...before, checkBank({ bank: text(b.bank), currency: text(b.currency), account: text(b.account), iban: text(b.iban) }, before)], []);
+      if (!banks.length) throw new SetupError('At least one bank account is needed.', { reason: 'noBank' });
+      return { step: 'banks', value: banks };
+    }
+    default: throw new SetupError(`No setup step ${String(r.step)}.`, { reason: 'preset', detail: String(r.step) });
+  }
+}
+
+/**
+ * The draft as read from disk: each answer checked again and left out when it no longer passes (an
+ * answer of an older version), so a draft always opens; undefined when the folder holds none.
+ */
+export function readDraft(root: string): SetupDraft | undefined {
+  const file = draftFile(root);
+  if (!existsSync(file)) return undefined;
+  let raw: Record<string, unknown>;
+  try { raw = JSON.parse(readFileSync(file, 'utf8')); } catch { raw = {}; }
+  if (!isMap(raw)) raw = {};
+  const language = appLanguages().includes(text(raw.language)) ? text(raw.language) : 'de';
+  let draft = newDraft(language, typeof raw.started === 'string' ? raw.started : new Date().toISOString());
+  const replay = (patch: unknown) => { try { draft = withPatch(draft, checkPatch(patch)); } catch { /* left out */ } };
+  if (raw.firm) replay({ step: 'firm', value: raw.firm });
+  // The answers before the preset: a preset fills only what it has, so the person's answers are not lost.
+  const answers = isMap(raw.answers) ? raw.answers : {};
+  if (raw.preset) draft = { ...draft, preset: raw.preset as SetupDraft['preset'] };
+  try { if (draft.preset) checkPreset(draft.preset); } catch { delete draft.preset; }
+  for (const [key, value] of Object.entries(answers)) replay({ step: 'question', key, value });
+  if (raw.netRates) replay({ step: 'netRates', value: raw.netRates });
+  if (raw.banks) replay({ step: 'banks', value: raw.banks });
+  return draft;
+}
+
+const write = (root: string, d: SetupDraft): SetupDraft => { writeAtomic(draftFile(root), JSON.stringify({ schema: 1, ...d }, null, 2) + '\n'); return d; };
+
+/** «Weiter» after the folder and the language: the draft in that folder, the one there already when the setup was broken off. */
+export function beginDraft(root: string, language: string, now: string): SetupDraft {
+  if (!appLanguages().includes(language)) throw new SetupError(`The language must be one of ${appLanguages().join(', ')}.`, { reason: 'language', detail: language });
+  return readDraft(root) ?? write(root, newDraft(language, now));
+}
+
+export function patchDraft(root: string, raw: unknown): SetupDraft {
+  const draft = readDraft(root);
+  if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
+  return write(root, withPatch(draft, checkPatch(raw)));
+}
+
+/**
+ * «Buchhaltung anlegen»: the books, written by createWorkspace from the draft's request, with the
+ * conversation's first answers recorded (seedCreated) so it goes on in the books where it stopped.
+ * A refusal leaves the draft as it was.
+ */
+export async function createFromDraft(root: string, now: string): Promise<Created> {
+  const draft = readDraft(root);
+  const request = draft && requestOf(draft);
+  if (!draft || !request) throw new SetupError('The setup is not complete yet.', { reason: 'required', field: 'root' });
+  rmSync(draftFile(root));
+  let created: Created;
+  try {
+    created = await createWorkspace({ root, ...request });
+  } catch (e) {
+    write(root, draft);
+    throw e;
+  }
+  const ws = workspaceAt(created.root);
+  seedCreated(ws, { started: draft.started, vat: methodOf(ws.company.vat) as AnswerValue<'vat'>, sells: sellsAnswer(request.answers.sells) }, now);
+  return created;
+}

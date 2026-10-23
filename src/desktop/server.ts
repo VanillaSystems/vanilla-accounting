@@ -16,8 +16,9 @@ import { SetupError, createWorkspace, type SetupRequest } from '../workspace/cre
 import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import { bundledDemo } from '../workspace/demo-copy.js';
+import { beginDraft, createFromDraft, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { ApiErrorBody } from '../types/api-error.js';
-import type { DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
+import type { AiAvailability, DesktopInfo, SetupDraftView, KnownBooks, PhoneInfo, SetupBegun } from '../types/desktop.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
 
@@ -36,11 +37,23 @@ export interface DesktopServerOptions {
   onOpen?: (books: KnownBooks) => void;
   /** How often the inbox is looked at for files that arrived (src/server/background.ts). */
   inboxEveryMs?: number;
+  /** Whether an AI provider answers on this computer (the setup conversation needs one); by default the providers of src/llm are asked. */
+  aiAvailable?: () => Promise<boolean>;
+}
+
+/** The claude CLI or a provider with its key: the first that answers. */
+async function anyProviderReady(): Promise<boolean> {
+  const { usableProviders } = await import('../llm/providers/index.js');
+  for (const p of await usableProviders()) if (await p.ready(8000).catch(() => false)) return true;
+  return false;
 }
 
 export interface DesktopServer {
   app: express.Express;
-  /** Opens the books in `root` and remembers them; throws a WorkspaceError when the folder holds none. */
+  /**
+   * Opens the books in `root` and remembers them; a folder with a setup broken off is remembered and
+   * answered with `setup` (the start screen continues it); throws a WorkspaceError when it holds neither.
+   */
   open(root: string): Promise<KnownBooks>;
   /** Copies the demo into the user data folder the first time, then opens the copy. */
   openDemo(): Promise<KnownBooks>;
@@ -89,20 +102,27 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   const known = (root: string): KnownBooks => {
     const demo = resolve(root) === resolve(opts.demoRoot);
     // A look at the name, never workspaceAt: that would switch the engines to these books' setup while other books are open.
-    try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch { return { root, demo }; }
+    try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch { /* no books: perhaps a setup */ }
+    const draft = readDraft(root);
+    return draft ? { root, ...(draft.firm ? { name: draft.firm.name } : {}), demo, setup: true } : { root, demo };
   };
+  const remember = (root: string) => writeState(opts.stateFile, opened(readState(opts.stateFile), root));
 
   async function openBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);
     if (bundledDemo(root)) return openDemo();
-    if (!appFolderIn(root)) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
+    if (!appFolderIn(root)) {
+      if (!readDraft(root)) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
+      remember(root);
+      return known(root);
+    }
     workspaceAt(root);
     if (books) (await import('../server/books.js')).reopenWorkspace(root);
     else {
       openWorkspaceAt(root);
       books = (await import('../server/api.js')).app;
     }
-    writeState(opts.stateFile, opened(readState(opts.stateFile), root));
+    remember(root);
     await runBackground();
     open = known(root);
     opts.onOpen?.(open);
@@ -178,6 +198,45 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.post('/api/desktop/create', async (req, res) => {
     try {
       const created = await createWorkspace(req.body as SetupRequest);
+      res.json(await openBooks(created.root));
+    } catch (e) { refuse(res, e); }
+  });
+  // The setup conversation before the books exist (src/onboarding/draft.ts, #139).
+  app.get('/api/desktop/ai', async (_req, res) => {
+    res.json({ available: await (opts.aiAvailable ?? anyProviderReady)() } satisfies AiAvailability);
+  });
+  const rootOf = (raw: unknown): string => {
+    if (typeof raw !== 'string' || !raw.trim()) throw new SetupError('A folder for the books is needed.', { reason: 'required', field: 'root' });
+    return resolve(raw);
+  };
+  const draftView = (root: string): SetupDraftView => {
+    const draft = readDraft(root);
+    if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
+    return { root, draft };
+  };
+  app.get('/api/desktop/setup', (req, res) => {
+    try { res.json(draftView(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
+  });
+  app.post('/api/desktop/setup', async (req, res) => {
+    try {
+      const { root: raw, language } = (req.body ?? {}) as { root?: unknown; language?: unknown };
+      const root = rootOf(raw);
+      if (appFolderIn(root)) { res.json({ kind: 'books', books: await openBooks(root) } satisfies SetupBegun); return; }
+      const draft = beginDraft(root, typeof language === 'string' ? language : 'de', new Date().toISOString());
+      remember(root);
+      res.json({ kind: 'draft', view: { root, draft } } satisfies SetupBegun);
+    } catch (e) { refuse(res, e); }
+  });
+  app.put('/api/desktop/setup', (req, res) => {
+    try {
+      const { root: raw, patch } = (req.body ?? {}) as { root?: unknown; patch?: unknown };
+      const root = rootOf(raw);
+      res.json({ root, draft: patchDraft(root, patch) } satisfies SetupDraftView);
+    } catch (e) { refuse(res, e); }
+  });
+  app.post('/api/desktop/setup/create', async (req, res) => {
+    try {
+      const created = await createFromDraft(rootOf((req.body ?? {}).root), new Date().toISOString());
       res.json(await openBooks(created.root));
     } catch (e) { refuse(res, e); }
   });

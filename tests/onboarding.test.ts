@@ -50,11 +50,11 @@ test('the next topic is the first open one in the checklist order, and skipped t
 
 test('an empty workspace opens the setup once: after it started, the first start is over and progress survives a restart', () => {
   const ws = tempWorkspace('onboarding-');
-  assert.equal(setupView(ws, empty).firstStart, true);
-  assert.equal(setupView(ws, { ...empty, transactions: [{}] as never }).firstStart, false, 'books in use before the setup existed never open it by themselves');
+  assert.equal(setupView(ws, empty).opensItself, true);
+  assert.equal(setupView(ws, { ...empty, transactions: [{}] as never }).opensItself, false, 'books in use before the setup existed never open it by themselves');
   startSetup(ws, NOW);
   assert.ok(existsSync(join(ws.paths.root, ONBOARDING_FILE)));
-  assert.equal(setupView(ws, empty).firstStart, false);
+  assert.equal(setupView(ws, empty).opensItself, false);
   assert.equal(startSetup(ws, '2027-01-01T00:00:00.000Z').started, NOW, 'starting again keeps the first start date');
 
   assert.deepEqual(markTopic(ws, 'bank', 'done', NOW).was, 'open');
@@ -113,9 +113,9 @@ after(async () => { await api?.stop(); });
 test('the API: an empty workspace\'s first start, start once, a topic marked by the person and kept on disk; unknown topics and states refused', async () => {
   let r = await api.send('GET', '/api/onboarding');
   assert.equal(r.status, 200);
-  assert.equal(r.json.firstStart, true);
+  assert.equal(r.json.opensItself, true);
   r = await api.send('POST', '/api/onboarding/start');
-  assert.equal(r.json.firstStart, false);
+  assert.equal(r.json.opensItself, false);
   r = await api.send('PUT', '/api/onboarding/topics/bank', { state: 'done' });
   assert.equal(r.status, 200);
   assert.equal((r.json.progress as { topics: Record<string, { state: string }> }).topics.bank.state, 'done');

@@ -26,7 +26,9 @@ export type SetupRefusal =
   | { reason: 'required'; field: 'name' | 'owner' | 'root' }
   | { reason: 'uid' | 'language' | 'preset'; detail: string }
   | { reason: 'iban' | 'currency' | 'account' | 'accountTwice' | 'bankTwice'; bank: string; detail: string }
-  | { reason: 'noBank' };
+  | { reason: 'noBank' }
+  /** A bank account listed without the bank's name (the setup conversation's bank step). */
+  | { reason: 'bankName' };
 
 export class SetupError extends Error {
   constructor(message: string, readonly refusal: SetupRefusal) { super(message); }

@@ -18,7 +18,7 @@ import type { ClearPartner } from '../../onboarding/facts.js';
 import { askedAt, vatLine, vatSetupOf, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import { placeKeys, type HandPlace } from '../../onboarding/hand.js';
-import { answer, keepSells, keepVat, undoVat, useSetup } from './state.js';
+import { answer, keepSells, keepVat, setupReady, undoVat, useSetup } from './state.js';
 import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
@@ -115,7 +115,7 @@ function Answered({ step, onGo }: { step: SetupStep; onGo: Go }) {
 
 function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
   switch (card.kind) {
-    case 'company': return <CompanyCard company={card.company} />;
+    case 'company': return <CompanyCard company={card.company} origin={card.origin} />;
     case 'vat': return <VatCard card={card} onGo={onGo} />;
     case 'sells': return <SellsCard card={card} />;
     case 'needs': return (
@@ -157,7 +157,7 @@ function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
   }
 }
 
-function CompanyCard({ company: c }: { company: Extract<SetupCard, { kind: 'company' }>['company'] }) {
+function CompanyCard({ company: c, origin }: Pick<Extract<SetupCard, { kind: 'company' }>, 'company' | 'origin'>) {
   const address = c.address && [[c.address.street, c.address.number].filter(Boolean).join(' '), `${c.address.postcode} ${c.address.town}`.trim()].filter(Boolean).join(', ');
   const rows: Array<[string, ReactNode]> = [
     [t('onboarding.company.name'), c.name],
@@ -170,7 +170,7 @@ function CompanyCard({ company: c }: { company: Extract<SetupCard, { kind: 'comp
   return (
     <div className="obcard">
       <dl className="obkv">
-        {rows.map(([k, v], i) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd><dd>{i === 0 ? <span className="obbadge">{t('onboarding.origin.form')}</span> : null}</dd></Fragment>)}
+        {rows.map(([k, v], i) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd><dd>{i === 0 ? <span className="obbadge">{t(`onboarding.origin.${origin}`)}</span> : null}</dd></Fragment>)}
       </dl>
     </div>
   );
@@ -325,7 +325,7 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
         </>
       ) : null}
       <span className="lead">{t('onboarding.summary.lead')}</span>
-      <div className="actions"><button type="button" className="aiact primary" data-testid="setup-go" onClick={closeAssistant}>{t('onboarding.summary.go')}</button></div>
+      <div className="actions"><button type="button" className="aiact primary" data-testid="setup-go" onClick={() => { void setupReady(); closeAssistant(); }}>{t('onboarding.summary.go')}</button></div>
     </div>
   );
 }
