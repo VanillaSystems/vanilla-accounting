@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { SALES_KINDS, kindsOf, profileOf, type SalesKind } from '../src/workspace/setup.js';
 import { payoutSales, salesDefaults } from '../src/workspace/sells.js';
+import { setup } from '../src/engines/index.js';
 import { parseManifest } from '../src/workspace/manifest.js';
 import { patchManifestText } from '../src/workspace/manifest-write.js';
 import { checkAnswers, SetupError } from '../src/workspace/create.js';
@@ -29,8 +30,8 @@ const combos: SalesKind[][] = [['made'], ['traded'], ['services'], ['made', 'tra
 
 test('each combination gives its default accounts: purchases 4000 / 4200, sales 3000 / 3200 / 3400, payouts on the one kind\'s revenue', () => {
   const got = combos.map((k) => {
-    const d = salesDefaults(k);
-    return [k.join('+'), d.purchase.map((p) => p.account).join(','), d.sales.map((s) => s.account).join(','), payoutSales(k)];
+    const d = salesDefaults(k, setup().sells);
+    return [k.join('+'), d.purchase.map((p) => p.account).join(','), d.sales.map((s) => s.account).join(','), payoutSales(k, setup().sells, setup().answers.payouts.sales.otherwise)];
   });
   assert.deepEqual(got, [
     ['made', '4000', '3000', '3000'],
@@ -88,7 +89,7 @@ test('the setup form and init take any combination but none; one value from an o
 });
 
 test('the classifier reads what the firm sells and the default accounts', () => {
-  const prompt = buildBatchClassifyPrompt([], { companyName: 'Beispiel GmbH', chartOfAccounts: '', historicEntries: '', sells: salesDefaults(['made', 'services']) });
+  const prompt = buildBatchClassifyPrompt([], { companyName: 'Beispiel GmbH', chartOfAccounts: '', historicEntries: '', sells: salesDefaults(['made', 'services'], setup().sells) });
   assert.match(prompt, /## What the company sells\nproducts it makes itself, services\. Default accounts, unless a rule, the receipt or the prior year says otherwise: material for its own products → 4000; sales of products it makes itself → 3000; sales of services → 3400\./);
   assert.doesNotMatch(buildBatchClassifyPrompt([], { companyName: 'X', chartOfAccounts: '', historicEntries: '' }), /What the company sells/, 'not answered: nothing said');
 });

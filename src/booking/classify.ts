@@ -202,7 +202,7 @@ export function payoutDefault(ws: Pick<Workspace, 'profile'>, chart: readonly st
   if (ws.profile?.payouts !== 'yes') return undefined;
   const { fees } = setup().answers.payouts;
   const has = new Set(chart);
-  const account = payoutSales(ws.profile.sells ?? []);
+  const account = payoutSales(ws.profile.sells, setup().sells, setup().answers.payouts.sales.otherwise);
   if (!has.has(account) || !has.has(fees.account)) return undefined;
   return { account, vat: saleVatCode('saleDomestic'), fees: { account: fees.account, vat: formTakes(fees.vat) ? fees.vat : '' } };
 }
@@ -281,7 +281,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     purchaseVat: businessVat(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
     vat: ws.company.vat,
-    ...(ws.profile?.sells.length ? { sells: salesDefaults(ws.profile.sells) } : {}),
+    ...(ws.profile?.sells.length ? { sells: salesDefaults(ws.profile.sells, setup().sells) } : {}),
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
     ...((p) => (p ? { payout: p } : {}))(payoutDefault(ws, [...chartNames(chartOfAccounts).keys()])),
   };
