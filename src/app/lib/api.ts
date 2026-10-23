@@ -295,8 +295,9 @@ export const api = {
   /** The owner's payment made for the receipt: its ref and date, and the filed period it corrects when the receipt lies in one (r8k-10). */
   privatePayment: (receiptId: string, part: PrivatePart = {}) => request<{ ref: string; date: string; corrects?: string; exchangeRate?: number; replaced?: JournalEntry[] }>('POST', `/api/receipts/${receiptId}/private-payment`, part),
 
-  bookPayment: (ref: string, lines: BookingLine[]) =>
-    request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines }).then((r) => r.entries),
+  /** `inputTaxProof`: the other proof of the input tax, named instead of a receipt (#134). */
+  bookPayment: (ref: string, lines: BookingLine[], inputTaxProof?: string) =>
+    request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines, ...(inputTaxProof !== undefined && { inputTaxProof }) }).then((r) => r.entries),
 
   attachEntries: (ref: string, own: string) =>
     request<{ before: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }).then((r) => r.before),

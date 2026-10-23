@@ -95,6 +95,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const [asking, setAsking] = useState(false);
   const rebook = (overwrite: boolean) => { setAsking(false); if (tx) void reclassify(nav, tx.ref, payment, overwrite).then((es) => es?.[0] && selectNew(nav, es[0].id)); };
   const seen = whySeen(e, props.books.receipts);
+  // Input tax on other proof than a receipt (#134): the person's words, kept on the payment.
+  const proof = !v.receipts.length && e.vatCode ? tx?.inputTaxProof : undefined;
   const ws = useWorkspace();
   // The tags in the order the firm lists its dimensions; one it no longer lists last.
   const rank = (d: string) => { const i = ws?.dimensions?.findIndex((x) => x.id === d) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
@@ -197,8 +199,9 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} />
                 {((e.by?.kind === 'person' || e.by?.kind === 'assistant') && (e.by.was || e.corrects)) ? <CorrectionOffer payment={e.transactionRef} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
               </dd>
-              {seen || e.reason || e.by?.kind === 'person' || e.by?.kind === 'assistant' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
+              {seen || proof || e.reason || e.by?.kind === 'person' || e.by?.kind === 'assistant' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
                 {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
+                {proof && <div data-testid="why-proof">{t('journal.why.otherProof', { text: proof.text })}</div>}
                 {e.reason && <div className="m">{reasonText(e, e.reason, say)}</div>}
                 {(e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was && <div className="m">{t(`journal.why.${e.by.kind}`, { changes: changesText(e, e.by.was, say) })}</div>}
               </dd></> : null}

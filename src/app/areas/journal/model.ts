@@ -79,7 +79,7 @@ export function journalOf(books: Index): Journal {
     const tx = txByRef.get(e.transactionRef);
     const receipts = receiptsByRef.get(e.transactionRef) ?? [];
     const [title, sub] = splitText(e.description || e.transactionRef);
-    const evidence = evidenceCheck(e, receipts, closedThrough);
+    const evidence = evidenceCheck(e, receipts, closedThrough, tx?.inputTaxProof);
     return { e, tx, receipts, missing: !!tx && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, ...(evidence && { evidence }), title, sub };
   });
   const byRef = new Map<string, EntryView[]>();
@@ -104,7 +104,7 @@ export function unsettledAtFiling(j: Journal, length: FilingLength): { period: s
   const corrected = (ref: string) => j.views.some((x) => x.e.corrects === period && (x.e.description ?? '').includes(ref));
   const items = j.views.flatMap((v): Unsettled[] => {
     if (v.e.date < from || v.e.date > closed || v.e.corrects || corrected(v.e.transactionRef)) return [];
-    const check = evidenceCheck(v.e, v.receipts, undefined);
+    const check = evidenceCheck(v.e, v.receipts, undefined, v.tx?.inputTaxProof);
     return check ? [{ v, check }] : [];
   });
   return { period, items };

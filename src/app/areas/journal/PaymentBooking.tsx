@@ -107,6 +107,9 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
 
   const now = typed();
   const noReceipt = !books.mappings.some((m) => m.transactionRef === payment);
+  // An input-tax code no receipt backs: the person may name the other proof that shows the VAT (#134).
+  const deducts = noReceipt && now.some((x) => inputTaxWithoutReceipt(x.vat?.code));
+  const proofText = () => String((form.current ? new FormData(form.current).get('inputTaxProof') : '') ?? '').trim() || undefined;
   const rest = restOf(books, payment, now.map((x) => x.line), accounts);
 
   function addLine() {
@@ -137,7 +140,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
     if (problem) { setErr(problem); return; }
     setErr('');
     busy.current = true;
-    const entries = await bookPayment(nav, payment, now.map((x) => x.line));
+    const entries = await bookPayment(nav, payment, now.map((x) => x.line), deducts ? proofText() : undefined);
     busy.current = false;
     if (entries) onBooked?.(entries);
   }
@@ -186,6 +189,12 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
           </div>
         );
       })}
+      {deducts ? (
+        <label className="pbp" data-testid="input-tax-proof">{t('journal.byHand.proofLabel')}
+          <input name="inputTaxProof" placeholder={t('journal.byHand.proofPlaceholder')} />
+          <span className="m">{t('journal.byHand.proofHint')}</span>
+        </label>
+      ) : null}
       <VatCodeList />
       <div className="pbf">
         <button type="button" className="addlink" title={t('journal.byHand.addLineTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button>

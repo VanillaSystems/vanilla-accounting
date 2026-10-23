@@ -6,7 +6,7 @@
  * codes, Bezugsteuer and VAT-amount codes are never flagged; a receipt not read yet is no evidence.
  */
 import { baseCurrency, vat } from '../engines/index.js';
-import type { JournalEntry, Receipt } from '../types/index.js';
+import type { InputTaxProof, JournalEntry, Receipt } from '../types/index.js';
 
 /**
  * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by): the task
@@ -42,9 +42,11 @@ export function lineReceipts<R extends Pick<Receipt, 'amount' | 'currency'>>(e: 
  * `linked` are the receipts of the entry's payment; each line is checked against its own of them
  * (lineReceipts); `closedThrough` the period lock. Undefined when
  * the booking fits its evidence, when only a sales record or a supporting document is linked (the
- * payment's purchase side has no evidence either way), or when the entry is out of scope.
+ * payment's purchase side has no evidence either way), or when the entry is out of scope. `proof`:
+ * the other proof a person named for the payment's input tax (BankTransaction.inputTaxProof, #134),
+ * which backs a rate code no receipt shows.
  */
-export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], closedThrough: string | undefined): EvidenceCheck | undefined {
+export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], closedThrough: string | undefined, proof?: InputTaxProof): EvidenceCheck | undefined {
   if ((closedThrough && e.date <= closedThrough) || e.corrects) return undefined;
   const receipts = linked.filter(isPurchaseDocument);
   if (linked.length && !receipts.length) return undefined;
@@ -61,6 +63,6 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
     return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;
   }
-  if (sign || shown !== undefined || own.some((r) => r.hasSwissVat === undefined)) return undefined;
+  if (sign || proof || shown !== undefined || own.some((r) => r.hasSwissVat === undefined)) return undefined;
   return { kind: 'vatWithoutReceipt', code: `${family}0`, ...decided };
 }

@@ -135,8 +135,10 @@ export function ThresholdTasks({ nav, passed }: { nav: Nav; passed: ReturnType<t
 
 /**
  * The payments that waited for their receipt until their return came near (issue #29), and those
- * whose receipt could not be read (issue #57, UnreadReceipt.tsx): now the person's, each with its ways out. The receipt linked books it with its VAT; «Ohne Vorsteuer
- * buchen» books it at once with the zero code. An Eigenbeleg (#8) is not built yet.
+ * whose receipt could not be read (issue #57, UnreadReceipt.tsx): now the person's, each with its ways out. The receipt linked books it with its VAT;
+ * «Mit anderem Nachweis» opens the payment, where the person books it by hand with the rate and names the
+ * documents that show the VAT (#134); «Ohne Vorsteuer buchen» books it at once with the zero code. An
+ * Eigenbeleg (#8) is not built yet.
  */
 export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly WaitingPayment[]; nav: Nav; canEdit: boolean }) {
   // The rate answers given here, each with its «Immer so?» while the page stays open: the payment itself is booked and leaves the list.
@@ -155,6 +157,7 @@ export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly Waiti
           <p>{t('receiptDue.lead')}</p>
           <span className="wfactions">
             <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.find')}</button>
+            {canEdit ? <button type="button" className="btn ghost" data-testid="receipt-due-proof" title={t('receiptDue.otherProofTip')} onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.otherProof')}</button> : null}
             {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, item.tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
           </span>
         </div>

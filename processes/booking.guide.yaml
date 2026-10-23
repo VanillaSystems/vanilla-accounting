@@ -160,7 +160,10 @@ steps:
       - id: pv-no-receipt
         when: no linked receipt (noReceipt reason, or exempt by rule)
         then: zero_rated — I0, or M0 for goods
-        why: no receipt, no deduction
+        why: >-
+          no receipt, no deduction for the app and the AI; only a person may deduct on other proof
+          (a contract with the VAT and the payment), by hand, naming it (MWSTG Art. 81 Abs. 3,
+          ESTV MWST-Info 09 Ziff. 1.6, issue #134)
         source: AGENTS.md § VAT code rules
         test: no-receipt
       - id: pv-che-but-zero
