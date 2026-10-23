@@ -11,10 +11,10 @@ and the providers.
 | core | 56 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 95 | 26 |
-| infrastructure | 44 | 4 |
+| split | 96 | 26 |
+| infrastructure | 45 | 4 |
 | workflow | 20 | 0 |
-| view | 265 | 57 |
+| view | 266 | 57 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -186,7 +186,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 43, MWST 261, ESTV 37, Ziffer 52, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 43, MWST 265, ESTV 37, Ziffer 52, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
 | `src/app/i18n/locales/en.ts` | CHF 43, MWST 4, ESTV 24, form 0535 1, UID 1, camt.053 16, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 16, QR-bill 1 |

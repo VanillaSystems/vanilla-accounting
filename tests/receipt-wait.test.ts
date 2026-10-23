@@ -25,12 +25,12 @@ import './support/jurisdiction.js';
 const OUT = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Telefonie Muster AG Rechnung 10/2026', ...over });
 
-const CTX: WaitContext = { free: new Set(['estv']), ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
+const CTX: WaitContext = { free: new Set(['estv']), assumesUnread: new Set(['coop']), ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
 
 test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business or a firm without input tax book at once', () => {
-  assert.deepEqual(receiptWait(OUT('a'), { linked: false }, CTX), { wait: true });
-  const why = (tx: BankTransaction, facts = {}, ctx = CTX) => { const w = receiptWait(tx, { linked: false, ...facts }, ctx); return w.wait ? 'wait' : w.why; };
-  assert.equal(why(OUT('a'), { linked: true }), 'receipt');
+  assert.deepEqual(receiptWait(OUT('a'), { linked: 'none' }, CTX), { wait: true });
+  const why = (tx: BankTransaction, facts = {}, ctx = CTX) => { const w = receiptWait(tx, { linked: 'none', ...facts }, ctx); return w.wait ? 'wait' : w.why; };
+  assert.equal(why(OUT('a'), { linked: 'read' }), 'receipt');
   assert.equal(why(OUT('a', { noReceiptNeeded: true })), 'marked');
   assert.equal(why(OUT('a', { amount: 0 })), 'zero');
   assert.equal(why(OUT('a', { direction: 'CRDT' })), 'incoming');
