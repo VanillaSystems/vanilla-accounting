@@ -16,7 +16,7 @@
  * company's word goes before the app's, unless that file states such a choice itself. The company's executable rules book before the model and
  * a person's booking is never classified, so neither reaches this.
  */
-import { evidenceCheck, isPurchaseDocument } from '../accounting/evidence-check.js';
+import { evidenceCheck, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
 import { formTakes } from '../accounting/vat-codes.js';
 import { vat } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
@@ -176,7 +176,9 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
       const code = vat().codes.purchaseAt(part, family === 'M' ? box.costOfGoods : box.otherwise);
       return code ? decide(e, sign + code, de().t('rules.say.purchaseVat.receiptShowsVat', { rate: String(part), code: sign + code })) : e;
     }
-    if (check?.kind !== 'receiptShowsVat' || model.length > 1 || !taxedWhole(read, check.rate, e.amount, tx.currency)) return e;
+    // A line of its own receipt (#27) is that receipt's; of several lines on all the receipts, none is decided here.
+    const own = lineReceipts(e, read);
+    if (check?.kind !== 'receiptShowsVat' || (model.length > 1 && own === read) || !taxedWhole(own, check.rate, e.amount, tx.currency)) return e;
     return decide(e, check.code, assume && purchase.some(unread)
       ? de().t('rules.say.purchaseVat.unreadReceipt', { business: name, rule: assume.rule, rate: String(check.rate), code: check.code })
       : de().t('rules.say.purchaseVat.receiptShowsVat', { rate: String(check.rate), code: check.code }));

@@ -110,6 +110,17 @@ export function unsettledAtFiling(j: Journal, length: FilingLength): { period: s
   return { period, items };
 }
 
+/**
+ * With no entry under the link: whether the first row takes the selection. A link that names none
+ * hands it to the first row; an entry just booked or just deleted (its place kept with «Rückgängig»,
+ * r6h-28) holds it; an entry shown before that went away hands it on; a link to an entry that never
+ * was here keeps its place, and the detail says so (urls.md rule 5).
+ */
+export function firstRowTakesOver(link: string | undefined, held: readonly (string | undefined)[], seen: string | undefined): boolean {
+  if (!link) return true;
+  return !held.includes(link) && seen === link;
+}
+
 export const JOURNAL_FILTERS = ['ohneBeleg', 'korrekturen'] as const;
 export type JournalFilter = typeof JOURNAL_FILTERS[number];
 export type Counts = Record<'alle' | JournalFilter, number>;

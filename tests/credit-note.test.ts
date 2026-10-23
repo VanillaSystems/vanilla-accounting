@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { creditSigned, linkByCode, matchStep } from '../src/intake/match.js';
+import { linkByCode, matchStep } from '../src/intake/match.js';
+import { creditSigned } from '../src/accounting/credit-signed.js';
 import type { Books } from '../src/books/store.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import type { Workspace } from '../src/workspace/workspace.js';

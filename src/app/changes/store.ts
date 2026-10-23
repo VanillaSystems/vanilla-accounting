@@ -15,7 +15,7 @@ const emit = () => { for (const l of listeners) l(); };
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 export async function pollChanges(): Promise<void> {
-  if (STATIC_EXPORT) { state = { error: t('automation.apiOnly') }; emit(); return; }
+  if (STATIC_EXPORT) { if (!state.error) { state = { error: t('automation.apiOnly') }; emit(); } return; }
   try {
     const answer = await api.changes(state.view?.rev);
     if (!('unchanged' in answer)) { state = { view: answer }; emit(); }
@@ -29,12 +29,15 @@ export async function pollChanges(): Promise<void> {
 
 const onFocus = () => { void pollChanges(); };
 
+/** One function for every render: React subscribes again whenever it gets a new one, and a subscription polls. */
+function subscribe(l: () => void): () => void {
+  listeners.add(l);
+  if (listeners.size === 1) { void pollChanges(); window.addEventListener('focus', onFocus); }
+  return () => { listeners.delete(l); if (!listeners.size) { clearTimeout(timer); window.removeEventListener('focus', onFocus); } };
+}
+
 export function useChanges(): State {
-  return useSyncExternalStore((l) => {
-    listeners.add(l);
-    if (listeners.size === 1) { void pollChanges(); window.addEventListener('focus', onFocus); }
-    return () => { listeners.delete(l); if (!listeners.size) { clearTimeout(timer); window.removeEventListener('focus', onFocus); } };
-  }, () => state);
+  return useSyncExternalStore(subscribe, () => state);
 }
 
 const cache = new Map<string, { data?: unknown; error?: string }>();
