@@ -57,7 +57,7 @@ classDiagram
   }
   class Manifest {
     <<belege.workspace.yaml>>
-    +schema: number = 1
+    +schema: number = 2
     +company: Company
     +bankAccounts: LedgerBankAccount[1..*]
     +profile: WorkspaceProfile [0..1]
@@ -387,7 +387,9 @@ Notes on the diagram:
   charge (several invoices in one payment) links many receipts to one movement, and a receipt is
   normally linked to one movement.
 - A booking without a payment (#89) carries a ref of its own in `transactionRef`, and its receipts
-  in `receipts`.
+  in `receipts`. A `Mapping` may name that ref too: a receipt linked to a booking without a payment.
+- A hand movement confirmed by a statement row (#88) keeps its own `ref`; `statement` holds the
+  row's ref, and `BankStatement.refs` lists the row's ref, not the movement's.
 - A Sammelzahlung stays one `BankTransaction`. Its `parts` are what receipts match against and what
   entries split by.
 - `amount` of an entry is in CHF. A foreign movement carries `exchangeCurrency` and the ESTV daily
@@ -876,6 +878,7 @@ classDiagram
 | Books records (`Index`, `JournalEntry`, `BankTransaction`, `Receipt`, `Mapping`, config) | src/types/index.ts |
 | Books on disk, the write door, period lock | src/books/store.ts, src/books/years.ts |
 | Seals | src/books/seal.ts |
+| The referential integrity check: keys that name no record (`npm run doctor`) | src/accounting/integrity.ts |
 | Workspace layout and paths | src/workspace/workspace.ts (`LAYOUT`) |
 | Manifest | src/workspace/manifest.ts, src/workspace/vat-setup.ts |
 | Schema versions | src/workspace/schema.ts |

@@ -31,7 +31,7 @@ import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
-import { nextManualRef } from './refs.js';
+import { nextManualRef } from './next-ref.js';
 
 export const stateFile = (ws: Workspace, year: string): string => join(yearPaths(ws.paths, year).filings, 'year-close.json');
 

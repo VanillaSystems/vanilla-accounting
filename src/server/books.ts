@@ -8,6 +8,7 @@ import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, Stale
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
+import { byKind, danglingRefsOf } from '../accounting/integrity.js';
 
 /**
  * Live: a route that changes the manifest reopens it, the desktop app opens other books, and every
@@ -22,7 +23,27 @@ export function reopenWorkspace(root: string = WS.paths.root): void {
 
 export const receiptPath = (books: Books, receipt: Receipt): string => receiptFile(WS, books, receipt);
 
-export const readBooks = (): Books => loadBooks(WS);
+/** The books whose references were checked in this process: each is checked at its first load only. */
+const checked = new Set<string>();
+
+/** One line in the log when the books hold references that name no record (#126); npm run doctor lists them. Never stops a load. */
+function warnDangling(books: Books): void {
+  const root = WS.paths.root;
+  if (checked.has(root)) return;
+  checked.add(root);
+  try {
+    const groups = byKind(danglingRefsOf(WS, books));
+    if (groups.length) console.warn(`Books ${root}: ${groups.map((g) => `${g.found.length} ${g.label}`).join(', ')}. npm run doctor lists them.`);
+  } catch (e) {
+    console.warn(`Books ${root}: the reference check did not run (${(e as Error).message.split('\n')[0]}).`);
+  }
+}
+
+export const readBooks = (): Books => {
+  const books = loadBooks(WS);
+  warnDangling(books);
+  return books;
+};
 
 /** An async `fn` would hold loaded books across an await and save over every edit made meanwhile. */
 type Sync<T> = T extends PromiseLike<unknown> ? never : T;
