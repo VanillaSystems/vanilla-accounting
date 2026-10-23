@@ -519,7 +519,10 @@ test('#119: a hand balance is refused where a statement states the day, on an ac
   assert.throws(() => setYearEndBalance(bare, '2026', '2451', 1, LETTER), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndAccountUnknown', 'the owner\'s account needs no confirmation');
   assert.throws(() => setCashCount(bare, '2026', '1020', 1), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndAccountUnknown', 'a bank account is not counted');
   assert.throws(() => setYearEndBalance(bare, '2026', '1020', 1, { name: 'saldo.docx', body: Buffer.from('x') }), (err: unknown) => err instanceof YearCloseRefused && err.why.code === 'yearEndDocumentType');
-  const { sourceFile } = setYearEndBalance(bare, '2026', '1020', 10650, LETTER);
+  const first = setYearEndBalance(bare, '2026', '1020', 10650, LETTER);
+  const { sourceFile } = setYearEndBalance(bare, '2026', '1020', 10650, { name: 'scan.PNG', body: Buffer.from('png') });
+  const filings = yearPaths(bare.paths, '2026').filings;
+  assert.deepEqual([existsSync(join(filings, first.sourceFile)), readFileSync(join(filings, sourceFile), 'utf8')], [false, 'png'], 'a new confirmation replaces the old one');
   removeYearEndBalance(bare, '2026', '1020');
   assert.equal(existsSync(join(yearPaths(bare.paths, '2026').filings, sourceFile)), false);
   assert.ok(codesOf(yearCloseOf(bare, '2026', RATES)).includes('noYearEndBalance 1020'));

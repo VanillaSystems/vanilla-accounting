@@ -9,7 +9,7 @@
  */
 import { Refused } from '../types/refusal.js';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import type { JournalEntry, QuarterKey, StatementClosingBalance } from '../types/index.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
@@ -102,10 +102,18 @@ export function setYearEndBalance(ws: Workspace, year: string, account: string, 
     b.statementBalances = [...(b.statementBalances ?? []).filter((x) => !(x.account === account && x.date === date)), balance]
       .sort((x, y) => x.date.localeCompare(y.date) || x.account.localeCompare(y.account));
   });
+  // The proof it replaces goes only once the new one and the books are saved.
   mkdirSync(dirname(path), { recursive: true });
+  const fresh = `${path}.new`;
+  writeFileSync(fresh, document.body);
+  try {
+    saveBooks(ws, books);
+  } catch (e) {
+    rmSync(fresh, { force: true });
+    throw e;
+  }
+  renameSync(fresh, path);
   if (before && before !== path) rmSync(before, { force: true });
-  writeFileSync(path, document.body);
-  saveBooks(ws, books);
   return balance;
 }
 
