@@ -7,6 +7,8 @@
  *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
  *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
+ *   GET  /api/rules/unread?ref=       a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
+ *   POST /api/rules/unread            { ref, rate }: «Immer so?» — the company's rule for that business's unread receipts drafted into its file (waits in Änderungen)
  *   GET  /api/rules/correction?ref=   the rule change a person's correction of a rule booking teaches («Regel anpassen?»), or null
  *   POST /api/rules/correction        { ref }: that change drafted into the rule's file; the answer names the file for its card
  *   GET  /api/rules/learn?ref=        what a person's correction of a booking no rule made may teach («Ins Wissen übernehmen?»), or null
@@ -29,6 +31,7 @@ import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { draftUnreadRule, unreadOffer } from '../../saving/unread-rule.js';
 import { correctionOffer, draftCorrectionRule } from '../../saving/correction-rule.js';
 import { learnOffer, proposeFromCorrection } from '../../saving/learn-rule.js';
 import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.js';
@@ -127,6 +130,18 @@ router.post('/api/rules/draft', async (req, res) => {
   if (c.kind === 'discard') { res.json({ ok: discardDraft(WS, c.path) }); return; }
   if (typeof c.basis !== 'string') throw new RequestError(400, 'basis erwartet.');
   res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true)));
+});
+
+router.get('/api/rules/unread', (req, res) => {
+  res.json({ offer: unreadOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });
+});
+
+router.post('/api/rules/unread', (req, res) => {
+  const { ref, rate } = (req.body ?? {}) as { ref?: unknown; rate?: unknown };
+  if (typeof ref !== 'string' || typeof rate !== 'number') throw new RequestError(400, 'ref und rate erwartet.');
+  const path = draftUnreadRule(WS, ref, rate);
+  if (!path) throw new RequestError(404, 'Diese Zahlung führt zu keinem Geschäftspartner, für den eine Regel stehen kann.');
+  res.json({ path });
 });
 
 router.get('/api/rules/share', (req, res) => {
