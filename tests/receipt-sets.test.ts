@@ -101,6 +101,14 @@ test('a vendor with more receipts near the payment than code tries is only propo
   assert.ok(proposalsFor(books, books.transactions[0], open).some((s) => s.exact && s.receipts.length === 2));
 });
 
+test('nor is a set linked whose receipt lies among those another payment could not try every set of', () => {
+  const shared = [receipt(30, { date: '2026-07-06' }), receipt(57.4, { date: '2026-07-06' })];
+  const others = Array.from({ length: 11 }, (_, i) => receipt(200 + i, { date: '2026-08-01' }));
+  const books = booksOf([pay(87.4, { ref: 'A', date: '2026-07-07' }), pay(999, { ref: 'B', date: '2026-08-06' })], [...shared, ...others]);
+  assert.deepEqual(receiptSetsToLink(books, open), []);
+  assert.ok(proposalsFor(books, books.transactions[0], open).some((s) => s.exact), 'A still gets the proposal');
+});
+
 test('the split keeps the sign of the model\'s line: a refund booked as one negative line becomes negative lines per credit note', () => {
   const notes = [receipt(-20), receipt(-35)];
   const lines = splitByReceipts(pay(55, { direction: 'CRDT' }), [{ accountDebit: '4200', accountCredit: '', amount: -55, vatCode: '-M0', description: 'Rückerstattung' }], notes);

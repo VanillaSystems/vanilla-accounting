@@ -61,8 +61,11 @@ function freeReceipts(books: Books, isOpen: (date: string) => boolean): Receipt[
     && !!r.amount && !!r.date && isOpen(r.date) && !!vendorOf(r));
 }
 
-/** What fits payment `tx`: its exact sets, and the closest set that does not quite fit. `partial`: a vendor had more receipts near it than were tried. */
-export interface Fit { exact: Receipt[][]; close?: { set: Receipt[]; sum: number }; linkedCents: number; partial: boolean }
+/**
+ * What fits payment `tx`: its exact sets, and the closest set that does not quite fit. `untried`:
+ * the receipts of a vendor that had more near the payment than were tried; a set among them may fit it too.
+ */
+export interface Fit { exact: Receipt[][]; close?: { set: Receipt[]; sum: number }; linkedCents: number; untried: Set<string> }
 
 /**
  * The sets of `free` receipts that pay `tx` together with the receipts linked to it already: from one
@@ -84,11 +87,11 @@ export function fitOf(books: Books, tx: BankTransaction, free: readonly Receipt[
     if (linked.some((l) => vendorOf(l!) !== v)) continue;
     vendors.set(v, [...(vendors.get(v) ?? []), r]);
   }
-  const fit: Fit = { exact: [], linkedCents, partial: false };
+  const fit: Fit = { exact: [], linkedCents, untried: new Set() };
   const tolerance = Math.max(CLOSE * Math.abs(need), 100);
   for (const group of vendors.values()) {
     const tried = [...group].sort((a, b) => Math.abs(daysFrom(a, tx)) - Math.abs(daysFrom(b, tx))).slice(0, MAX_TRIED);
-    if (group.length > MAX_TRIED) fit.partial = true;
+    if (group.length > MAX_TRIED) for (const r of group) fit.untried.add(r.id);
     // On its own a set is two receipts at least; one receipt that completes those linked already is a set too.
     for (const { set, sum } of subsets(tried, linked.length ? 1 : 2)) {
       const off = Math.abs(sum - need);
@@ -96,7 +99,7 @@ export function fitOf(books: Books, tx: BankTransaction, free: readonly Receipt[
       else if (off <= tolerance && set.length + linked.length >= 2 && (!fit.close || off < Math.abs(fit.close.sum - need))) fit.close = { set, sum };
     }
   }
-  return fit.exact.length || fit.close ? fit : undefined;
+  return fit.exact.length || fit.close || fit.untried.size ? fit : undefined;
 }
 
 const asSet = (tx: BankTransaction, set: readonly Receipt[], fit: Fit, sum: number, exact: boolean): ReceiptSet =>
@@ -113,14 +116,18 @@ export function proposalsFor(books: Books, tx: BankTransaction, isOpen: (date: s
 
 /**
  * What code links: a payment's set when it is its only exact set, every receipt near it was tried,
- * and none of its receipts fits another payment's exact set. Every other fit stays a proposal (proposalsFor).
+ * and none of its receipts fits another payment's exact set or lies among the receipts another
+ * payment could not try every set of. Every other fit stays a proposal (proposalsFor).
  */
 export function receiptSetsToLink(books: Books, isOpen: (date: string) => boolean): ReceiptSet[] {
   const free = freeReceipts(books, isOpen);
-  const fits = books.transactions.flatMap((tx) => { const fit = fitOf(books, tx, free, isOpen); return fit?.exact.length ? [{ tx, fit }] : []; });
+  const all = books.transactions.flatMap((tx) => { const fit = fitOf(books, tx, free, isOpen); return fit ? [{ tx, fit }] : []; });
+  // A receipt a payment could not try every set of may belong to that payment: no set takes it by code.
+  const untried = new Set(all.flatMap(({ fit }) => [...fit.untried]));
+  const fits = all.filter(({ fit }) => fit.exact.length);
   const claims = new Map<string, number>();
   for (const { fit } of fits) for (const id of new Set(fit.exact.flat().map((r) => r.id))) claims.set(id, (claims.get(id) ?? 0) + 1);
-  return fits.filter(({ fit }) => fit.exact.length === 1 && !fit.partial && fit.exact[0].every((r) => claims.get(r.id) === 1))
+  return fits.filter(({ fit }) => fit.exact.length === 1 && !fit.untried.size && fit.exact[0].every((r) => claims.get(r.id) === 1 && !untried.has(r.id)))
     .map(({ tx, fit }) => asSet(tx, fit.exact[0], fit, sumOf(fit.exact[0]), true));
 }
 
