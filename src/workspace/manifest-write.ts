@@ -15,6 +15,7 @@ import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
 import { WorkspaceError, WorkspaceRefusal } from './workspace.js';
 import { parseUid } from './uid.js';
+import { goodsOf, profileOf, type SalesKind } from './setup.js';
 
 /** A text field set, or removed with null; absent: unchanged. */
 type Edit<T> = T | null | undefined;
@@ -68,6 +69,8 @@ export interface ManifestPatch {
   removeBank?: { bank: string; currency: string };
   invoicing?: InvoicingPatch;
   outgoingMail?: MailPatch | null;
+  /** «Was verkauft ihr?» (#46): written as `profile.sells` and `profile.goods` (src/workspace/setup.ts kindsOf); only into a manifest with a profile. */
+  sells?: SalesKind[];
 }
 
 const ADDRESS_KEYS = ['street', 'number', 'line2', 'postcode', 'town', 'state', 'country'] as const;
@@ -162,6 +165,14 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [lang, texts] of Object.entries(inv.texts ?? {})) {
       for (const [key, value] of Object.entries(texts)) set(doc, ['invoicing', 'texts', lang, key], value);
     }
+  }
+  if (patch.sells) {
+    if (!isMap(doc.get('profile'))) throw new WorkspaceError(`${path} has no profile: what the firm sells is kept in it (npm run init writes one)`);
+    if (!patch.sells.length) throw new WorkspaceError('profile.sells: one kind at least');
+    doc.setIn(['profile', 'sells'], profileOf(patch.sells));
+    const goods = goodsOf(patch.sells);
+    if (goods.length) doc.setIn(['profile', 'goods'], doc.createNode(goods, { flow: true }));
+    else doc.deleteIn(['profile', 'goods']);
   }
   if (patch.outgoingMail === null) doc.delete('outgoingMail');
   else if (patch.outgoingMail) {

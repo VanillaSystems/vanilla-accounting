@@ -32,7 +32,7 @@ test('books created as the first books of the app are the books the API serves',
       preset: 'consultant', name: 'Erste Bücher GmbH', uid: 'CHE-153.004.184', owner: 'Erika Test', language: 'de', root: join(home, 'Documents', 'Erste'),
       answers: {
         legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly', fiscalYear: 'calendar', start: 'new',
-        sells: 'services', foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
+        sells: ['services'], foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
       },
       banks: [{ bank: 'UBS', currency: 'CHF' }],
     }),

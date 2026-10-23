@@ -20,7 +20,15 @@ answers:
   payouts:
     accounts: ["1093", "6580"]
     # A payout report's split when no rule names the provider (src/booking/classify.ts payoutDefault): the gross
-    # sales on the revenue account of what the firm sells, at its sale code; the fees here, the code only where the form takes it.
-    sales: { goods: "3200", otherwise: "3400" }
+    # sales on the revenue account of what the firm sells (sells below), here when it sells more than one kind,
+    # at its sale code; the fees here, the code only where the form takes it.
+    sales: { otherwise: "3400" }
     fees: { account: "6580", vat: I0 }
   imports: ["4020", "4030", "4040"]
+
+# «Was verkauft ihr?» (src/workspace/sells.ts, #46): the default accounts of each kind, any combination.
+# Purchases: material for the firm's own products, goods bought for resale. Sales: each kind's revenue.
+sells:
+  made: { purchase: "4000", sales: "3000" }
+  traded: { purchase: "4200", sales: "3200" }
+  services: { sales: "3400" }

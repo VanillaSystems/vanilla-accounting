@@ -18,7 +18,7 @@ import { partnerBins, type SetupFacts, type SetupView } from '../../onboarding/f
 import { topicStates } from '../../onboarding/conversation.js';
 import { parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
-import { filing } from '../../engines/index.js';
+import { filing, setup } from '../../engines/index.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { sources } from '../../platform/sources/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
@@ -45,6 +45,7 @@ export function setupFacts(): SetupFacts {
     books: { payments: books.transactions.length, receipts: books.receipts.length, entries: (books.journalEntries ?? []).length },
     partners: partnerBins({ partners: view.partners, entries: partnerBooks.journalEntries ?? [], bankAccounts: new Set(WS.bankAccounts.map((b) => b.account)), accountName: (n) => chart.get(n) ?? '' }),
     rules: view.partners.reduce((n, p) => n + p.rules, 0),
+    ...(WS.profile ? { sells: { kinds: WS.profile.sells, accounts: setup().sells } } : {}),
   };
 }
 

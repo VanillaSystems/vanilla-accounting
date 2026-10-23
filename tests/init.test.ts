@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, isSupported, type Answers } from '../src/workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, isSupported, profileOf, type Answers } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt, workspacePaths, yearPaths } from '../src/workspace/workspace.js';
 import { loadBooks, saveBooks } from '../src/books/store.js';
@@ -76,12 +76,12 @@ test('chart: profile and legal form pick the accounts; a rule broken in the file
 test('preset trades: a small Swiss trades GmbH, fully supported, with the chart it needs', () => {
   assert.deepEqual(PRESETS.trades.answers, {
     legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
-    fiscalYear: 'calendar', start: 'new', sells: 'both', foreignCustomers: 'no', imports: 'no',
+    fiscalYear: 'calendar', start: 'new', sells: ['made', 'services'], foreignCustomers: 'no', imports: 'no',
     employees: 'staff', ownerPaysPrivately: 'yes', privateUse: ['car', 'phone'], payouts: 'no',
   });
   assert.ok(isSupported(PRESETS.trades.answers as unknown as Answers), 'every answer is one the engine runs on');
   assert.deepEqual(PRESET_NAMES, ['consultant', 'webshop', 'trades', 'freelancer', 'custom']);
-  const numbers = new Set(chartFor(loadChart(), PRESETS.trades.answers.sells, 'GmbH').map((a) => a.number));
+  const numbers = new Set(chartFor(loadChart(), profileOf(PRESETS.trades.answers.sells), 'GmbH').map((a) => a.number));
   for (const n of ['3000', '3400', '4000', '4400', '5000', '2451']) assert.ok(numbers.has(n), `${n} is in the trades chart`);
 });
 
@@ -101,7 +101,8 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   assert.equal(ws.company.uid, 'CHE-153.004.184');
   assert.equal(ws.company.legalForm, 'GmbH');
   assert.equal(ws.company.language, 'fr');
-  assert.equal(ws.profile?.sells, 'services');
+  assert.deepEqual(ws.profile?.sells, ['services']);
+  assert.equal(parse(readFileSync(ws.paths.manifest, 'utf8')).profile.sells, 'services', 'the manifest keeps the answer as it always did');
   assert.equal(ws.profile?.ownerPaysPrivately, 'yes');
   assert.deepEqual(ws.bankAccounts.map((a) => `${a.bank} ${a.currency} ${a.account} ${a.statements ?? '-'}`), [
     'UBS CHF 1020 camt053', 'Wise EUR 1021 wise', 'manual CHF 2451 -',

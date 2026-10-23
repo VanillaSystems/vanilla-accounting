@@ -1,6 +1,8 @@
 import type { BankTransaction, OrderFacts, PayoutFacts, PayoutShare, VatRateGroup, ReceiptLine, Supply } from "../types/index.js";
 import { vat } from "../engines/index.js";
 import type { VatSetup } from "../workspace/vat-setup.js";
+import type { SalesDefaults } from "../workspace/sells.js";
+import type { SalesKind } from "../workspace/setup.js";
 import type { VatLineFacts } from "../accounting/vat-codes.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
 
@@ -340,6 +342,23 @@ export interface ClassifyPromptContext {
   chartOfAccounts: string;
   historicEntries: string;
   vat?: VatSetup;
+  /** What the firm sells and the default accounts that follow (src/workspace/sells.ts, #46); absent: not answered. */
+  sells?: SalesDefaults;
+}
+
+const KIND_WORDS: Record<SalesKind, { sells: string; buys?: string }> = {
+  made: { sells: 'products it makes itself', buys: 'material for its own products' },
+  traded: { sells: 'goods it buys and resells', buys: 'goods bought for resale' },
+  services: { sells: 'services' },
+};
+
+/** What the firm sells, as the setup answered it, and the default accounts the model starts from. */
+function sellsSection(d: SalesDefaults | undefined): string {
+  if (!d?.kinds.length) return '';
+  const accounts = [...d.purchase.map((p) => `${KIND_WORDS[p.kind].buys} → ${p.account}`), ...d.sales.map((s) => `sales of ${KIND_WORDS[s.kind].sells} → ${s.account}`)];
+  return `## What the company sells
+${d.kinds.map((k) => KIND_WORDS[k].sells).join(', ')}. Default accounts, unless a rule, the receipt or the prior year says otherwise: ${accounts.join('; ')}.
+`;
 }
 
 /** The VAT part of the prompt: the model gives facts on every kind of firm, what code books of them differs (code enforces it either way). */
@@ -368,7 +387,7 @@ function businessPartLine(tx: TxInput, receipt: ReceiptInput | undefined): strin
 
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
-  { companyName, chartOfAccounts, historicEntries, vat: setup }: ClassifyPromptContext,
+  { companyName, chartOfAccounts, historicEntries, vat: setup, sells }: ClassifyPromptContext,
   cases: readonly BookingCase[] = [],
 ): string {
   const txSections = transactions.map(({ tx, receipts }, i) => {
@@ -402,7 +421,7 @@ ${txSections}
 ## Chart of Accounts
 ${chartOfAccounts}
 
-${vatSection(setup)}
+${sellsSection(sells)}${vatSection(setup)}
 
 ## Historic Journal Entry Examples (prior year)
 ${historicEntries}
