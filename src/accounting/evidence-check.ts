@@ -25,7 +25,7 @@ const swissRate = (r: Receipt): number | undefined =>
   r.hasSwissVat ? r.vatSummary?.find((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent))?.ratePercent : undefined;
 
 /** A purchase document: what a vendor charged, with its tax. The company's own sales record shows output tax; a copy or a delivery note proves nothing. */
-const isPurchaseDocument = (r: Receipt): boolean => r.kind === undefined || r.kind === 'invoice';
+export const isPurchaseDocument = (r: Pick<Receipt, 'kind'>): boolean => r.kind === undefined || r.kind === 'invoice';
 
 /**
  * `linked` are the receipts of the entry's payment; `closedThrough` the period lock. Undefined when

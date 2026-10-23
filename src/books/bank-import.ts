@@ -12,7 +12,7 @@ import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { partDirs, type Workspace } from '../workspace/workspace.js';
-import { periodLock } from './store.js';
+import { booksOpen, periodLock } from './store.js';
 
 type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
 
@@ -90,9 +90,8 @@ export function refsHeldWithout(ws: Ws, except: string, config: Index['config'])
  * opening balances already carry. Books without opening balances keep every row.
  */
 export function withinBooks(transactions: BankTransaction[], config: Index['config']): { kept: BankTransaction[]; before?: string } {
-  const years = Object.keys(config?.openingBalances ?? {}).sort();
-  if (years.length === 0) return { kept: transactions };
-  const opens = `${years[0]}-01-01`;
+  const opens = booksOpen({ config });
+  if (!opens) return { kept: transactions };
   return { kept: transactions.filter((t) => t.date >= opens), before: opens };
 }
 

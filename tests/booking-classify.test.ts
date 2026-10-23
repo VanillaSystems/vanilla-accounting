@@ -8,18 +8,18 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { classifyTransactions, entriesFor, moneyAccounts, type ClassifyDeps } from '../src/booking/classify.js';
+import { classifyTransactions, entriesFor, moneyAccounts, ruleBookingLines, type ClassifyDeps } from '../src/booking/classify.js';
 import { chartFor, loadChart } from '../src/workspace/chart.js';
 import { chartNames } from '../src/booking/rule-book.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
-import { workspaceAt, type LedgerBankAccount } from '../src/workspace/workspace.js';
+import { workspaceAt, yearsOf, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import { ClosedPeriodError, periodLock, type Books } from '../src/books/store.js';
+import { ClosedPeriodError, periodLock, saveBooks, type Books } from '../src/books/store.js';
 import { buildBatchClassifyPrompt, type ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { startApi } from './support/api-server.js';
-import { booksOnDisk } from './support/workspace.js';
+import { booksOnDisk, tempWorkspace } from './support/workspace.js';
 import { loadBooks } from '../src/books/store.js';
 import './support/jurisdiction.js';
 import { loadJurisdiction } from '../src/core/modules/load.js';
@@ -103,6 +103,17 @@ test('a VAT code from the model follows the money: a supplier credit (bank debit
   assert.equal(refund.vatCode, '-V81', 'a customer refund takes -V81');
 });
 
+test('a rule\'s rate code needs a purchase document showing Swiss VAT: a delivery note or a sales record proves none (#81)', () => {
+  const swiss = { hasSwissVat: true };
+  const code = (documents: Parameters<typeof ruleBookingLines>[2]) => ruleBookingLines(tx({ ref: 'R' }), { account: '6510', vat: 'I81' }, documents, undefined)[0].vat;
+  assert.equal(code([{ ...swiss, kind: 'supporting' }]), 'I0', 'a delivery note');
+  assert.equal(code([{ ...swiss, kind: 'sales-record' }]), 'I0', 'the company\'s own sales record');
+  assert.equal(code([{ ...swiss, kind: 'duplicate' }]), 'I0', 'a copy');
+  assert.equal(code([{ ...swiss, kind: 'supporting' }, { ...swiss, kind: 'invoice' }]), 'I81', 'with the invoice beside it');
+  assert.equal(code([swiss]), 'I81', 'a receipt not sorted yet counts as a purchase document, as in evidence-check');
+  assert.equal(code([]), 'I0', 'no receipt');
+});
+
 test('a Stripe payout books its 1093 entries on the order date and adds the payout leg', () => {
   const payout = tx({ ref: 'P', direction: 'CRDT', amount: 95, currency: 'EUR', bank: 'Wise' });
   const llm: ClassifyEntry[] = [
@@ -130,6 +141,21 @@ test('no entry is ever dated in a closed period', () => {
     () => entriesFor(tx({ ref: 'C', date: '2026-06-30' }), [expense(5)], { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } }),
     ClosedPeriodError,
   );
+});
+
+test('an order dated before the books begin books on the payment date: no entry and no year folder before them (#39)', async () => {
+  const b = books([tx({ ref: 'P', bank: 'Raiffeisen', direction: 'CRDT', amount: 95, date: '2027-01-02' })], [{ id: 'order', ref: 'P', date: '2026-12-27' }]);
+  b.config = {};
+  const { ask } = stubAsk(() => [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }]);
+  await classifyTransactions(b, b.transactions, { ask, fx, context });
+  assert.deepEqual(b.journalEntries.map((e) => e.date), ['2027-01-02', '2027-01-02'], 'the books begin with the first payment\'s year');
+  const ws = tempWorkspace('books-begin-');
+  saveBooks(ws, b);
+  assert.deepEqual(yearsOf(ws.paths), ['2027']);
+
+  const opened = periodLock({ config: { openingBalances: { 2027: { 1020: 100 } } } });
+  const [sale] = entriesFor(tx({ ref: 'Q', direction: 'CRDT', amount: 95, date: '2027-01-02' }), [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }], { fx, receiptDate: '2026-12-27', receipts: [], bankAccount: '1021', lock: opened, by: { kind: 'model', model: 'sonnet' } });
+  assert.equal(sale.date, '2027-01-02', 'the opening balances name the first year');
 });
 
 test('the bank side the model leaves empty is the transaction\'s account, manual ones on 2451', async () => {

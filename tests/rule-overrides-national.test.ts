@@ -109,15 +109,23 @@ test('a rule that books what the national rules give shows nothing new and keeps
   assert.equal((await keepDraft(ws, GUIDE, d.basis)).ok, true);
 });
 
-test('a rule claiming input tax where no receipt shows Swiss VAT warns', async () => {
+test('a rule claiming input tax where no receipt shows a Swiss rate warns', async () => {
   const ws = await company();
-  // A delivery note shows the MWST; no invoice is linked, so nothing proves the input tax (pv-no-receipt).
-  payments(ws, 2, { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 7.5 }], kind: 'supporting' }, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' } }));
+  // The invoice says MWST but no rate was read from it, so nothing proves the input tax (pv-no-receipt).
+  payments(ws, 2, { hasSwissVat: true, vatSummary: [] }, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' } }));
   draft(ws, rule('6570', 'I81'));
   const d = draftRules(ws, GUIDE)!;
   const [o] = d.preview[0].overrides ?? [];
   assert.deepEqual([o?.kind, o?.count, o?.payments[0].would.lines[0].vat, o?.payments[0].national[0].vat], ['inputTaxWithoutReceipt', 2, 'I81', 'I0']);
   assert.equal(d.confirm, true);
+});
+
+test('a rule\'s rate code with only a delivery note linked books the zero code itself, as the national rules do: no warning (#81)', async () => {
+  const ws = await company();
+  payments(ws, 2, { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 7.5 }], kind: 'supporting' }, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' } }));
+  draft(ws, rule('6570', 'I81'));
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual([d.preview[0].examples[0].would, d.preview[0].overrides ?? [], d.confirm], [{ kind: 'book', lines: [{ account: '6570', vat: 'I0', amount: 101 }] }, [], false]);
 });
 
 test('a rule booking without input tax where the receipt shows Swiss VAT on the whole amount warns', async () => {
