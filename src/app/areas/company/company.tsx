@@ -325,8 +325,7 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 </select>
               </label>
               <label>{t('company.vatPeriod')}
-                <select name="period"
- value={f.period} onChange={(e) => setF({ ...f, period: e.target.value as VatPeriod })}>
+                <select name="period" value={f.period} onChange={(e) => setF({ ...f, period: e.target.value as VatPeriod })}>
                   <option value="quarterly">{t('company.vatQuarterly')}</option>
                   <option value="half-yearly">{t('company.vatHalfYearly')}</option>
                 </select>

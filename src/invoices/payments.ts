@@ -29,8 +29,6 @@ import { roundCHF } from '../accounting/rappen.js';
 import { invoiceReceipt } from './events.js';
 import { eventRef, hasEvent } from '../books/refs.js';
 
-
-
 export interface PaymentContext {
   bankAccounts: readonly LedgerBankAccount[];
   revenueAccount: string;

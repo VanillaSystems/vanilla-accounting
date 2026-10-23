@@ -21,7 +21,6 @@ import { extractStatementBalances } from '../../providers/statement-pdf/statemen
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { matchPayments } from '../../invoices/payments.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
-
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
 import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';

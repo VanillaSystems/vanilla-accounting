@@ -112,7 +112,6 @@ type Payment = { ref: string; date: string; currency: string; description?: stri
  * claimed early), and booked against its open item; the payment settles each open item on its own
  * date. A document of a filed period of the books' open year leaves the line on the payment's date,
  * declared in that period's correction return (golden rule 1); one of an earlier year leaves it
-
  * on the payment's date as it is (the switch to the agreed basis, MWSTV Art. 106 Abs. 1: open items
  * at the switch count in the first period after it). Lines on the payout clearing account (dated
  * by their order already), with `corrects`, or without a document date stay as they are.
@@ -132,7 +131,6 @@ export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: T
     const date = side === 'sale' ? dates[0] : dates[dates.length - 1];
     // A document dated in a later year than its payment is a prepayment or a misread date: the payment's year keeps it.
     if (date === tx.date || (date > tx.date && date.slice(0, 4) !== tx.date.slice(0, 4))) return e;
-
     if (ctx.lock.isClosed(date) || ctx.lock.beforeBooks(date)) {
       return !ctx.lock.beforeBooks(date) && date.slice(0, 4) === openYear ? { ...e, corrects: filingKeyOf(date, ctx.length) } : e;
     }

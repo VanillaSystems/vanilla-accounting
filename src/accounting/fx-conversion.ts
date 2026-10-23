@@ -7,7 +7,6 @@ import type { JournalEntry } from '../types/index.js';
 import { chfAmount } from './ledger.js';
 import { agreedBasis, baseCurrency } from '../engines/index.js';
 
-
 /** reference/estv-daily-rates-<year>.json as `npm run fetch-rates` writes it. */
 export interface EstvRateTable {
   fetchedAt?: string;

@@ -26,7 +26,6 @@ import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { firmCodes } from '../accounting/vat-codes.js';
 import { agreedBasis, withoutInputTax } from '../engines/index.js';
-
 import { SHOPIFY_ACCOUNT } from '../accounting/payment-entries.js';
 import { wordsIn } from '../export/texts.js';
 import { FEW_PAYMENTS } from './held.js';

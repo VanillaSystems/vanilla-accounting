@@ -24,7 +24,6 @@ import { chfAmount } from '../src/accounting/ledger.js';
 import type { BankTransaction, JournalEntry, QuarterKey, Receipt } from '../src/types/index.js';
 import { classifyTransactions, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
 
-
 const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 const AGREED: VatSetup = { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' };
 const ITEMS = { receivable: '1100', payable: '2000', fxDifference: '6960' };
@@ -128,7 +127,6 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
   assert.deepEqual(rows(atTaxPoint(pay, [line({ vatCode: undefined, accountDebit: '2850' })], point('2026-06-30', ['2026-09-28']))), [['2026-10-05', '2850', '1021', 108.1, '', '']], 'a line without a code keeps the payment\'s date');
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2026-10-05']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'bill and payment on one day: nothing to settle');
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2027-01-04']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'a document of a later year never moves a line out of its payment\'s year');
-
 
   const sale = line({ accountDebit: '1021', accountCredit: '3200', amount: 1081, vatCode: 'V81' });
   assert.deepEqual(rows(atTaxPoint({ ...pay, date: '2026-10-05' }, [sale], point('2026-06-30', ['2026-09-25', '2026-10-01']))), [

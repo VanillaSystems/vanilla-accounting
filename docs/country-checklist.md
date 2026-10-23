@@ -118,7 +118,6 @@ change, or the issue that tracks it, in `answer`.
 - **Slot:** `company.vat.reporting` (`received` or `agreed`, src/workspace/vat-setup.ts), read
   through `agreedBasis()` and `filingBasis()` (src/engines/index.ts); the open-item accounts are the
   year-end module's `receivables` and `payables` roles.
-
 - **Minimum:** the basis the law makes the default, and the other one if the law lets a firm
   choose it.
 

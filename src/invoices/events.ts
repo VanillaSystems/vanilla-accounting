@@ -29,7 +29,6 @@ export { eventRef, hasEvent, type EventKind } from '../books/refs.js';
 export interface EventOutcome {
   booked: Array<{ number: string; kind: EventKind; date: string }>;
   /** A foreign document whose day has no official rate yet (npm run fetch-rates): booked by a later run. */
-
   skipped: Array<{ number: string; reason: 'rate' }>;
   files: PaymentOutcome['files'];
 }
@@ -145,7 +144,6 @@ export function invoiceReceipt(books: Books, inv: Issued, ctx: Pick<PaymentConte
 }
 
 function link(books: Books, ref: string, receiptId: string): void {
-
   const m: Mapping = { transactionRef: ref, receiptId, by: 'rule', rule: 'invoice-issue' };
   if (!books.mappings.some((x) => x.transactionRef === ref && x.receiptId === receiptId)) books.mappings.push(m);
 }

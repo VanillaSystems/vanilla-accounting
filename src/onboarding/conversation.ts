@@ -12,7 +12,6 @@ import { SETUP_TOPICS, kindsOfAnswer, type Answer, type AnswerValue, type Questi
 import type { ClearPartner, MixedPartner, SetupFacts } from './facts.js';
 import { TOPIC_HAND, type HandPlace } from './hand.js';
 import { NOT_REGISTERED, methodOf, onAgreedBasis, type VatBasis, type VatSetup } from '../workspace/vat-setup.js';
-
 import { SALES_KINDS, type SalesKind } from '../workspace/setup.js';
 
 /** A parameter of a line: a value, another key said in the person's language, or a date to format. */
@@ -322,7 +321,6 @@ export function vatLine(v: VatSetup): Line {
   const period: Param = { key: `onboarding.period.${v.period}` };
   if (v.method === 'effective') return L(v.reporting === 'agreed' ? 'sum.vatEffectiveAgreed' : 'sum.vatEffective', { period });
   return L(v.reporting === 'agreed' ? 'sum.vatNetRateAgreed' : 'sum.vatNetRate', { rates: v.rates.map((r) => `${r.rate} %${r.label ? ` ${r.label}` : ''}`).join(', '), period });
-
 }
 
 /** The closing card: what the app now knows and where it comes from, and what is still open with its place by hand. */

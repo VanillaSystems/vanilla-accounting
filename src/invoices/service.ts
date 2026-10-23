@@ -422,7 +422,6 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     revenueAccount: s.revenueAccount,
     ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
     openItems: openItemAccounts((accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []))),
-
     fx,
     pdfOf: (inv) => readPdf(ws, inv.pdf),
     receiptId: (pdf) => sha256(pdf).slice(0, 16),

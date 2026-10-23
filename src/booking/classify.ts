@@ -13,7 +13,6 @@ import { ownerAccount } from '../accounting/bank-accounts.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
 import { atTaxPoint, openItemAccounts } from '../accounting/tax-point.js';
-
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, BookedBy, JournalEntry, Receipt } from '../types/index.js';

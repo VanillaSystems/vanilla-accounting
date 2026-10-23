@@ -81,7 +81,6 @@ test('the manifest writes the setup back as one explicit block, and the method r
   assert.deepEqual(parseVatSetup({ method: 'effective', reporting: 'agreed' }, fail), agreed);
   assert.deepEqual(vatSetupYaml(agreed), { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
 
-
 });
 
 test('the setup questions skip the method, basis and period of a firm that is not registered', () => {

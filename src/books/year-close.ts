@@ -29,8 +29,6 @@ import { filingKeyOf } from '../accounting/periods.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { hasEvent } from './refs.js';
-
-
 import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';

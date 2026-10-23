@@ -25,7 +25,6 @@ export function FxProvider({ index, children }: { index: Index; children: ReactN
   const value = useMemo<Fx>(() => {
     const txDates = new Map(index.transactions.map((tx) => [tx.ref, tx.date]));
     const paymentDate = (entry: JournalEntry) => rateDateOf(entry, txDates);
-
     return { rates, paymentDate, convert: (entry) => (rates ? conversionOf(entry, paymentDate(entry), rates) : undefined) };
   }, [rates, index.transactions]);
 

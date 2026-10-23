@@ -292,7 +292,6 @@ answers:
     law: [MWSTV Art. 45, docs/adr/0001-foreign-currency-conversion.md]
     where: [src/accounting/fx-rates.ts, src/accounting/fx-conversion.ts, src/accounting/tax-point.ts, reference/estv-daily-rates-2026.json, src/cli/fetch-estv-rates.ts]
 
-
   fx.revaluation:
     answer: >
       The EUR and USD bank accounts are revalued at the 31.12. rate; the difference goes to the

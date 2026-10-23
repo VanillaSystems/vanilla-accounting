@@ -208,7 +208,6 @@ router.post('/api/invoices/:id/payments', (req, res) => {
     bookEvents(books);
     const invoices = loadInvoices(WS);
     const result = confirmPayment(books, invoices, req.params.id, transactionRef, ctx);
-
     fileReceipts(WS, books, result.files);
     saveInvoices(WS, invoices);
     // What the link replaced waits beside the books for «Lösen» (r10c-3).

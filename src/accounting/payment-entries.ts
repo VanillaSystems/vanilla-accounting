@@ -5,7 +5,6 @@
  * the bank account by what the bank paid. On the agreed basis a coded line on an open item carries
  * its document's date as well (src/accounting/tax-point.ts). The AI sidebar's changes keep both
  * (src/server/edits.ts applyAnswer).
-
  */
 import type { Index, JournalEntry } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';

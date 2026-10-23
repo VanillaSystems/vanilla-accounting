@@ -43,7 +43,6 @@ import { EFFECTIVE_QUARTERLY, vatSetupYaml } from '../../src/workspace/vat-setup
 import { filingKeyOf } from '../../src/accounting/periods.js';
 import { openItemAccounts } from '../../src/accounting/tax-point.js';
 
-
 /** Every demo workspace `npm run demo:generate` writes. */
 const DEMOS: readonly Demo[] = [kaffee, consulting, coiffeur, schreinerei];
 

@@ -10,7 +10,6 @@
  * On the agreed basis the tax point is the document's date, which a line on an open item carries
  * as its own: there the entry's date wins (rateDateOf, MWSTV Art. 45 Abs. 1).
  *
-
  * Reads rates from reference/estv-daily-rates-2026.json (run `npm run fetch-rates` first).
  * Applies the ESTV weekend/holiday rule — "apply the most recently recorded daily rate" —
  * by falling back to the latest validity date on or before the payment date.
@@ -72,7 +71,6 @@ function main() {
   for (const e of entries) {
     const cur = e.exchangeCurrency!;
     const payDate = rateDateOf(e, txDate);
-
     const newRate = fx.daily(cur, payDate);
     if (newRate === undefined) { unresolved.push(e); continue; }
 

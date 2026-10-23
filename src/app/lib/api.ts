@@ -23,7 +23,6 @@ import type { Opening, TemplateState, YearClose } from '../../accounting/year-cl
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
 import { agreedBasis, vatSetup } from '../../engines/index.js';
-
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';

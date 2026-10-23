@@ -18,7 +18,6 @@ import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { agreedBasis, withoutInputTax } from '../engines/index.js';
 import { isOpenItemAccount, openItemAccounts } from '../accounting/tax-point.js';
-
 import type { BankTransaction, BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, PrivatePart, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
@@ -713,7 +712,6 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
     if (dates.length && !dates.includes(e.date)) {
       const why = items ? 'nur eine Zeile auf Debitoren oder Kreditoren trägt das Datum ihres Belegs' : 'die Steuer wird nach vereinnahmtem Entgelt abgerechnet, sie gehört ins Quartal der Zahlung';
       throw new RequestError(400, `Die Buchung einer Zahlung trägt das Datum der Zahlung (${day(dates[0])}): ${why}.`, { code: 'paymentDate', params: { date: dates[0] } });
-
     }
   }
   for (const [ref, before] of payments) {
