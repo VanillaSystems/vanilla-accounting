@@ -7,8 +7,8 @@
  * payment with the same key is answered and booked by it without anyone asked
  * (src/server/questions.ts). A wrong auto-answer is worse than a question, so the key must name
  * one counterparty for certain; a bank text such as «Karte 5412 Einkauf» gives none
- * (src/knowledge/payer.ts). The answer to a sale without an invoice is kept here too, as a rule of
- * the step `classify` (keepRule), which the classifier carries out.
+ * (src/knowledge/payer.ts). A payer rule an answer to a sale kept before #38 is taken back here
+ * with its answer (dropRule).
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -107,22 +107,7 @@ export function dropPrecedent(ws: Pick<Workspace, 'paths'>, id: string): void {
   if (seq.items.length !== before) save(ws, doc);
 }
 
-/**
- * A rule an answer keeps (src/server/questions.ts): written to the booking step `classify` of the
- * company's guide, where the classifier carries it out (src/booking/rule-book.ts). An older rule of
- * the same `replaces` key goes, so the newer answer wins.
- */
-export function keepRule(ws: Pick<Workspace, 'paths'>, rule: Record<string, unknown> & { id: string }, replaces: (old: Record<string, unknown>) => boolean): void {
-  const doc = load(ws);
-  const seq = stepSeq(doc, RULE_SECTION, 'rules');
-  seq.items = seq.items.filter((node) => { const r = json(node); return !r || !replaces(r); });
-  const node = doc.createNode(rule);
-  (node as { flow?: boolean }).flow = true;
-  seq.items.push(node);
-  save(ws, doc);
-}
-
-/** Takes the rule `id` back (the answer it came from was undone). */
+/** Takes the rule `id` back (the answer it came from, before #38, was undone). */
 export function dropRule(ws: Pick<Workspace, 'paths'>, id: string): void {
   if (!existsSync(guideFile(ws))) return;
   const doc = load(ws);

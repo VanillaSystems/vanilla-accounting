@@ -255,9 +255,12 @@ steps:
           the app's proposal, in code (src/accounting/sales-without-vat.ts saleCodeOf): the books' currency from an IBAN of the
           VAT territory (Switzerland and Liechtenstein, modules/ch/invoicing.yaml territory) or with no IBAN named → V81;
           a foreign currency or a foreign IBAN → V0. Never V0 for want of a paper. The owner confirms it once (the
-          app's question under Aufgaben), and her answer or her correction becomes a rule for the payer
+          app's question under Aufgaben); her answer or her correction books that payment only. A rule for the
+          payer only by her «Immer so?» under the answer, and only when the payer's other payments are booked
+          the same way: a mixed payer (a payment provider's payouts with domestic and export orders) gets none,
+          it is split per order (sv-payout-orders)
         why: "the output tax is owed on a domestic supply whether or not an invoice exists (MWSTG Art. 18); «no receipt, zero code» is the input-tax rule"
-        source: decision 2026-10-16, owner
+        source: decision 2026-10-23, owner
       - id: sv-card-terminal
         when: a payout of a card terminal or payment provider (SumUp, Payrexx, Worldline, TWINT)
         then: >

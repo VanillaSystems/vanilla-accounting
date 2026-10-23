@@ -41,6 +41,7 @@ import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { UnreadOffer } from '../../saving/unread-rule.js';
+import type { SaleRuleOffer } from '../../saving/sale-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { LearnOffer, LearnProposal } from '../../saving/learn-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
@@ -348,6 +349,8 @@ export const api = {
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
   unreadOffer: (ref: string) => request<{ offer: UnreadOffer | null }>('GET', `/api/rules/unread?ref=${encodeURIComponent(ref)}`),
   draftUnread: (ref: string, rate: number) => request<{ path: string }>('POST', '/api/rules/unread', { ref, rate }),
+  /** «Immer so?» under an answer to a sale question (#38): the payer rule drafted for its card, or why none. */
+  draftSaleRule: (question: string) => request<SaleRuleOffer>('POST', '/api/rules/sale', { question }),
   /** «Regel anpassen?» after a person corrected a rule's booking (r9k-5): the rule's change the correction teaches, and its draft for the card. */
   correctionOffer: (ref: string) => request<{ offer: CorrectionOffer | null }>('GET', `/api/rules/correction?ref=${encodeURIComponent(ref)}`),
   draftCorrection: (ref: string) => request<{ path: string }>('POST', '/api/rules/correction', { ref }),

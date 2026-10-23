@@ -5,8 +5,9 @@
  * hand do, and «privat» or «geschäftlich» is kept as a precedent, so the next question of the
  * kind about the same counterparty is answered without anyone asked. The answer to the app's own
  * question about a customer payment without an invoice (src/intake/sale-questions.ts) books the sale
- * at the normal rate, as an export, or moves it off the turnover onto the owner's account, and is
- * kept as a rule for the payer, so the classifier books the payer's next payment by it. Any other answer, or one the app cannot act
+ * at the normal rate, as an export, or moves it off the turnover onto the owner's account: that one
+ * payment only (#38). A rule for the payer is offered under the answer («Immer so?»,
+ * src/saving/sale-rule.ts), never written by the answer alone. Any other answer, or one the app cannot act
  * on (a filed quarter, a payment it cannot read, one with a receipt or an invoice), goes back to
  * the asker, who decides.
  */
@@ -18,12 +19,9 @@ import { ClosedPeriodError, periodLock, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
 import { APP_ASKER, askSalesWithoutVat, saleQuestionLine } from '../intake/sale-questions.js';
 import { chart } from '../engines/index.js';
-import { dropPrecedent, dropRule, keepPrecedent, keepRule, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
+import { dropPrecedent, dropRule, keepPrecedent, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
 import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget, type SaleGone } from '../questions/model.js';
 import { saleChoiceOf, saleCodeReason, saleProposal, saleQuestionGone, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
-import { payerKey } from '../knowledge/payer.js';
-import { parseRule } from '../booking/rules.js';
-import { ruleFactsOf } from '../saving/rules.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
 import { WS, RequestError, assertOpen, readBooks, updateBooks } from './books.js';
@@ -154,8 +152,7 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
  * correction, asked back, r4c-35) takes hers. A payment with a receipt or an invoice is the
  * document's to decide, never changed; one with no revenue entry to set is refused, not answered
  * with nothing booked (r4c-28). «Kein Umsatz» on a payment without any booking (deleted since the
- * question was asked) books it bank against the owner's account, so the answer acts and its payer
- * rule is kept (r9n-21).
+ * question was asked) books it bank against the owner's account, so the answer acts (r9n-21).
  */
 function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string } {
   if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
@@ -184,45 +181,6 @@ function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { book
   return { booked: entries.map((e) => e.id), undo, vatCode: code, ...(account ? { account } : {}) };
 }
 
-/**
- * The answer kept as a rule for the payer: the payer's next payment in is booked on `account`
- * with the answer's VAT code, in code, without a question. A payer the bank names only by a
- * generic text gets no rule (src/knowledge/payer.ts): its next payment is asked again.
- */
-function keepSaleRule(q: Question, choice: SaleChoice, tx: BankTransaction, account: string | undefined, vatCode: string, at: string): string | undefined {
-  const payer = payerKey(tx);
-  if (!payer || !account) return undefined;
-  const raw = { id: `sale-${q.id}`, when: { payer, direction: 'in' }, then: { account, vat: vatCode || 'none' }, source: `correction ${at.slice(0, 10)}`, why: `${choice}: ${tx.counterparty || tx.description}` };
-  if (!parseRule(raw, ruleFactsOf(WS)).ok) return undefined;
-  keepRule(WS, raw, (old) => typeof old.id === 'string' && old.id.startsWith('sale-') && (old.when as { payer?: unknown } | undefined)?.payer === payer);
-  return raw.id;
-}
-
-/**
- * The app's open sale questions about the same payer's other payments: the answer holds for them
- * too, as its card says («gilt für jede Zahlung dieses Zahlers», r10f-34, r10n-2). Each is booked
- * the same way and answered `from` the rule the answer kept, so taking the answer back takes them
- * back with it. One the books refuse (a receipt linked meanwhile) stays open.
- */
-function answerSiblings(q: Question, choice: SaleChoice, tx: BankTransaction, rule: string, by: string, at: string): string[] {
-  const payer = payerKey(tx);
-  if (!payer) return [];
-  const books = readBooks();
-  const also: string[] = [];
-  for (const s of readQuestions(WS).filter((x) => x.id !== q.id && x.topic === 'saleVat' && x.status === 'open' && x.on.kind === 'payment')) {
-    const t = books.transactions.find((x) => x.ref === s.on.id);
-    if (!t || payerKey(t) !== payer) continue;
-    let sale: ReturnType<typeof bookSale>;
-    try {
-      sale = updateBooks((b) => bookSale(b, b.transactions.find((x) => x.ref === t.ref)!, choice));
-    } catch (e) { refusalOf(e); continue; }
-    const acted: Acted = { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}) };
-    append({ v: 1, event: 'answered', id: s.id, at, by, answer: { choice }, acted, from: rule });
-    also.push(t.ref);
-  }
-  return also;
-}
-
 /** What the answer does in the books and the knowledge, or why it does nothing. `from`: the precedent that answers, kept already. */
 function act(q: Question, answer: Answer, by: string, at: string, from: string | undefined): Acted | undefined {
   if (!('choice' in answer)) return undefined;
@@ -235,9 +193,7 @@ function act(q: Question, answer: Answer, by: string, at: string, from: string |
     try {
       sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice));
     } catch (e) { return refusalOf(e); }
-    const rule = keepSaleRule(q, choice, tx, sale.account, sale.vatCode, at);
-    const also = rule ? answerSiblings(q, choice, tx, rule, by, at) : [];
-    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}), ...(rule ? { rule } : {}), ...(also.length ? { also } : {}) };
+    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}) };
   }
   let booked: { booked: string[]; undo: BookChange[] } | undefined;
   if (choice === 'private') {
@@ -330,8 +286,8 @@ export function answerQuestion(id: string, { by, answer }: { by: string; answer:
 }
 
 /**
- * The bookings the withdrawn payer rule `rule` made in the open period are no longer the rule's
- * (r9n-22). One it booked as a sale stays that sale, with its code, as the person taught it
+ * The bookings the withdrawn payer rule `rule` (kept by an answer before #38) made in the open
+ * period are no longer the rule's (r9n-22). One it booked as a sale stays that sale, with its code, as the person taught it
  * (corner-4); nothing keeps a reason naming the rule that is gone. One it moved off revenue
  * («kein Umsatz»: the owner's account) goes back to being the app's guess: a sale at the proposal
  * (saleCodeOf's reasoning), on the revenue account the answer had moved the money from
@@ -359,7 +315,7 @@ function revertRuleBookings(b: Books, rule: string, revenue: string | undefined)
 
 /**
  * Takes back what the answer did, as one whole: its bookings as before the answer, its precedent,
- * its payer rule and that rule's later bookings (revertRuleBookings), the payment's mark; the
+ * the payer rule an answer kept before #38 and that rule's later bookings (revertRuleBookings), the payment's mark; the
  * question is open again. Änderungen › «Rückgängig» on the answer's booking comes here too (r9n-20).
  */
 export function undoAnswer(id: string, by: string): Question {
@@ -400,31 +356,30 @@ export function closeQuestion(id: string, by: string, how: 'done' | 'withdrawn')
 /**
  * What a person's bookings of a customer payment say about the sale: a sale at one code (her
  * revenue entries, all with that code), or no sale at all (every booking of hers credits the
- * owner's account), else nothing to learn. `account`: the revenue account, or the owner's.
+ * owner's account), else nothing to learn.
  */
-function saidByBookings(own: readonly JournalEntry[], owner: string): { choice: SaleChoice; code: string; account: string } | undefined {
+function saidByBookings(own: readonly JournalEntry[], owner: string): { choice: SaleChoice; code: string } | undefined {
   const sales = own.filter((e) => chart().typeOf(e.accountCredit) === 'revenue');
   const hers = sales.filter((e) => e.origin === 'manual');
   const codes = [...new Set(hers.map((e) => e.vatCode ?? ''))];
   if (hers.length && hers.length === sales.length && codes.length === 1) {
     const choice = saleChoiceOf(codes[0]);
-    return choice ? { choice, code: codes[0], account: hers[0].accountCredit } : undefined;
+    return choice ? { choice, code: codes[0] } : undefined;
   }
-  if (!sales.length && own.length && own.every((e) => e.origin === 'manual' && e.accountCredit === owner)) return { choice: 'notSale', code: '', account: owner };
+  if (!sales.length && own.length && own.every((e) => e.origin === 'manual' && e.accountCredit === owner)) return { choice: 'notSale', code: '' };
   return undefined;
 }
 
 /**
  * A person's correction of a customer payment without an invoice (by hand, or by a wish in the AI
  * sidebar) answers the app's question about it, as she would have: the code she set on its
- * revenue decides the choice (every booking on the owner's account: no sale), and the answer is
- * kept as a rule for the payer, so the payer's next payment, and «Neu klassifizieren» of this one,
- * are booked as she set. The question is asked first when the app had not asked it yet. A question
+ * revenue decides the choice (every booking on the owner's account: no sale). Like an answer, it
+ * keeps no rule (#38): «Immer so?» under the answer offers one. The question is asked first when the app had not asked it yet. A question
  * answered before whose bookings now say something else is answered anew by the correction, so
  * its card says what holds and «Zurücknehmen» no longer rebooks over the correction (r10f-22); the
  * payment's mark follows the answer (no receipt needed for money that is no sale). A question
  * closed before, a code that says neither a rate nor an exemption, and a payment with a receipt or
- * an invoice are left alone; the answer's «Zurücknehmen» drops the rule and keeps her booking. Her
+ * an invoice are left alone; the answer's «Zurücknehmen» keeps her booking. Her
  * export code on a payer at home answers nothing: the question stays open and asks whether it was
  * an export or no sale (r4c-35). Returns the questions it answered.
  */
@@ -442,7 +397,7 @@ export function learnFromCorrection(refs: Iterable<string>, by: string = WS.comp
     if (own.some((e) => e.origin === 'invoice')) continue;
     const said = saidByBookings(own, owner);
     if (!said) continue;
-    const { choice, code, account } = said;
+    const { choice, code } = said;
     const asked = readQuestions(WS).filter((q) => q.topic === 'saleVat' && q.on.id === ref);
     if (asked.some((q) => q.status === 'closed')) continue;
     const before = asked.find((q) => q.status === 'answered');
@@ -458,10 +413,9 @@ export function learnFromCorrection(refs: Iterable<string>, by: string = WS.comp
     }
     // A zero code on a payer at home is an export or no sale at all: asked back once, not taken as «Ausland» (r4c-35).
     if (choice === 'saleAbroad' && saleProposal(tx).choice === 'saleDomestic') continue;
-    const rule = asSwitchedOn(() => keepSaleRule(q, choice, tx, account, code, at));
     const marked = choice === 'notSale';
     if (!!tx.noReceiptNeeded !== marked) updateBooks((b) => { const t = b.transactions.find((x) => x.ref === ref); if (t) { if (marked) t.noReceiptNeeded = true; else delete t.noReceiptNeeded; } });
-    const acted: Acted = { booked: [], undo: [], vatCode: code, correction: true, ...(marked ? { marked: true as const, account: owner } : {}), ...(rule ? { rule } : {}) };
+    const acted: Acted = { booked: [], undo: [], vatCode: code, correction: true, ...(marked ? { marked: true as const, account: owner } : {}) };
     append({ v: 1, event: 'answered', id: q.id, at, by, answer: { choice }, acted });
     answered.push(find(q.id));
   }

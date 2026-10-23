@@ -9,6 +9,7 @@
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *   GET  /api/rules/unread?ref=       a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
  *   POST /api/rules/unread            { ref, rate }: «Immer so?» — the company's rule for that business's unread receipts drafted into its file (waits in Änderungen)
+ *   POST /api/rules/sale              { question }: «Immer so?» under an answer to a sale question: the payer rule drafted for its card, or the payer is mixed
  *   GET  /api/rules/correction?ref=   the rule change a person's correction of a rule booking teaches («Regel anpassen?»), or null
  *   POST /api/rules/correction        { ref }: that change drafted into the rule's file; the answer names the file for its card
  *   GET  /api/rules/learn?ref=        what a person's correction of a booking no rule made may teach («Ins Wissen übernehmen?»), or null
@@ -32,6 +33,7 @@ import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type Dra
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { draftUnreadRule, unreadOffer } from '../../saving/unread-rule.js';
+import { draftSaleRule } from '../../saving/sale-rule.js';
 import { correctionOffer, draftCorrectionRule } from '../../saving/correction-rule.js';
 import { learnOffer, proposeFromCorrection } from '../../saving/learn-rule.js';
 import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.js';
@@ -154,6 +156,14 @@ router.post('/api/rules/share', (req, res) => {
   const path = draftShareRule(WS, ref);
   if (!path) throw new RequestError(404, 'Diese Zahlung ist nicht in einen privaten und einen geschäftlichen Teil aufgeteilt.');
   res.json({ path });
+});
+
+router.post('/api/rules/sale', (req, res) => {
+  const question = (req.body as { question?: unknown })?.question;
+  if (typeof question !== 'string') throw new RequestError(400, 'question erwartet.');
+  const offer = draftSaleRule(WS, question);
+  if (!offer) throw new RequestError(404, 'Diese Frage gibt es nicht.');
+  res.json(offer);
 });
 
 router.get('/api/rules/correction', (req, res) => {

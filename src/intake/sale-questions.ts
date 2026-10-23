@@ -2,7 +2,8 @@
  * The question the app asks the owner by itself about a customer payment without an invoice
  * (src/accounting/sales-without-vat.ts): was it a sale with VAT, an export, or no sale at all?
  * Asked once per payment, with the app's proposal, which the classifier booked meanwhile; the
- * answer books it and becomes a rule for the payer (src/server/questions.ts). Run after the
+ * answer books that payment, and «Immer so?» under it offers a rule for the payer (src/server/questions.ts,
+ * src/saving/sale-rule.ts). Run after the
  * booking step, so every sale without an invoice it finds waits as a question under Aufgaben
  * until it is answered.
  */

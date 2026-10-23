@@ -57,7 +57,7 @@ function questionLine(books: Books, q: Question, t: T): string {
   if (q.topic === 'saleVat' && q.status === 'open') {
     const codes = [...new Set(books.journalEntries.filter((e) => e.transactionRef === q.on.id && chart().typeOf(e.accountCredit) === 'revenue').map((e) => e.vatCode || 'none'))];
     if (codes.length) parts.push(`booked meanwhile with ${codes.join(', ')}`);
-    parts.push('the app asks this itself: a change of the VAT code of this sale\'s booking in your block answers it (the app closes the question and keeps the answer as a rule for the payer), so never ask the person to answer it as well');
+    parts.push('the app asks this itself: a change of the VAT code of this sale\'s booking in your block answers it (the app closes the question; it keeps no rule for the payer), so never ask the person to answer it as well');
   }
   return parts.join('; ');
 }
