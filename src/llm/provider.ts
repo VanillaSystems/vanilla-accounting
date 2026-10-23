@@ -5,7 +5,7 @@
  */
 import type { Capability, Tier } from './steps.js';
 
-export type ProviderId = 'claude-cli' | 'anthropic' | 'openai';
+export type ProviderId = 'claude-cli' | 'anthropic' | 'openai' | 'jev';
 
 export interface ModelEntry {
   /** The id the provider takes (`sonnet` for the CLI). */
@@ -19,6 +19,26 @@ export interface Call {
   model: string;
   /** Absolute paths of the files the model reads. */
   attachments: readonly string[];
+  timeoutMs: number;
+}
+
+/** A typed question: yes or no, or one of a few named choices (each with what it means, or null). */
+export type Question =
+  | { type: 'noul'; instructions: string }
+  | { type: 'choice'; instructions: string; options: Record<string, string | null> };
+
+/** The answer and how sure the model is of it, from 0 to 1. `yes` is the probability of yes. */
+export type Verdict =
+  | { type: 'noul'; yes: number; confidence: number }
+  | { type: 'choice'; choice: string; confidence: number };
+
+export interface JudgeCall {
+  /** What the question is about: text or a plain JSON object. */
+  state: string | Record<string, unknown>;
+  question: Question;
+  model: string;
+  /** Absolute paths of PNG or JPEG images the question is about. */
+  images: readonly string[];
   timeoutMs: number;
 }
 
@@ -46,6 +66,8 @@ export interface Provider {
   models: readonly ModelEntry[];
   defaults: Record<Tier, string>;
   ask(call: Call): Promise<{ text: string; usage: Usage }>;
+  /** A model made for typed questions answers them itself; any other answers through a prompt (judge.ts). */
+  judge?(call: JudgeCall): Promise<{ verdict: Verdict; usage: Usage }>;
   /** Whether the provider answers here at all. */
   ready(timeoutMs?: number): Promise<boolean>;
 }

@@ -4225,5 +4225,9 @@ export default {
     'error.aiModelUnfit': '{model} ne peut pas faire cette étape.',
     'error.aiKeyRefused': 'Le fournisseur refuse cette clé: rien n’est enregistré.',
     'error.aiKeyWhere': 'L’app ne garde pas de clés ici: elle va dans {where}.',
+    'ai.provider.jev': 'TypeSafe Jev (clé API)',
+    'ai.step.mail-triage': 'Repérer un mail avec justificatif',
+    'ai.needs.typed': 'Question oui/non; en dessous de {percent} % de certitude, la valeur par défaut est interrogée',
+    'ai.typedOnly': 'ne répond qu’aux questions oui/non et à choix',
   },
 } satisfies Locale;
