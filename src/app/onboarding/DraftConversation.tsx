@@ -13,11 +13,14 @@ import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, optionOf, type Question
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
 import { draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
-import type { SetupReply, TalkRefusal, TalkTurn } from '../../onboarding/draft-talk.js';
+import type { SetupReply, TalkRefusal } from '../../onboarding/draft-talk.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText, setupText } from '../lib/api.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
+
+/** As src/onboarding/draft-talk.ts MAX_TEXT: the server refuses a longer message. */
+const MAX_TALK = 4000;
 import './onboarding.css';
 
 type Send = (patch: DraftPatch) => Promise<boolean>;
@@ -47,9 +50,6 @@ const refusalText = (r: TalkRefusal): string =>
   r.reason === 'notStated' ? t(`onboarding.talk.notStated.${r.field}`, { detail: r.detail })
     : r.reason === 'notAnOption' ? t('onboarding.talk.notAnOption', { question: tData(`desktop.q.${r.question}.ask`), value: r.value })
       : setupText(r);
-/** The turns so far as the AI reads them again: the person's words and its own. */
-const historyOf = (turns: readonly Turn[]): TalkTurn[] =>
-  turns.flatMap((x) => [{ who: 'me' as const, text: x.me }, ...(x.reply?.kind === 'read' && x.reply.say ? [{ who: 'ai' as const, text: x.reply.say }] : [])]);
 const FromText = ({ on }: { on: boolean }) => (on ? <span className="obbadge ai" data-from-text>{t('onboarding.talk.fromText')}</span> : null);
 
 export function DraftConversation({ root, onLeave }: { root: string; onLeave(): void }) {
@@ -83,14 +83,13 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
     const words = text.trim();
     if (!words || busy || !view) return;
     const at = stepKey(steps.at(-1)!);
-    const history = historyOf(turns);
     setText('');
     setError('');
     setBusy(true);
     setTurns((x) => [...x, { at, me: words }]);
     const settle = (turn: Partial<Turn>) => setTurns((x) => x.map((y, i) => (i === x.length - 1 ? { ...y, ...turn } : y)));
     try {
-      const { view: next, reply } = await api.desktop.setupTalk(root, words, history);
+      const { view: next, reply } = await api.desktop.setupTalk(root, words);
       setView(next);
       if (reply.kind === 'read' && reply.firm) setFirmHint((h) => ({ n: h.n + 1, firm: { ...h.firm, ...reply.firm } }));
       settle({ reply, ...(reply.kind === 'read' ? { filled: reply.filled.map((m) => filledLine(m, next.draft)) } : {}) });
@@ -138,7 +137,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         <form className="obtalk" onSubmit={(e) => { e.preventDefault(); void talk(); }}>
           <div className={busy ? 'obtalkbox busy' : 'obtalkbox'}>
             <textarea
-              name="talk" rows={2} value={text} placeholder={t('onboarding.talk.placeholder')} aria-label={t('onboarding.talk.label')}
+              name="talk" rows={2} maxLength={MAX_TALK} value={text} placeholder={t('onboarding.talk.placeholder')} aria-label={t('onboarding.talk.label')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void talk(); } }}
             />

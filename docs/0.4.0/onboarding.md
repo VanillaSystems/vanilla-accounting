@@ -111,11 +111,11 @@ stopped, from the folder dialog, the recent list or at the next start.
 **Typed words before the books exist** (#145, src/onboarding/draft-talk.ts). Below the conversation
 is a field for the person's own words. The AI (step `setup-conversation` of src/llm/steps.ts, the
 provider and model the person set for it) reads them with the draft, the step waiting, every value
-of src/workspace/setup.ts and the turns typed before, and answers one JSON object: `say` (an answer
+of src/workspace/setup.ts and the turns typed before (kept in the server's memory per folder,
+never taken from the screen), and answers one JSON object: `say` (an answer
 to a question, then one short question back) and the answers the words state (`firm`, `preset`,
 `answers`, `netRates`, `banks`). Code is the authority: each answer goes through `checkPatch` and
-`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them
-(the turns the screen sends back are context for the model, never evidence);
+`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them;
 an answer refused is not saved and the reply says why; the AI's words are left out beside a refusal,
 because it wrote them before the check. Non-VAT answers without a preset make it
 «custom», so a preset picked later cannot replace them. Answers taken from the words are kept in the
@@ -145,7 +145,7 @@ PUT  /api/onboarding/answers/:question   { value: <one of its answers> | null, k
 The desktop server adds the setup before the books exist: `GET /api/desktop/ai` (whether an AI
 answers), `GET /api/desktop/setup?root=`, `POST /api/desktop/setup { root, language }` (start or
 continue; a folder with books opens them), `PUT /api/desktop/setup { root, patch }` (one answer or
-`null`), `POST /api/desktop/setup/talk { root, text, history }` (typed words: `{ view, reply }`),
+`null`), `POST /api/desktop/setup/talk { root, text }` (typed words: `{ view, reply }`),
 `POST /api/desktop/setup/create { root }`.
 
 `facts` (src/onboarding/facts.ts) is read fresh on every call: today and the open year, the company,

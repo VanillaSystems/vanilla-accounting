@@ -16,7 +16,7 @@ import { APP_FOLDER } from '../workspace/workspace.js';
 import { checkPatch, draftView, readDraft, writeDraft } from './draft-store.js';
 import { draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
 
-/** A turn of the conversation typed so far, as the start screen keeps it; it is not saved. */
+/** A turn of the conversation typed so far, as the server keeps it in memory; it is not saved. */
 export interface TalkTurn { who: 'me' | 'ai'; text: string }
 
 /** Why code did not take an answer the AI read from the words. */
@@ -205,42 +205,40 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
 
 /**
- * What the person typed per folder, as this server received it: the evidence a UID or an IBAN must
- * stand in. The turns the start screen sends back are context for the model only, never evidence.
+ * The turns typed per folder, as this server received and answered them: the model's context, and
+ * the person's words the evidence a UID or an IBAN must stand in. Nothing the screen sends counts
+ * but the message itself; a restart forgets the turns, the draft keeps the answers.
  */
-const said = new Map<string, string[]>();
+const turnsOf = new Map<string, TalkTurn[]>();
 
 const SYSTEM = 'You help set up Swiss bookkeeping. Answer only with the JSON object the message asks for.';
-const MAX_TEXT = 4000;
+export const MAX_TEXT = 4000;
 const MAX_TURNS = 12;
 
-/** A typed message as the start screen sent it: its text, and the turns before it (the last ones, each cut short); undefined without text. */
-export function parseTalkRequest(body: unknown): { text: string; history: TalkTurn[] } | undefined {
+/** A typed message as the start screen sent it; undefined without text. */
+export function parseTalkRequest(body: unknown): { text: string } | { tooLong: true } | undefined {
   const r = isMap(body) ? body : {};
-  const text = typeof r.text === 'string' ? r.text.trim().slice(0, MAX_TEXT) : '';
+  const text = typeof r.text === 'string' ? r.text.trim() : '';
   if (!text) return undefined;
-  const turns = Array.isArray(r.history) ? r.history.filter(isMap) : [];
-  const history = turns
-    .filter((t) => (t.who === 'me' || t.who === 'ai') && typeof t.text === 'string' && t.text.trim())
-    .map((t): TalkTurn => ({ who: t.who as TalkTurn['who'], text: (t.text as string).trim().slice(0, MAX_TEXT) }))
-    .slice(-MAX_TURNS);
-  return { text, history };
+  return text.length > MAX_TEXT ? { tooLong: true } : { text };
 }
 
 /**
- * One typed message: the model reads it with the draft, code checks and saves what it read. The
- * call is ledgered in the folder's data/, which becomes the books' own. A model that fails or
- * answers no JSON leaves the draft as it was.
+ * One typed message: the model reads it with the draft and the turns before it, code checks and
+ * saves what it read. The call is ledgered in the folder's data/, which becomes the books' own. A
+ * model that fails or answers no JSON leaves the draft as it was.
  */
-export async function talkDraft(root: string, text: string, history: readonly TalkTurn[], ask: Ask): Promise<{ draft: SetupDraft; reply: SetupReply }> {
+export async function talkDraft(root: string, text: string, ask: Ask): Promise<{ draft: SetupDraft; reply: SetupReply }> {
   const draft = readDraft(root);
   if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
   const { baseCurrency } = draftView(root, draft);
-  const words = [...(said.get(resolve(root)) ?? []), text].slice(-MAX_TURNS);
-  said.set(resolve(root), words);
+  const key = resolve(root);
+  const before = turnsOf.get(key) ?? [];
+  const keep = (turns: TalkTurn[]) => turnsOf.set(key, turns.slice(-MAX_TURNS));
+  keep([...before, { who: 'me', text }]);
   let raw: string;
   try {
-    raw = await ask(talkPrompt(draft, text, history, baseCurrency), {
+    raw = await ask(talkPrompt(draft, text, before, baseCurrency), {
       step: 'setup-conversation', system: SYSTEM, timeoutMs: 120_000, ledger: join(root, APP_FOLDER, 'data', 'llm-ledger.jsonl'),
     });
   } catch (e) {
@@ -248,6 +246,8 @@ export async function talkDraft(root: string, text: string, history: readonly Ta
   }
   const out = parseTalk(raw);
   if (!out) return { draft, reply: { kind: 'unreadable' } };
+  const words = [...before, { who: 'me', text }].filter((t) => t.who === 'me').map((t) => t.text);
   const next = applyTalk(draft, out, words, baseCurrency);
+  if (next.reply.kind === 'read' && next.reply.say) keep([...(turnsOf.get(key) ?? []), { who: 'ai', text: next.reply.say }]);
   return next.reply.kind === 'read' && next.reply.filled.length ? { ...next, draft: writeDraft(root, next.draft) } : next;
 }

@@ -18,7 +18,7 @@ import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, 
 import { bundledDemo } from '../workspace/demo-copy.js';
 import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
-import { parseTalkRequest, talkDraft, type Ask, type SetupTalked } from '../onboarding/draft-talk.js';
+import { MAX_TEXT, parseTalkRequest, talkDraft, type Ask, type SetupTalked } from '../onboarding/draft-talk.js';
 import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import type { ApiErrorBody } from '../types/api-error.js';
@@ -268,8 +268,9 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       const root = rootOf((req.body ?? {}).root);
       const message = parseTalkRequest(req.body);
       if (!message) { res.status(400).json({ error: 'A message is needed.' } satisfies ApiErrorBody); return; }
+      if ('tooLong' in message) { res.status(400).json({ error: `A message has at most ${MAX_TEXT} characters.` } satisfies ApiErrorBody); return; }
       const ask = opts.ask ?? (await import('../llm/ask.js')).ask;
-      const { draft, reply } = await talkDraft(root, message.text, message.history, ask);
+      const { draft, reply } = await talkDraft(root, message.text, ask);
       res.json({ view: draftView(root, draft), reply } satisfies SetupTalked);
     } catch (e) { refuse(res, e); }
   });

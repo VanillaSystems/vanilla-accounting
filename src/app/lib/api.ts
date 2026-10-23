@@ -31,7 +31,7 @@ import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
-import type { SetupTalked, TalkTurn } from '../../onboarding/draft-talk.js';
+import type { SetupTalked } from '../../onboarding/draft-talk.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
 import type { JournalEntryInput } from '../../books/entry-input.js';
@@ -462,7 +462,7 @@ export const api = {
     setup: (root: string) => request<SetupDraftView>('GET', `/api/desktop/setup?root=${encodeURIComponent(root)}`),
     setupBegin: (root: string, language: string) => request<SetupBegun>('POST', '/api/desktop/setup', { root, language }),
     setupPatch: (root: string, patch: SetupPatch) => request<SetupDraftView>('PUT', '/api/desktop/setup', { root, patch }),
-    setupTalk: (root: string, text: string, history: TalkTurn[]) => request<SetupTalked>('POST', '/api/desktop/setup/talk', { root, text, history }),
+    setupTalk: (root: string, text: string) => request<SetupTalked>('POST', '/api/desktop/setup/talk', { root, text }),
     setupCreate: (root: string) => request<KnownBooks>('POST', '/api/desktop/setup/create', { root }),
     phone: () => request<PhoneInfo>('GET', '/api/desktop/phone'),
     setPhone: (on: boolean) => request<PhoneInfo>('POST', '/api/desktop/phone', { on }),
