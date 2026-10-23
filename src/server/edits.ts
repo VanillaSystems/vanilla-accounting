@@ -148,18 +148,23 @@ const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{
  * The person's booking without a payment that books this receipt already (#87: the owner's outlay
  * booked by hand, by her or the AI sidebar on her wish, before the receipt was paid privately): a
  * line of one of `amounts` in the receipt's currency, or in the books' at the day's `rate` to the
- * percent, dated on the receipt's day or naming a word of it. Its ref, and all its lines.
+ * percent, dated on the receipt's day or naming a word of it. Its ref, all its lines, and whether
+ * it names the receipt (a word of it, or the receipt recorded): only such a booking may be
+ * replaced; one that merely shares the day and the amount may be another purchase.
  */
-function bookedByHand(books: Books, r: Receipt, amounts: readonly number[], currency: string, rate: number | undefined): { ref: string; entries: JournalEntry[] } | undefined {
+function bookedByHand(books: Books, r: Receipt, amounts: readonly number[], currency: string, rate: number | undefined): { ref: string; entries: JournalEntry[]; named: boolean } | undefined {
   const base = baseCurrency();
   const words = new Set(wordsOf(`${r.description ?? ''} ${r.filename}`));
   const paid = new Set(books.transactions.map((t) => t.ref));
   const near = (a: number, b: number, slack: number) => Math.abs(Math.abs(a) - b) <= slack;
   const same = (e: JournalEntry) => amounts.some((a) => ((e.exchangeCurrency ?? base) === currency ? near(e.amount, a, 0.05)
     : !e.exchangeCurrency && rate !== undefined && near(e.amount, a * rate, Math.max(0.05, 0.01 * a * rate))));
+  const names = (e: JournalEntry) => !!e.receipts?.includes(r.id) || wordsOf(e.description ?? '').some((w) => words.has(w));
   const hit = books.journalEntries.find((e) => e.origin === 'manual' && !paid.has(e.transactionRef) && !(e.receipts?.length && !e.receipts.includes(r.id))
-    && same(e) && (e.date === r.date || wordsOf(e.description ?? '').some((w) => words.has(w))));
-  return hit && { ref: hit.transactionRef, entries: books.journalEntries.filter((e) => e.transactionRef === hit.transactionRef) };
+    && same(e) && (e.date === r.date || names(e)));
+  if (!hit) return undefined;
+  const entries = books.journalEntries.filter((e) => e.transactionRef === hit.transactionRef);
+  return { ref: hit.transactionRef, entries, named: entries.some(names) };
 }
 
 /**
@@ -197,11 +202,12 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
   const exchangeRate = currency === baseCurrency() ? undefined : fx.daily(currency, date) ?? fx.flat(currency);
   const held = bookedByHand(books, r, [...new Set([amount, total])], currency, exchangeRate);
   // Only the booking found to book this receipt gives way: a stale or wrong ref deletes nothing.
-  const replaced = ask.replace && held?.ref === ask.replace ? held.entries : [];
-  if (held && held.ref !== ask.replace) {
+  const replaced = ask.replace && held?.named && held.ref === ask.replace ? held.entries : [];
+  if (held && !replaced.length) {
     const line = held.entries[0];
-    const params = { entry: held.ref, date: line.date, amount: line.amount, currency: line.exchangeCurrency ?? baseCurrency() };
-    throw new RequestError(409, `Die Buchung ${held.ref} vom ${day(line.date)} über ${params.currency} ${line.amount.toFixed(2)} bucht diesen Beleg schon von Hand. Eine private Zahlung dazu buchte ihn doppelt: die Buchung ersetzen oder zuerst löschen.`, { code: 'bookedByHand', params });
+    const params = { entry: held.ref, date: line.date, amount: line.amount, currency: line.exchangeCurrency ?? baseCurrency(), replaceable: held.named };
+    const way = held.named ? 'die Buchung ersetzen oder zuerst löschen' : 'ist sie dieselbe Auslage, zuerst in Buchungen löschen';
+    throw new RequestError(409, `Die Buchung ${held.ref} vom ${day(line.date)} über ${params.currency} ${line.amount.toFixed(2)} bucht diesen Beleg wohl schon von Hand. Eine private Zahlung dazu buchte ihn doppelt: ${way}.`, { code: 'bookedByHand', params });
   }
   if (ask.replace && !replaced.length) throw new RequestError(400, `${ask.replace} bucht diesen Beleg nicht (kein Betrag des Belegs oder seines Teils, weder sein Tag noch seine Worte): sie bleibt. Ist sie doch dieselbe Auslage, zuerst in Buchungen löschen.`);
   if (replaced.length) assertOpen(books, replaced.map((e) => e.date), 'deleteEntry');

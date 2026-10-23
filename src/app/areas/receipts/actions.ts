@@ -61,8 +61,8 @@ export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, fro
 export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
   run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
 
-/** A booking by hand that books the receipt already (409 bookedByHand): the dialog offers to replace it. */
-export interface HeldByHand { entry: string; date: string; amount: number; currency: string }
+/** A booking by hand that books the receipt already (409 bookedByHand): the dialog offers to replace it when it names the receipt. */
+export interface HeldByHand { entry: string; date: string; amount: number; currency: string; replaceable: boolean }
 
 /**
  * Paid privately or in cash: one write makes the owner's payment on the receipt's date, for its

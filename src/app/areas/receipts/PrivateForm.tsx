@@ -2,7 +2,8 @@
  * «Privat oder bar bezahlt» in the link dialog (#87): the whole receipt, or only its business part
  * (an amount in the receipt's currency and what it was); a receipt that shows several Swiss VAT
  * rates asks the rate line the part falls under. A booking by hand that books the receipt already
- * holds the payment; the form names it and offers to replace it. ↵ books, Esc goes back to the list.
+ * holds the payment; the form names it and offers to replace it when it names the receipt, else
+ * says to delete it in Buchungen first (it may be another purchase of that day and amount). ↵ books, Esc goes back to the list.
  */
 import { useState } from 'react';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -29,7 +30,7 @@ export function PrivateForm({ v, nav, onBack, onDone }: { v: ReceiptView; nav: N
   const value = parseAmount(amount);
   const fits = whole || (value > 0 && value <= total);
   const needsRate = !whole && rates.length > 1 && value < total;
-  const ready = fits && (!needsRate || rate !== undefined);
+  const ready = fits && (!needsRate || rate !== undefined) && (!held || held.replaceable);
 
   async function book(replace?: string) {
     if (!ready) return;
@@ -77,12 +78,13 @@ export function PrivateForm({ v, nav, onBack, onDone }: { v: ReceiptView; nav: N
       {held && (
         <p className="warnline" data-testid="booked-by-hand">
           {t('error.bookedByHand', { entry: held.entry, date: formatDate(held.date), amount: `${held.currency} ${fmt(held.amount)}` })}
+          {!held.replaceable && ` ${t('receipts.privateDeleteFirst')}`}
         </p>
       )}
       <div className="acts">
         <button type="button" className="btn ghost" onClick={onBack}>{t('receipts.privateBack')} <span className="k">{t('receipts.escKey')}</span></button>
         <button type="button" className="btn primary" disabled={!ready} data-testid="private-book" onClick={() => void book(held?.entry)}>
-          {held ? t('receipts.privateReplace', { entry: held.entry }) : t('receipts.privateBook')} <span className="k">↵</span>
+          {held?.replaceable ? t('receipts.privateReplace', { entry: held.entry }) : t('receipts.privateBook')} <span className="k">↵</span>
         </button>
       </div>
     </div>

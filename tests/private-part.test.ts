@@ -123,7 +123,7 @@ const byHand = (amount: number, date = DAY, description = 'Kaffee Café Central'
 test('a booking by hand of the same part (in CHF at the day\'s rate) refuses the private payment, naming it; with replace it goes in the same write', () => {
   const chf = Math.round(17.99 * fx.daily('EUR', DAY)! * 100) / 100;
   const b = booksWith(cafe(), [byHand(chf)]);
-  assert.deepEqual(refusal(() => privatePayment(b, 'cafe', { amount: 17.99, part: 'Kaffee' }, fx)), { status: 409, code: 'bookedByHand', params: { entry: 'M2026-063', date: DAY, amount: chf, currency: 'CHF' } });
+  assert.deepEqual(refusal(() => privatePayment(b, 'cafe', { amount: 17.99, part: 'Kaffee' }, fx)), { status: 409, code: 'bookedByHand', params: { entry: 'M2026-063', date: DAY, amount: chf, currency: 'CHF', replaceable: true } });
   assert.deepEqual([b.transactions.length, b.journalEntries.length], [0, 1], 'nothing written');
 
   const made = privatePayment(b, 'cafe', { amount: 17.99, part: 'Kaffee', replace: 'M2026-063' }, fx);
@@ -135,6 +135,15 @@ test('a booking by hand of the same part (in CHF at the day\'s rate) refuses the
 test('the guard knows the receipt\'s whole amount too, and a booking of the same amount in the receipt\'s currency on another day with the same words', () => {
   const whole = booksWith(cafe(), [{ ...byHand(70.57, '2026-08-14', 'Café Central'), exchangeCurrency: 'EUR', exchangeRate: 0.95 }]);
   assert.equal(refusal(() => privatePayment(whole, 'cafe', { amount: 17.99 }, fx)).code, 'bookedByHand');
+});
+
+test('a booking by hand of the same day and amount that does not name the receipt holds the payment but is never replaced: it may be another purchase', () => {
+  const chf = Math.round(17.99 * fx.daily('EUR', DAY)! * 100) / 100;
+  const b = booksWith(cafe(), [byHand(chf, DAY, 'Bürobedarf Papeterie')]);
+  const held = refusal(() => privatePayment(b, 'cafe', { amount: 17.99 }, fx));
+  assert.deepEqual([held.code, (held.params as { replaceable: boolean }).replaceable], ['bookedByHand', false]);
+  assert.equal(refusal(() => privatePayment(b, 'cafe', { amount: 17.99, replace: 'M2026-063' }, fx)).code, 'bookedByHand');
+  assert.deepEqual([b.transactions.length, b.journalEntries.length], [0, 1], 'nothing deleted');
 });
 
 test('replace deletes only the booking found to book this receipt: another booking by hand named as replace is refused, nothing written', () => {

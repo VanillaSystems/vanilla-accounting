@@ -3,12 +3,13 @@
  * (its questions, «Frage stellen»), one question as a card (answer with one click or a few words,
  * «beantwortet» for the asker, «Zurücknehmen», «Erledigt»), and Aufgaben's two lists, «Fragen an
  * dich» and «Deine offenen Fragen». The app's own question about a sale without an invoice shows
- * its proposal first and why.
+ * its proposal first and why; its answer books that payment only, and «Immer so?» under it offers
+ * the payer's rule on its card, or says the payer is mixed (#38).
  */
 import { useState } from 'react';
 import './questions.css';
 import { t } from '../i18n/index.js';
-import { errorText } from '../lib/api.js';
+import { api, errorText } from '../lib/api.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { at } from '../areas/receipts/view.js';
 import type { Nav } from '../areas/index.js';
@@ -18,6 +19,8 @@ import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, undoable, type Choice, typ
 import { domesticSale, normalRate, saleChoiceOf, saleProposal } from '../../accounting/sales-without-vat.js';
 import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
+import { RuleDraft } from '../areas/company/RulesSection.js';
+import type { SaleRuleOffer } from '../../saving/sale-rule.js';
 
 /** The domestic sale at the normal rate; on the net tax rate method the firm's code and approved rate, which the answer books. */
 function saleDomesticText(): string {
@@ -77,6 +80,32 @@ export function IAm() {
   );
 }
 
+/**
+ * «Immer so?» under an answer to the app's sale question (#38): the click lets code read the payer's
+ * other payments and draft the rule for its card, or say why it drafts none (a mixed payer).
+ */
+function AlwaysSo({ q, nav }: { q: Question; nav: Nav }) {
+  const [offer, setOffer] = useState<SaleRuleOffer>();
+  const [busy, setBusy] = useState(false);
+  if (offer?.kind === 'rule') return <RuleDraft path={offer.path} nav={nav} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} title={t('questions.sale.ruleTitle')} />;
+  const ask = () => {
+    setBusy(true);
+    api.draftSaleRule(q.id).then(setOffer, (e) => nav.toast(errorText(e))).finally(() => setBusy(false));
+  };
+  return (
+    <div className="ruledraft" data-sale-rule={q.id}>
+      {offer?.kind === 'mixed' ? <span data-testid="sale-mixed">{t(`questions.sale.mixed.${offer.why}`, { who: offer.name, n: offer.other })}</span>
+        : offer?.kind === 'none' ? <span className="m" data-testid="sale-no-rule">{t(`questions.sale.none.${offer.why}`)}</span>
+        : (
+          <>
+            <span>{t('questions.sale.always')}</span>
+            <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-act="sale-always" onClick={ask}>{t('rules.share.draft')}</button></span>
+          </>
+        )}
+    </div>
+  );
+}
+
 /** What the app did with the answer, in one line. */
 function Acted({ q, owner }: { q: Question; owner: string }) {
   const a = q.answer?.acted;
@@ -85,7 +114,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   if ('vatCode' in a) {
     const sale = [
       a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
-      a.rule ? t('questions.sale.rule') : t('questions.sale.noRule'),
+      ...(a.rule ? [t('questions.sale.rule')] : []),
       ...(a.also?.length ? [t('questions.sale.also', { n: a.also.length })] : []),
     ];
     return <p className="qnote" data-testid="sale-acted">{sale.join(' · ')}</p>;
@@ -146,6 +175,7 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
             <span className="m">{' '}{q.answer.from ? t('questions.answeredFrom', { by: q.answer.by }) : t('questions.answeredBy', { by: q.answer.by, date: when(q.answer.at) })}</span>
           </p>
           <Acted q={q} owner={owner} />
+          {canEdit && q.status === 'answered' && q.topic === 'saleVat' && q.answer.acted && 'vatCode' in q.answer.acted && !q.answer.acted.rule && !q.answer.from && undoable(q, books) ? <AlwaysSo q={q} nav={nav} /> : null}
           {canEdit && q.status === 'answered' ? (
             <div className="qacts">
               {mine || q.origin === 'assistant' ? <button type="button" className="btn" onClick={() => void run(nav, closeQuestion(q.id, 'done'))}>{t('questions.done')}</button> : null}

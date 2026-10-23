@@ -43,8 +43,8 @@ export type ApiRefusal =
   | { code: 'partRate'; params: { rates: number[] } }
   /** A receipt paid privately (its payment made by hand) is linked to no second payment, confirmed or not (src/server/edits.ts assertNotPaidPrivately, #90). */
   | { code: 'paidPrivately'; params: { receipt: string; payment: string } }
-  /** A person's booking without a payment books this receipt already (its amount or the part's, the same day or words): a private payment would book it twice, unless it replaces that booking (`entry`: its ref). */
-  | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string } }
+  /** A person's booking without a payment books this receipt already (its amount or the part's, the same day or words): a private payment would book it twice, unless it replaces that booking (`entry`: its ref; `replaceable`: it names the receipt, else it may be another purchase of that day and amount and is deleted by hand). */
+  | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string; replaceable: boolean } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }

@@ -1,8 +1,8 @@
 /**
  * Without a model (an owner or accountant without a subscription): a link made or taken back by
- * hand never leaves its payment silently unbooked. The run it starts books what a company rule
- * decides; what no rule decides becomes a task in Automatisierung, «Zahlung ohne Buchung · von Hand
- * buchen», with the payment's hand form. A second link or unlink starts a run too and asks nothing new.
+ * hand never leaves its payment silently unbooked. A payment that lost its receipt waits for one,
+ * marked so (issue #29); with its receipt, what no company rule decides becomes a task in
+ * Automatisierung, «Zahlung ohne Buchung · von Hand buchen», with the payment's hand form.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,17 +57,19 @@ test('without a model, unlinking and linking by hand leave the payment booked or
     let v = await view();
     assert.deepEqual(await onL(), [], 'the booking that saw the receipt is gone');
     assert.equal(intakeRuns(v).length, 1, 'the unlink started an inbox run');
-    assert.equal(forL(v).length, 1, `a task waits for the payment: ${JSON.stringify(v.tasks.map((t) => [t.workflow, t.step, t.item]))} ${JSON.stringify(v.runs.map((r) => [r.workflow, r.item.id, r.status, r.path, r.error]))}`);
-    assert.equal(forL(v)[0].title.de, 'Zahlung ohne Buchung · von Hand buchen');
-    assert.deepEqual(forL(v)[0].outcomes, ['booked']);
-    assert.equal(forL(v)[0].do, 'open-item');
+    assert.deepEqual(forL(v), [], 'no task: without its receipt the payment waits for it, the app\'s work (issue #29)');
+    assert.ok((await books()).transactions.find((t) => t.ref === 'REF-L')?.waitsForReceipt, 'marked as waiting for its receipt');
 
     const linked = await api.send('POST', '/api/mapping/add', { receiptId: receipt.id, transactionRef: 'REF-L' });
     assert.deepEqual(linked.json, { ok: true, again: ['REF-L'] }, 'a link of an unbooked payment books it again');
     await rest();
     v = await view();
     assert.equal(intakeRuns(v).length, 2, 'the link started an inbox run too');
-    assert.equal(forL(v).length, 1, 'still one task for the payment, no second question');
+    assert.equal(forL(v).length, 1, `with its receipt and no model, a task waits for the payment: ${JSON.stringify(v.tasks.map((t) => [t.workflow, t.step, t.item]))} ${JSON.stringify(v.runs.map((r) => [r.workflow, r.item.id, r.status, r.path, r.error]))}`);
+    assert.equal(forL(v)[0].title.de, 'Zahlung ohne Buchung · von Hand buchen');
+    assert.deepEqual(forL(v)[0].outcomes, ['booked']);
+    assert.equal(forL(v)[0].do, 'open-item');
+    assert.equal((await books()).transactions.find((t) => t.ref === 'REF-L')?.waitsForReceipt, undefined, 'it waits for its receipt no more');
 
     // The person books it by hand: the task is answered, and the payment stays as the person left it.
     const booked = await api.send('POST', '/api/journal-entries', { date: '2026-09-13', accountDebit: '6510', accountCredit: '1021', amount: 217.75, vatCode: 'I81', description: 'Post CH, von Hand', transactionRef: 'REF-L' });

@@ -399,6 +399,13 @@ export interface BankTransaction {
    * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
    */
   waitsForPerson?: { since: string; why: 'bookingDeleted' };
+  /**
+   * The payment needs a receipt and has none yet, so the inbox run does not book it (issue #29):
+   * no provisional booking, it is booked once a receipt is linked. The run sets the mark and takes
+   * it away again (src/booking/receipt-wait.ts); src/accounting/receipt-due.ts says from when the
+   * person is asked about it.
+   */
+  waitsForReceipt?: { since: string };
 }
 
 /** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */

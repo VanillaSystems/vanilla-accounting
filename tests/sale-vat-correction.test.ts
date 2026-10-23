@@ -1,13 +1,13 @@
 /**
  * A person's correction of a customer payment without an invoice teaches (MISSION.md «Every
  * correction teaches»): fixed by hand or by a wish, it answers the app's question about the sale
- * (src/server/questions.ts learnFromCorrection) and is kept as a rule for the payer, so «Neu
- * klassifizieren» › «Trotzdem neu buchen» books what she set, not the model's V0. Persona test
- * 2026-10-15 corner-4. On the real API server, the model a stub that answers V0 as the test saw.
+ * (src/server/questions.ts learnFromCorrection) for that payment only, without a rule for the payer
+ * (#38: «Immer so?» under the answer offers one); «Neu klassifizieren» › «Trotzdem neu buchen» books
+ * the app's proposal, never the model's V0. Persona test 2026-10-15 corner-4. On the real API server, the model a stub that answers V0 as the test saw.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -38,36 +38,36 @@ after(() => api?.stop());
 const OWNER = 'Anna Muster';
 const entriesOf = (ref: string) => loadBooks(api.ws).journalEntries.filter((e) => e.transactionRef === ref);
 const questionOn = (ref: string) => readQuestions(api.ws).filter((q) => q.topic === 'saleVat' && q.on.id === ref);
-const rules = () => (parse(readFileSync(join(api.root, 'knowledge/rules/booking.guide.yaml'), 'utf8')) as { steps: { classify?: { rules?: Array<Record<string, unknown>> } } }).steps.classify?.rules ?? [];
+const guide = () => join(api.root, 'knowledge/rules/booking.guide.yaml');
+const rules = () => (existsSync(guide()) ? (parse(readFileSync(guide(), 'utf8')) as { steps?: { classify?: { rules?: Array<Record<string, unknown>> } } }).steps?.classify?.rules ?? [] : []);
 const rebookAnyway = async (ref: string) => {
   const r = await api.send('POST', `/api/journal-entries/classify/${ref}`, { overwrite: true });
   assert.equal(r.status, 200, String(r.json.error));
 };
 
-test('a hand correction of a sale nobody asked about yet asks and answers the question, and keeps a rule for the payer', async () => {
+test('a hand correction of a sale nobody asked about yet asks and answers the question, and keeps no rule (#38)', async () => {
   const r = await api.send('PATCH', '/api/journal-entries/e-ch', { vatCode: 'V81' });
   assert.equal(r.status, 200, String(r.json.error));
   const [q] = questionOn('S-CH');
   assert.deepEqual([q.status, q.answer?.by, q.answer?.answer], ['answered', OWNER, { choice: 'saleDomestic' }]);
-  assert.deepEqual(q.answer?.acted, { booked: [], undo: [], vatCode: 'V81', correction: true, rule: `sale-${q.id}` });
-  assert.deepEqual(rules().find((x) => x.id === `sale-${q.id}`)?.then, { account: '3400', vat: 'V81' });
+  assert.deepEqual(q.answer?.acted, { booked: [], undo: [], vatCode: 'V81', correction: true });
+  assert.deepEqual(rules(), [], 'no rule for the payer');
 });
 
-test('«Trotzdem neu buchen» after the correction books her V81 by the rule, not the model\'s V0', async () => {
+test('«Trotzdem neu buchen» after the correction books the app\'s proposal V81 for the domestic payer, not the model\'s V0', async () => {
   await rebookAnyway('S-CH');
   const [e] = entriesOf('S-CH');
-  assert.deepEqual([e.vatCode, e.accountCredit, e.rule?.startsWith('sale-')], ['V81', '3400', true]);
+  assert.deepEqual([e.vatCode, e.accountCredit, e.rule], ['V81', '3400', undefined]);
 });
 
-test('a correction to the abroad code is a «Ausland» answer; the rule keeps the code she set', async () => {
+test('a correction to the abroad code is a «Ausland» answer, without a rule', async () => {
   await runIntake({ ws: api.ws, books: storePort(api.ws, moduleActor('intake')), steps: [['classify', classifyStep()]] });
   assert.equal(questionOn('S-EU')[0].status, 'open', 'the booking step asked');
   const r = await api.send('PATCH', '/api/journal-entries/e-eu', { vatCode: 'V0-E' });
   assert.equal(r.status, 200, String(r.json.error));
   const [q] = questionOn('S-EU');
   assert.deepEqual([q.status, q.answer?.answer], ['answered', { choice: 'saleAbroad' }]);
-  assert.deepEqual(rules().find((x) => x.id === `sale-${q.id}`)?.then, { account: '3400', vat: 'V0-E' });
-  await rebookAnyway('S-EU');
+  assert.deepEqual(rules(), []);
   assert.deepEqual(entriesOf('S-EU').map((e) => e.vatCode), ['V0-E']);
 });
 
@@ -83,35 +83,32 @@ test('a wish that fixes a generic payer\'s sale answers its question without a r
   assert.deepEqual([e.vatCode, e.origin], ['V81', 'classify'], 'no rule, and still the proposal, never V0');
 });
 
-test('«Zurücknehmen» on an answer from a correction drops the rule and keeps the booking, no longer held by the rule', async () => {
+test('«Zurücknehmen» on an answer from a correction keeps her booking', async () => {
   const [q] = questionOn('S-EU');
-  assert.ok(entriesOf('S-EU')[0].rule, 'booked by the rule before');
   const r = await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER });
   assert.equal(r.status, 200, String(r.json.error));
   assert.equal(questionOn('S-EU')[0].status, 'open');
-  assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false);
-  assert.deepEqual(entriesOf('S-EU').map((e) => [e.vatCode, e.rule]), [['V0-E', undefined]]);
+  assert.deepEqual(entriesOf('S-EU').map((e) => [e.vatCode, e.origin]), [['V0-E', 'manual']]);
 });
 
-test('then «mit MWST» books the payment at the normal rate and keeps a rule (r4c-28)', async () => {
+test('then «mit MWST» books the payment at the normal rate, and no rule (r4c-28, #38)', async () => {
   const [q] = questionOn('S-EU');
   const r = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'saleDomestic' });
   assert.equal(r.status, 200, String(r.json.error));
   const acted = (r.json as unknown as Question).answer?.acted as { booked: string[]; vatCode: string; rule?: string };
-  assert.deepEqual([acted.booked, acted.vatCode, acted.rule], [entriesOf('S-EU').map((e) => e.id), 'V81', `sale-${q.id}`]);
+  assert.deepEqual([acted.booked, acted.vatCode, acted.rule], [entriesOf('S-EU').map((e) => e.id), 'V81', undefined]);
   assert.equal(acted.booked.length, 1);
   assert.deepEqual(entriesOf('S-EU').map((e) => e.vatCode), ['V81']);
 });
 
-test('«Zurücknehmen» after the answer\'s booking was booked anew takes back what is still there: the rule goes, the question opens', async () => {
+test('«Zurücknehmen» after the answer\'s booking was booked anew takes back what is still there: the question opens, the new booking stays', async () => {
   const [q] = questionOn('S-EU');
   await rebookAnyway('S-EU');
-  assert.ok(entriesOf('S-EU')[0].rule, 'booked anew by the answer\'s rule');
+  const anew = entriesOf('S-EU').map((e) => [e.id, e.vatCode]);
   const r = await api.send('POST', `/api/questions/${q.id}/undo`, { by: OWNER });
   assert.equal(r.status, 200, String(r.json.error));
   assert.equal(questionOn('S-EU')[0].status, 'open');
-  assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false);
-  assert.deepEqual(entriesOf('S-EU').map((e) => [e.vatCode, e.rule]), [['V81', undefined]]);
+  assert.deepEqual(entriesOf('S-EU').map((e) => [e.id, e.vatCode]), anew);
 });
 
 test('a payment with no revenue booking the app may set is refused in words, not answered «0 Buchungen»', async () => {
@@ -125,7 +122,7 @@ test('a payment with no revenue booking the app may set is refused in words, not
   assert.deepEqual((r.json as unknown as Question).answer?.acted, { refused: 'noSaleEntry', detail: 'Rückzahlung' });
 });
 
-test('her V0 on a payer at home is asked back, not taken as «Ausland»; her answer then keeps the rule from her booking (r4c-35)', async () => {
+test('her V0 on a payer at home is asked back, not taken as «Ausland»; her answer then books it, without a rule (r4c-35)', async () => {
   const b = loadBooks(api.ws);
   b.transactions.push({ ref: 'S-HOME', bank: 'Raiffeisen', date: '2026-08-21', amount: 3274.4, currency: 'CHF', direction: 'CRDT', description: 'Malerarbeiten', counterparty: 'Hans Muster', counterpartyIban: 'CH0000235099999999999' });
   b.journalEntries.push({ id: 'e-home', transactionRef: 'S-HOME', date: '2026-08-21', accountDebit: '1021', accountCredit: '3400', amount: 3274.4, vatCode: 'V81', description: 'Kundenzahlung Hans Muster', origin: 'classify' });
@@ -137,8 +134,8 @@ test('her V0 on a payer at home is asked back, not taken as «Ausland»; her ans
   assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false, 'no export rule guessed');
   const a = await api.send('POST', `/api/questions/${q.id}/answer`, { by: OWNER, choice: 'saleAbroad' });
   const acted = (a.json as unknown as Question).answer?.acted as { booked: string[]; vatCode: string; rule?: string };
-  assert.deepEqual([acted.booked, acted.vatCode, acted.rule], [['e-home'], 'V0', `sale-${q.id}`]);
-  assert.deepEqual(rules().find((x) => x.id === `sale-${q.id}`)?.then, { account: '3400', vat: 'V0' });
+  assert.deepEqual([acted.booked, acted.vatCode, acted.rule], [['e-home'], 'V0', undefined]);
+  assert.deepEqual(rules(), []);
 });
 
 test('«Neu klassifizieren» of a sale without an invoice asks its question at once, as the booking\'s reason says (r4c-36)', async () => {
@@ -172,7 +169,6 @@ test('«Rückgängig» on the wish that answered a sale\'s question opens the qu
   assert.equal(undone.status, 200, String(undone.json.error));
   assert.deepEqual(entriesOf('S-UNDO').map((e) => [e.vatCode, e.origin, e.by]), [['V0', 'classify', undefined]]);
   assert.equal(questionOn('S-UNDO')[0].status, 'open', 'the question is open again');
-  assert.equal(rules().some((x) => x.id === `sale-${q.id}`), false, 'and its rule is gone');
 
   const r = await api.send('PATCH', '/api/journal-entries/e-undo', { vatCode: 'V81' });
   assert.equal(r.status, 200, String(r.json.error));
