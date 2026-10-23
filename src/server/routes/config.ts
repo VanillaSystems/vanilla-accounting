@@ -8,6 +8,7 @@ import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { companyInfo } from '../../books/company.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
+import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
@@ -213,6 +214,13 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
  * method rule: registration, method, period and a rate's percent hold for whole years, so a change
  * is refused while the open year holds entries (a label or an activity code may change any time).
  */
+/** What the firm sells: one kind at least, of made, traded, services. */
+function sellsPatch(raw: unknown): SalesKind[] {
+  const kinds = Array.isArray(raw) ? salesKinds(raw.filter((v): v is string => typeof v === 'string')) : [];
+  if (!kinds.length || kinds.length !== (raw as unknown[]).length) throw new RequestError(400, `sells: eine Liste aus ${SALES_KINDS.join(', ')}, mindestens eines.`);
+  return kinds;
+}
+
 function vatPatch(raw: unknown): VatSetup {
   // A refusal the form can meet (an activity code, a rate) carries its code, so the page says it in the person's words (r7f-30).
   const next = parseVatSetup(raw, (msg, refusal) => { throw new RequestError(400, msg, refusal ? { code: 'vatSetup', params: refusal } : undefined); });
@@ -262,7 +270,7 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
  * A new payment term also goes to every customer who had the old one.
  */
 router.patch('/api/workspace', (req, res) => {
-  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'removeBank', 'invoicing', 'outgoingMail', 'vat']);
+  const b = patchBody(req.body, ['company', 'banks', 'addBank', 'removeBank', 'invoicing', 'outgoingMail', 'vat', 'sells']);
   if (b.banks !== undefined && !Array.isArray(b.banks)) throw new RequestError(400, 'banks: eine Liste erwartet.');
   const patch: ManifestPatch = {
     ...(b.vat === undefined ? {} : { vat: vatPatch(b.vat) }),
@@ -272,6 +280,7 @@ router.patch('/api/workspace', (req, res) => {
     ...(b.removeBank === undefined ? {} : { removeBank: removedBank(b.removeBank) }),
     ...(b.invoicing === undefined ? {} : { invoicing: invoicingPatch(b.invoicing) }),
     ...(b.outgoingMail === undefined ? {} : { outgoingMail: mailPatch(b.outgoingMail) }),
+    ...(b.sells === undefined ? {} : { sells: sellsPatch(b.sells) }),
   };
   const terms = WS.invoicing?.paymentTermsDays;
   const banksBefore = WS.bankAccounts;

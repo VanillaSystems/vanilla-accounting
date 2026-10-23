@@ -44,7 +44,7 @@ const SETUP = {
   preset: 'consultant', name: 'Neu Test GmbH', uid: 'CHE-153.004.184', owner: 'Erika Test', language: 'de',
   answers: {
     legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly', fiscalYear: 'calendar', start: 'new',
-    sells: 'services', foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
+    sells: ['services'], foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
   },
   banks: [{ bank: 'UBS', currency: 'CHF' }],
 };
