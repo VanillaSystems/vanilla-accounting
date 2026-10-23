@@ -28,7 +28,7 @@ one place, `src/workspace/schema.ts`.
 
 | File | Version now | Migration ladder |
 |---|---|---|
-| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 3` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes) | `BOOKS_MIGRATIONS` |
+| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 4` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes; 4: `JournalEntry.tags`, #127, no record changes) | `BOOKS_MIGRATIONS` |
 | `belege.workspace.yaml` | `WORKSPACE_SCHEMA = 2` (2: each money account names its `role`, #88) | `MANIFEST_MIGRATIONS` (on the YAML document, comments survive) |
 | `invoices.json` | `INVOICES_SCHEMA = 1` | `INVOICES_MIGRATIONS` |
 | `questions.jsonl` lines | `QUESTION_LINE_VERSION = 1` (`v` on each line) | none |
@@ -63,6 +63,17 @@ classDiagram
     +profile: WorkspaceProfile [0..1]
     +invoicing: InvoicingSettings [0..1]
     +outgoingMail: OutgoingMail [0..1]
+    +dimensions: Dimension[0..*]
+  }
+  class Dimension {
+    +id: string «projekt, lower case»
+    +label: string
+    +values: DimensionValue[0..*]
+  }
+  class DimensionValue {
+    +value: string «what bookings carry»
+    +label: string [0..1]
+    +active: boolean = true
   }
   class Company {
     +name: string
@@ -117,7 +128,7 @@ classDiagram
   }
   class Ledger {
     <<ledger.json>>
-    +schema: number = 3
+    +schema: number = 4
     +config: AccountingConfig
   }
   class AccountingConfig {
@@ -339,6 +350,7 @@ classDiagram
     +receipts: string[0..*]
     +supply: goods | service | exempt [0..1]
     +supplierCountry: string [0..1]
+    +tags: map dimension id to value [0..1]
     +run: string [0..1]
   }
   class BookedBy {
@@ -392,6 +404,13 @@ Notes on the diagram:
   entries split by.
 - `amount` of an entry is in CHF. A foreign movement carries `exchangeCurrency` and the ESTV daily
   sell rate of the payment date in `exchangeRate` (ADR 0001).
+- `tags` (#127, src/books/tags.ts) sorts an entry for the reports: per dimension the manifest
+  declares (`dimensions`) at most one value, `{ "projekt": "alpha", "standort": "Bern" }`. A value
+  the dimension does not list is kept as typed (a «new value»); the API refuses a dimension the
+  manifest lacks, and Firma › Dimensionen refuses to drop a dimension entries carry. A rule's
+  `then.tags` puts them on every line it books; a copy, a reversal and a correction carry them on.
+  No VAT figure reads them. A tag is part of the entry, so the seal of a filed quarter covers it:
+  a filed entry's tags never change, and the API refuses the change like any other (403).
 - `origin: manual` and `by.kind: person` mark a person's entry. Only a person may change or remove
   it (the write door `update` in src/books/store.ts).
 - Each record lies in the year file of its date. Records dated on or before
@@ -620,6 +639,7 @@ classDiagram
     +vat: string | null
     +private: percent [0..1]
     +fees: account, vat [0..1]
+    +tags: map dimension id to value [0..1]
   }
   class Note {
     <<knowledge/ROLE/ID.md | knowledge/company/SLUG.md>>

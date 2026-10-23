@@ -96,6 +96,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const rebook = (overwrite: boolean) => { setAsking(false); if (tx) void reclassify(nav, tx.ref, payment, overwrite).then((es) => es?.[0] && selectNew(nav, es[0].id)); };
   const seen = whySeen(e, props.books.receipts);
   const ws = useWorkspace();
+  // The tags in the order the firm lists its dimensions; one it no longer lists last.
+  const rank = (d: string) => { const i = ws?.dimensions?.findIndex((x) => x.id === d) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
 
   return (
     <div className="detail-in" data-for={e.id}>
@@ -120,7 +122,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           </span>
         </div>}
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
-        {Object.entries(e.tags ?? {}).map(([d, value]) => {
+        {Object.entries(e.tags ?? {}).sort(([a], [b]) => rank(a) - rank(b)).map(([d, value]) => {
           const dim = ws?.dimensions?.find((x) => x.id === d);
           return <div key={d} role="row" data-tag={d}><span className="k">{dim?.label ?? d}</span><span /><span className="nm">{valueLabel(dim, value)}</span></div>;
         })}
