@@ -22,7 +22,8 @@ import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
-import { vatSetup } from '../../engines/index.js';
+import { agreedBasis, vatSetup } from '../../engines/index.js';
+
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
@@ -126,7 +127,7 @@ export function errorText(e: unknown): string {
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
-    case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
+    case 'paymentDate': return t(agreedBasis() ? 'error.paymentDateAgreed' : 'error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
       const { date, currency, paid, booked } = b.params;
       return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });

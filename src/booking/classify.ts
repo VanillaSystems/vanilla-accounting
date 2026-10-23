@@ -12,6 +12,8 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
+import { atTaxPoint, openItemAccounts } from '../accounting/tax-point.js';
+
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, BookedBy, JournalEntry, Receipt } from '../types/index.js';
@@ -613,6 +615,12 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const lock = periodLock(books);
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
   const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
+  const items = openItemAccounts([...chartAccounts]);
+  // On the agreed basis a coded line takes its document's date and the open item; on the cash basis this changes nothing (src/accounting/tax-point.ts).
+  const atPoint = (tx: BankTransaction, entries: JournalEntry[]): JournalEntry[] => atTaxPoint(tx, entries, {
+    accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), lock, rateOn: (c, d) => fx.daily(c, d),
+    documents: mappedReceipts(books, tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
+  });
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [], held: [] };
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
@@ -630,7 +638,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       const byOrders = payoutFromOrders(books, tx, { ...split, fees: split.fees }, context, fx, placed ? by : { kind: 'code', check: 'payoutOrders' }, reason);
       const read = Array.isArray(byOrders) ? byOrders : payoutFromReport(books, tx, { ...split, fees: split.fees }, context, fx, by, reason);
       if (read) {
-        books.journalEntries.push(...(placed ? read.map((e) => ({ ...e, rule: placed.rule.id })) : read));
+        books.journalEntries.push(...atPoint(tx, placed ? read.map((e) => ({ ...e, rule: placed.rule.id })) : read));
         log(`  ${tx.ref}  → ${read === byOrders ? 'orders' : 'payout report'}${placed ? ` (rule ${placed.rule.id})` : ''}`);
         outcome.classified.push(tx.ref);
         continue;
@@ -640,14 +648,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         log(`  ${tx.ref}  waits for its orders${placed ? ` (rule ${placed.rule.id})` : ''}`);
         const why = wordsIn('de').t('rules.say.ordersAsk', { why: orderHoldWords(byOrders) });
         outcome.held.push({ ref: tx.ref, hold: byOrders });
-        if (placed) outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: why, entries: ruleEntries(books, tx, placed, split, context, fx) });
+        if (placed) outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: why, entries: atPoint(tx, ruleEntries(books, tx, placed, split, context, fx)) });
         else outcome.failed.push({ ref: tx.ref, reason: why });
         continue;
       }
     }
     const byParts = placed ? undefined : partRuleEntries(books, tx, context, fx);
     if (byParts) {
-      books.journalEntries.push(...byParts.entries);
+      books.journalEntries.push(...atPoint(tx, byParts.entries));
       // The parts no rule decided go to the model when there is one; the rule-decided parts stay the rules'.
       const model = byParts.rest && ask;
       log(`  ${tx.ref}  → rules by part${byParts.whole ? '' : model ? ', the rest to the model' : ', the rest waits for the person'}`);
@@ -666,16 +674,16 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     if (then.kind === 'book' && then.booking.fees) {
       // No report to read the gross sales and the fees from: the payout waits for the person (r4c-21, r5h-12), with the whole payout as sales to take over.
       log(`  ${tx.ref}  waits for its payout report (rule ${placed.rule.id})`);
-      outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: wordsIn('de').t('rules.say.payoutAsk'), entries: ruleEntries(books, tx, placed, then.booking, context, fx) });
+      outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: wordsIn('de').t('rules.say.payoutAsk'), entries: atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)) });
       continue;
     }
     if (then.kind === 'book') {
-      books.journalEntries.push(...ruleEntries(books, tx, placed, then.booking, context, fx));
+      books.journalEntries.push(...atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)));
       log(`  ${tx.ref}  → rule ${placed.rule.id}`);
       outcome.classified.push(tx.ref);
       continue;
     }
-    const asked = { ref: tx.ref, rule: placed.rule.id, question: then.question, entries: then.booking ? ruleEntries(books, tx, placed, then.booking, context, fx) : [] };
+    const asked = { ref: tx.ref, rule: placed.rule.id, question: then.question, entries: then.booking ? atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)) : [] };
     log(`  ${tx.ref}  waits for the person (rule ${placed.rule.id})`);
     outcome.asked.push(asked);
     if (!then.booking && proposeAsked) { proposing.set(tx.ref, asked); toModel.push(tx); }
@@ -742,8 +750,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           continue;
         }
         const held = proposing.get(tx.ref);
-        if (held) { held.entries = entries.map((e) => ({ ...e, rule: held.rule })); continue; }
-        books.journalEntries.push(...entries);
+        if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
+        books.journalEntries.push(...atPoint(tx, entries));
         log(`  [Batch ${batchNum}]  ${tx.ref}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
         outcome.classified.push(tx.ref);
       }

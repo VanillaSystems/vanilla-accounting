@@ -11,7 +11,8 @@
 import { SETUP_TOPICS, kindsOfAnswer, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { ClearPartner, MixedPartner, SetupFacts } from './facts.js';
 import { TOPIC_HAND, type HandPlace } from './hand.js';
-import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, methodOf, type VatSetup } from '../workspace/vat-setup.js';
+import { NOT_REGISTERED, methodOf, onAgreedBasis, type VatBasis, type VatSetup } from '../workspace/vat-setup.js';
+
 import { SALES_KINDS, type SalesKind } from '../workspace/setup.js';
 
 /** A parameter of a line: a value, another key said in the person's language, or a date to format. */
@@ -55,11 +56,11 @@ export interface SetupStep {
 export type VatKind = 'none' | 'effective' | 'net-rate';
 export const vatKind = (v: VatSetup): VatKind => methodOf(v) as VatKind;
 
-/** The setup a click on a VAT answer asks for; a net tax rate needs the rate, which the card asks. */
-export function vatSetupOf(kind: VatKind, rate?: { rate: number; label?: string }): VatSetup | null {
+/** The setup a click on a VAT answer asks for, on the basis the firm reports on now; a net tax rate needs the rate, which the card asks. */
+export function vatSetupOf(kind: VatKind, rate?: { rate: number; label?: string }, reporting: VatBasis = 'received'): VatSetup | null {
   if (kind === 'none') return NOT_REGISTERED;
-  if (kind === 'effective') return EFFECTIVE_QUARTERLY;
-  return rate ? { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: rate.rate, ...(rate.label ? { label: rate.label } : {}) }] } : null;
+  if (kind === 'effective') return { registered: true, method: 'effective', reporting, period: 'quarterly' };
+  return rate ? { registered: true, method: 'net-rate', reporting, period: 'half-yearly', rates: [{ rate: rate.rate, ...(rate.label ? { label: rate.label } : {}) }] } : null;
 }
 
 const L = (key: string, params?: Record<string, Param>): Line => ({ key: `onboarding.${key}`, ...(params ? { params } : {}) });
@@ -182,7 +183,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     const kept = a.vat?.kept;
     if (kept) return { lines: [L('r.vatChange')], card: { kind: 'vat', from: kept.before, to: vatAnswer as VatKind, state: 'kept' }, go: TOPIC_HAND.firm ?? undefined };
     if (vatAnswer === 'unknown') return { lines: [L('r.vatUnknown')] };
-    if (vatAnswer === now) return { lines: [L(now === 'none' ? 'r.vatSameNone' : 'r.vatSame')] };
+    if (vatAnswer === now) return { lines: [L(now === 'none' ? 'r.vatSameNone' : onAgreedBasis(f.company.vat) ? 'r.vatSameAgreed' : 'r.vatSame')] };
     return { lines: [L('r.vatChange')], card: { kind: 'vat', from: f.company.vat, to: vatAnswer, state: 'proposed' }, go: TOPIC_HAND.firm ?? undefined };
   };
   if (!take({
@@ -319,7 +320,9 @@ const dayBefore = (iso: string) => { const d = new Date(`${iso}T12:00:00Z`); d.s
 export function vatLine(v: VatSetup): Line {
   if (!v.registered) return L('sum.vatNone');
   const period: Param = { key: `onboarding.period.${v.period}` };
-  return v.method === 'effective' ? L('sum.vatEffective', { period }) : L('sum.vatNetRate', { rates: v.rates.map((r) => `${r.rate} %${r.label ? ` ${r.label}` : ''}`).join(', '), period });
+  if (v.method === 'effective') return L(v.reporting === 'agreed' ? 'sum.vatEffectiveAgreed' : 'sum.vatEffective', { period });
+  return L(v.reporting === 'agreed' ? 'sum.vatNetRateAgreed' : 'sum.vatNetRate', { rates: v.rates.map((r) => `${r.rate} %${r.label ? ` ${r.label}` : ''}`).join(', '), period });
+
 }
 
 /** The closing card: what the app now knows and where it comes from, and what is still open with its place by hand. */

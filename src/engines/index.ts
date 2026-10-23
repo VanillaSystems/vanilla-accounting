@@ -40,7 +40,8 @@ export function filingMethod(): VatMethod {
   return method;
 }
 
-/** The basis the firm's return is written on (eCH-0217 formOfReporting); a firm that is not registered has none. */
+/** The basis the firm's return is written on (the electronic return names it); a firm that is not registered has none. */
+
 export function filingBasis(): VatBasis {
   const setup = vatSetup();
   if (!setup.registered) throw new Error('the firm is not registered for VAT: there is no return to write');
