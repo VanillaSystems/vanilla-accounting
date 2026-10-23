@@ -1,4 +1,7 @@
 import type { StatementProblem } from '../../types/api-error.js';
+import type { AiView } from '../../llm/view.js';
+import type { ProviderId } from '../../llm/provider.js';
+import type { StepId } from '../../llm/steps.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
@@ -167,6 +170,9 @@ export function errorText(e: unknown): string {
     case 'attachment': return t(`error.attachment.${b.params.reason}`, { name: b.params.name, mb: 'mb' in b.params ? b.params.mb : 0, limit: ATTACHMENT_MAX_MB });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
+    case 'aiModelUnfit': return t('error.aiModelUnfit', b.params);
+    case 'aiKeyRefused': return t('error.aiKeyRefused');
+    case 'aiKeyWhere': return t('error.aiKeyWhere', b.params);
     case 'partnerGone': return t('partners.gone');
     case 'topicGone': return t('knowledge.topicGone');
     case 'notesChanged': return t('partners.notes.changed');
@@ -457,6 +463,9 @@ export const api = {
   mailStatus: () => request<MailStatus>('GET', '/api/mail'),
   saveMailPassword: (password: string) => request<{ ok: true }>('PUT', '/api/mail/password', { password }),
   verifyMail: () => request<{ ok: true }>('POST', '/api/mail/verify'),
+  ai: () => request<AiView>('GET', '/api/ai'),
+  setAiStep: (step: StepId, choice: { provider: ProviderId; model: string } | { provider: null }) => request<AiView>('PUT', `/api/ai/steps/${step}`, choice),
+  setAiKey: (provider: ProviderId, key: string | null) => request<AiView>('PUT', `/api/ai/keys/${provider}`, { key }),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),

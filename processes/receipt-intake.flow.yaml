@@ -86,7 +86,7 @@ steps:
   - id: vat_facts
     name: Read the VAT facts off the text
     kind: agent
-    with: { guide: receipt-intake.guide.yaml#vat_facts, model: sonnet, batch: 1 }
+    with: { guide: receipt-intake.guide.yaml#vat_facts, model: haiku, batch: 1 }
     icon: file-search
     uses: npm:extract-vat
     note: vatId, hasSwissVat, vatSummary, lineItems

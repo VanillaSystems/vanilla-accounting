@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import git from 'isomorphic-git';
 import { appVersion } from '../version.js';
+import { apiKeysIn } from '../core/api-keys.js';
 
 /** The repository `dir` is the root of, or null when it is none or lies inside another one. */
 export async function repositoryAt(dir: string): Promise<string | null> {
@@ -55,6 +56,7 @@ export async function commitExactly(dir: string, message: string, paths: string[
   for (const [filepath] of others) await git.resetIndex({ fs, dir, filepath });
   try {
     const rows = await git.statusMatrix({ fs, dir, filepaths: wanted });
+    refuseApiKeys(dir, rows.filter(([, , workdir]) => workdir === 2).map(([f]) => f));
     for (const [filepath, head, workdir] of rows) {
       if (workdir === 0) { if (head === 1) await git.remove({ fs, dir, filepath }); }
       else await git.add({ fs, dir, filepath });
@@ -74,6 +76,16 @@ export async function commitExactly(dir: string, message: string, paths: string[
 }
 
 type StatusRow = [string, number, number, number];
+
+/** A workspace is a repository others may read: a commit never carries an AI provider's API key (issue #48). */
+function refuseApiKeys(dir: string, files: string[]): void {
+  for (const f of files) {
+    const bytes = readFileSync(join(dir, f));
+    if (bytes.includes(0)) continue;
+    const [key] = apiKeysIn(bytes.toString('utf8'));
+    if (key) throw new Error(`${f} holds an API key (${key.shown}): not saved. An API key belongs into Firma › KI, never into a file of the books.`);
+  }
+}
 
 /** The index's blob and mode of each of `paths` that the index holds. */
 async function stagedEntries(dir: string, paths: Set<string>): Promise<Map<string, { oid: string; mode: number }>> {

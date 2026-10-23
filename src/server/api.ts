@@ -31,6 +31,7 @@ import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
+import { router as ai } from './routes/ai.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
 
@@ -71,7 +72,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);
+app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);
 app.use(knowledge);
 app.use(onboarding);
 

@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
-import { record, resolveStep } from '../llm/ask.js';
+import { record, sidebarModel } from '../llm/ask.js';
 import { claudeCommand, NoClaudeError } from '../llm/providers/claude-cli.js';
 import { STEPS } from '../llm/steps.js';
 import { customizingNames } from '../saving/changes.js';
@@ -174,7 +174,7 @@ export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: st
   const never = NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
   return [
     '-p',
-    '--model', resolveStep('sidebar').model,
+    '--model', sidebarModel(),
     '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--append-system-prompt', assistantSystem(send.language, owner, map, term),
     '--setting-sources', '',

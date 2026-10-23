@@ -691,7 +691,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
       const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context, examples);
-      const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS });
+      let model: string | undefined;
+      const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
+      model ??= (await resolveStep('classify')).model;
       const result = parseBatchClassifyResult(raw);
       if (!result) {
         log(`  [Batch ${batchNum}/${batches.length}]  could not parse response`);
@@ -729,7 +731,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
-        const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model: resolveStep('classify').model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
+        const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

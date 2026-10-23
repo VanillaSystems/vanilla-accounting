@@ -7,8 +7,18 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
-/** The sending password, and one per source channel: `source:<id>:mail` (ADR 0014; derived, never listed). */
-export type SecretName = 'smtp' | `source:${string}:mail` | `source:${string}:api`;
+/**
+ * The sending password, and one per source channel: `source:<id>:mail` (ADR 0014; derived, never
+ * listed). An AI provider's API key (`ai:<provider>`, issue #48) belongs to this computer, not to
+ * the books: every store keeps it once for all books.
+ */
+export type SecretName = 'smtp' | `source:${string}:mail` | `source:${string}:api` | AiKeyName;
+
+export type AiKeyName = `ai:${'anthropic' | 'openai' | 'jev'}`;
+
+/** A secret of this computer, the same for every books folder. */
+export const MACHINE = '(this computer)';
+export const isMachineSecret = (name: SecretName): name is AiKeyName => name.startsWith('ai:');
 
 /** The secret of a mailbox's login. */
 export const mailSecret = (source: string): SecretName => `source:${source}:mail`;
@@ -21,7 +31,13 @@ export interface SecretStore {
   set?(name: SecretName, value: string | null): Promise<void>;
 }
 
-const ENV: Partial<Record<SecretName, string>> = { smtp: 'VANILLA_SMTP_PASSWORD' };
+// Names of the app's own, never ANTHROPIC_API_KEY or OPENAI_API_KEY: a key exported for another tool must not make the app spend money unasked.
+const ENV: Partial<Record<SecretName, string>> = {
+  smtp: 'VANILLA_SMTP_PASSWORD',
+  'ai:anthropic': 'VANILLA_ANTHROPIC_API_KEY',
+  'ai:openai': 'VANILLA_OPENAI_API_KEY',
+  'ai:jev': 'VANILLA_JEV_API_KEY',
+};
 
 export const envSecrets: SecretStore = {
   get: async (name) => (ENV[name] && process.env[ENV[name]!]) || undefined,
