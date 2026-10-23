@@ -69,7 +69,8 @@ function List(props: Props) {
   listed.keys = keys;
 
   const files = rows.filter((r) => r.s.file).length;
-  const without = rows.filter((r) => !r.s.file && !r.s.running).length;
+  const missing = rows.filter((r) => r.s.missing).length;
+  const without = rows.filter((r) => !r.s.file && !r.s.running && !r.s.missing).length;
   const gaps = rows.filter((r) => r.c?.gap).length;
   const bad = rows.filter((r) => r.c && troubled(b, r.s)).length - gaps;
   const strays = useMemo(() => b.strays(period.from, period.to), [b, period.from, period.to]);
@@ -115,6 +116,7 @@ function List(props: Props) {
       <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts stc">
           <span>{t('bank.nStatements', { n: files })}</span>
+          {missing > 0 && <span className="warn" data-testid="missing-count">{I.dot}{t('bank.nMissing', { n: missing })}</span>}
           {without > 0 && <span data-testid="without-count" title={t('bank.withoutTip')}>{t('bank.nWithout', { n: without })}</span>}
           {gaps > 0 && <span className="warn" data-testid="gap-count">{I.dot}{t('bank.nGaps', { n: gaps })}</span>}
           {bad > 0
@@ -193,9 +195,9 @@ function List(props: Props) {
 
 function StatementRow({ r, byMonth, same, sel, searching, bad, onSelect }: { r: Row; byMonth: boolean; same: boolean; sel: boolean; searching: boolean; bad: boolean; onSelect(key: string): void }) {
   const { s } = r;
-  const sub = !s.file ? t(s.running ? 'bank.running' : 'bank.without') : searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
+  const sub = !s.file ? t(s.running ? 'bank.running' : s.missing ? 'bank.missing' : 'bank.without') : searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
   return (
-    <div className={`row${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-stmt={s.key} onClick={() => onSelect(s.key)}>
+    <div className={`row${sel ? ' sel' : ''}${s.missing ? ' missing' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-stmt={s.key} onClick={() => onSelect(s.key)}>
       <span className="d mono">{same ? <span className="sr">{formatDate(s.to)}</span> : <><span className="dl">{formatDate(s.to)}</span><span className="ds">{formatDate(s.to).slice(0, 6)}</span></>}</span>
       <span className="t">{bad && I.dot}{byMonth ? s.account.label : statementName(s)} <small>{sub}{r.open > 0 && <> · <span className="wn">{t('bank.nWithoutReceipt', { n: r.open })}</span></>}</small></span>
       <span className="a mono">{r.c?.close != null ? fmt(r.c.close) : ''}</span>
@@ -217,7 +219,7 @@ function palette({ books, nav, period }: AreaProps): PaletteItem[] {
   const open = booksOpenPeriod(books, localToday(), filing().length);
   const statements = b.statements('0000-01-01', localToday()).filter((s) => s.file || s.from >= open.from).map((s) => ({
     label: `${t('bank.statementOf', { name: statementName(s) })} · ${s.account.label}`,
-    side: s.file ? t('bank.statement') : t('bank.without'),
+    side: t(s.file ? 'bank.statement' : s.missing ? 'bank.missing' : 'bank.without'),
     run: () => nav.go(at({ area: 'bank', statement: s.key }, s.from, period)),
   }));
   const payments = [...b.txByRef.values()].filter((tx) => b.statementOf(tx)).sort((x, y) => y.date.localeCompare(x.date)).map((tx) => ({

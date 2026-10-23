@@ -1,8 +1,8 @@
 /**
  * Kontoauszüge as the list and detail show them, derived from the books and never stored: each
- * bank account's monthly statements in a period, a month that ended without one as a month whose
- * balance comes from the movements alone (#88: statements are optional, never required), the
- * payments of a statement (a Wise fee folded into its payment), and the balance checks. Pure, so
+ * bank account's monthly statements in a period, a month that ended without one (missing on an
+ * account that has had statements, else a month whose balance comes from the movements alone: #88),
+ * the payments of a statement (a Wise fee folded into its payment), and the balance checks. Pure, so
  * the list, the keys, the dock badge and the tests read the same statements.
  */
 import type { BankStatement, BankTransaction, Index, JournalEntry } from '../../../types/index.js';
@@ -30,6 +30,12 @@ export interface Statement {
   file?: BankStatement;
   /** The month has not ended: its payments are there, its statement is still to come. */
   running?: boolean;
+  /**
+   * An ended month without a statement on an account that has had at least one imported: its
+   * statement is missing. An account that never had one shows the month as without a statement,
+   * no problem (#88): the account's own history decides, no setting.
+   */
+  missing?: true;
 }
 
 export interface Check {
@@ -176,9 +182,12 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   for (const e of books.journalEntries ?? []) (entries.get(e.transactionRef) ?? entries.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
 
   const files = new Map<string, Statement[]>(banked.map((a) => [a.account, []]));
+  const received = new Set<string>();
   for (const f of books.bankStatements) {
     const a = accountOf(f.bank, f.currency ?? baseCurrency());
-    if (a) files.get(a.account)!.push({ key: statementKey(a.account, f.fromDate), account: a, from: f.fromDate, to: f.toDate, file: f });
+    if (!a) continue;
+    received.add(a.account);
+    files.get(a.account)!.push({ key: statementKey(a.account, f.fromDate), account: a, from: f.fromDate, to: f.toDate, file: f });
   }
   // An XML statement counts from the first month no PDF covers; beside the PDFs of all its months it adds nothing to see. PDFs come first.
   for (const [account, list] of files) {
@@ -212,7 +221,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
         if (coversMonth(files.get(a.account)!, first, last)) continue;
         const running = last >= today;
         if (running && !byAccount.get(a.account)!.some((t) => t.date >= first)) continue;
-        missing.push({ key: statementKey(a.account, first), account: a, from: first, to: last, ...(running && { running }) });
+        missing.push({ key: statementKey(a.account, first), account: a, from: first, to: last, ...(running ? { running } : received.has(a.account) && { missing: true as const }) });
       }
     }
     return [...have, ...missing];
@@ -308,12 +317,12 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
 }
 
 /**
- * A statement with a problem: its payments do not add up to the bank's balance, or a statement is
- * missing between two that do not chain. A month without a statement is none (#88): its balance
- * comes from the movements, reconciled with no statement, and a statement may follow any time.
+ * A statement with a problem: missing on an account that has had statements, its payments do not
+ * add up to the bank's balance, or a statement is missing between two that do not chain. A month
+ * of an account that never had a statement is none (#88): its balance comes from the movements.
  */
 export const troubled = (b: Bank, s: Statement) => {
-  if (!s.file) return false;
+  if (!s.file) return s.missing === true;
   const c = b.check(s);
   return c.gap !== undefined || (c.diff != null && !c.ok);
 };

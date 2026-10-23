@@ -107,8 +107,12 @@ removes `statement` again, and the movement stays. A filed movement is never mat
 byte), so a row whose only fit is a filed hand movement becomes a new movement.
 
 **Reconciliation.** The Bank area lists every account at a bank and every account that takes
-statements. A month without a statement is no problem and no badge: «ohne Auszug», with the balance
-from the movements, reconciled with no statement, and the well to import one. A statement's own
+statements. What a month without a statement means follows the account's own history (owner's
+decision of 23.10., no setting): on an account that has had at least one imported statement it is
+«fehlt», a problem counted on the badge as before #88; on an account that never had one (a cash box,
+the owner's account, a firm that never imports) it is «ohne Auszug», no problem and no badge, with
+the balance from the movements, reconciled with no statement, and the well to import one. A gap
+between two statements whose balances do not chain stays a problem. A statement's own
 checks are as before; a hand movement a row confirmed counts as that row. Firma › Geldkonten shows
 each money account with its role; an account no statement covers shows the sum of its movements up
 to today, «aus den Bewegungen, nicht abgestimmt».

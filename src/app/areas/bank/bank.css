@@ -18,6 +18,7 @@
 .counts.stc .warn { color: var(--warn); display: inline-flex; align-items: center; gap: 6px; }
 .counts.stc .i { width: 14px; height: 14px; }
 .row .wn, .paybar .wn { color: var(--warn); }
+.row.missing .t { color: var(--warn); }
 .paybar { min-height: 22px; flex-wrap: wrap; align-items: center; color: var(--ink-2); }
 /* A long note or text wraps inside the desk: never under the payment list beside it. */
 .paybar > span { min-width: 0; }

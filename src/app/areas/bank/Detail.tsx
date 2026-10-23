@@ -121,7 +121,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
         {!s.file ? (
           s.running
             ? <span className="notice" style={{ margin: 0 }}>{t('bank.runningNotice')}</span>
-            : <span className="notice" style={{ margin: 0 }} data-testid="without-notice">{t('bank.withoutNotice', { amount: `${s.account.currency} ${fmt(b.check(s).book)}` })}</span>
+            : s.missing
+              ? <span className="notice warn" style={{ margin: 0 }} data-testid="missing-notice">{I.dot}{t('bank.missingNotice')}</span>
+              : <span className="notice" style={{ margin: 0 }} data-testid="without-notice">{t('bank.withoutNotice', { amount: `${s.account.currency} ${fmt(b.check(s).book)}` })}</span>
         ) : c!.gap ? (
           <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
         ) : c!.ok ? (

@@ -20,6 +20,8 @@ import { upgradeWorkspace } from '../src/workspace/upgrade.js';
 import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
 import { MATCH_DAYS, matchStatementRows, mergeIndex, type Scan } from '../src/books/bank-import.js';
 import { DEMO_ROOTS } from './support/workspace.js';
+import { parsePeriod } from '../src/accounting/periods.js';
+import { reportView } from '../src/app/areas/reports/model.js';
 import { testIban } from './support/iban.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
@@ -71,6 +73,29 @@ test('a movement\'s money account: by label and currency, the owner\'s in any cu
   assert.equal(roleOf({ bank: 'Lea', currency: 'CHF' }, ACCOUNTS), 'employee');
   assert.equal(accountOf({ bank: 'manual', currency: 'EUR' }, ACCOUNTS)?.account, '2451');
   assert.throws(() => bankAccountFor({ ref: 'X1', bank: 'PayPal', currency: 'CHF' }, ACCOUNTS), (e: Error) => e instanceof UnknownMoneyAccountError && /X1 moved on PayPal CHF/.test(e.message), 'never the first bank account');
+});
+
+test('the Bilanz places a money account by its chart account, never by its role: the owner\'s and the card account stay liabilities', () => {
+  const entry = (id: string, accountDebit: string, accountCredit: string, amount: number) => ({ id, transactionRef: id, date: '2026-08-04', accountDebit, accountCredit, amount });
+  const books = {
+    transactions: [], receipts: [], mappings: [], bankStatements: [],
+    journalEntries: [entry('E1', '1021', '3200', 1000), entry('E2', '6500', '2030', 120), entry('E3', '6000', '2451', 80), entry('E4', '6000', '1000', 30), entry('E5', '2030', '1021', 50)],
+    config: {},
+  } as unknown as Index;
+  const names = { 1000: 'Kasse', 1021: 'Raiffeisen', 2030: 'Visa', 2270: 'Lea Muster', 2451: 'Kontokorrent', 3200: 'Ertrag', 6000: 'Raum', 6500: 'Büro' };
+  const view = reportView('balance', books, parsePeriod('2026', '2026-12-31')!, names, false);
+  const side = new Map<string, string>();
+  let head = '';
+  for (const b of view.blocks) {
+    if (b.kind === 'head') head = b.title;
+    if (b.kind === 'group') for (const r of b.rows) side.set(r.account, `${head} ${b.title}`);
+  }
+  assert.deepEqual(Object.fromEntries(['1000', '1021', '2030', '2451'].map((a) => [a, side.get(a)])), {
+    1000: 'assets Umlaufvermögen',
+    1021: 'assets Umlaufvermögen',
+    2030: 'liabilities Kurzfristiges Fremdkapital',
+    2451: 'liabilities Langfristiges Fremdkapital',
+  }, 'the card account and the owner\'s account are debts of the firm, not liquid assets');
 });
 
 test('one predicate: a statement row and a hand movement a row confirmed are confirmed; a hand movement alone is not', () => {
