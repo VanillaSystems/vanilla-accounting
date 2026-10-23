@@ -5,6 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DuplicateFileError, findFile, yearPaths, yearsOf, type Workspace } from '../src/workspace/workspace.js';
@@ -31,7 +32,8 @@ test('saveBooks writes ledger.json and each year\'s books/*.jsonl, one record pe
   assert.deepEqual(JSON.parse(before['ledger.json']), { schema: BOOKS_SCHEMA, config: JSON.parse(readFileSync(FIXTURE, 'utf8')).config });
   saveBooks(dir, loadBooks(dir));
   assert.deepEqual(booksOnDisk(dir), before, 'load + save is a fixed point');
-  assert.deepEqual(readdirSync(dir.paths.root).sort(), ['belege.workspace.yaml', 'ledger.json', 'transactional-data']);
+  assert.deepEqual(readdirSync(dir.paths.root).sort(), ['belege.workspace.yaml', 'data', 'ledger.json', 'transactional-data']);
+  assert.deepEqual(readdirSync(dir.paths.data), [], 'the write lock is gone');
 });
 
 test('loadBooks reads every year, and saveBooks writes a record into the year of its date', () => {
@@ -282,6 +284,26 @@ test('one process saves the same books again and again, and edits to other files
   const now = loadBooks(dir);
   assert.deepEqual(now.journalEntries.map((e) => e.id).sort(), ['a', 'b', 'c', 'd', 'jc', 'jo']);
   assert.equal(now.receipts[0].remarks, 'other');
+});
+
+test('a save waits while another live process holds the write lock, and takes over a lock whose process is gone', () => {
+  const dir = root();
+  const lock = join(dir.paths.data, 'books.lock');
+  mkdirSync(dir.paths.data, { recursive: true });
+  const holder = spawn(process.execPath, ['-e', `setTimeout(() => require('fs').rmSync(${JSON.stringify(lock)}, { force: true }), 300)`]);
+  writeFileSync(lock, String(holder.pid));
+  const books = loadBooks(dir);
+  books.journalEntries.push(entry('waited'));
+  const started = Date.now();
+  saveBooks(dir, books);
+  assert.ok(Date.now() - started >= 200, 'waited for the holder');
+  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'waited'));
+  const gone = spawnSync(process.execPath, ['-e', '0']).pid!;
+  writeFileSync(lock, String(gone));
+  books.journalEntries.push(entry('took-over'));
+  saveBooks(dir, books);
+  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'took-over'));
+  assert.deepEqual(readdirSync(dir.paths.data), []);
 });
 
 test('the server runs a change once more on books loaded afresh when another process saved meanwhile; a change with effects elsewhere runs once', async () => {

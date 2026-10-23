@@ -7,7 +7,7 @@
  * transactional-data/<year>/books/*.jsonl, one record per line, sorted by id (src/books/years.ts).
  * A closed year's files are never written; saveBooks refuses books that would change one.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import type { AccountingConfig, ApprovedReturn, FiledFigures, Index, JournalEntry, Receipt } from '../types/index.js';
 import { vat } from '../engines/index.js';
@@ -154,6 +154,39 @@ const writeAtomic = (path: string, text: string) => {
   renameSync(tmp, path);
 };
 
+const alive = (pid: number): boolean => {
+  try { process.kill(pid, 0); return true; } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM'; }
+};
+
+/**
+ * The books' write lock: data/books.lock holding the pid, from saveBooks' stale check to its last
+ * write, so two processes' saves never interleave (#123). A lock whose process is gone is taken
+ * over; one held longer than a few seconds refuses the save as stale.
+ */
+function lockBooks(ws: Workspace): () => void {
+  const path = join(ws.paths.data, 'books.lock');
+  const mine = `${path}.${process.pid}.tmp`;
+  mkdirSync(ws.paths.data, { recursive: true });
+  writeFileSync(mine, String(process.pid));
+  const until = Date.now() + 5000;
+  try {
+    for (;;) {
+      try {
+        linkSync(mine, path);
+        return () => rmSync(path, { force: true });
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+        const pid = Number(readIfThere(path) ?? 0);
+        if (!pid || pid === process.pid || !alive(pid)) rmSync(path, { force: true });
+        else if (Date.now() > until) throw new StaleBooksError([relative(ws.paths.root, path)]);
+        else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+      }
+    }
+  } finally {
+    rmSync(mine, { force: true });
+  }
+}
+
 /**
  * Writes the books' files that changed, each atomically, then moves the files of open years to
  * where their records say (placeFiles). Throws, before writing anything, for a broken seal, a
@@ -171,15 +204,20 @@ export function saveBooks(ws: Workspace, books: Books): void {
   const changed = [...new Set([...before.files.keys(), ...files.keys()])].filter((rel) => before.files.get(rel) !== files.get(rel));
   const closed = changed.filter((rel) => isClosedYear(yearOfFile(rel), closedThrough));
   if (closed.length) throw new ClosedPeriodError(`Das Jahr ${yearOfFile(closed[0])} ist abgeschlossen, nichts gespeichert: ${closed.join(', ')} würde sich ändern.`, closedThrough);
-  const stale = changed.filter((rel) => readIfThere(join(ws.paths.root, rel)) !== before.files.get(rel));
-  if (readIfThere(ws.paths.ledger) !== before.ledger) stale.push(relative(ws.paths.root, ws.paths.ledger));
-  if (stale.length) throw new StaleBooksError(stale);
-  for (const rel of changed) {
-    const text = files.get(rel);
-    if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
-    else writeAtomic(join(ws.paths.root, rel), text);
+  const unlock = lockBooks(ws);
+  try {
+    const stale = changed.filter((rel) => readIfThere(join(ws.paths.root, rel)) !== before.files.get(rel));
+    if (readIfThere(ws.paths.ledger) !== before.ledger) stale.push(relative(ws.paths.root, ws.paths.ledger));
+    if (stale.length) throw new StaleBooksError(stale);
+    for (const rel of changed) {
+      const text = files.get(rel);
+      if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
+      else writeAtomic(join(ws.paths.root, rel), text);
+    }
+    if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
+  } finally {
+    unlock();
   }
-  if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
   onDisk.set(books, { files, ledger });
   placeFiles(ws, books);
 }
