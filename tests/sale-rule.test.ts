@@ -61,8 +61,9 @@ test('an answer books its payment only: no rule file written, nothing drafted', 
 
 test('«Immer so?» on a consistent payer drafts the rule for its card; kept, it books the payer\'s next payment, named as Firma › Regeln names it (r4w-8)', async () => {
   assert.deepEqual(await alwaysSo('K-1'), { kind: 'rule', path: GUIDE });
+  assert.deepEqual(await alwaysSo('K-1'), { kind: 'rule', path: GUIDE }, 'asked again (the page reloaded)');
   const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(GUIDE)}`)).json as unknown as DraftView;
-  assert.equal(card.added.length, 1, 'one rule on the card');
+  assert.equal(card.added.length, 1, 'one rule on the card, however often «Immer so?» is clicked');
   assert.equal((await api.send('POST', '/api/rules/draft', { kind: 'keep', path: GUIDE, basis: card.basis, confirm: card.confirm })).json.ok, true);
   const [rule] = kept();
   assert.deepEqual([rule.when, rule.then], [{ payer: 'CH0000762011623852959', direction: 'in' }, { account: '3400', vat: 'V81' }]);
