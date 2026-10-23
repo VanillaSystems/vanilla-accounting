@@ -6,7 +6,7 @@
  * only, with the pairing token (src/server/phone.ts); it is off until then.
  * Nothing here needs Electron, so the tests run it in Node.
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type RequestListener, type Server } from 'node:http';
 import { join, resolve } from 'node:path';
 import express from 'express';
@@ -14,8 +14,10 @@ import { isAppPath } from '../server/app-paths.js';
 import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, usePhoneToken } from '../server/phone.js';
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
 import { readManifest } from '../workspace/manifest.js';
-import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import { bundledDemo } from '../workspace/demo-copy.js';
+import { isOldLayout } from '../workspace/layout.js';
+import { upgradeWorkspace } from '../workspace/upgrade.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 import type { DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
 import { qrSvg } from './qr.js';
@@ -88,14 +90,24 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
 
   const known = (root: string): KnownBooks => {
     const demo = resolve(root) === resolve(opts.demoRoot);
+    if (!existsSync(root)) return { root, demo };
     // A look at the name, never workspaceAt: that would switch the engines to these books' setup while other books are open.
-    try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch { return { root, demo }; }
+    try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch (e) { return { root, demo, problem: e instanceof Error ? e.message : String(e) }; }
+  };
+
+  /** The demo copy as this version reads it: one from an app before 0.4.0 (books.json at its top) is thrown away, it is a copy. */
+  const freshDemoCopy = () => {
+    if (isOldLayout(opts.demoRoot)) rmSync(opts.demoRoot, { recursive: true, force: true });
+    if (!appFolderIn(opts.demoRoot)) copyTree(opts.demoSource ?? join(APP_ROOT, 'demo'), opts.demoRoot);
   };
 
   async function openBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);
     if (bundledDemo(root)) return openDemo();
-    if (!appFolderIn(root)) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
+    if (root === resolve(opts.demoRoot)) freshDemoCopy();
+    const folder = appFolderIn(root);
+    if (!folder) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
+    if (isOldLayout(folder)) throw new WorkspaceRefusal(`${root} holds the books in the layout before 0.4.0 (books.json).`, { code: 'oldLayout', params: { root } });
     workspaceAt(root);
     if (books) (await import('../server/books.js')).reopenWorkspace(root);
     else {
@@ -109,9 +121,19 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     return open;
   }
 
-  async function openDemo(): Promise<KnownBooks> {
-    if (!appFolderIn(opts.demoRoot)) copyTree(opts.demoSource ?? join(APP_ROOT, 'demo'), opts.demoRoot);
-    return openBooks(opts.demoRoot);
+  const openDemo = (): Promise<KnownBooks> => openBooks(opts.demoRoot);
+
+  /**
+   * Books in the layout before 0.4.0, moved into vanilla-accounting/ and split by year as
+   * `npm run update` does it (src/workspace/upgrade.ts: books.json stays as a backup in
+   * data/backups/, no record changes, the seals hold), then opened.
+   */
+  async function upgradeBooks(root: string): Promise<KnownBooks> {
+    root = resolve(root);
+    const folder = appFolderIn(root);
+    if (!folder) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
+    await upgradeWorkspace(workspaceAt(folder));
+    return openBooks(root);
   }
 
   // ─── The phone ─────────────────────────────────────────────────────────────
@@ -161,6 +183,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     open,
     recent: readState(opts.stateFile).recent.map(known),
     booksHome: opts.booksHome,
+    folders: existsSync(opts.booksHome) ? readdirSync(opts.booksHome, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) : [],
   });
 
   const app = express();
@@ -183,6 +206,11 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
   app.post('/api/desktop/demo', async (_req, res) => {
     try { res.json(await openDemo()); } catch (e) { refuse(res, e); }
+  });
+  app.post('/api/desktop/upgrade', async (req, res) => {
+    const root = (req.body as { root?: unknown }).root;
+    if (typeof root !== 'string' || !root.trim()) return refuse(res, new WorkspaceError('No folder given.'));
+    try { res.json(await upgradeBooks(root)); } catch (e) { refuse(res, e); }
   });
   app.get('/api/desktop/phone', (_req, res) => { res.json(phoneInfo()); });
   app.post('/api/desktop/phone', async (req, res) => {
@@ -219,6 +247,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
 
 function refuse(res: express.Response, e: unknown): void {
   if (e instanceof SetupError) res.status(400).json({ error: e.message, code: 'setup', params: e.refusal } satisfies ApiErrorBody);
+  else if (e instanceof WorkspaceRefusal) res.status(400).json({ error: e.message, ...e.refusal } satisfies ApiErrorBody);
   else if (e instanceof WorkspaceError) res.status(400).json({ error: e.message, code: 'notWorkspace' } satisfies ApiErrorBody);
   else res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
 }
