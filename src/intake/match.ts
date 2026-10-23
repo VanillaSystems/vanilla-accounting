@@ -3,6 +3,9 @@
  * - needsVisionReview: moved to receipts/ under its own name, archived, no model call
  * - otherwise: the model (src/llm/ask.ts) names it and finds its payment; the file is renamed
  *   into receipts/ and linked when the model is at least 80 % sure
+ * Code links what it can without the model, before and after: a receipt by amount and number
+ * (linkByCode), an order to its payout (order-links.ts), several receipts that add up to one
+ * payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
 import { existsSync } from 'node:fs';
@@ -19,6 +22,8 @@ import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
 import { linkOrdersToPayouts } from './order-links.js';
+import { linkReceiptSets } from './receipt-sets.js';
+import { creditSigned } from '../accounting/credit-signed.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -81,15 +86,6 @@ function factsOf(r: Receipt): { date?: string; amount?: number; currency?: strin
 export const BANK_WORDS = new Set(['zahlung', 'gutschrift', 'belastung', 'lastschrift', 'einkauf', 'karte', 'debit', 'kredit', 'transfer', 'payment', 'rechnung', 'auftrag', 'dauerauftrag', 'ebanking', 'twint', 'mastercard', 'visa', 'august', 'september', 'oktober', 'november', 'dezember', 'januar', 'februar', 'april', 'juni', 'juli']);
 export const nameWords = (tx: BankTransaction) => [...new Set([tx.description, tx.counterparty ?? '', ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference ?? ''])].join(' ').toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !BANK_WORDS.has(w));
 
-/**
- * A credit note's total is money back: when the receipt's VAT says so (its tax, or its net and
- * gross, below zero), its amount is negative too, whatever sign the reader gave it (corner-34).
- */
-export function creditSigned(r: Pick<Receipt, 'amount' | 'vatSummary'>): number | undefined {
-  const groups = r.vatSummary ?? [];
-  const back = groups.length > 0 && (groups.reduce((sum, g) => sum + g.vat, 0) < 0 || groups.every((g) => (g.gross ?? g.net ?? 0) < 0));
-  return r.amount !== undefined && back && r.amount > 0 ? -r.amount : r.amount;
-}
 
 /**
  * What code links without the model (MISSION: a payment that matches a receipt by amount and
@@ -190,6 +186,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const byCode = () => {
     for (const l of books.update(linkByCode)) log(l.filed ? `pays the filed payment ${l.payment} by amount and number: receipt ${l.receipt}, not linked` : `linked by amount and number: receipt ${l.receipt} → ${l.payment}`);
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
+    for (const s of books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, (d) => !lock.isClosed(d)); })) log(`linked ${s.receipts.length} receipts that add up to the payment: ${s.receipts.join(', ')} → ${s.payment}`);
   };
   byCode();
   const snapshot = books.read();
