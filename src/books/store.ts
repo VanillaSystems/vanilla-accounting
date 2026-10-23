@@ -39,6 +39,7 @@ export class OldLayoutError extends Error {}
 /** The books' files as they were read or last written, by path relative to the workspace. */
 const onDisk = new WeakMap<Books, Map<string, string>>();
 const seals = new WeakMap<Books, SealReport>();
+const homes = new WeakMap<Books, WorkspacePaths>();
 const warned = new Set<string>();
 
 const fileOf = (year: string, part: Part) => `transactional-data/${year}/books/${BOOK_FILES[part]}`;
@@ -87,6 +88,7 @@ export function loadBooks(ws: Workspace): Books {
     delete e.by;
   }
   onDisk.set(books, files);
+  homes.set(books, ws.paths);
   const report = checkSeals(ws, books);
   seals.set(books, report);
   for (const c of report.checks) {
@@ -105,6 +107,9 @@ export const hasBooks = (ws: Workspace): boolean => existsSync(ws.paths.ledger) 
 export function sealsOf(books: Books): SealReport {
   return seals.get(books) ?? { checks: [], unsealed: [] };
 }
+
+/** Where loadBooks read these books from; none for books made in memory. */
+export const homeOf = (books: Books): WorkspacePaths | undefined => homes.get(books);
 
 /** The books before anything is read in. */
 export const emptyBooks = (): Books => ({ schema: BOOKS_SCHEMA, receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: [], config: {} });
