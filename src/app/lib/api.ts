@@ -207,6 +207,7 @@ export function errorText(e: unknown): string {
     case 'accountOutsideStatements': return t('error.accountOutsideStatements', b.params);
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
+    case 'oldLayout': return t('desktop.oldLayout', { root: b.params.root });
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
@@ -450,6 +451,8 @@ export const api = {
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
+    /** Books in the layout before 0.4.0: moved into vanilla-accounting/ as npm run update does, then opened. */
+    upgrade: (root: string) => request<KnownBooks>('POST', '/api/desktop/upgrade', { root }),
     phone: () => request<PhoneInfo>('GET', '/api/desktop/phone'),
     setPhone: (on: boolean) => request<PhoneInfo>('POST', '/api/desktop/phone', { on }),
     renewPhone: () => request<PhoneInfo>('POST', '/api/desktop/phone', { renew: true }),

@@ -30,8 +30,12 @@ export interface SmokeBridge {
   quit(): void;
 }
 
-/** Books the app knows: their folder and, when it still holds a workspace, the company's name. */
-export interface KnownBooks { root: string; name?: string; demo: boolean }
+/**
+ * Books the app knows: their folder and, when it still holds a workspace, the company's name.
+ * `problem`: the folder is there, but its manifest cannot be read (why, in the reader's words);
+ * neither name nor problem: the folder is gone.
+ */
+export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean }
 
 /** GET /api/desktop */
 export interface DesktopInfo {
@@ -40,6 +44,8 @@ export interface DesktopInfo {
   recent: KnownBooks[];
   /** Where new books go unless the person picks another folder. */
   booksHome: string;
+  /** The folders already in booksHome, so a new default name steps aside from one that is taken. */
+  folders: string[];
 }
 
 /** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */

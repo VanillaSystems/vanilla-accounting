@@ -84,7 +84,9 @@ export function parseManifest(source: string, path: string): Manifest {
       ...(iban ? { iban } : {}),
     };
   });
-  if (bankAccounts.filter((a) => a.role === 'owner').length > 1) fail('bankAccounts: one account at most has the role owner');
+  // The owner is one person on one ledger account, which may run in several currencies (manual CHF, EUR, USD on 2451).
+  const ownerAccounts = [...new Set(bankAccounts.filter((a) => a.role === 'owner').map((a) => a.account))];
+  if (ownerAccounts.length > 1) fail(`bankAccounts: the owner's accounts (role owner) book on one ledger account, not on ${ownerAccounts.join(' and ')}`);
   const seen = new Set<string>();
   for (const a of bankAccounts) {
     for (const key of [`${a.bank} ${a.currency}`, ...(a.iban ? [`${a.iban} ${a.currency}`] : [])]) {
