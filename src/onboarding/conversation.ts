@@ -8,10 +8,11 @@
  *
  * Words are i18n keys under `onboarding.` with their parameters; the UI says them with t(). Pure.
  */
-import { SETUP_TOPICS, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
+import { SETUP_TOPICS, kindsOfAnswer, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { ClearPartner, MixedPartner, SetupFacts } from './facts.js';
 import { TOPIC_HAND, type HandPlace } from './hand.js';
 import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, methodOf, type VatSetup } from '../workspace/vat-setup.js';
+import { SALES_KINDS, type SalesKind } from '../workspace/setup.js';
 
 /** A parameter of a line: a value, another key said in the person's language, or a date to format. */
 export type Param = string | number | { key: string } | { date: string };
@@ -25,6 +26,8 @@ export type SetupCard =
   | { kind: 'company'; company: SetupFacts['company'] }
   /** The VAT setup the answer asks for, against the one the app has: `proposed` waits for «Übernehmen», `kept` was taken. */
   | { kind: 'vat'; from: VatSetup; to: VatKind; state: 'proposed' | 'kept' }
+  /** What the firm sells as answered, with the default accounts that follow; `proposed` until the profile says the same («Übernehmen»). */
+  | { kind: 'sells'; kinds: SalesKind[]; purchase: Array<{ kind: SalesKind; account: string }>; sales: Array<{ kind: SalesKind; account: string }>; state: 'proposed' | 'kept' }
   | { kind: 'needs'; items: Array<{ what: Line; why: Line; who: Line }>; note: Line }
   | { kind: 'opening'; year: string; rows: SetupFacts['opening'] }
   | { kind: 'banks'; banks: SetupFacts['banks'] }
@@ -45,6 +48,8 @@ export interface SetupStep {
   reply?: { lines: Line[]; card?: SetupCard; go?: HandPlace };
   /** Where this step is done by hand, offered on the card. */
   go?: HandPlace;
+  /** The choices are toggles, any combination, sent at once (`sells`): the answer joins them (sellsAnswer). */
+  multi?: true;
 }
 
 export type VatKind = 'none' | 'effective' | 'net-rate';
@@ -93,6 +98,22 @@ const runningFrom = (f: SetupFacts, length: Length) => {
 const PROGRAMS_WITH_JOURNAL = new Set(['bexio', 'abacus', 'banana']);
 const programParam = (v: AnswerValue<'program'> | undefined): Param => ({ key: `onboarding.program.${v ?? 'excel'}` });
 
+/** Whether the answer to `sells` is what the profile keeps: nothing left to take over. A workspace without a profile is not asked. */
+function sellsSettled(p: SetupProgress, f: SetupFacts): boolean {
+  if (!f.sells) return true;
+  const a = p.answers.sells?.value;
+  return !!a && kindsOfAnswer(a).join('+') === f.sells.kinds.join('+');
+}
+
+/** The card of an answer to `sells`: the kinds and the default accounts they give. */
+function sellsCard(kinds: SalesKind[], f: Required<Pick<SetupFacts, 'sells'>>['sells'], kept: boolean): Extract<SetupCard, { kind: 'sells' }> {
+  return {
+    kind: 'sells', kinds, state: kept ? 'kept' : 'proposed',
+    purchase: kinds.flatMap((kind) => (f.accounts[kind].purchase ? [{ kind, account: f.accounts[kind].purchase! }] : [])),
+    sales: kinds.map((kind) => ({ kind, account: f.accounts[kind].sales })),
+  };
+}
+
 /** Whether a VAT answer is settled: as the app has it now, or nothing to change. */
 function vatSettled(p: SetupProgress, f: SetupFacts): boolean {
   const a = p.answers.vat?.value;
@@ -113,7 +134,7 @@ export function topicStates(p: SetupProgress, f: SetupFacts): Record<SetupTopic,
   const length = lengthOf(p, f);
   const filed = filedCount(p, f);
   const seen: Record<SetupTopic, TopicState> = {
-    firm: a.company && vatSettled(p, f) ? 'done' : 'open',
+    firm: a.company && vatSettled(p, f) && sellsSettled(p, f) ? 'done' : 'open',
     periods: !a.start ? 'open' : !needsFiled(p, f) ? 'done' : !a.filed ? 'open'
       : !filed || (!!f.closedThrough && f.closedThrough >= endOf(f, length, filed)) ? 'done' : 'skipped',
     history: a.program?.value === 'new' ? 'done' : a.needs ? 'skipped' : 'open',
@@ -170,6 +191,17 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     choices: (['none', 'effective', 'net-rate', 'unknown'] as const).map((v) => choice('vat', v, { sub: true, primary: v === now })),
     reply: vatReply(),
   })) return steps;
+
+  // Was verkauft ihr? (#46)
+  if (f.sells) {
+    const sold = a.sells ? kindsOfAnswer(a.sells.value) : undefined;
+    if (!take({
+      id: 'sells', topic: 'firm', multi: true,
+      say: [L('s.sells')],
+      choices: SALES_KINDS.map((k) => ({ ...choice('sells', k, { sub: true }), ...(f.sells!.kinds.includes(k) ? { primary: true } : {}) })),
+      ...(sold ? { reply: { lines: [L('r.sells')], card: sellsCard(sold, f.sells, sellsSettled(p, f)) } } : {}),
+    })) return steps;
+  }
 
   // Geschäftsjahr
   const from = runningFrom(f, length);
@@ -313,7 +345,7 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
 
 /** Typed text that names exactly one of the open question's answers picks it; anything else goes to the AI. */
 export function typedChoice(step: SetupStep | undefined, typed: string, labelOf: (c: Choice) => string): string | undefined {
-  if (!step || step.answer || !step.choices.length) return undefined;
+  if (!step || step.answer || !step.choices.length || step.multi) return undefined;
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   const text = norm(typed);
   if (!text) return undefined;

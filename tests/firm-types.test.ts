@@ -78,7 +78,7 @@ test('the manifest writes the setup back as one explicit block, and the method r
 });
 
 test('the setup questions skip the method, basis and period of a firm that is not registered', () => {
-  const freelancer: Partial<Answers> = { legalForm: 'Einzelfirma', vatRegistered: 'no', fiscalYear: 'calendar', start: 'new', sells: 'services', foreignCustomers: 'no', imports: 'no', employees: 'none', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no' };
+  const freelancer: Partial<Answers> = { legalForm: 'Einzelfirma', vatRegistered: 'no', fiscalYear: 'calendar', start: 'new', sells: ['services'], foreignCustomers: 'no', imports: 'no', employees: 'none', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no' };
   assert.equal(asked('vatMethod', freelancer), false);
   assert.equal(asked('vatMethod', { ...freelancer, vatRegistered: 'yes' }), true);
   assert.equal(firstUnsupported(freelancer), undefined);

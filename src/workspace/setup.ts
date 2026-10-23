@@ -10,7 +10,37 @@ import { VAT_PERIODS, asNetRates, type NetRate, type VatPeriod, type VatSetup } 
 export const LEGAL_FORMS = ['GmbH', 'AG', 'Einzelfirma'] as const;
 export type LegalForm = (typeof LEGAL_FORMS)[number];
 export const BUSINESS_PROFILES = ['services', 'goods', 'both'] as const;
+/** The chart's profile, and what the manifest's `profile.sells` keeps: services, goods, or both. */
 export type BusinessProfile = (typeof BUSINESS_PROFILES)[number];
+
+/**
+ * «Was verkauft ihr?» (#46): products the firm makes itself, goods it buys and resells (Handel),
+ * services, in any combination. The manifest keeps the answer as it always did, `profile.sells:
+ * services | goods | both`, and which goods in an added `profile.goods: [made, traded]` (profileOf,
+ * kindsOf), so an older app reads it unchanged and a manifest without `goods` reads its goods as
+ * traded, the webshop `goods` stood for.
+ */
+export const SALES_KINDS = ['made', 'traded', 'services'] as const;
+export type SalesKind = (typeof SALES_KINDS)[number];
+export type GoodsKind = Exclude<SalesKind, 'services'>;
+
+/** The kinds in their fixed order, each once. */
+export const salesKinds = (kinds: readonly string[]): SalesKind[] => SALES_KINDS.filter((k) => kinds.includes(k));
+
+/** The coarse profile of the kinds: what the chart and the manifest's `sells` know. */
+export function profileOf(kinds: readonly SalesKind[]): BusinessProfile {
+  const goods = kinds.some((k) => k !== 'services');
+  return goods && kinds.includes('services') ? 'both' : goods ? 'goods' : 'services';
+}
+
+/** The goods kinds the manifest's `goods` keeps. */
+export const goodsOf = (kinds: readonly SalesKind[]): GoodsKind[] => kinds.filter((k): k is GoodsKind => k !== 'services');
+
+/** The kinds a manifest's `sells` and `goods` say; `goods` absent: traded, what `goods` meant before #46. */
+export function kindsOf(sells: BusinessProfile, goods: readonly GoodsKind[] | undefined): SalesKind[] {
+  const which: GoodsKind[] = goods?.length ? [...goods] : ['traded'];
+  return salesKinds([...(sells === 'services' ? [] : which), ...(sells === 'goods' ? [] : ['services' as const])]);
+}
 
 export interface Option {
   value: string;
@@ -28,8 +58,10 @@ interface QuestionSpec {
   /** One line, in plain words: why the answer matters. */
   why: string;
   options: readonly Option[];
-  /** Several answers allowed (comma separated); none is a valid answer. */
+  /** Several answers allowed (comma separated); none is a valid answer, unless `required`. */
   multi?: boolean;
+  /** A multiple-choice question that needs one answer at least. */
+  required?: boolean;
   /** Asked only when the answers so far say so; otherwise the answer is absent. */
   when?: (answers: Given) => boolean;
 }
@@ -115,11 +147,13 @@ export const QUESTIONS = {
   },
   sells: {
     ask: 'What you sell',
-    why: 'Picks the accounts of your chart: services (consulting, software) or goods (a shop, a webshop), or both.',
+    why: 'Sets the default accounts: material for your own products (4000) or goods bought to resell (4200); sales of own products (3000), traded goods (3200), services (3400). Any combination.',
+    multi: true,
+    required: true,
     options: [
+      { value: 'made', label: 'products you make yourself' },
+      { value: 'traded', label: 'goods you buy and resell (trade)' },
       { value: 'services', label: 'services' },
-      { value: 'goods', label: 'goods' },
-      { value: 'both', label: 'both' },
     ],
   },
   foreignCustomers: {
@@ -191,7 +225,7 @@ export const PRESETS = {
     label: 'Consultant / services GmbH',
     answers: {
       legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
-      fiscalYear: 'calendar', start: 'new', sells: 'services', foreignCustomers: 'yes', imports: 'no',
+      fiscalYear: 'calendar', start: 'new', sells: ['services'], foreignCustomers: 'yes', imports: 'no',
       employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
     },
   },
@@ -199,7 +233,7 @@ export const PRESETS = {
     label: 'Webshop / goods GmbH',
     answers: {
       legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
-      fiscalYear: 'calendar', start: 'new', sells: 'goods', foreignCustomers: 'no', imports: 'yes',
+      fiscalYear: 'calendar', start: 'new', sells: ['traded'], foreignCustomers: 'no', imports: 'yes',
       employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'yes',
     },
   },
@@ -207,7 +241,7 @@ export const PRESETS = {
     label: 'Trades / construction GmbH',
     answers: {
       legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
-      fiscalYear: 'calendar', start: 'new', sells: 'both', foreignCustomers: 'no', imports: 'no',
+      fiscalYear: 'calendar', start: 'new', sells: ['made', 'services'], foreignCustomers: 'no', imports: 'no',
       employees: 'staff', ownerPaysPrivately: 'yes', privateUse: ['car', 'phone'], payouts: 'no',
     },
   },
@@ -215,7 +249,7 @@ export const PRESETS = {
     label: 'Freelancer, not registered for VAT',
     answers: {
       legalForm: 'Einzelfirma', vatRegistered: 'no',
-      fiscalYear: 'calendar', start: 'new', sells: 'services', foreignCustomers: 'no', imports: 'no',
+      fiscalYear: 'calendar', start: 'new', sells: ['services'], foreignCustomers: 'no', imports: 'no',
       employees: 'none', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
     },
   },
@@ -247,7 +281,12 @@ export function firstUnsupported(answers: Partial<Answers>): { key: QuestionKey;
 
 /** The first question asked but not answered, in question order. */
 export function firstMissing(answers: Partial<Answers>): QuestionKey | undefined {
-  return QUESTION_ORDER.find((key) => asked(key, answers) && !('multi' in QUESTIONS[key]) && answers[key] === undefined);
+  return QUESTION_ORDER.find((key) => {
+    if (!asked(key, answers)) return false;
+    const q: QuestionSpec = QUESTIONS[key];
+    const given = answers[key];
+    return q.multi ? !!q.required && !([] as string[]).concat(given ?? []).length : given === undefined;
+  });
 }
 
 export function isSupported(answers: Answers): answers is Answers & SupportedAnswers {

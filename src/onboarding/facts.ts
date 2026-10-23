@@ -6,7 +6,7 @@
  * first turn needs no AI. Pure.
  */
 import type { Address } from '../invoices/model.js';
-import type { LegalForm } from '../workspace/setup.js';
+import type { LegalForm, SalesKind } from '../workspace/setup.js';
 import type { VatSetup } from '../workspace/vat-setup.js';
 import type { SetupProgress, TopicStates } from './model.js';
 
@@ -25,6 +25,11 @@ export interface SetupFacts {
   partners: PartnerBins;
   /** Rules the company keeps (Firma › Regeln), switched on. */
   rules: number;
+  /**
+   * What the firm sells as the manifest's profile keeps it, and each kind's default accounts
+   * (modules/ch/setup.yaml `sells`); absent for a workspace without a profile, which is not asked.
+   */
+  sells?: { kinds: SalesKind[]; accounts: Record<SalesKind, { purchase?: string; sales: string }> };
 }
 
 /** One partner always booked the same way: what a rule would book. */

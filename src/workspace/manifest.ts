@@ -7,7 +7,7 @@ import { parseDocument } from 'yaml';
 import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
 import { WorkspaceError, WorkspaceRefusal, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
 import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
-import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
+import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, kindsOf, optionOf, type BusinessProfile, type GoodsKind, type LegalForm, type Preset, type SalesKind } from './setup.js';
 import { parseVatSetup } from './vat-setup.js';
 import {
   DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, OWN_TEXTS,
@@ -196,7 +196,9 @@ function readProfile(raw: unknown, fail: (msg: string) => never): WorkspaceProfi
   if (!raw || typeof raw !== 'object') return fail('profile must be a mapping');
   const p = raw as Record<string, unknown>;
   if (!PRESET_NAMES.includes(p.preset as Preset)) fail(`profile.preset must be one of ${PRESET_NAMES.join(', ')}`);
+  const sells = readSells(p, fail);
   for (const key of PROFILE_KEYS) {
+    if (key === 'sells') continue;
     const multi = 'multi' in QUESTIONS[key];
     const values = multi ? p[key] : [p[key]];
     const allowed = QUESTIONS[key].options.filter((o) => !('unsupported' in o)).map((o) => o.value);
@@ -204,5 +206,19 @@ function readProfile(raw: unknown, fail: (msg: string) => never): WorkspaceProfi
     if (!ok) fail(`profile.${key} must be ${multi ? 'a list of ' : 'one of '}${allowed.join(', ')}${p[key] === undefined ? ' (missing: rerun npm run init in a new folder, or add it)' : ''}`);
   }
   if (p.exportTo !== undefined && (typeof p.exportTo !== 'string' || !p.exportTo.trim())) fail('profile.exportTo must be a non-empty text');
-  return p as unknown as WorkspaceProfile;
+  const { goods: _, ...rest } = p;
+  return { ...rest, sells } as unknown as WorkspaceProfile;
+}
+
+/**
+ * What the firm sells (src/workspace/setup.ts SALES_KINDS), from the manifest's `sells` (services,
+ * goods or both, as it has always been kept) and `goods` (which goods: made, traded); a manifest
+ * without `goods` sells traded goods, what `goods` stood for before #46.
+ */
+function readSells(p: Record<string, unknown>, fail: (msg: string) => never): SalesKind[] {
+  if (!BUSINESS_PROFILES.includes(p.sells as BusinessProfile)) fail(`profile.sells must be one of ${BUSINESS_PROFILES.join(', ')}${p.sells === undefined ? ' (missing: rerun npm run init in a new folder, or add it)' : ''}`);
+  const goods = p.goods;
+  const kinds = ['made', 'traded'];
+  if (goods !== undefined && (!Array.isArray(goods) || !goods.every((g) => kinds.includes(g)))) fail(`profile.goods must be a list of ${kinds.join(', ')}`);
+  return kindsOf(p.sells as BusinessProfile, goods as GoodsKind[] | undefined);
 }

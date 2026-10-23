@@ -7,6 +7,7 @@
  */
 
 import { parseVatSetup, type VatSetup } from '../workspace/vat-setup.js';
+import { salesKinds, type SalesKind } from '../workspace/setup.js';
 
 /** In the order the conversation takes them: the old program before the opening, whose balance sheet it holds. */
 export const SETUP_TOPICS = ['firm', 'periods', 'history', 'opening', 'bank', 'receipts', 'knowledge'] as const;
@@ -39,6 +40,8 @@ export interface SetupProgress {
 export const QUESTIONS = {
   company: ['ok', 'fix'],
   vat: ['none', 'effective', 'net-rate', 'unknown'],
+  /** «Was verkauft ihr?» (#46): the kinds chosen, in SALES_KINDS order, joined by «+» (sellsAnswer). */
+  sells: ['made', 'traded', 'services', 'made+traded', 'made+services', 'traded+services', 'made+traded+services'],
   start: ['year', 'during'],
   filed: ['0', '1', '2', '3'],
   program: ['bexio', 'abacus', 'banana', 'excel', 'accountant', 'new'],
@@ -61,6 +64,10 @@ export interface Answer<Q extends QuestionId = QuestionId> {
   kept?: { before: VatSetup; at: string };
 }
 export type Answers = { [Q in QuestionId]?: Answer<Q> };
+
+/** The kinds an answer to `sells` names, and the answer of the kinds. */
+export const kindsOfAnswer = (value: string): SalesKind[] => salesKinds(value.split('+'));
+export const sellsAnswer = (kinds: readonly SalesKind[]): AnswerValue<'sells'> => salesKinds(kinds).join('+') as AnswerValue<'sells'>;
 
 export const isQuestion = (s: unknown): s is QuestionId => typeof s === 'string' && Object.hasOwn(QUESTIONS, s);
 export const isAnswerOf = <Q extends QuestionId>(q: Q, v: unknown): v is AnswerValue<Q> => (QUESTIONS[q] as readonly unknown[]).includes(v);

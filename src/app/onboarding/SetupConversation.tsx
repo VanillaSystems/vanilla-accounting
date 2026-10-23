@@ -18,7 +18,9 @@ import type { ClearPartner } from '../../onboarding/facts.js';
 import { askedAt, vatLine, vatSetupOf, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import { placeKeys, type HandPlace } from '../../onboarding/hand.js';
-import { answer, keepVat, undoVat, useSetup } from './state.js';
+import { answer, keepSells, keepVat, undoVat, useSetup } from './state.js';
+import { kindsOfAnswer } from '../../onboarding/model.js';
+import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
 
 type Go = (route: Route) => void;
@@ -58,7 +60,8 @@ function Question({ step, onGo }: { step: SetupStep; onGo: Go }) {
       {step.say.map((l, i) => <Ai key={i}><p>{say(l)}</p></Ai>)}
       {step.card ? <div className="obind"><Card card={step.card} onGo={onGo} /></div> : null}
       {step.go && !step.answer ? <div className="obind"><ByHand go={step.go} onGo={onGo} /></div> : null}
-      {!step.answer && step.choices.length ? (
+      {!step.answer && step.multi ? <div className="obind"><Toggles step={step} /></div> : null}
+      {!step.answer && step.choices.length && !step.multi ? (
         <div className="obind">
           <div className="qacts" role="group" aria-label={say(step.say.at(-1)!)}>
             {step.choices.map((c) => (
@@ -73,15 +76,34 @@ function Question({ step, onGo }: { step: SetupStep; onGo: Go }) {
   );
 }
 
+/** A step whose choices go together (`sells`): each a toggle, started from what the app has, sent with «Weiter». */
+function Toggles({ step }: { step: SetupStep }) {
+  const { busy } = useSetup();
+  const [on, setOn] = useState<string[]>(() => step.choices.filter((c) => c.primary).map((c) => c.value));
+  const flip = (v: string) => setOn((x) => (x.includes(v) ? x.filter((y) => y !== v) : [...x, v]));
+  const kinds = salesKinds(on);
+  return (
+    <div className="qacts" role="group" aria-label={say(step.say.at(-1)!)}>
+      {step.choices.map((c) => (
+        <button key={c.value} type="button" role="checkbox" aria-checked={on.includes(c.value)} className={`btn${on.includes(c.value) ? ' primary' : ''}`} disabled={busy} data-answer={c.value} onClick={() => flip(c.value)}>
+          {say(c.label)}{c.sub ? <small>{say(c.sub)}</small> : null}
+        </button>
+      ))}
+      <button type="button" className="btn" disabled={busy || !kinds.length} title={kinds.length ? undefined : t('onboarding.sellsCard.none')} data-act="sells-next" onClick={() => void keepSells(kinds)}>{t('onboarding.sellsCard.next')}</button>
+    </div>
+  );
+}
+
 function Answered({ step, onGo }: { step: SetupStep; onGo: Go }) {
   const { busy } = useSetup();
-  const chosen = step.choices.find((c) => c.value === step.answer?.value);
+  const picked = step.multi && step.answer ? step.choices.filter((c) => kindsOfAnswer(step.answer!.value).includes(c.value as SalesKind)) : [];
+  const chosen = step.multi ? (picked.length ? { label: picked.map((c) => say(c.label)).join(', ') } : undefined) : step.choices.find((c) => c.value === step.answer?.value);
   return (
     <div className="obstep" data-answered={step.id}>
       {chosen ? (
         <div className="obme">
           <button type="button" className="linkbtn" disabled={busy} onClick={() => void answer(step.id as QuestionId, null)}>{t('onboarding.change')}</button>
-          <div className="msg me">{say(chosen.label)}</div>
+          <div className="msg me">{typeof chosen.label === 'string' ? chosen.label : say(chosen.label)}</div>
         </div>
       ) : null}
       {step.reply?.lines.map((l, i) => <Ai key={i}><p>{say(l)}</p></Ai>)}
@@ -95,6 +117,7 @@ function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
   switch (card.kind) {
     case 'company': return <CompanyCard company={card.company} />;
     case 'vat': return <VatCard card={card} onGo={onGo} />;
+    case 'sells': return <SellsCard card={card} />;
     case 'needs': return (
       <div className="obcard">
         <h4>{t('onboarding.needs.title')}</h4>
@@ -181,6 +204,23 @@ function VatCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'vat' }>; on
         <button type="button" className="linkbtn" onClick={() => onGo({ area: 'company', section: 'vat' })}>{t('assistant.show')}</button>
       </span>
       {error ? <span className="warnline">{error}</span> : null}
+    </div>
+  );
+}
+
+/** The default accounts an answer to «Was verkauft ihr?» gives; «Übernehmen» while the company's profile says otherwise. */
+function SellsCard({ card }: { card: Extract<SetupCard, { kind: 'sells' }> }) {
+  const { busy } = useSetup();
+  return (
+    <div className="ruledraft obsells" data-state={card.state}>
+      <b>{t('onboarding.sellsCard.title')}</b>
+      <dl className="obkv">
+        {card.purchase.length ? <><dt>{t('onboarding.sellsCard.purchase')}</dt><dd>{card.purchase.map((p) => `${t(`onboarding.sellsCard.buy.${p.kind as 'made'}`)} → ${p.account}`).join(' · ')}</dd><dd /></> : null}
+        <dt>{t('onboarding.sellsCard.sales')}</dt><dd>{card.sales.map((s) => `${t(`onboarding.sellsCard.kind.${s.kind}`)} → ${s.account}`).join(' · ')}</dd><dd />
+      </dl>
+      {card.state === 'proposed'
+        ? <><span className="m">{t('onboarding.sellsCard.lead')}</span><span className="ruleacts"><button type="button" className="btn primary" disabled={busy} onClick={() => void keepSells(card.kinds)}>{t('onboarding.sellsCard.take')}</button></span></>
+        : <span className="okline">{ICONS.check}{t('onboarding.sellsCard.kept')}</span>}
     </div>
   );
 }

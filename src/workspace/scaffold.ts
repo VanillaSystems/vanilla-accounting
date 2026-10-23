@@ -8,7 +8,7 @@ import { dirname, join, relative } from 'node:path';
 import { stringify } from 'yaml';
 import { bankKind, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
-import { VAT_QUESTIONS, type Preset, type SupportedAnswers } from './setup.js';
+import { VAT_QUESTIONS, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
@@ -67,7 +67,7 @@ export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   const { sells, legalForm, payouts, imports } = input.answers;
   const { answers, bankAccounts } = ch().setup;
   const extra = new Set([...(payouts === 'yes' ? answers.payouts.accounts : []), ...(imports === 'yes' ? answers.imports : [])]);
-  const base = chartFor(chart, sells, legalForm);
+  const base = chartFor(chart, profileOf(sells), legalForm);
   const byNumber = new Map(base.map((a) => [a.number, a]));
   for (const a of chartFor(chart, 'both', legalForm)) if (extra.has(a.number)) byNumber.set(a.number, a);
   for (const b of bankAccountsOf(input)) {
@@ -83,7 +83,9 @@ export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
 function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): string {
   const { legalForm } = input.answers;
   const answers = Object.fromEntries(Object.entries(input.answers).filter(([k]) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)));
-  const profile = { preset: input.preset, ...answers, ...(input.exportTo ? { exportTo: input.exportTo } : {}) } as WorkspaceProfile;
+  // What it sells as the manifest has always kept it, and which goods beside it (setup.ts kindsOf).
+  const goods = goodsOf(input.answers.sells);
+  const profile = { preset: input.preset, ...answers, sells: profileOf(input.answers.sells), ...(goods.length ? { goods } : {}), ...(input.exportTo ? { exportTo: input.exportTo } : {}) };
   const doc = {
     schema: WORKSPACE_SCHEMA,
     company: {

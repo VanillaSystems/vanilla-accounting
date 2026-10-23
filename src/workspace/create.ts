@@ -71,7 +71,9 @@ export function checkPreset(raw: string): Preset {
 }
 
 /** The answers the engine runs on, and the VAT setup they make with the approved net rates (`netRates`, the net tax rate method only). */
-export function checkAnswers(answers: Answers, netRates: readonly NetRate[] = []): { answers: SupportedAnswers; vat: VatSetup } {
+export function checkAnswers(given: Answers, netRates: readonly NetRate[] = []): { answers: SupportedAnswers; vat: VatSetup } {
+  // A multiple-choice answer sent as one value (a form of before #46 sent `sells: services`) is a list of one.
+  const answers = Object.fromEntries(Object.entries(given).map(([k, v]) => [k, typeof v === 'string' && (QUESTIONS[k as QuestionKey] as { multi?: boolean } | undefined)?.multi ? [v] : v])) as Answers;
   const stop = firstUnsupported(answers);
   if (stop) {
     throw new SetupError(stop.option.unsupported!, { reason: 'unsupported', question: stop.key, value: stop.option.value });
