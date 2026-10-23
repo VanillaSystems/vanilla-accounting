@@ -12,6 +12,7 @@
 import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import type { BankSpec, SetupRequest } from '../workspace/create.js';
+import type { KnownBooks } from '../types/desktop.js';
 
 export const DRAFT_FILE = 'setup-draft.json';
 
@@ -49,6 +50,12 @@ export type DraftPatch =
   | { step: 'question'; key: QuestionKey; value: QuestionValue | null }
   | { step: 'netRates'; value: NetRate[] | null }
   | { step: 'banks'; value: BankSpec[] | null };
+
+/** A setup in progress before its books exist, as /api/desktop/setup returns it; `baseCurrency`: the jurisdiction's, a bank account's first proposal. */
+export interface SetupDraftView { root: string; draft: SetupDraft; baseCurrency: string }
+
+/** POST /api/desktop/setup: the setup in that folder, or the books already there, opened. */
+export type SetupBegun = { kind: 'draft'; view: SetupDraftView } | { kind: 'books'; books: KnownBooks };
 
 export const newDraft = (language: string, now: string): SetupDraft => ({ started: now, language, answers: {} });
 

@@ -11,8 +11,9 @@ import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Cr
 import { QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
 import { methodOf, parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
-import { APP_FOLDER, appLanguages, workspaceAt } from '../workspace/workspace.js';
-import { DRAFT_FILE, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft } from './draft.js';
+import { APP_FOLDER, APP_ROOT, appLanguages, workspaceAt } from '../workspace/workspace.js';
+import { loadJurisdiction } from '../core/modules/load.js';
+import { DRAFT_FILE, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
 import { sellsAnswer, type AnswerValue } from './model.js';
 import { seedCreated } from './store.js';
 
@@ -93,6 +94,10 @@ export function readDraft(root: string): SetupDraft | undefined {
   if (raw.banks) replay({ step: 'banks', value: raw.banks });
   return draft;
 }
+
+/** The draft with what the start screen proposes from the jurisdiction new books get (src/workspace/scaffold.ts). */
+export const draftView = (root: string, draft: SetupDraft): SetupDraftView =>
+  ({ root, draft, baseCurrency: loadJurisdiction(APP_ROOT, 'ch').jurisdiction.manifest.baseCurrency });
 
 const write = (root: string, d: SetupDraft): SetupDraft => { writeAtomic(draftFile(root), JSON.stringify({ schema: 1, ...d }, null, 2) + '\n'); return d; };
 

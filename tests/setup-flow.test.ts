@@ -98,7 +98,7 @@ const ANSWERS = {
   legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly', fiscalYear: 'calendar', start: 'new',
   sells: ['services'], foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
 };
-const BANKS = [{ bank: 'UBS', currency: 'CHF', iban: 'CH93 0076 2011 6238 5295 7' }];
+const BANKS = [{ bank: 'UBS', currency: 'CHF' }];
 
 test('no AI on this computer: the start screen is told so, and takes the form', async () => {
   const { call } = await start();

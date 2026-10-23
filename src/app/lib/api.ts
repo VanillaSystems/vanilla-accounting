@@ -29,8 +29,8 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { AiAvailability, DesktopInfo, SetupDraftView, KnownBooks, PhoneInfo, SetupBegun } from '../../types/desktop.js';
-import type { DraftPatch as SetupPatch } from '../../onboarding/draft.js';
+import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
 import type { ReturnFigures } from '../../engines/return.js';
 import type { JournalEntryInput } from '../../books/entry-input.js';

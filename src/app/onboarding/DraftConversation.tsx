@@ -10,8 +10,7 @@ import { BANKS } from '../../workspace/banks.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, optionOf, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
-import { draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft } from '../../onboarding/draft.js';
-import type { SetupDraftView } from '../../types/desktop.js';
+import { draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView } from '../../onboarding/draft.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
 import { BotIcon } from '../areas/automation/Graph.js';
@@ -77,7 +76,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
       <div className="obflowturns">
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
         {view && steps.map((step) => (
-          <Step key={step.id === 'question' ? step.key : step.id} step={step} draft={view.draft} root={root} busy={busy} send={send} change={change} taken={taken.current} onCreate={() => void create()} />
+          <Step key={step.id === 'question' ? step.key : step.id} step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} onCreate={() => void create()} />
         ))}
         {error && <p className="warnline" role="alert">{error}</p>}
         <div ref={end} />
@@ -87,7 +86,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
 }
 
 interface StepProps {
-  step: DraftStep; draft: SetupDraft; root: string; busy: boolean; send: Send;
+  step: DraftStep; draft: SetupDraft; currency: string; root: string; busy: boolean; send: Send;
   change(key: string, patch: DraftPatch, was: unknown): void;
   taken: Partial<Record<string, unknown>>;
   onCreate(): void;
@@ -101,7 +100,7 @@ const Answer = ({ text, busy, onChange }: { text: string; busy: boolean; onChang
   </div>
 );
 
-function Step({ step, draft, root, busy, send, change, taken, onCreate }: StepProps) {
+function Step({ step, draft, currency, root, busy, send, change, taken, onCreate }: StepProps) {
   switch (step.id) {
     case 'firm': return (
       <div className="obstep" data-step="firm">
@@ -137,7 +136,7 @@ function Step({ step, draft, root, busy, send, change, taken, onCreate }: StepPr
         <Ai><p>{t('onboarding.draft.banks')}</p></Ai>
         {step.answer
           ? <Answer text={banksLine(step.answer)} busy={busy} onChange={() => change('banks', { step: 'banks', value: null }, step.answer)} />
-          : <div className="obind"><BanksCard initial={taken.banks as BankSpec[] | undefined} busy={busy} send={send} /></div>}
+          : <div className="obind"><BanksCard initial={taken.banks as BankSpec[] | undefined} currency={currency} busy={busy} send={send} /></div>}
       </div>
     );
     case 'review': return <Review draft={draft} root={root} busy={busy} change={change} onCreate={onCreate} />;
@@ -215,11 +214,12 @@ function RatesCard({ initial, busy, send }: { initial?: NetRate[]; busy: boolean
   );
 }
 
-const NEW_BANK = { bank: '', currency: 'CHF', iban: '' };
+type BankRow = { bank: string; currency: string; iban: string };
 
-function BanksCard({ initial, busy, send }: { initial?: BankSpec[]; busy: boolean; send: Send }) {
-  const [rows, setRows] = useState(() => (initial?.length ? initial.map((b) => ({ bank: b.bank, currency: b.currency, iban: b.iban ?? '' })) : [{ ...NEW_BANK, bank: 'UBS' }]));
-  const set = (i: number, k: keyof typeof NEW_BANK, v: string) => setRows((x) => x.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+function BanksCard({ initial, currency, busy, send }: { initial?: BankSpec[]; currency: string; busy: boolean; send: Send }) {
+  const blank: BankRow = { bank: '', currency, iban: '' };
+  const [rows, setRows] = useState<BankRow[]>(() => (initial?.length ? initial.map((b) => ({ bank: b.bank, currency: b.currency, iban: b.iban ?? '' })) : [blank]));
+  const set = (i: number, k: keyof BankRow, v: string) => setRows((x) => x.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   return (
     <form className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); void send({ step: 'banks', value: rows }); }}>
       <datalist id="ob-banks">{Object.keys(BANKS).map((b) => <option key={b} value={b} />)}</datalist>
@@ -232,7 +232,7 @@ function BanksCard({ initial, busy, send }: { initial?: BankSpec[]; busy: boolea
         </div>
       ))}
       <div className="actions">
-        <button type="button" className="btn ghost" onClick={() => setRows((x) => [...x, { ...NEW_BANK }])}>{t('desktop.addBank')}</button>
+        <button type="button" className="btn ghost" onClick={() => setRows((x) => [...x, { ...blank }])}>{t('desktop.addBank')}</button>
         <button type="submit" className="btn primary" data-act="banks-next" disabled={busy || rows.some((r) => !r.bank.trim())}>{t('onboarding.draft.next')}</button>
       </div>
     </form>

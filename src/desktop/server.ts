@@ -16,11 +16,12 @@ import { SetupError, createWorkspace, type SetupRequest } from '../workspace/cre
 import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import { bundledDemo } from '../workspace/demo-copy.js';
-import { beginDraft, createFromDraft, patchDraft, readDraft } from '../onboarding/draft-store.js';
+import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
+import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
 import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import type { ApiErrorBody } from '../types/api-error.js';
-import type { AiAvailability, DesktopInfo, SetupDraftView, KnownBooks, PhoneInfo, SetupBegun } from '../types/desktop.js';
+import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
 
@@ -233,13 +234,13 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (typeof raw !== 'string' || !raw.trim()) throw new SetupError('A folder for the books is needed.', { reason: 'required', field: 'root' });
     return resolve(raw);
   };
-  const draftView = (root: string): SetupDraftView => {
+  const viewOf = (root: string): SetupDraftView => {
     const draft = readDraft(root);
     if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
-    return { root, draft };
+    return draftView(root, draft);
   };
   app.get('/api/desktop/setup', (req, res) => {
-    try { res.json(draftView(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
+    try { res.json(viewOf(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
   });
   app.post('/api/desktop/setup', async (req, res) => {
     try {
@@ -248,14 +249,14 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       if (appFolderIn(root)) { res.json({ kind: 'books', books: await openBooks(root) } satisfies SetupBegun); return; }
       const draft = beginDraft(root, typeof language === 'string' ? language : 'de', new Date().toISOString());
       remember(root);
-      res.json({ kind: 'draft', view: { root, draft } } satisfies SetupBegun);
+      res.json({ kind: 'draft', view: draftView(root, draft) } satisfies SetupBegun);
     } catch (e) { refuse(res, e); }
   });
   app.put('/api/desktop/setup', (req, res) => {
     try {
       const { root: raw, patch } = (req.body ?? {}) as { root?: unknown; patch?: unknown };
       const root = rootOf(raw);
-      res.json({ root, draft: patchDraft(root, patch) } satisfies SetupDraftView);
+      res.json(draftView(root, patchDraft(root, patch)));
     } catch (e) { refuse(res, e); }
   });
   app.post('/api/desktop/setup/create', async (req, res) => {
