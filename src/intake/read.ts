@@ -24,6 +24,7 @@ import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, w
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
+import { bookInvoiceEvents } from '../invoices/events.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
@@ -285,6 +286,10 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
     const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
+    // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).
+    const events = payments ? bookInvoiceEvents(index, invoices, payments) : undefined;
+    if (events) fileReceipts(ws, index, events.files);
+    if (events?.skipped.length) log(`  VAT of ${events.skipped.map((s) => s.number).join(', ')} not booked: no official rate of the invoice's day yet (npm run fetch-rates); the VAT filing waits for it`);
     // Paid invoices first (ADR 0010): a payment with an invoice's reference or number, or a credit note's refund, is booked from the document before classify sees it.
     const paid = payments ? matchPayments(index, invoices, payments) : undefined;
     if (paid) {

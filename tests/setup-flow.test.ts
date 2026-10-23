@@ -118,8 +118,8 @@ test('a setup broken off resumes where it stood: the folder opens into it, from 
   const badUid = await call('PUT', '/api/desktop/setup', { root, patch: { step: 'firm', value: { ...FIRM, uid: 'CHE-123' } } });
   assert.deepEqual([badUid.status, badUid.json.params.reason], [400, 'uid'], 'an answer createWorkspace would refuse is refused as it is given');
   await call('PUT', '/api/desktop/setup', { root, patch: { step: 'firm', value: FIRM } });
-  const agreed = await call('PUT', '/api/desktop/setup', { root, patch: { step: 'question', key: 'basis', value: 'agreed' } });
-  assert.deepEqual(agreed.json.params, { reason: 'unsupported', question: 'basis', value: 'agreed' });
+  const monthly = await call('PUT', '/api/desktop/setup', { root, patch: { step: 'question', key: 'period', value: 'monthly' } });
+  assert.deepEqual(monthly.json.params, { reason: 'unsupported', question: 'period', value: 'monthly' });
   await call('PUT', '/api/desktop/setup', { root, patch: { step: 'preset', value: 'consultant' } });
 
   ({ call } = await start());

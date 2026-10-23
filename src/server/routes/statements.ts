@@ -20,6 +20,7 @@ import { parseStatementBalances } from '../../providers/camt053/statement-balanc
 import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { matchPayments } from '../../invoices/payments.js';
+import { bookInvoiceEvents } from '../../invoices/events.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
 import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
@@ -236,6 +237,9 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
       if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
+      // On the agreed basis an issued document's event comes first: its payment then only settles the receivable.
+      const events = payments ? bookInvoiceEvents(books, invoices, payments) : undefined;
+      if (events) fileReceipts(WS, books, events.files);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
       if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
       const closing = placed.closing ?? balances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)

@@ -94,7 +94,7 @@ test('one message fills every answer it states, through the click\'s checks, eac
   assert.equal(call1.opts.step, 'setup-conversation', 'the call names its step, so the resolver picks the configured provider');
   assert.equal(call1.opts.ledger, join(root, APP_FOLDER, 'data', 'llm-ledger.jsonl'), 'it is ledgered in the folder that becomes the books');
   assert.ok(call1.prompt.includes(SCHREINEREI) && call1.prompt.includes('The step waiting now: firm'), 'the model reads the words with the step waiting');
-  assert.ok(call1.prompt.includes('"net-rate" (Saldosteuersatz') && call1.prompt.includes('"agreed" (vereinbart (invoice); not supported'), 'and every value code accepts');
+  assert.ok(call1.prompt.includes('"net-rate" (Saldosteuersatz') && call1.prompt.includes('"monthly" (monthly; not supported'), 'and every value code accepts');
 
   const history = [{ who: 'me', text: SCHREINEREI }, { who: 'ai', text: reply.say }];
   const uid = await talk(`Die UID ist ${UID}.`, JSON.stringify({ say: '', firm: { name: 'Muster Schreinerei GmbH', uid: UID, owner: 'Anna Muster' } }), history);
@@ -111,20 +111,20 @@ test('one message fills every answer it states, through the click\'s checks, eac
 test('code refuses what createWorkspace would refuse or the person never wrote, says why, and saves none of it', async () => {
   const { root, talk } = await folder('Abgelehnt');
   const before = readFileSync(draftFile(root), 'utf8');
-  const res = await talk('Muster AG, UID CHE-123.456.789, Inhaber Max Muster. Wir rechnen pauschal ab und vereinbart. Bank UBS.', JSON.stringify({
+  const res = await talk('Muster AG, UID CHE-123.456.789, Inhaber Max Muster. Wir rechnen pauschal und monatlich ab. Bank UBS.', JSON.stringify({
     say: 'Danke, die UID habe ich übernommen.',
     firm: { name: 'Muster AG', uid: 'CHE-123.456.789', owner: 'Max Muster' },
-    answers: { vatMethod: 'pauschal', basis: 'agreed' },
+    answers: { vatMethod: 'pauschal', period: 'monthly' },
     banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }],
   }));
   const { reply, view } = res.json;
   assert.deepEqual(reply.refused.map((r: { step: string; refusal: { reason: string } }) => [r.step, r.refusal.reason]), [
-    ['firm', 'uid'], ['vatMethod', 'notAnOption'], ['basis', 'unsupported'], ['banks', 'notStated'],
+    ['firm', 'uid'], ['vatMethod', 'notAnOption'], ['period', 'unsupported'], ['banks', 'notStated'],
   ], 'a UID failing its check digit, a value the question does not offer, one not supported yet, an IBAN not in the words');
   assert.equal(view.draft.firm, undefined, 'the refused firm is not saved');
   assert.equal(reply.say, '', 'the model\'s words, written before the check, never claim what code refused');
   assert.equal(view.draft.answers.vatMethod, undefined);
-  assert.equal(view.draft.answers.basis, undefined);
+  assert.equal(view.draft.answers.period, undefined);
   assert.deepEqual(view.draft.banks, [{ bank: 'UBS', currency: 'CHF', account: '1020' }], 'the bank is saved without the IBAN the model made up');
   assert.deepEqual(reply.firm, { name: 'Muster AG', uid: 'CHE-123.456.789', owner: 'Max Muster' }, 'the firm\'s card shows what was said, to correct');
   assert.notEqual(readFileSync(draftFile(root), 'utf8'), before);

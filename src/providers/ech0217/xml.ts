@@ -7,13 +7,14 @@
  *  - Effective reporting method, gross figures (grossOrNet = 2): the bookings are VAT-inclusive.
  *  - Net tax rate method (periods from 2025): simpleTaxRateMethod, each approved rate with the
  *    authority's activity code (5.3.11), the turnover gross, Bezugsteuer net at the statutory rate.
- *  - formOfReporting = 2 (vereinnahmt / cash basis).
+ *  - formOfReporting 1 (vereinbart, agreed consideration) or 2 (vereinnahmt, cash basis), as the
+ *    firm's basis (spec: generalInformation/formOfReporting).
  *  - payableTax is the eCH way (tax on the rate-total turnover, rule 7.5/7.6, error MWST-0006);
  *    it can differ from a per-entry sum by a Rappen and is the authoritative figure for filing.
  *  - The declaring company's UID and name are the workspace's (rule 7.7, error MWST-0009).
  */
 import type { BoxId, ReturnData } from '../../core/modules/schema.js';
-import type { VatMethod } from '../../workspace/vat-setup.js';
+import type { VatBasis, VatMethod } from '../../workspace/vat-setup.js';
 
 export interface Ech0217Input {
   uid: string;
@@ -25,6 +26,8 @@ export interface Ech0217Input {
   rateRows: ReadonlyArray<{ ziffer: BoxId; rate: number; kind: 'supply' | 'acquisition' | 'net-rate'; name?: string; activityId?: string }>;
   /** Which method's element carries section II; the effective one when absent. */
   method?: VatMethod;
+  /** The basis the return is on; the cash basis when absent. */
+  basis?: VatBasis;
   /** xs:dateTime in UTC without milliseconds (spec 4.1). */
   generationTime: string;
 }
@@ -92,7 +95,7 @@ ${inputEls}
     <eCH-0217:reportingPeriodFrom>${period.from}</eCH-0217:reportingPeriodFrom>
     <eCH-0217:reportingPeriodTill>${period.to}</eCH-0217:reportingPeriodTill>
     <eCH-0217:typeOfSubmission>1</eCH-0217:typeOfSubmission>
-    <eCH-0217:formOfReporting>2</eCH-0217:formOfReporting>
+    <eCH-0217:formOfReporting>${input.basis === 'agreed' ? 1 : 2}</eCH-0217:formOfReporting>
     <eCH-0217:businessReferenceId>MWST-${period.key}</eCH-0217:businessReferenceId>
     <eCH-0217:sendingApplication>
       <eCH-0058:manufacturer>Vanilla Accounting</eCH-0058:manufacturer>

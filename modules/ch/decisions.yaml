@@ -76,11 +76,19 @@ answers:
 
   vat.basis:
     answer: >
-      The app books on received consideration (cash basis): the payment date is the tax point.
-      The law's default is agreed consideration (invoice date); cash basis is a choice the ESTV
-      approves. A firm on agreed consideration cannot use the app correctly today: no slot.
-    law: [MWSTG Art. 39, MWSTG Art. 40]
-    where: [src/workspace/vat-setup.ts, docs/adr/0001-foreign-currency-conversion.md]
+      Both. Agreed consideration (vereinbart) is the law's default: a sale's tax arises with the
+      invoice, input tax and Bezugsteuer with the bill received; an invoice the app issues is
+      booked on its date against the receivable, a payment's coded line takes its receipt's date
+      and the open item, the payment settles it. Received consideration (vereinnahmt, the cash
+      basis) is a choice the ESTV approves on request: the payment date is the tax point. The
+      basis is held for a whole tax period; at a switch the open receivables and payables count
+      in the first period after it. The XML names it in formOfReporting (1 vereinbart, 2 vereinnahmt).
+    law: [MWSTG Art. 39, MWSTG Art. 40, MWSTG Art. 41, MWSTG Art. 48 Abs. 1 lit. b, MWSTV Art. 106, MWSTV Art. 107, eCH-0217 v2.0.0]
+    where: [src/workspace/vat-setup.ts, src/accounting/tax-point.ts, src/invoices/events.ts, src/providers/ech0217/xml.ts]
+    unverified: >
+      Whether the ESTV takes the invoice date for the day the bill was received (Art. 40 Abs. 1);
+      the app uses the receipt's date. Whether input tax not claimed in its period may be claimed
+      in a later one without a correction (a bill of an earlier year paid after the switch).
 
   vat.filing:
     answer: >
@@ -276,11 +284,13 @@ answers:
 
   fx.rate-rule:
     answer: >
-      The ESTV daily sell rate (Devisenkurs Verkauf) valid on the payment date, the tax point on
-      the cash basis; on a weekend or holiday the last published rate. Never a flat yearly rate.
+      The ESTV daily sell rate (Devisenkurs Verkauf) valid when the tax arises: the payment date
+      on the cash basis, the document's date on the agreed basis (an open item's line carries it,
+      the payment settles at its own date's rate, the difference goes to Kursdifferenzen); on a
+      weekend or holiday the last published rate. Never a flat yearly rate. The law also allows
+      the monthly average rate, kept for a whole tax period; the app uses the daily rate.
     law: [MWSTV Art. 45, docs/adr/0001-foreign-currency-conversion.md]
-    where: [src/accounting/fx-rates.ts, reference/estv-daily-rates-2026.json, src/cli/fetch-estv-rates.ts]
-    unverified: The article is cited from memory (the code comment cites MWSTG Art. 24).
+    where: [src/accounting/fx-rates.ts, src/accounting/fx-conversion.ts, src/accounting/tax-point.ts, reference/estv-daily-rates-2026.json, src/cli/fetch-estv-rates.ts]
 
   fx.revaluation:
     answer: >

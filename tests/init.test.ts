@@ -170,6 +170,10 @@ test('a freelancer not registered for VAT and a firm on the net tax rate method 
   const ws = workspaceAt(join(base, 'b'));
   assert.deepEqual(ws.company.vat, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] });
   assert.equal(ws.filingLength, 'half');
+
+  const agreed = cli('init.ts', [...consultant(join(base, 'c'), envFile), '--basis', 'agreed']);
+  assert.equal(agreed.code, 0, agreed.out);
+  assert.deepEqual(workspaceAt(join(base, 'c')).company.vat, { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -189,7 +193,7 @@ test('init takes an IBAN per bank and refuses one with wrong check digits', () =
 test('an answer the app does not support yet stops with its explanation and writes nothing', () => {
   const base = tmp();
   const cases: [string[], RegExp][] = [
-    [['--basis', 'agreed'], /Vereinbarte Entgelte are not supported yet/],
+
     [['--period', 'monthly'], /Monthly returns are not supported yet/],
     [['--fiscal-year', 'other'], /calendar year is not supported yet/],
   ];

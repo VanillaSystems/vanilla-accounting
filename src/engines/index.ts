@@ -5,7 +5,7 @@
  * figures from the same data for the same kind of firm.
  */
 import type { Jurisdiction } from '../core/modules/schema.js';
-import { EFFECTIVE_QUARTERLY, filingLengthOf, methodOf, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
+import { EFFECTIVE_QUARTERLY, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
 import { returnEngine, type ReturnEngine } from './return.js';
 
@@ -30,11 +30,21 @@ export const vat = (): ReturnEngine => loaded().vat;
 /** The firm's VAT setup: registered or not, its method and its filing period (src/workspace/vat-setup.ts); the effective method where no firm is open. */
 export const vatSetup = (): VatSetup => loaded().setup ?? EFFECTIVE_QUARTERLY;
 
+/** Whether the firm reports on the agreed consideration (src/accounting/tax-point.ts): its VAT arises with the invoice, not the payment. */
+export const agreedBasis = (): boolean => onAgreedBasis(vatSetup());
+
 /** The method the firm's return is written in; a firm that is not registered has none to write. */
 export function filingMethod(): VatMethod {
   const method = methodOf(vatSetup());
   if (method === 'none') throw new Error('the firm is not registered for VAT: there is no return to write');
   return method;
+}
+
+/** The basis the firm's return is written on (the electronic return names it); a firm that is not registered has none. */
+export function filingBasis(): VatBasis {
+  const setup = vatSetup();
+  if (!setup.registered) throw new Error('the firm is not registered for VAT: there is no return to write');
+  return setup.reporting;
 }
 
 /**

@@ -41,6 +41,7 @@ import { setJurisdiction, vat } from '../../src/engines/index.js';
 import { loadJurisdiction } from '../../src/core/modules/load.js';
 import { EFFECTIVE_QUARTERLY, vatSetupYaml } from '../../src/workspace/vat-setup.js';
 import { filingKeyOf } from '../../src/accounting/periods.js';
+import { openItemAccounts } from '../../src/accounting/tax-point.js';
 
 /** Every demo workspace `npm run demo:generate` writes. */
 const DEMOS: readonly Demo[] = [kaffee, consulting, coiffeur, schreinerei];
@@ -386,7 +387,7 @@ async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPay
     const book = loadInvoices(ws);
     const full = { ...books, journalEntries: books.journalEntries!, config: books.config! };
     const paid = matchPayments(full, book, {
-      bankAccounts: ws.bankAccounts, revenueAccount: ws.invoicing!.revenueAccount, fx,
+      bankAccounts: ws.bankAccounts, revenueAccount: ws.invoicing!.revenueAccount, fx, openItems: openItemAccounts([]),
       pdfOf: (inv) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx) => `${tx.date}T18:00:00.000Z`,
     });
     const expected = demo.invoicing!.steps.filter((s) => s.do === 'issue' && s.paid).length;

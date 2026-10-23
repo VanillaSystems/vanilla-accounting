@@ -6,8 +6,10 @@
  *
  * Three kinds of firm: not registered (purchases and sales gross, no codes, no return); registered
  * on the effective method (input tax per receipt, form 0550); registered on the net tax rate
- * method (one or two approved rates on the gross turnover, no input tax, form 0553). The method
- * holds for whole years: the Firma page refuses a change in a year that has entries.
+ * method (one or two approved rates on the gross turnover, no input tax, form 0553). A registered
+ * firm reports on one basis: the payment (cash basis) or the invoice (agreed consideration,
+ * src/accounting/tax-point.ts). The method and the basis hold for whole years: the Firma page
+ * refuses a change in a year that has entries.
  */
 import type { FilingLength } from '../accounting/periods.js';
 
@@ -16,6 +18,14 @@ export type VatMethod = (typeof VAT_METHODS)[number];
 
 export const VAT_PERIODS = ['quarterly', 'half-yearly'] as const;
 export type VatPeriod = (typeof VAT_PERIODS)[number];
+
+/**
+ * When the tax arises (MWSTG Art. 39, 40): `agreed` with the invoice (the law's default: a sale's
+ * tax with the invoice issued, input tax with the bill received), `received` with the payment (the
+ * cash basis the tax authority approves on request). Held for at least a whole tax period (Art. 39 Abs. 3).
+ */
+export const VAT_BASES = ['received', 'agreed'] as const;
+export type VatBasis = (typeof VAT_BASES)[number];
 
 /**
  * One net tax rate the tax authority approved for the firm: the percent of the gross turnover it
@@ -33,8 +43,8 @@ export type NetRates = readonly [NetRate] | readonly [NetRate, NetRate];
 
 export type VatSetup =
   | { registered: false }
-  | { registered: true; method: 'effective'; reporting: 'received'; period: VatPeriod }
-  | { registered: true; method: 'net-rate'; reporting: 'received'; period: VatPeriod; rates: NetRates };
+  | { registered: true; method: 'effective'; reporting: VatBasis; period: VatPeriod }
+  | { registered: true; method: 'net-rate'; reporting: VatBasis; period: VatPeriod; rates: NetRates };
 
 export type RegisteredVat = Extract<VatSetup, { registered: true }>;
 
@@ -50,6 +60,9 @@ export function asNetRates(rates: readonly NetRate[]): NetRates | null {
 
 /** The method the books run on; `none` for a firm that charges no VAT. */
 export const methodOf = (setup: VatSetup): VatMethod | 'none' => (setup.registered ? setup.method : 'none');
+
+/** Whether the firm reports on the agreed consideration: a sale's tax with its invoice, input tax with the bill (MWSTG Art. 40 Abs. 1). */
+export const onAgreedBasis = (setup: VatSetup): boolean => setup.registered && setup.reporting === 'agreed';
 
 /** The firm's approved net rates, none on any other setup. */
 export const netRatesOf = (setup: VatSetup): readonly NetRate[] => (setup.registered && setup.method === 'net-rate' ? setup.rates : []);
@@ -86,14 +99,15 @@ export function parseVatSetup(raw: unknown, fail: VatSetupFail): VatSetup {
   }
   const method = vat.method;
   if (!VAT_METHODS.includes(method as VatMethod)) fail(`company.vat.method must be one of ${VAT_METHODS.join(', ')}`);
-  if (vat.reporting !== 'received') fail('company.vat.reporting must be received: the books are kept on a cash basis, the only basis the engine supports');
+  const reporting = vat.reporting;
+  if (!VAT_BASES.includes(reporting as VatBasis)) fail(`company.vat.reporting must be one of ${VAT_BASES.join(', ')}`);
   const period = vat.period ?? 'quarterly';
   if (!VAT_PERIODS.includes(period as VatPeriod)) fail(`company.vat.period must be one of ${VAT_PERIODS.join(', ')}`);
   if (method === 'effective') {
     if (vat.rates !== undefined) fail('company.vat.rates belongs to the net tax rate method only');
-    return { registered: true, method: 'effective', reporting: 'received', period: period as VatPeriod };
+    return { registered: true, method: 'effective', reporting: reporting as VatBasis, period: period as VatPeriod };
   }
-  return { registered: true, method: 'net-rate', reporting: 'received', period: period as VatPeriod, rates: parseNetRates(vat.rates, fail) };
+  return { registered: true, method: 'net-rate', reporting: reporting as VatBasis, period: period as VatPeriod, rates: parseNetRates(vat.rates, fail) };
 }
 
 export function parseNetRates(raw: unknown, fail: VatSetupFail): NetRates {
@@ -120,10 +134,10 @@ export function vatSetupYaml(setup: VatSetup): Record<string, unknown> {
 }
 
 /**
- * Whether two setups differ in a way the method rule covers: registration, method, period or a
- * rate's percent. A label or an activity code may change at any time.
+ * Whether two setups differ in a way the method rule covers: registration, method, basis, period
+ * or a rate's percent. A label or an activity code may change at any time.
  */
 export function changesMethod(a: VatSetup, b: VatSetup): boolean {
-  const key = (s: VatSetup) => JSON.stringify(s.registered ? [s.method, s.period, netRatesOf(s).map((r) => r.rate)] : ['none']);
+  const key = (s: VatSetup) => JSON.stringify(s.registered ? [s.method, s.reporting, s.period, netRatesOf(s).map((r) => r.rate)] : ['none']);
   return key(a) !== key(b);
 }

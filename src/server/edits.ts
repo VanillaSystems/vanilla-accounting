@@ -16,7 +16,8 @@ import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
-import { withoutInputTax } from '../engines/index.js';
+import { agreedBasis, withoutInputTax } from '../engines/index.js';
+import { isOpenItemAccount, openItemAccounts } from '../accounting/tax-point.js';
 import type { BankTransaction, BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, PrivatePart, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
@@ -703,10 +704,14 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
   });
   const unknown = ctx.chart.size ? [...accounts].find((a) => !ctx.chart.has(a)) : undefined;
   if (unknown) throw new RequestError(400, `Konto ${unknown} gibt es im Kontenplan nicht: zuerst das Konto anlegen, in derselben Antwort.`, { code: 'unknownAccount', params: { account: unknown } });
-  for (const e of books.journalEntries.filter((x) => dated.includes(x.id) && !x.corrects)) {
+  // On the agreed basis a line on an open item carries its document's date, not the payment's (src/accounting/tax-point.ts).
+  const items = agreedBasis() ? openItemAccounts([...ctx.chart]) : undefined;
+  const onOpenItem = (e: JournalEntry) => !!items && (isOpenItemAccount(items, e.accountDebit) || isOpenItemAccount(items, e.accountCredit));
+  for (const e of books.journalEntries.filter((x) => dated.includes(x.id) && !x.corrects && !onOpenItem(x))) {
     const dates = paymentDates(books, e);
     if (dates.length && !dates.includes(e.date)) {
-      throw new RequestError(400, `Die Buchung einer Zahlung trägt das Datum der Zahlung (${day(dates[0])}): die Steuer wird nach vereinnahmtem Entgelt abgerechnet, sie gehört ins Quartal der Zahlung.`, { code: 'paymentDate', params: { date: dates[0] } });
+      const why = items ? 'nur eine Zeile auf Debitoren oder Kreditoren trägt das Datum ihres Belegs' : 'die Steuer wird nach vereinnahmtem Entgelt abgerechnet, sie gehört ins Quartal der Zahlung';
+      throw new RequestError(400, `Die Buchung einer Zahlung trägt das Datum der Zahlung (${day(dates[0])}): ${why}.`, { code: 'paymentDate', params: { date: dates[0] } });
     }
   }
   for (const [ref, before] of payments) {
