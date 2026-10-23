@@ -21,6 +21,8 @@ export interface ReportRow {
   counterparty: string;
   /** What the row is, for a link to it. */
   link: { kind: 'entry' | 'payment' | 'receipt' | 'invoice'; id: string };
+  /** A booking's reporting dimensions (#127): what a tag grouping groups by. */
+  tags?: Record<string, string>;
 }
 
 /** The sums of rows in one currency. */

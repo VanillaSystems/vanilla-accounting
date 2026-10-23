@@ -10,11 +10,14 @@ import { Go, entryAt } from '../vat/links.js';
 import { NO_ACCOUNT, ledgerOf, reportOfAccount } from './model.js';
 import { accountName, accountOfRoute } from './view.js';
 import { DownloadMenu } from '../export/DownloadMenu.js';
+import { useSliced } from './slice.js';
 
 type Props = AreaProps<Extract<RouteOf<'reports'>, { report: Report }>>;
 
-export function Detail({ route, books, period, nav }: Props) {
+export function Detail({ route, period, nav, ...props }: Props) {
   const account = accountOfRoute(route);
+  // The Erfolgsrechnung sliced by tags (#127): the ledger of one of its accounts shows the same entries.
+  const { books } = useSliced(route.report, props.books);
   const names = getAccountMap();
   const l = useMemo(() => (account === undefined ? undefined : ledgerOf(books, account, period, names)), [books, account, period, names]);
   if (account === undefined || !l) return <div className="detail-empty"><div>{t('reports.noAccounts', { period: periodName(period) })}</div></div>;

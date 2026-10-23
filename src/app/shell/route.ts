@@ -9,7 +9,7 @@ import { KNOWLEDGE_PAGES, type KnowledgePage } from '../../knowledge/topics.js';
 export const REPORTS = ['income', 'balance', 'trial'] as const;
 export type Report = typeof REPORTS[number];
 
-export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources', 'rules', 'accounts', 'periods', 'opening', 'display', 'ai', 'phone'] as const;
+export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources', 'rules', 'accounts', 'dimensions', 'periods', 'opening', 'display', 'ai', 'phone'] as const;
 export type CompanySection = typeof COMPANY_SECTIONS[number];
 
 export const RECEIPT_FILTERS = ['zugeordnet', 'offen', 'ohneDatum'] as const;

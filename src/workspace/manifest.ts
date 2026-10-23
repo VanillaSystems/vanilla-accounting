@@ -14,10 +14,15 @@ import {
   type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail,
 } from '../invoices/model.js';
 import { isQrIban } from '../providers/qr-bill/reference.js';
+import { readDimensions, type Dimension } from '../books/tags.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)) as ProfileKey[];
 
-export type Manifest = { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail };
+export type Manifest = {
+  company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail;
+  /** The reporting dimensions bookings may carry a tag of (#127, src/books/tags.ts); absent: none. */
+  dimensions?: Dimension[];
+};
 
 export function readManifest(path: string): Manifest {
   if (!existsSync(path)) throw new WorkspaceError(`${path} not found.`);
@@ -93,6 +98,7 @@ export function parseManifest(source: string, path: string): Manifest {
     ...(raw.profile === undefined ? {} : { profile: readProfile(raw.profile, fail) }),
     ...(raw.invoicing === undefined ? {} : { invoicing: readInvoicing(raw.invoicing, bankAccounts, fail) }),
     ...(raw.outgoingMail === undefined ? {} : { outgoingMail: readOutgoingMail(raw.outgoingMail, fail) }),
+    ...(raw.dimensions === undefined ? {} : { dimensions: readDimensions(raw.dimensions, fail) }),
   };
 }
 

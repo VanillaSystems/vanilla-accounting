@@ -216,6 +216,13 @@ export interface YearEndData {
 
   templates: YearEndTemplate[];
   byLegalForm: Record<string, ResultCloseData> & { otherwise: ResultCloseData };
+  /**
+   * What a country's law asks of money accounts at the year end beyond the base every country
+   * gets (a closing balance from a document on every bank and card account, a cash count on every
+   * cash box). `monthlyStatements`: the roles whose accounts need a statement for every month of
+   * the year, imported or not. Absent or empty: only accounts with an imported statement do.
+   */
+  moneyAccounts?: { monthlyStatements?: string[] };
 }
 
 /** invoicing.yaml: the rates an invoice line offers, and a 0 % line's deduction box by exemption. */

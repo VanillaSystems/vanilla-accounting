@@ -10,11 +10,12 @@ import { codeForRate, formTakes, lookupVatCode } from './vat-codes.js';
 import { chart, withoutInputTax } from '../engines/index.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { isManualRef } from '../books/refs.js';
+import type { Tags } from '../books/tags.js';
 import type { Invoice } from '../invoices/model.js';
 import { namedInvoice } from '../invoices/rules.js';
 
 /** One line of the booking, in the payment's currency. */
-export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string }
+export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string; tags?: Tags }
 
 /** What the form opens with. `vat` is as a person would type it: a code, or a receipt's rate («8.1») that becomes a code once the accounts are known. */
 export interface DraftLine { accountDebit: string; accountCredit: string; amount: number; vat: string; description: string }

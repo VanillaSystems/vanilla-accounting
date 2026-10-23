@@ -40,12 +40,13 @@ import { baseCurrency, chargesVat, chart, filing } from '../../../engines/index.
 import { openingLock } from '../../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../../accounting/year-close.js';
 import { AccountField } from '../journal/AccountField.js';
+import { DimensionsSection } from './DimensionsSection.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
   ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources']],
-  ['company.groupBooks', ['accounts', 'rules', 'periods', 'opening']],
+  ['company.groupBooks', ['accounts', 'dimensions', 'rules', 'periods', 'opening']],
   ['company.groupApp', ['display', 'ai', 'phone']],
 ];
 
@@ -84,6 +85,7 @@ function List({ route, books, nav }: Props) {
     'invoice-layout': ws?.invoicing?.layout.font,
     mail: ws?.outgoingMail?.host,
     accounts: String(Object.keys(getAccountMap()).length),
+    dimensions: ws?.dimensions?.length ? String(ws.dimensions.length) : undefined,
     periods: closed ? t('company.through', { date: formatDate(closed) }) : undefined,
     opening: opening ? t('company.nAccounts', { n: Object.keys(opening).length }) : undefined,
     display: themeLabel(ui.theme),
@@ -159,6 +161,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'phone': return <PhoneSection nav={p.nav} />;
     case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} payment={p.query.payment} />;
     case 'accounts': return <Accounts {...p} />;
+    case 'dimensions': return <DimensionsSection dimensions={p.ws.dimensions ?? []} entries={p.books.journalEntries ?? []} canEdit={p.canEdit} save={(next, message) => patch(p.nav, { dimensions: next }, message, { dimensions: [...(p.ws.dimensions ?? [])] })} />;
     case 'periods': return <Periods {...p} />;
     case 'opening': return <Opening {...p} />;
     case 'display': return <Display />;

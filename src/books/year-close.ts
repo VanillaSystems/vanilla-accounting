@@ -9,20 +9,20 @@
  */
 import { Refused } from '../types/refusal.js';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import type { JournalEntry, QuarterKey } from '../types/index.js';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
+import type { JournalEntry, QuarterKey, StatementClosingBalance } from '../types/index.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
-import { yearPaths, type Workspace } from '../workspace/workspace.js';
+import { yearPaths, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { accountsOf, filedReturnsOf } from '../workspace/reads.js';
 import { readBankStatements } from '../workspace/bank-statements.js';
 import { parseStatementBalances } from '../providers/camt053/statement-balances.js';
 import { estvRates, type EstvRates } from '../accounting/fx-conversion.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import {
-  applyRevaluation, bookedFor, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, revaluationEntries,
+  applyRevaluation, bookedFor, closingLedger, emptyState, foreignAccounts, openingChanges, openingOf, proofOf, revaluationEntries,
   yearClose, yearEndAccounts, yearEndTemplates, PROFIT_ALLOCATION_ID, RECEIVABLES_ID, receivablesEntryId, receivablesReversal,
-  type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState,
+  type BankBalance, type Opening, type Receivables, type TemplateState, type YearClose, type YearCloseState, type YearEndProof,
 } from '../accounting/year-close.js';
 import { roundCHF } from '../accounting/rappen.js';
 import { filingKeyOf } from '../accounting/periods.js';
@@ -42,7 +42,7 @@ export function readState(ws: Workspace, year: string): YearCloseState {
   const file = stateFile(ws, year);
   if (!existsSync(file)) return emptyState(year);
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<YearCloseState>;
-  return { year, templates: raw.templates ?? {}, closedAt: raw.closedAt, openedAt: raw.openedAt };
+  return { year, templates: raw.templates ?? {}, closedAt: raw.closedAt, openedAt: raw.openedAt, ...(raw.cashCounts && { cashCounts: raw.cashCounts }) };
 }
 
 function writeState(ws: Workspace, state: YearCloseState): void {
@@ -51,13 +51,102 @@ function writeState(ws: Workspace, state: YearCloseState): void {
   writeFileSync(file, JSON.stringify(state, null, 2) + '\n');
 }
 
-/** The bank's own balances: the month-end balances read off statement PDFs, and every camt.053 closing balance. */
+/** The bank's own balances: the month-end balances read off statement PDFs, every camt.053 closing balance, and the year-end confirmations a person attached (`document`, #119). */
 export function bankBalances(ws: Workspace, books: Books): BankBalance[] {
-  const fromPdf = (books.statementBalances ?? []).filter((b) => b.source !== 'camt').map((b) => ({ account: b.account, date: b.date, amount: b.amount, source: b.sourceFile }));
+  const fromPdf = (books.statementBalances ?? []).filter((b) => b.source !== 'camt').map((b) => ({ account: b.account, date: b.date, amount: b.amount, source: b.sourceFile, ...(fromYearEndDocument(b) && { document: true as const }) }));
   const fromCamt = readBankStatements(ws).flatMap((f) => f.status !== 'read' ? [] : parseStatementBalances(f.statement, f.account.bank, f.file)
     .filter((s) => s.type === 'CLBD' && s.currency === f.account.currency)
     .map((s) => ({ account: f.account.account, date: s.date, amount: s.amount, source: s.sourceFile })));
   return [...fromPdf, ...fromCamt];
+}
+
+/**
+ * A bank's year-end confirmation the person attached (#119) lies in filings/<year>/year-end/; its
+ * balance is a StatementClosingBalance read off a PDF like a statement's, whose `sourceFile` names
+ * it under that folder. `npm run extract-balances` reads statements only and keeps these.
+ */
+const YEAR_END_DOCUMENTS = 'year-end';
+export const fromYearEndDocument = (b: Pick<StatementClosingBalance, 'sourceFile'>): boolean => b.sourceFile.startsWith(`${YEAR_END_DOCUMENTS}/`);
+const DOCUMENT_TYPES = /\.(pdf|png|jpe?g)$/i;
+
+/** The money account of the manifest `account` books on, if 31.12. needs `proof` from it. */
+function accountNeeding(ws: Workspace, account: string, proof: YearEndProof): LedgerBankAccount {
+  const found = ws.bankAccounts.find((a) => a.account === account && proofOf(a.role) === proof);
+  if (!found) throw new YearCloseRefused({ code: 'yearEndAccountUnknown', params: { account } }, `Account ${account} is no ${proof === 'bank' ? 'bank or card' : 'cash'} account of bankAccounts in belege.workspace.yaml.`);
+  return found;
+}
+
+/** The year-end confirmation's file of a hand balance, if the year's books hold one for `account`. */
+export function yearEndDocumentOf(ws: Workspace, year: string, account: string, books: Books = loadBooks(ws)): string | undefined {
+  const b = (books.statementBalances ?? []).find((x) => x.account === account && x.date === `${year}-12-31` && fromYearEndDocument(x));
+  return b && join(yearPaths(ws.paths, year).filings, b.sourceFile);
+}
+
+/**
+ * A bank or card account's balance on 31.12. from the bank's year-end confirmation the person
+ * attached (#119), for books without a statement covering the day. Replaces the account's hand
+ * balance of the year and its document; refused while a statement states the day's balance (the
+ * bank's own statement is the proof then) and once the year is closed.
+ */
+export function setYearEndBalance(ws: Workspace, year: string, account: string, amount: number, document: { name: string; body: Buffer }): StatementClosingBalance {
+  const money = accountNeeding(ws, account, 'bank');
+  const name = basename(document.name).trim();
+  if (!DOCUMENT_TYPES.test(name)) throw new YearCloseRefused({ code: 'yearEndDocumentType', params: { name } }, `${name}: the confirmation must be a PDF or an image (PNG, JPG).`);
+  const books = loadBooks(ws);
+  assertYearOpen(books, year, 'its balances of 31.12. stay.');
+  const date = `${year}-12-31`;
+  const statement = bankBalances(ws, books).find((b) => b.account === account && b.date === date && !b.document);
+  if (statement) throw new YearCloseRefused({ code: 'yearEndBalanceStated', params: { account, source: statement.source } }, `${statement.source} states the balance of ${account} on ${date} already: the statement is the proof.`);
+  const before = yearEndDocumentOf(ws, year, account, books);
+  const sourceFile = `${YEAR_END_DOCUMENTS}/${account}-${date}${extname(name).toLowerCase()}`;
+  const path = join(yearPaths(ws.paths, year).filings, sourceFile);
+  const balance: StatementClosingBalance = { account, bank: money.bank, currency: money.currency, date, amount, source: 'pdf', sourceFile };
+  update(books, PERSON, (b) => {
+    b.statementBalances = [...(b.statementBalances ?? []).filter((x) => !(x.account === account && x.date === date)), balance]
+      .sort((x, y) => x.date.localeCompare(y.date) || x.account.localeCompare(y.account));
+  });
+  // The proof it replaces goes only once the new one and the books are saved.
+  mkdirSync(dirname(path), { recursive: true });
+  const fresh = `${path}.new`;
+  writeFileSync(fresh, document.body);
+  try {
+    saveBooks(ws, books);
+  } catch (e) {
+    rmSync(fresh, { force: true });
+    throw e;
+  }
+  renameSync(fresh, path);
+  if (before && before !== path) rmSync(before, { force: true });
+  return balance;
+}
+
+/** Takes back a hand balance of 31.12. and its document. */
+export function removeYearEndBalance(ws: Workspace, year: string, account: string): void {
+  accountNeeding(ws, account, 'bank');
+  const books = loadBooks(ws);
+  assertYearOpen(books, year, 'its balances of 31.12. stay.');
+  const file = yearEndDocumentOf(ws, year, account, books);
+  if (!file) return;
+  update(books, PERSON, (b) => { b.statementBalances = (b.statementBalances ?? []).filter((x) => !(x.account === account && x.date === `${year}-12-31` && fromYearEndDocument(x))); });
+  saveBooks(ws, books);
+  rmSync(file, { force: true });
+}
+
+/**
+ * The cash counted on 31.12. on a cash account (#119), kept in the year's close record; null takes
+ * it back. A difference to the books is shown by the checklist, never booked here.
+ */
+export function setCashCount(ws: Workspace, year: string, account: string, amount: number | null): YearCloseState {
+  accountNeeding(ws, account, 'count');
+  assertYearOpen(loadBooks(ws), year, 'its cash count stays.');
+  const current = readState(ws, year);
+  if (current.closedAt) throw new YearCloseRefused({ code: 'yearChecklistClosed', params: { year } }, `${year} is closed: its checklist no longer changes.`);
+  const cashCounts = { ...current.cashCounts };
+  if (amount === null) delete cashCounts[account]; else cashCounts[account] = amount;
+  const { cashCounts: _, ...rest } = current;
+  const next: YearCloseState = { ...rest, ...(Object.keys(cashCounts).length && { cashCounts }) };
+  writeState(ws, next);
+  return next;
 }
 
 /** The account numbers of the workspace's chart. */

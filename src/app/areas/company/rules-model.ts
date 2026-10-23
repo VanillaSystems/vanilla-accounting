@@ -6,6 +6,7 @@
 import { ruleWords, type RuleNames, type RuleRefusal, type RuleWords } from '../../../booking/rules.js';
 import type { RuleRow } from '../../../booking/rule-book.js';
 import type { RulesView } from '../../../saving/rules.js';
+import { valueLabel } from '../../../books/tags.js';
 
 export interface RuleLine {
   key: string;
@@ -27,6 +28,7 @@ export function namesOf(view: Pick<RulesView, 'names' | 'currency'>, money: (n: 
     business: (id) => view.names.businesses[id],
     payer: (key) => view.names.payers?.[key],
     money: (n) => `${view.currency} ${money(n)}`,
+    tag: (d, v) => { const dim = view.names.dimensions?.find((x) => x.id === d); return dim && `${dim.label} «${valueLabel(dim, v)}»`; },
   };
 }
 

@@ -11,7 +11,7 @@ import type { JournalEntry } from '../types/index.js';
 export const UNDO_FIELDS = ['by', 'rule', 'reason', 'run', 'receipts'] as const;
 
 export type JournalEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount'> & { description: string }
-  & Partial<Pick<JournalEntry, 'id' | 'transactionRef' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate' | 'corrects' | 'origin' | (typeof UNDO_FIELDS)[number]>>
+  & Partial<Pick<JournalEntry, 'id' | 'transactionRef' | 'vatCode' | 'exchangeCurrency' | 'exchangeRate' | 'corrects' | 'origin' | 'tags' | (typeof UNDO_FIELDS)[number]>>
   /** A correction of a filed entry: the entry it corrects and what was wrong, for its case (r8c-6). */
   & { correctsEntry?: string; correction?: 'vat' | 'account' | 'storno' }
   /** The receipt the booking is for (a late receipt of a filed payment, r10h-6): linked to the new entry, and pointed at the payment corrected. */
@@ -30,6 +30,7 @@ export function undoInput(e: JournalEntry): JournalEntryInput {
     ...(e.vatCode && { vatCode: e.vatCode }),
     ...(e.exchangeCurrency && e.exchangeRate !== undefined && { exchangeCurrency: e.exchangeCurrency, exchangeRate: e.exchangeRate }),
     ...(e.corrects && { corrects: e.corrects }),
+    ...(e.tags && { tags: e.tags }),
     ...(e.origin && { origin: e.origin }),
     ...(e.by && { by: e.by }),
     ...(e.rule && { rule: e.rule }),

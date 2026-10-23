@@ -18,4 +18,8 @@ export type RuleRefusal =
   | { code: 'fees' }
   | { code: 'direction'; params: { direction: string } }
   | { code: 'counterparty'; params: { counterparty: string } }
-  | { code: 'payer'; params: { payer: string } };
+  | { code: 'payer'; params: { payer: string } }
+  /** `then.tags` names a reporting dimension the workspace does not declare (#127). */
+  | { code: 'dimension'; params: { dimension: string } }
+  /** `then.tags` is not a map of dimension to one short value. */
+  | { code: 'tags' };

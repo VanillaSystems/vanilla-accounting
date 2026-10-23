@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 
-interface Answer { answer?: unknown; law?: unknown; where?: unknown; unverified?: unknown }
+interface Answer { answer?: unknown; law?: unknown; where?: unknown; unverified?: unknown; verified?: unknown }
 
 const checklist = readFileSync(join(APP_ROOT, 'docs/country-checklist.md'), 'utf8');
 const questions = [...checklist.matchAll(/^### `([a-z]+\.[a-z-]+)`/gm)].map((m) => m[1]);
@@ -47,6 +47,7 @@ for (const id of modules) {
       if (!Array.isArray(a.where) || !a.where.length) problems.push(`${q}: where must list at least one path`);
       else for (const w of a.where) if (typeof w !== 'string' || !existsSync(join(APP_ROOT, w.split('#')[0]))) problems.push(`${q}: ${String(w)} does not exist`);
       if (a.unverified !== undefined && (typeof a.unverified !== 'string' || !a.unverified.trim())) problems.push(`${q}: unverified must say what to confirm`);
+      if (a.verified !== undefined && (typeof a.verified !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(a.verified))) problems.push(`${q}: verified must start with the date of the check and name the sources`);
     }
     assert.deepEqual(problems, []);
   });

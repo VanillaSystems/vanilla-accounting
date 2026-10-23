@@ -5,7 +5,7 @@
  * (extract-vat step). It reports — it never mutates — the failure modes that
  * silently cost money or misstate VAT:
  *   - a rate code (I81/M26/...) not backed by any linked receipt showing Swiss MWST
- *   - a rate code with no receipt linked at all (no receipt = no deduction)
+ *   - a rate code with no receipt linked at all and no other proof named (BankTransaction.inputTaxProof)
  *   - a 0-code (I0/M0) where a linked receipt DOES show Swiss MWST (missed deduction)
  */
 
@@ -24,6 +24,7 @@ export interface VatAuditReport {
 export function auditVat(index: Index): VatAuditReport {
   const entries = index.journalEntries ?? [];
 
+  const proved = new Set(index.transactions.filter((tx) => tx.inputTaxProof).map((tx) => tx.ref));
   const receiptsByTx = new Map<string, Array<{ hasSwissVat?: boolean }>>();
   for (const tx of index.transactions) {
     const recs = index.mappings
@@ -60,7 +61,7 @@ export function auditVat(index: Index): VatAuditReport {
 
     if (POS_RATE_CODE.test(code)) {
       if (isCoopPronto || isWebshopFee) continue;
-      if (recs.length === 0) report.rateCodeNoReceipt.push(label);
+      if (recs.length === 0) { if (!proved.has(e.transactionRef)) report.rateCodeNoReceipt.push(label); }
       else if (!anySwiss) report.rateCodeNoSwissReceipt.push(label);
     } else if (ZERO_CODE.test(code) && anySwiss && /^-?[IM]0\b/.test(code)) {
       // Revenue exports (V0) are legitimately 0-rated even with a Swiss-VAT

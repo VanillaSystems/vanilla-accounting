@@ -120,7 +120,10 @@ suppliers, customers and authorities (see step 6). The better the knowledge base
 the first pass is right.
 
 **Check.** The Buchungen tab shows every entry. A VAT code with a rate (I81, M81, V81) needs a
-receipt that shows Swiss MWST. No receipt, no input tax: the code is then I0, M0 or V0.
+receipt that shows Swiss MWST. No receipt, no input tax: the app then books I0, M0 or V0. If
+other documents show the VAT (a contract with the VAT and the payment confirmation), you may
+book the payment by hand with the rate and name them in «Anderer Nachweis der Vorsteuer»; the
+payment keeps what you wrote (MWSTG Art. 81 Abs. 3, ESTV MWST-Info 09 Ziff. 1.6).
 
 For agents: [`booking.flow.yaml`](../processes/booking.flow.yaml), step `classify`.
 

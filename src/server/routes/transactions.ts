@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { BankTransaction, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction } from '../../types/index.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
@@ -7,7 +7,7 @@ import { patchManifest } from '../../workspace/manifest-write.js';
 import { ownerOf } from '../../workspace/money-accounts.js';
 import { baseCurrency } from '../../engines/index.js';
 import { nextManualRef } from '../../books/next-ref.js';
-import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, WS } from '../books.js';
+import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, tagsField, WS } from '../books.js';
 import { assertPlaced, attachEntries, bookPayment, dropPayment } from '../edits.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
@@ -27,10 +27,10 @@ function checkedManifest<T>(run: () => T): T {
   }
 }
 
-/** A description may not be empty; an empty remark clears it; noReceiptNeeded false clears the flag. */
-function parseTransactionPatch(body: unknown): TransactionPatch {
-  const b = patchBody(body, ['description', 'remarks', 'noReceiptNeeded']);
-  const patch: TransactionPatch = {};
+/** A description may not be empty; an empty remark clears it; noReceiptNeeded false clears the flag; an empty inputTaxProof takes the proof back. */
+function parseTransactionPatch(body: unknown): Partial<BankTransaction> {
+  const b = patchBody(body, ['description', 'remarks', 'noReceiptNeeded', 'inputTaxProof']);
+  const patch: Partial<BankTransaction> = {};
   if ('description' in b) {
     const description = stringField(b, 'description').trim();
     if (!description) throw new RequestError(400, 'description darf nicht leer sein.');
@@ -40,6 +40,10 @@ function parseTransactionPatch(body: unknown): TransactionPatch {
   if ('noReceiptNeeded' in b) {
     if (typeof b.noReceiptNeeded !== 'boolean') throw new RequestError(400, 'noReceiptNeeded muss true oder false sein.');
     patch.noReceiptNeeded = b.noReceiptNeeded || undefined;
+  }
+  if ('inputTaxProof' in b) {
+    const text = stringField(b, 'inputTaxProof').trim();
+    patch.inputTaxProof = text ? { text, at: new Date().toISOString() } : undefined;
   }
   return patch;
 }
@@ -137,11 +141,12 @@ router.delete('/api/transactions/:ref', (req, res) => {
 
 /** One line of a booking by hand: accounts, an amount in the payment's currency, a VAT code, a text. */
 function bookingLine(raw: unknown): BookingLine {
-  const b = patchBody(raw, ['accountDebit', 'accountCredit', 'amount', 'vatCode', 'description']);
+  const b = patchBody(raw, ['accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'tags']);
   const text = (k: string) => (b[k] === undefined ? '' : stringField(b, k).trim());
   if (typeof b.amount !== 'number') throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
   const vatCode = text('vatCode');
-  return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description') };
+  const tags = tagsField(b.tags);
+  return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description'), ...(tags && { tags }) };
 }
 
 /** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were, for the undo. */
@@ -153,8 +158,10 @@ router.post('/api/transactions/:ref/attach', (req, res) => {
 
 /** A payment booked by hand, in one or more lines that add up to it (src/server/edits.ts bookPayment). */
 router.post('/api/transactions/:ref/entries', (req, res) => {
-  const lines = (req.body as { lines?: unknown })?.lines;
+  const { lines, inputTaxProof } = (req.body ?? {}) as { lines?: unknown; inputTaxProof?: unknown };
   if (!Array.isArray(lines)) throw new RequestError(400, 'lines: eine Liste von Zeilen.');
   const parsed = lines.map(bookingLine);
-  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver()) }));
+  const proof = inputTaxProof === undefined ? undefined : typeof inputTaxProof === 'string' ? inputTaxProof.trim() : '';
+  if (proof === '') throw new RequestError(400, 'inputTaxProof: den anderen Nachweis der Vorsteuer nennen (Vertrag, Auftragsbestätigung, E-Mail).');
+  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof) }));
 });

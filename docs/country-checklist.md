@@ -41,6 +41,8 @@ answers:
     where: [modules/ch/rates.yaml] # files that implement it; a #key may follow the path
     unverified: >                  # only when part of the answer is not sure: what to confirm
       ...
+    verified: >                    # once checked against the primary sources: the date and the sources
+      ...
 ```
 
 `where` names repository paths. An answer with no implementation names the file that would

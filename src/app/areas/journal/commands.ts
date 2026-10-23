@@ -65,8 +65,12 @@ export function correct(books: Index, e: JournalEntry, as: CorrectionKind, from?
   setUi({ overlay: { kind: 'new', correcting: { entry: e.id, as, ...(from && { from }) }, draft: {
     ...correctionOf(e, as, newEntryDate(books), t('journal.correctionText', { ref: e.transactionRef, text: e.description ?? '' }), isBankAccount, receiptRateOf(books, e, from), receiptVatOf(books, e, from)),
     corrects: e.date ? filingKeyOf(e.date, filing().length) : undefined,
+    ...tagsOf(e),
   } } });
 }
+
+/** A copy, a reversal or a correction of an entry carries its tags, so the project's figures stay with it (#127). */
+const tagsOf = (e: JournalEntry) => (e.tags ? { tags: e.tags } : {});
 
 export type Act = 'edit' | 'del' | 'correct' | 'reverse' | 'reverseNewYear' | 'copy' | 'receipt' | 'payment' | 'download';
 
@@ -97,17 +101,17 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
     // A Gegenbuchung of an open entry, its accrual's reversal on the next 1.1., a copy (treuhaender-27).
     case 'reverse':
       if (!p.canEdit || v.locked) return false;
-      setUi({ overlay: { kind: 'new', draft: reversalOf(e, newEntryDate(p.books), t('journal.reverseText', { ref: e.transactionRef, text: e.description ?? '' })) } });
+      setUi({ overlay: { kind: 'new', draft: { ...reversalOf(e, newEntryDate(p.books), t('journal.reverseText', { ref: e.transactionRef, text: e.description ?? '' })), ...tagsOf(e) } } });
       return true;
     case 'reverseNewYear':
       if (!p.canEdit || !isAccrual(e)) return false;
-      setUi({ overlay: { kind: 'new', draft: reversalOf(e, newYearAfter(e.date), t('journal.accrualText', { text: e.description ?? '', year: e.date.slice(0, 4) })) } });
+      setUi({ overlay: { kind: 'new', draft: { ...reversalOf(e, newYearAfter(e.date), t('journal.accrualText', { text: e.description ?? '', year: e.date.slice(0, 4) })), ...tagsOf(e) } } });
       return true;
     case 'copy':
       if (!p.canEdit) return false;
       setUi({ overlay: { kind: 'new', draft: {
         date: newEntryDate(p.books), accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount,
-        ...(e.vatCode && { vatCode: e.vatCode }), description: e.description ?? '',
+        ...(e.vatCode && { vatCode: e.vatCode }), description: e.description ?? '', ...tagsOf(e),
       } } });
       return true;
   }

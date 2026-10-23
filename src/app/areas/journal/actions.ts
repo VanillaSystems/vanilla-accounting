@@ -24,13 +24,13 @@ async function run<T>(nav: Nav, call: () => Promise<T>, message: (r: T) => strin
   return result;
 }
 
-export type Field = 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount' | 'description';
+export type Field = 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount' | 'description' | 'tags';
 
 /** Saves the fields that changed; undo writes back what they were. */
 export function saveEntry(nav: Nav, e: JournalEntry, patch: JournalEntryPatch, changed: Field[]) {
   // The undo puts the booking back as it was, with who decided it and why.
   const back: JournalEntryPatch = { origin: e.origin ?? null, reason: e.reason ?? null, by: e.by ?? null };
-  for (const f of changed) Object.assign(back, { [f]: f === 'vatCode' || f === 'description' ? e[f] ?? '' : e[f] });
+  for (const f of changed) Object.assign(back, { [f]: f === 'vatCode' || f === 'description' ? e[f] ?? '' : f === 'tags' ? e.tags ?? null : e[f] });
   const fields = changed.map((f) => t(`journal.field.${f}`)).join(', ');
   return run(nav, () => api.patchJournalEntry(e.id, patch), () => t('journal.saved', { fields }), () => api.patchJournalEntry(e.id, back));
 }
@@ -76,10 +76,11 @@ export function reclassify(nav: Nav, ref: string, before: JournalEntry[], overwr
   });
 }
 
-/** A payment booked by hand in one or more lines (src/server/edits.ts bookPayment); undo deletes them again. */
-export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[]) =>
-  run(nav, () => api.bookPayment(ref, lines), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { line: bookingLine(entries[0]) })), async (entries) => {
+/** A payment booked by hand in one or more lines (src/server/edits.ts bookPayment), with the other proof of its input tax when one is named; undo deletes them again and takes the proof back. */
+export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[], proof?: string) =>
+  run(nav, () => api.bookPayment(ref, lines, proof), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { line: bookingLine(entries[0]) })), async (entries) => {
     for (const e of entries) await api.deleteJournalEntry(e.id);
+    if (proof !== undefined) await api.patchTransaction(ref, { inputTaxProof: '' });
   });
 
 /** A booking typed without its payment tied to it (src/server/edits.ts attachEntries); undo puts its entries back as they were. */
