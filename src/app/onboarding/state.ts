@@ -9,7 +9,8 @@ import { api, errorText } from '../lib/api.js';
 import { newPurposeConversation, onBooksChanged, openAssistant, showConversation } from '../assistant/store.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { openStep, setupThread, typedChoice, type SetupStep } from '../../onboarding/conversation.js';
-import type { QuestionId } from '../../onboarding/model.js';
+import { sellsAnswer, type QuestionId } from '../../onboarding/model.js';
+import type { SalesKind } from '../../workspace/setup.js';
 import type { SetupView } from '../../onboarding/facts.js';
 import type { VatSetup } from '../../workspace/vat-setup.js';
 import { say } from './words.js';
@@ -66,6 +67,20 @@ export async function undoVat(before: VatSetup): Promise<string | undefined> {
     set(withView(await api.onboardingAnswer('vat', state.view?.progress.answers.vat?.value ?? null, null)));
     return undefined;
   } catch (e) { return errorText(e); }
+}
+
+/**
+ * «Was verkauft ihr?» (#46): the kinds saved into the company's profile through the Firma page's
+ * PATCH /api/workspace, and recorded as the answer. A refusal shows on the step.
+ */
+export async function keepSells(kinds: readonly SalesKind[]): Promise<string | undefined> {
+  set({ ...state, busy: true, error: undefined });
+  try {
+    await api.patchWorkspace({ sells: [...kinds] });
+    reloadWorkspace();
+    set(withView(await api.onboardingAnswer('sells', sellsAnswer(kinds))));
+    return undefined;
+  } catch (e) { const error = errorText(e); set({ ...state, busy: false, error }); return error; }
 }
 
 /** Opens the setup: the conversation it ran in, or a new one. */

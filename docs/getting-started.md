@@ -85,7 +85,7 @@ words on what the company does. Then these questions, in this order:
 7. **Starting point.** A new company starts with empty books. If you switch from other
    bookkeeping, bring your opening balances of 1 January: `npm run import-opening` reads them
    from a Banana export (Konten XML), or you enter them later.
-8. **What you sell.** Services, goods, or both. This picks the accounts of your chart.
+8. **What you sell.** Any combination of products you make yourself, goods you buy and resell (trade), and services (`--sells made,services`). This picks the accounts of your chart and the default accounts the app books with: material for your own products on 4000, goods for resale on 4200; sales of own products on 3000, traded goods on 3200, services on 3400. A supplier or customer can differ by a rule of its own.
 9. **Customers abroad?** A service to a customer abroad is usually declared without Swiss VAT.
 10. **Do you import goods?** Imports come with customs and import VAT invoices.
 11. **Employees.** None, the owner only, or staff. Vanilla Accounting books the salary and the AHV, BVG and

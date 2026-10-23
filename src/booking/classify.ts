@@ -38,6 +38,7 @@ import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { holdWords, payoutByOrders, type OrderHold } from './payout-orders.js';
 import { splitByReceipts } from './receipt-lines.js';
+import { payoutSales, salesDefaults } from '../workspace/sells.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
@@ -199,9 +200,9 @@ export interface ClassifyContext extends ClassifyPromptContext {
  */
 export function payoutDefault(ws: Pick<Workspace, 'profile'>, chart: readonly string[]): RuleBooking | undefined {
   if (ws.profile?.payouts !== 'yes') return undefined;
-  const { sales, fees } = setup().answers.payouts;
+  const { fees } = setup().answers.payouts;
   const has = new Set(chart);
-  const account = (ws.profile.sells && sales[ws.profile.sells]) || sales.otherwise;
+  const account = payoutSales(ws.profile.sells ?? []);
   if (!has.has(account) || !has.has(fees.account)) return undefined;
   return { account, vat: saleVatCode('saleDomestic'), fees: { account: fees.account, vat: formTakes(fees.vat) ? fees.vat : '' } };
 }
@@ -280,6 +281,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     purchaseVat: businessVat(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
     vat: ws.company.vat,
+    ...(ws.profile?.sells.length ? { sells: salesDefaults(ws.profile.sells) } : {}),
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
     ...((p) => (p ? { payout: p } : {}))(payoutDefault(ws, [...chartNames(chartOfAccounts).keys()])),
   };

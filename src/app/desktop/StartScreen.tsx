@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
@@ -138,7 +138,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
   const root = f.root || (info ? `${info.booksHome}/${t('desktop.folderName', { name: f.name.trim() || t('desktop.folderDefault') }).replace(/[/:]/g, '-')}` : '');
   const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
   const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
-  const complete = questions.every((k) => 'multi' in QUESTIONS[k] || f.answers[k] !== undefined);
+  const complete = firstMissing(f.answers) === undefined;
   const stop = complete ? firstUnsupported(f.answers as Answers) : undefined;
   const errors = useMemo(() => {
     const uid = parseUid(f.uid);

@@ -27,7 +27,7 @@ export function workspaceChecks(ws: Workspace): Result[] {
   const results: Result[] = [ok(`Workspace ${ws.paths.root} (${ws.company.name})`)];
   const { profile } = ws;
   results.push(profile
-    ? ok(`Profile: ${profile.preset}, sells ${profile.sells}, ${ws.company.legalForm ?? 'legal form not set'}`)
+    ? ok(`Profile: ${profile.preset}, sells ${profile.sells.join(', ')}, ${ws.company.legalForm ?? 'legal form not set'}`)
     : warn('No profile in belege.workspace.yaml', 'set up before npm run init; nothing is missing for booking'));
 
   try {
