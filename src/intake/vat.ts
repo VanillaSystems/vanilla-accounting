@@ -12,7 +12,7 @@
  * without any VAT indicator is recorded hasSwissVat=false without a model call, on a receipt
  * that has no facts. Only a model answer that parses as VAT facts replaces facts.
  */
-import { creditSigned } from './match.js';
+import { creditSigned } from '../accounting/credit-signed.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { periodLock, type Books } from '../books/store.js';

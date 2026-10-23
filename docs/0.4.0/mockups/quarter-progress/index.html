@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Period progress</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --bg: #f4f6f9; --card: #fff; --ink: #0b1220; --muted: #6e7685; --line: #e7eaf0; --accent: #0067b1; --accent-soft: #e8f1f9; --pick: #1a7f4b; }
+:root[data-theme="dark"] { --bg: #111; --card: #0a0a0a; --ink: #ededed; --muted: #8f8f8f; --line: #1f1f1f; --accent: #ededed; --accent-soft: #1a1a1a; --pick: #5cc790; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 "Instrument Sans", system-ui, sans-serif; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font: 800 30px/1.1 "Hanken Grotesk"; margin: 0 0 8px; letter-spacing: -.01em; }
+.lead { color: var(--muted); max-width: 860px; margin: 0 0 18px; }
+.lead b { color: var(--ink); font-weight: 600; }
+.bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 0; background: var(--bg); border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--card); }
+.seg button { font: 500 13px "Instrument Sans"; border: 0; background: none; color: var(--muted); padding: 6px 11px; cursor: pointer; }
+.seg button.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.seg i { width: 1px; background: var(--line); }
+.bar label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.note { margin: 0 0 18px; padding: 10px 14px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.note b { color: var(--ink); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); gap: 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+.card.wide { grid-column: 1 / -1; }
+.card.pick { border-color: var(--pick); box-shadow: 0 0 0 1px var(--pick); }
+.view { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); background: var(--bg); }
+.view iframe { position: absolute; border: 0; transform-origin: 0 0; }
+.txt { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+.txt h2 { font: 700 17px "Hanken Grotesk"; margin: 0; display: flex; align-items: baseline; gap: 8px; }
+.txt h2 small { font: 500 11px "Geist Mono"; color: var(--muted); }
+.txt h2 .tag { font: 600 11px "Instrument Sans"; color: var(--pick); margin-left: auto; text-transform: uppercase; letter-spacing: .06em; }
+.txt p { margin: 0; color: var(--muted); font-size: 13px; }
+.txt p b { color: var(--ink); font-weight: 600; }
+.txt a { color: var(--accent); font-size: 12.5px; }
+h2.sec { font: 700 20px "Hanken Grotesk"; margin: 34px 0 8px; }
+table { border-collapse: collapse; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 13px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-top: 1px solid var(--line); }
+th { font-weight: 600; background: var(--accent-soft); border-top: 0; }
+td:first-child { white-space: nowrap; font-weight: 600; }
+td .inv { color: var(--muted); }
+.rec { background: var(--card); border: 1px solid var(--pick); border-radius: 12px; padding: 14px 18px; max-width: 900px; }
+.rec p { margin: 6px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>How far along is the period?</h1>
+  <p class="lead"><b>Revised after the owner's review:</b> variant 5 now counts done / total at every station, splits the open part into «macht die App» and «braucht dich», merges Beleg and Zuordnung into Belege, compares with the periods before and lists the recurring payments that have not come. Five ways the app could show the open reporting period's way to a fileable VAT return instead of the activity summary («18 Belege gesammelt, 18 gebucht»). Each frame is the real Automatisierung page of the demo (captured from a read-only server); only the summary is swapped, plus the period chip in the top bar that the page follows. Every number comes from one pass over the payments of the selected period: <b>not cumulative</b>, a payment counts at the first station it has not passed. Blue means the app is still on it, amber means it waits for you, green is done. Links in the frames show where they would go.</p>
+  <div class="bar">
+    <label>State</label>
+    <span class="seg" id="state">
+      <button data-s="early">Early (12.08.)</button><button data-s="late" class="on">Before deadline, 2 open (23.11.)</button><button data-s="ready">Ready to file (21.10.)</button><button data-s="half">Half-year firm (26.10.)</button><i></i><button data-s="filed">Picker: filed Q1</button><button data-s="future">Picker: Q1 2027</button><button data-s="month">Picker: August</button>
+    </span>
+    <label>Theme</label>
+    <span class="seg" id="theme"><button data-t="light" class="on">Light</button><button data-t="dark">Dark</button></span>
+    <label>5 · Dock card</label>
+    <span class="seg" id="tip"><button data-tip="">Hover only</button><button data-tip="all" class="on">All (G held)</button><i></i><button data-tip="automatisierung">Automatisierung</button><button data-tip="belege">Belege</button><button data-tip="rechnungen">Rechnungen</button><button data-tip="auszuege">Kontoauszüge</button><button data-tip="buchungen">Buchungen</button><button data-tip="mwst">MWST</button><button data-tip="berichte">Bilanz &amp; ER</button><button data-tip="abschluss">Abschluss</button><button data-tip="partner">Partner</button><button data-tip="wissen">Wissen</button><button data-tip="aenderungen">Änderungen</button><button data-tip="firma">Firma</button></span>
+    <label>5 · Marks on icons</label>
+    <span class="seg" id="marks"><button data-marks="dots" class="on">Punkte</button><button data-marks="none">Nichts</button></span>
+    <label>5 · Dot</label>
+    <span class="seg" id="dot"><button data-dot="glyph" class="on">Beside the glyph</button><button data-dot="edge">At the bar's edge</button></span>
+  </div>
+  <p class="note" id="statenote"></p>
+  <div class="grid" id="grid"></div>
+
+  <h2 class="sec">Which numbers are real</h2>
+  <p class="lead">Real means read from the demo workspaces' books (demo/: Muster Kaffee GmbH, quarterly, effective method; demo-schreinerei/: Schreinerei Beispiel GmbH, half-yearly, net tax rate 4.5 %), or from <code>npm run vat-report</code> on them. The due date is the app's own rule (period end + 60 days). Every count in variant 5 is computed in the frame from the payment list, never typed in: the same pass that counts Q3 counts Q2 and Q1 for the comparison, and the rhythm of «Erwartet, noch nicht da» comes from the three months before the period.</p>
+  <table>
+    <tr><th>What</th><th>Real</th><th>Invented</th></tr>
+    <tr><td>All Muster Kaffee</td><td>Every payment of Q1 (25), Q2 (23) and Q3 2026 (24) with date, text, amount, bank and whether it needs a receipt (Q1 4, Q2 5, Q3 3 do not); statements Raiffeisen and Wise monthly through 30.09.; month-end balances; Ziffer 500 per quarter (Q1 CHF 2'081.10 paid, Q2 CHF 2'344.32, Q3 CHF 2'146.30); the Sammelzahlung of 30.09. (CHF 5'288.30) is booked in the demo as Grünkaffee GK-2026-09 (2'888.30) plus Liegenschaften Muster, Miete September (2'400.00).</td><td class="inv">Q2 2026 filed on 27.08.2026 (the demo's closedThrough is 31.03.). Who brings each statement in (Raiffeisen and Wise: the app).</td></tr>
+    <tr><td>Partners</td><td>Knowledge or process files exist for coop-pronto, swiss-post, gruenkaffee-muster, shopify, beispiel-holzhandel, ausgleichskasse, estv: their /partners/&lt;id&gt; links are real ids.</td><td class="inv">The ids liegenschaften-muster, kartenterminal, example-cloud, raiffeisen, vermieter-werkstatt, example-tools, garage-beispiel, muster-telecom (the demo has no file for them; the app would show them under their customer or bank name).</td></tr>
+    <tr><td>Rhythm</td><td>Derived from the real payments: Muster Kaffee has 7 monthly partners (rent ~2., Example Cloud ~3., Shopify ~5., Coop Pronto ~14., Post CH ~20., Grünkaffee ~25., card payouts ~28.) and 1 quarterly (account fee); the Schreinerei 5 monthly (rent, Holzhandel, Example Tools, Garage, Muster Telecom ~18.) and 2 quarterly (AHV, account fee). Wages are no partner and stay out.</td><td class="inv">The grace of 3 days after the usual day before a payment counts as missing.</td></tr>
+    <tr><td>Early (12.08.)</td><td>Which payments exist by then (Raiffeisen to 11.08. = 9, Wise to 31.07. = 2), the July balances, the comparison «Q2 bis 11.05.: 9 · Q1 bis 11.02.: 11».</td><td class="inv">Today = 12.08.; Raiffeisen read through 11.08.; the 5 open payments and their reasons (3 receipts the app still fetches, 1 EUR receipt there but not matched, 1 question «Tanken: Geschäftsauto oder privat?»).</td></tr>
+    <tr><td>Before deadline (23.11.)</td><td>Everything else as in the books: 22 of 24 booked, 20 of 21 with receipt; the two September rows of «Erwartet» follow from the real Sammelzahlung.</td><td class="inv">Today = 23.11.; Coop Pronto 14.09. CHF 79.25 without receipt; the Sammelzahlung as an open question instead of booked (hence the Raiffeisen difference CHF 5'367.55 = both); the line «aus früheren Perioden» (Post CH June).</td></tr>
+    <tr><td>Ready to file (21.10.)</td><td>The demo's Q3 as it is today: 24 / 24 booked, 21 / 21 with receipt, 22 of 22 expected payments there, CHF 2'146.30 payable.</td><td class="inv">The previous year, Q3 2025 (26 payments, 22 / 22 with receipt, Raiffeisen CHF 61'930.15, CHF 1'987.40 payable): the demo's books begin in 2026. A new customer gets this line from the import of the old program; a customer who starts with the app gets it in its second year.</td></tr>
+    <tr><td>Half-year firm (26.10.)</td><td>Schreinerei H1 (52 payments, 14 without receipt needed) and H2 to 30.09. (26 payments, 9 without), H1 filed and sealed, CHF 1'707.14 paid for H1, balances to 30.09., net tax H2 CHF 369.93.</td><td class="inv">Today = 26.10.; Raiffeisen read through 23.10.; four October payments (copies of September's; the Holzhandel invoice there but not matched); Muster Telecom's October payment missing. The H1 filing date 27.08.2026.</td></tr>
+    <tr><td>Picker: filed Q1</td><td>Q1 2026's 25 payments, the seal (sealedAt 28.04.2026), CHF 2'081.10 paid. No comparison and no rhythm: it is the first quarter in the app.</td><td class="inv">The dock cards show Q3 as in «Before deadline».</td></tr>
+    <tr><td>Picker: Q1 2027</td><td>The forecast: 22 payments of 8 partners from the rhythm of Jul–Sep.</td><td class="inv">Same day and dock cards as «Before deadline».</td></tr>
+    <tr><td>Picker: August</td><td>August's payments, the 31.08. balances, July and June as comparison.</td><td class="inv">Today = 10.09.; Raiffeisen through 09.09.; Wise uploaded by hand and its August statement missing (so Example Cloud 03.08. is «noch nicht eingelesen»); 2 receipts missing (Shopify payout report: app; Post CH August: you); 1 question on the September payout that only the dock cards count (it lies after August).</td></tr>
+  </table>
+
+  <h2 class="sec">Dock cards: each area's state for the open period</h2>
+  <p class="lead"><b>After the owner's review (#33):</b> every dock icon's tooltip is a card in the route's station style, for the <b>open</b> reporting period, whatever the picker shows (so «Picker: filed Q1» shows the same cards as «Before deadline»). Belege, Buchungen, Kontoauszüge with Kontrolle, and MWST (station Abrechnung) render the very same station markup as the route above (one function, <code>stationHtml</code>, two places), fed by the same pass for the open period; the other areas get a card of the same shape. The cards are light popovers (the page surface with a line and shadow) in both themes, not the dark tooltip: the station's colours (amber «braucht dich», blue «macht die App», green done, the soft pill backgrounds) are tuned for the page surface, and an inverted tooltip would need a second palette for every piece. <b>Kontrolle</b> sits on Kontoauszüge, under the statements station: the area is «Auszüge pro Konto, Saldo geprüft», and the check compares the statement's balance with the books. <b>Holding G</b> (or «All») hides the cards beside the icons, keeps the dock's key caps and shows all twelve cards as a board of six columns beside the dock: one card per icon in dock order, each with its G key, so nothing overlaps; the cards beside the icons would cover each other at the dock's 48 px pitch. In the full-size frame, real hover and holding G both work.</p>
+  <p class="lead"><b>Marks on the icons:</b> no numbers. An area where something waits for you (a receipt missing, a question, a statement to upload) gets a quiet 6 px dot (amber at 65 %, no outline); together they are the «braucht dich» that Automatisierung's card counts. <b>No number anywhere on the bar</b> (the owner dropped the period ring at the foot of the bar): Automatisierung stays the app's disc at the top, its state only in its card. The dot sits top-right beside the glyph, outside its 24 px box and level with its top, a status dot beside the icon rather than on it; «At the bar's edge» puts it at the row's right edge by the bar's border for comparison (checked on the receipt, bank and book icons, light and dark, 100 % and 125 %). An area where only the app works gets nothing: the app's work asks nothing of the person, and any mark invites a click that leads nowhere. Overdue invoices (Rechnungen) and an expected payment that has not come (Geschäftspartner) are facts about others, not tasks, so they show in their cards and never as a dot; Bilanz &amp; ER, Änderungen and Firma never get a mark. «Nichts» removes the dots too: then only the cards say what waits.</p>
+  <table>
+    <tr><th>Icon</th><th>Card (Before deadline, 23.11.)</th><th>Real</th><th>Invented</th></tr>
+    <tr><td>Automatisierung (the disc at the top)</td><td>2 · 22 / 24 Q3 erledigt · «2 brauchen dich» · «1 macht die App» · fällig 29.11.2026 · Coop Pronto 14.09., Sammelzahlung 30.09.</td><td>Counts from the pass; «braucht dich» is the sum of what the dots mark.</td><td class="inv">What the state invents (see above).</td></tr>
+    <tr><td>Belege</td><td>The route's Belege station: 20 / 21 mit Beleg, «1 fehlt → dich», 3 brauchen keinen, Q2 18/18 · Q1 21/21.</td><td>As the route.</td><td class="inv">As the route.</td></tr>
+    <tr><td>Rechnungen</td><td>2 / 5 bezahlt, «3 überfällig», 2 Entwürfe; 2026-003 fällig 16.09., 2026-005 fällig 21.10., 2026-006 fällig 29.10.</td><td>Every invoice of demo/invoices.json: number, date, due date, payment date (paid counts once its statement is read), the cancelled 2026-007, the credit note left out, the 2 drafts. The Schreinerei demo has no invoices: «noch keine Rechnungen».</td><td class="inv">Today's date, which makes 3 overdue (the demo's bank data ends 30.09.).</td></tr>
+    <tr><td>Kontoauszüge</td><td>The route's Kontoauszüge station (2 / 2, vollständig bis 30.09.) and, under it, Kontrolle (1 / 2, Raiffeisen CHF 5'367.55: 2 Zahlungen noch nicht gebucht, the month-end balances).</td><td>As the route.</td><td class="inv">As the route.</td></tr>
+    <tr><td>Buchungen</td><td>The route's station: 22 / 24 gebucht, «1 braucht dich», «1 macht die App».</td><td>As the route.</td><td class="inv">As the route.</td></tr>
+    <tr><td>MWST</td><td>The route's Abrechnung station: fällig 29.11.2026, wartet auf 2 Zahlungen; Q2 2'344.32 · Q1 2'081.10. Ready: «zu bezahlen CHF 2'146.30».</td><td>Ziffer 500 per period from vat-report; due = period end + 60 days.</td><td class="inv">—</td></tr>
+    <tr><td>Bilanz &amp; ER</td><td>CHF 63'073.63 Gewinn 2026 bis 30.09., vorläufig · Q3: Ertrag 37'459.56 · Aufwand 16'116.73 · Flüssig 30.09.: CHF 88'252.44 + EUR 1'543.50 · Ergebnis Q2 23'295.19 · Q1 18'435.61.</td><td>Revenue and expenses per month, net of VAT, from the app's own computeIncomeStatement over each demo's books; the result runs through the last month whose statements are all read (early: 31.07.); liquid funds are the statement balances.</td><td class="inv">Q3 2025's result (CHF 17'960.40, ready state only). The figures are the demo books as booked: in «Before deadline» two payments are still open, which the real app would leave out until booked.</td></tr>
+    <tr><td>Abschluss</td><td>2 / 4 Perioden abgerechnet · Jahresabschluss ab 01.01.2027 · Q1 eingereicht 28.04. · Q2 eingereicht 27.08. · Q3 fällig 29.11. · Q4 läuft bis 31.12.</td><td>Q1 filed 28.04. (the demo's seal); the Schreinerei's H1 filed.</td><td class="inv">Q2 filed 27.08. (as above).</td></tr>
+    <tr><td>Geschäftspartner</td><td>20 / 22 erwartete Zahlungen da · «2 vielleicht in der Sammelzahlung» · Liegenschaften Muster Sep., Grünkaffee Muster Sep.</td><td>The rhythm pass of «Erwartet, noch nicht da».</td><td class="inv">The 3-day grace.</td></tr>
+    <tr><td>Wissen</td><td>23 / 24 Zahlungen mit Partner · «1 ohne Partner → dich» · Sammelzahlung 30.09. The Schreinerei shows 4 customer payments («Rechnung 2026-071 …») with no partner.</td><td>Derived: a payment none of the mockup's partner patterns match (the stand-in for the app's business match). Wages are no partner and stay out.</td><td class="inv">Who resolves a payment without a partner (amber when it is a question to you, else blue).</td></tr>
+    <tr><td>Änderungen</td><td>alles gespeichert · zuletzt 22.11. 17:42</td><td>—</td><td class="inv">All of it: the demos hold no unsaved changes, and the time of the last save is made up.</td></tr>
+    <tr><td>Firma</td><td>6 / 7 Einrichtung erledigt · Bisheriges Programm übersprungen · MWST effektiv, vereinnahmt · Abrechnung vierteljährlich · Raiffeisen 1021 · Wise 1023</td><td>The VAT setup and bank accounts of each demo; the 7 topics of Firma › Einrichtung.</td><td class="inv">Which topics are done (6, «Bisheriges Programm» skipped).</td></tr>
+  </table>
+
+  <h2 class="sec">Recommendation</h2>
+  <div class="rec" id="rec">
+    <p><b>Take 5: the route on top, the checklist under it, the dock cards beside it.</b> The route answers «where does it stick?» and «is that mine or the app's?» at a glance, in the order the work really flows, and each station opens its items. The checklist answers the question that drives the work, «can I file?», with the deadline as a plain date and one button per open condition. They need each other: the route alone does not say when you are allowed to file, the checklist alone hides where the flow stands.</p>
+    <p>The dock cards keep the open period in reach while you browse a filed one, without nagging: a quiet dot where something waits, the counts only on hover or while G is held. The timeline (3) is the most honest picture of time («complete through 11.08.») and could replace the statements row of the checklist later, but it needs reading and gets crowded with more banks. The dots (4) are pretty and scale badly: a firm with 300 payments a quarter gets a carpet, and the colour carries all the meaning.</p>
+    <p><b>How variant 5 counts, after the review.</b> The bank statement is the backbone: per payment, is its receipt there, is it booked (cash basis). So the person's key figure is payments without a receipt; a receipt that came but is not matched is the app's work and only a grey sub-line. A payment that waits for its receipt is counted once as «fehlt → dich» under Belege and, under Buchungen, as the app's («davon 1 wartet auf den Beleg»): the app books it as soon as the receipt is there, so the person is not asked twice. Kontrolle compares the last month-end balance with the books; a difference that equals the unbooked payments is the app's and resolves itself. «Erwartet, noch nicht da» does not block filing: on cash basis a payment that did not happen declares nothing. It is a hint that a statement, a direct debit or a bill may be missing, and links to the partner.</p>
+  </div>
+</div>
+<script>
+const VARIANTS = [
+  { v: 'route', name: '1 · Route with stations', sub: 'flow, counts stuck per station', crop: [579, 50, 861, 560],
+    text: '<b>Shows:</b> the chain Kontoauszüge › Beleg › Zuordnung › Buchung › Kontrolle › Abrechnung; each station holds the payments that stopped there, the biggest count is marked («hier staut es»); a click lists the items with who they wait on. <b>Strong:</b> where it sticks, at a glance. <b>Weak:</b> does not say when filing becomes possible.' },
+  { v: 'check', name: '2 · Checklist to filing', sub: 'conditions, ticked or open', crop: [579, 50, 861, 720],
+    text: '<b>Shows:</b> the seven conditions of a return: statements complete, receipts, questions, booked, balances, figures checked, filed; each ticked, open (amber, with the button that fixes it), running (blue) or later; the due date as a fact. A month or a future period gets one line instead. <b>Strong:</b> answers «can I file?». <b>Weak:</b> long, the flow is lost.' },
+  { v: 'time', name: '3 · Timeline of the period', sub: 'weeks, complete through, gaps', crop: [579, 50, 861, 520],
+    text: '<b>Shows:</b> the period\'s weeks plus the filing window to the due date; per bank up to when statements are read, then receipts and bookings, each gap a mark at its date (click it), today and the deadline as lines. <b>Strong:</b> time is visible («complete through 11.08.»). <b>Weak:</b> needs reading; little to act on.' },
+  { v: 'dots', name: '4 · One dot per payment', sub: 'every payment, coloured by stage', crop: [579, 50, 861, 520],
+    text: '<b>Shows:</b> each payment of the period as a dot in its week, green booked, blue the app is on it, amber waits for you, hollow green needs no receipt; hatched weeks are not read yet. A click names the payment. <b>Strong:</b> the whole period in one picture. <b>Weak:</b> does not scale to hundreds of payments; colour carries all meaning.' },
+  { v: 'combo', name: '5 · Route + checklist + dock cards', sub: 'Automatisierung home and the dock', crop: [0, 0, 1440, 1000], wide: true, pick: true,
+    text: '<b>Shows:</b> five stations, each counted as done / total: Kontoauszüge (accounts complete through which date), Belege (payments with their receipt), Buchungen (payments booked), Kontrolle (accounts whose balance agrees with the books), Abrechnung (due date, the amount when ready). Under each number the open part in two colours: blue «macht die App», amber «braucht dich». A receipt that arrived but is not matched yet is the app\'s, so it is only a small grey line. Under a dashed rule the same figure for the periods before (cut at the same day while the period runs). Then «Erwartet, noch nicht da»: the recurring partners whose payment of this period has not come, each linked to its partner page. The checklist below says what is left before filing. Each dock icon\'s card shows its area for the open period (see «Dock cards» below). Variants 1–4 keep the earlier counting.' },
+];
+const NOTES = {
+  early: '<b>Q3 2026, 12.08.</b> 11 payments read (Raiffeisen through 11.08., Wise through 31.07.). Belege 5 / 9 (4 the app\'s: 3 still fetched, 1 there and being matched; 2 need none); Buchungen 6 / 11 (1 question for you, 4 the app\'s); Kontrolle 0 / 2 at 31.07., because those payments are not booked yet. Every payment expected by 11.08. is there; Example Cloud comes with the Wise statement.',
+  late: '<b>Q3 2026, 23.11.</b> Six days before the deadline. Belege 20 / 21, 1 missing → you (Coop Pronto); Buchungen 22 / 24, 1 question → you (the Sammelzahlung), 1 the app books once the receipt is there. «Erwartet»: the rent and Grünkaffee of September have no payment of their own: both are probably inside the Sammelzahlung the question asks about. An older item from Q2 shows on its own line.',
+  ready: '<b>Q3 2026, 21.10.</b> The demo as it is today: every station complete, 22 of 22 expected payments there, CHF 2\'146.30 payable. This state also shows the comparison with the previous year (Q3 2025, invented: it would come from the import of the old program).',
+  half: '<b>Schreinerei Beispiel GmbH, 2. Semester 2026, 26.10.</b> Net tax rate, half-yearly, due 01.03.2027. Compared with H1 at the same day (23.04.). «Erwartet»: Muster Telecom pays around the 18th every month; October has not come although Raiffeisen is read through 23.10.',
+  filed: '<b>Picker on Q1 2026</b> (23.11.): filed 28.04.2026 and sealed, every station complete. No comparison and no rhythm: Q1 2026 is the first period in the app; a new customer would bring them with the import of the old program. The dock cards still show the open Q3 with its 2.',
+  future: '<b>Picker on Q1 2027</b> (23.11.): not begun; the stations are empty, «Erwartet» forecasts 22 payments of 8 partners. The dock cards still show Q3.',
+  month: '<b>Picker on August 2026</b> (10.09.): not a reporting period. Kontoauszüge 1 / 2: the Wise statement of August is missing and is yours to upload; compared with July and June. The checklist gives way to «Die Abrechnung umfasst Q3 2026».',
+};
+const st = { s: 'late', t: 'light', tip: 'all', marks: 'dots', dot: 'glyph' };
+const H = 1000;
+function render() {
+  document.documentElement.dataset.theme = st.t;
+  document.getElementById('statenote').innerHTML = NOTES[st.s];
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (const x of VARIANTS) {
+    const [cx, cy, cw, ch] = x.crop;
+    const card = document.createElement('div'); card.className = 'card' + (x.pick ? ' pick' : '') + (x.wide ? ' wide' : '');
+    const extra = x.v === 'combo' ? `${st.tip ? `&tip=${st.tip}` : ''}&marks=${st.marks}&dot=${st.dot}` : '';
+    const qs = `v=${x.v}&s=${st.s}&t=${st.t}${extra}`;
+    card.innerHTML = `<div class="view"><iframe src="frame.html?${qs}&crop=1#${qs}&crop=1" width="1440" height="${H}" title="${x.name}"></iframe></div>
+      <div class="txt"><h2>${x.name} <small>${x.sub}</small>${x.pick ? '<span class="tag">My pick</span>' : ''}</h2><p>${x.text}</p><a href="frame.html?${qs}#${qs}" target="_blank" rel="noopener">Open full size</a></div>`;
+    grid.appendChild(card);
+    const view = card.querySelector('.view'), fr = card.querySelector('iframe');
+    const fit = () => { const k = view.clientWidth / cw; view.style.height = ch * k + 'px'; fr.style.transform = `scale(${k})`; fr.style.left = -cx * k + 'px'; fr.style.top = -cy * k + 'px'; };
+    fit(); new ResizeObserver(fit).observe(view);
+  }
+}
+for (const [id, key] of [['state', 's'], ['theme', 't'], ['tip', 'tip'], ['marks', 'marks'], ['dot', 'dot']]) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    st[key] = b.dataset[key];
+    for (const o of b.parentNode.querySelectorAll('button')) o.classList.toggle('on', o === b);
+    render();
+  });
+}
+render();
+</script>
+</body>
+</html>
