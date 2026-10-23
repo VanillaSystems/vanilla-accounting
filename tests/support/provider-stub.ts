@@ -18,7 +18,7 @@ export interface ProviderStub {
 }
 
 const DEFAULTS: Record<string, Reply> = {
-  'GET /v1/models': { status: 200, body: { data: [{ id: 'claude-sonnet-4-6' }, { id: 'gpt-4o' }, { id: 'text-embedding-3-small' }] } },
+  'GET /v1/models': { status: 200, body: { data: ['claude-sonnet-4-6', 'claude-mythos-5-1', 'gpt-4o', 'gpt-7-nova', 'gpt-3.5-turbo', 'gpt-image-2.5-flare', 'gpt-realtime-2.1', 'gpt-4o-mini-tts', 'gpt-5-pro', 'text-embedding-3-small'].map((id) => ({ id })) } },
   'POST /v1/messages': { status: 200, body: { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '{"stub":"anthropic"}' }], usage: { input_tokens: 11, cache_creation_input_tokens: 2, cache_read_input_tokens: 3, output_tokens: 5 } } },
   'POST /v1/systemone': { status: 200, body: { model: 'jev-1.13.0', answers: { q: { type: 'noul', noul: 0.93 } }, usage: { input_tokens: 40, output_tokens: 1 } } },
   'POST /v1/chat/completions': { status: 200, body: { choices: [{ finish_reason: 'stop', message: { content: '{"stub":"openai"}' } }], usage: { prompt_tokens: 20, completion_tokens: 4, prompt_tokens_details: { cached_tokens: 8 } } } },

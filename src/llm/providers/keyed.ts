@@ -40,7 +40,9 @@ export const ANTHROPIC: KeyedSpec = {
     { id: 'claude-opus-5-5', can: READS },
   ],
   defaults: { fast: 'claude-haiku-5-5', standard: 'claude-sonnet-5-5', strong: 'claude-opus-5-5' },
-  capabilitiesOf: (model) => (!model.startsWith('claude-') ? undefined : /^claude-(opus|sonnet|haiku|fable)-[4-9]/.test(model) ? READS : TEXT),
+  // Every active Claude model reads images and PDFs (platform.claude.com/docs/en/build-with-claude/pdf-support),
+  // whatever its line is called; retired ones are no longer listed.
+  capabilitiesOf: (model) => (model.startsWith('claude-') ? READS : undefined),
   async list(key) {
     const json = await requestJson('Anthropic', `${anthropicUrl()}/v1/models?limit=1000`, { headers: anthropicHeaders(key), timeoutMs: 15_000 }) as { data?: Array<{ id?: unknown }> };
     return (json.data ?? []).flatMap((m) => (typeof m.id === 'string' ? [m.id] : []));
@@ -65,16 +67,20 @@ export const ANTHROPIC: KeyedSpec = {
 };
 
 const openaiUrl = () => process.env.VANILLA_OPENAI_URL ?? 'https://api.openai.com';
-const NOT_CHAT = /(audio|realtime|tts|transcribe|image|search|embedding|moderation|dall-e|whisper|codex)/;
+/** Not a model for these steps: speech, images, embeddings, a specialist, or one only the Responses API serves (codex, pro, deep research). */
+const NOT_CHAT = /(audio|realtime|live|tts|transcribe|whisper|image|dall-e|embedding|moderation|search|codex|cyber|rosalind|-pro\b|deep-research)/;
+/** The chat generations before gpt-4o that read no PDF; every later one does, so a new generation needs no edit here. */
+const TEXT_ONLY = /^(gpt-3\.5|gpt-4(-|$)|o1-mini|o3-mini)/;
 
 export const OPENAI: KeyedSpec = {
   id: 'openai',
   shipped: [
-    { id: 'gpt-5-mini', can: READS },
-    { id: 'gpt-5', can: READS },
+    { id: 'gpt-6-luna', can: READS },
+    { id: 'gpt-6.1-sol', can: READS },
+    { id: 'gpt-6-astra', can: READS },
   ],
-  defaults: { fast: 'gpt-5-mini', standard: 'gpt-5', strong: 'gpt-5' },
-  capabilitiesOf: (model) => (!/^(gpt-|o\d|chatgpt-)/.test(model) || NOT_CHAT.test(model) ? undefined : /^(gpt-(4o|4\.1|5)|o[34])/.test(model) ? READS : TEXT),
+  defaults: { fast: 'gpt-6-luna', standard: 'gpt-6.1-sol', strong: 'gpt-6-astra' },
+  capabilitiesOf: (model) => (!/^(gpt-|o\d|chatgpt-)/.test(model) || NOT_CHAT.test(model) ? undefined : TEXT_ONLY.test(model) ? TEXT : READS),
   async list(key) {
     const json = await requestJson('OpenAI', `${openaiUrl()}/v1/models`, { headers: { authorization: `Bearer ${key}` }, timeoutMs: 15_000 }) as { data?: Array<{ id?: unknown }> };
     return (json.data ?? []).flatMap((m) => (typeof m.id === 'string' ? [m.id] : []));

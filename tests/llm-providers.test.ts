@@ -70,7 +70,7 @@ test('a step set to Anthropic sends the key in its header, the system, the PDF a
 });
 
 test('a step set to OpenAI sends a PDF as file data and an image as an image, the key as bearer', async () => {
-  choose({ 'receipt-match': { provider: 'openai', model: 'gpt-5' } });
+  choose({ 'receipt-match': { provider: 'openai', model: 'gpt-6.1-sol' } });
   assert.equal(await ask('Finde die Zahlung', { step: 'receipt-match', attachments: [join(dir, 'scan.pdf'), join(dir, 'photo.png')] }), '{"stub":"openai"}');
   const [sent] = calls('/v1/chat/completions');
   assert.equal(sent.headers.authorization, `Bearer ${OPENAI_KEY}`);
@@ -108,15 +108,21 @@ test('a failing subscription never asks a key that costs money', async () => {
 test('when the default cannot answer either, the key\'s own reason is the one given, without the key', async () => {
   process.env.CLAUDE_BIN = join(dir, 'no-such-claude');
   stub.reply.set('POST /v1/chat/completions', { status: 401, body: { error: { message: 'Incorrect API key provided' } } });
-  choose({ classify: { provider: 'openai', model: 'gpt-5' } });
+  choose({ classify: { provider: 'openai', model: 'gpt-6.1-sol' } });
   await assert.rejects(ask('{}', { step: 'classify' }), (e: Error) => /OpenAI answered 401: Incorrect API key/.test(e.message) && !e.message.includes(OPENAI_KEY));
 });
 
 test('the model list adds what each provider lists that serves these steps; a listed model can be chosen', async () => {
   const states = await keyedStates();
-  const ids = (id: string) => states.find((s) => s.spec.id === id)!.provider!.models.map((m) => m.id);
-  assert.deepEqual(ids('anthropic'), ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-sonnet-4-6']);
-  assert.deepEqual(ids('openai'), ['gpt-5-mini', 'gpt-5', 'gpt-4o'], 'no embedding model, and no Claude model at OpenAI');
+  const models = (id: string) => Object.fromEntries(states.find((s) => s.spec.id === id)!.provider!.models.map((m) => [m.id, m.can.includes('pdf') ? 'reads' : 'text']));
+  assert.deepEqual(models('anthropic'), {
+    'claude-haiku-5-5': 'reads', 'claude-sonnet-5-5': 'reads', 'claude-opus-5-5': 'reads', 'claude-sonnet-4-6': 'reads',
+    'claude-mythos-5-1': 'reads',
+  }, 'a Claude line the app has never heard of reads receipts too');
+  assert.deepEqual(models('openai'), {
+    'gpt-6-luna': 'reads', 'gpt-6.1-sol': 'reads', 'gpt-6-astra': 'reads', 'gpt-4o': 'reads',
+    'gpt-7-nova': 'reads', 'gpt-3.5-turbo': 'text',
+  }, 'a later generation reads without a code change; no image, speech, Responses-only, embedding or Claude model at OpenAI');
   choose({ classify: { provider: 'anthropic', model: 'claude-sonnet-4-6' } });
   await ask('{}', { step: 'classify' });
   assert.equal(calls('/v1/messages').at(-1)!.body.model, 'claude-sonnet-4-6');
