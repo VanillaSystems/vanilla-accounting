@@ -244,7 +244,7 @@ export async function receiptChanges(ws: Ws): Promise<ReceiptChange[]> {
     }
     for (const m of linksSaved) {
       const r = receiptsNow.get(m.receiptId);
-      if (!r || nowKeys.has(linkKey(m)) || !txNow.has(m.transactionRef)) continue;
+      if (!r || nowKeys.has(linkKey(m)) || !(txNow.has(m.transactionRef) || entriesNow.some((e) => e.transactionRef === m.transactionRef))) continue;
       out.push({ kind: 'unlinked', id: r.id, text: text(r), at: wrote('mappings'), date: r.date, payment: m.transactionRef });
     }
     for (const ref of outlays) {

@@ -92,9 +92,13 @@ function newEntry(v: unknown): NewEntry {
   const transactionRef = text('transactionRef');
   const vatCode = text('vatCode');
   const corrects = text('corrects');
+  // The documents a booking without a payment carries (#89): linked to it in the same change.
+  if (e.receipts !== undefined && !(Array.isArray(e.receipts) && e.receipts.every((r) => typeof r === 'string' && r.trim()))) throw new ChangesError('receipts: eine Liste von Beleg-IDs');
+  const receipts = (e.receipts as string[] | undefined)?.map((r) => r.trim());
   return {
     ...(transactionRef && { transactionRef }), date, accountDebit, accountCredit, amount,
     ...(vatCode && { vatCode }), description: str(e.description, 'description'), ...(corrects && { corrects }), origin: 'manual',
+    ...(receipts?.length && { receipts }),
   };
 }
 

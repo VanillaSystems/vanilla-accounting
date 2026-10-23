@@ -35,6 +35,10 @@ export function saveEntry(nav: Nav, e: JournalEntry, patch: JournalEntryPatch, c
   return run(nav, () => api.patchJournalEntry(e.id, patch), () => t('journal.saved', { fields }), () => api.patchJournalEntry(e.id, back));
 }
 
+/** A receipt hung on a booking without a payment (#89); the undo takes it off again. */
+export const linkReceipt = (nav: Nav, receiptId: string, ref: string, what: string) =>
+  run(nav, () => api.addMapping({ receiptId, transactionRef: ref }), () => t('receipts.linkedTo', { what }), () => api.removeMapping({ receiptId, transactionRef: ref }));
+
 export const deleteEntry = (nav: Nav, e: JournalEntry) =>
   run(nav, () => api.deleteJournalEntry(e.id), () => t('journal.deleted', { id: e.transactionRef }), () => api.createJournalEntry(undoInput(e)));
 

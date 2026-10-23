@@ -11,7 +11,8 @@ import { bookedStates } from '../../../accounting/payment-entries.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
-import { chart, vat } from '../../../engines/index.js';
+import { baseCurrency, chart, vat } from '../../../engines/index.js';
+import { isManualRef } from '../../../books/refs.js';
 
 export interface EntryView {
   e: JournalEntry;
@@ -28,6 +29,24 @@ export interface EntryView {
   /** Its text split for the list and the head: "Sunrise" and "Mobilabo Sep 2026". */
   title: string;
   sub: string;
+}
+
+/**
+ * The receipts a booking without a payment (#89: a depreciation, an accrual) can take: those no
+ * payment or booking holds yet, not set aside as a duplicate or noise; a receipt of one of its
+ * amounts first, then the nearest in date. None for an entry of a payment: its receipt hangs on the
+ * payment (Belege › «Zahlung verknüpfen»).
+ */
+export function receiptsFor(books: Pick<Index, 'transactions' | 'mappings' | 'receipts'>, entries: readonly JournalEntry[]): Receipt[] {
+  const [e] = entries;
+  if (!e || !isManualRef(e.transactionRef) || books.transactions.some((t) => t.ref === e.transactionRef)) return [];
+  const linked = new Set(books.mappings.map((m) => m.receiptId));
+  const same = (r: Receipt) => r.amount != null && entries.some((x) => (x.exchangeCurrency ?? baseCurrency()) === (r.currency || baseCurrency()) && Math.abs(x.amount - Math.abs(r.amount!)) < 0.005);
+  const near = (r: Receipt) => (r.date ? Math.abs(Date.parse(r.date) - Date.parse(e.date)) : Infinity);
+  return books.receipts
+    .filter((r) => !linked.has(r.id) && r.kind !== 'duplicate' && r.kind !== 'noise')
+    .sort((a, b) => Number(same(b)) - Number(same(a)) || near(a) - near(b) || a.id.localeCompare(b.id))
+    .slice(0, 30);
 }
 
 export interface Journal {
