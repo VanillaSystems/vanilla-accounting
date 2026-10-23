@@ -157,7 +157,7 @@ ${past.length ? past.join('\n') : '- none'}
 Of its ${of} payments this year, ${same} are booked the corrected way, this one counted.
 
 Answer with exactly one JSON object and nothing else:
-- {"kind":"rule","then":{"account":"<number>","vat":"<code or none>"}} when every payment of this ${partner.kind === 'business' ? 'partner' : 'payer'} should be booked the corrected way: the app will book them so by itself. Only when at least ${GENERAL} of its payments, the corrected one counted, are booked so. Name the corrected account; name a VAT code with a rate (I81, M81) only when its receipts show Swiss VAT, else the corrected code.
+- {"kind":"rule","then":{"account":"<number>","vat":"<code or none>"}} when every payment of this ${partner.kind === 'business' ? 'partner' : 'payer'} should be booked the corrected way: the app will book them so by itself. Only when at least ${GENERAL} of its payments, the corrected one counted, are booked so. Name the corrected account and the corrected VAT code (a sale's code such as V81 as it is). Only for a purchase booked with a zero code (I0, M0) may you name its rate code (I81, M81) instead, and only when its receipts show Swiss VAT.
 - {"kind":"note","sentence":"<one sentence in German>"} when the correction depends on something a rule cannot see (the item bought, the kind of invoice): the sentence goes in the partner's notes for whoever books its next payment.${partner.kind === 'payer' ? ' Not for a payer: answer none instead.' : ''}
 - {"kind":"none"} when the correction is a one-off, or puts right a mistake of the app (a double booking, a wrong amount) rather than a practice.`;
 }
