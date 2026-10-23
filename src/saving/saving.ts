@@ -11,6 +11,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { promisify } from 'node:util';
+import type { AskOptions } from '../llm/ask.js';
 import fs from 'node:fs';
 import git from 'isomorphic-git';
 import { loadBooks, PERSON, saveBooks, update, ClosedPeriodError, type Books } from '../books/store.js';
@@ -23,7 +24,7 @@ import { booksBasis, changesView, customizingNames, draftDir, fileDiff, lastSave
 import { BOOKS, describeBooks, diffLines, hunks, type BooksChange, type ChangeSource, type ChangesView, type CoveredFile, type FileChange, type PreparedSave, type Proposal, type ProposalView, type RunWrote, type SavingCommand, type SavingResult, type SyncState } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
-export type Ask = (prompt: string, opts: { step: string; system?: string }) => Promise<string>;
+export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
 
 const proposalPath = (ws: Ws) => join(ws.paths.data, 'saving', 'proposal.json');
 const run = promisify(execFile);
@@ -140,7 +141,7 @@ export function openSaving(ws: Workspace, deps: { ask: Ask; now?: () => Date; ru
     let answer: Answer;
     let plain: true | undefined;
     try {
-      answer = parseAnswer(await deps.ask(prompt, { step: `saving#${said ? 'talk' : 'prepare'}`, system: SYSTEM }));
+      answer = parseAnswer(await deps.ask(prompt, { step: 'saving', detail: said ? 'talk' : 'prepare', system: SYSTEM }));
     } catch (e) {
       // MISSION: saving never needs the AI. Without it, code groups one save per file (r8c-3); only talking to it does.
       if (said) return refuse('model', `Die KI antwortet nicht (${e instanceof Error ? e.message : String(e)}). Die Speicherstände bleiben, wie sie sind.`);

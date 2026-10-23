@@ -25,7 +25,7 @@ import { chartNames } from '../booking/rule-book.js';
 import { bookedNow, openYear, sameLines } from '../booking/rule-preview.js';
 import { parseRule, type RuleBooking } from '../booking/rules.js';
 import { payerKey, payerNames } from '../knowledge/payer.js';
-import { ask, type AskOptions } from '../llm/ask.js';
+import { ask } from '../llm/ask.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { draftHandRule, type HandMatch } from './hand-rule.js';
@@ -34,9 +34,6 @@ import { ruleCode } from './share-rule.js';
 
 /** Payments of a partner a rule must book as they are booked today, the corrected one counted, before the AI may propose it. */
 const GENERAL = 2;
-
-/** The model that drafts the entry: Haiku proposed as well as Sonnet in the learning-loop eval (#7 M2c), at a fraction of the cost. */
-const LEARN_MODEL: NonNullable<AskOptions['model']> = 'haiku';
 
 /** Whose payments a learned rule books: a business the firm knows (its file), else the payer. */
 export type LearnPartner = { kind: 'business'; id: string; name: string } | { kind: 'payer'; payer: string; name: string };
@@ -208,7 +205,7 @@ export async function proposeFromCorrection(ws: Workspace, ref: string, today = 
   const context = loadClassifyContext(ws);
   const c = corrected(ws, books, ref, context);
   if (!c) return undefined;
-  const raw = await ask(learnPrompt(c, books, context), { step: 'learn.correction', model: LEARN_MODEL, timeoutMs: 120_000 });
+  const raw = await ask(learnPrompt(c, books, context), { step: 'learn-rule', timeoutMs: 120_000 });
   const verdict = checkAnswer(ws, books, c, parseLearnAnswer(raw), context);
   if (verdict.kind !== 'rule') return verdict;
   const drafted = draftHandRule(ws, { match: verdict.match, direction: c.tx.direction === 'CRDT' ? 'in' : 'out', account: verdict.booking.account, vat: verdict.booking.vat }, today, 'correction');

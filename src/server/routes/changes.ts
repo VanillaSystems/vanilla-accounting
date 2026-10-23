@@ -19,7 +19,7 @@ import { queueCommit, runsWroteSince } from './automation.js';
 
 export const router = Router();
 
-const saving = () => openSaving(WS, { ask: (prompt, opts) => ask(prompt, { ...opts, model: 'sonnet' }), runs: runsWroteSince });
+const saving = () => openSaving(WS, { ask, runs: runsWroteSince });
 
 /** Each waiting change with how it will take effect: the structure decides (switch-on.ts). */
 async function withEffects(view: ChangesView): Promise<ChangesView> {

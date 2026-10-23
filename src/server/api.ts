@@ -31,7 +31,7 @@ import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
-import { NoClaudeError } from '../llm/ask.js';
+import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
 
 export const app = express();
