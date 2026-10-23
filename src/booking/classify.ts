@@ -12,7 +12,8 @@ import { bankAccountFor, ownerAccount } from '../accounting/bank-accounts.js';
 import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
-import type { BankTransaction, BookedBy, JournalEntry } from '../types/index.js';
+import type { BankTransaction, BookedBy, JournalEntry, Receipt } from '../types/index.js';
+import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
@@ -319,8 +320,8 @@ export function ruleOfPayment(books: Books, tx: BankTransaction, context: Classi
 
 /**
  * The VAT code a rule's booking takes on this payment. Only the receipt decides a rate (AGENTS.md
- * § VAT code rules): an input-tax code with a rate falls to its zero code when no linked receipt
- * shows Swiss VAT. Money coming back on a purchase, or going out on a sale, takes the code's minus.
+ * § VAT code rules): an input-tax code with a rate falls to its zero code when no linked purchase
+ * document shows Swiss VAT (ruleBookingLines). Money coming back on a purchase, or going out on a sale, takes the code's minus.
  */
 export function ruleVatCode(code: string | null, tx: Pick<BankTransaction, 'direction'>, swissVat: boolean): string | undefined {
   if (!code) return undefined;
@@ -339,10 +340,12 @@ export interface RuleLine { account: string; vat?: string; amount: number }
 /**
  * What a rule's booking books for `tx`: the whole amount on the rule's account with its VAT code
  * (ruleVatCode), or, with a private share, that share on the owner's account without VAT and the
- * rest on the rule's account. The lines add up to what the bank paid, to the Rappen.
+ * rest on the rule's account. The lines add up to what the bank paid, to the Rappen. `documents`
+ * are the payment's linked receipts: only a purchase document (evidence-check isPurchaseDocument)
+ * proves Swiss VAT, never a delivery note or a supporting document (#81).
  */
-export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, swissVat: boolean, owner: string | undefined): RuleLine[] {
-  const vat = ruleVatCode(booking.vat, tx, swissVat);
+export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined): RuleLine[] {
+  const vat = ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
   const whole: RuleLine = { account: booking.account, ...(vat ? { vat } : {}), amount: tx.amount };
   if (!booking.private || !owner) return [whole];
   const total = Math.round(tx.amount * 100);
@@ -451,7 +454,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const mapped = mappedReceipts(books, tx);
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const out = tx.direction === 'DBIT';
-  const lines = ruleBookingLines(tx, booking, mapped.some((r) => r.hasSwissVat), context.ownerAccount);
+  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount);
   const entries: ClassifyEntry[] = lines.map((l) => ({
     accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description),
   }));

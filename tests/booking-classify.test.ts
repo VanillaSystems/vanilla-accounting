@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { classifyTransactions, entriesFor, moneyAccounts, type ClassifyDeps } from '../src/booking/classify.js';
+import { classifyTransactions, entriesFor, moneyAccounts, ruleBookingLines, type ClassifyDeps } from '../src/booking/classify.js';
 import { chartFor, loadChart } from '../src/workspace/chart.js';
 import { chartNames } from '../src/booking/rule-book.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
@@ -101,6 +101,17 @@ test('a VAT code from the model follows the money: a supplier credit (bank debit
   assert.equal(purchase.vatCode, 'M0', 'a minus the model put on a purchase goes');
   const [refund] = entriesFor(tx({ ref: 'RF', bank: 'Raiffeisen', amount: 50 }), [{ accountDebit: '3400', accountCredit: '', amount: 50, vatCode: 'V81', description: 'Rückerstattung' }], ctx);
   assert.equal(refund.vatCode, '-V81', 'a customer refund takes -V81');
+});
+
+test('a rule\'s rate code needs a purchase document showing Swiss VAT: a delivery note or a sales record proves none (#81)', () => {
+  const swiss = { hasSwissVat: true };
+  const code = (documents: Parameters<typeof ruleBookingLines>[2]) => ruleBookingLines(tx({ ref: 'R' }), { account: '6510', vat: 'I81' }, documents, undefined)[0].vat;
+  assert.equal(code([{ ...swiss, kind: 'supporting' }]), 'I0', 'a delivery note');
+  assert.equal(code([{ ...swiss, kind: 'sales-record' }]), 'I0', 'the company\'s own sales record');
+  assert.equal(code([{ ...swiss, kind: 'duplicate' }]), 'I0', 'a copy');
+  assert.equal(code([{ ...swiss, kind: 'supporting' }, { ...swiss, kind: 'invoice' }]), 'I81', 'with the invoice beside it');
+  assert.equal(code([swiss]), 'I81', 'a receipt not sorted yet counts as a purchase document, as in evidence-check');
+  assert.equal(code([]), 'I0', 'no receipt');
 });
 
 test('a Stripe payout books its 1093 entries on the order date and adds the payout leg', () => {
