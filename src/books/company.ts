@@ -19,7 +19,7 @@ export type SealView =
   | ({ status: 'intact' } & Pick<Seal, 'quarter' | 'through' | 'sha256' | 'sealedAt' | 'records'>)
   | { status: 'broken'; quarter: QuarterKey; problem: string };
 
-export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing' | 'outgoingMail'> {
+export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing' | 'outgoingMail' | 'dimensions'> {
   /** The quarters whose return lies in transactional-data/<year>/filings/ as filed with the ESTV. */
   filed: QuarterKey[];
   seals: SealView[];
@@ -64,6 +64,7 @@ export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
     bankAccounts: ws.bankAccounts,
     ...(ws.invoicing ? { invoicing: ws.invoicing } : {}),
     ...(ws.outgoingMail ? { outgoingMail: ws.outgoingMail } : {}),
+    ...(ws.dimensions?.length ? { dimensions: ws.dimensions } : {}),
     filed: filedQuarters(ws),
     seals,
     statementBalances: [...latest.values()],

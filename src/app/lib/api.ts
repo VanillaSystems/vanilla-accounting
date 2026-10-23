@@ -126,6 +126,10 @@ export function errorText(e: unknown): string {
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
+    case 'tagShape': return t('error.tagShape');
+    case 'tagDimension': return t('error.tagDimension', b.params);
+    case 'tagValue': return t('error.tagValue', b.params);
+    case 'dimensionInUse': return t('error.dimensionInUse', { dimension: b.params.dimension, n: b.params.entries });
     case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
       const { date, currency, paid, booked } = b.params;
@@ -254,7 +258,7 @@ type Ok = { ok: true };
 type Link = { receiptId: string; transactionRef: string; confirm?: true };
 type Linked = Ok & { again: string[]; kept?: string[] };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
-export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>>
+export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>> & { tags?: JournalEntry['tags'] | null }
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };
 /** A new entry by hand; `id`, `transactionRef` and the provenance put a deleted one back (undo): src/books/entry-input.ts. */
 export type { JournalEntryInput };

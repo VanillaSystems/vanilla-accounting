@@ -17,6 +17,8 @@ export interface HandForm {
   account: string;
   /** '' books without a VAT code. */
   vat: string;
+  /** Per reporting dimension the value typed; '' none (#127). */
+  tags: Record<string, string>;
 }
 
 export type Missing = 'business' | 'payer' | 'text' | 'amount' | 'account';
@@ -27,7 +29,7 @@ export const emptyForm = (start?: HandStart | null): HandForm => ({
   payer: start?.match.kind === 'payer' ? start.match.payer : '',
   text: start?.match.kind === 'text' ? start.match.text : '',
   direction: start?.direction ?? '',
-  over: '', under: '', account: '', vat: '',
+  over: '', under: '', account: '', vat: '', tags: {},
 });
 
 /** An amount as typed, or undefined when the field is empty; NaN when it is no amount. */
@@ -55,6 +57,7 @@ export function handRuleOf(f: HandForm): { ok: true; rule: HandRule } | { ok: fa
       ...(over !== undefined || under !== undefined ? { amount: { ...(over !== undefined ? { over } : {}), ...(under !== undefined ? { under } : {}) } } : {}),
       account: f.account.trim().split(/\s/)[0],
       vat: f.vat || null,
+      ...((tags) => (Object.keys(tags).length ? { tags } : {}))(Object.fromEntries(Object.entries(f.tags).map(([d, v]) => [d, v.trim()]).filter(([, v]) => v))),
     },
   };
 }

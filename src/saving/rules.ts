@@ -25,17 +25,18 @@ import { payerNames } from '../knowledge/payer.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
+import type { Dimension } from '../books/tags.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
 export const hashOf = (text: string): string => createHash('sha256').update(text).digest('hex').slice(0, 16);
 const read = (p: string): string => (existsSync(p) ? readFileSync(p, 'utf8') : '');
 
-/** What the rules of a workspace may name: its chart, the VAT codes, its businesses (and `alsoBusiness`, a business a draft adds). */
-export function ruleFactsOf(ws: Ws, alsoBusiness?: string): RuleFacts {
+/** What the rules of a workspace may name: its chart, the VAT codes, its businesses (and `alsoBusiness`, a business a draft adds), its reporting dimensions. */
+export function ruleFactsOf(ws: Pick<Workspace, 'paths' | 'dimensions'>, alsoBusiness?: string): RuleFacts {
   const ids = new Set(loadKnowledge(APP_ROOT, ws.paths.root).counterparties.map((c) => c.id));
   if (alsoBusiness) ids.add(alsoBusiness);
-  return factsOf(chartNames(chartOf(ws)), ids);
+  return factsOf(chartNames(chartOf(ws)), ids, ws.dimensions);
 }
 
 /** How a rules file changes: its rules added, changed and removed, whether anything else changed, and what cannot be kept. */
@@ -259,7 +260,7 @@ export interface RulesView {
   /** The workflows waiting to be switched on because a rules or knowledge file they read changed (the AI's edit, a hand edit): the rules in those files are not live (r6h-24). */
   waiting: Array<{ workflow: string; label: { en: string } & Partial<Record<'de' | 'fr' | 'it', string>>; files: string[] }>;
   /** What a rule's plain words name: accounts, businesses and payers (by the key `when.payer` holds) by their names. */
-  names: { accounts: Record<string, string>; businesses: Record<string, string>; payers: Record<string, string> };
+  names: { accounts: Record<string, string>; businesses: Record<string, string>; payers: Record<string, string>; dimensions?: Dimension[] };
   currency: string;
 }
 

@@ -398,6 +398,7 @@ export function setEntry(books: Books, id: string, set: EntrySet, author: Author
   if (set.origin === undefined && (set.vatCode !== undefined || set.accountDebit !== undefined || set.accountCredit !== undefined)) assertCodeSign(e.vatCode, e.accountDebit, e.accountCredit);
   if (set.description !== undefined) { before.description = e.description ?? ''; e.description = set.description || undefined; }
   if (set.amount !== undefined) { before.amount = e.amount; e.amount = set.amount; }
+  if (set.tags !== undefined) { before.tags = e.tags ?? null; if (set.tags && Object.keys(set.tags).length) e.tags = set.tags; else delete e.tags; }
   // The reason explains the booking as its author made it; once a person changes its accounts, code or amount, she decided it.
   const changed = BOOKING_FIELDS.filter((k) => set[k] !== undefined);
   if (set.reason !== undefined) { if (set.reason) e.reason = set.reason; else delete e.reason; }
@@ -503,7 +504,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   const entries = lines.map((l): JournalEntry => ({
     id: randomBytes(8).toString('hex'), transactionRef: ref, date: tx.date,
     accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
-    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), by: { kind: 'person', at },
+    ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), ...(l.tags && { tags: l.tags }), by: { kind: 'person', at },
   }));
   books.journalEntries.push(...entries);
   bookedAgain(books, ref);

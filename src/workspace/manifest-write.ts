@@ -16,6 +16,7 @@ import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, manifestText, schemaOf, s
 import { WorkspaceError, WorkspaceRefusal } from './workspace.js';
 import { parseUid } from './uid.js';
 import { goodsOf, profileOf, type SalesKind } from './setup.js';
+import { dimensionYaml, type Dimension } from '../books/tags.js';
 
 /** A text field set, or removed with null; absent: unchanged. */
 type Edit<T> = T | null | undefined;
@@ -74,6 +75,8 @@ export interface ManifestPatch {
   outgoingMail?: MailPatch | null;
   /** «Was verkauft ihr?» (#46): written as `profile.sells` and `profile.goods` (src/workspace/setup.ts kindsOf); only into a manifest with a profile. */
   sells?: SalesKind[];
+  /** Firma › Dimensionen (#127): the whole list, written as one block; empty removes it. The API refuses to drop a dimension bookings carry. */
+  dimensions?: Dimension[];
 }
 
 const ADDRESS_KEYS = ['street', 'number', 'line2', 'postcode', 'town', 'state', 'country'] as const;
@@ -180,6 +183,10 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     const goods = goodsOf(patch.sells);
     if (goods.length) doc.setIn(['profile', 'goods'], doc.createNode(goods, { flow: true }));
     else doc.deleteIn(['profile', 'goods']);
+  }
+  if (patch.dimensions) {
+    if (patch.dimensions.length) doc.set('dimensions', doc.createNode(patch.dimensions.map(dimensionYaml)));
+    else doc.delete('dimensions');
   }
   if (patch.outgoingMail === null) doc.delete('outgoingMail');
   else if (patch.outgoingMail) {

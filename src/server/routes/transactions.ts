@@ -7,7 +7,7 @@ import { patchManifest } from '../../workspace/manifest-write.js';
 import { ownerOf } from '../../workspace/money-accounts.js';
 import { baseCurrency } from '../../engines/index.js';
 import { nextManualRef } from '../../books/next-ref.js';
-import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, WS } from '../books.js';
+import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, tagsField, WS } from '../books.js';
 import { assertPlaced, attachEntries, bookPayment, dropPayment } from '../edits.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
@@ -137,11 +137,12 @@ router.delete('/api/transactions/:ref', (req, res) => {
 
 /** One line of a booking by hand: accounts, an amount in the payment's currency, a VAT code, a text. */
 function bookingLine(raw: unknown): BookingLine {
-  const b = patchBody(raw, ['accountDebit', 'accountCredit', 'amount', 'vatCode', 'description']);
+  const b = patchBody(raw, ['accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'tags']);
   const text = (k: string) => (b[k] === undefined ? '' : stringField(b, k).trim());
   if (typeof b.amount !== 'number') throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');
   const vatCode = text('vatCode');
-  return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description') };
+  const tags = tagsField(b.tags);
+  return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description'), ...(tags && { tags }) };
 }
 
 /** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were, for the undo. */

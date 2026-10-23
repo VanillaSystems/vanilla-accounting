@@ -54,6 +54,7 @@ export const COMPANY_PLACES: { readonly [S in CompanySection]: Place } = {
   rules: { does: 'the company\'s rules, each in plain words with where it came from and how many payments it booked; «{rules.switchOff}» and «{rules.delete}» with an undo. A rule you draft (AGENTS.md, "Rules the app carries out") shows as a card under your answer: the person keeps it with «{rules.draft.keep}» or drops it with «{rules.draft.discard}»; a rule you take out asks «{rules.draft.remove}» there. That one click is all the person does; until then the rule does nothing' },
   phone: { does: 'receipts from the phone: switch on, scan the QR code with the iPhone app to pair; a new code locks out old phones' },
   accounts: { does: 'the chart of accounts: an account renamed or added', kinds: ['account'] },
+  dimensions: { does: 'the reporting dimensions (a project, a cost centre, a location) a booking may carry one value each of, with the values each offers; the person adds, renames and sets values aside here. A booking\'s values are set on the booking (Buchungen) or by a rule (`then.tags`); the income statement filters and groups by them; no VAT figure reads them' },
   periods: { does: 'the filed periods and their seals' },
   opening: { does: 'the opening balances of the year' },
   display: { does: 'language, theme, the app\'s version' },

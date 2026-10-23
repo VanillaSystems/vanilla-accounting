@@ -23,6 +23,8 @@ import { attachEntries, bookPayment } from './actions.js';
 import { useInvoices } from '../invoices/data.js';
 import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
+import { TagFields, tagsOfForm } from './TagFields.js';
+import type { Dimension } from '../../../books/tags.js';
 
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) && s.trim() ? n : null; };
 const FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const;
@@ -47,7 +49,7 @@ export function PaymentBooking(props: Props) {
   return (
     <>
       {typed.length ? <Unattached {...props} typed={typed} /> : null}
-      <BookingForm {...props} accounts={ws.bankAccounts} draft={draft} />
+      <BookingForm {...props} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} />
     </>
   );
 }
@@ -81,7 +83,7 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
   );
 }
 
-function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, draft }: Props & { accounts: readonly LedgerBankAccount[]; draft: BookingDraft }) {
+function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, draft, dimensions }: Props & { accounts: readonly LedgerBankAccount[]; draft: BookingDraft; dimensions: readonly Dimension[] }) {
   const [rows, setRows] = useState<Row[]>(() => draft.lines.map((init, key) => ({ key, init })));
   const [, redraw] = useState(0);
   // The lines follow the draft (the payment's own prefill, a receipt linked meanwhile) until the person typed (r9k-7).
@@ -98,7 +100,8 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       const get = (k: typeof FIELDS[number]) => String(f?.get(`${k}-${key}`) ?? (k === 'amount' ? fmt(init.amount) : k === 'vatCode' ? init.vat : init[k])).trim();
       const raw = Object.fromEntries(FIELDS.map((k) => [k, get(k)])) as Record<typeof FIELDS[number], string>;
       const vat = vatCodeOf(raw.vatCode, raw.accountDebit, raw.accountCredit);
-      return { raw, vat, line: { accountDebit: raw.accountDebit, accountCredit: raw.accountCredit, amount: parseAmount(raw.amount) ?? 0, ...(vat?.code && { vatCode: vat.code }), description: raw.description } };
+      const tags = f && tagsOfForm(f, dimensions, `-${key}`);
+      return { raw, vat, line: { accountDebit: raw.accountDebit, accountCredit: raw.accountCredit, amount: parseAmount(raw.amount) ?? 0, ...(vat?.code && { vatCode: vat.code }), description: raw.description, ...(tags && { tags }) } };
     });
   }
 
@@ -178,6 +181,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
             {zero ? <p className="pbw" data-testid="vat-no-receipt">{t('journal.byHand.noReceiptVat', { code: vat!.code, zero })}</p> : null}
             <label className="pba">{t('journal.amountIn', { currency: draft.currency })}<input className="mono" name={`amount-${key}`} defaultValue={fmt(init.amount)} style={{ textAlign: 'right' }} /></label>
             <label className="pbt">{t('journal.field.description')}<input name={`description-${key}`} defaultValue={init.description} /></label>
+            {dimensions.length ? <div className="pbg"><TagFields dimensions={dimensions} entries={books.journalEntries ?? []} suffix={`-${key}`} /></div> : null}
             {rows.length > 1 ? <button type="button" className="rm" title={t('journal.byHand.removeLine')} aria-label={t('journal.byHand.removeLine')} onClick={() => setRows(rows.filter((r) => r.key !== key))}>×</button> : null}
           </div>
         );

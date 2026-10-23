@@ -26,10 +26,11 @@
  * the AI and people: it loads and shows, but nothing carries it out, so a new one is refused when
  * it is kept (src/saving/rules.ts).
  */
-import type { BankTransaction } from '../types/index.js';
+import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { ibanKey, isGenericText, isPayer } from '../knowledge/payer.js';
 import { chart, withoutInputTax } from '../engines/index.js';
 import { codeOfFacts, codeOnAccount, rateOf } from '../accounting/vat-codes.js';
+import { parseTags, type Tags } from '../books/tags.js';
 
 export const RULE_STEP = 'booking.guide.yaml#classify';
 /** The step's id inside knowledge/rules/booking.guide.yaml. */
@@ -50,8 +51,9 @@ export interface RuleWhen {
  * rest goes on `account` with `vat` («das Natel ist zur Hälfte privat»: private 50).
  * `fees`: the payment is a payout of sales less a provider's fees («bei SumUp immer so»): the sales
  * on `account` with `vat`, the fees on fees.account with fees.vat, as the payout report states them.
+ * `tags`: the reporting dimensions every line it books carries ({ projekt: "alpha" }, #127).
  */
-export interface RuleBooking { account: string; vat: string | null; private?: number; fees?: { account: string; vat: string } }
+export interface RuleBooking { account: string; vat: string | null; private?: number; fees?: { account: string; vat: string }; tags?: Tags }
 
 export type RuleThen =
   | { kind: 'book'; booking: RuleBooking }
@@ -81,10 +83,12 @@ export interface RuleFacts {
   account(number: string): boolean;
   vat(code: string): VatTaken;
   counterparty(id: string): boolean;
+  /** Whether the workspace declares this reporting dimension (#127); absent: it declares none. */
+  dimension?(id: string): boolean;
 }
 
 const WHEN_KEYS = new Set(['counterparty', 'payer', 'text', 'direction', 'amount', 'account']);
-const THEN_KEYS = new Set(['account', 'vat', 'ask', 'private', 'fees']);
+const THEN_KEYS = new Set(['account', 'vat', 'ask', 'private', 'fees', 'tags']);
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
 
@@ -190,6 +194,14 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     if ('refusal' in vat) return no(vat.refusal);
     booking.fees = { account, vat: vat.code };
   }
+  if (t.tags !== undefined) {
+    // Tags ride on the booking the rule makes or proposes: without one there is nothing to carry them.
+    if (!booking) return no({ code: 'outcome' });
+    const declared = Object.keys(isMap(t.tags) ? t.tags : {}).filter((d) => facts.dimension?.(d)).map((id) => ({ id }));
+    const tags = parseTags(t.tags, declared);
+    if (!tags.ok) return no(tags.refusal.code === 'tagDimension' ? { code: 'dimension', params: { dimension: tags.refusal.params.dimension } } : { code: 'tags' });
+    if (tags.tags) booking.tags = tags.tags;
+  }
   let then: RuleThen;
   if (t.ask !== undefined) {
     const question = text(t.ask);
@@ -208,6 +220,9 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     },
   };
 }
+
+/** An entry a rule booked, named by the rule and carrying the rule's tags. */
+export const stampRule = <E extends JournalEntry>(e: E, rule: string, booking: Pick<RuleBooking, 'tags'>): E => ({ ...e, rule, ...(booking.tags && { tags: booking.tags }) });
 
 /** What a payment offers a rule: its text, the business it routes to, the bank account that paid, its amount in the books' currency. */
 export interface PaymentFacts {
@@ -277,6 +292,7 @@ export interface RuleWordVars {
   'rules.say.private': { percent: string };
   'rules.say.fees': { account: string; vat: string };
   'rules.say.ask': { question: string };
+  'rules.say.tags': { tags: string };
   'rules.say.askWith': { question: string; booking: string };
 }
 export type RuleWordKey = keyof RuleWordVars;
@@ -289,6 +305,8 @@ export interface RuleNames {
   /** The payer `when.payer` names (an IBAN or a counterparty key), when the books know them. */
   payer?(key: string): string | undefined;
   money(amount: number): string;
+  /** A tag as it reads: «Projekt Alpha» for { projekt: "alpha" }; absent: dimension id and value as written. */
+  tag?(dimension: string, value: string): string | undefined;
 }
 
 /** «Bargeldbezug» or «Bancomat»: a pattern of plain words separated by | reads as alternatives; any other pattern as written. */
@@ -301,8 +319,9 @@ const accountWords = (n: string, names: RuleNames) => { const name = names.accou
 
 export function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
   const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
-  if (b.fees) return `${main}${w('rules.say.fees', { account: accountWords(b.fees.account, names), vat: b.fees.vat })}`;
-  return b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main;
+  const tags = b.tags ? w('rules.say.tags', { tags: Object.entries(b.tags).map(([d, v]) => names.tag?.(d, v) ?? `${d}: ${v}`).join(', ') }) : '';
+  if (b.fees) return `${main}${w('rules.say.fees', { account: accountWords(b.fees.account, names), vat: b.fees.vat })}${tags}`;
+  return `${b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main}${tags}`;
 }
 
 /** The rule in one line: «Swisscom → Konto 6510 Telefon» and its VAT code. */

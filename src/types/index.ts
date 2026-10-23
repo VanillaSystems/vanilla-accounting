@@ -1,3 +1,5 @@
+import type { Tags } from '../books/tags.js';
+
 // One row of a receipt's printed MWST summary block (grouped by rate).
 // This is the receipt-intrinsic VAT evidence — the source of truth for the
 // rate suffix (81/26/0). The accounting letter (I/M/V) and sign are decided
@@ -220,6 +222,13 @@ export interface JournalEntry {
   supply?: Supply;
   /** The supplier's country as the classifier read it off the receipt, ISO 3166 alpha-2 (#80); absent as `supply` is. */
   supplierCountry?: string;
+  /**
+   * The booking's reporting dimensions (#127, src/books/tags.ts): per dimension the workspace
+   * declares (belege.workspace.yaml `dimensions`) at most one value, `{ projekt: "alpha" }`. The
+   * reports filter and group by them; no VAT figure reads them. Absent: none. A filed entry keeps
+   * what it was sealed with, so a tag on it never changes.
+   */
+  tags?: Tags;
 }
 
 /** What a purchase line buys, as the model reads it (rule 7h): code decides Bezugsteuer from it (src/accounting/acquisition-tax.ts). `exempt`: a service exempt from VAT, such as payment processing, banking or insurance. */
