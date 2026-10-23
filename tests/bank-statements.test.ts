@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { bankAccountFor } from '../src/accounting/bank-accounts.js';
+import { bankAccountFor } from '../src/workspace/money-accounts.js';
 import { assignUniqueRefs, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { parseStatementBalances } from '../src/providers/camt053/statement-balances.js';
 import { readBankStatements, type StatementFile } from '../src/workspace/bank-statements.js';
@@ -25,11 +25,11 @@ const OTHER = testIban('00790000000000005');
 const UBS_GROUPED = UBS.replace(/(.{4})(?!$)/g, '$1 ');
 
 const BANK_ACCOUNTS = `bankAccounts:
-  - { bank: UBS, currency: CHF, account: "1020", label: UBS Geschäftskonto, iban: ${UBS_GROUPED} }
-  - { bank: PostFinance, currency: CHF, account: "1021", label: PostFinance CHF }
-  - { bank: PostFinance, currency: EUR, account: "1022", label: PostFinance EUR }
-  - { bank: BEKB, currency: CHF, account: "1023", label: BEKB }
-  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent }
+  - { bank: UBS, currency: CHF, account: "1020", label: UBS Geschäftskonto, iban: ${UBS_GROUPED}, role: bank }
+  - { bank: PostFinance, currency: CHF, account: "1021", label: PostFinance CHF, role: bank }
+  - { bank: PostFinance, currency: EUR, account: "1022", label: PostFinance EUR, role: bank }
+  - { bank: BEKB, currency: CHF, account: "1023", label: BEKB, role: bank }
+  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent, role: owner }
 `;
 
 /** A workspace with the banks above and the given statement files (path under bank-statements/ → fixture). */
@@ -162,10 +162,10 @@ test('the manifest checks an IBAN and keeps it without spaces', () => {
   assert.throws(() => workspaceWith({}, BANK_ACCOUNTS.replace(UBS_GROUPED, typo)),
     (e: Error) => e instanceof WorkspaceError && e.message.includes(`bankAccounts[0].iban "${typo}" is not an IBAN`));
   const mixed = workspaceWith({}, `bankAccounts:
-  - { bank: Wise, currency: EUR, account: "1023", label: Wise EUR }
-  - { bank: Wise Business, currency: USD, account: "1024", label: Wise USD, statements: wise }
-  - { bank: Valiant, currency: CHF, account: "1020", label: Valiant }
-  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent }
+  - { bank: Wise, currency: EUR, account: "1023", label: Wise EUR, role: bank }
+  - { bank: Wise Business, currency: USD, account: "1024", label: Wise USD, statements: wise, role: bank }
+  - { bank: Valiant, currency: CHF, account: "1020", label: Valiant, role: bank }
+  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent, role: owner }
 `);
   assert.deepEqual(mixed.bankAccounts.map((a) => `${a.bank} ${a.statements ?? '-'}`), ['Wise wise', 'Wise Business wise', 'Valiant camt053', 'manual -'], 'the manifest names the kind, else the bank registry');
   rmSync(mixed.paths.root, { recursive: true, force: true });

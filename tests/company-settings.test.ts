@@ -66,8 +66,8 @@ test('business removed with null; a bank label and IBAN changed; a new bank writ
   assert.equal(manifest.company.business, undefined);
   assert.equal(manifest.bankAccounts[0].label, 'Raiffeisen Geschäft');
   assert.equal(manifest.bankAccounts[0].iban, 'CH6580808000000000001');
-  assert.deepEqual(manifest.bankAccounts[2], { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', statements: 'wise', iban: 'BE29967000000164' });
-  assert.match(text, /- \{ bank: Wise, currency: EUR, account: "1023", label: Wise EUR, iban: BE29967000000164 \}/);
+  assert.deepEqual(manifest.bankAccounts[2], { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank', statements: 'wise', iban: 'BE29967000000164' });
+  assert.match(text, /- \{ bank: Wise, currency: EUR, account: "1023", label: Wise EUR, role: bank, iban: BE29967000000164 \}/);
 });
 
 test('refused: a UID of the wrong shape, an IBAN with wrong check digits, a bank listed twice, an unknown bank; the file stays as it was', () => {

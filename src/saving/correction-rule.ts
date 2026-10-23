@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
-import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { loadBooks, periodLock, type Books } from '../books/store.js';
 import { loadClassifyContext, ruleOfPayment, type ClassifyContext } from '../booking/classify.js';

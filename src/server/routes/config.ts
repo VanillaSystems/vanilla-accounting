@@ -125,7 +125,7 @@ function removedBank(raw: unknown): NonNullable<ManifestPatch['removeBank']> {
   const b = patchBody(raw, ['bank', 'currency']);
   const r = { bank: stringField(b, 'bank'), currency: stringField(b, 'currency') };
   const bank = WS.bankAccounts.find((a) => a.bank === r.bank && a.currency === r.currency);
-  if (!bank || bank.bank === 'manual') return r;
+  if (!bank || bank.role === 'owner') return r;
   const books = readBooks();
   const statements = readBankStatements(WS).filter((f) => f.status === 'read' && f.account.bank === bank.bank && f.account.currency === bank.currency).length;
   const payments = books.transactions.filter((t) => t.bank === bank.bank && t.currency === bank.currency);
@@ -168,7 +168,7 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
       if (v === null) return [currency, null];
       const account = stringField(patchBody(v, ['account']), 'account');
       // The IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
-      const bank = WS.bankAccounts.find((a) => a.account === account && a.bank !== 'manual' && a.currency === currency);
+      const bank = WS.bankAccounts.find((a) => a.account === account && a.role === 'bank' && a.currency === currency);
       if (!bank) throw new RequestError(400, `Das Konto, auf das Kunden in ${currency} zahlen, muss ein Bankkonto in ${currency} sein.`, { code: 'payToAccount', params: { currency } });
       return [currency, { account }];
     }));
@@ -180,7 +180,7 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
   if (b.setup !== undefined) {
     const s = patchBody(b.setup, ['currency', 'account', 'revenueAccount', 'paymentTermsDays']);
     // Its IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
-    const bank = WS.bankAccounts.find((a) => a.account === stringField(s, 'account') && a.bank !== 'manual');
+    const bank = WS.bankAccounts.find((a) => a.account === stringField(s, 'account') && a.role === 'bank');
     if (!bank) throw new RequestError(400, 'Das Konto, auf das Kunden zahlen, muss ein Bankkonto sein.');
     const days = Number(s.paymentTermsDays ?? 30);
     if (!Number.isInteger(days) || days < 1 || days > 120) throw new RequestError(400, 'Zahlungsfrist: 1 bis 120 Tage.');

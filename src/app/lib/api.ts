@@ -1,4 +1,5 @@
 import type { StatementProblem } from '../../types/api-error.js';
+import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
 import type { ProviderId } from '../../llm/provider.js';
 import type { StepId } from '../../llm/steps.js';
@@ -256,7 +257,8 @@ export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebi
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };
 /** A new entry by hand; `id`, `transactionRef` and the provenance put a deleted one back (undo): src/books/entry-input.ts. */
 export type { JournalEntryInput };
-export type ManualTransactionInput ={ date: string; description: string; amount: number; currency: string };
+/** A movement made by hand (#88): on the owner's account without `account`; `role` and `label` add an account the firm lacks. */
+export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening };
 export interface InvoiceList { today: string; invoices: Invoice[]; customers: Customer[]; sent: SentDocument[] }

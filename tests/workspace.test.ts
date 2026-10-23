@@ -2,6 +2,7 @@
  * src/workspace: the manifest is the boundary, so a malformed one fails at open naming the field,
  * and openWorkspace finds the workspace by env or by walking up from the cwd.
  */
+import { WORKSPACE_SCHEMA } from '../src/workspace/schema.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -34,7 +35,9 @@ test('a malformed manifest fails at open, naming the field', () => {
     writeFileSync(ws.paths.manifest, manifest.replace(from, to));
     assert.throws(() => workspaceAt(ws.paths.root), (e: Error) => e instanceof WorkspaceError && msg.test(e.message), msg.source);
   };
-  bad('schema: 1', 'schema: 2', /has schema 2; this version of the app reads up to 1\. Update the app: npm run update/);
+  bad(`schema: ${WORKSPACE_SCHEMA}`, `schema: ${WORKSPACE_SCHEMA + 1}`, new RegExp(`has schema ${WORKSPACE_SCHEMA + 1}; this version of the app reads up to ${WORKSPACE_SCHEMA}\\. Update the app: npm run update`));
+  bad('role: owner', 'role: boss', /bankAccounts\[2\]\.role must be one of bank, cash, owner, employee, card, clearing/);
+  bad('role: owner', 'role: bank', /the label manual is the owner's account/);
   bad(/uid: .*/.exec(manifest)![0], 'uid: "123456789"', /company\.uid "123456789"/);
   bad('method: effective', 'method: flat', /company\.vat/);
   bad(/owner: .*/.exec(manifest)![0], `${/owner: .*/.exec(manifest)![0]}\n  language: xx`, /company\.language must be one of de, en, fr, it/);

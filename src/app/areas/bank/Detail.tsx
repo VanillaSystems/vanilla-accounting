@@ -4,6 +4,7 @@
  * payments, the exchange rates its foreign entries were booked at, and its file. A month without
  * its statement shows where to add it.
  */
+import { byStatement, madeByHand } from '../../../workspace/money-accounts.js';
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
@@ -120,7 +121,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
         {!s.file ? (
           s.running
             ? <span className="notice" style={{ margin: 0 }}>{t('bank.runningNotice')}</span>
-            : <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.missingNotice')}</span>
+            : s.missing
+              ? <span className="notice warn" style={{ margin: 0 }} data-testid="missing-notice">{I.dot}{t('bank.missingNotice')}</span>
+              : <span className="notice" style={{ margin: 0 }} data-testid="without-notice">{t('bank.withoutNotice', { amount: `${s.account.currency} ${fmt(b.check(s).book)}` })}</span>
         ) : c!.gap ? (
           <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
         ) : c!.ok ? (
@@ -152,7 +155,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             </div>
           ) : camt ? (
             <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>
-          ) : !s.running && canEdit && !closed ? (
+          ) : !s.running && s.account.statements && canEdit && !closed ? (
             <button type="button" className="well" style={{ width: '100%', maxWidth: 640 }} onClick={() => pickStatements((files) => importStatements(files, nav, { account: s.account, month: s.from.slice(0, 7) }))}>
               <span><b>{t('bank.well')}</b>{t('bank.wellFor', { bank: s.account.bank })}</span>
             </button>
@@ -173,7 +176,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                   return (
                     <button key={p.ref} type="button" className={`pay${on ? ' on' : ''}${hit ? '' : ' dim'}`} role="option" aria-selected={on} data-pay={p.ref} onClick={() => choose(on ? undefined : p.ref)}>
                       <span className="d">{p.date.slice(8)}.{p.date.slice(5, 7)}.</span>
-                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" title={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}</span>
+                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" title={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}
+                        {madeByHand(p) && <span className="hm" data-testid="by-hand" title={t(byStatement(p) ? 'bank.byHandConfirmedTip' : 'bank.byHandTip')}>{t(byStatement(p) ? 'bank.byHandConfirmed' : 'bank.byHand')}</span>}</span>
                       <span className="a"><Amount tx={p} /></span>
                     </button>
                   );

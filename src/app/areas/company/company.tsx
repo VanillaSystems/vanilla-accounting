@@ -4,6 +4,8 @@
  * periods and seals are read only (a quarter closes with the seal CLI, the year with Abschluss);
  * Darstellung is this browser's own.
  */
+import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
+import type { MoneyRole } from '../../../workspace/banks.js';
 import { periodCards } from './periods.js';
 import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
@@ -78,7 +80,7 @@ function List({ route, books, nav }: Props) {
   const side: Partial<Record<CompanySection, string>> = {
     profile: ws?.company.uid,
     vat: ws ? vatSide(ws.company.vat) : undefined,
-    banks: ws ? String(ws.bankAccounts.filter((b) => b.bank !== 'manual').length) : undefined,
+    banks: ws ? String(ws.bankAccounts.length) : undefined,
     'invoice-layout': ws?.invoicing?.layout.font,
     mail: ws?.outgoingMail?.host,
     accounts: String(Object.keys(getAccountMap()).length),
@@ -346,7 +348,10 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
 
 const prettyIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 
-function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
+/** The money accounts a person's or a bank's IBAN belongs to: a bank pays to it, or the owner or an employee is paid back on it. */
+const TAKES_IBAN: readonly MoneyRole[] = ['bank', 'card', 'owner', 'employee'];
+
+function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const [edit, setEdit] = useState(false);
   const [draft] = useState(peekBankDraft);
   useEffect(clearBankDraft, []);
@@ -364,6 +369,9 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
     if (await patch(nav, { banks }, t('company.banksSaved', { n: changed.length }), { banks: undo })) setEdit(false);
   }
   const balance = (account: string) => ws.statementBalances.find((s) => s.account === account);
+  // An account no statement covers shows what its movements add up to, said to be unreconciled (#88).
+  const today = localToday();
+  const moved = (b: CompanyInfo['bankAccounts'][number]) => bookBalanceNative(books.journalEntries ?? [], b.account, b.currency, today.slice(0, 4), today, nativeOpening(books, b.account, b.currency, today.slice(0, 4)));
   const goBank = () => nav.go({ route: { area: 'bank' }, query: {} });
   // «Entfernen» takes an account out again; the toast's «Rückgängig» adds it back as it was (r9k-1). The API refuses one the books use.
   const remove = (b: CompanyInfo['bankAccounts'][number]) => patch(nav, { removeBank: { bank: b.bank, currency: b.currency } }, t('company.bankRemoved', { label: b.label }),
@@ -380,15 +388,17 @@ function Banks({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
               <div key={k} className="fr form">
                 <span className="mono">{b.account}</span>
                 <input aria-label={t('company.field.label')} value={f[k].label} onChange={(e) => setF({ ...f, [k]: { ...f[k], label: e.target.value } })} />
-                <input aria-label={t('company.iban')} className="mono" value={f[k].iban} disabled={b.bank === 'manual'} onChange={(e) => setF({ ...f, [k]: { ...f[k], iban: e.target.value } })} />
-                <span className="r m">{b.bank} {b.currency}{b.bank !== 'manual' && <> <button type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} title={t('company.removeBankTip')} onClick={() => void remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</button></>}</span>
+                <input aria-label={t('company.iban')} className="mono" value={f[k].iban} disabled={!TAKES_IBAN.includes(b.role)} onChange={(e) => setF({ ...f, [k]: { ...f[k], iban: e.target.value } })} />
+                <span className="r m">{b.bank} {b.currency}{b.role !== 'owner' && <> <button type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} title={t('company.removeBankTip')} onClick={() => void remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</button></>}</span>
               </div>
             ) : (
               <div key={k} className="fr go" role="link" tabIndex={0} data-bank={b.account} onClick={goBank} onKeyDown={(e) => { if (e.key === 'Enter') goBank(); }}>
                 <span className="mono">{b.account}</span>
-                <span>{b.label}{b.bank === 'manual' && <> <span className="m">{t('company.privateOutlay')}</span></>}</span>
+                <span>{b.label}{b.role !== 'bank' && !b.label.toLowerCase().includes(t(`company.role.${b.role}`).toLowerCase()) && <> <span className="m" data-testid="money-role">{t(`company.role.${b.role}`)}</span></>}</span>
                 <span className="mono m">{b.iban ? prettyIban(b.iban) : '–'}</span>
-                <span className="r mono">{bal ? <>{b.currency} {fmt(bal.amount)} <span className="m">{formatDate(bal.date)}</span></> : '–'}</span>
+                <span className="r mono">{bal
+                  ? <>{b.currency} {fmt(bal.amount)} <span className="m">{formatDate(bal.date)}</span></>
+                  : <span title={t('company.unreconciledTip')} data-testid="unreconciled">{b.currency} {fmt(moved(b))} <span className="m">{t('company.unreconciled')}</span></span>}</span>
               </div>
             );
           })}

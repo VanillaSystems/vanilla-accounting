@@ -144,6 +144,8 @@ export interface StatementImport {
   account: string;
   month: string;
   added: number;
+  /** Movements made by hand that rows of the statement confirmed (#88): matched, not added. */
+  confirmed?: number;
   bank: string;
   currency: string;
   /** The days it covers, as far as the file says (a camt export: its first and last booking). */
@@ -345,14 +347,27 @@ export interface BankTransactionPart {
 
 export interface BankTransaction {
   ref: string;
-  /** The manifest's label of the bank account it moved on (belege.workspace.yaml bankAccounts); `manual` when paid privately. */
+  /**
+   * The manifest's label of the money account it moved on (belege.workspace.yaml bankAccounts): a
+   * bank, the cash box, an employee, a card; `manual` is the owner's account (src/accounting/bank-accounts.ts accountOf).
+   */
   bank: string;
   date: string;
   amount: number;
   currency: string;
   direction: 'CRDT' | 'DBIT';
   description: string;
+  /**
+   * Where the movement was learned (#88). Absent: a row of an imported statement, as every record
+   * without it has been. `manual`: a receipt, a person's answer or a hand entry made it.
+   */
   source?: 'manual';
+  /**
+   * A movement made by hand that a statement imported later confirmed: the ref that statement row
+   * has (src/books/bank-import.ts matchStatementRows). The movement keeps its ref, its bookings and
+   * its origin; a re-import finds the row here and adds nothing (src/accounting/bank-accounts.ts byStatement).
+   */
+  statement?: string;
   /**
    * An owner's payment of a business part of its receipt («Privat oder bar bezahlt», nur ein Teil,
    * src/server/edits.ts privatePayment): `amount` is that part, the rest of the receipt was private

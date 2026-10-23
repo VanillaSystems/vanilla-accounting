@@ -13,7 +13,8 @@
  */
 import { randomBytes } from 'node:crypto';
 import { loadFxResolver } from '../accounting/fx-rates.js';
-import { bankAccountFor, ownerAccount, ownerAccountNumber } from '../accounting/bank-accounts.js';
+import { ownerAccount, ownerAccountNumber } from '../accounting/bank-accounts.js';
+import { bankAccountFor, roleOf } from '../workspace/money-accounts.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, periodLock, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
@@ -108,7 +109,7 @@ class Unclear extends Error { constructor(readonly why: NotActed, message: strin
  */
 function bookPrivate(books: Books, tx: BankTransaction, only: string | undefined): { booked: string[]; undo: BookChange[] } {
   const owner = ownerAccount(WS).split(' ')[0];
-  if (tx.bank === 'manual') throw new Unclear('paidPrivately', 'paid privately already');
+  if (roleOf(tx, WS.bankAccounts) === 'owner') throw new Unclear('paidPrivately', 'paid privately already');
   const bank = bankAccountFor(tx, WS.bankAccounts);
   const entries = books.journalEntries.filter((e) => e.transactionRef === tx.ref && (!only || e.id === only));
   if (!entries.length) {
@@ -300,7 +301,8 @@ function revertRuleBookings(b: Books, rule: string, revenue: string | undefined)
     if (e.rule !== rule || lock.isClosed(e.date)) continue;
     delete e.rule;
     const tx = b.transactions.find((t) => t.ref === e.transactionRef);
-    const bank = tx && tx.bank !== 'manual' ? bankAccountFor(tx, WS.bankAccounts) : undefined;
+    const role = tx && roleOf(tx, WS.bankAccounts);
+    const bank = tx && role && role !== 'owner' ? bankAccountFor(tx, WS.bankAccounts) : undefined;
     const account = chart().typeOf(e.accountCredit) === 'revenue' ? undefined : revenue;
     if (!tx || e.origin === 'manual' || e.accountDebit !== bank || !account || isVatAmountCode(e.vatCode)) { if (e.reason?.startsWith('Regel:')) delete e.reason; continue; }
     const proposal = saleProposal(tx);

@@ -9,6 +9,7 @@ import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
+import { madeByHand } from '../../workspace/money-accounts.js';
 import { legOf, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, refsHeldWithout, statementPdf, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
@@ -222,11 +223,12 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     return updateBooks((books): StatementImport => {
       assertOpen(books, [placed.last], 'newStatement');
       const before = new Set(books.transactions.map((t) => t.ref));
+      const confirmedBefore = new Set(books.transactions.filter((t) => t.statement !== undefined).map((t) => t.ref));
       const fresh = assignUniqueRefs(withinBooks(bank.transactions, books.config).kept);
       const freshLegs = new Set(fresh.map(legOf));
       // An upload adds: a payment no file holds any more stays until extract's rebuild decides.
       const lock = periodLock(books);
-      const stay = books.transactions.filter((t) => t.source !== 'manual' && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
+      const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
       const files = readStatementFiles(WS);
       const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: files.statements, camtBalances: files.balances });
       // The books keep their order; the new payments come after them.
@@ -243,6 +245,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         account: placed.account.account,
         month: placed.last.slice(0, 7),
         added: books.transactions.filter((t) => !before.has(t.ref)).length,
+        ...confirmedCount(books.transactions.filter((t) => t.statement !== undefined && !confirmedBefore.has(t.ref)).length),
         bank: placed.account.bank,
         currency: placed.account.currency,
         ...(placed.first ? { from: placed.first } : {}),
@@ -256,6 +259,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     throw e;
   }
 }
+
+const confirmedCount = (n: number) => (n ? { confirmed: n } : {});
 
 /** The refs a statement file alone brought: every ref the folder's files hold, less those the other files hold. */
 function refsOnlyIn(file: string): string[] {
@@ -282,11 +287,14 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
   assertOpen(books, [...mine].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
   if ((books.journalEntries ?? []).some((e) => mine.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
   const bytes = readFileSync(path);
+  const lock = periodLock(books);
   rmSync(path, { force: true });
   try {
     return updateBooks((b) => {
       const removed = { entries: b.journalEntries.filter((e) => mine.has(e.transactionRef)), mappings: b.mappings.filter((m) => mine.has(m.transactionRef)) };
       b.transactions = b.transactions.filter((t) => !mine.has(t.ref));
+      // A movement made by hand this statement confirmed stays, with its bookings, as not confirmed (#88).
+      for (const t of b.transactions) if (t.statement !== undefined && mine.has(t.statement) && !lock.isClosed(t.date)) delete t.statement;
       b.journalEntries = b.journalEntries.filter((e) => !mine.has(e.transactionRef));
       b.mappings = b.mappings.filter((m) => !mine.has(m.transactionRef));
       const files = readStatementFiles(WS);

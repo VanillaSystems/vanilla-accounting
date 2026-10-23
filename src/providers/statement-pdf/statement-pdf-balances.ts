@@ -12,7 +12,7 @@
 import { readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { StatementClosingBalance } from '../../types/index.js';
-import { findBankAccount } from '../../accounting/bank-accounts.js';
+import { findBankAccount } from '../../workspace/money-accounts.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import { pdfText } from '../../parsers/pdf-text.js';
 

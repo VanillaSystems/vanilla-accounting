@@ -69,7 +69,7 @@ test('the AI turns that storno into a VAT-only correction: the same account on b
     receipts: [], transactions: [], mappings: [], bankStatements: [],
     journalEntries: [natel, structuredClone(storno)], config: { closedThrough: '2026-09-30' },
   });
-  const ctx = { bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen' }], chart: new Set(['1020', '6510']), earlier: [], conversation: 'c' };
+  const ctx = { bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen', role: 'bank' as const }], chart: new Set(['1020', '6510']), earlier: [], conversation: 'c' };
   for (const set of ['{"accountDebit":"6510"}', '{"accountDebit":6510,"accountCredit":6510}', '{"accountDebit":"6510","accountCredit":"6510","vatCode":"-I81"}']) {
     const b = books();
     applyAnswer(b, asked('[{"kind":"entry","id":"corr","set":' + set + '}]'), ctx);

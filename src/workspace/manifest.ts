@@ -6,7 +6,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { parseDocument } from 'yaml';
 import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
 import { WorkspaceError, WorkspaceRefusal, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
-import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
+import { MANUAL_BANK, MONEY_ROLES, STATEMENT_KINDS, bankKind, parseIban, type MoneyRole, type StatementKind } from './banks.js';
 import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, kindsOf, optionOf, type BusinessProfile, type GoodsKind, type LegalForm, type Preset, type SalesKind } from './setup.js';
 import { parseVatSetup } from './vat-setup.js';
 import {
@@ -60,8 +60,12 @@ export function parseManifest(source: string, path: string): Manifest {
     const account = String(a.account ?? '');
     if (!/^\d{4}$/.test(account)) fail(`bankAccounts[${i}].account "${account}" must be a 4-digit ledger account`);
     const bank = text(a.bank, `bankAccounts[${i}].bank`);
+    if (!MONEY_ROLES.includes(a.role as MoneyRole)) fail(`bankAccounts[${i}].role must be one of ${MONEY_ROLES.join(', ')}`);
+    const role = a.role as MoneyRole;
+    if (bank === MANUAL_BANK && role !== 'owner') fail(`bankAccounts[${i}]: the label manual is the owner's account, its role is owner`);
     if (a.statements !== undefined && !STATEMENT_KINDS.includes(a.statements as StatementKind)) fail(`bankAccounts[${i}].statements must be ${STATEMENT_KINDS.join(' or ')}`);
-    const statements = bank === MANUAL_BANK ? undefined : (a.statements as StatementKind | undefined) ?? bankKind(bank).statements;
+    // The bank registry names the reader of an account at a bank; a cash box, a person's account or a clearing account has one only when the manifest says so.
+    const statements = (a.statements as StatementKind | undefined) ?? (role === 'bank' || role === 'card' ? bankKind(bank).statements : undefined);
     const iban = a.iban === undefined ? undefined : parseIban(String(a.iban)) ?? ((): never => {
       throw new WorkspaceRefusal(`${path}: bankAccounts[${i}].iban "${String(a.iban)}" is not an IBAN (wrong length or check digits)`, { code: 'iban', params: { bank: `${String(a.bank)} ${String(a.currency)}`, detail: String(a.iban) } });
     })();
@@ -70,10 +74,12 @@ export function parseManifest(source: string, path: string): Manifest {
       currency: text(a.currency, `bankAccounts[${i}].currency`),
       account,
       label: text(a.label, `bankAccounts[${i}].label`),
+      role,
       ...(statements ? { statements } : {}),
       ...(iban ? { iban } : {}),
     };
   });
+  if (bankAccounts.filter((a) => a.role === 'owner').length > 1) fail('bankAccounts: one account at most has the role owner');
   const seen = new Set<string>();
   for (const a of bankAccounts) {
     for (const key of [`${a.bank} ${a.currency}`, ...(a.iban ? [`${a.iban} ${a.currency}`] : [])]) {

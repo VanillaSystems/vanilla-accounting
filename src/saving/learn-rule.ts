@@ -16,7 +16,7 @@
  * - parseRule refuses what the app could not carry out; the card then says what it would do, and
  *   warns when it books against a national VAT rule (#75).
  */
-import { bankAccountFor } from '../accounting/bank-accounts.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { loadBooks, periodLock, type Books } from '../books/store.js';

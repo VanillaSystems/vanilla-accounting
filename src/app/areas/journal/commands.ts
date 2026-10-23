@@ -2,6 +2,7 @@
 import type { Index, JournalEntry, Receipt } from '../../../types/index.js';
 import { correctionKinds, correctionOf, correctionReceipts, receiptRate, receiptVat, type CorrectionKind } from '../../../accounting/correction.js';
 import { ownerAccount } from '../../../accounting/bank-accounts.js';
+import { banksOf } from '../../../workspace/money-accounts.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { localToday, booksOpenPeriod, filingKeyOf, parsePeriod, type Period } from '../../../accounting/periods.js';
 import { periodName } from '../../lib/period-label.js';
@@ -41,9 +42,9 @@ export const correctionPeriodName = (books: Index): string => periodName(parsePe
 
 export const splitReceipt = (r: Receipt) => splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
 
-/** The bank accounts statements come for: a correction or an entry typed by hand should not move them. */
+/** The accounts at a bank: a correction or an entry typed by hand should not move them. */
 export const isBankAccount = (account: string): boolean =>
-  !!workspaceNow()?.bankAccounts.some((b) => b.account === account && b.bank !== 'manual');
+  banksOf(workspaceNow()?.bankAccounts ?? []).some((b) => b.account === account);
 
 /** The owner's private account (its number): a purchase moved there claims no input tax. */
 export const isPrivateAccount = (account: string): boolean => {

@@ -114,10 +114,10 @@ function transactionShape(tx: BankTransaction | undefined, rows: JournalEntry[],
   };
 }
 
-/** The inventory of a workspace's journal. `bankAccounts` is the manifest's: manual ones are the owner's current account. */
+/** The inventory of a workspace's journal. `bankAccounts` is the manifest's: the one of role owner is the owner's current account. */
 export function minePatterns(books: Books, bankAccounts: readonly LedgerBankAccount[]): Inventory {
-  const banks = new Set(bankAccounts.filter((b) => b.bank !== 'manual').map((b) => b.account));
-  const owner = new Set(bankAccounts.filter((b) => b.bank === 'manual').map((b) => b.account));
+  const banks = new Set(bankAccounts.filter((b) => b.role !== 'owner').map((b) => b.account));
+  const owner = new Set(bankAccounts.filter((b) => b.role === 'owner').map((b) => b.account));
   const count = <P>(into: Map<string, { pattern: P; count: number }>, key: string, pattern: P) => {
     const hit = into.get(key);
     if (hit) hit.count++;

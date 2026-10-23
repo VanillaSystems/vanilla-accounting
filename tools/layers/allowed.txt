@@ -20,7 +20,6 @@ src/export/texts.ts -> src/app/i18n/locales/de.ts
 src/export/texts.ts -> src/app/i18n/locales/en.ts
 src/export/texts.ts -> src/app/i18n/locales/fr.ts
 src/export/texts.ts -> src/app/i18n/locales/it.ts
-src/providers/statement-pdf/statement-pdf-balances.ts -> src/accounting/bank-accounts.ts
 src/types/api-error.ts -> src/audit/sources.ts
 src/types/api-error.ts -> src/invoices/mail.ts
 src/types/api-error.ts -> src/invoices/rules.ts

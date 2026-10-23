@@ -178,7 +178,7 @@ test('init takes an IBAN per bank and refuses one with wrong check digits', () =
   const withIban = cli('init.ts', consultant(join(base, 'a'), join(base, 'app.env'), '--bank', `PostFinance:CHF::${testIban('09000000000000002').replace(/(.{4})(?!$)/g, '$1 ')}`));
   assert.equal(withIban.code, 0, withIban.out);
   assert.deepEqual(workspaceAt(join(base, 'a')).bankAccounts.find((a) => a.bank === 'PostFinance'),
-    { bank: 'PostFinance', currency: 'CHF', account: '1023', label: 'PostFinance CHF', statements: 'camt053', iban: testIban('09000000000000002') });
+    { bank: 'PostFinance', currency: 'CHF', account: '1023', label: 'PostFinance CHF', role: 'bank', statements: 'camt053', iban: testIban('09000000000000002') });
   const typo = cli('init.ts', consultant(join(base, 'b'), join(base, 'app.env'), '--bank', 'PostFinance:CHF::CH00 0900 0000 0000 0000 2'));
   assert.equal(typo.code, 1);
   assert.match(typo.out, /Bank PostFinance: "CH00 0900 0000 0000 0000 2" is not an IBAN/);

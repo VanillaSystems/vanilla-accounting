@@ -1,48 +1,32 @@
 /**
- * The ledger account money moving through a bank + currency is booked on, from the workspace
- * manifest's bankAccounts. A `manual` transaction was paid privately, so the manifest books it on
- * the owner's Kontokorrent whatever its currency. Used by classify to fill in the bank side, and
- * by bank-balance reconciliation to match a statement's closing balance to a ledger account (no
- * statement names `manual`, so those rows never reconcile).
+ * The owner's account as the jurisdiction names it when the manifest has none, and how a
+ * statement finds the money account it lands on (accountForStatement). Which account a movement
+ * moved on, its role and whether a statement confirms it: src/workspace/money-accounts.ts.
  */
 import type { StatementProblem, UnknownAccount } from '../types/api-error.js';
 export type { StatementProblem } from '../types/api-error.js';
-import type { BankTransaction } from '../types/index.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import { setup } from '../engines/index.js';
 import { parseIban, type StatementKind } from '../workspace/banks.js';
+import { ownerOf } from '../workspace/money-accounts.js';
 
-export function findBankAccount(accounts: readonly LedgerBankAccount[], bank: string, currency: string): LedgerBankAccount | undefined {
-  return accounts.find((a) => a.bank === bank && a.currency === currency);
-}
-
-/**
- * The ledger account a transaction's bank side is booked on: the manifest's first account when the
- * pair is unknown. A payment made privately goes on the owner's account in any currency (#87: an
- * outlay in EUR landed on the first bank account).
- */
-export function bankAccountFor(tx: Pick<BankTransaction, 'bank' | 'currency'>, accounts: readonly LedgerBankAccount[]): string {
-  const owner = tx.bank === 'manual' ? accounts.find((a) => a.bank === 'manual') : undefined;
-  return findBankAccount(accounts, tx.bank, tx.currency)?.account ?? owner?.account ?? accounts[0].account;
-}
-
-/** The owner's private account, number and name: the manifest's `manual` account, else the jurisdiction's for the legal form (a current account, the private account of an Einzelfirma). */
+/** The owner's private account, number and name: the manifest's owner account, else the jurisdiction's for the legal form (a current account, the private account of an Einzelfirma). */
 export function ownerAccount(ws: Pick<Workspace, 'bankAccounts' | 'company'>): string {
   const { account, label } = ownerAccountOf(ws);
   return `${account} ${label}`;
 }
 
-/** The owner's account alone: the manual bank account's, else the legal form's default (setup.yaml). */
+/** The owner's account alone: the manifest's owner account, else the legal form's default (setup.yaml). */
 export const ownerAccountNumber = (ws: OwnerFacts): string => ownerAccountOf(ws).account;
 
-/** What names the owner's account: a manual bank account, else the legal form. */
+/** What names the owner's account: the manifest's owner account, else the legal form. */
 type OwnerFacts = { bankAccounts: readonly LedgerBankAccount[]; company: Pick<Workspace['company'], 'legalForm'> };
 
 function ownerAccountOf(ws: OwnerFacts): { account: string; label: string } {
-  const manual = ws.bankAccounts.find((a) => a.bank === 'manual');
-  if (manual) return { account: manual.account, label: manual.label };
-  const { owner } = setup();
-  return (ws.company.legalForm && owner[ws.company.legalForm]) || owner.otherwise;
+  const owner = ownerOf(ws.bankAccounts);
+  if (owner) return { account: owner.account, label: owner.label };
+  const { owner: byForm } = setup();
+  return (ws.company.legalForm && byForm[ws.company.legalForm]) || byForm.otherwise;
 }
 
 /** What a statement says about its account, and the folder under bank-statements/ it was found in. */
@@ -80,7 +64,7 @@ export function accountForStatement(accounts: readonly LedgerBankAccount[], s: S
   const of = `${iban ? `IBAN ${iban}` : 'an account without IBAN'} in ${s.currency}`;
   if (byFolder?.iban && iban) {
     const refusal: StatementProblem = { kind: 'otherIban', currency: s.currency, iban, account: { bank: byFolder.bank, iban: byFolder.iban } };
-    return { problem: `statement of ${of} is in ${where}, but ${byFolder.bank} ${byFolder.currency} has IBAN ${byFolder.iban}. Add that account to bankAccounts in belege.workspace.yaml (another bank label, its own ledger account, iban: ${iban}), or move the file to its bank's folder.`, refusal, ...unknownOf(refusal) };
+    return { problem: `statement of ${of} is in ${where}, but ${byFolder.bank} ${byFolder.currency} has IBAN ${byFolder.iban}. Add that account to bankAccounts in belege.workspace.yaml (another bank label, its own ledger account, role: bank, iban: ${iban}), or move the file to its bank's folder.`, refusal, ...unknownOf(refusal) };
   }
   if (byFolder) return { account: byFolder, by: 'folder' };
   // A folder named for a bank holds that bank's statements: only a file of no bank's folder falls back to the firm's one account of its currency.
@@ -93,5 +77,5 @@ export function accountForStatement(accounts: readonly LedgerBankAccount[], s: S
     return { problem: `statement of ${of} could be any of ${inCurrency.length} accounts in ${s.currency} without IBAN (${inCurrency.map((a) => `${a.bank} ${a.account}`).join(', ')}). Add its IBAN${iban ? ` ${iban}` : ''} to the right one in bankAccounts of belege.workspace.yaml, or put the file into that bank's folder.`, refusal, ...unknownOf(refusal) };
   }
   const refusal: StatementProblem = { kind: 'noAccount', currency: s.currency, ...(iban ? { iban } : {}) };
-  return { problem: `statement of ${of} in ${where} matches no bank account. Add { bank: ${s.folder || '<bank>'}, currency: ${s.currency}, account: "<ledger account>", label: <name>${iban ? `, iban: ${iban}` : ''} } to bankAccounts in belege.workspace.yaml.`, refusal, ...unknownOf(refusal) };
+  return { problem: `statement of ${of} in ${where} matches no bank account. Add { bank: ${s.folder || '<bank>'}, currency: ${s.currency}, account: "<ledger account>", label: <name>, role: bank${iban ? `, iban: ${iban}` : ''} } to bankAccounts in belege.workspace.yaml.`, refusal, ...unknownOf(refusal) };
 }

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { madeByHand } from '../../workspace/money-accounts.js';
 import { correctionCaseFor, type CorrectionKind } from '../../accounting/correction.js';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
 import { isIsoDate } from '../../accounting/periods.js';
@@ -150,7 +151,7 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   const unbooked = updateBooks((books) => {
     restoreSaved(books, edit.id, edit.saved, edit.kept);
     // Not booked any more: no entry left, or the lines left fall short of the payment (one line of a split undone, r9k-2).
-    return books.transactions.some((t) => t.ref === edit.ref && t.source !== 'manual') && bookedState(books, edit.ref, WS.bankAccounts) !== 'booked';
+    return books.transactions.some((t) => t.ref === edit.ref && !madeByHand(t)) && bookedState(books, edit.ref, WS.bankAccounts) !== 'booked';
   });
   if (unbooked) await bookPaymentAgain(edit.ref);
   res.json({ ok: true });

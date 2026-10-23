@@ -3,6 +3,7 @@
  * (src/assistant/): each refuses a filed quarter as the write door would, and returns the change
  * that undoes it. Who made it (Author) is what the booking records as its `by`.
  */
+import { byStatement } from '../workspace/money-accounts.js';
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
 import { isManualRef, nextManualRef } from '../books/refs.js';
@@ -104,21 +105,22 @@ export function assertNotSecondPayment(books: Books, receipt: string, payment: s
   if (!next) return;
   const other = books.mappings.filter((m) => m.receiptId === receipt && m.transactionRef !== payment)
     .map((m) => books.transactions.find((t) => t.ref === m.transactionRef))
-    .find((t): t is BankTransaction => !!t && t.bank !== 'manual' && !samePayee(t, next));
+    .find((t): t is BankTransaction => !!t && byStatement(t) && !samePayee(t, next));
   if (!other) return;
   throw new RequestError(409, `Der Beleg hat schon die Zahlung ${other.ref} vom ${day(other.date)} (${other.description}). Eine zweite Zahlung an eine andere Stelle würde ihn doppelt bezahlen: nur verknüpfen, wenn er wirklich in zwei Zahlungen bezahlt wurde.`, { code: 'secondPayment', params: { receipt, payment: other.ref } });
 }
 
 /**
- * A receipt the owner paid privately or in cash (its payment made by hand) takes no second payment,
- * also when the person confirms (#90): the bank payment that pays the owner back settles the
- * owner's account and is booked onto it without VAT; linked to the receipt, it would book the
- * expense and its input tax a second time.
+ * A receipt the owner paid privately or in cash, or any receipt whose payment was made by hand and
+ * no statement confirms, takes no second payment, also when the person confirms (#90, #88): the
+ * bank payment that pays the owner back settles the owner's account and is booked onto it without
+ * VAT; linked to the receipt, it would book the expense and its input tax a second time. A later
+ * statement row of a hand payment is matched to it on import, never linked beside it.
  */
 export function assertNotPaidPrivately(books: Books, receipt: string, payment: string): void {
   const own = books.mappings.filter((m) => m.receiptId === receipt && m.transactionRef !== payment)
     .map((m) => books.transactions.find((t) => t.ref === m.transactionRef))
-    .find((t): t is BankTransaction => !!t && t.bank === 'manual');
+    .find((t): t is BankTransaction => !!t && !byStatement(t));
   if (!own) return;
   throw new RequestError(409, `Der Beleg ist privat bezahlt (Zahlung ${own.ref} vom ${day(own.date)}). Eine weitere Zahlung dazu buchte den Aufwand und die Vorsteuer doppelt: zahlt die Firma dem Inhaber die Auslage zurück, gehört diese Zahlung ohne Steuer auf sein Konto, nicht zum Beleg.`, { code: 'paidPrivately', params: { receipt, payment: own.ref } });
 }
@@ -268,7 +270,7 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
 export function dropPayment(books: Books, ref: string): BankTransaction {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
-  if (tx.source !== 'manual') throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug.', { code: 'manualOnly' });
+  if (byStatement(tx)) throw new RequestError(400, 'Nur manuelle Transaktionen ohne Kontoauszug können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug.', { code: 'manualOnly' });
   assertOpen(books, refDates(books, ref), 'deleteTransaction');
   books.transactions = books.transactions.filter((t) => t.ref !== ref);
   books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);

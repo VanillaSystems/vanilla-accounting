@@ -16,7 +16,7 @@ import { filing, setJurisdiction } from '../engines/index.js';
 import type { FilingLength } from '../accounting/periods.js';
 import type { LegalForm, Preset, QuestionKey, SupportedAnswers, VatQuestionKey } from './setup.js';
 import type { VatSetup } from './vat-setup.js';
-import type { Iban, StatementKind } from './banks.js';
+import type { Iban, MoneyRole, StatementKind } from './banks.js';
 import type { Address, InvoicingSettings, OutgoingMail } from '../invoices/model.js';
 
 declare const brand: unique symbol;
@@ -59,14 +59,21 @@ export type WorkspaceProfile = Pick<SupportedAnswers, ProfileKey> & {
  * A statement lands on the account whose `iban` and currency it names, else on the account of
  * its folder (bank-statements/<bank>/) and currency (src/accounting/bank-accounts.ts).
  */
+/**
+ * A money account (#88): a ledger account money sits on or is owed through. Every one is equal:
+ * any of them takes movements from receipts, answers and hand entries, and statement imports
+ * when a reader exists and the person has them.
+ */
 export interface LedgerBankAccount {
-  /** The bank's label: the statements folder, and the `bank` of every transaction booked here. */
+  /** The account's label: the statements folder, and the `bank` of every movement on it; `manual` is the owner's. */
   bank: string;
   currency: string;
   account: string;
   label: string;
-  /** How this account's statements are read: from the manifest, else the bank registry; absent for `manual`. */
+  role: MoneyRole;
+  /** How this account's statements are read when imported: from the manifest, else the bank registry; absent when no reader exists. */
   statements?: StatementKind;
+  /** The account's IBAN; on an owner's or employee's account their own, so a bank payment to it is known as theirs. */
   iban?: Iban;
 }
 

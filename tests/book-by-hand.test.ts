@@ -150,7 +150,7 @@ test('the draft: the bank on its side, the payment\'s amount and date, the recei
     mappings: [{ transactionRef: 'T1', receiptId: 'r1' }, { transactionRef: 'T0', receiptId: 'r0' }],
     journalEntries: [{ id: 'j0', transactionRef: 'T0', date: '2026-07-02', accountDebit: '4400', accountCredit: '1023', amount: 20 }],
   };
-  const accounts = [{ bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' }];
+  const accounts = [{ bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' as const }];
   const draft = bookingDraft(books, 'T1', accounts)!;
   assert.deepEqual(draft.bank, { account: '1023', side: 'accountCredit' });
   assert.equal(draft.date, '2026-08-14');
@@ -175,7 +175,7 @@ test('the vendor\'s last payment split into an asset and an expense leg: the dra
       { id: 'material', transactionRef: 'T0', date: '2026-07-08', accountDebit: '4400', accountCredit: '1020', amount: 62.9, vatCode: 'M81' },
     ],
   };
-  const draft = bookingDraft(books, 'T1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }])!;
+  const draft = bookingDraft(books, 'T1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' as const }])!;
   assert.deepEqual([draft.lines[0].accountDebit, draft.precedent?.id], ['4400', 'material']);
 });
 
@@ -201,7 +201,7 @@ test('without a receipt the draft prefills the code the app would book: the vend
       { id: 'p1', transactionRef: 'P1', date: '2026-08-20', accountDebit: '6200', accountCredit: '1020', amount: 30, vatCode: 'I0' },
     ],
   };
-  const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen CHF' }];
+  const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen CHF', role: 'bank' as const }];
   assert.equal(bookingDraft(books, 'S9', accounts)!.lines[0].vat, 'I0', 'August had a receipt with 8.1 %; September has none');
   assert.equal(bookingDraft(books, 'P2', accounts)!.lines[0].vat, 'I0');
 });
@@ -216,7 +216,7 @@ test('a payment naming a cancelled invoice (r8c-5): the draft says which one, an
     mappings: [],
     journalEntries: [{ id: 'j1', transactionRef: 'P1', date: '2026-09-01', accountDebit: '1020', accountCredit: '3400', amount: 500, vatCode: 'V81' }],
   };
-  const accounts = [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }];
+  const accounts = [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' as const }];
   const cancelled = { id: 'i5', status: 'issued', kind: 'invoice', deleted: false, number: '2026-005', reference: 'RF492026005', currency: 'CHF', date: '2026-10-01', cancelled: { date: '2026-10-18', reason: 'doppelt' }, payments: [], lines: [] } as unknown as Invoice;
   const blind = bookingDraft(books, 'P2', accounts)!;
   assert.deepEqual([blind.lines[0].accountCredit, blind.lines[0].vat], ['3400', 'V81'], 'without the invoices, the customer\'s last sale is the precedent');
@@ -246,11 +246,11 @@ test('r9k-6: a collective payment (Sammelauftrag) is drafted as one line per par
     mappings: [],
     journalEntries: [],
   };
-  const draft = bookingDraft(books, 'S1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }])!;
+  const draft = bookingDraft(books, 'S1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' as const }])!;
   assert.deepEqual(draft.lines, [
     { accountDebit: '', accountCredit: '1020', amount: 260, vat: '', description: 'BEISPIEL HAARKOSMETIK AG · Rechnung HK-2026-10b' },
     { accountDebit: '', accountCredit: '1020', amount: 150, vat: '', description: 'STADTWERK BEISPIEL · Rechnung SW-2026-1028' },
   ]);
-  const odd = bookingDraft({ ...books, transactions: [{ ...books.transactions[0], amount: 400 }] }, 'S1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank' }])!;
+  const odd = bookingDraft({ ...books, transactions: [{ ...books.transactions[0], amount: 400 }] }, 'S1', [{ bank: 'Bank', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' as const }])!;
   assert.equal(odd.lines.length, 1, 'parts that do not add up to the payment are not a split');
 });

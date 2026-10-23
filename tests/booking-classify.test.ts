@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { classifyTransactions, entriesFor, moneyAccounts, ruleBookingLines, type ClassifyDeps } from '../src/booking/classify.js';
 import { chartFor, loadChart } from '../src/workspace/chart.js';
 import { chartNames } from '../src/booking/rule-book.js';
-import { bankAccountFor } from '../src/accounting/bank-accounts.js';
+import { bankAccountFor, UnknownMoneyAccountError } from '../src/workspace/money-accounts.js';
 import { workspaceAt, yearsOf, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { ClosedPeriodError, moduleActor, PERSON, periodLock, saveBooks, update, type Books } from '../src/books/store.js';
@@ -61,12 +61,12 @@ function stubAsk(answer: (ref: string) => ClassifyEntry[]) {
 }
 
 const bankAccounts: LedgerBankAccount[] = [
-  { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank' },
-  { bank: 'Wise', currency: 'CHF', account: '1022', label: 'Wise CHF' },
-  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' },
-  { bank: 'Wise', currency: 'USD', account: '1024', label: 'Wise USD' },
-  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Kontokorrent' },
-  { bank: 'manual', currency: 'EUR', account: '2451', label: 'Kontokorrent' },
+  { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank', role: 'bank' },
+  { bank: 'Wise', currency: 'CHF', account: '1022', label: 'Wise CHF', role: 'bank' },
+  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' },
+  { bank: 'Wise', currency: 'USD', account: '1024', label: 'Wise USD', role: 'bank' },
+  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Kontokorrent', role: 'owner' },
+  { bank: 'manual', currency: 'EUR', account: '2451', label: 'Kontokorrent', role: 'owner' },
 ];
 const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '', bankAccounts };
 
@@ -83,7 +83,8 @@ test('a foreign entry carries the ESTV daily sell rate of the payment date, not 
 test('a transfer between the company\'s own money accounts carries no VAT code, whoever proposed one (r4w-9)', () => {
   const money = moneyAccounts(bankAccounts, loadChart().accounts);
   assert.ok(['1000', '1021', '1022', '1090'].every((a) => money.has(a)), 'cash, the banks, the transfer account');
-  assert.ok(!money.has('2451') && !money.has('1510'), 'the owner\'s account and a fixed asset are no money');
+  assert.ok(money.has('2451'), 'the owner\'s account is a money account (#88): a bank payment that pays the owner back is a transfer');
+  assert.ok(!money.has('1510') && !money.has('2000'), 'a fixed asset is no money, and the owner\'s account brings no other account of its line');
   const ctx = { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } as const, money };
   const [cash] = entriesFor(tx({ ref: 'ATM', bank: 'Raiffeisen', amount: 800 }), [{ accountDebit: '1000', accountCredit: '', amount: 800, vatCode: 'I0', description: 'Bargeldbezug' }], ctx);
   assert.deepEqual([cash.accountDebit, cash.accountCredit, cash.vatCode], ['1000', '1021', undefined]);
@@ -165,10 +166,10 @@ test('the bank side the model leaves empty is the transaction\'s account, manual
       bankAccountFor({ bank: 'Raiffeisen', currency: 'CHF' }, bankAccounts),
       bankAccountFor({ bank: 'Wise', currency: 'USD' }, bankAccounts),
       bankAccountFor({ bank: 'manual', currency: 'EUR' }, bankAccounts),
-      bankAccountFor({ bank: 'Wise', currency: 'GBP' }, bankAccounts),
     ],
-    ['1021', '1024', '2451', '1021'],
+    ['1021', '1024', '2451'],
   );
+  assert.throws(() => bankAccountFor({ bank: 'Wise', currency: 'GBP' }, bankAccounts), UnknownMoneyAccountError, 'an account the manifest lacks is refused, never booked on the first bank account (#88)');
   const b = books([
     tx({ ref: 'M', bank: 'manual', currency: 'EUR' }),
     tx({ ref: 'R', bank: 'Raiffeisen', direction: 'CRDT' }),

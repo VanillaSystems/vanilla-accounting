@@ -11,9 +11,9 @@ import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
 
 const ACCOUNTS: Account[] = [
-  { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053' },
-  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', statements: 'wise' },
-  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Privat' },
+  { bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053', role: 'bank' },
+  { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', statements: 'wise', role: 'bank' },
+  { bank: 'manual', currency: 'CHF', account: '2451', label: 'Privat', role: 'owner' },
 ];
 
 const tx = (ref: string, date: string, amount: number, extra: Partial<BankTransaction> = {}): BankTransaction =>
@@ -147,6 +147,19 @@ test('two statements starting the same day get keys of their own', () => {
 test('the dock counts statements with a problem from the open quarter on', () => {
   const b = bankOf(books(), ACCOUNTS, '2026-09-15');
   assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), 2, 'the two missing Augusts; July adds up, September is running');
+});
+
+test('#88: a month without a statement is missing only on an account that has had statements', () => {
+  const paypal: Account = { bank: 'PayPal', currency: 'CHF', account: '1025', label: 'PayPal', role: 'bank' };
+  const b = bankOf(books({ transactions: [...books().transactions, tx('P1', '2026-07-10', -40, { bank: 'PayPal' }), tx('P2', '2026-08-12', -15, { bank: 'PayPal' })] }), [...ACCOUNTS, paypal], '2026-09-15');
+  const august = b.statements('2026-08-01', '2026-08-31').filter((s) => !s.file);
+  assert.deepEqual(august.map((s) => [s.account.account, s.missing === true, troubled(b, s)]), [
+    ['1021', true, true],
+    ['1023', true, true],
+    ['1025', false, false],
+  ], 'Raiffeisen and Wise had a July statement: their August is missing; PayPal never had one: its August is only without a statement');
+  assert.equal(b.statements('2026-07-01', '2026-07-31').find((s) => s.account.account === '1025')?.missing, undefined, 'nor is its July missing');
+  assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), 2, 'the badge counts the two missing Augusts, none of PayPal\'s months');
 });
 
 test('a bank text as name and note', () => {

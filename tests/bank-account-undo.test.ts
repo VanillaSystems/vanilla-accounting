@@ -109,7 +109,7 @@ test('a ledger account in use refuses a second bank account; a bank sharing one 
   // Books from before the refusal: PostFinance CHF sits on Raiffeisen's 1020.
   const shared = mkdtempSync(join(tmpdir(), 'shared-bank-'));
   writeFileSync(join(shared, MANIFEST_FILE), readFileSync(join(COIFFEUR, MANIFEST_FILE), 'utf8')
-    .replace(/^bankAccounts:\n/m, `bankAccounts:\n  - { bank: PostFinance, currency: CHF, account: "1020", label: PostFinance CHF, iban: ${NEIGHBOUR} }\n`)
+    .replace(/^bankAccounts:\n/m, `bankAccounts:\n  - { bank: PostFinance, currency: CHF, account: "1020", label: PostFinance CHF, iban: ${NEIGHBOUR}, role: bank }\n`)
     .replace('label: Bank Raiffeisen,', `label: Bank Raiffeisen, iban: ${SALON},`));
   const legacy = await startApi('tests/fixtures/fresh-books-index.json', {}, { manifestOf: shared });
   try {

@@ -47,7 +47,7 @@ const credit = (ref: string, date: string, amount: number, reference?: string, p
 
 const books = (transactions: BankTransaction[]): Books => ({ receipts: [], transactions, mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } });
 const ctx: PaymentContext = {
-  bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR' }],
+  bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank', role: 'bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' }],
   revenueAccount: '3300', fx: { daily: (c, d) => (c === 'EUR' && d === '2026-09-02' ? 0.94 : undefined) },
   pdfOf: () => PDF, receiptId: () => 'r_invoice', indexedAt: (tx) => `${tx.date}T18:00:00Z`,
 };

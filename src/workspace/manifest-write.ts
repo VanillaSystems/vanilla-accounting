@@ -9,10 +9,10 @@ import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
 import type { Address, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
-import { parseIban } from './banks.js';
+import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
-import { WORKSPACE_SCHEMA, schemaOf } from './schema.js';
+import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, manifestText, schemaOf, stampManifest } from './schema.js';
 import { WorkspaceError, WorkspaceRefusal } from './workspace.js';
 import { parseUid } from './uid.js';
 import { goodsOf, profileOf, type SalesKind } from './setup.js';
@@ -36,11 +36,14 @@ export interface BankPatch {
   iban?: Edit<string>;
 }
 
+/** A money account added: from Firma › Geldkonten, or when it is first used (#88). */
 export interface NewBank {
   bank: string;
   currency: string;
   account: string;
   label: string;
+  /** Absent: a card for a card issuer the app knows, else a bank. */
+  role?: MoneyRole;
   iban?: string;
 }
 
@@ -89,9 +92,13 @@ function iban(text: Edit<string>, where: string): Edit<string> {
 
 /** The manifest text with `patch` applied; throws a WorkspaceError for a change the app could not open. */
 export function patchManifestText(text: string, patch: ManifestPatch, path: string): { text: string; manifest: Manifest } {
-  const doc = parseDocument(text);
-  if (schemaOf(doc.get('schema'), path) !== WORKSPACE_SCHEMA) {
-    throw new WorkspaceError(`${path} has an older format: npm run update before changing it here.`);
+  // An older manifest climbs first, on the document, so its comments stay; the change writes it at the current schema.
+  let doc: Document = parseDocument(text);
+  try {
+    const from = schemaOf(doc.toJS()?.schema, path);
+    if (from !== WORKSPACE_SCHEMA) doc = stampManifest(climb(doc, from, WORKSPACE_SCHEMA, MANIFEST_MIGRATIONS, path, (d) => d.clone()));
+  } catch (e) {
+    throw new WorkspaceError((e as Error).message);
   }
   const c = patch.company;
   if (c) {
@@ -119,9 +126,9 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
   if ((patch.banks?.length || patch.addBank || patch.removeBank) && !isSeq(seq)) throw new WorkspaceError(`${path}: bankAccounts must be a list`);
   if (patch.removeBank && isSeq(seq)) {
     const r = patch.removeBank;
-    if (r.bank === 'manual') throw new WorkspaceError('bankAccounts: the owner\'s private account (manual) is not a bank account to remove');
     const i = seq.items.findIndex((item) => isMap(item) && item.get('bank') === r.bank && item.get('currency') === r.currency);
     if (i < 0) throw new WorkspaceError(`bankAccounts: no account ${r.bank} ${r.currency}`);
+    if ((seq.items[i] as YAMLMap).get('role') === 'owner') throw new WorkspaceError('bankAccounts: the owner\'s account is not an account to remove');
     seq.items.splice(i, 1);
   }
   for (const b of patch.banks ?? []) {
@@ -133,7 +140,7 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
   if (patch.addBank && isSeq(seq)) {
     const a = patch.addBank;
     const node = doc.createNode({
-      bank: a.bank.trim(), currency: a.currency.trim().toUpperCase(), account: a.account.trim(), label: a.label.trim(),
+      bank: a.bank.trim(), currency: a.currency.trim().toUpperCase(), account: a.account.trim(), label: a.label.trim(), role: a.role ?? roleBefore(a.bank.trim()),
       ...(a.iban?.trim() ? { iban: iban(a.iban, `bankAccounts ${a.bank} ${a.currency}`) } : {}),
     }) as YAMLMap;
     // The new line looks like its neighbours: one-line `{ … }` when they are.
@@ -180,7 +187,7 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [key, value] of Object.entries(patch.outgoingMail)) set(doc, ['outgoingMail', key], typeof value === 'string' ? value.trim() : value);
   }
   // A one-line `{ … }` stays one line however long it grows, a quoted text with \n in it too.
-  const out = doc.toString({ lineWidth: 0, doubleQuotedAsJSON: true });
+  const out = manifestText(doc);
   return { text: out, manifest: parseManifest(out, path) };
 }
 

@@ -7,7 +7,7 @@
  */
 import type { Index, JournalEntry } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import { findBankAccount } from './bank-accounts.js';
+import { accountOf } from '../workspace/money-accounts.js';
 import { fromRappen, toRappen } from './rappen.js';
 
 /** Shopify/Stripe clearing account: revenue and fees on it are dated by the order, and its payout is booked automatically. */
@@ -26,7 +26,7 @@ export interface PaymentSide { account: string; date: string; currency: string; 
 export function paymentSides(books: Pick<Index, 'transactions' | 'journalEntries'>, ref: string, accounts: readonly LedgerBankAccount[]): PaymentSide[] {
   const sides = new Map<string, PaymentSide>();
   for (const tx of books.transactions.filter((t) => t.ref === ref)) {
-    const account = findBankAccount(accounts, tx.bank, tx.currency)?.account;
+    const account = accountOf(tx, accounts)?.account;
     if (!account) continue;
     const side = sides.get(account) ?? { account, date: tx.date, currency: tx.currency, paid: 0, booked: 0 };
     side.paid += toRappen(tx.direction === 'CRDT' ? tx.amount : -tx.amount);

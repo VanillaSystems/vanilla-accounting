@@ -68,7 +68,7 @@ test('a PDF\'s balance of a day wins over the camt\'s; the camt\'s are read anew
 });
 
 test('beside a PDF for every month it touches, a camt adds no row; from the first month without one it does', () => {
-  const ACCOUNTS: Account[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053' }];
+  const ACCOUNTS: Account[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053', role: 'bank' }];
   const pdf = (m: string, last: string) => ({ bank: 'Raiffeisen', filename: `Kontoauszug 01.${m}.2026 - ${last}.${m}.2026.pdf`, fromDate: `2026-${m}-01`, toDate: `2026-${m}-${last}` });
   const camtFile = { bank: 'Raiffeisen', filename: 'q3.xml', fromDate: '2026-07-08', toDate: '2026-09-30', currency: 'CHF' };
   const of = (bankStatements: Index['bankStatements']): Index => ({ receipts: [], transactions: [], mappings: [], bankStatements });

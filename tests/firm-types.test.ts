@@ -219,7 +219,7 @@ test('r8f-50: the hand form of a firm without input tax never prefills a receipt
     mappings: [{ transactionRef: 'T1', receiptId: 'r1' }],
     journalEntries: [],
   };
-  const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen' }];
+  const accounts = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen', role: 'bank' as const }];
   setJurisdiction(ch, NET_RATE);
   assert.equal(bookingDraft(books, 'T1', accounts)!.lines[0].vat, '', 'net tax rate: no input tax, the field stays empty');
   setJurisdiction(ch, NOT_REGISTERED);

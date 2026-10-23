@@ -46,7 +46,7 @@ const bankRows: Row[] = [];
 // One row pair per bank of the manifest; a bank sends one monthly PDF per currency account.
 const currenciesByBank = new Map<string, string[]>();
 for (const a of ws.bankAccounts) {
-  if (a.bank === 'manual') continue;
+  if (a.role !== 'bank' && a.role !== 'card') continue;
   currenciesByBank.set(a.bank, [...(currenciesByBank.get(a.bank) ?? []), a.currency]);
 }
 const statementFiles = readBankStatements(ws);
