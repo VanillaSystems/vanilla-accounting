@@ -35,13 +35,25 @@ export class BeforeBooksError extends ClosedPeriodError {}
 export class SealBrokenError extends ClosedPeriodError {}
 /** A workspace in the layout before ADR 0013 (books.json beside the manifest): npm run update moves it. */
 export class OldLayoutError extends Error {}
+/**
+ * Another process wrote the books since these were loaded (ADR 0004: the content read is the
+ * expected state). Nothing was saved; load the books again and redo the change.
+ */
+export class StaleBooksError extends Error {
+  override name = 'StaleBooksError';
+  constructor(readonly files: string[]) {
+    super(`Die Bücher wurden seit dem Laden von einem anderen Prozess geändert (${files.join(', ')}), nichts gespeichert. Den Befehl noch einmal ausführen: er liest die Bücher neu.`);
+  }
+}
 
-/** The books' files as they were read or last written, by path relative to the workspace. */
-const onDisk = new WeakMap<Books, Map<string, string>>();
+/** The books' files and ledger.json as they were read or last written; files by path relative to the workspace. */
+interface Snapshot { files: Map<string, string>; ledger: string | undefined }
+const onDisk = new WeakMap<Books, Snapshot>();
 const seals = new WeakMap<Books, SealReport>();
 const warned = new Set<string>();
 
 const fileOf = (year: string, part: Part) => `transactional-data/${year}/books/${BOOK_FILES[part]}`;
+const readIfThere = (path: string): string | undefined => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
 
 /** The books' files of the workspace, by path relative to it. */
 function readFiles(paths: WorkspacePaths): Map<string, string> {
@@ -69,7 +81,8 @@ export function loadBooks(ws: Workspace): Books {
     }
     throw new Error(`No ${ledger} found: set up the books with npm run init.`);
   }
-  const head = JSON.parse(readFileSync(ledger, 'utf8')) as Record<string, unknown>;
+  const ledgerText = readFileSync(ledger, 'utf8');
+  const head = JSON.parse(ledgerText) as Record<string, unknown>;
   const files = readFiles(ws.paths);
   const raw: Record<string, unknown> = { schema: head.schema, config: head.config ?? {}, journalEntries: [], receipts: [], transactions: [], mappings: [], bankStatements: [] };
   for (const year of yearsOf(ws.paths)) {
@@ -86,7 +99,7 @@ export function loadBooks(ws: Workspace): Books {
     console.error(`${e.id}: «by» ${JSON.stringify(e.by)} reads as none of its kinds; the entry shows what its origin says.`);
     delete e.by;
   }
-  onDisk.set(books, files);
+  onDisk.set(books, { files, ledger: ledgerText });
   const report = checkSeals(ws, books);
   seals.set(books, report);
   for (const c of report.checks) {
@@ -111,7 +124,7 @@ export const emptyBooks = (): Books => ({ schema: BOOKS_SCHEMA, receipts: [], tr
 
 /** Whether a record lay in a closed year's books when they were read. */
 function closedRecords(books: Books): InClosedYear {
-  const files = onDisk.get(books) ?? new Map<string, string>();
+  const files = onDisk.get(books)?.files ?? new Map<string, string>();
   const keys = new Map<string, Set<string>>();
   return (year, part, key) => {
     if (!isClosedYear(year, books.config.closedThrough)) return false;
@@ -144,26 +157,30 @@ const writeAtomic = (path: string, text: string) => {
 /**
  * Writes the books' files that changed, each atomically, then moves the files of open years to
  * where their records say (placeFiles). Throws, before writing anything, for a broken seal, a
- * check of an `update` in flight, and a change to a closed year's files.
+ * check of an `update` in flight, a change to a closed year's files, and StaleBooksError when
+ * ledger.json or a file about to change is no longer what these books were read from (#123).
  */
 export function saveBooks(ws: Workspace, books: Books): void {
   const broken = sealsOf(books).checks.find((c) => c.status === 'broken');
   if (broken) throw new SealBrokenError(`Siegel ${broken.quarter} gebrochen, nichts gespeichert: ${broken.problem}. Restore the books from git.`);
   guards.get(books)?.();
-  const before = onDisk.get(books) ?? readFiles(ws.paths);
+  const before = onDisk.get(books) ?? { files: readFiles(ws.paths), ledger: readIfThere(ws.paths.ledger) };
   const { files, ledger } = render(books, closedRecords(books));
   const closedThrough = books.config.closedThrough;
   const yearOfFile = (rel: string) => rel.split('/')[1];
-  const changed = [...new Set([...before.keys(), ...files.keys()])].filter((rel) => before.get(rel) !== files.get(rel));
+  const changed = [...new Set([...before.files.keys(), ...files.keys()])].filter((rel) => before.files.get(rel) !== files.get(rel));
   const closed = changed.filter((rel) => isClosedYear(yearOfFile(rel), closedThrough));
   if (closed.length) throw new ClosedPeriodError(`Das Jahr ${yearOfFile(closed[0])} ist abgeschlossen, nichts gespeichert: ${closed.join(', ')} würde sich ändern.`, closedThrough);
+  const stale = changed.filter((rel) => readIfThere(join(ws.paths.root, rel)) !== before.files.get(rel));
+  if (readIfThere(ws.paths.ledger) !== before.ledger) stale.push(relative(ws.paths.root, ws.paths.ledger));
+  if (stale.length) throw new StaleBooksError(stale);
   for (const rel of changed) {
     const text = files.get(rel);
     if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
     else writeAtomic(join(ws.paths.root, rel), text);
   }
-  if (!existsSync(ws.paths.ledger) || readFileSync(ws.paths.ledger, 'utf8') !== ledger) writeAtomic(ws.paths.ledger, ledger);
-  onDisk.set(books, files);
+  if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
+  onDisk.set(books, { files, ledger });
   placeFiles(ws, books);
 }
 

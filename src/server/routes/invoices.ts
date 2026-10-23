@@ -6,7 +6,7 @@
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WS, assertOpen, readBooks, updateBooks, withBooks, RequestError } from '../books.js';
+import { WS, assertOpen, readBooks, updateBooksWithEffects, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
@@ -185,7 +185,7 @@ router.post('/api/invoices/:id/payments', (req, res) => {
   if (!transactionRef) throw new RequestError(400, 'transactionRef fehlt.');
   const ctx = paymentContext(WS);
   if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
-  withBooks(res, (books) => {
+  res.json(updateBooksWithEffects((books) => {
     assertOpen(books, books.transactions.filter((t) => t.ref === transactionRef).map((t) => t.date), 'mapping');
     const invoices = loadInvoices(WS);
     const result = confirmPayment(books, invoices, req.params.id, transactionRef, ctx);
@@ -195,7 +195,7 @@ router.post('/api/invoices/:id/payments', (req, res) => {
     const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
     if (result.replaced?.length && inv?.status === 'issued') recordReplaced(WS, transactionRef, ctx.receiptId(ctx.pdfOf(inv)), result.replaced);
     return { paid: result.paid };
-  });
+  }));
 });
 
 /**
@@ -208,7 +208,7 @@ router.delete('/api/invoices/:id/payments/:ref', async (req, res) => {
   if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
   const ref = req.params.ref;
   let unbooked = false;
-  const out = updateBooks((books): PaymentReleased => {
+  const out = updateBooksWithEffects((books): PaymentReleased => {
     assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'mapping');
     const invoices = loadInvoices(WS);
     const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
