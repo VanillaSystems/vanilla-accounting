@@ -29,3 +29,14 @@ facts:
   - id: finalisation
     fact: the year's returns are reconciled with the annual accounts (Finalisierung, form 0550 Jahresabstimmung) within 180 days after the end of the financial year; a difference is declared then
     source: MWSTG Art. 72 Abs. 2
+
+steps:
+  evidence.guide.yaml#rules:
+    rules:
+      - id: ev-estv-notice
+        when: a payment to or from the ESTV
+        then: "booked at once, without waiting for a receipt: the payment settles a VAT return or an ESTV invoice, filed apart in filings/<year>/"
+        apply: { receipt: none }
+        why: it carries no input tax, so no receipt changes its booking (issue #29)
+        source: decision 2026-10-21, owner
+    precedents: []

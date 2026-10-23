@@ -24,6 +24,8 @@ import { at } from '../receipts/view.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
 import { baseCurrency } from '../../../engines/index.js';
+import { localToday } from '../../../accounting/periods.js';
+import { receiptState } from '../../../accounting/receipt-due.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
@@ -231,7 +233,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
         <> · <button type="button" className="golink" data-testid="go-entry" title={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
           {t('bank.entries', { lines })}
         </button></>
-      ) : tx.amount ? <> · <span className="wn">{t('bank.notBooked')}</span></> : null}
+      ) : tx.amount ? <> · <NotBooked tx={tx} linked={receipts.length > 0} /></> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
       {' '}<button type="button" className="x" title={t('bank.clear')} aria-label={t('bank.clear')} onClick={onClear}>×</button>
@@ -324,4 +326,11 @@ function Quick({ src, file, mark }: { src: string; file: string; mark?: Mark }) 
       <div className="paper real stmt" style={{ width: '70vw', maxWidth: 'none' }}><StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.quick')} /></div>
     </div>
   );
+}
+
+/** A payment without a booking: one that waits for its receipt says so as a fact, with its return's due day once it is the person's (issue #29). */
+function NotBooked({ tx, linked }: { tx: BankTransaction; linked: boolean }) {
+  const wait = receiptState(tx, linked, false, localToday());
+  if (!wait) return <span className="wn">{t('bank.notBooked')}</span>;
+  return <span className={wait.kind === 'asks' ? 'wn' : 'm'} data-testid="waits-for-receipt">{wait.kind === 'asks' ? t('bank.receiptDue', { date: formatDate(wait.due) }) : t('bank.waitsForReceipt')}</span>;
 }

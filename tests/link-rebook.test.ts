@@ -46,7 +46,10 @@ async function setUp() {
   await rest();
   const receipt = (await books()).receipts.find((r) => r.filename === RECEIPT)!;
   assert.ok(receipt.hasSwissVat, 'the receipt shows Swiss VAT');
-  assert.deepEqual(await onL(), [['I0', [], 'classify']], 'the statement run booked the payment without a receipt: no input tax');
+  assert.deepEqual(await onL(), [], 'the statement run leaves the payment waiting for its receipt (issue #29)');
+  // «Neu klassifizieren»: the person has it booked before its receipt came, without input tax.
+  assert.equal((await api.send('POST', '/api/journal-entries/classify/REF-L', {})).status, 200);
+  assert.deepEqual(await onL(), [['I0', [], 'classify']], 'booked without a receipt: no input tax');
   const ask = async (asked: unknown) => {
     writeFileSync(changes, JSON.stringify(asked));
     const res = await api.fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Beleg zur Zahlung', language: 'de', context: [] }) });
@@ -91,7 +94,7 @@ test('a hand booking stays as the person left it when a receipt is linked or tak
   }
 });
 
-test('a link the AI sidebar makes books the payment again with the receipt; undoing it books it again without', async () => {
+test('a link the AI sidebar makes books the payment again with the receipt; undoing it takes the booking away, the payment waits for its receipt', async () => {
   const { api, receipt, rest, onL, ask, done } = await setUp();
   try {
     const { conversation, made } = await ask([{ kind: 'link', receipt: receipt.id, payment: 'REF-L' }]);
@@ -100,13 +103,13 @@ test('a link the AI sidebar makes books the payment again with the receipt; undo
 
     assert.equal((await api.send('POST', `/api/assistant/${conversation}/changes/${made[0].id}/undo`)).status, 200);
     await rest();
-    assert.deepEqual(await onL(), [['I0', [], 'classify']], 'the undo takes the link back, and with it the input tax');
+    assert.deepEqual(await onL(), [], 'the undo takes the link back, and with it the booking: the payment waits for its receipt');
 
     await ask([{ kind: 'link', receipt: receipt.id, payment: 'REF-L' }]);
     await rest();
     await ask([{ kind: 'unlink', receipt: receipt.id, payment: 'REF-L' }]);
     await rest();
-    assert.deepEqual(await onL(), [['I0', [], 'classify']], 'an unlink by the sidebar the same');
+    assert.deepEqual(await onL(), [], 'an unlink by the sidebar the same');
   } finally {
     await done();
   }

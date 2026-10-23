@@ -254,7 +254,8 @@ test('a new workspace books its first transaction: no prior-year export, the cha
   assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
   const ws = workspaceAt(dir);
   const books = loadBooks(ws);
-  books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo' });
+  // Marked as needing no receipt, so the run books it now instead of waiting for one (issue #29).
+  books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo', noReceiptNeeded: true });
   saveBooks(ws, books);
 
   const prompts = join(base, 'prompts.txt');

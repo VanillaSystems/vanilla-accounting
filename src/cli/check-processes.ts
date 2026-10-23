@@ -12,6 +12,7 @@
 
 import { isExecutable } from '../booking/rules.js';
 import { parseApply, PURCHASE_VAT_STEP } from '../booking/purchase-vat.js';
+import { parseReceiptApply, RECEIPT_STEP } from '../booking/receipt-wait.js';
 import { noteRuleProblems } from '../knowledge/note-rules.js';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
@@ -190,7 +191,12 @@ function checkProcedure(where: string, procedure: string, err: (m: string) => vo
   }
 }
 
-function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string; apply?: Layer } = {}) {
+/** How a business file's `apply:` on this step reads, in this layer; undefined: the step takes none. */
+type ApplyCheck = (raw: unknown) => { ok: true } | { ok: false; problem: string };
+const applyCheck = (ref: string, layer: Layer): ApplyCheck | undefined =>
+  ref === PURCHASE_VAT_STEP ? (raw) => parseApply(raw, layer) : ref === RECEIPT_STEP ? parseReceiptApply : undefined;
+
+function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string; apply?: ApplyCheck } = {}) {
   for (const rule of rules ?? []) {
     const at = `${where}/${rule.id ?? '(no id)'}`;
     // An executable rule (src/booking/rules.ts) in a business's file needs no when: its business is its condition.
@@ -205,8 +211,8 @@ function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) =
       else if (!(GATE_TESTS as readonly string[]).includes(rule.test)) err(`${at}: test "${rule.test}" is not in src/knowledge/gates.ts — add it there or fix the name`);
     }
     if (rule.apply !== undefined) {
-      const parsed = parseApply(rule.apply, opts.apply ?? 'app');
-      if (!opts.apply) err(`${at}: apply: is for a rule of ${PURCHASE_VAT_STEP} in a business file; a company's booking rule is a rule with then: { account, vat }`);
+      const parsed = opts.apply?.(rule.apply);
+      if (!parsed) err(`${at}: apply: is for a rule of ${PURCHASE_VAT_STEP} or ${RECEIPT_STEP} in a business file; a company's booking rule is a rule with then: { account, vat }`);
       else if (!parsed.ok) err(`${at}: ${parsed.problem}`);
     }
     if (rule.procedure) checkProcedure(at, rule.procedure, err, opts.root ?? APP_ROOT);
@@ -314,7 +320,7 @@ for (const f of counterpartyFiles) {
     if (!stepRefs.has(ref)) err(`steps."${ref}" is not the with.guide of any flow step — use the exact string, e.g. "booking.guide.yaml#classify"`);
     const section = raw as Section;
     if (section.goal) err(`steps."${ref}": goal belongs to the step's guide, not to a counterparty`);
-    checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root, ...(ref === PURCHASE_VAT_STEP && { apply: f.layer }) });
+    checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root, apply: applyCheck(ref, f.layer) });
     if (section.gates) err(`steps."${ref}": gates hold for every counterparty — they live in the guide`);
   }
 }
