@@ -3,7 +3,8 @@
  * store: the public app files (src/publish/leak-guard.ts) and a workspace's commits
  * (src/workspace/git.ts) refuse a text that holds one.
  */
-const API_KEY = /(?<![A-Za-z0-9_-])sk-(?:ant-[A-Za-z0-9_-]{20,}|(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,})/g;
+// sk-ant- is Anthropic's own prefix, found inside any word; the bare sk- of OpenAI only where a word starts, so task-<uuid> is no key.
+const API_KEY = /sk-ant-[A-Za-z0-9_-]{20,}|(?<![A-Za-z0-9_-])sk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{32,}/g;
 
 /** The keys a text holds, each shortened to its first characters so a report never repeats it. */
 export function apiKeysIn(text: string): Array<{ index: number; shown: string }> {
