@@ -20,7 +20,7 @@ export interface AiSettings {
   steps: Partial<Record<StepId, StepChoice>>;
 }
 
-export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'anthropic', 'openai'];
+export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'anthropic', 'openai', 'jev'];
 const isProvider = (p: unknown): p is ProviderId => PROVIDERS.includes(p as ProviderId);
 
 export const settingsPath = (): string | undefined =>

@@ -8,6 +8,12 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { MailReach, MailCheck } from './model.js';
 import { senderAllowed } from './reach.js';
+import { judge, type Judged } from '../../llm/judge.js';
+
+/** What a source's code learns from `triage`: the probability that the mail brings a receipt, how sure the model is, and which model said so; `receipt: null` when no model answered. */
+export type Triage = { receipt: number; confidence: number; by: string } | { receipt: null; why: string };
+
+const TRIAGE = 'Does this mail bring a receipt for the books: an invoice, a bill, a receipt or a credit note, attached or behind a link? A newsletter, an offer, a shipping notice, a reminder without the bill or a private message is no receipt.';
 
 export interface MailSummary { uid: number; from: string; to: string[]; subject: string; date: string; messageId: string }
 export interface MailBackend {
@@ -96,13 +102,15 @@ export const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex'
 
 /**
  * What the code may call: `messages(cursor)` (a page of mail it may see, and the cursor after
- * it) and `attachments(uid)` (each as a file reference to bytes the host holds). `held` collects
- * the bytes by reference for the delivery, with their sender.
+ * it), `attachments(uid)` (each as a file reference to bytes the host holds) and `triage(uid)`
+ * (whether the mail brings a receipt, by its sender and subject only, asked of the model of the
+ * step mail-triage). `held` collects the bytes by reference for the delivery, with their sender.
  */
-export function mailChannel(backend: MailBackend, r: Pick<MailReach, 'folders' | 'from' | 'skip'>, addresses: string[], since: Date, held: Map<string, Held>) {
+export function mailChannel(backend: MailBackend, r: Pick<MailReach, 'folders' | 'from' | 'skip'>, addresses: string[], since: Date, held: Map<string, Held>, judgeWith: typeof judge = judge) {
   const folder = r.folders[0] ?? 'INBOX';
   /** The sender of each message handed to the code. */
   const seen = new Map<number, string>();
+  const subjects = new Map<number, string>();
   const mine = (to: string[]) => !addresses.length || to.some((a) => addresses.includes(a.toLowerCase()));
   return {
     async messages(cursor?: MailCursor, limit = 50) {
@@ -111,7 +119,7 @@ export function mailChannel(backend: MailBackend, r: Pick<MailReach, 'folders' |
       const list = restart ? await backend.list(folder, undefined, since, limit) : page;
       const last = list.messages.at(-1)?.uid ?? (restart ? 0 : cursor?.uid ?? 0);
       const shown = list.messages.filter((m) => senderAllowed(r, m.from) && mine(m.to));
-      for (const m of shown) seen.set(m.uid, m.from.toLowerCase());
+      for (const m of shown) { seen.set(m.uid, m.from.toLowerCase()); subjects.set(m.uid, m.subject); }
       return { messages: shown, cursor: { validity: list.validity, uid: last } satisfies MailCursor, done: list.messages.length < limit };
     },
     async attachments(uid: number) {
@@ -122,6 +130,15 @@ export function mailChannel(backend: MailBackend, r: Pick<MailReach, 'folders' |
         held.set(ref, { name: p.filename, content: p.content, from: seen.get(uid) });
         return { file: ref, filename: p.filename, contentType: p.contentType, size: p.content.length };
       });
+    },
+    async triage(uid: number): Promise<Triage> {
+      if (!seen.has(uid)) throw new Error(`message ${uid} was not handed to this source`);
+      try {
+        const v: Judged = await judgeWith({ from: seen.get(uid)!, subject: subjects.get(uid) ?? '' }, { type: 'noul', instructions: TRIAGE }, { step: 'mail-triage', timeoutMs: 60_000 });
+        return v.type === 'noul' ? { receipt: v.yes, confidence: v.confidence, by: `${v.provider} ${v.model}` } : { receipt: null, why: 'no yes/no answer' };
+      } catch (e) {
+        return { receipt: null, why: e instanceof Error ? e.message : String(e) };
+      }
     },
   };
 }

@@ -4,11 +4,12 @@
  * know is offered only for what every model of its kind can do. The key comes from the secret store
  * (src/llm/keys.ts) and goes only into the request's header.
  */
-import { CallFailed, type Call, type ModelEntry, type Provider, type Usage } from '../provider.js';
+import { CallFailed, NO_USAGE, type Call, type JudgeCall, type ModelEntry, type Provider, type Usage, type Verdict } from '../provider.js';
 import type { Capability, Tier } from '../steps.js';
 import { readAttachment, requestJson } from './http.js';
+import { JEV } from './jev.js';
 
-export type KeyedId = 'anthropic' | 'openai';
+export type KeyedId = 'anthropic' | 'openai' | 'jev';
 
 export interface KeyedSpec {
   id: KeyedId;
@@ -16,12 +17,17 @@ export interface KeyedSpec {
   defaults: Record<Tier, string>;
   /** What a listed model can do; undefined: not a model for these steps (embeddings, speech, images). */
   capabilitiesOf(model: string): readonly Capability[] | undefined;
-  list(key: string): Promise<string[]>;
-  call(key: string, call: Call): Promise<{ text: string; usage: Usage }>;
+  /** The provider's model list; absent: it has none, its shipped models are all. */
+  list?(key: string): Promise<string[]>;
+  /** Rejects a key the provider refuses (HttpRefused 401 or 403), before the app keeps it. */
+  check(key: string): Promise<unknown>;
+  /** Absent: the provider writes no text (Jev); the step table never sends it a text step. */
+  call?(key: string, call: Call): Promise<{ text: string; usage: Usage }>;
+  judge?(key: string, call: JudgeCall): Promise<{ verdict: Verdict; usage: Usage }>;
 }
 
-const READS = ['text', 'json', 'pdf', 'image'] as const;
-const TEXT = ['text', 'json'] as const;
+const READS = ['text', 'json', 'typed', 'pdf', 'image'] as const;
+const TEXT = ['text', 'json', 'typed'] as const;
 
 const anthropicUrl = () => process.env.VANILLA_ANTHROPIC_URL ?? 'https://api.anthropic.com';
 const anthropicHeaders = (key: string) => ({ 'x-api-key': key, 'anthropic-version': '2023-06-01' });
@@ -41,6 +47,7 @@ export const ANTHROPIC: KeyedSpec = {
     const json = await requestJson('Anthropic', `${anthropicUrl()}/v1/models?limit=1000`, { headers: anthropicHeaders(key), timeoutMs: 15_000 }) as { data?: Array<{ id?: unknown }> };
     return (json.data ?? []).flatMap((m) => (typeof m.id === 'string' ? [m.id] : []));
   },
+  check(key) { return ANTHROPIC.list!(key); },
   async call(key, call) {
     const files = call.attachments.map(readAttachment).map((a) => (a.mediaType === 'application/pdf'
       ? { type: 'document', source: { type: 'base64', media_type: a.mediaType, data: a.base64 } }
@@ -78,6 +85,7 @@ export const OPENAI: KeyedSpec = {
     const json = await requestJson('OpenAI', `${openaiUrl()}/v1/models`, { headers: { authorization: `Bearer ${key}` }, timeoutMs: 15_000 }) as { data?: Array<{ id?: unknown }> };
     return (json.data ?? []).flatMap((m) => (typeof m.id === 'string' ? [m.id] : []));
   },
+  check(key) { return OPENAI.list!(key); },
   async call(key, call) {
     const files = call.attachments.map(readAttachment).map((a) => (a.mediaType === 'application/pdf'
       ? { type: 'file', file: { filename: a.name, file_data: `data:${a.mediaType};base64,${a.base64}` } }
@@ -100,7 +108,7 @@ export const OPENAI: KeyedSpec = {
   },
 };
 
-export const KEYED: readonly KeyedSpec[] = [ANTHROPIC, OPENAI];
+export const KEYED: readonly KeyedSpec[] = [ANTHROPIC, OPENAI, JEV];
 
 /** The models of a provider: the shipped ones, then those its list adds that serve these steps. */
 export function catalogOf(spec: KeyedSpec, listed: readonly string[]): ModelEntry[] {
@@ -117,7 +125,8 @@ export function keyedProvider(spec: KeyedSpec, key: string, models: readonly Mod
     billing: 'key',
     models,
     defaults: spec.defaults,
-    ask: (call) => spec.call(key, call),
+    ask: (call) => (spec.call ? spec.call(key, call) : Promise.reject(new CallFailed(`${spec.id} answers typed questions only`, NO_USAGE))),
+    ...(spec.judge ? { judge: (call: JudgeCall) => spec.judge!(key, call) } : {}),
     ready: async () => true,
   };
 }
