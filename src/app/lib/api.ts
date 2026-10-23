@@ -116,6 +116,7 @@ export function errorText(e: unknown): string {
     case 'localOnly': return t('error.localOnly');
     case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
+    case 'booksChanged': return t('error.booksChanged');
     case 'hasEntries': return t('error.hasEntries');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
@@ -396,6 +397,13 @@ export const api = {
   /** `state: null` opens the step again and removes the booking it made; `removed` lists it for the undo (r9c-16). */
   markYearEndEntry: (year: string, id: string, state: TemplateState | null) => request<{ removed?: JournalEntry[] }>('PUT', `/api/year-close/${year}/templates/${id}`, { state }),
   bookYearEndEntry: (year: string, input: YearEndEntryInput) => request<{ entry: JournalEntry }>('POST', `/api/year-close/${year}/entries`, input),
+  /** A bank or card account's balance on 31.12. with the bank's year-end confirmation attached (#119). */
+  setYearEndBalance: (year: string, account: string, amount: number, file: File) =>
+    upload<{ balance: unknown }>(`/api/year-close/${year}/balances/${encodeURIComponent(account)}?${new URLSearchParams({ amount: String(amount), name: file.name })}`, file, 'application/octet-stream'),
+  removeYearEndBalance: (year: string, account: string) => request<Ok>('DELETE', `/api/year-close/${year}/balances/${encodeURIComponent(account)}`),
+  yearEndDocumentUrl: (year: string, account: string) => `/api/year-close/${year}/balances/${encodeURIComponent(account)}/document`,
+  /** The cash counted on 31.12.; null takes it back. */
+  setCashCount: (year: string, account: string, amount: number | null) => request<Ok>('PUT', `/api/year-close/${year}/cash/${encodeURIComponent(account)}`, { amount }),
   rebookYearEndEntry: (year: string, id: string, description: string) => request<{ removed: JournalEntry[]; entry?: JournalEntry }>('POST', `/api/year-close/${year}/templates/${id}/rebook`, { description }),
   closeYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/close`),
   openYear: (year: string) => request<unknown>('POST', `/api/year-close/${year}/open`),

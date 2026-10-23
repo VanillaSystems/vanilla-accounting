@@ -3,11 +3,13 @@
  * Kursdifferenz, mark a guided entry, book an entry, close the year, open the next one).
  * Each goes through src/books/year-close.ts, the same code `npm run year:close` runs.
  */
-import { Router, type Response } from 'express';
+import express, { Router, type Response } from 'express';
+import { existsSync } from 'node:fs';
 import { isIsoDate } from '../../accounting/periods.js';
 import type { TemplateState } from '../../accounting/year-close.js';
 import {
-  bookEntry, bookRevaluation, closeYear, markTemplate, openingFor, openYear, rebookTemplate, reopenTemplate, YearCloseRefused, yearCloseOf,
+  bookEntry, bookRevaluation, closeYear, markTemplate, openingFor, openYear, rebookTemplate, removeYearEndBalance, reopenTemplate, setCashCount,
+  setYearEndBalance, YearCloseRefused, yearCloseOf, yearEndDocumentOf,
 } from '../../books/year-close.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, stringField } from '../books.js';
 
@@ -77,6 +79,40 @@ router.post('/api/year-close/:year/entries', async (req, res) => {
   const template = b.template === undefined ? undefined : stringField(b, 'template');
   assertOpen(readBooks(), [date], 'newTransaction');
   await answer(res, () => ({ entry: bookEntry(WS, { date, accountDebit, accountCredit, amount, vatCode: vatCode || undefined, description }, template) }));
+});
+
+// A bank or card account's balance on 31.12. from the bank's year-end confirmation (#119): the file is the body, the amount and its name in the query.
+router.post('/api/year-close/:year/balances/:account', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
+  const year = yearOf(req.params.year);
+  assertOpen(readBooks(), [`${year}-12-31`], 'newStatement');
+  const body = req.body as unknown;
+  if (!Buffer.isBuffer(body) || body.length === 0) throw new RequestError(400, 'Keine Datei erhalten.');
+  const amount = Number(req.query.amount);
+  if (typeof req.query.amount !== 'string' || !Number.isFinite(amount)) throw new RequestError(400, 'amount: eine Zahl.');
+  const name = typeof req.query.name === 'string' ? req.query.name : '';
+  await answer(res, () => ({ balance: setYearEndBalance(WS, year, req.params.account, amount, { name, body }) }));
+});
+
+router.delete('/api/year-close/:year/balances/:account', async (req, res) => {
+  const year = yearOf(req.params.year);
+  assertOpen(readBooks(), [`${year}-12-31`], 'newStatement');
+  await answer(res, () => { removeYearEndBalance(WS, year, req.params.account); return { ok: true }; });
+});
+
+router.get('/api/year-close/:year/balances/:account/document', (req, res) => {
+  const file = yearEndDocumentOf(WS, yearOf(req.params.year), req.params.account);
+  if (!file || !existsSync(file)) throw new RequestError(404, 'Kein Beleg für diesen Saldo.');
+  res.sendFile(file);
+});
+
+// The cash counted on 31.12. on a cash account (#119); null takes it back.
+router.put('/api/year-close/:year/cash/:account', async (req, res) => {
+  const year = yearOf(req.params.year);
+  assertOpen(readBooks(), [`${year}-12-31`], 'newTransaction');
+  const b = patchBody(req.body, ['amount']);
+  const amount = b.amount === null ? null : Number(b.amount);
+  if (amount !== null && (typeof b.amount !== 'number' || !Number.isFinite(amount))) throw new RequestError(400, 'amount: eine Zahl oder null.');
+  await answer(res, () => setCashCount(WS, year, req.params.account, amount));
 });
 
 router.post('/api/year-close/:year/close', async (req, res) => {

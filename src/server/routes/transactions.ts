@@ -6,7 +6,7 @@ import { MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
 import { patchManifest } from '../../workspace/manifest-write.js';
 import { ownerOf } from '../../workspace/money-accounts.js';
 import { baseCurrency } from '../../engines/index.js';
-import { nextManualRef } from '../../books/refs.js';
+import { nextManualRef } from '../../books/next-ref.js';
 import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, tagsField, WS } from '../books.js';
 import { assertPlaced, attachEntries, bookPayment, dropPayment } from '../edits.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';

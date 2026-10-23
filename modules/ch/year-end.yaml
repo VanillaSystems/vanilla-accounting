@@ -10,6 +10,16 @@ accounts:
   # Proposed only when the chart has one of these; else the person picks or adds the account.
   receivables: ["1100"]
 
+# What the law asks of money accounts at the year end beyond the base the app applies everywhere:
+# every bank and card account's balance on 31.12. from a document (a statement covering the day, or
+# the bank's year-end confirmation), every cash box counted, the owner's and employees' accounts
+# with no outside confirmation, and every month's statement only on an account with an imported
+# one. A stricter country lists here the roles (bank, card, cash, …) whose accounts need a statement
+# for every month of the year. Switzerland asks nothing more (OR Art. 957a, 958c: inventory and
+# proof at the year end, no monthly statement duty).
+moneyAccounts:
+  monthlyStatements: []
+
 # Blank accounts are the user's pick.
 templates:
   - { id: depreciation, accountDebit: "6800", accountCredit: "" }

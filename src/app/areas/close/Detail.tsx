@@ -136,8 +136,102 @@ function Checks(p: StepProps) {
             : <div key={c.id} className={`chk st-${c.state}`} data-check={c.id}>{inner}</div>;
         })}
       </div>
+      <YearEndBalances {...p} />
       {chargesVat() && <VatReconciliation d={d} />}
     </>
+  );
+}
+
+type Balance = YearCloseView['balances'][number];
+
+/**
+ * The balances on 31.12. of every bank, card and cash account against their proof (#119): a
+ * statement covering the day, else the bank's confirmation the person attaches here; the cash box
+ * counted. A difference is shown, never booked.
+ */
+function YearEndBalances({ d, nav, canEdit }: StepProps) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!d.balances.length) return null;
+  const editable = canEdit && !d.closed;
+  const money = (b: Balance, n: number) => `${b.currency} ${fmt(n)}`;
+  const remove = (b: Balance) => act(nav, () => api.removeYearEndBalance(d.year, b.account), t('close.balances.removed', { account: b.account }));
+  return (
+    <>
+      <h3>{t('close.balances.title')}</h3>
+      <p className="m">{t('close.balances.lead')}</p>
+      <div className="yel">
+        {d.balances.map((b) => {
+          const differs = b.stated !== undefined && Math.round(b.stated * 100) !== Math.round(b.book * 100);
+          const ownProof = b.proof === 'count' || b.document;
+          return (
+            <div key={b.account} data-balance={b.account}>
+              <div className={`ye${b.stated === undefined ? '' : differs ? ' stale' : ' done'}`}>
+                <span className="cx">
+                  <b><span className="mono">{b.account}</span> {b.label}</b>
+                  <span>
+                    {!b.source ? (b.proof === 'bank' ? t('close.balances.hintBank') : t('close.balances.hintCount'))
+                      : b.document ? <a className="golink mono" href={api.yearEndDocumentUrl(d.year, b.account)} target="_blank" rel="noreferrer">{b.source.split('/').at(-1)}</a>
+                      : <span className="mono">{b.source}</span>}
+                  </span>
+                </span>
+                <span className="mono acc">{t('close.balances.book', { amount: money(b, b.book) })}</span>
+                {b.stated === undefined ? (
+                  <span className="st stale">{b.proof === 'bank' ? t('close.balances.missingBank') : t('close.balances.missingCount')}</span>
+                ) : (
+                  <span className={`st${differs ? ' stale' : ''}`}>
+                    {!differs && I.check}
+                    {b.proof === 'bank' ? t('close.balances.bank', { amount: money(b, b.stated) }) : t('close.balances.counted', { amount: money(b, b.stated) })}
+                    {differs && ` · ${t('close.balances.difference', { amount: money(b, b.stated - b.book) })}`}
+                  </span>
+                )}
+                {editable && (b.stated === undefined || ownProof) && (
+                  <button type="button" className={b.stated === undefined ? 'btn' : 'quiet2'} onClick={() => setOpen(open === b.account ? null : b.account)}>
+                    {b.stated !== undefined ? t('close.balances.change') : b.proof === 'bank' ? t('close.balances.enter') : t('close.balances.count')}
+                  </button>
+                )}
+                {editable && b.document && <button type="button" className="quiet2" onClick={() => remove(b)}>{t('close.balances.remove')}</button>}
+              </div>
+              {open === b.account && <BalanceForm d={d} b={b} nav={nav} onDone={() => setOpen(null)} />}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/** A bank or card account's balance with the bank's confirmation attached, or the cash counted. */
+function BalanceForm({ d, b, nav, onDone }: { d: YearCloseView; b: Balance; nav: Nav; onDone(): void }) {
+  const [amount, setAmount] = useState(b.stated !== undefined ? b.stated.toFixed(2) : '');
+  const [file, setFile] = useState<File | null>(null);
+  const bank = b.proof === 'bank';
+  const valid = amount.trim() !== '' && Number.isFinite(Number(amount.replace(/['’\s]/g, '').replace(',', '.'))) && (!bank || !!file);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid) return;
+    const n = num(amount);
+    const shown = `${b.currency} ${fmt(n)}`;
+    const ok = bank
+      ? await act(nav, () => api.setYearEndBalance(d.year, b.account, n, file!), t('close.balances.saved', { account: b.account, amount: shown }))
+      : await act(nav, () => api.setCashCount(d.year, b.account, n), t('close.balances.countSaved', { account: b.account, amount: shown }),
+        () => api.setCashCount(d.year, b.account, b.stated ?? null));
+    if (ok) onDone();
+  }
+  return (
+    <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
+      <label>{bank ? t('close.balances.amount', { currency: b.currency }) : t('close.balances.countAmount', { currency: b.currency })}
+        <input className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+      </label>
+      {bank && (
+        <label className="wide">{t('close.balances.document')}
+          <input type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+      )}
+      <div className="acts">
+        <button type="submit" className="btn primary" disabled={!valid}>{t('close.balances.save')}</button>
+        <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
+      </div>
+    </form>
   );
 }
 

@@ -2,7 +2,7 @@
  * npm run doctor: is everything in place to keep the books? Checks the tools (Node, the claude
  * CLI and its login, without a model call; git only for npm run update) and the workspace (manifest, books.json,
  * folders, chart, bank accounts, which bank account each statement lands on, the answers of
- * npm run init), the mailboxes of mail.yaml (their keys in the app's .env; `--mail` also logs in
+ * npm run init), every reference of the books that names no record, the mailboxes of mail.yaml (their keys in the app's .env; `--mail` also logs in
  * to each, nothing fetched) and how many open transactions route to no knowledge file. Prints one
  * line per check and the fix for each ✗; exit code 1 on any ✗.
  * `--workspace <dir>` checks that folder instead of the one VANILLA_WORKSPACE names.
@@ -20,6 +20,7 @@ import { secretKey } from '../platform/sources/model.js';
 import { imapBackend } from '../platform/sources/mail-channel.js';
 import { secrets } from '../secrets/secrets.js';
 import { useKeychain } from '../secrets/keychain-store.js';
+import { byKind, danglingRefsOf } from '../accounting/integrity.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { fail, ok, warn, workspaceChecks, type Result } from '../workspace/checks.js';
@@ -74,6 +75,19 @@ function knowledgeCheck(ws: Workspace): Result[] {
   }
 }
 
+/** The references of the books that name no record (#126), a line per kind with its first few: doctor only reports, it repairs nothing. */
+function integrityCheck(ws: Workspace): Result[] {
+  if (!hasBooks(ws)) return [];
+  let groups: ReturnType<typeof byKind>;
+  try {
+    groups = byKind(danglingRefsOf(ws, loadBooks(ws)));
+  } catch (e) {
+    return [warn(`Books: the reference check did not run (${(e as Error).message.split('\n')[0]})`, 'it reads the books, invoices.json and the questions: fix the one that does not read, then run npm run doctor again')];
+  }
+  if (!groups.length) return [ok('Books: every reference names a record')];
+  return groups.map(({ label, found }) => warn(`Books: ${found.length} ${label}`, `${found.slice(0, 3).map((d) => `${d.record} → ${d.missing}`).join('; ')}${found.length > 3 ? `; and ${found.length - 3} more` : ''}`));
+}
+
 /** Each mail source (ADR 0014): its password in the keychain, switched on, and with `login` a real IMAP login and logout. */
 async function mailChecks(ws: Workspace, login: boolean): Promise<Result[]> {
   useKeychain(() => ws.paths.root);
@@ -116,7 +130,7 @@ async function main(): Promise<number> {
   } catch (e) {
     results.push(fail((e as Error).message, 'Run npm run init to set up a workspace, or set VANILLA_WORKSPACE in .env to the folder holding belege.workspace.yaml.'));
   }
-  if (ws) results.push(...workspaceChecks(ws), ...(hasBooks(ws) ? plausibilityHints(loadBooks(ws)).map((h) => warn(h.label, h.fix)) : []), ...knowledgeCheck(ws), ...await mailChecks(ws, values.mail === true));
+  if (ws) results.push(...workspaceChecks(ws), ...(hasBooks(ws) ? plausibilityHints(loadBooks(ws)).map((h) => warn(h.label, h.fix)) : []), ...integrityCheck(ws), ...knowledgeCheck(ws), ...await mailChecks(ws, values.mail === true));
 
   for (const r of results) {
     if (r.status === 'ok') console.log(`✓ ${r.label}`);

@@ -11,7 +11,7 @@ and the providers.
 | core | 60 | 22 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 96 | 26 |
+| split | 97 | 26 |
 | infrastructure | 56 | 4 |
 | workflow | 20 | 0 |
 | view | 273 | 56 |
@@ -203,7 +203,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/vat-ech0217.ts` | CHF 1, MWST 2, ESTV 1, eCH-0217 1, form 0535 1 |
 | `src/cli/vat-report-html.ts` | CHF 2, MWST 5, ESTV 3, Ziffer 9 |
 | `src/cli/vat-report.ts` | CHF 2, MWST 3, Ziffer 5, form 0535 1 |
-| `src/cli/year-close-text.ts` | CHF 11, ESTV 1, camt.053 1 |
+| `src/cli/year-close-text.ts` | CHF 11, ESTV 1 |
 | `src/cli/year-close.ts` | CHF 4, ESTV 3, form 0535 1 |
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |

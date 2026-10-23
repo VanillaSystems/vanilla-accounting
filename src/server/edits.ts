@@ -6,7 +6,8 @@
 import { byStatement } from '../workspace/money-accounts.js';
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
-import { isManualRef, nextManualRef } from '../books/refs.js';
+import { isManualRef } from '../books/refs.js';
+import { nextManualRef } from '../books/next-ref.js';
 import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
 import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
