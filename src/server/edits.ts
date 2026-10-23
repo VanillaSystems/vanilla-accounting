@@ -74,9 +74,10 @@ export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'rec
     const links = books.mappings.filter((m) => m.receiptId === c.id).map((m) => m.transactionRef);
     for (const ref of links) assertOpen(books, refDates(books, ref), 'mapping');
     books.mappings = books.mappings.filter((m) => m.receiptId !== c.id);
+    for (const ref of links) carried(books, ref);
     if (links.length) before.links = links;
   }
-  for (const ref of c.links ?? []) if (books.transactions.some((t) => t.ref === ref)) link(books, c.id, ref);
+  for (const ref of c.links ?? []) if (books.transactions.some((t) => t.ref === ref) || withoutPayment(books, ref)) link(books, c.id, ref);
   return before;
 }
 
@@ -122,13 +123,42 @@ export function assertNotPaidPrivately(books: Books, receipt: string, payment: s
   throw new RequestError(409, `Der Beleg ist privat bezahlt (Zahlung ${own.ref} vom ${day(own.date)}). Eine weitere Zahlung dazu buchte den Aufwand und die Vorsteuer doppelt: zahlt die Firma dem Inhaber die Auslage zurück, gehört diese Zahlung ohne Steuer auf sein Konto, nicht zum Beleg.`, { code: 'paidPrivately', params: { receipt, payment: own.ref } });
 }
 
+/**
+ * A booking without a payment (#89: a depreciation, an accrual, a private share, a correction):
+ * a ref of its own (M2026-004) that entries book and no transaction holds. It carries its receipt
+ * through a link like a payment; the seal of a filed quarter covers that link with its entries
+ * (src/books/seal.ts closedPart).
+ */
+export const withoutPayment = (books: Pick<Books, 'transactions' | 'journalEntries'>, ref: string): boolean =>
+  isManualRef(ref) && !books.transactions.some((t) => t.ref === ref) && books.journalEntries.some((e) => e.transactionRef === ref);
+
+/**
+ * The receipts a booking without a payment carries, recorded on its entries (JournalEntry.receipts)
+ * so that the booking deleted and put back (an undo) carries them again. Nothing for a payment's
+ * ref: there `receipts` is what its booking saw.
+ */
+function carried(books: Books, ref: string): void {
+  if (!isManualRef(ref) || books.transactions.some((t) => t.ref === ref)) return;
+  const ids = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
+  for (const e of books.journalEntries) {
+    if (e.transactionRef !== ref) continue;
+    if (ids.length) e.receipts = ids; else delete e.receipts;
+  }
+}
+
+/**
+ * A receipt linked to a payment, or to a booking without one (withoutPayment), of the open period.
+ * A receipt the owner paid privately takes no other link (assertNotPaidPrivately).
+ */
 export function link(books: Books, receipt: string, payment: string): BookChange | undefined {
   receiptOf(books, receipt);
-  if (!books.transactions.some((t) => t.ref === payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  assertNotPaidPrivately(books, receipt, payment);
+  if (!books.transactions.some((t) => t.ref === payment) && !withoutPayment(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, payment), 'mapping');
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
   // A link by hand (or by the AI sidebar on the person's wish) says so: Änderungen lists it (r8k-7).
   books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'human' });
+  carried(books, payment);
   return { kind: 'unlink', receipt, payment };
 }
 
@@ -185,7 +215,9 @@ function bookedByHand(books: Books, r: Receipt, amounts: readonly number[], curr
  */
 export function privatePayment(books: Books, receiptId: string, ask: PrivatePart, fx: FxResolver): PrivateOutlay {
   const r = receiptOf(books, receiptId);
-  const paid = books.mappings.find((m) => m.receiptId === receiptId);
+  const links = books.mappings.filter((m) => m.receiptId === receiptId);
+  // A booking without a payment that carries the receipt books it by hand: bookedByHand below offers to replace it.
+  const paid = links.find((m) => !withoutPayment(books, m.transactionRef));
   if (paid) throw new RequestError(409, `Der Beleg ist schon bezahlt: die Zahlung ${paid.transactionRef} ist mit ihm verknüpft. Eine private Auslage dazu würde den Aufwand und die Vorsteuer doppelt buchen.`, { code: 'receiptPaid', params: { receipt: receiptId, payment: paid.transactionRef } });
   if (!r.date || r.amount == null) throw new RequestError(400, 'Für eine Auslage braucht der Beleg Datum und Betrag.');
   const total = Math.abs(r.amount);
@@ -210,10 +242,14 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
     throw new RequestError(409, `Die Buchung ${held.ref} vom ${day(line.date)} über ${params.currency} ${line.amount.toFixed(2)} bucht diesen Beleg wohl schon von Hand. Eine private Zahlung dazu buchte ihn doppelt: ${way}.`, { code: 'bookedByHand', params });
   }
   if (ask.replace && !replaced.length) throw new RequestError(400, `${ask.replace} bucht diesen Beleg nicht (kein Betrag des Belegs oder seines Teils, weder sein Tag noch seine Worte): sie bleibt. Ist sie doch dieselbe Auslage, zuerst in Buchungen löschen.`);
+  const carrier = links.find((m) => !replaced.some((e) => e.transactionRef === m.transactionRef));
+  if (carrier) throw new RequestError(409, `Der Beleg gehört schon zur Buchung ${carrier.transactionRef} ohne Zahlung. Eine private Zahlung dazu buchte ihn doppelt: zuerst dort lösen.`, { code: 'receiptPaid', params: { receipt: receiptId, payment: carrier.transactionRef } });
   if (replaced.length) assertOpen(books, replaced.map((e) => e.date), 'deleteEntry');
   // The ref before the replaced booking goes: the payment never takes the number of the booking it replaces.
   const ref = nextManualRef(books, date.slice(0, 4));
   books.journalEntries = books.journalEntries.filter((e) => !replaced.includes(e));
+  // Its links go with the replaced booking; they come back with it when the payment is deleted (linkCarried).
+  if (replaced.length) books.mappings = books.mappings.filter((m) => m.transactionRef !== replaced[0].transactionRef);
   const what = r.description || r.filename;
   const named = ask.part?.trim();
   const text = part ? `${what} · ${named || 'Geschäftsanteil'} (Teil von ${currency} ${total.toFixed(2)}, Rest privat)` : what;
@@ -252,6 +288,7 @@ export function unlink(books: Books, receipt: string, payment: string): BookChan
   assertOpen(books, refDates(books, payment), 'mapping');
   const had = books.mappings.length;
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === payment && m.receiptId === receipt));
+  carried(books, payment);
   return books.mappings.length < had ? { kind: 'link', receipt, payment } : undefined;
 }
 
@@ -409,7 +446,16 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
   books.journalEntries.push(entry);
   bookedAgain(books, entry.transactionRef);
+  linkCarried(books, entry);
   return entry;
+}
+
+/** A booking without a payment made or put back with the receipts it carries (`receipts`): linked to it again. */
+function linkCarried(books: Books, entry: JournalEntry): void {
+  if (!entry.receipts?.length || !withoutPayment(books, entry.transactionRef)) return;
+  for (const id of entry.receipts) if (books.receipts.some((r) => r.id === id)) link(books, id, entry.transactionRef);
+  // A receipt deleted meanwhile is no longer recorded.
+  carried(books, entry.transactionRef);
 }
 
 /**
@@ -503,6 +549,7 @@ export function restoreSaved(books: Books, id: string, saved: JournalEntry | und
   }
   books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries, saved];
   bookedAgain(books, saved.transactionRef);
+  linkCarried(books, saved);
 }
 
 /**
@@ -516,6 +563,10 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
   const tx = books.transactions.find((t) => t.ref === entry.transactionRef);
   if (tx) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
+  // A booking without a payment takes its links along: no receipt hangs on a booking that is gone. The entry keeps them in `receipts` for its undo.
+  else if (isManualRef(entry.transactionRef) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
+    books.mappings = books.mappings.filter((m) => m.transactionRef !== entry.transactionRef);
+  }
   return entry;
 }
 
@@ -606,13 +657,15 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
     if (asked.kind === 'link') {
       const r = books.receipts.find((x) => x.id === asked.receipt);
       if (r?.kindBy === 'human' && SET_ASIDE.has(r.kind)) throw new RequestError(400, `${r.description || r.filename} ist als ${r.kind === 'duplicate' ? 'Doppel' : 'kein Beleg'} beiseitegelegt und wird nicht verknüpft.`, { code: 'setAside', params: { receipt: r.description || r.filename } });
-      assertNotPaidPrivately(books, asked.receipt, asked.payment);
     }
     const payment = paymentOf(books, asked);
     if (payment && !payments.has(payment)) payments.set(payment, JSON.stringify(paymentSides(books, payment, ctx.bankAccounts).map((s) => s.booked)));
     let note: ChangeNote | undefined;
     let change: BookChange = asked;
     if (asked.kind === 'newEntry') {
+      if (asked.entry.receipts?.length && asked.entry.transactionRef && books.transactions.some((t) => t.ref === asked.entry.transactionRef)) {
+        throw new RequestError(400, 'Der Beleg einer Zahlung gehört an die Zahlung: "link" mit ihrer Referenz, nicht "receipts" an der Buchung.');
+      }
       const entry = withRate(books, asked.entry);
       const to = codeOnAccount(entry.vatCode, entry.accountDebit, entry.accountCredit);
       if (to && to !== entry.vatCode) note = { vatFollowed: { from: entry.vatCode!, to } };

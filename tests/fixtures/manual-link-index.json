@@ -1,0 +1,19 @@
+{
+  "receipts": [
+    { "id": "rd", "filename": "laptop.pdf", "originalFilename": "laptop.pdf", "extractedText": "Laptop Rechnung", "extractionMethod": "pdftotext", "fileSize": 10, "indexedAt": "2026-08-01T08:00:00Z", "location": "archived", "date": "2026-08-31", "amount": 1200, "currency": "CHF", "description": "Abschreibungsplan Laptop" },
+    { "id": "rq", "filename": "mai.pdf", "originalFilename": "mai.pdf", "extractedText": "Abgrenzung Mai", "extractionMethod": "pdftotext", "fileSize": 10, "indexedAt": "2026-05-01T08:00:00Z", "location": "archived", "date": "2026-05-31", "amount": 300, "currency": "CHF", "description": "Abgrenzung Mai" },
+    { "id": "rp", "filename": "kaffee.pdf", "originalFilename": "kaffee.pdf", "extractedText": "Kaffee Quittung", "extractionMethod": "pdftotext", "fileSize": 10, "indexedAt": "2026-08-12T08:00:00Z", "location": "archived", "date": "2026-08-12", "amount": 50, "currency": "CHF", "description": "Kaffee" }
+  ],
+  "transactions": [
+    { "ref": "M2026-001", "bank": "manual", "source": "manual", "date": "2026-08-12", "amount": 50, "currency": "CHF", "direction": "DBIT", "description": "Kaffee" }
+  ],
+  "mappings": [
+    { "transactionRef": "M2026-001", "receiptId": "rp" }
+  ],
+  "bankStatements": [],
+  "journalEntries": [
+    { "id": "jd", "transactionRef": "M2026-002", "date": "2026-08-31", "accountDebit": "6800", "accountCredit": "1520", "amount": 1200, "description": "Abschreibung Laptop", "origin": "manual" },
+    { "id": "jq", "transactionRef": "M2026-003", "date": "2026-05-31", "accountDebit": "6800", "accountCredit": "1520", "amount": 300, "description": "Abgrenzung Mai", "origin": "manual" }
+  ],
+  "config": { "closedThrough": "2026-06-30" }
+}

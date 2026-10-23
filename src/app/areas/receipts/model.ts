@@ -10,6 +10,7 @@ import type { ReceiptFilter } from '../../shell/route.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
+import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
@@ -281,6 +282,32 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''):
   if (words.length) return { best: [], more: all.slice(0, 40) };
   const best = all.filter(isBest).slice(0, 3);
   return { best, more: all.filter((c) => !best.includes(c)).slice(0, 12) };
+}
+
+/** A booking without a payment a receipt can hang on (#89): its ref, its first line, and whether a line is the receipt's amount. */
+export interface Unpaid { ref: string; date: string; amount: number; currency: string; description: string; sameAmount: boolean }
+
+/**
+ * The bookings without a payment of the open period (a depreciation, an accrual, a private share,
+ * a correction; src/server/edits.ts withoutPayment) the receipt could hang on, not yet linked to it:
+ * those with a line of the receipt's amount, nearest in date first. With a query, every one whose
+ * text, ref, amount or date hold every word (a depreciation books less than the invoice it carries).
+ */
+export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = ''): Unpaid[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const cur = v.r.currency || baseCurrency();
+  const near = (d: string) => (v.date ? Math.abs(Date.parse(d) - Date.parse(v.date)) : 0);
+  const out: Unpaid[] = [];
+  for (const [ref, es] of l.entriesByRef) {
+    if (!isManualRef(ref) || l.txByRef.has(ref) || v.links.includes(ref) || es.some((e) => !!l.closedThrough && e.date <= l.closedThrough)) continue;
+    const [e] = es;
+    const h = es.flatMap((x) => [x.description, x.amount.toFixed(2)]).concat(ref, e.date, e.date.split('-').reverse().join('.')).join(' ').toLowerCase();
+    if (!words.every((w) => h.includes(w))) continue;
+    const sameAmount = v.r.amount != null && es.some((x) => (x.exchangeCurrency ?? baseCurrency()) === cur && Math.abs(x.amount - Math.abs(v.r.amount!)) < HALF_RAPPEN);
+    if (!words.length && !sameAmount) continue;
+    out.push({ ref, date: e.date, amount: e.amount, currency: e.exchangeCurrency ?? baseCurrency(), description: e.description ?? ref, sameAmount });
+  }
+  return out.sort((a, b) => Number(b.sameAmount) - Number(a.sameAmount) || near(a.date) - near(b.date) || a.ref.localeCompare(b.ref)).slice(0, words.length ? 40 : 8);
 }
 
 /** A best fit: the amount fits (the same, a Skonto, an exact part) and the money goes the receipt's way. */

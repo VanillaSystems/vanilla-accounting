@@ -107,8 +107,7 @@ router.post('/api/journal-entries', (req, res) => {
     if (receipt) {
       const r = books.receipts.find((x) => x.id === receipt);
       if (!r) throw new RequestError(404, `Beleg ${receipt} gibt es nicht.`, { code: 'gone', params: { what: 'receipt' } });
-      if (books.transactions.some((t) => t.ref === entry.transactionRef)) link(books, receipt, entry.transactionRef);
-      else books.mappings.push({ transactionRef: entry.transactionRef, receiptId: receipt, by: 'human' });
+      link(books, receipt, entry.transactionRef);
       if (original && !r.filedPayment && books.transactions.some((t) => t.ref === original.transactionRef)) r.filedPayment = original.transactionRef;
     }
     return withWarnings(books, entry);

@@ -4,7 +4,7 @@
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
-import type { BankTransaction, InboxFile, Receipt } from '../../../types/index.js';
+import type { BankTransaction, InboxFile, JournalEntry, Receipt } from '../../../types/index.js';
 import { filingKeyOf, parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
@@ -178,6 +178,9 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   );
 }
 
+/** A booking without a payment in a toast (#89): its day, text and amount. */
+const entryLine = (e: JournalEntry) => `${formatDate(e.date)} · ${e.description ?? e.transactionRef} · ${fmt(e.amount)}`;
+
 /** A private payment only this receipt holds: releasing it deletes the payment, as unlinking would leave it orphaned. */
 const ownPrivate = (l: Ledger, tx: BankTransaction) => tx.bank === 'manual' && (l.receiptsByRef.get(tx.ref)?.length ?? 0) <= 1;
 
@@ -193,11 +196,14 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
     const entry = (l.entriesByRef.get(ref) ?? [])[0];
     if (!tx) {
       return (
-        <span className="linked">{I.check}
-          {entry
-            ? <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.bookedNoPayment', { date: formatDate(entry.date) })}{more} <span className="arr">→</span></button>
-            : <span>{t('receipts.linkedNoPayment', { ref })}{more}</span>}
-        </span>
+        <>
+          <span className="linked">{I.check}
+            {entry
+              ? <button type="button" className="golink" data-testid="go-entry" onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.bookedNoPayment', { date: formatDate(entry.date) })}{more} <span className="arr">→</span></button>
+              : <span>{t('receipts.linkedNoPayment', { ref })}{more}</span>}
+          </span>
+          {canEdit && !v.locked && entry && <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, ref, entryLine(entry))}>{t('receipts.unlink')}</button>}
+        </>
       );
     }
     return (
@@ -270,6 +276,7 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
               <span className="d">{e ? `${formatDate(e.date)} · ${t('receipts.booking')}` : ref}</span>
               <span className="am">{e ? fmt(e.amount) : ''}</span>
               <span className="tt">{e?.description ?? t('receipts.noBankPayment')}</span>
+              {edit && e && <button type="button" className="un" onClick={(ev) => { ev.stopPropagation(); unlinkPayment(nav, v, ref, entryLine(e)); }}>{t('receipts.unlinkCap')}</button>}
             </div>
           );
         }
