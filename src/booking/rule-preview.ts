@@ -95,6 +95,10 @@ export interface RulePreview {
    * A rule from the notes is offered only when there are none (src/knowledge/note-rules.ts).
    */
   otherwise?: number;
+  /** A booking rule's payments booked today (as decided before the AI sidebar moved them) exactly as it would book them. */
+  same?: number;
+  /** The newest payments counted in `otherwise` that `examples` and `spread` leave out, at most PREVIEW_EXAMPLES: the card names them. */
+  differ?: PreviewPayment[];
 }
 
 const lineKey = (l: RuleLine) => `${l.account}|${l.vat ?? ''}|${Math.abs(l.amount).toFixed(2)}`;
@@ -118,7 +122,7 @@ export function openYear(books: Pick<Books, 'config' | 'transactions'>): string 
  * AI sidebar changed as it was before (JournalEntry.by `was`): a wish that rebooked the payments
  * first must not hide the decisions its rule would book over (x02).
  */
-function bookedNow(books: Books, tx: BankTransaction, bank: string, decided = false): RuleLine[] {
+export function bookedNow(books: Books, tx: BankTransaction, bank: string, decided = false): RuleLine[] {
   return books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((now) => {
     const e = decided && now.by?.kind === 'assistant' && now.by.was ? { ...now, ...now.by.was } : now;
     return {
@@ -211,6 +215,8 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
     const others: string[] = [];
     const elsewhere: BankTransaction[] = [];
     let otherwise = 0;
+    let same = 0;
+    const differs: BankTransaction[] = [];
     const against = new Map<NationalOverride, { count: number; payments: RuleOverride['payments'] }>();
     for (const tx of hits) {
       const p = facts.get(tx.ref)!;
@@ -229,7 +235,9 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         if (off.length) elsewhere.push(tx);
         for (const a of off) if (!others.includes(a)) others.push(a);
         const byItself = books.journalEntries.filter((e) => e.transactionRef === tx.ref).every((e) => e.rule === target.row.id && e.origin !== 'manual');
-        if (decided.length && !byItself && !sameLines(decided, wouldBook(books, tx, t.booking, context))) otherwise++;
+        const agrees = decided.length > 0 && sameLines(decided, wouldBook(books, tx, t.booking, context));
+        if (agrees) same++;
+        else if (decided.length && !byItself) { otherwise++; differs.push(tx); }
         // Only where it books: another rule deciding first, or a payout waiting for its report, books nothing by this one.
         const decider = ruleFor(placed, p);
         const asked = t.booking.fees && !mappedReceipts(books, tx).length;
@@ -251,11 +259,13 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       private: isPrivate,
       payments: elsewhere.filter((tx) => !examples.some((x) => x.ref === tx.ref)).slice(0, PREVIEW_EXAMPLES).map((tx) => payment(tx, facts.get(tx.ref)!)),
     } : undefined;
+    const listed = new Set([...examples, ...(spread?.payments ?? [])].map((x) => x.ref));
+    const differ = differs.filter((tx) => !listed.has(tx.ref)).slice(0, PREVIEW_EXAMPLES).map((tx) => payment(tx, facts.get(tx.ref)!));
     return {
       key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed),
       ...(spread ? { spread } : {}),
       ...(against.size ? { overrides: [...against].map(([kind, o]) => ({ kind, ...o })) } : {}),
-      ...(t.kind === 'book' ? { otherwise } : {}),
+      ...(t.kind === 'book' ? { otherwise, same, ...(differ.length ? { differ } : {}) } : {}),
     };
   });
 }

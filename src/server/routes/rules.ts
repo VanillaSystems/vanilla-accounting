@@ -9,6 +9,8 @@
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *   GET  /api/rules/correction?ref=   the rule change a person's correction of a rule booking teaches («Regel anpassen?»), or null
  *   POST /api/rules/correction        { ref }: that change drafted into the rule's file; the answer names the file for its card
+ *   GET  /api/rules/learn?ref=        what a person's correction of a booking no rule made may teach («Ins Wissen übernehmen?»), or null
+ *   POST /api/rules/learn             { ref }: the AI's rule (drafted into its file for the card) or note sentence, checked by code, or why none
  *   GET  /api/rules/hand?payment=     the form of a rule made by hand, started from that payment
  *   POST /api/rules/hand              a HandRule: drafted into its file for the same card; refused when the app cannot carry it out
  *   POST /api/rules/note              a NoteRuleCommand: the rule of a sentence of a partner's notes (or its adjustment) drafted into the partner's file for the card
@@ -28,6 +30,7 @@ import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type Dra
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { correctionOffer, draftCorrectionRule } from '../../saving/correction-rule.js';
+import { learnOffer, proposeFromCorrection } from '../../saving/learn-rule.js';
 import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.js';
 import { draftNoteRule, type NoteRuleCommand } from '../../saving/note-rule.js';
 import type { RuleRefusal } from '../../booking/rules.js';
@@ -148,6 +151,18 @@ router.post('/api/rules/correction', (req, res) => {
   const path = draftCorrectionRule(WS, ref);
   if (!path) throw new RequestError(404, 'Diese Buchung lehrt keine Regel: keine Regel hat die Zahlung gebucht, oder die Buchung ist nicht von Hand korrigiert.');
   res.json({ path });
+});
+
+router.get('/api/rules/learn', (req, res) => {
+  res.json({ offer: learnOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });
+});
+
+router.post('/api/rules/learn', async (req, res) => {
+  const ref = (req.body as { ref?: unknown })?.ref;
+  if (typeof ref !== 'string') throw new RequestError(400, 'ref erwartet.');
+  const proposal = await proposeFromCorrection(WS, ref);
+  if (!proposal) throw new RequestError(404, 'Diese Buchung lehrt nichts: sie ist nicht von Hand korrigiert, oder eine Regel hat sie gebucht.');
+  res.json(proposal);
 });
 
 router.get('/api/rules/hand', (req, res) => {
