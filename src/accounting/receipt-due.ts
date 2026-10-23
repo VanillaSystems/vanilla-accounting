@@ -24,10 +24,10 @@ export function receiptDue(date: IsoDate): { due: IsoDate; askFrom: IsoDate } {
 /**
  * Where a payment the app holds for its receipt stands today: `waits` (the app's work, no one is
  * asked) or `asks` (the person's, from askFrom on). Undefined when it does not wait: never held,
- * booked meanwhile, or a receipt is linked now (the next run books it).
+ * booked meanwhile, marked as needing none, or a receipt is linked now (the next run books it).
  */
-export function receiptState(tx: Pick<BankTransaction, 'date' | 'waitsForReceipt'>, linked: boolean, booked: boolean, today: IsoDate): { kind: 'waits' | 'asks'; due: IsoDate; askFrom: IsoDate } | undefined {
-  if (!tx.waitsForReceipt || linked || booked) return undefined;
+export function receiptState(tx: Pick<BankTransaction, 'date' | 'waitsForReceipt' | 'noReceiptNeeded'>, linked: boolean, booked: boolean, today: IsoDate): { kind: 'waits' | 'asks'; due: IsoDate; askFrom: IsoDate } | undefined {
+  if (!tx.waitsForReceipt || tx.noReceiptNeeded || linked || booked) return undefined;
   const days = receiptDue(tx.date);
   return { kind: today >= days.askFrom ? 'asks' : 'waits', ...days };
 }

@@ -63,6 +63,7 @@ test('the person is asked two weeks before the return is due; until then the wai
   assert.deepEqual(at('2026-11-14'), [['W', 'waits']], 'a payment with its receipt linked waits no more: the next run books it');
   assert.deepEqual(at('2026-11-15'), [['W', 'asks']]);
   assert.deepEqual(waitingForReceipt(books, (ref) => ref === 'W', '2026-11-20'), [], 'booked meanwhile');
+  assert.deepEqual(waitingForReceipt({ ...books, transactions: books.transactions.map((t) => ({ ...t, noReceiptNeeded: true })) }, () => false, '2026-11-20'), [], '«Ohne Vorsteuer buchen» answered it');
   assert.deepEqual(waitingForReceipt({ ...books, config: { closedThrough: '2026-09-30' } }, () => false, '2026-12-01'), [], 'a filed quarter holds nothing open');
 });
 
