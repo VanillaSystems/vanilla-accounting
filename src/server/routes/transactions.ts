@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { TransactionPatch } from '../../types/index.js';
 import { nextManualRef } from '../../books/refs.js';
 import { assertOpen, refDates, withBooks, RequestError, patchBody, stringField, WS } from '../books.js';
-import { attachEntries, bookPayment } from '../edits.js';
+import { attachEntries, bookPayment, dropPayment } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import type { BookingLine } from '../../accounting/manual-booking.js';
 
@@ -68,16 +68,7 @@ router.patch('/api/transactions/:ref', (req, res) => {
 router.delete('/api/transactions/:ref', (req, res) => {
   const { ref } = req.params;
   return withBooks(res, (books) => {
-    const tx = books.transactions.find((t) => t.ref === ref);
-    if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
-    if (tx.source !== 'manual') {
-      throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).', { code: 'manualOnly' });
-    }
-    assertOpen(books, refDates(books, ref), 'deleteTransaction');
-    // A private payment goes with its bookings and its links: without the payment they book nothing (r7h-23: the undo is one step).
-    books.transactions = books.transactions.filter((t) => t.ref !== ref);
-    books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);
-    books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
+    dropPayment(books, ref);
     return { ok: true };
   });
 });

@@ -211,6 +211,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
         {canEdit && !v.locked && (ownPrivate(l, tx)
           ? <button type="button" className="quiet" title={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
           : <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx))}>{t('receipts.unlink')}</button>)}
+        {tx.businessPart && <span className="fitnote note" data-testid="business-part">{t('receipts.businessPartNotice', { what: tx.businessPart.what || t('receipts.privatePartUnnamed'), amount: `${tx.currency} ${fmt(Math.abs(tx.amount))}`, total: `${v.r.currency || baseCurrency()} ${fmt(Math.abs(v.r.amount ?? 0))}` })}</span>}
         {fit?.kind === 'off' && <span className="fitnote warn" data-testid="fit-off">{t('receipts.fitOffNotice', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })}</span>}
         {fit?.kind === 'skonto' && <span className="fitnote note" data-testid="fit-skonto">{t('receipts.fitSkontoNotice', { percent: fit.percent })}</span>}
       </>

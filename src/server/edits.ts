@@ -16,9 +16,9 @@ import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { withoutInputTax } from '../engines/index.js';
 import type { BankTransaction, BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
-import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, ReceiptSet } from '../types/assistant.js';
+import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, PrivatePart, ReceiptSet } from '../types/assistant.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import type { FxResolver } from '../accounting/fx-rates.js';
+import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
@@ -108,6 +108,20 @@ export function assertNotSecondPayment(books: Books, receipt: string, payment: s
   throw new RequestError(409, `Der Beleg hat schon die Zahlung ${other.ref} vom ${day(other.date)} (${other.description}). Eine zweite Zahlung an eine andere Stelle würde ihn doppelt bezahlen: nur verknüpfen, wenn er wirklich in zwei Zahlungen bezahlt wurde.`, { code: 'secondPayment', params: { receipt, payment: other.ref } });
 }
 
+/**
+ * A receipt the owner paid privately or in cash (its payment made by hand) takes no second payment,
+ * also when the person confirms (#90): the bank payment that pays the owner back settles the
+ * owner's account and is booked onto it without VAT; linked to the receipt, it would book the
+ * expense and its input tax a second time.
+ */
+export function assertNotPaidPrivately(books: Books, receipt: string, payment: string): void {
+  const own = books.mappings.filter((m) => m.receiptId === receipt && m.transactionRef !== payment)
+    .map((m) => books.transactions.find((t) => t.ref === m.transactionRef))
+    .find((t): t is BankTransaction => !!t && t.bank === 'manual');
+  if (!own) return;
+  throw new RequestError(409, `Der Beleg ist privat bezahlt (Zahlung ${own.ref} vom ${day(own.date)}). Eine weitere Zahlung dazu buchte den Aufwand und die Vorsteuer doppelt: zahlt die Firma dem Inhaber die Auslage zurück, gehört diese Zahlung ohne Steuer auf sein Konto, nicht zum Beleg.`, { code: 'paidPrivately', params: { receipt, payment: own.ref } });
+}
+
 export function link(books: Books, receipt: string, payment: string): BookChange | undefined {
   receiptOf(books, receipt);
   if (!books.transactions.some((t) => t.ref === payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
@@ -118,32 +132,120 @@ export function link(books: Books, receipt: string, payment: string): BookChange
   return { kind: 'unlink', receipt, payment };
 }
 
-/** A private outlay as made: its payment's ref and date, and the filed period it corrects when the receipt lies in one. */
-export interface PrivateOutlay { ref: string; date: string; corrects?: string }
+/** A private outlay as made: its payment's ref and date, the filed period it corrects when the receipt lies in one, the official daily rate its booking takes when foreign, and the bookings by hand it replaced. */
+export interface PrivateOutlay { ref: string; date: string; corrects?: string; exchangeRate?: number; replaced?: JournalEntry[] }
+
+const cents = (n: number): number => Math.round(n * 100) / 100;
+
+/** The Swiss VAT rates a read receipt shows, ascending. */
+const swissRates = (r: Receipt): number[] =>
+  (r.hasSwissVat ? [...new Set((r.vatSummary ?? []).map((g) => g.ratePercent).filter((x) => x > 0 && vat().isDomesticRate(x)))].sort((a, b) => a - b) : []);
+
+/** The words of a text that name something (four letters or more), lower case. */
+const wordsOf = (text: string): string[] => text.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4);
 
 /**
- * «Privat oder bar bezahlt»: the owner's payment of the receipt, on its date and amount, linked to
- * it, in one write. A receipt a payment already pays (the bank's, or an earlier private one) is
- * refused: a second payment would book the expense and its input tax twice (r7h-23). A receipt
- * dated in a filed period is booked as a correction (golden rule 1, r8k-10): its payment is dated
- * the first open day and names the receipt's day, and its bookings carry `corrects` (correctsFor).
- * Deleting the payment is the whole undo.
+ * The person's booking without a payment that books this receipt already (#87: the owner's outlay
+ * booked by hand, by her or the AI sidebar on her wish, before the receipt was paid privately): a
+ * line of one of `amounts` in the receipt's currency, or in the books' at the day's `rate` to the
+ * percent, dated on the receipt's day or naming a word of it. Its ref, all its lines, and whether
+ * it names the receipt (a word of it, or the receipt recorded): only such a booking may be
+ * replaced; one that merely shares the day and the amount may be another purchase.
  */
-export function privatePayment(books: Books, receiptId: string): PrivateOutlay {
+function bookedByHand(books: Books, r: Receipt, amounts: readonly number[], currency: string, rate: number | undefined): { ref: string; entries: JournalEntry[]; named: boolean } | undefined {
+  const base = baseCurrency();
+  const words = new Set(wordsOf(`${r.description ?? ''} ${r.filename}`));
+  const paid = new Set(books.transactions.map((t) => t.ref));
+  const near = (a: number, b: number, slack: number) => Math.abs(Math.abs(a) - b) <= slack;
+  const same = (e: JournalEntry) => amounts.some((a) => ((e.exchangeCurrency ?? base) === currency ? near(e.amount, a, 0.05)
+    : !e.exchangeCurrency && rate !== undefined && near(e.amount, a * rate, Math.max(0.05, 0.01 * a * rate))));
+  const names = (e: JournalEntry) => !!e.receipts?.includes(r.id) || wordsOf(e.description ?? '').some((w) => words.has(w));
+  const hit = books.journalEntries.find((e) => e.origin === 'manual' && !paid.has(e.transactionRef) && !(e.receipts?.length && !e.receipts.includes(r.id))
+    && same(e) && (e.date === r.date || names(e)));
+  if (!hit) return undefined;
+  const entries = books.journalEntries.filter((e) => e.transactionRef === hit.transactionRef);
+  return { ref: hit.transactionRef, entries, named: entries.some(names) };
+}
+
+/**
+ * «Privat oder bar bezahlt»: the owner's payment of the receipt, on its date, linked to it, in one
+ * write. For the whole receipt, or for its business part `amount` in the receipt's currency (#87:
+ * EUR 17.99 of a EUR 70.57 bill was coffee with a customer): the payment is that part and says so
+ * (BankTransaction.businessPart), the booking books it with the VAT the receipt's facts give that
+ * part (src/booking/purchase-vat.ts), and the private rest is never booked. A part of a receipt that
+ * shows several Swiss rates names its rate line. A foreign receipt's booking takes the official daily rate of
+ * the payment's day, which for an outlay is the receipt's (ADR 0001).
+ *
+ * A receipt a payment already pays (the bank's, or an earlier private one) is refused: a second
+ * payment would book the expense and its input tax twice (r7h-23). So is one a person's booking
+ * without a payment books already (bookedByHand), unless `replace` names that booking: it then
+ * goes in the same write. A receipt dated in a filed period is booked as a correction (golden rule
+ * 1, r8k-10): its payment is dated the first open day and names the receipt's day, and its
+ * bookings carry `corrects` (correctsFor). Deleting the payment is the whole undo.
+ */
+export function privatePayment(books: Books, receiptId: string, ask: PrivatePart, fx: FxResolver): PrivateOutlay {
   const r = receiptOf(books, receiptId);
   const paid = books.mappings.find((m) => m.receiptId === receiptId);
   if (paid) throw new RequestError(409, `Der Beleg ist schon bezahlt: die Zahlung ${paid.transactionRef} ist mit ihm verknüpft. Eine private Auslage dazu würde den Aufwand und die Vorsteuer doppelt buchen.`, { code: 'receiptPaid', params: { receipt: receiptId, payment: paid.transactionRef } });
   if (!r.date || r.amount == null) throw new RequestError(400, 'Für eine Auslage braucht der Beleg Datum und Betrag.');
+  const total = Math.abs(r.amount);
+  const currency = r.currency || baseCurrency();
+  const amount = ask.amount === undefined ? total : cents(ask.amount);
+  if (!(amount > 0 && amount <= total)) throw new RequestError(400, `Der Geschäftsanteil muss über 0 und höchstens ${currency} ${total.toFixed(2)} sein, der Betrag des Belegs.`, { code: 'partAmount', params: { total, currency } });
+  const part = amount < total;
+  const rates = part ? swissRates(r) : [];
+  if (rates.length > 1 && !rates.includes(ask.rate as number)) throw new RequestError(400, `Der Beleg zeigt mehrere Steuersätze (${rates.join(' %, ')} %): für den Teil den Satz nennen, unter den er fällt.`, { code: 'partRate', params: { rates } });
   const lock = periodLock(books);
   const late = lock.isClosed(r.date) && lock.closedThrough ? addDays(lock.closedThrough, 1) : undefined;
   const date = late ?? r.date;
   assertOpen(books, [date], 'newTransaction');
+  const exchangeRate = currency === baseCurrency() ? undefined : fx.daily(currency, date) ?? fx.flat(currency);
+  const held = bookedByHand(books, r, [...new Set([amount, total])], currency, exchangeRate);
+  // Only the booking found to book this receipt gives way: a stale or wrong ref deletes nothing.
+  const replaced = ask.replace && held?.named && held.ref === ask.replace ? held.entries : [];
+  if (held && !replaced.length) {
+    const line = held.entries[0];
+    const params = { entry: held.ref, date: line.date, amount: line.amount, currency: line.exchangeCurrency ?? baseCurrency(), replaceable: held.named };
+    const way = held.named ? 'die Buchung ersetzen oder zuerst löschen' : 'ist sie dieselbe Auslage, zuerst in Buchungen löschen';
+    throw new RequestError(409, `Die Buchung ${held.ref} vom ${day(line.date)} über ${params.currency} ${line.amount.toFixed(2)} bucht diesen Beleg wohl schon von Hand. Eine private Zahlung dazu buchte ihn doppelt: ${way}.`, { code: 'bookedByHand', params });
+  }
+  if (ask.replace && !replaced.length) throw new RequestError(400, `${ask.replace} bucht diesen Beleg nicht (kein Betrag des Belegs oder seines Teils, weder sein Tag noch seine Worte): sie bleibt. Ist sie doch dieselbe Auslage, zuerst in Buchungen löschen.`);
+  if (replaced.length) assertOpen(books, replaced.map((e) => e.date), 'deleteEntry');
+  // The ref before the replaced booking goes: the payment never takes the number of the booking it replaces.
   const ref = nextManualRef(books, date.slice(0, 4));
+  books.journalEntries = books.journalEntries.filter((e) => !replaced.includes(e));
   const what = r.description || r.filename;
-  books.transactions.push({ ref, bank: 'manual', source: 'manual', date, amount: Math.abs(r.amount), currency: r.currency || baseCurrency(), direction: 'DBIT', description: late ? `${what} · Beleg vom ${day(r.date)}` : what });
+  const named = ask.part?.trim();
+  const text = part ? `${what} · ${named || 'Geschäftsanteil'} (Teil von ${currency} ${total.toFixed(2)}, Rest privat)` : what;
+  const businessPart = part ? { ...(named && { what: named }), ...(rates.length > 1 && { rate: ask.rate }) } : undefined;
+  books.transactions.push({ ref, bank: 'manual', source: 'manual', date, amount, currency, direction: 'DBIT', description: late ? `${text} · Beleg vom ${day(r.date)}` : text, ...(businessPart && { businessPart }), ...(replaced.length && { replaced }) });
   books.mappings.push({ transactionRef: ref, receiptId });
   const corrects = late ? correctsFor({ source: 'manual' }, [r], lock.isClosed, filing().length) : undefined;
-  return { ref, date, ...(corrects ? { corrects } : {}) };
+  return { ref, date, ...(corrects ? { corrects } : {}), ...(exchangeRate !== undefined && { exchangeRate }), ...(replaced.length && { replaced }) };
+}
+
+/**
+ * A payment made by hand goes with its bookings and its links: without the payment they book
+ * nothing (r7h-23: the undo is one step). The bookings by hand an owner's payment replaced come
+ * back as they were, in the same write.
+ */
+export function dropPayment(books: Books, ref: string): BankTransaction {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  if (tx.source !== 'manual') throw new RequestError(400, 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug.', { code: 'manualOnly' });
+  assertOpen(books, refDates(books, ref), 'deleteTransaction');
+  books.transactions = books.transactions.filter((t) => t.ref !== ref);
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);
+  books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
+  for (const e of tx.replaced ?? []) addEntry(books, e);
+  return tx;
+}
+
+/** The undo of a private payment: it goes, the bookings by hand it replaced come back; returns the private payment again, for the undo of the undo. */
+function deletePayment(books: Books, c: Extract<BookChange, { kind: 'deletePayment' }>): BookChange {
+  const tx = dropPayment(books, c.ref);
+  const part = tx.businessPart && { amount: tx.amount, ...(tx.businessPart.what && { part: tx.businessPart.what }), ...(tx.businessPart.rate !== undefined && { rate: tx.businessPart.rate }) };
+  return { kind: 'privatePayment', receipt: c.receipt, ...part, ...(tx.replaced?.length && { replace: tx.replaced[0].transactionRef }) };
 }
 
 export function unlink(books: Books, receipt: string, payment: string): BookChange | undefined {
@@ -161,7 +263,8 @@ export function unlink(books: Books, receipt: string, payment: string): BookChan
  */
 export function relinked(books: Books, changes: readonly BookChange[]): { payments: string[]; file?: string } {
   const touched = changes.flatMap((c) => (c.kind === 'link' || c.kind === 'unlink' ? [{ receipt: c.receipt, payments: [c.payment] }]
-    : c.kind === 'receiptKind' && c.links?.length ? [{ receipt: c.id, payments: c.links }] : []));
+    : c.kind === 'receiptKind' && c.links?.length ? [{ receipt: c.id, payments: c.links }]
+      : c.kind === 'deletePayment' ? [{ receipt: c.receipt, payments: [c.ref] }] : []));
   const refs = new Set(touched.flatMap((c) => c.payments));
   if (refs.size) unbookPayments(books, refs, 'links');
   const lock = periodLock(books);
@@ -427,6 +530,12 @@ export function applyChange(books: Books, c: BookChange, author: Author = BY_HAN
     case 'newEntry': return { kind: 'deleteEntry', id: addEntry(books, c.entry.id ? c.entry : { ...c.entry, by: byOf(author, undefined, undefined) }).id };
     case 'deleteEntry': return { kind: 'newEntry', entry: deleteEntry(books, c.id) };
     case 'receiptKind': return setReceiptKind(books, c);
+    case 'privatePayment': {
+      const { kind: _, receipt, ...ask } = c;
+      const made = privatePayment(books, receipt, ask, loadFxResolver());
+      return { kind: 'deletePayment', ref: made.ref, receipt };
+    }
+    case 'deletePayment': return deletePayment(books, c);
   }
 }
 
@@ -497,6 +606,7 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
     if (asked.kind === 'link') {
       const r = books.receipts.find((x) => x.id === asked.receipt);
       if (r?.kindBy === 'human' && SET_ASIDE.has(r.kind)) throw new RequestError(400, `${r.description || r.filename} ist als ${r.kind === 'duplicate' ? 'Doppel' : 'kein Beleg'} beiseitegelegt und wird nicht verknüpft.`, { code: 'setAside', params: { receipt: r.description || r.filename } });
+      assertNotPaidPrivately(books, asked.receipt, asked.payment);
     }
     const payment = paymentOf(books, asked);
     if (payment && !payments.has(payment)) payments.set(payment, JSON.stringify(paymentSides(books, payment, ctx.bankAccounts).map((s) => s.booked)));

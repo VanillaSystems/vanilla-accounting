@@ -16,9 +16,14 @@ export function findBankAccount(accounts: readonly LedgerBankAccount[], bank: st
   return accounts.find((a) => a.bank === bank && a.currency === currency);
 }
 
-/** The ledger account a transaction's bank side is booked on: the manifest's first account when the pair is unknown. */
+/**
+ * The ledger account a transaction's bank side is booked on: the manifest's first account when the
+ * pair is unknown. A payment made privately goes on the owner's account in any currency (#87: an
+ * outlay in EUR landed on the first bank account).
+ */
 export function bankAccountFor(tx: Pick<BankTransaction, 'bank' | 'currency'>, accounts: readonly LedgerBankAccount[]): string {
-  return findBankAccount(accounts, tx.bank, tx.currency)?.account ?? accounts[0].account;
+  const owner = tx.bank === 'manual' ? accounts.find((a) => a.bank === 'manual') : undefined;
+  return findBankAccount(accounts, tx.bank, tx.currency)?.account ?? owner?.account ?? accounts[0].account;
 }
 
 /** The owner's private account, number and name: the manifest's `manual` account, else the jurisdiction's for the legal form (a current account, the private account of an Einzelfirma). */

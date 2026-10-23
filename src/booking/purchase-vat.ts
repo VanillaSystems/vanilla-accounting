@@ -112,6 +112,23 @@ function taxedWhole(receipts: readonly Receipt[], rate: number, amount: number, 
   return Math.abs(gross - Math.abs(amount)) <= 0.05;
 }
 
+/**
+ * The Swiss rate an owner's business part of its one receipt is taxed at (#87): the receipt's only
+ * rate when it taxes the whole receipt, or the rate line the person named among several, when the
+ * part fits in that line's gross, in the payment's currency. Undefined when the receipt shows no
+ * Swiss VAT (the zero-code rule decides), holds untaxed items beside its one rate (the part may be
+ * one of them: the model's facts stand), or the part does not fit.
+ */
+function partRate(receipts: readonly Receipt[], part: NonNullable<BankTransaction['businessPart']>, amount: number, currency: string): number | undefined {
+  if (receipts.length !== 1) return undefined;
+  const [r] = receipts;
+  const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent));
+  if (!r.hasSwissVat || !groups.length || (r.currency ?? currency) !== currency) return undefined;
+  const whole = groups.length === 1 && r.amount != null && grossOf(groups[0]) >= Math.abs(r.amount) - 0.05;
+  const line = groups.length === 1 ? (whole ? groups[0] : undefined) : groups.find((g) => g.ratePercent === part.rate);
+  return line && Math.abs(amount) <= grossOf(line) + 0.05 ? line.ratePercent : undefined;
+}
+
 /** An unread receipt as the business's fact reads it: Swiss VAT at the fact's rate on its whole amount (the line's, when the receipt names none). */
 function asRead(r: Receipt, rate: number, amount: number): Receipt {
   const gross = r.amount ?? Math.abs(amount);
@@ -153,6 +170,12 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
     // Only a sales record or a supporting document linked: no purchase document, so no input tax (pv-no-receipt).
     const check = evidenceCheck(e, read, undefined);
     if (check?.kind === 'vatWithoutReceipt') return decide(e, check.code, de().t('rules.say.zeroCode', { code: check.code }));
+    const part = tx.businessPart && model.length === 1 ? partRate(read, tx.businessPart, e.amount, tx.currency) : undefined;
+    if (part !== undefined) {
+      const box = vat().codes.purchaseBoxes;
+      const code = vat().codes.purchaseAt(part, family === 'M' ? box.costOfGoods : box.otherwise);
+      return code ? decide(e, sign + code, de().t('rules.say.purchaseVat.receiptShowsVat', { rate: String(part), code: sign + code })) : e;
+    }
     // A line of its own receipt (#27) is that receipt's; of several lines on all the receipts, none is decided here.
     const own = lineReceipts(e, read);
     if (check?.kind !== 'receiptShowsVat' || (model.length > 1 && own === read) || !taxedWhole(own, check.rate, e.amount, tx.currency)) return e;
