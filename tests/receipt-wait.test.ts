@@ -1,0 +1,154 @@
+/**
+ * A payment that needs a receipt waits for it (issue #29, owner 21.10.: «wait»): the inbox run does
+ * not book it while none is linked, and marks it as waiting; a receipt linked later books it.
+ * Payments that need none (money in, the bank's own fee row, own transfers, an authority whose
+ * notice is filed apart, a payment a person marked) are booked at once. When the return comes near
+ * it becomes the person's, and «Ohne Vorsteuer buchen» books it with the zero code.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { cpSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { classifyStep } from '../src/intake/classify.js';
+import type { IntakeNote } from '../src/intake/pipeline.js';
+import { parseReceiptApply, receiptFree, receiptWait, type WaitContext } from '../src/booking/receipt-wait.js';
+import { receiptDue, waitingForReceipt } from '../src/accounting/receipt-due.js';
+import { ACTIONS } from '../src/workflows/actions.js';
+import { loadKnowledge } from '../src/knowledge/layers.js';
+import type { Books } from '../src/books/store.js';
+import type { BankTransaction, Receipt } from '../src/types/index.js';
+import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { DEMO_ROOT } from './support/workspace.js';
+import './support/jurisdiction.js';
+
+const OUT = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction =>
+  ({ ref, bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Telefonie Muster AG Rechnung 10/2026', ...over });
+
+const CTX: WaitContext = { free: new Set(['estv']), ownIbans: new Set(['CH6580808000000000001']), money: new Set(['1020', '1000']), inputTax: true };
+
+test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business or a firm without input tax book at once', () => {
+  assert.deepEqual(receiptWait(OUT('a'), { linked: false }, CTX), { wait: true });
+  const why = (tx: BankTransaction, facts = {}, ctx = CTX) => { const w = receiptWait(tx, { linked: false, ...facts }, ctx); return w.wait ? 'wait' : w.why; };
+  assert.equal(why(OUT('a'), { linked: true }), 'receipt');
+  assert.equal(why(OUT('a', { noReceiptNeeded: true })), 'marked');
+  assert.equal(why(OUT('a', { amount: 0 })), 'zero');
+  assert.equal(why(OUT('a', { direction: 'CRDT' })), 'incoming');
+  assert.equal(why(OUT('a', { type: 'wise-fee' })), 'separateFee');
+  assert.equal(why(OUT('a', { counterpartyIban: 'ch65 8080 8000 0000 0000 1' })), 'ownTransfer');
+  assert.equal(why(OUT('a'), { ruleAccount: '1000' }), 'ownTransfer', 'a rule that books onto cash is a transfer');
+  assert.equal(why(OUT('a'), { ruleAccount: '6510' }), 'wait', 'a rule that books an expense waits like the model');
+  assert.equal(why(OUT('a'), { ruleAccount: '2451', ruleAsks: true }), 'ruleAsks', 'a rule that asks first asks at once');
+  assert.equal(why(OUT('a'), { business: 'estv' }), 'business');
+  assert.equal(why(OUT('a'), { business: 'telefonie' }), 'wait');
+  assert.equal(why(OUT('a'), {}, { ...CTX, inputTax: false }), 'noInputTax');
+});
+
+test('apply: { receipt: none } on evidence.guide.yaml#rules: the shipped authorities with their own notice carry it, customs does not; a wrong form is refused', () => {
+  const free = receiptFree(loadKnowledge(APP_ROOT, DEMO_ROOT));
+  for (const id of ['estv', 'ausgleichskasse', 'steuerverwaltung']) assert.ok(free.has(id), id);
+  assert.equal(free.has('bazg'), false, 'the import VAT needs its assessment as proof');
+  assert.deepEqual(parseReceiptApply({ receipt: 'none' }), { ok: true });
+  assert.match((parseReceiptApply({ receipt: 'later' }) as { problem: string }).problem, /receipt must be none/);
+  assert.match((parseReceiptApply({ receipt: 'none', inputTax: 'none' }) as { problem: string }).problem, /apply\.inputTax is unknown/);
+});
+
+test('the person is asked two weeks before the return is due; until then the waiting is the app\'s', () => {
+  assert.deepEqual(receiptDue('2026-08-14'), { due: '2026-11-29', askFrom: '2026-11-15' });
+  const books = {
+    transactions: [OUT('W', { date: '2026-08-14', waitsForReceipt: { since: '2026-08-15T06:00:00Z' } }), OUT('L', { date: '2026-08-20', waitsForReceipt: { since: '2026-08-21T06:00:00Z' } }), OUT('N', { date: '2026-08-21' })],
+    mappings: [{ transactionRef: 'L', receiptId: 'r1' }], receipts: [{ id: 'r1' } as Receipt], config: {},
+  };
+  const at = (today: string) => waitingForReceipt(books, () => false, today).map((w) => [w.tx.ref, w.kind]);
+  assert.deepEqual(at('2026-11-14'), [['W', 'waits']], 'a payment with its receipt linked waits no more: the next run books it');
+  assert.deepEqual(at('2026-11-15'), [['W', 'asks']]);
+  assert.deepEqual(waitingForReceipt(books, (ref) => ref === 'W', '2026-11-20'), [], 'booked meanwhile');
+  assert.deepEqual(waitingForReceipt({ ...books, config: { closedThrough: '2026-09-30' } }, () => false, '2026-12-01'), [], 'a filed quarter holds nothing open');
+});
+
+/** The demo company: its rules, its knowledge, the effective method. */
+function company(): Workspace {
+  const dir = mkdtempSync(join(tmpdir(), 'receipt-wait-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  return workspaceAt(dir);
+}
+
+const RECEIPT: Receipt = {
+  id: 'tel-10', filename: '20261005-telefonie-10.pdf', location: 'archived', kind: 'invoice', date: '2026-10-05', amount: 89, currency: 'CHF',
+  extractedText: 'Telefonie Muster AG, Rechnung Oktober 2026, Total CHF 89.00 inkl. 8.1% MWST 6.67', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, gross: 89, vat: 6.67 }],
+} as Receipt;
+
+function booksOf(txs: BankTransaction[]): Books {
+  return { transactions: txs, receipts: [], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
+}
+
+const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1'];
+/** The model's answer: a payment out on 6570 with I81, the one in as a sale, the bank on the other side. */
+const model = async (prompt: string) => {
+  const refs = REFS.filter((ref) => prompt.includes(ref));
+  const line = (ref: string) => (ref === 'IN-1' ? { accountDebit: '', accountCredit: '3200', amount: 89, vatCode: 'V81', description: 'Verkauf' } : { accountDebit: '6570', accountCredit: '', amount: 89, vatCode: 'I81', description: 'Telefon' });
+  return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries: [line(ref)], reason: 'Telefonrechnung' }])));
+};
+
+async function run(ws: Workspace, books: Books, ask: typeof model | undefined = model) {
+  const port = { read: () => structuredClone(books), update: <T>(fn: (b: Books) => T) => fn(books) };
+  return (await classifyStep()({ ws, books: port, ask, progress: () => {}, log: () => {} })).notes;
+}
+
+const entries = (books: Books, ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
+const tx = (books: Books, ref: string) => books.transactions.find((t) => t.ref === ref)!;
+
+test('a payment without its receipt is not booked and waits; the receipt linked later books it with the receipt\'s VAT, and the mark goes', async () => {
+  const ws = company();
+  const books = booksOf([OUT('TEL-10')]);
+  const notes = await run(ws, books);
+  assert.deepEqual(entries(books, 'TEL-10'), [], 'no provisional booking');
+  assert.ok(tx(books, 'TEL-10').waitsForReceipt, 'marked as waiting for its receipt');
+  assert.deepEqual(notes.filter((n): n is Extract<IntakeNote, { code: 'waitingReceipt' }> => n.code === 'waitingReceipt').map((n) => n.count), [1]);
+  assert.equal(notes.some((n) => n.code === 'failed' || n.code === 'noModel'), false, 'waiting is no failure');
+
+  books.receipts.push(RECEIPT);
+  books.mappings.push({ transactionRef: 'TEL-10', receiptId: RECEIPT.id });
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'TEL-10'), [['6570', '1021', 89, 'I81']]);
+  assert.equal(tx(books, 'TEL-10').waitsForReceipt, undefined);
+});
+
+test('without a model a waiting payment still waits for its receipt, not for a booking by hand', async () => {
+  const ws = company();
+  const books = booksOf([OUT('TEL-10')]);
+  const notes = await run(ws, books, undefined);
+  assert.ok(tx(books, 'TEL-10').waitsForReceipt);
+  assert.equal(notes.some((n) => n.code === 'noModel'), false);
+});
+
+test('payments that need no receipt are booked at once: an authority with its own notice, money in, the bank\'s fee row', async () => {
+  const ws = company();
+  const estv = OUT('ESTV-1', { description: 'Eidg. Steuerverwaltung MWST 2026-Q2', amount: 89 });
+  const income = OUT('IN-1', { direction: 'CRDT', description: 'Zahlung Kunde Muster' });
+  const fee = OUT('FEE-1', { type: 'wise-fee', description: 'Gebühr', amount: 89 });
+  const books = booksOf([estv, income, fee]);
+  await run(ws, books);
+  for (const ref of ['ESTV-1', 'IN-1', 'FEE-1']) {
+    assert.ok(entries(books, ref).length > 0, `${ref} booked`);
+    assert.equal(tx(books, ref).waitsForReceipt, undefined, `${ref} does not wait`);
+  }
+});
+
+test('«Ohne Vorsteuer buchen»: a payment marked as needing no receipt is booked at once, without input tax whatever the model wrote', async () => {
+  const ws = company();
+  const books = booksOf([OUT('TEL-10', { waitsForReceipt: { since: '2026-10-06T06:00:00Z' } })]);
+  tx(books, 'TEL-10').noReceiptNeeded = true;
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'TEL-10'), [['6570', '1021', 89, 'I0']]);
+  assert.equal(tx(books, 'TEL-10').waitsForReceipt, undefined);
+});
+
+test('«Buchen» of one payment holds a payment that waits for its receipt, without asking the model', async () => {
+  const ws = company();
+  const books = booksOf([OUT('TEL-10')]);
+  let asked = 0;
+  const out = await ACTIONS['accounting.expenses.classification'].run!({ transaction: tx(books, 'TEL-10'), books }, {}, { ws, ask: async (p, o) => { asked++; return model(p); }, now: () => '2026-10-23T08:00:00Z' });
+  assert.deepEqual(out, { outcome: 'held', output: { why: 'waitsForReceipt' } });
+  assert.equal(asked, 0);
+});

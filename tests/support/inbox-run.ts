@@ -47,7 +47,7 @@ const SCAFFOLD = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:te
 </Stmt></BkToCstmrStmt></Document>`;
 const LINKS_TO_G = { suggestedFilename: '20260801-geruestbau.pdf', date: '2026-08-01', description: 'Gerüstbau, Gerüstmiete', amount: 1120, currency: 'CHF', confidence: 0.95, matchedTransactionRefs: ['REF-G'] };
 
-/** The demo with the model stub, the statement read and booked, then the receipt dropped, linked and the payment booked again with it. */
+/** The demo with the model stub, the statement read (its payment waits for the receipt), then the receipt dropped, linked and the payment booked with it. */
 export async function bookedWithReceipt(env: Record<string, string> = {}) {
   const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_ANSWER: JSON.stringify(LINKS_TO_G), ...env });
   cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
@@ -57,12 +57,12 @@ export async function bookedWithReceipt(env: Record<string, string> = {}) {
   let s = await session.post('/api/drop');
   s = await session.post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(SCAFFOLD));
   await session.rest();
-  assert.deepEqual(await onG(), [[]], 'the statement run booked the payment without a receipt');
+  assert.deepEqual(await onG(), [], 'the statement run leaves the payment waiting for its receipt (issue #29)');
   // An invoice of its own, not a copy of a demo receipt: that would be a possible duplicate.
   const pdf = await textPdf(['Malerbedarf Muster AG', 'Rechnung G-2026-08', 'Datum: 01.08.2026', 'Gerüstmiete August 1036.08', 'Total CHF 1120.00']);
   s = await session.post(`/api/drop/${s.id}/files?name=Geruest_August.pdf`, pdf);
   await session.rest();
   const rc = s.rows.at(-1)!;
-  assert.deepEqual(await onG(), [[rc.id]], 'linked, and booked again with the receipt');
+  assert.deepEqual(await onG(), [[rc.id]], 'linked, and booked with the receipt');
   return { api, session, s, rc, pdf, full, onG };
 }

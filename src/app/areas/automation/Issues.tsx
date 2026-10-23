@@ -15,7 +15,10 @@ import { saveEntry } from '../journal/actions.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { thresholdWatch, thresholdYears } from '../vat/model.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
-import { localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
+import { filingKeyOf, localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
+import type { WaitingPayment } from '../../../accounting/receipt-due.js';
+import { payText, signed } from '../bank/model.js';
+import { bookWithoutInputTax } from '../bank/actions.js';
 import { periodName } from '../../lib/period-label.js';
 import { periodIssues, type PeriodIssue } from './period-issues.js';
 import type { Location } from '../../shell/route.js';
@@ -120,6 +123,31 @@ export function ThresholdTasks({ nav, passed }: { nav: Nav; passed: ReturnType<t
           <p>{t('vat.thresholdPassed', { threshold: money(w.threshold), next: String(Number(w.year) + 1) })}</p>
           <span className="wfactions">
             <button type="button" className="btn ghost" onClick={() => nav.go({ route: { area: 'vat' }, query: { period: parsePeriod(w.year, localToday()) ?? undefined } })}>{t('automation.thresholdOpen')}</button>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The payments that waited for their receipt until their return came near (issue #29): now the
+ * person's, each with its ways out. The receipt linked books it with its VAT; «Ohne Vorsteuer
+ * buchen» books it at once with the zero code. An Eigenbeleg (#8) is not built yet.
+ */
+export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly WaitingPayment[]; nav: Nav; canEdit: boolean }) {
+  if (!items.length) return null;
+  const period = (date: string) => { const p = parsePeriod(filingKeyOf(date, filing().length), localToday()); return p ? periodName(p) : date; };
+  return (
+    <div className="wftasks" data-testid="receipt-due">
+      {items.map(({ tx, due }) => (
+        <div key={tx.ref} className="wftask">
+          <b>{t('receiptDue.title', { name: payText(tx).name, amount: `${tx.currency} ${fmt(signed(tx))}` })}</b>
+          <span className="m">{formatDate(tx.date)} · {t('receiptDue.due', { period: period(tx.date), date: formatDate(due) })}</span>
+          <p>{t('receiptDue.lead')}</p>
+          <span className="wfactions">
+            <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('receiptDue.find')}</button>
+            {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
           </span>
         </div>
       ))}

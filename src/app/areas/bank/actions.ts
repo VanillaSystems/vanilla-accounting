@@ -4,6 +4,8 @@
  * POST /api/statements, which reads them into the books as `npm run extract` would.
  */
 import { startIntake } from '../../automation/intake.js';
+import { automationCommand } from '../../automation/store.js';
+import { commandRefusalText } from '../../automation/refusal.js';
 import type { BankTransaction, StatementImport } from '../../../types/index.js';
 import type { OpeningOffer } from '../../../accounting/opening-balance.js';
 import { fmt } from '../../lib/utils.js';
@@ -25,6 +27,22 @@ export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, u
   }
   nav.refresh();
   if (!undoing) nav.toast(t(on ? 'bank.noReceiptSet' : 'bank.noReceiptCleared'), () => setNoReceipt(nav, tx, !on, true));
+}
+
+/**
+ * A payment that waited for its receipt, booked without one in one click (issue #29): marked as
+ * needing none, which gives it the zero input-tax code, and handed to «Buchen» at once. A receipt
+ * linked later books it again with its VAT, while the period is open.
+ */
+export async function bookWithoutInputTax(nav: Nav, tx: BankTransaction): Promise<void> {
+  try {
+    await api.patchTransaction(tx.ref, { noReceiptNeeded: true });
+    const r = await automationCommand({ kind: 'start', workflow: 'booking', item: { kind: 'transaction', id: tx.ref } });
+    nav.toast(r.ok ? t('receiptDue.booking') : commandRefusalText(r));
+  } catch (e) {
+    nav.toast(errorText(e));
+  }
+  nav.refresh();
 }
 
 /** The payment's note; an empty one removes it. */

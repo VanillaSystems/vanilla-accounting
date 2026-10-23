@@ -36,6 +36,8 @@ export type IntakeNote =
   | { code: 'payoutsHeld'; payouts: HeldPayout[] }
   /** Customer payments without an invoice booked without VAT: each a question to the owner (src/intake/sale-questions.ts). */
   | { code: 'saleAsked'; count: number }
+  /** Payments that need a receipt and have none yet (src/booking/receipt-wait.ts): not booked, booked once it is linked. */
+  | { code: 'waitingReceipt'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -205,6 +207,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
       case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;
       case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
+      case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;
       case 'payoutsHeld': return `? ${n.payouts.length} payout(s) wait for the person, their orders do not book them:\n${n.payouts.map((p) => { const w = holdWords(p.hold); return `  ${p.date} ${p.currency} ${p.amount.toFixed(2)}: ${wordsIn('en').t(w.key, w.vars)}`; }).join('\n')}`;
       case 'error': return `⛔ ${n.detail}`;
     }

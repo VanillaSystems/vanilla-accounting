@@ -264,12 +264,12 @@ test('«Rückgängig» takes a file back out: a receipt the run read leaves the 
 });
 
 
-test('«Rückgängig» on a receipt books its payment again as without it; the same file dropped again is taken, not «schon da»', async () => {
+test('«Rückgängig» on a receipt takes its payment\'s booking away: it waits for its receipt again; the same file dropped again is taken, not «schon da»', async () => {
   const { api, session, s: s0, rc, pdf, onG } = await bookedWithReceipt();
   try {
     let s = await session.post(`/api/drop/${s0.id}/rows/${rc.key}`, { kind: 'undo' });
     await session.rest();
-    assert.deepEqual(await onG(), [[]], 'the payment has its booking again, without the receipt');
+    assert.deepEqual(await onG(), [], 'no booking without the receipt: the payment waits for it again');
     s = await session.post(`/api/drop/${s.id}/files?name=Geruest_August.pdf`, pdf);
     assert.equal(s.rows.at(-1)!.state, 'taken', 'taken back, so it is new again');
     await session.rest();
@@ -280,14 +280,14 @@ test('«Rückgängig» on a receipt books its payment again as without it; the s
   }
 });
 
-test('deleting a receipt books its payment again without it; the trash gives it back, booked with it again', async () => {
+test('deleting a receipt takes its payment\'s booking away, the payment waits for a receipt again; the trash gives it back, booked with it again', async () => {
   const { api, session, rc, full, onG } = await bookedWithReceipt();
   try {
     const del = await api.send('DELETE', `/api/receipts/${rc.id}`);
     assert.equal(del.status, 200);
     assert.equal((await full()).receipts.some((r) => r.id === rc.id), false);
     await session.rest();
-    assert.deepEqual(await onG(), [[]], 'no input tax on a receipt that is gone');
+    assert.deepEqual(await onG(), [], 'no booking, and no input tax, on a receipt that is gone');
     const trash = join(api.root, 'data/trash', rc.id);
     assert.deepEqual(readdirSync(join(trash, del.json.deletion as string)).sort(), ['20260801-geruestbau.pdf', 'trashed.json'], 'the file waits in the trash');
 
@@ -306,7 +306,7 @@ test('deleting a receipt books its payment again without it; the trash gives it 
   }
 });
 
-test('«Rückgängig» of a delete while the run that books the payment without the receipt still works: the payment ends booked with it', async () => {
+test('«Rückgängig» of a delete: the run of the delete asks no model and books nothing, the payment waits for its receipt; the restore books it with it', async () => {
   const gate = join(tmpdir(), `restore-gate-${process.pid}-${Date.now()}`);
   writeFileSync(gate, '');
   const { api, session, rc, onG } = await bookedWithReceipt({ CLAUDE_STUB_GATE: gate });
@@ -314,13 +314,14 @@ test('«Rückgängig» of a delete while the run that books the payment without 
     rmSync(gate);
     rmSync(`${gate}.started`, { force: true });
     assert.equal((await api.send('DELETE', `/api/receipts/${rc.id}`)).status, 200);
-    for (let i = 0; i < 200 && !existsSync(`${gate}.started`); i++) await new Promise((r) => setTimeout(r, 25));
-    assert.ok(existsSync(`${gate}.started`), 'the run asks the model to book the payment without the receipt');
+    await session.rest();
+    assert.equal(existsSync(`${gate}.started`), false, 'no model call for a payment without its receipt');
+    assert.deepEqual(await onG(), []);
+    writeFileSync(gate, '');
     const back = await api.send('POST', `/api/receipts/${rc.id}/restore`);
     assert.equal(back.status, 200, back.json.error as string);
-    writeFileSync(gate, '');
     await session.rest();
-    assert.deepEqual(await onG(), [[rc.id]], 'booked with the receipt, not left as the run of the delete booked it');
+    assert.deepEqual(await onG(), [[rc.id]], 'booked with the receipt');
   } finally {
     writeFileSync(gate, '');
     await session.rest().catch(() => {});

@@ -22,3 +22,14 @@ facts:
   - id: instalments
     fact: cantonal and communal taxes are billed provisionally in instalments during the year; due dates, interest and discounts are set by each canton's own tax law
     source: StHG Art. 1 Abs. 3
+
+steps:
+  evidence.guide.yaml#rules:
+    rules:
+      - id: ev-steuerverwaltung-notice
+        when: a payment to or from the tax office
+        then: "booked at once, without waiting for a receipt: the payment settles a tax bill or instalment, filed apart"
+        apply: { receipt: none }
+        why: it carries no input tax, so no receipt changes its booking (issue #29)
+        source: decision 2026-10-21, owner
+    precedents: []

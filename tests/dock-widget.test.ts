@@ -13,7 +13,7 @@ import type { AutomationView, RunSummary, Task, WorkflowDecl } from '../src/work
 const figures = (over: Partial<HomeFigures> = {}): HomeFigures => ({
   period: { key: '2026-Q4', from: '2026-10-01', to: '2026-12-31' },
   collected: 46, read: 44, withVat: 30, payable: 40, matched: 39, booked: 38,
-  authors: { app: 30, asked: 2, changed: 1, person: 5, unknown: 0 }, filing: { kind: 'running', ends: '2026-12-31' }, ...over,
+  authors: { app: 30, asked: 2, changed: 1, person: 5, unknown: 0 }, waitingReceipt: 0, filing: { kind: 'running', ends: '2026-12-31' }, ...over,
 });
 const wf = (over: Partial<WorkflowDecl> = {}): WorkflowDecl => ({
   id: RUN_NOW, label: { en: 'Collect' }, desc: { en: '' }, phase: 'collect', cadence: { en: '' }, for: 'company',

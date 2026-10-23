@@ -10,6 +10,9 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 
+/** Whether `tx` is itself a fee the bank debited as a movement of its own, the fee of another payment. */
+export const isSeparateFee = (tx: Pick<BankTransaction, 'type'>): boolean => tx.type === 'wise-fee';
+
 /**
  * The fee the bank debited apart from `tx`, as its own movement. The one place that knows how the
  * books link the two (today `type: 'wise-fee'` and the id `FEE-<id>`, as the bank statement reader writes it):

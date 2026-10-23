@@ -4,6 +4,9 @@
  * the outputs the step `emits`.
  */
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
+import { receiptFree, receiptWaitOf } from '../booking/receipt-wait.js';
+import { loadKnowledge } from '../knowledge/layers.js';
+import { APP_ROOT } from '../workspace/workspace.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { bookedState } from '../accounting/payment-entries.js';
 import { loadBooks, periodLock, type Books } from '../books/store.js';
@@ -151,7 +154,11 @@ export const ACTIONS: Record<string, Action> = {
       const t = tx(input);
       // A payment a person booked in part (one line of a split undone, r9k-2) is hers to finish: no rule or model books over her lines.
       if (bookedState(scratch, t.ref, ws.bankAccounts) === 'partly') return { outcome: 'undecided', output: { why: 'partlyBooked' } };
-      const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+      const fx = loadFxResolver();
+      const context = loadClassifyContext(ws);
+      // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).
+      if (receiptWaitOf(scratch, t, context, receiptFree(loadKnowledge(APP_ROOT, ws.paths.root)), fx).wait) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
+      const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries: scratch.journalEntries.slice(before) } };
       // A rule holds the payment for the person: its one question (workflows/ask) is the task, not «Bewegung von Hand buchen» (r7h-27).
       if (asked.length) {
