@@ -93,6 +93,23 @@ test('a rule booking a foreign ad platform without Bezugsteuer warns, names the 
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), rule('6570', 'I0'), '«Trotzdem behalten»');
 });
 
+test('the supply and supplier country the model read, kept on its entries, warn on a payment never booked with Bezugsteuer (#80)', async () => {
+  const ws = await company();
+  payments(ws, 2, foreignNoVat, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' }, supply: 'service', supplierCountry: 'IE' }));
+  draft(ws, rule('6570', 'I0'));
+  const [o] = draftRules(ws, GUIDE)!.preview[0].overrides ?? [];
+  assert.deepEqual([o?.kind, o?.count, o?.payments[0].national[0].vat], ['withoutAcquisition', 2, 'B81-1']);
+});
+
+test('the model\'s reading of goods from abroad, or none kept at all, gives no Bezugsteuer warning (#80)', async () => {
+  for (const kept of [{ supply: 'goods', supplierCountry: 'IE' }, {}] as const) {
+    const ws = await company();
+    payments(ws, 1, foreignNoVat, () => ({ vatCode: 'I0', by: { kind: 'model', model: 'm' }, ...kept }));
+    draft(ws, rule('6570', 'I0'));
+    assert.equal(draftRules(ws, GUIDE)!.preview[0].overrides, undefined, JSON.stringify(kept));
+  }
+});
+
 test('a person who changed the app\'s Bezugsteuer to I0 is warned too: the code was B81-1 before', async () => {
   const ws = await company();
   payments(ws, 2, foreignNoVat, () => ({ vatCode: 'I0', origin: 'manual', by: { kind: 'person', at: '2026-10-20T10:00:00Z', was: { vatCode: 'B81-1' } } }));

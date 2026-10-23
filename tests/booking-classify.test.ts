@@ -14,12 +14,13 @@ import { chartNames } from '../src/booking/rule-book.js';
 import { bankAccountFor } from '../src/accounting/bank-accounts.js';
 import { workspaceAt, yearsOf, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import { ClosedPeriodError, periodLock, saveBooks, type Books } from '../src/books/store.js';
+import { ClosedPeriodError, moduleActor, PERSON, periodLock, saveBooks, update, type Books } from '../src/books/store.js';
+import { checkSeals, writeSeal } from '../src/books/seal.js';
 import { buildBatchClassifyPrompt, type ClassifyEntry } from '../src/llm/prompts.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { startApi } from './support/api-server.js';
-import { booksOnDisk, tempWorkspace } from './support/workspace.js';
+import { booksOnDisk, tempWorkspace, writeIndex } from './support/workspace.js';
 import { loadBooks } from '../src/books/store.js';
 import './support/jurisdiction.js';
 import { loadJurisdiction } from '../src/core/modules/load.js';
@@ -256,6 +257,33 @@ test('a Wise card fee is booked once, on its FEE-CARD payment, never again insid
   assert.deepEqual(on('6940'), [['FEE-CARD-7200000001', 0.02]], 'the fee once, on its own payment');
   assert.deepEqual(on('6570'), [['CARD-7200000001', 9.5]], 'the charge whole on the expense');
   assert.match(b.journalEntries.find((e) => e.transactionRef === 'CARD-7200000001')?.reason ?? '', /separat \(FEE-CARD-7200000001\)/, 'the booking says why the fee line went');
+});
+
+test('the model\'s supply and supplier country are kept on the entries it books; a filed entry and its seal stay as they were (#80)', async () => {
+  const ws = tempWorkspace('supplier-facts-');
+  writeIndex(ws, JSON.parse(readFileSync(join(REPO, 'tests/fixtures/period-lock-index.json'), 'utf8')));
+  writeSeal(ws, loadBooks(ws), '2026-Q2', '2026-07-11');
+  const b = loadBooks(ws);
+  const filed = JSON.stringify(b.journalEntries.find((e) => e.id === 'jc'));
+  update(b, PERSON, (x) => {
+    for (const ref of ['N1', 'N2']) {
+      const id = `r-${ref}`;
+      x.transactions.push(tx({ ref, bank: 'Raiffeisen', date: '2026-08-12', amount: 30 }));
+      x.receipts.push({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: 'Invoice, no VAT', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-08-12T00:00:00Z', location: 'archived', date: '2026-08-12', hasSwissVat: false, vatSummary: [] });
+      x.mappings.push({ transactionRef: ref, receiptId: id });
+    }
+  });
+  const { ask } = stubAsk((ref) => [{ ...expense(30), ...(ref === 'N1' ? { supply: 'service', supplierCountry: 'ie' } : { supply: 'software' as never, supplierCountry: 'Ireland' }) }]);
+  await update(b, moduleActor('classify'), () => classifyTransactions(b, b.transactions.filter((t) => t.ref.startsWith('N')), { ask, fx, context }));
+  saveBooks(ws, b);
+
+  const again = loadBooks(ws);
+  const facts = (ref: string) => again.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.supply, e.supplierCountry, e.vatCode]);
+  assert.deepEqual(facts('N1'), [['service', 'IE', 'B81-1']], 'kept as rule 7h asks, and Bezugsteuer decided from them');
+  assert.deepEqual(facts('N2'), [[undefined, undefined, 'I0']], 'a supply or a country rule 7h does not know is not kept');
+  assert.equal(JSON.stringify(again.journalEntries.find((e) => e.id === 'jc')), filed);
+  assert.equal(again.journalEntries.find((e) => e.id === 'jo')!.supply, undefined, 'an entry booked before stays without');
+  assert.deepEqual(checkSeals(ws, again).checks.map((c) => `${c.quarter} ${c.status}`), ['2026-Q2 intact']);
 });
 
 test('a Wise card fee read from camt.053 is linked to its charge by the bank ids, not the refs (#69)', async () => {
