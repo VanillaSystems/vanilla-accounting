@@ -135,3 +135,4 @@ html.phone .counts .origins { padding-left: 0; border-left: 0; flex-basis: 100%;
 .jnew .jcorr .seg button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent); }
 .jnew .jcorr p { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
 .jnew .notice.warn { margin: 4px 0 0; font-size: 12.5px; }
+.jlearn .ruledraft { margin: 10px 0 4px; }

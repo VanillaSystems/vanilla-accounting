@@ -39,7 +39,7 @@ export interface ShareOffer {
  * showed VAT that time) names its family's standard rate, since the rule falls back to the zero
  * code for any payment whose receipt shows none (ruleVatCode); any other code as booked.
  */
-function ruleCode(code: string | undefined): string | null {
+export function ruleCode(code: string | undefined): string | null {
   if (!code) return null;
   const found = lookupVatCode(code);
   if (!found || found.negative) return code;

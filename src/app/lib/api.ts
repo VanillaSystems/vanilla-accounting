@@ -41,6 +41,7 @@ import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
+import type { LearnOffer, LearnProposal } from '../../saving/learn-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
 import type { NoteRuleCommand } from '../../saving/note-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
@@ -347,6 +348,9 @@ export const api = {
   /** «Regel anpassen?» after a person corrected a rule's booking (r9k-5): the rule's change the correction teaches, and its draft for the card. */
   correctionOffer: (ref: string) => request<{ offer: CorrectionOffer | null }>('GET', `/api/rules/correction?ref=${encodeURIComponent(ref)}`),
   draftCorrection: (ref: string) => request<{ path: string }>('POST', '/api/rules/correction', { ref }),
+  /** «Ins Wissen übernehmen?» under a corrected booking no rule made, and the AI's checked draft for it. */
+  learnOffer: (ref: string) => request<{ offer: LearnOffer | null }>('GET', `/api/rules/learn?ref=${encodeURIComponent(ref)}`),
+  proposeLearned: (ref: string) => request<LearnProposal>('POST', '/api/rules/learn', { ref }),
   handStart: (payment: string) => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}`),
   draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
   /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */

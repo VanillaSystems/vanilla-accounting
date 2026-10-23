@@ -47,18 +47,21 @@ const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+
 /** The payer as a rule keeps it: an IBAN without spaces, else the name's key (src/knowledge/payer.ts). */
 const payerOf = (s: string) => ibanKey(s) ?? textKey({ description: '', counterparty: s }) ?? s.trim();
 
+/** Where a drafted rule came from (`source:`, AGENTS.md): the form of Firma › Regeln, or a person's correction (issue #40). */
+export type HandSource = 'hand' | 'correction';
+
 /** The rule as written in its file, without its id. */
-function written(h: HandRule, today: string): { when?: Record<string, unknown>; then: Record<string, unknown>; source: string } {
+function written(h: HandRule, today: string, source: HandSource = 'hand'): { when?: Record<string, unknown>; then: Record<string, unknown>; source: string } {
   const when: Record<string, unknown> = {
     ...(h.match.kind === 'payer' ? { payer: payerOf(h.match.payer) } : h.match.kind === 'text' ? { text: h.match.text.trim() } : {}),
     ...(h.direction ? { direction: h.direction } : {}),
     ...(h.amount && (h.amount.over !== undefined || h.amount.under !== undefined) ? { amount: h.amount } : {}),
   };
-  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none' }, source: `hand ${today}` };
+  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none' }, source: `${source} ${today}` };
 }
 
 /** The text of a rules file with the hand-made rule added at the end of its rules, under an id no rule of the file has. */
-export function withHandRule(text: string, h: HandRule, today: string): string {
+export function withHandRule(text: string, h: HandRule, today: string, source: HandSource = 'hand'): string {
   const business = h.match.kind === 'business' ? h.match.id : undefined;
   const doc = parseDocument(text || (business ? `id: ${business}\n` : 'process: booking\n'));
   const section = business ? RULE_STEP : RULE_SECTION;
@@ -69,7 +72,7 @@ export function withHandRule(text: string, h: HandRule, today: string): string {
   const base = `${slug(h.match.kind === 'business' ? h.match.id : h.match.kind === 'payer' ? h.match.payer : h.match.text)}-${h.account}`;
   let id = base;
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-  seq.add(doc.createNode({ id, ...written(h, today) }, { flow: false }));
+  seq.add(doc.createNode({ id, ...written(h, today, source) }, { flow: false }));
   const added = seq.items.at(-1) as YAMLMap;
   for (const k of ['when', 'then']) { const v = added.get(k, true); if (v instanceof YAMLMap) v.flow = true; }
   return doc.toString({ lineWidth: 0 });
@@ -82,18 +85,18 @@ export type HandDraft = { ok: true; path: string } | { ok: false; refusal: RuleR
  * file (into the draft waiting for it, if one does) for the card. A rule the app cannot carry
  * out is refused here with its reason, and nothing is written.
  */
-export function draftHandRule(ws: Workspace, h: HandRule, today = new Date().toISOString().slice(0, 10)): HandDraft {
+export function draftHandRule(ws: Workspace, h: HandRule, today = new Date().toISOString().slice(0, 10), source: HandSource = 'hand'): HandDraft {
   const id = h.match.kind === 'business' ? h.match.id : undefined;
   const business = id ? loadKnowledge(APP_ROOT, ws.paths.root).counterparties.find((c) => c.id === id) : undefined;
   if (id !== undefined && !business) return { ok: false, refusal: { code: 'counterparty', params: { counterparty: id } } };
-  const parsed = parseRule({ id: 'hand', ...written(h, today) }, ruleFactsOf(ws), !!business);
+  const parsed = parseRule({ id: 'hand', ...written(h, today, source) }, ruleFactsOf(ws), !!business);
   if (!parsed.ok) return { ok: false, refusal: parsed.refusal };
   const path = business ? homeOf('workspace', business.role, business.id) : GUIDE;
   const draft = join(draftDir(ws), path);
   const real = join(ws.paths.root, path);
   const text = existsSync(draft) ? readFileSync(draft, 'utf8') : existsSync(real) ? readFileSync(real, 'utf8') : '';
   mkdirSync(dirname(draft), { recursive: true });
-  writeFileSync(draft, withHandRule(text, h, today));
+  writeFileSync(draft, withHandRule(text, h, today, source));
   return { ok: true, path };
 }
 
