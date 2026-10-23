@@ -878,7 +878,7 @@ classDiagram
 | Books records (`Index`, `JournalEntry`, `BankTransaction`, `Receipt`, `Mapping`, config) | src/types/index.ts |
 | Books on disk, the write door, period lock | src/books/store.ts, src/books/years.ts |
 | Seals | src/books/seal.ts |
-| The referential integrity check: keys that name no record (`npm run doctor`) | src/books/integrity.ts |
+| The referential integrity check: keys that name no record (`npm run doctor`) | src/accounting/integrity.ts |
 | Workspace layout and paths | src/workspace/workspace.ts (`LAYOUT`) |
 | Manifest | src/workspace/manifest.ts, src/workspace/vat-setup.ts |
 | Schema versions | src/workspace/schema.ts |

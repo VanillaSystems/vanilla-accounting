@@ -20,7 +20,7 @@ import { secretKey } from '../platform/sources/model.js';
 import { imapBackend } from '../platform/sources/mail-channel.js';
 import { secrets } from '../secrets/secrets.js';
 import { useKeychain } from '../secrets/keychain-store.js';
-import { byKind, danglingRefsOf } from '../books/integrity.js';
+import { byKind, danglingRefsOf } from '../accounting/integrity.js';
 import { knowledgeGaps } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { fail, ok, warn, workspaceChecks, type Result } from '../workspace/checks.js';

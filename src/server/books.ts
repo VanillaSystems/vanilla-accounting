@@ -8,7 +8,7 @@ import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, updat
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
-import { byKind, danglingRefsOf } from '../books/integrity.js';
+import { byKind, danglingRefsOf } from '../accounting/integrity.js';
 
 /**
  * Live: a route that changes the manifest reopens it, the desktop app opens other books, and every

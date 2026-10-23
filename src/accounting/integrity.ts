@@ -9,13 +9,13 @@ import type { LegalForm } from '../workspace/setup.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import type { InvoiceBook } from '../invoices/model.js';
 import type { Question } from '../questions/model.js';
-import type { EstvRates } from '../accounting/fx-conversion.js';
-import { closingLedger, foreignAccounts, openingChanges, openingOf, yearEndAccounts } from '../accounting/year-close.js';
+import type { EstvRates } from './fx-conversion.js';
+import { closingLedger, foreignAccounts, openingChanges, openingOf, yearEndAccounts } from './year-close.js';
 import { accountOf } from '../workspace/money-accounts.js';
 import { loadInvoices } from '../invoices/store.js';
 import { readQuestions } from '../questions/store.js';
-import { chartOf } from './year-close.js';
-import type { Books } from './store.js';
+import { chartOf } from '../books/year-close.js';
+import type { Books } from '../books/store.js';
 
 export interface IntegrityInput {
   books: Books;
@@ -159,7 +159,7 @@ export function danglingRefs(input: IntegrityInput): Dangling[] {
   return DANGLING_KINDS.flatMap((kind) => CHECKS[kind].find(known).map((f) => ({ kind, ...f })));
 }
 
-/** The CHF opening ignores the rates: they only explain a foreign account not revalued. */
+/** The opening in the books' currency ignores the rates: they only explain a foreign account not revalued. */
 const NO_RATES: EstvRates = { on: () => undefined, yearEnd: () => undefined };
 
 /**

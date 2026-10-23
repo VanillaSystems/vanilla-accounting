@@ -8,7 +8,7 @@ import { appendFileSync, cpSync, mkdtempSync, readFileSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, writeBooks } from '../src/books/store.js';
-import { danglingRefsOf, DANGLING_KINDS, type Dangling } from '../src/books/integrity.js';
+import { danglingRefsOf, DANGLING_KINDS, type Dangling } from '../src/accounting/integrity.js';
 import { openingFor } from '../src/books/year-close.js';
 import { APP_FOLDER, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
 import type { InvoiceBook } from '../src/invoices/model.js';
