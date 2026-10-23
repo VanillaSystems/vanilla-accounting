@@ -170,12 +170,12 @@ answers:
   books.retention:
     answer: >
       Books, receipts, annual reports and returns: 10 years after the end of the fiscal year.
-      Records for the input-tax correction of real estate: 26 years. The export preset «Alles für
+      Records for the input-tax correction of real estate: 20 years. The export preset «Alles für
       10 Jahre» bundles the books, the originals and checksums; the app has no retention period of
       its own.
     law: [OR Art. 958f, MWSTG Art. 70 Abs. 2, MWSTG Art. 70 Abs. 3]
     where: [src/audit, docs/audit-export.md]
-    unverified: The 26 years of Art. 70 Abs. 3 were not checked against the current text.
+    verified: 2026-10-23, Art. 70 Abs. 3 MWSTG on fedlex (as of 2025-03-31) says 20 years, not 26 (issue #134).
 
   books.integrity:
     answer: >
@@ -301,14 +301,17 @@ answers:
   docs.invoice-fields:
     answer: >
       Supplier's name, place and VAT number; recipient's name and place; date or period of the
-      supply; kind, object and scope of the supply; the consideration; the rate and the tax. Up to
-      CHF 400 the recipient may be left out. The app checks them before issue and adds an account
-      for the QR-bill.
-    law: [MWSTG Art. 26 Abs. 2, MWSTV Art. 57]
+      supply; kind, object and scope of the supply; the consideration; the rate and the tax. The
+      recipient may be left out only on a receipt issued by an automated cash register
+      (Kassenzettel, also a register's coupon) of at most CHF 400 including the tax. The app
+      issues invoices with payment terms and a QR-bill, not cash-register receipts, so every
+      invoice names its customer: that is the law's rule for an invoice, not a stricter one
+      (issue #134). The app checks the fields before issue and adds an account for the QR-bill.
+    law: [MWSTG Art. 26 Abs. 2, MWSTG Art. 26 Abs. 3, MWSTV Art. 57, ESTV MWST-Info 16 Ziff. 2.3]
     where: [src/invoices/rules.ts]
-    unverified: >
-      MWSTV Art. 57 as the source of the CHF 400 rule; the app asks a customer on every invoice,
-      which may be stricter than the law for small cash sales.
+    verified: >
+      2026-10-23 against fedlex (MWSTG as of 2025-03-31, MWSTV as of
+      2025-01-01) and ESTV MWST-Info 16 Ziff. 2.3 and MWST-Info 09 Ziff. 1.6 (issue #134).
 
   docs.e-invoicing:
     answer: >
@@ -319,13 +322,23 @@ answers:
 
   docs.input-tax-proof:
     answer: >
-      The law weighs evidence freely, but the firm must prove the deduction. The app books a VAT
-      rate only when the linked receipt shows Swiss MWST; without one the payment waits, and two
-      weeks before the return is due it offers «Ohne Vorsteuer buchen». A person can still book a
-      rate by hand.
-    law: [MWSTG Art. 28, MWSTG Art. 81 Abs. 3]
-    where: [processes/evidence.guide.yaml, processes/booking.guide.yaml, src/booking/receipt-wait.ts, src/accounting/receipt-due.ts]
-    unverified: Whether «no receipt, no input tax» is stricter than Art. 81 Abs. 3 requires has not been confirmed by a Treuhänder.
+      The law weighs evidence freely and forbids making the proof depend on one kind of evidence
+      alone, but the firm must prove the deduction and that it paid the tax. The ESTV accepts one
+      unambiguous document (an invoice with the fields of Art. 26 Abs. 2) or, without one, several
+      documents that together prove it, such as a contract, a receipt or a payment confirmation;
+      a credit-card debit note is no invoice. So «no receipt, no input tax» holds for the app's
+      own runs, which book a rate only when a linked receipt shows Swiss MWST; without one the
+      payment waits. A person may deduct on other proof: she books the payment by hand with the
+      rate and names the documents that show the VAT, which the payment keeps
+      (BankTransaction.inputTaxProof) and the booking shows. Two weeks before the return is due
+      the waiting payment becomes a task with «Beleg zuordnen», «Mit anderem Nachweis» and «Ohne
+      Vorsteuer buchen» (issue #134).
+    law: [MWSTG Art. 28 Abs. 1 lit. a, MWSTG Art. 28 Abs. 3, MWSTG Art. 81 Abs. 3, MWSTV Art. 59, ESTV MWST-Info 09 Ziff. 1.6, ESTV MWST-Info 16 Ziff. 2.1]
+    where: [processes/evidence.guide.yaml, processes/booking.guide.yaml, src/booking/receipt-wait.ts, src/accounting/receipt-due.ts, src/server/edits.ts, src/accounting/evidence-check.ts]
+    verified: >
+      2026-10-23 against fedlex (MWSTG as of 2025-03-31, MWSTV as of
+      2025-01-01) and ESTV MWST-Info 09 Ziff. 1.6 (published 31.10.2025) and MWST-Info 16 Ziff.
+      2.1 (issue #134).
 
   docs.self-made:
     answer: >

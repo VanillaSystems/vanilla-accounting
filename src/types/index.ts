@@ -431,7 +431,18 @@ export interface BankTransaction {
    * run without a model, and the next run with one judges the payment again (issue #110).
    */
   waitsForReceipt?: { since: string; unread?: true; decided?: true };
+  /**
+   * The proof of the input tax other than a receipt, as a person named it when she booked the
+   * payment by hand with input tax (issue #134): the documents that together show the supplier
+   * charged Swiss VAT, such as a contract and the payment confirmation (MWSTG Art. 81 Abs. 3, ESTV
+   * MWST-Info 09 Ziff. 1.6). Only a person's booking sets it; no run claims input tax without a
+   * receipt. The booking is then not flagged as a deduction without evidence (evidence-check.ts).
+   */
+  inputTaxProof?: InputTaxProof;
 }
+
+/** A person's words for the other proof of a payment's input tax, and when she named it. */
+export interface InputTaxProof { text: string; at: string }
 
 /** A receipt's VAT facts as a person sets them: whether it shows Swiss VAT, at which rates, and its VAT number. */
 export interface VatFacts { hasSwissVat: boolean; vatSummary: VatRateGroup[]; vatId?: string }
@@ -445,5 +456,5 @@ export interface VatFacts { hasSwissVat: boolean; vatSummary: VatRateGroup[]; va
 export type ReceiptPatch = Partial<Pick<Receipt, 'filename' | 'currency' | 'description' | 'remarks'>>
   & { date?: string | null; amount?: number | null; kind?: ReceiptKind | null; vat?: VatFacts | null; vatBy?: null };
 
-/** The body of PATCH /api/transactions/:ref. An empty remark or noReceiptNeeded false clears the field. */
-export type TransactionPatch = Partial<Pick<BankTransaction, 'description' | 'remarks' | 'noReceiptNeeded'>>;
+/** The body of PATCH /api/transactions/:ref. An empty remark, noReceiptNeeded false or an empty inputTaxProof clears the field. */
+export type TransactionPatch = Partial<Pick<BankTransaction, 'description' | 'remarks' | 'noReceiptNeeded'>> & { inputTaxProof?: string };

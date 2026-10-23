@@ -474,9 +474,10 @@ export function bookedAgain(books: Books, ref: string): void {
  * A payment booked by hand (src/accounting/manual-booking.ts): its lines as a person's entries,
  * each dated on the payment (cash basis), at the official rate of that day when it is foreign, with
  * the receipts linked now, so a later run sees nothing new and keeps them. Refused when the
- * payment is booked already or the lines do not add up to what the bank paid.
+ * payment is booked already or the lines do not add up to what the bank paid. `proof`: the other
+ * proof of its input tax the person names instead of a receipt (BankTransaction.inputTaxProof, #134).
  */
-export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver): JournalEntry[] {
+export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver, proof?: string): JournalEntry[] {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
@@ -506,6 +507,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), by: { kind: 'person', at },
   }));
   books.journalEntries.push(...entries);
+  if (proof !== undefined) tx.inputTaxProof = { text: proof, at };
   bookedAgain(books, ref);
   return entries;
 }

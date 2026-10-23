@@ -192,7 +192,7 @@ export interface Scan {
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
   description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank', counterpartyIban: 'bank', bankTxId: 'bank',
-  source: 'kept', statement: 'kept', businessPart: 'kept', replaced: 'kept', remarks: 'kept', noReceiptNeeded: 'kept', waitsForPerson: 'kept', waitsForReceipt: 'kept',
+  source: 'kept', statement: 'kept', businessPart: 'kept', replaced: 'kept', remarks: 'kept', noReceiptNeeded: 'kept', waitsForPerson: 'kept', waitsForReceipt: 'kept', inputTaxProof: 'kept',
 } as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
 
 function keptFields(t: BankTransaction): Partial<BankTransaction> {

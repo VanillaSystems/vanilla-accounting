@@ -224,6 +224,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
         <> · <button type="button" className="golink" data-testid="go-receipt" title={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
           {t('bank.receipt', { name: first?.name ?? receipts[0] })}{receipts.length > 1 && ` +${receipts.length - 1}`}
         </button></>
+      ) : tx.inputTaxProof ? (
+        <> · <span data-testid="input-tax-proof">{t('bank.inputTaxProof', { text: tx.inputTaxProof.text })}</span></>
       ) : saleWithoutVat ? (
         <> · <span className="wn" data-testid="sale-without-vat">{t('bank.saleNoVat')}</span>{edit && <>
           {' '}<button type="button" className="golink" title={t('bank.uploadInvoiceTip')} onClick={() => intakeAdd.run(props)}>{t('bank.uploadInvoice')}</button>
