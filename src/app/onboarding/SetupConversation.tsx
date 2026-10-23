@@ -184,7 +184,7 @@ function VatCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'vat' }>; on
   const [busy, setBusy] = useState(false);
   const kept = view?.progress.answers.vat?.kept;
   const percent = Number(rate.replace(',', '.'));
-  const next = vatSetupOf(card.to, rate && percent > 0 && percent < 100 ? { rate: percent, ...(label.trim() ? { label: label.trim() } : {}) } : undefined);
+  const next = vatSetupOf(card.to, rate && percent > 0 && percent < 100 ? { rate: percent, ...(label.trim() ? { label: label.trim() } : {}) } : undefined, card.from.registered ? card.from.reporting : 'received');
   const run = async (f: () => Promise<string | undefined>) => { setBusy(true); setError(await f()); setBusy(false); };
   return (
     <div className="ruledraft obvat" data-state={card.state}>

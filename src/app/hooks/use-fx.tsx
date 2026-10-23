@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Index, JournalEntry } from '../../types/index.js';
-import { conversionOf, estvRates, paymentDateOf, type Conversion, type EstvRates } from '../../accounting/fx-conversion.js';
+import { conversionOf, estvRates, rateDateOf, type Conversion, type EstvRates } from '../../accounting/fx-conversion.js';
 import { api } from '../lib/api.js';
 
 interface Fx {
@@ -24,7 +24,7 @@ export function FxProvider({ index, children }: { index: Index; children: ReactN
 
   const value = useMemo<Fx>(() => {
     const txDates = new Map(index.transactions.map((tx) => [tx.ref, tx.date]));
-    const paymentDate = (entry: JournalEntry) => paymentDateOf(entry, txDates);
+    const paymentDate = (entry: JournalEntry) => rateDateOf(entry, txDates);
     return { rates, paymentDate, convert: (entry) => (rates ? conversionOf(entry, paymentDate(entry), rates) : undefined) };
   }, [rates, index.transactions]);
 

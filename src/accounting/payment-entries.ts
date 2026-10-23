@@ -1,9 +1,10 @@
 /**
- * What the bookings of a bank payment keep under cash-basis reporting (vat.reporting: received,
- * the only setup the engine supports): each carries the payment's date, so its VAT falls into the
- * payment's quarter, except one on the payout clearing account, which takes the order's
- * (src/booking/classify.ts); together they move the bank account by what the bank paid. The AI
- * sidebar's changes keep both (src/server/edits.ts applyAnswer).
+ * What the bookings of a bank payment keep under cash-basis reporting (vat.reporting: received):
+ * each carries the payment's date, so its VAT falls into the payment's quarter, except one on the
+ * payout clearing account, which takes the order's (src/booking/classify.ts); together they move
+ * the bank account by what the bank paid. On the agreed basis a coded line on an open item carries
+ * its document's date as well (src/accounting/tax-point.ts). The AI sidebar's changes keep both
+ * (src/server/edits.ts applyAnswer).
  */
 import type { Index, JournalEntry } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';

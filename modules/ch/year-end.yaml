@@ -9,6 +9,9 @@ accounts:
   # Debitoren: invoices still open on 31.12. (ADR 0010); the credit is the invoices' revenue account.
   # Proposed only when the chart has one of these; else the person picks or adds the account.
   receivables: ["1100"]
+  # Kreditoren: on the agreed basis (MWSTG Art. 40 Abs. 1) a supplier bill's input tax is booked on
+  # its date against this account, and its payment settles it (src/accounting/tax-point.ts).
+  payables: ["2000"]
 
 # What the law asks of money accounts at the year end beyond the base the app applies everywhere:
 # every bank and card account's balance on 31.12. from a document (a statement covering the day, or

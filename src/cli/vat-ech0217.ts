@@ -9,7 +9,7 @@ import type { QuarterKey } from '../types/index.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
-import { vat, filing, filingMethod } from '../engines/index.js';
+import { vat, filing, filingBasis, filingMethod } from '../engines/index.js';
 import { ech0217Xml } from '../providers/ech0217/xml.js';
 
 const ws = openWorkspace();
@@ -22,7 +22,7 @@ function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
   const { ziffern, payable } = vat().figures(entries, periodKey, adjustments);
   const { xml, warnings } = ech0217Xml({
     uid: ws.company.uid, organisationName: ws.company.name, period: { key: periodKey, from, to },
-    ziffern, payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(),
+    ziffern, payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(), basis: filingBasis(),
     generationTime: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
   });
   for (const w of warnings) console.error(`⚠ ${periodKey}: ${w}`);

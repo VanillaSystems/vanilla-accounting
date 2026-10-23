@@ -7,6 +7,8 @@
  * transaction's date. Some entries (Shopify revenue/fee) carry a shifted entry.date (the
  * order date), so we deliberately key off the BankTransaction date, not entry.date. Manual
  * corrections with no bank transaction (Eigenverbrauch M2026-xxx) fall back to entry.date.
+ * On the agreed basis the tax point is the document's date, which a line on an open item carries
+ * as its own: there the entry's date wins (rateDateOf, MWSTV Art. 45 Abs. 1).
  *
  * Reads rates from reference/estv-daily-rates-2026.json (run `npm run fetch-rates` first).
  * Applies the ESTV weekend/holiday rule — "apply the most recently recorded daily rate" —
@@ -20,7 +22,7 @@ import { join } from 'path';
 import type { JournalEntry } from '../types/index.js';
 import { loadBooks, periodLock, saveBooks, update, PERSON } from '../books/store.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
-import { paymentDateOf } from '../accounting/fx-conversion.js';
+import { rateDateOf } from '../accounting/fx-conversion.js';
 import { REFERENCE_DIR, openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
@@ -68,7 +70,7 @@ function main() {
 
   for (const e of entries) {
     const cur = e.exchangeCurrency!;
-    const payDate = paymentDateOf(e, txDate);
+    const payDate = rateDateOf(e, txDate);
     const newRate = fx.daily(cur, payDate);
     if (newRate === undefined) { unresolved.push(e); continue; }
 

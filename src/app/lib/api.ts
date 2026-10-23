@@ -22,7 +22,7 @@ import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
-import { vatSetup } from '../../engines/index.js';
+import { agreedBasis, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
@@ -131,7 +131,7 @@ export function errorText(e: unknown): string {
     case 'tagDimension': return t('error.tagDimension', b.params);
     case 'tagValue': return t('error.tagValue', b.params);
     case 'dimensionInUse': return t('error.dimensionInUse', { dimension: b.params.dimension, n: b.params.entries });
-    case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
+    case 'paymentDate': return t(agreedBasis() ? 'error.paymentDateAgreed' : 'error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
       const { date, currency, paid, booked } = b.params;
       return t('error.paymentBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
@@ -144,6 +144,7 @@ export function errorText(e: unknown): string {
       return t('error.classifyBalance', { date: formatDate(date), paid: `${currency} ${fmt(paid)}`, booked: `${currency} ${fmt(booked)}` });
     }
     case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
+    case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'notInTrash': return t('error.notInTrash');

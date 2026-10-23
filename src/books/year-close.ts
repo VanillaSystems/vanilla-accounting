@@ -28,6 +28,7 @@ import { roundCHF } from '../accounting/rappen.js';
 import { filingKeyOf } from '../accounting/periods.js';
 import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
+import { hasEvent } from './refs.js';
 import { workspaceChecks } from '../workspace/checks.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
@@ -152,6 +153,8 @@ export const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ n
 /**
  * The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before
  * it), and the payments of the books that name one of them without being linked to it (r9c-3).
+ * An invoice whose VAT event the books carry (the agreed basis, src/invoices/events.ts) is on the
+ * receivable already and is not proposed again.
  */
 export function receivablesOf(ws: Workspace, year: string, rates: EstvRates, books: Books): Receivables {
   const end = `${year}-12-31`;
@@ -159,7 +162,7 @@ export function receivablesOf(ws: Workspace, year: string, rates: EstvRates, boo
   const invoices = liveInvoices(book);
   const open = invoices.flatMap((inv) => {
     const amount = inv.status === 'issued' ? openOn(inv, invoices, end) : 0;
-    if (inv.status !== 'issued' || amount === 0) return [];
+    if (inv.status !== 'issued' || amount === 0 || hasEvent(books, inv)) return [];
     const rate = inv.currency === 'CHF' ? 1 : rates.on(inv.currency, end)?.rate ?? 0;
     return [{ number: inv.number, customer: inv.customer.name, date: inv.date, currency: inv.currency, open: amount, chf: roundCHF(amount * rate) }];
   });
