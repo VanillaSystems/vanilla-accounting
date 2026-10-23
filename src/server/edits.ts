@@ -9,7 +9,7 @@ import { isManualRef, nextManualRef } from '../books/refs.js';
 import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
 import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
-import { baseCurrency, chart, filing } from '../engines/index.js';
+import { baseCurrency, chart, filing, vat } from '../engines/index.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
@@ -207,7 +207,11 @@ export function assertPlaced(...accounts: Array<string | undefined>): void {
  * input tax. 400 in plain words otherwise (r5f-5, r5f-17); the UI says it in the user's language.
  */
 export function assertCodeTaken(code: string | undefined): void {
-  if (!code || formTakes(code)) return;
+  if (!code) return;
+  if (formTakes(code)) {
+    if (!vat().codes.parse(code)) throw new RequestError(400, `Den Steuercode ${code} gibt es nicht.`, { code: 'unknownVatCode', params: { code } });
+    return;
+  }
   const method = withoutInputTax()!;
   const why = method === 'none'
     ? `Den Steuercode ${code} gibt es in dieser Firma nicht: sie ist nicht steuerpflichtig eingetragen und bucht brutto, ohne Codes.`

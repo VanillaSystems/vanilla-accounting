@@ -38,6 +38,21 @@ test('a year-close check that cannot be computed answers an error, never a reque
   assert.match(body.error, /2026-Q1|reportingPeriod|VATDeclaration/);
 });
 
+test('effective firm: a VAT code the engine has no definition for is refused as unknownVatCode on a new entry and a change; a known code passes (issue #60)', async () => {
+  const api = await start();
+  for (const vatCode of ['Z0', 'V81-B', 'F1']) {
+    const refused = await api.send('POST', '/api/journal-entries', { ...ENTRY, vatCode });
+    assert.deepEqual([refused.status, refused.json.code, refused.json.params], [400, 'unknownVatCode', { code: vatCode }], JSON.stringify(refused.json));
+  }
+  const ok = await api.send('POST', '/api/journal-entries', { ...ENTRY, vatCode: 'I81' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  const id = (ok.json.entry as { id: string }).id;
+  const changed = await api.send('PATCH', `/api/journal-entries/${id}`, { vatCode: 'Z0' });
+  assert.deepEqual([changed.status, changed.json.code], [400, 'unknownVatCode'], JSON.stringify(changed.json));
+  assert.equal(loadBooks(api.ws).journalEntries.find((e) => e.id === id)?.vatCode, 'I81');
+  assert.equal((await api.send('PATCH', `/api/journal-entries/${id}`, { vatCode: 'I0' })).status, 200);
+});
+
 test('net tax rate method: the server refuses an input-tax code on an entry, a change and a payment booked by hand; the firm\'s own code passes (r5f-17)', async () => {
   const api = await start('demo-schreinerei');
   const refused = await api.send('POST', '/api/journal-entries', { ...ENTRY, vatCode: 'I81' });
