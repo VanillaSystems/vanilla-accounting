@@ -207,6 +207,15 @@ test('over HTTP: GET offers, POST asks the model and drafts the rule for the car
   }
 });
 
+test('payments another rule decides count for no learned rule: it would never book them', async () => {
+  const ws = await company();
+  mietwerk(ws);
+  mkdirSync(join(ws.paths.root, 'knowledge/rules'), { recursive: true });
+  writeFileSync(join(ws.paths.root, GUIDE), 'process: booking\nsteps:\n  classify:\n    rules:\n      - id: mietwerk-gross\n        when: { text: "Mietwerk", amount: { over: 61.5, under: 63.5 } }\n        then: { account: "6513", vat: I0 }\n        source: hand 2026-10-01\n');
+  const offer = learnOffer(workspaceAt(ws.paths.root), loadBooks(ws), 'MW-4');
+  assert.deepEqual([offer?.same, offer?.of], [2, 2], 'MW-2 and MW-3 are the narrow rule\'s');
+});
+
 test('parseLearnAnswer takes exactly the three shapes', () => {
   assert.deepEqual(parseLearnAnswer('```json\n{"kind":"rule","then":{"account":"6513","vat":"none"}}\n```'), { kind: 'rule', then: { account: '6513', vat: null } });
   assert.equal(parseLearnAnswer('{"kind":"rule","then":{"account":"6513"}}'), undefined);

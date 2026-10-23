@@ -7,7 +7,8 @@
  *
  * Code decides what is offered and checks what the model drafts, never the model's confidence:
  * - only a change of account or VAT code teaches; a changed amount or date is a fix, not a practice;
- * - a correction of a rule's booking goes to «Regel anpassen?» (correction-rule.ts), not here;
+ * - a payment a rule decides offers nothing here (a correction of it goes to «Regel anpassen?»,
+ *   correction-rule.ts), and counts for no learned rule: the deciding rule ranks before it;
  * - a rule only for a partner with at least GENERAL payments it books as they are booked today, the
  *   corrected one counted; a one-off gets a note or nothing;
  * - the rule must book the corrected payment exactly as the person did, for one business (its file)
@@ -26,7 +27,6 @@ import { payerKey, payerNames } from '../knowledge/payer.js';
 import { ask, type AskOptions } from '../llm/ask.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { correctionOffer } from './correction-rule.js';
 import { draftHandRule, type HandMatch } from './hand-rule.js';
 import { ruleFactsOf } from './rules.js';
 import { ruleCode } from './share-rule.js';
@@ -51,9 +51,9 @@ export interface LearnOffer {
   partner: LearnPartner;
   was: Booked;
   booked: Booked;
-  /** The partner's payments of the open year booked today as the correction books, this one counted. */
+  /** The partner's payments of the open year no rule decides (those a learned rule would book), booked today as the correction books, this one counted. */
   same: number;
-  /** The partner's payments of the open year. */
+  /** The partner's payments of the open year no rule decides. */
   of: number;
 }
 
@@ -100,15 +100,14 @@ function corrected(ws: Workspace, books: Books, ref: string, context: ClassifyCo
   const was = entry.by.was;
   // Only a changed account or code teaches: an amount or a date put right is a fix, not a practice.
   if (was.accountDebit === undefined && was.accountCredit === undefined && was.vatCode === undefined) return undefined;
-  if (correctionOffer(ws, books, ref, context)) return undefined;
   const bank = bankAccountFor(tx, context.bankAccounts);
   const account = opposite(entry, bank);
   const before = opposite({ ...entry, ...was }, bank);
   if (!account || account === bank || !before) return undefined;
   const booked: Booked = { account, vat: entry.vatCode ?? null };
   const fx = loadFxResolver();
-  const placed = ruleOfPayment(books, tx, context, fx);
-  if (placed?.rule.then.kind === 'book' && placed.rule.then.booking.account === account && !placed.rule.then.booking.private && !placed.rule.then.booking.fees) return undefined;
+  // A payment a rule decides would stay that rule's: a learned rule, added after it, would never book it.
+  if (ruleOfPayment(books, tx, context, fx)) return undefined;
   const business = paymentFacts(books, tx, context, fx).counterparty;
   const cp = business ? context.counterparties?.find((c) => c.id === business) : undefined;
   const payer = payerKey(tx);
@@ -117,7 +116,8 @@ function corrected(ws: Workspace, books: Books, ref: string, context: ClassifyCo
   if (!partner) return undefined;
   const year = openYear(books);
   const partnerTxs = books.transactions.filter((t) => t.date.startsWith(year) && t.direction === tx.direction
-    && (partner.kind === 'business' ? paymentFacts(books, t, context, fx).counterparty === partner.id : payerKey(t) === partner.payer));
+    && (partner.kind === 'business' ? paymentFacts(books, t, context, fx).counterparty === partner.id : payerKey(t) === partner.payer)
+    && !ruleOfPayment(books, t, context, fx));
   const same = agreeing(books, partnerTxs, bookingOf(books, tx, booked, context.ownerAccount), context);
   return {
     tx, entry, partnerTxs,
