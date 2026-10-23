@@ -244,16 +244,23 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
   );
 }
 
-/** Receipts that add up to the payment, or nearly (#27): code proposes them, the person links them in one click. */
+/** At most this many sets are offered on one payment. */
+const SETS_SHOWN = 3;
+
+/**
+ * Receipts that add up to the payment, or nearly (#27): code proposes them, the person links them in
+ * one click. Several sets that fit are each offered with their receipts named, so the person picks.
+ */
 function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTransaction }) {
-  const [s] = useMemo(() => proposalsFor(books, tx, (d) => !b.closedThrough || d > b.closedThrough), [books, tx, b.closedThrough]);
-  if (!s) return null;
-  const names = s.receipts.map((id) => b.receiptOf(id)?.name ?? id).join(', ');
-  const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
-  return (
-    <> · <span className="m" data-testid="receipt-set" title={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}</span>
-      {' '}<button type="button" className="golink" data-act="link-receipt-set" title={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></>
-  );
+  const offers = useMemo(() => proposalsFor(books, tx, (d) => !b.closedThrough || d > b.closedThrough), [books, tx, b.closedThrough]);
+  return offers.slice(0, SETS_SHOWN).map((s) => {
+    const names = s.receipts.map((id) => b.receiptOf(id)?.name ?? id).join(', ');
+    const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
+    return (
+      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" title={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
+        {' '}<button type="button" className="golink" data-act="link-receipt-set" title={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></span>
+    );
+  });
 }
 
 /** An incoming payment linked to one of the open invoices of its currency, from the payment's side (r9c-3): the named invoice first. */
