@@ -5,7 +5,7 @@
  */
 import type { Capability, Tier } from './steps.js';
 
-export type ProviderId = 'claude-cli';
+export type ProviderId = 'claude-cli' | 'anthropic' | 'openai';
 
 export interface ModelEntry {
   /** The id the provider takes (`sonnet` for the CLI). */

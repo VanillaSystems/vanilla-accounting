@@ -40,6 +40,21 @@ test('a password saved for one books comes back sealed from the file, not for ot
   assert.equal(await store.get('smtp'), undefined);
 });
 
+test('an AI provider\'s key belongs to this computer: the same for every books, and with none open', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sealed-'));
+  const file = join(dir, 'secrets.json');
+  let open: string | undefined = join(dir, 'a');
+  mkdirSync(open);
+  mkdirSync(join(dir, 'b'));
+  const store = sealedStore({ file, cipher, books: () => open });
+  await store.set('ai:anthropic', 'test-key-0004');
+  open = join(dir, 'b');
+  assert.equal(await store.get('ai:anthropic'), 'test-key-0004', 'other books use it too');
+  open = undefined;
+  assert.equal(await store.get('ai:anthropic'), 'test-key-0004', 'no books open');
+  assert.ok(!readFileSync(file, 'utf8').includes('test-key'), 'never in plain text');
+});
+
 test('a store without the system keychain refuses to save', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'sealed-'));
   const store = sealedStore({ file: join(dir, 'secrets.json'), cipher: { ...cipher, isEncryptionAvailable: () => false }, books: () => dir });
