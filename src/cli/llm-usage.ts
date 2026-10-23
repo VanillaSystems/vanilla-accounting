@@ -16,10 +16,12 @@ if (!existsSync(ledgerPath())) {
 
 const rows: LedgerRow[] = readFileSync(ledgerPath(), 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 const byStep = new Map<string, LedgerRow[]>();
-for (const r of rows) byStep.set(`${r.step} (${r.model})`, [...(byStep.get(`${r.step} (${r.model})`) ?? []), r]);
+// Rows written before #48 name no provider: they all went through the claude CLI.
+const keyOf = (r: LedgerRow) => `${r.step} (${r.provider ?? 'claude-cli'} ${r.model})`;
+for (const r of rows) byStep.set(keyOf(r), [...(byStep.get(keyOf(r)) ?? []), r]);
 
 const fmt = (n: number) => n.toLocaleString('de-CH');
-console.log(`${'step (model)'.padEnd(52)} ${'calls'.padStart(6)} ${'failed'.padStart(6)} ${'in/call'.padStart(9)} ${'out/call'.padStart(9)} ${'in total'.padStart(11)} ${'s/call'.padStart(7)}`);
+console.log(`${'step (provider model)'.padEnd(52)} ${'calls'.padStart(6)} ${'failed'.padStart(6)} ${'in/call'.padStart(9)} ${'out/call'.padStart(9)} ${'in total'.padStart(11)} ${'s/call'.padStart(7)}`);
 for (const [step, rs] of [...byStep].sort()) {
   const input = rs.reduce((a, r) => a + r.input + r.cacheCreate + r.cacheRead, 0);
   const output = rs.reduce((a, r) => a + r.output, 0);

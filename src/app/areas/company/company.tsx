@@ -32,6 +32,7 @@ import { clearBankDraft, draftForm, peekBankDraft, type BankDraft } from './bank
 import { MailSection } from './MailSection.js';
 import { SourcesSection } from './SourcesSection.js';
 import { PhoneSection } from './PhoneSection.js';
+import { AiSection } from './AiSection.js';
 import { desktop } from '../../desktop/bridge.js';
 import { RulesSection } from './RulesSection.js';
 import { SetupEntry } from '../../onboarding/SetupEntry.js';
@@ -45,7 +46,7 @@ type Props = AreaProps<RouteOf<'company'>>;
 const GROUPS: Array<['company.groupMaster' | 'company.groupBooks' | 'company.groupApp', CompanySection[]]> = [
   ['company.groupMaster', ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources']],
   ['company.groupBooks', ['accounts', 'rules', 'periods', 'opening']],
-  ['company.groupApp', ['display', 'phone']],
+  ['company.groupApp', ['display', 'ai', 'phone']],
 ];
 
 const THEMES: Theme[] = ['light', 'dark', 'system'];
@@ -154,6 +155,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'invoice-layout': return <InvoiceLayoutSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'mail': return <MailSection ws={p.ws} nav={p.nav} canEdit={p.canEdit} />;
     case 'sources': return <SourcesSection nav={p.nav} canEdit={p.canEdit} />;
+    case 'ai': return <AiSection nav={p.nav} canEdit={p.canEdit} />;
     case 'phone': return <PhoneSection nav={p.nav} />;
     case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} payment={p.query.payment} />;
     case 'accounts': return <Accounts {...p} />;

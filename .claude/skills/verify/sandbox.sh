@@ -109,7 +109,7 @@ EOF
   # What the app keeps on this computer outside the workspace (approvals, runs, demo copies, the
   # browser profile, traces) goes next to the sandbox, never into the owner's ~/.vanilla-accounting.
   # READONLY=1 in the caller's environment starts it in audit mode, as `npm run start:audit` does.
-  (cd "$SB" && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" VANILLA_DEMO_DIR="$SB.local/demo" VANILLA_BROWSER_DIR="$SB.local/browser" VANILLA_TRACES_DIR="$SB.local/traces" PATH="$SB/bin:$PATH" VANILLA_API_HOST=127.0.0.1 PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
+  (cd "$SB" && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" VANILLA_DEMO_DIR="$SB.local/demo" VANILLA_BROWSER_DIR="$SB.local/browser" VANILLA_TRACES_DIR="$SB.local/traces" VANILLA_AI_SETTINGS="${VANILLA_AI_SETTINGS:-$SB.local/ai.json}" VANILLA_SECRETS_FILE="${VANILLA_SECRETS_FILE:-$SB.local/secrets.json}" PATH="$SB/bin:$PATH" VANILLA_API_HOST=127.0.0.1 PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
   echo $! >"$SB/api.pid"
   # UI: cwd = the repo; data comes through the API proxy.
   (cd "$REPO" && exec node "$REPO/node_modules/vite/bin/vite.js" --config "$VITE_CONFIG" </dev/null >"$SB/ui.log" 2>&1) &

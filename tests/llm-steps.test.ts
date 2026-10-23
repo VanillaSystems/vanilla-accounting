@@ -31,10 +31,11 @@ beforeEach(() => { writeFileSync(args, ''); writeFileSync(settings, '{}'); });
 const calls = (): string[][] => readFileSync(args, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
 const ledger = (): LedgerRow[] => readFileSync(ledgerPath(), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 
-test('with no setting every step asks the model and ledgers the name it had before #48', () => {
+test('with no setting every step asks its shipped default and ledgers the name it had before #48', async () => {
   const before: Record<StepId, [string, string]> = {
     'receipt-vision': ['sonnet', 'receipt-intake.guide.yaml#vision'],
-    'receipt-vat': ['sonnet', 'receipt-intake.guide.yaml#vat_facts'],
+    // Haiku since #48 step 2: it read the VAT facts of 100 receipts as well as Sonnet (#64).
+    'receipt-vat': ['haiku', 'receipt-intake.guide.yaml#vat_facts'],
     'receipt-titles': ['haiku', 'receipt-intake.guide.yaml#titles'],
     'receipt-match': ['sonnet', 'evidence.guide.yaml#ai'],
     classify: ['sonnet', 'booking.guide.yaml#classify'],
@@ -43,8 +44,9 @@ test('with no setting every step asks the model and ledgers the name it had befo
     tutti: ['sonnet', 'receipt-collection.guide.yaml#tutti'],
     sidebar: ['sonnet', 'assistant'],
   };
-  assert.deepEqual(Object.fromEntries(STEP_IDS.map((s) => [s, [resolveStep(s).model, STEPS[s].ledger]])), before);
-  assert.ok(STEP_IDS.every((s) => resolveStep(s).provider.id === 'claude-cli'));
+  const resolved = await Promise.all(STEP_IDS.map((s) => resolveStep(s)));
+  assert.deepEqual(Object.fromEntries(STEP_IDS.map((s, i) => [s, [resolved[i].model, STEPS[s].ledger]])), before);
+  assert.ok(resolved.every((r) => r.provider.id === 'claude-cli'));
 });
 
 test('the CLI gets the same arguments as before: no tools, or Read on the attachment\'s folder', async () => {
@@ -65,8 +67,9 @@ test('the ledger names the provider, and a step\'s part after its name', async (
 
 test('a setting on this machine picks the model; one that cannot serve the step is ignored', async () => {
   writeFileSync(settings, JSON.stringify({ steps: { classify: { provider: 'claude-cli', model: 'opus' }, 'receipt-vat': { provider: 'claude-cli', model: 'no-such-model' } } }));
-  assert.deepEqual([resolveStep('classify').model, resolveStep('classify').source], ['opus', 'setting']);
-  assert.deepEqual([resolveStep('receipt-vat').model, resolveStep('receipt-vat').source], ['sonnet', 'default']);
+  const [classify, vat] = [await resolveStep('classify'), await resolveStep('receipt-vat')];
+  assert.deepEqual([classify.model, classify.source], ['opus', 'setting']);
+  assert.deepEqual([vat.model, vat.source], ['haiku', 'default']);
   await ask('{}', { step: 'classify' });
   assert.deepEqual(calls()[0].slice(1, 3), ['--model', 'opus']);
 });

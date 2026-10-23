@@ -7,6 +7,7 @@
  *   files of the app layer declare, and in prose no amount
  *   with cents and no number of six digits or more: those are one company's items (invoice,
  *   order, account numbers, figures). A rate below 1 (0.91) and a date (31.12) pass.
+ *   No file, a demo's neither, holds an AI provider's API key (src/core/api-keys.ts).
  * - Secrets (needs the real workspace): every string that identifies the company, derived from
  *   its own data at run time (secretsOf), so the list of secrets is never written into the app.
  */
@@ -15,12 +16,13 @@ import type { Counterparty, RawCounterparty } from '../knowledge/counterparties.
 import { GUIDE_DIR, ROLE_DIRS } from '../knowledge/layers.js';
 import { namesOf } from '../knowledge/mentions.js';
 import { DEMO_NAME, type Company } from '../workspace/workspace.js';
+import { apiKeysIn } from '../core/api-keys.js';
 
 export type SecretKind =
   | 'company' | 'owner' | 'uid' | 'company-domain' | 'mailbox' | 'iban' | 'bank-account-id'
   | 'private-counterparty' | 'binding-signal' | 'secret-term'
   | 'tx-ref' | 'receipt-id' | 'receipt-filename' | 'journal-id' | 'amount' | 'personal-email';
-export type StructuralKind = 'not-allowlisted' | 'binary-not-listed' | 'iban-pattern' | 'foreign-uid' | 'amount-in-prose' | 'long-number';
+export type StructuralKind = 'not-allowlisted' | 'binary-not-listed' | 'iban-pattern' | 'foreign-uid' | 'amount-in-prose' | 'long-number' | 'api-key';
 
 /**
  * `token`: equal to a whole token of the text (ids, refs, filenames, numbers), compared lowercase.
@@ -259,6 +261,7 @@ export function scan(files: readonly PublicFile[], secrets: readonly Secret[], a
       if (!seen.has(key)) { seen.add(key); at(kind, term, l); }
     };
 
+    for (const k of apiKeysIn(text)) hit('api-key', k.shown, k.index);
     if (!isDemo(f.path)) {
       for (const m of text.matchAll(IBAN)) if (isIban(m[0]) && !publicIbans.has(compact(m[0]))) hit('iban-pattern', m[0], m.index!);
       for (const m of text.matchAll(UID)) if (!publicUids.has(m[0].replace(/\D/g, ''))) hit('foreign-uid', m[0], m.index!);
