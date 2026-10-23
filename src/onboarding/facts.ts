@@ -88,7 +88,7 @@ export function partnerBins(input: BinInput): PartnerBins {
 }
 
 /**
- * GET /api/onboarding. `firstStart`: an empty workspace never set up, which opens the setup by
- * itself. `facts`: what the app knows that the conversation's cards show (src/onboarding/facts.ts).
+ * GET /api/onboarding. `opensItself`: the setup opens by itself (an empty workspace never set up,
+ * or books the setup conversation created and the person did not call ready yet). `facts`: what the app knows that the conversation's cards show (src/onboarding/facts.ts).
  */
-export interface SetupView { progress: SetupProgress; firstStart: boolean; facts: SetupFacts; states: TopicStates }
+export interface SetupView { progress: SetupProgress; opensItself: boolean; facts: SetupFacts; states: TopicStates }

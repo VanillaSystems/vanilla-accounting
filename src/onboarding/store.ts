@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { Index } from '../types/index.js';
 import { writeAtomic } from '../invoices/store.js';
-import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
+import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { SetupView } from './facts.js';
 
 export const ONBOARDING_FILE = 'onboarding.json';
@@ -32,8 +32,33 @@ function write(ws: Ws, p: SetupProgress): SetupProgress {
 const emptyBooks = (books: Pick<Index, 'transactions' | 'receipts'> & { journalEntries?: unknown[] }) =>
   !books.transactions.length && !books.receipts.length && !(books.journalEntries ?? []).length;
 
-export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick<SetupView, 'progress' | 'firstStart'> {
-  return { progress: readProgress(ws), firstStart: !existsSync(fileOf(ws)) && emptyBooks(books) };
+/**
+ * Whether opening the books opens the setup by itself: the first start of an empty workspace never
+ * set up, and books the setup conversation created until the person said «Los geht's» (#139).
+ */
+export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick<SetupView, 'progress' | 'opensItself'> {
+  const progress = readProgress(ws);
+  const first = !existsSync(fileOf(ws)) && emptyBooks(books);
+  return { progress, opensItself: first || (!!progress.created && !progress.ready) };
+}
+
+/**
+ * Books the setup conversation just created (src/onboarding/draft-store.ts): what it asked before
+ * the books existed stands answered, so the conversation goes on at the next question.
+ */
+export function seedCreated(ws: Ws, seed: { started: string; vat: AnswerValue<'vat'>; sells: AnswerValue<'sells'> }, now: string): SetupProgress {
+  let p: SetupProgress = { ...emptyProgress(), started: seed.started, created: now };
+  p = withAnswer(p, 'company', { value: 'ok', at: now });
+  p = withAnswer(p, 'vat', { value: seed.vat, at: now });
+  p = withAnswer(p, 'sells', { value: seed.sells, at: now });
+  return write(ws, p);
+}
+
+/** «Los geht's»: the setup ends; the books open as books from now on. */
+export function finishSetup(ws: Ws, now: string): SetupProgress {
+  const p = readProgress(ws);
+  if (p.ready) return p;
+  return write(ws, { ...p, started: p.started ?? now, ready: now });
 }
 
 /** The setup opened: the file exists from now on, so the first start does not open it again by itself. */

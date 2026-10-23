@@ -15,7 +15,8 @@ import { usePrintPages } from '../invoices/pdf.js';
 import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
-import type { MenuCommand } from '../types/desktop.js';
+import type { KnownBooks, MenuCommand } from '../types/desktop.js';
+import { setupPath } from '../app/desktop/bridge.js';
 import { findClaude } from './claude.js';
 import { sameOrigin, saveFile } from './save-file.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
@@ -69,10 +70,11 @@ async function start(): Promise<void> {
     void win!.loadURL(base + path);
     if (!fresh) win!.show();
   };
-  const opening = (open: () => Promise<unknown>) => async () => {
+  /** Books open on their page; a folder whose setup was broken off continues it on the start screen. */
+  const pathOf = (books: KnownBooks | undefined) => (books?.setup ? setupPath(books.root) : '/');
+  const opening = (open: () => Promise<KnownBooks>) => async () => {
     try {
-      await open();
-      show();
+      show(pathOf(await open()));
     } catch (e) {
       const t = textsIn(language);
       await dialog.showMessageBox({ type: 'warning', message: t('desktop.notWorkspace'), detail: (e as Error).message });
@@ -121,13 +123,13 @@ async function start(): Promise<void> {
     if (next !== language) { language = next; refreshMenu(); }
   });
   const last = readState(stateFile).recent[0];
-  if (last) await server.open(last).catch(() => undefined);
+  const first = last ? await server.open(last).catch(() => undefined) : undefined;
   refreshMenu();
   // The inbox's runs check for claude once, so it must be known before the first one starts.
   await claudeFound;
   server.startBackground();
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
-  show();
+  show(pathOf(first));
   app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); } });
   app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

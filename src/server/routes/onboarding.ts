@@ -7,13 +7,14 @@
  *
  *   GET  /api/onboarding                     the checklist, the facts, and whether this is an empty workspace's first start
  *   POST /api/onboarding/start               the setup opened (the first start does not open it again)
+ *   POST /api/onboarding/ready               «Los geht's»: books the conversation created no longer open it by themselves
  *   PUT  /api/onboarding/topics/:topic       { state: open | done | skipped }
  *   PUT  /api/onboarding/answers/:question   { value: <one of its answers> | null, kept?: <the VAT setup before> | null }
  */
 import { Router } from 'express';
 import { RequestError, WS, patchBody, readBooks } from '../books.js';
 import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState, type Answer } from '../../onboarding/model.js';
-import { answerQuestion, markTopic, readProgress, setupView, startSetup } from '../../onboarding/store.js';
+import { answerQuestion, finishSetup, markTopic, readProgress, setupView, startSetup } from '../../onboarding/store.js';
 import { partnerBins, type SetupFacts, type SetupView } from '../../onboarding/facts.js';
 import { topicStates } from '../../onboarding/conversation.js';
 import { parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
@@ -53,7 +54,7 @@ export function setupFacts(): SetupFacts {
 function view(): SetupView {
   const v = setupView(WS, readBooks());
   const facts = setupFacts();
-  return { ...v, facts, states: topicStates(v.progress, facts), ...(process.env.READONLY === '1' ? { firstStart: false } : {}) };
+  return { ...v, facts, states: topicStates(v.progress, facts), ...(process.env.READONLY === '1' ? { opensItself: false } : {}) };
 }
 
 router.get('/api/onboarding', (_req, res) => {
@@ -62,6 +63,11 @@ router.get('/api/onboarding', (_req, res) => {
 
 router.post('/api/onboarding/start', (_req, res) => {
   startSetup(WS, new Date().toISOString());
+  res.json(view());
+});
+
+router.post('/api/onboarding/ready', (_req, res) => {
+  finishSetup(WS, new Date().toISOString());
   res.json(view());
 });
 

@@ -34,8 +34,13 @@ export interface SmokeBridge {
  * Books the app knows: their folder and, when it still holds a workspace, the company's name.
  * `problem`: the folder is there, but its manifest cannot be read (why, in the reader's words);
  * neither name nor problem: the folder is gone.
+ * `setup`: the folder holds a setup broken off before the books were created (src/onboarding/draft.ts);
+ * opening it continues the setup conversation, and `name` is the firm's once it was answered.
  */
-export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean }
+export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true }
+
+/** GET /api/desktop/ai: whether the setup conversation can run; without a provider the form takes its place. */
+export interface AiAvailability { available: boolean }
 
 /** GET /api/desktop */
 export interface DesktopInfo {

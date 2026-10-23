@@ -93,19 +93,41 @@ person as before (mailbox, source).
 shows «Von Hand: Firma › …». The old program's history has no place of its own: what it becomes
 (rules, opening balances) has.
 
-**Way in.** The first start of an empty workspace (no payments, receipts or bookings, and no
+**Way in.** In the Mac app, «Neue Buchhaltung anlegen» is the setup (#139): the start screen asks
+the folder and the books' language, and the setup conversation runs before the books exist, in a
+wide panel of the start screen (src/app/onboarding/DraftConversation.tsx). It asks what
+`createWorkspace` needs: the firm (name, UID, owner), the preset, every VAT question (a preset only
+suggests them), the net tax rates when they apply, the other questions of src/workspace/setup.ts
+unless the preset answers them, and the bank accounts. Each answer is checked as createWorkspace
+checks it and kept in a draft in the folder (`vanilla-accounting/setup-draft.json`,
+src/onboarding/draft.ts and draft-store.ts); the manifest is written only when the draft is complete,
+so a folder holds a draft or books, never half a manifest. «Buchhaltung anlegen» creates the books
+through createWorkspace, removes the draft before the first commit and records the conversation's
+first answers (company, VAT, what the firm sells) in `onboarding.json` with `created`; the
+conversation goes on in the books at the next question. Such books open into the setup until
+«Los geht's» sets `ready`. A folder with a draft opens into the draft's conversation at the step it
+stopped, from the folder dialog, the recent list or at the next start. Without an AI provider on the
+computer, «Neue Buchhaltung anlegen» opens the form with the reason; «Ohne KI einrichten» opens it
+too. The form and `npm run init` stay the way by hand and write the same manifest.
+
+The first start of an empty workspace set up by the form (no payments, receipts or bookings, and no
 `onboarding.json` yet) opens the setup once by itself, on its first step. Firma has «Einrichtung
-öffnen» / «Einrichtung fortsetzen» at the top of its list. The setup form of `npm run init` and the
-desktop stays the by-hand way to create the workspace; the conversation starts from what it saved.
+öffnen» / «Einrichtung fortsetzen» at the top of its list.
 
 ## API
 
 ```
-GET  /api/onboarding                     { progress, firstStart, facts, states }
+GET  /api/onboarding                     { progress, opensItself, facts, states }
 POST /api/onboarding/start               the setup opened; the first start does not open it again
+POST /api/onboarding/ready               «Los geht's»: books the conversation created no longer open it by themselves
 PUT  /api/onboarding/topics/:topic       { state: open | done | skipped }
 PUT  /api/onboarding/answers/:question   { value: <one of its answers> | null, kept?: <VAT setup before> | null }
 ```
+
+The desktop server adds the setup before the books exist: `GET /api/desktop/ai` (whether an AI
+answers), `GET /api/desktop/setup?root=`, `POST /api/desktop/setup { root, language }` (start or
+continue; a folder with books opens them), `PUT /api/desktop/setup { root, patch }` (one answer or
+`null`), `POST /api/desktop/setup/create { root }`.
 
 `facts` (src/onboarding/facts.ts) is read fresh on every call: today and the open year, the company,
 the bank accounts, the sources switched on, the open year's opening balances, `closedThrough`, the
