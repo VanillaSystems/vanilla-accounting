@@ -123,6 +123,21 @@
 .linkdlg .none { padding: 14px 12px; color: var(--muted); font-size: 13px; }
 .linkdlg .foot { display: flex; gap: 6px; align-items: center; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
 .linkdlg .foot .k { margin-left: 10px; }
+.linkdlg .privform { padding: 14px 20px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; }
+.linkdlg .privform .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.linkdlg .privform .opt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.linkdlg .privform .opt:has(input[type="radio"]:checked) { border-color: var(--accent); }
+.linkdlg .privform .opt.rate { cursor: default; }
+.linkdlg .privform .opt > b { margin-left: auto; font-weight: 500; }
+.linkdlg .privform input[type="radio"] { accent-color: var(--accent); width: auto; flex: none; margin: 0; padding: 0; border: 0; }
+.linkdlg .privform .part { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.linkdlg .privform .part input, .linkdlg .privform select { padding: 4px 8px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13.5px; }
+.linkdlg .privform .part .amt { width: 92px; text-align: right; }
+.linkdlg .privform .part .what { width: 200px; }
+.linkdlg .privform .m { color: var(--muted); }
+.linkdlg .privform .hint { margin: 0; color: var(--muted); font-size: 12px; }
+.linkdlg .privform .warnline { margin: 0; flex-wrap: wrap; }
+.linkdlg .privform .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .golink { color: inherit; font: inherit; text-align: left; border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
 .golink:hover { border-bottom-color: currentColor; }
 .golink .m { color: var(--muted); }

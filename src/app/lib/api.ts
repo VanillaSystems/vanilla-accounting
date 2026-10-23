@@ -33,7 +33,7 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
-import type { Conversation, ConversationSummary, MadeChange, Turn } from '../../types/assistant.js';
+import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
 import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.js';
 import type { MailCheck, SourcePreview, SourcesView } from '../../platform/sources/model.js';
@@ -108,6 +108,10 @@ export function errorText(e: unknown): string {
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
+    case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
+    case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
+    case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
+    case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
     case 'paymentDate': return t('error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
@@ -270,7 +274,7 @@ export const api = {
     request<{ ref: string }>('POST', '/api/transactions/manual', input).then((r) => r.ref),
   /** «Privat oder bar bezahlt»: the owner's payment of the receipt, linked; refused when a payment pays it already. */
   /** The owner's payment made for the receipt: its ref and date, and the filed period it corrects when the receipt lies in one (r8k-10). */
-  privatePayment: (receiptId: string) => request<{ ref: string; date: string; corrects?: string }>('POST', `/api/receipts/${receiptId}/private-payment`),
+  privatePayment: (receiptId: string, part: PrivatePart = {}) => request<{ ref: string; date: string; corrects?: string; exchangeRate?: number; replaced?: JournalEntry[] }>('POST', `/api/receipts/${receiptId}/private-payment`, part),
 
   bookPayment: (ref: string, lines: BookingLine[]) =>
     request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines }).then((r) => r.entries),

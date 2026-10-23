@@ -23,6 +23,12 @@ export interface ApiServer {
    * client already sent on it, and the request fails with ECONNRESET.
    */
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  /**
+   * Waits until no run is running or queued. A run a request started writes the books after the
+   * request answered: a test that writes the books itself waits for it first, or the run's save
+   * overwrites what the test wrote (#71).
+   */
+  rest(): Promise<void>;
   /** Ends the server and waits for its exit before removing its folders: a run it drives may still write. */
   stop(): Promise<void>;
 }
@@ -81,6 +87,14 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       return { status: res.status, json: await res.json().catch(() => ({})) as Record<string, unknown> };
+    },
+    async rest() {
+      for (let i = 0; i < 400; i++) {
+        const v = (await (await request('/api/automation')).json()) as { runs: Array<{ status: string }> };
+        if (!v.runs.some((r) => r.status === 'running' || r.status === 'queued')) return;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      throw new Error('the runs did not come to rest');
     },
     async stop() {
       if (server.exitCode === null && server.signalCode === null) await new Promise((resolve) => { server.once('exit', resolve); server.kill(); });

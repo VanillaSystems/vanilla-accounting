@@ -4,7 +4,8 @@
  * the undo is the opposite write, for a delete the receipt back from the trash.
  */
 import type { BankTransaction, Index, ReceiptKind, ReceiptPatch, VatFacts } from '../../../types/index.js';
-import { api, errorText } from '../../lib/api.js';
+import { ApiError, api, errorText } from '../../lib/api.js';
+import type { PrivatePart } from '../../../types/assistant.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { together, type AmountFit, type Ledger, type ReceiptView, type Saves } from './model.js';
@@ -14,12 +15,12 @@ import { correctionKinds } from '../../../accounting/correction.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
 
-/** `message`: the toast, or a function for one that depends on what the call made. */
-async function run(nav: Nav, call: () => Promise<unknown>, message: string | (() => string), undo?: () => Promise<unknown>): Promise<boolean> {
+/** `message`: the toast, or a function for one that depends on what the call made. `refused`: a refusal the caller shows itself (true: no toast). */
+async function run(nav: Nav, call: () => Promise<unknown>, message: string | (() => string), undo?: () => Promise<unknown>, refused?: (e: unknown) => boolean): Promise<boolean> {
   try {
     await call();
   } catch (e) {
-    nav.toast(errorText(e));
+    if (!refused?.(e)) nav.toast(errorText(e));
     return false;
   }
   nav.refresh();
@@ -59,26 +60,46 @@ export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, fro
 export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
   run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
 
+/** A booking by hand that books the receipt already (409 bookedByHand): the dialog offers to replace it when it names the receipt. */
+export interface HeldByHand { entry: string; date: string; amount: number; currency: string; replaceable: boolean }
+
 /**
- * Paid privately or in cash: one write makes the owner's payment on the receipt's date and amount
- * and links it; the books refuse a receipt a payment already pays (r7h-23); classify books it
- * against the owner's account. Undo deletes the payment, which takes its booking and link with it.
+ * Paid privately or in cash: one write makes the owner's payment on the receipt's date, for its
+ * amount or for the business part `part.amount` (#87), and links it; the books refuse a receipt a
+ * payment already pays (r7h-23); classify books it against the owner's account. A booking by hand
+ * of the receipt holds it (`onHeld`), until the person replaces it (`part.replace`). Undo deletes
+ * the payment, which takes its booking and link with it, and puts the replaced booking back.
  */
-export async function privateOutlay(nav: Nav, v: ReceiptView): Promise<boolean> {
+export async function privateOutlay(nav: Nav, v: ReceiptView, part: PrivatePart = {}, onHeld?: (held: HeldByHand) => void): Promise<boolean> {
   const { r } = v;
   if (!v.date || r.amount == null) {
     nav.toast(t('receipts.privateNeeds'));
     return false;
   }
   let made = { ref: '', date: '' } as Awaited<ReturnType<typeof api.privatePayment>>;
+  const currency = r.currency || baseCurrency();
+  const amount = `${currency} ${fmt(part.amount ?? Math.abs(r.amount))}`;
+  // A foreign receipt: the toast names the amount in the books' currency at the official daily rate of the receipt's day (ADR 0001).
+  const rate = () => (made.exchangeRate ? ` · ${t('receipts.privateRate', { chf: `${baseCurrency()} ${fmt((part.amount ?? Math.abs(r.amount!)) * made.exchangeRate)}`, rate: String(made.exchangeRate), date: formatDate(made.date) })}` : '');
   // A receipt of a filed period: the toast says the payment is dated the first open day and corrects that period (r8k-10).
-  const said = () => (made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects }) : t('receipts.privateDone'));
-  return run(nav, async () => { made = await api.privatePayment(r.id); }, said, () => api.deleteTransaction(made.ref));
+  const said = () => (made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects })
+    : part.amount !== undefined && part.amount < Math.abs(r.amount!) ? t('receipts.privatePartDone', { amount, what: part.part || t('receipts.privatePartUnnamed') }) : t('receipts.privateDone')) + rate();
+  const undo = () => api.deleteTransaction(made.ref);
+  const held = (e: unknown) => {
+    if (!onHeld || !(e instanceof ApiError) || e.body.code !== 'bookedByHand') return false;
+    onHeld(e.body.params);
+    return true;
+  };
+  return run(nav, async () => { made = await api.privatePayment(r.id, part); }, said, undo, held);
 }
 
-/** A private payment made by mistake goes with its booking and its link; undo pays the receipt privately again. */
+/** A private payment made by mistake goes with its booking and its link, and a booking by hand it replaced comes back; undo pays the receipt privately again, as it was. */
 export function undoPrivate(nav: Nav, v: ReceiptView, tx: BankTransaction, what: string) {
-  return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), () => api.privatePayment(v.r.id));
+  const part: PrivatePart = {
+    ...(tx.businessPart && { amount: tx.amount, ...(tx.businessPart.what && { part: tx.businessPart.what }), ...(tx.businessPart.rate !== undefined && { rate: tx.businessPart.rate }) }),
+    ...(tx.replaced?.length && { replace: tx.replaced[0].transactionRef }),
+  };
+  return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), () => api.privatePayment(v.r.id, part));
 }
 
 export function setKind(nav: Nav, v: ReceiptView, kind: ReceiptKind) {

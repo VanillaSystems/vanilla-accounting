@@ -149,6 +149,11 @@ function change(v: unknown): Change {
       if (c.as !== null && !RECEIPT_KINDS.includes(c.as as ReceiptKind)) throw new ChangesError(`as: eines von ${RECEIPT_KINDS.join(', ')} oder null`);
       return { kind: 'receiptKind', id: str(c.id, 'id'), as: c.as as ReceiptKind | null };
     }
+    case 'privatePayment': {
+      const opt = (k: 'part' | 'replace') => (typeof c[k] === 'string' && c[k].trim() ? { [k]: c[k].trim() } : {});
+      const n = (k: 'amount' | 'rate') => (c[k] === undefined || c[k] === null ? {} : { [k]: num(c[k], k) });
+      return { kind: 'privatePayment', receipt: str(c.receipt, 'receipt'), ...n('amount'), ...n('rate'), ...opt('part'), ...opt('replace') };
+    }
     case 'account': {
       const number = str(c.number, 'number');
       if (!/^\d{4}$/.test(number)) throw new ChangesError('number: vier Stellen', { code: 'accountNumber', params: { account: number } });

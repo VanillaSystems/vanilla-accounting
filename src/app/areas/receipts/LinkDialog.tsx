@@ -4,7 +4,8 @@
  * picked it only picks the first: a stray ↵ links nothing, r8h-21), Esc closes. The chosen payment
  * says when its amount is off the receipt's, before it is linked; a collective payment's row names
  * the part that pays the receipt (r8k-5). A receipt that has a payment says so at the top, and a
- * second payment is linked only after ↵ a second time. A payment of a filed quarter is marked:
+ * second payment is linked only after ↵ a second time. «Privat oder bar bezahlt» opens its form
+ * (PrivateForm): the whole receipt or only its business part (#87). A payment of a filed quarter is marked:
  * ↵ on it opens its correction in the open quarter and links nothing (corner-33).
  */
 import { useMemo, useState } from 'react';
@@ -17,7 +18,8 @@ import type { AreaProps } from '../index.js';
 import type { BankTransaction } from '../../../types/index.js';
 import { candidates, chfOf, linkKey, type Candidate, type Ledger, type ReceiptView } from './model.js';
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
-import { correctFiled, linkPayment, privateOutlay } from './actions.js';
+import { correctFiled, linkPayment } from './actions.js';
+import { PrivateForm } from './PrivateForm.js';
 import { Kbd } from './commands.js';
 import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
 
@@ -46,6 +48,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const [idx, setIdx] = useState<number | undefined>();
   /** A second payment for a receipt that has one: picked once, linked on the next ↵ or click. */
   const [second, setSecond] = useState<Candidate>();
+  /** «Privat oder bar bezahlt» picked: its form replaces the list. */
+  const [privately, setPrivately] = useState(false);
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q), [v, l, rates, q]);
   const items: Array<Candidate | 'private'> = [...best, ...more, 'private'];
   const at = idx === undefined ? -1 : Math.min(idx, items.length - 1);
@@ -53,7 +57,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
 
   function choose(item: Candidate | 'private' | undefined) {
     if (!item) return;
-    if (item === 'private') { onClose(); privateOutlay(nav, v); return; }
+    if (item === 'private') { setPrivately(true); return; }
     if (noCorrection(item)) return;
     if (item.filed) { onClose(); correctFiled(nav, books, l, item.tx.ref, r.id); return; }
     if (paid.length && second !== item) { setSecond(item); return; }
@@ -103,6 +107,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
             {second ? t('receipts.secondPaymentAsk', { what: txLine(second.tx) }) : t('receipts.hasPaymentAlready', { what: paid.map(txLine).join(', ') })}
           </p>
         )}
+        {privately ? <PrivateForm v={v} nav={nav} onBack={() => setPrivately(false)} onDone={onClose} /> : <>
         <input autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(undefined); setSecond(undefined); }} onKeyDown={onKeyDown} />
         <div className="res" role="listbox">
           {best.length > 0 && <div className="gh">{t('receipts.bestFit')}</div>}
@@ -122,6 +127,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
           <Kbd keys={['↵']} tip={t('receipts.linkTip')} /> {enterDoes}
           <Kbd keys={[t('receipts.escKey')]} tip={t('receipts.closeTip')} /> {t('receipts.close')}
         </div>
+        </>}
       </div>
     </>
   );

@@ -6,6 +6,8 @@ import { deletionsOf, dropFromTrash, readTrashed, trashedFile, trashReceipt, typ
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { privatePayment, setReceipt, unbookedPayments } from '../edits.js';
+import { loadFxResolver } from '../../accounting/fx-rates.js';
+import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
@@ -179,10 +181,23 @@ router.post('/api/vision/extract', async (req, res) => {
   });
 });
 
-/** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment, linked; the inbox run books it. A receipt of a filed period: dated the first open day, `corrects` names the period (r8k-10). */
+/** The body of «Privat oder bar bezahlt»: all optional; the business part's amount in the receipt's currency, what it was, its VAT rate line, the booking by hand it replaces. */
+function privatePartOf(raw: unknown): PrivatePart {
+  const b = patchBody(raw ?? {}, ['amount', 'part', 'rate', 'replace']);
+  const num = (k: 'amount' | 'rate') => {
+    if (b[k] === undefined || b[k] === null) return {};
+    if (typeof b[k] !== 'number') throw new RequestError(400, `${k} muss eine Zahl sein.`);
+    return { [k]: b[k] as number };
+  };
+  const text = (k: 'part' | 'replace') => (typeof b[k] === 'string' && (b[k] as string).trim() ? { [k]: (b[k] as string).trim().slice(0, 80) } : {});
+  return { ...num('amount'), ...num('rate'), ...text('part'), ...text('replace') };
+}
+
+/** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment of the receipt or of its business part, linked; the inbox run books it. A receipt of a filed period: dated the first open day, `corrects` names the period (r8k-10). */
 router.post('/api/receipts/:id/private-payment', async (req, res) => {
   const { id } = req.params;
-  const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id), file: books.receipts.find((r) => r.id === id)!.filename }));
+  const ask = privatePartOf(req.body);
+  const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id, ask, loadFxResolver()), file: books.receipts.find((r) => r.id === id)!.filename }));
   await bookAgain(file);
   res.json({ ok: true, ...made });
 });

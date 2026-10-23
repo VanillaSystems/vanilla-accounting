@@ -97,6 +97,15 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     case 'link': return { text: t('assistant.c.link', { name: receipt(c.receipt), payment: payment(c.payment) }), go: { area: 'receipts', id: c.receipt } };
     case 'unlink': return { text: t('assistant.c.unlink', { name: receipt(c.receipt), payment: payment(c.payment) }), go: { area: 'receipts', id: c.receipt } };
     case 'receiptKind': return { text: t(`assistant.c.kind.${c.as ?? 'none'}` as 'assistant.c.kind.none', { name: receipt(c.id) }), go: { area: 'receipts', id: c.id } };
+    case 'privatePayment': {
+      const r = books.receipts.find((x) => x.id === c.receipt);
+      const amount = `${r?.currency ?? ''} ${fmt(c.amount ?? r?.amount ?? 0)}`.trim();
+      const text = c.amount !== undefined && r?.amount != null && c.amount < Math.abs(r.amount)
+        ? t('assistant.c.privatePart', { name: receipt(c.receipt), amount, what: c.part ?? t('assistant.c.privatePartUnnamed') })
+        : t('assistant.c.privatePayment', { name: receipt(c.receipt), amount });
+      return { text: c.replace ? `${text} · ${t('assistant.c.privateReplaced', { entry: c.replace })}` : text, go: { area: 'receipts', id: c.receipt } };
+    }
+    case 'deletePayment': return { text: t('assistant.c.deletePayment', { name: receipt(c.receipt) }), go: { area: 'receipts', id: c.receipt } };
     case 'entry': {
       const what = [entryWhat(c.set), note?.vatFollowed && t('assistant.c.vatFollowed', note.vatFollowed), note?.noReceipt && t('assistant.c.noReceipt')].filter(Boolean).join(' · ');
       return { text: t('assistant.c.entry', { name: books.journalEntries?.find((x) => x.id === c.id)?.description || c.id, what }), go: { area: 'journal', id: c.id } };
