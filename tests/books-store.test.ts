@@ -324,6 +324,9 @@ test('the server runs a change once more on books loaded afresh when another pro
   assert.deepEqual([runs, count], [2, 4]);
   assert.deepEqual(loadBooks(dir).journalEntries.map((e) => e.id).sort(), ['jc', 'jo', 'mine', 'other']);
   runs = 0;
+  assert.throws(() => updateBooks(() => { runs++; throw new StaleBooksError(['elsewhere']); }), StaleBooksError);
+  assert.equal(runs, 1, 'only a stale save is retried, not fn\'s own error');
+  runs = 0;
   assert.throws(() => updateBooksWithEffects((books) => {
     runs++;
     otherSaves('other2');

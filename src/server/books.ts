@@ -57,11 +57,15 @@ type Sync<T> = T extends PromiseLike<unknown> ? never : T;
  * `fn` also writes elsewhere (a file, the invoice book) uses updateBooksWithEffects.
  */
 export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
-  try {
-    return updateBooksWithEffects(fn);
-  } catch (e) {
-    if (!(e instanceof StaleBooksError)) throw e;
-    return updateBooksWithEffects(fn);
+  for (let again = false; ; again = true) {
+    const books = readBooks();
+    const result = update(books, PERSON, fn);
+    try {
+      saveBooks(WS, books);
+      return result;
+    } catch (e) {
+      if (again || !(e instanceof StaleBooksError)) throw e;
+    }
   }
 }
 
