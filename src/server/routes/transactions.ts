@@ -11,6 +11,7 @@ import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestErr
 import { assertPlaced, attachEntries, bookPayment, dropPayment } from '../edits.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
+import { isIsoDate } from '../../accounting/periods.js';
 import type { BookingLine } from '../../accounting/manual-booking.js';
 
 export const router = Router();
@@ -83,7 +84,7 @@ function parseMovement(body: unknown): ParsedMovement {
   const text = (k: string) => (b[k] === undefined ? undefined : stringField(b, k).trim() || undefined);
   const date = text('date');
   const description = text('description');
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !description || typeof b.amount !== 'number' || !Number.isFinite(b.amount) || b.amount === 0) {
+  if (!date || !isIsoDate(date) || !description || typeof b.amount !== 'number' || !Number.isFinite(b.amount) || b.amount === 0) {
     throw new RequestError(400, 'date (JJJJ-MM-TT), description und amount (eine Zahl ungleich 0) sind nötig.');
   }
   const direction = (text('direction') ?? 'DBIT') as BankTransaction['direction'];

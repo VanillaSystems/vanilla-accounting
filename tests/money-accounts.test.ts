@@ -210,6 +210,8 @@ test('API: a cash purchase adds the cash box with its first movement; a bank pay
   assert.equal(chart.find((a) => a.number === '1000')?.name, 'Kasse', 'its ledger account joins the chart');
   const unknown = await api.send('POST', '/api/transactions/manual', { date: '2026-08-04', description: 'x', amount: 1, account: '1999' });
   assert.equal(unknown.status, 400, 'an account the firm lacks needs its role and label');
+  const impossible = await api.send('POST', '/api/transactions/manual', { date: '2026-02-31', description: 'x', amount: 1, account: '1021' });
+  assert.equal(impossible.status, 400, 'a day the calendar lacks is refused');
 
   const typed = await api.send('POST', '/api/transactions/manual', { date: '2026-08-18', description: 'Druckerei Muster', amount: 230.4, account: '1021' });
   assert.equal(typed.status, 200, JSON.stringify(typed.json));
