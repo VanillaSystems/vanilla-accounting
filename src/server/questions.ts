@@ -152,8 +152,7 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
  * correction, asked back, r4c-35) takes hers. A payment with a receipt or an invoice is the
  * document's to decide, never changed; one with no revenue entry to set is refused, not answered
  * with nothing booked (r4c-28). «Kein Umsatz» on a payment without any booking (deleted since the
- * question was asked) books it bank against the owner's account, so the answer acts and its payer
- * rule is kept (r9n-21).
+ * question was asked) books it bank against the owner's account, so the answer acts (r9n-21).
  */
 function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string } {
   if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
@@ -287,8 +286,8 @@ export function answerQuestion(id: string, { by, answer }: { by: string; answer:
 }
 
 /**
- * The bookings the withdrawn payer rule `rule` made in the open period are no longer the rule's
- * (r9n-22). One it booked as a sale stays that sale, with its code, as the person taught it
+ * The bookings the withdrawn payer rule `rule` (kept by an answer before #38) made in the open
+ * period are no longer the rule's (r9n-22). One it booked as a sale stays that sale, with its code, as the person taught it
  * (corner-4); nothing keeps a reason naming the rule that is gone. One it moved off revenue
  * («kein Umsatz»: the owner's account) goes back to being the app's guess: a sale at the proposal
  * (saleCodeOf's reasoning), on the revenue account the answer had moved the money from
@@ -316,7 +315,7 @@ function revertRuleBookings(b: Books, rule: string, revenue: string | undefined)
 
 /**
  * Takes back what the answer did, as one whole: its bookings as before the answer, its precedent,
- * its payer rule and that rule's later bookings (revertRuleBookings), the payment's mark; the
+ * the payer rule an answer kept before #38 and that rule's later bookings (revertRuleBookings), the payment's mark; the
  * question is open again. Änderungen › «Rückgängig» on the answer's booking comes here too (r9n-20).
  */
 export function undoAnswer(id: string, by: string): Question {
