@@ -21,6 +21,7 @@ import { context } from 'esbuild';
 import { createServer } from 'vite';
 import { describeBuild } from '../../src/version.ts';
 import { bundles } from './bundles.mjs';
+import { buildDictation } from './dictation.mjs';
 
 const VITE_PORT = 5191;
 const WINDOW_PORT = 5192;
@@ -41,6 +42,10 @@ const ui = `http://127.0.0.1:${vitePort}`;
 
 const contexts = await Promise.all(bundles(describeBuild(process.cwd())).map((options) => context(options)));
 let inputs = await rebuild();
+// The chat's microphone (src/desktop/dictation.swift), built once: without swiftc the chat has no button.
+if (process.platform === 'darwin') {
+  try { buildDictation(); } catch (e) { console.warn(`desktop:dev: no microphone in the chat, the speech recognizer did not build: ${e.message}`); }
+}
 
 let child;
 let restarting = false;
