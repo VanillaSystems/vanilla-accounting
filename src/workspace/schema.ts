@@ -14,8 +14,8 @@
  */
 import { isMap, isSeq, type Document } from 'yaml';
 import { roleBefore } from './banks.js';
-import { documents } from '../engines/index.js';
-import { statementFacts } from '../intake/statement-facts.js';
+import { statementFacts } from '../books/statement-facts.js';
+import type { DocumentsData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
 
 /**
@@ -39,6 +39,12 @@ export const INVOICES_SCHEMA = 1;
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
 
+let documentWords: DocumentsData | undefined;
+/** The open jurisdiction's document words for books step 4, handed over with the jurisdiction (src/engines/index.ts setJurisdiction): the core reads no engine. */
+export function useDocumentWords(words: DocumentsData): void {
+  documentWords = words;
+}
+
 export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // The records stay as they are; only where they lie changed.
   1: (doc) => doc,
@@ -52,10 +58,9 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // jurisdiction's: every workspace open loads it (tests: tests/support/jurisdiction.js); without
   // one the books stay as they are.
   4: (doc) => {
-    let words: ReturnType<typeof documents>;
-    try { words = documents(); } catch { return doc; }
+    const words = documentWords;
     const receipts = doc.receipts as Receipt[] | undefined;
-    if (!receipts) return doc;
+    if (!words || !receipts) return doc;
     return {
       ...doc,
       receipts: receipts.map((r) => {

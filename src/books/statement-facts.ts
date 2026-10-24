@@ -9,7 +9,7 @@
 import type { DocumentsData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import { namesStatement, wordsRe } from './document-kind.js';
+import { HEAD, namesStatement, wordsRe } from '../core/modules/words.js';
 
 export interface StatementFacts {
   /** The first day of the period, when the text or the name gives it. */
@@ -21,9 +21,6 @@ export interface StatementFacts {
   /** The account's currency, when the file name gives it. */
   currency?: string;
 }
-
-/** Where a statement names itself and its account: its first lines. */
-const HEAD = 600;
 
 const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/;
 const DMY = String.raw`(\d{1,2})\.(\d{1,2})\.(20\d{2})`;

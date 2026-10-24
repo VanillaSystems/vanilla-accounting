@@ -9,7 +9,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
 import { pdfText } from '../parsers/pdf-text.js';
-import { statementPdf } from '../intake/statement-facts.js';
+import { statementPdf } from './statement-facts.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';

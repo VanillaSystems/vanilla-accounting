@@ -7,7 +7,7 @@ import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { documents } from '../src/engines/index.js';
-import { accountOfStatement, statementFacts, statementPdf, statementPeriod } from '../src/intake/statement-facts.js';
+import { accountOfStatement, statementFacts, statementPdf, statementPeriod } from '../src/books/statement-facts.js';
 import { parseIban } from '../src/workspace/banks.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb } from '../src/workspace/schema.js';
 

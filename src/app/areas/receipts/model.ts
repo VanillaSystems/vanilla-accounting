@@ -10,7 +10,7 @@ import type { ReceiptFilter } from '../../shell/route.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
-import { accountOfStatement, statementFacts, type StatementFacts } from '../../../intake/statement-facts.js';
+import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';

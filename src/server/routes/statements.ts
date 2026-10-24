@@ -11,7 +11,7 @@ import { basename, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { madeByHand } from '../../workspace/money-accounts.js';
 import { legOf, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, refsHeldWithout, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
-import { statementPdf } from '../../intake/statement-facts.js';
+import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';

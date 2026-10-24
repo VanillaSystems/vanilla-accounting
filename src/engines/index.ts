@@ -7,6 +7,7 @@
 import type { Jurisdiction } from '../core/modules/schema.js';
 import { EFFECTIVE_QUARTERLY, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
+import { useDocumentWords } from '../workspace/schema.js';
 import { returnEngine, type ReturnEngine } from './return.js';
 
 let current: { source: Jurisdiction; setup?: VatSetup; vat: ReturnEngine; chart: ChartEngine } | undefined;
@@ -17,6 +18,7 @@ let current: { source: Jurisdiction; setup?: VatSetup; vat: ReturnEngine; chart:
  */
 export function setJurisdiction(j: Jurisdiction, setup?: VatSetup): void {
   if (current?.source !== j || current.setup !== setup) current = { source: j, setup, vat: returnEngine(j, setup), chart: chartEngine(j.chart) };
+  useDocumentWords(j.documents);
 }
 
 function loaded() {

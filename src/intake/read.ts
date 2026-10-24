@@ -29,7 +29,7 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
-import { statementFacts } from './statement-facts.js';
+import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────

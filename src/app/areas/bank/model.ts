@@ -13,7 +13,7 @@ import { fromRappen, toRappen } from '../../../accounting/rappen.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { splitTitle } from '../receipts/model.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
-import { accountOfStatement, statementFacts } from '../../../intake/statement-facts.js';
+import { accountOfStatement, statementFacts } from '../../../books/statement-facts.js';
 
 export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements' | 'iban'>;
 
