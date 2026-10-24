@@ -92,7 +92,7 @@ test('a field offers the active declared values, then the values bookings carry 
 });
 
 test('books schema 4: the step from 3 changes no record and runs twice to the same result; an app of schema 3 refuses books of schema 4', () => {
-  assert.equal(BOOKS_SCHEMA, 4);
+  assert.equal(BOOKS_SCHEMA, 5);
   const clone = (d: Record<string, unknown>) => structuredClone(d);
   const books = { schema: 3, journalEntries: [{ id: 'e1', tags: { projekt: 'alpha' } }], config: { closedThrough: '2026-03-31' } };
   const once = climb<Record<string, unknown>>(books, 3, BOOKS_SCHEMA, BOOKS_MIGRATIONS, 'ledger.json', clone);
@@ -102,7 +102,7 @@ test('books schema 4: the step from 3 changes no record and runs twice to the sa
   assert.throws(() => climb(once, 4, 3, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError && /schema 4; this version of the app reads up to 3/.test(e.message));
 });
 
-test('tags on an open entry survive a save and a load, and a sealed demo still verifies with books written at schema 4', () => {
+test('tags on an open entry survive a save and a load, and a sealed demo still verifies with books written at the current schema', () => {
   const dir = mkdtempSync(join(tmpdir(), 'tags-books-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const ws = workspaceAt(dir);
@@ -112,7 +112,7 @@ test('tags on an open entry survive a save and a load, and a sealed demo still v
   saveBooks(ws, books);
   const again = loadBooks(ws);
   assert.deepEqual(again.journalEntries.find((e) => e.id === open.id)?.tags, { projekt: 'alpha' });
-  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 4);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
 });
 
 // ─── Rules ───────────────────────────────────────────────────────────────────

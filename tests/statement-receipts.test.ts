@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { documents } from '../src/engines/index.js';
 import { accountOfStatement, statementFacts, statementPdf, statementPeriod } from '../src/intake/statement-facts.js';
 import { parseIban } from '../src/workspace/banks.js';
+import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb } from '../src/workspace/schema.js';
 
 const words = documents();
 const doc = (lines: string[], filename = 'scan.pdf', originalFilename = filename) => ({ extractedText: lines.join('\n'), filename, originalFilename });
@@ -66,4 +67,30 @@ test('statementPeriod reads a dash, «bis» or «to» between two days, in eithe
   assert.deepEqual(statementPdf('statement_20629946_CHF_2026-02-01_2026-02-28.pdf'), { currency: 'CHF', fromDate: '2026-02-01', toDate: '2026-02-28' });
   assert.deepEqual(statementPdf('Kontoauszug 01.01.2026 - 31.01.2026 - CH6580808000000000001 - 2026-01-31.pdf'), { fromDate: '2026-01-01', toDate: '2026-01-31' });
   assert.equal(statementPdf('20260105-example-cloud-invoice-2026-01.pdf'), null);
+});
+
+test('books 4 → 5: a receipt nobody typed that reads as a statement is typed and dated; a person\'s kind, an own date and an invoice stay; the step runs twice to the same result', () => {
+  const invoice = { id: 'inv', filename: 'r.pdf', date: '2026-02-03', extractedText: 'Swisscom AG\nRechnung 4711\nTotal CHF 89.00\nMWST 8.1%' };
+  const books = {
+    schema: 4, config: { closedThrough: '2026-03-31' },
+    receipts: [
+      { id: 'a', ...doc(KONTOAUSZUG, 'Kontoauszug.pdf') },
+      { id: 'b', ...doc(KONTOAUSZUG, 'b.pdf'), kind: 'invoice', kindBy: 'human' },
+      { id: 'c', ...doc(KONTOAUSZUG, 'c.pdf'), date: '2026-03-02' },
+      { id: 'd', ...doc(KONTOAUSZUG, '20260305-d.pdf'), date: '2026-03-05', dateSource: 'captured' },
+      invoice,
+    ],
+  };
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  const once = climb<Record<string, unknown>>(books, 4, BOOKS_SCHEMA, BOOKS_MIGRATIONS, 'ledger.json', clone);
+  const twice = climb<Record<string, unknown>>(once, 4, BOOKS_SCHEMA, BOOKS_MIGRATIONS, 'ledger.json', clone);
+  const [a, b, c, d, e] = once.receipts as Array<Record<string, unknown>>;
+  const typed = { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement' };
+  assert.deepEqual(a, { ...books.receipts[0], ...typed, date: '2026-02-28' });
+  assert.deepEqual(b, books.receipts[1], 'a kind a person gave stays');
+  assert.deepEqual(c, { ...books.receipts[2], ...typed }, 'its own date stays');
+  assert.deepEqual(d, { id: 'd', ...doc(KONTOAUSZUG, '20260305-d.pdf'), ...typed, date: '2026-02-28' }, 'a day read off the name gives way to the period');
+  assert.deepEqual(e, invoice);
+  assert.deepEqual(twice, once);
+  assert.equal('kind' in books.receipts[0], false, 'the books handed in are not changed');
 });
