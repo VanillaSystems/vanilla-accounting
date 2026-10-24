@@ -110,6 +110,12 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
 
+/**
+ * What a locked receipt refuses (#151): a link or a delete, which would change a filed return.
+ * Its date, words and kind still change; its amount, VAT and file stay (the server holds them).
+ */
+export const lockedRefuses = (act: 'link' | 'edit' | 'del' | 'mark' | 'notreceipt') => act === 'link' || act === 'del';
+
 /** Receipts that may repeat another and wait for «Ist dasselbe» or «Verschieden» (Belege and Aufgaben, r5h-34). */
 export const openTwins = (l: Ledger): ReceiptView[] =>
   l.views.filter((v) => v.twin?.relation === 'duplicate' && !v.links.length && v.r.kind !== 'duplicate' && !v.locked && l.byId.has(v.twin.of));

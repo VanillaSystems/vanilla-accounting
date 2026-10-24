@@ -200,17 +200,13 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
-          edit && <button type="button" title={t('receipts.isReceipt')} aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
+          canEdit && <button type="button" title={t('receipts.isReceipt')} aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
         ) : (
           <>
             <button type="button" title={t('receipts.previewKey')} aria-label={t('receipts.preview')} onClick={act(() => setUi({ overlay: 'quick' }))}>{I.eye}</button>
-            {edit && (
-              <>
-                <button type="button" title={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>
-                <button type="button" title={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>
-                <button type="button" className="del" title={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>
-              </>
-            )}
+            {edit && <button type="button" title={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>}
+            {canEdit && <button type="button" title={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>}
+            {edit && <button type="button" className="del" title={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>}
           </>
         )}
       </span>

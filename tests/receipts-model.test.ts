@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
-import { badgeCount, candidates, groups, ledgerOf, suggestion, visible, type ToChf } from '../src/app/areas/receipts/model.js';
+import { badgeCount, candidates, groups, ledgerOf, lockedRefuses, suggestion, visible, type ToChf } from '../src/app/areas/receipts/model.js';
 
 const receipt = (id: string, x: Partial<Receipt>): Receipt => ({
   id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: '', extractionMethod: 'pdftotext',
@@ -53,6 +53,10 @@ test('a receipt linked to a payment of a filed quarter is locked; the vendor com
   assert.equal(view('filed').locked, true);
   assert.equal(view('paper').locked, false);
   assert.deepEqual([view('paper').vendor, view('paper').desc], ['Muster Büro AG', 'Druckerpapier']);
+});
+
+test('a locked receipt refuses a link and a delete; its date, words and kind still change (#151)', () => {
+  assert.deepEqual((['link', 'edit', 'del', 'mark', 'notreceipt'] as const).filter(lockedRefuses), ['link', 'del']);
 });
 
 test('a period shows its receipts, counts them per filter, and hides what is no receipt', () => {
