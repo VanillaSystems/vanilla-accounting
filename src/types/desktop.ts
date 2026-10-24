@@ -16,7 +16,25 @@ export interface DesktopBridge {
   setLanguage(code: string): void;
   /** Saves a file of the local server (`url`) through the system's Save dialog; false when the person cancelled. */
   saveFile(url: string, name: string): Promise<boolean>;
+  /**
+   * Listens on the microphone and recognizes the words on this Mac (src/desktop/dictation.swift);
+   * returns the stop. Absent where the app has no recognizer (not a Mac, or a build without it).
+   */
+  dictate?(lang: string, listener: (event: DictationEvent) => void): () => void;
 }
+
+/** Why the Mac's recognizer stopped early (src/desktop/dictation.swift). */
+export type DictationProblem = 'micDenied' | 'speechDenied' | 'noOnDevice' | 'notInstalled' | 'failed';
+
+/**
+ * What the recognizer reports, in order: `preparing` while it loads the language's model (once),
+ * `listening`, `heard` with everything heard so far each time it grows, and one `ended`.
+ */
+export type DictationEvent =
+  | { kind: 'preparing' }
+  | { kind: 'listening' }
+  | { kind: 'heard'; text: string }
+  | { kind: 'ended'; error?: DictationProblem };
 
 /**
  * `window.vanillaSmoke`, only when the app was started with --vanilla-smoke (tools/desktop/smoke.mjs):

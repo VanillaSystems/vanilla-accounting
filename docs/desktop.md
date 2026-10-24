@@ -18,6 +18,7 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 | What is packed | `desktop/not-packed.cjs` | puppeteer-core, the canvas binary pdf.js would load, and the mail client of receipt collection (imapflow, mailparser) stay out, with every package only they need. The engine imports them only dynamically or from CLI code the bundle does not reach; `tools/desktop/build.mjs` fails when the bundle imports one at start. |
 | Photos | `src/parsers/image-pdf.ts`, `src/parsers/smaller.ts` | A JPG, PNG or HEIC in the inbox becomes a one-page PDF, turned upright by its EXIF orientation; HEIC is decoded by `/usr/bin/sips`. An own photo or the phone's scan is made smaller before it gets its id: each large JPEG in it is scaled to 3000 pixels on its long side at quality 75, by `sips` as well; a received PDF, a signed or encrypted one stays byte for byte. |
 | Mail app | `src/platform/sources/mac-mail.ts` | The `mac-mail` channel for a source over one account of the Mail app (none is set up by the app yet, ADR 0015): the app asks Mail through `/usr/bin/osascript` (JavaScript for Automation) for its accounts, new messages and their attachments; no Full Disk Access. macOS asks once whether the app may control Mail, with the text of `NSAppleEventsUsageDescription`; the hardened runtime needs the entitlement `com.apple.security.automation.apple-events`. The app's own source code runs in the app's process (`inProcessLauncher`), since the fenced child cannot start in the Mac app yet. Contract and limits: `docs/0.4.0/mail-channels.md`. |
+| Dictation | `src/desktop/dictation.swift`, `src/desktop/dictation.ts` | The chat's microphone (issue #150). The browser's Web Speech API fails in Electron, so the app ships its own recognizer: `Contents/MacOS/vanilla-dictation`, a Swift program built by `tools/desktop/build.mjs` with `swiftc` (Xcode command line tools) for Apple silicon and Intel. The main process starts one run per dictation and reads its JSON lines (`DictationEvent`); the page reaches it through `window.vanilla.dictate`, present only when the program was found. It captures the microphone with AVAudioEngine and recognizes on the Mac: from macOS 26 with SpeechAnalyzer (de-CH, fr-CH, it-CH, en-US; a language's model is fetched from Apple once, shown as «Lädt die Spracherkennung»), before that with SFSpeechRecognizer and `requiresOnDeviceRecognition`, only where Dictation has the language's model (de-CH, fr-CH, it-CH fall back to de-DE, fr-FR, it-IT); otherwise the button says why and nothing goes online. No audio and no text leave the Mac. macOS asks once for the microphone (`NSMicrophoneUsageDescription`) and, before macOS 26, for speech recognition (`NSSpeechRecognitionUsageDescription`); the program carries the same texts in its own `__info_plist`. Signed, the hardened runtime needs `com.apple.security.device.audio-input`. `vanilla-dictation --lang de-CH --file a.aiff` recognizes a file, for a check without a microphone (`say -v Anna -o a.aiff …`). |
 
 ## Receipts from the phone
 
@@ -57,6 +58,7 @@ Verkleinern and Originalgrösse step it, and ⌘+ ⌘− ⌘0 still reach the pa
 ## Commands
 
     npm run desktop          # build the UI and the main process, then run the app from this checkout
+    npm run desktop:dev      # the app from this checkout without a rebuild per change (below)
     npm run desktop:build    # release/Vanilla Accounting-<version>-arm64.dmg and -x64.dmg
     node tools/desktop/smoke.mjs "release/mac-arm64/Vanilla Accounting.app" .verify/evidence/release/b
 
@@ -97,6 +99,45 @@ cookies. So the smoke reaches the page through Chromium's `--remote-debugging-po
 native menu through `window.vanillaSmoke`, which the preload exposes only when the app is started
 with `--vanilla-smoke`. Both are command-line switches: a person opening the app from the Finder
 has neither, and whoever can start it with switches could drive the page anyway.
+
+## Dev mode
+
+`npm run desktop:dev` (`tools/desktop/dev.mjs`) runs the app from this checkout and keeps it
+current while you edit. It is one command; Ctrl+C ends it, and so does quitting the app.
+
+| You change | What happens |
+|---|---|
+| `src/app/**` (components, CSS, the dictionaries) | Vite's HMR updates the page in the window. A component swaps in place; a file that is not a component, such as a dictionary, reloads the page. Electron keeps running. |
+| a file the main process bundles outside `src/app` (`src/desktop`, `src/server`, the engine) | esbuild rebuilds `out/desktop/` and the runner restarts Electron. The window reopens where it was, on the books opened last. |
+| anything else, or the menu's words (they come from the dictionaries) | type `rs` and Enter in the terminal to restart Electron by hand. |
+
+The window loads the desktop server as in the packed app, so `/start`, the app's paths, the
+books API, `/api/desktop`, the host check and the preload's bridge are the same. Only the server's
+answer to a request that is no API changes: in dev it comes from the Vite dev server the runner
+starts (`devUi` in `src/desktop/server.ts`), not from `dist/`. Vite's HMR socket goes to Vite
+directly. Electron is in a process group of its own; a restart or the end sends it SIGTERM, which
+it answers with `app.quit()`, then removes whatever of the group is left (helpers, the login shell
+of the PATH lookup), with SIGKILL after 5 seconds. The runner stops nothing outside that group.
+
+Dev mode does not share anything with the installed app, so both can run side by side:
+
+- The user data folder is `~/Library/Application Support/vanilla-accounting-dev` (recent list,
+  `desktop.json`, the demo copy, the single-instance lock). Set `VANILLA_DEV_USER_DATA` to use
+  another folder, for example a fresh one for a test.
+- The window's server listens on 127.0.0.1:5192, Vite on 127.0.0.1:5191 (or the next free port).
+  `npm start` uses 5173 and 3456, and the installed app keeps its own port.
+- Electron starts with Chromium's `--use-mock-keychain`, so dev never reads or writes the keychain
+  item "vanilla-accounting Safe Storage". An SMTP password saved in dev is sealed with a test key.
+- The window shows a DEV badge at the top, its title starts with «DEV ·», and the Dock icon carries
+  «DEV».
+
+Electron starts with the PATH an app opened from the Finder has (`/usr/bin:/bin:/usr/sbin:/sbin`),
+so `claude` and `codex` are found through the login shell as in the packed app. Arguments after
+`--` go to Electron, for example `npm run desktop:dev -- --remote-debugging-port=9339`.
+
+Dev mode is active only when the runner sets both `VANILLA_DEV_UI` and `VANILLA_DEV_USER_DATA`,
+and never in a packed app (`app.isPackaged`), whatever its environment says. `npm run desktop`,
+`desktop:dir` and `desktop:build` set neither and run as before.
 
 ## Signing, notarization, updates
 

@@ -1,19 +1,24 @@
 /**
  * Speech to text for the chat's microphone button: one recognizer per environment, the first this
  * one has. The browser's own (Chrome, Edge, Safari) hears through its maker's online service. The
- * Mac app does not use it: in Electron it needs a key only the browsers carry and fails with
- * `network`; the app gets its own on-device recognizer instead. Firefox has none: no button.
+ * Mac app does not use it (in Electron it needs a key only the browsers carry and fails with
+ * `network`): it recognizes on the Mac (src/desktop/dictation.swift), and never goes online.
+ * Firefox has none: no button.
  */
 import { desktop } from '../desktop/bridge.js';
+import type { DesktopBridge, DictationProblem } from '../../types/desktop.js';
 
 /** Why listening stopped early; a pause or a stop by the person is no error. */
-export type DictationError = 'denied' | 'unreachable' | 'failed';
+export type DictationError = 'denied' | 'unreachable' | DictationProblem;
 
 export interface Recognizer {
   /** The voice leaves this computer to be recognized. */
   online: boolean;
-  /** Starts listening; `heard` gets everything heard so far, each time it grows. Returns the stop. */
-  start(lang: string, heard: (text: string) => void, ended: (error?: DictationError) => void): () => void;
+  /**
+   * Starts listening; `heard` gets everything heard so far, each time it grows; `preparing` is true
+   * while the recognizer first loads the language onto this computer. Returns the stop.
+   */
+  start(lang: string, heard: (text: string) => void, ended: (error?: DictationError) => void, preparing?: (loading: boolean) => void): () => void;
 }
 
 interface SpeechResults { length: number; [i: number]: { 0: { transcript: string } } }
@@ -57,8 +62,29 @@ function browser(): Recognizer | undefined {
   };
 }
 
-export function recognizer(): Recognizer | undefined {
-  if (typeof window === 'undefined' || desktop) return undefined;
+/**
+ * The Mac app's: heard and recognized on the Mac. Like the Mac's own dictation it stops when the
+ * window loses focus, but only once listening: the system's permission prompt takes the focus first.
+ */
+export function onDevice(bridge: Required<Pick<DesktopBridge, 'dictate'>>, win: Pick<Window, 'addEventListener' | 'removeEventListener'> = window): Recognizer {
+  return {
+    online: false,
+    start(lang, heard, ended, preparing) {
+      const blur = () => stop();
+      const stop = bridge.dictate(lang, (e) => {
+        if (e.kind === 'preparing') preparing?.(true);
+        else if (e.kind === 'listening') { preparing?.(false); win.addEventListener('blur', blur); }
+        else if (e.kind === 'heard') heard(e.text);
+        else { preparing?.(false); win.removeEventListener('blur', blur); ended(e.error); }
+      });
+      return stop;
+    },
+  };
+}
+
+export function recognizer(bridge: DesktopBridge | undefined = desktop): Recognizer | undefined {
+  if (typeof window === 'undefined') return undefined;
+  if (bridge) return bridge.dictate ? onDevice({ dictate: bridge.dictate }) : undefined;
   return browser();
 }
 

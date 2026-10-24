@@ -7,10 +7,10 @@
  * Nothing here needs Electron, so the tests run it in Node.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, type RequestListener, type Server } from 'node:http';
+import { createServer, request, type RequestListener, type Server } from 'node:http';
 import { join, resolve } from 'node:path';
 import express from 'express';
-import { isAppPath } from '../server/app-paths.js';
+import { isApiPath, isAppPath } from '../server/app-paths.js';
 import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, usePhoneToken } from '../server/phone.js';
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
 import { readManifest } from '../workspace/manifest.js';
@@ -35,6 +35,8 @@ export interface DesktopServerOptions {
   booksHome: string;
   /** The built UI. */
   dist: string;
+  /** Under `npm run desktop:dev` (tools/desktop/dev.mjs): the Vite dev server's origin, which answers every request that is no API instead of `dist`. */
+  devUi?: string;
   /** The demo shipped with the app. */
   demoSource?: string;
   /** After books were opened, from the start screen or the menu. */
@@ -300,9 +302,14 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     res.json(await setPhone(on));
   });
 
-  app.use(express.static(opts.dist, { index: false }));
-  app.use((req, res, next) => (books ? books(req, res, next) : next()));
-  app.get(/.*/, (req, res, next) => (isAppPath(req.path) ? res.sendFile(join(opts.dist, 'index.html')) : next()));
+  if (opts.devUi) {
+    app.use((req, res, next) => (books ? books(req, res, next) : next()));
+    app.use((req, res, next) => (isApiPath(req.path) ? next() : forwardTo(opts.devUi!, req, res)));
+  } else {
+    app.use(express.static(opts.dist, { index: false }));
+    app.use((req, res, next) => (books ? books(req, res, next) : next()));
+    app.get(/.*/, (req, res, next) => (isAppPath(req.path) ? res.sendFile('index.html', { root: opts.dist }) : next()));
+  }
   app.use('/api', (_req, res) => {
     res.status(409).json({ error: 'Keine Buchhaltung geöffnet.', code: 'noWorkspace' } satisfies ApiErrorBody);
   });
@@ -319,6 +326,17 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       resume: () => (pairing?.on ? setPhone(true) : Promise.resolve(phoneInfo())),
     },
   };
+}
+
+/** The page and its modules from Vite, so the window keeps this server's origin, host check and API. Vite's HMR socket goes to Vite itself. */
+function forwardTo(origin: string, req: express.Request, res: express.Response): void {
+  const target = new URL(origin);
+  const upstream = request({ hostname: target.hostname, port: target.port, path: req.originalUrl, method: req.method, headers: { ...req.headers, host: target.host } }, (answer) => {
+    res.writeHead(answer.statusCode ?? 502, answer.headers);
+    answer.pipe(res);
+  });
+  upstream.on('error', (e) => { if (res.headersSent) res.end(); else res.status(502).type('text').send(`Vite at ${origin}: ${e.message}`); });
+  req.pipe(upstream);
 }
 
 function refuse(res: express.Response, e: unknown): void {

@@ -8,7 +8,7 @@
  */
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell } from 'electron';
 import { usePrintPages } from '../invoices/pdf.js';
@@ -19,6 +19,7 @@ import type { KnownBooks, MenuCommand } from '../types/desktop.js';
 import { setupPath } from '../app/desktop/bridge.js';
 import { findClaude } from '../platform/login-path.js';
 import { sameOrigin, saveFile } from './save-file.js';
+import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer, listen, portOf } from './server.js';
@@ -27,6 +28,16 @@ import { readState, writeState, type Bounds } from './state.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
 const SMOKE = app.commandLine.hasSwitch('vanilla-smoke');
+const DEV = devMode();
+// Before the single-instance lock, which lives in the user data folder: dev never meets the installed app's.
+if (DEV) {
+  app.setPath('userData', DEV.userData);
+  // The runner restarts it with SIGTERM, which Chromium alone takes 20 s and more to act on; app.quit() takes a moment.
+  process.on('SIGTERM', () => app.quit());
+}
+/** The chat's speech recognizer: next to the app's binary when packed, beside the bundle when run from the repo. */
+const DICTATION = process.platform !== 'darwin' ? undefined
+  : [join(dirname(process.execPath), 'vanilla-dictation'), join(HERE, 'vanilla-dictation')].find((f) => existsSync(f));
 
 // The sheet's text is laid out as puppeteer prints it (src/invoices/pdf.ts launches Chrome so).
 app.commandLine.appendSwitch('font-render-hinting', 'none');
@@ -49,6 +60,7 @@ async function start(): Promise<void> {
     demoRoot: join(app.getPath('userData'), 'Demo'),
     booksHome: app.getPath('documents'),
     dist: join(APP_ROOT, 'dist'),
+    devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
     onOpen: () => refreshMenu(),
   });
@@ -118,6 +130,7 @@ async function start(): Promise<void> {
       write: (path, bytes) => writeFile(path, bytes),
     });
   });
+  dictationHandles();
   ipcMain.on('desktop:language', (_e, code: unknown) => {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }
@@ -154,6 +167,29 @@ async function offerApplicationsFolder(t: ReturnType<typeof textsIn>): Promise<v
   }
 }
 
+/** One recognizer per dictation of a page, stopped by the page, or when the page goes away. */
+function dictationHandles(): void {
+  if (!DICTATION) return;
+  const running = new Map<string, () => void>();
+  ipcMain.on('dictation:start', (e, id: unknown, lang: unknown) => {
+    const page = e.sender;
+    const key = `${page.id}:${String(id)}`;
+    if (typeof id !== 'string' || !isLang(lang) || running.has(key)) return;
+    // A reload or a closed window leaves no page to stop it: the microphone goes off with the page.
+    const gone = () => stop();
+    const stop = dictate(DICTATION, lang, (event) => {
+      if (event.kind === 'ended') {
+        running.delete(key);
+        page.off('destroyed', gone).off('did-navigate', gone);
+      }
+      if (!page.isDestroyed()) page.send('dictation:event', id, event);
+    });
+    running.set(key, stop);
+    page.once('destroyed', gone).once('did-navigate', gone);
+  });
+  ipcMain.on('dictation:stop', (e, id: unknown) => { running.get(`${e.sender.id}:${String(id)}`)?.(); });
+}
+
 function smokeHandles(): void {
   const menu = () => Menu.getApplicationMenu();
   ipcMain.handle('smoke:menu', () => ({
@@ -179,15 +215,36 @@ function createWindow(stateFile: string): BrowserWindow {
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const } : {}),
     webPreferences: {
       preload: join(HERE, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,
-      additionalArguments: SMOKE ? ['--vanilla-smoke'] : [],
+      additionalArguments: [...(SMOKE ? ['--vanilla-smoke'] : []), ...(DICTATION ? ['--vanilla-dictation'] : [])],
     },
   });
   if (saved?.maximized) win.maximize();
+  if (DEV) markDev(win);
   void win.webContents.setVisualZoomLevelLimits(1, 1);
   win.on('close', () => {
     writeState(stateFile, { ...readState(stateFile), bounds: { ...win.getNormalBounds(), maximized: win.isMaximized() } });
   });
   return win;
+}
+
+/**
+ * `npm run desktop:dev` (tools/desktop/dev.mjs): the UI from Vite and a user data folder of its own,
+ * both named by the runner. Never in the packed app, whatever its environment says.
+ */
+function devMode(): { ui: string; userData: string } | undefined {
+  const { VANILLA_DEV_UI: ui, VANILLA_DEV_USER_DATA: userData } = process.env;
+  return !app.isPackaged && ui && userData ? { ui, userData } : undefined;
+}
+
+/** DEV in the title, on the Dock icon and in the page's corner, so it is never taken for the installed app. */
+function markDev(win: BrowserWindow): void {
+  app.dock?.setBadge('DEV');
+  win.on('page-title-updated', (e, title) => { e.preventDefault(); win.setTitle(`DEV · ${title}`); });
+  win.webContents.on('dom-ready', () => {
+    void win.webContents.insertCSS(`html::after { content: 'DEV'; position: fixed; left: 50%; top: 6px; transform: translateX(-50%); z-index: 2147483647;
+      pointer-events: none; padding: 2px 8px; border-radius: 4px; font: 700 11px/1.4 system-ui; letter-spacing: .08em;
+      background: var(--warn); color: var(--bg); }`);
+  });
 }
 
 /** The saved bounds when they still lie on a screen (a display may have been unplugged). */

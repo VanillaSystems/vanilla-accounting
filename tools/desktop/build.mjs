@@ -7,8 +7,10 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
+import { bundles } from './bundles.mjs';
 import { describeBuild } from '../../src/version.ts';
 import { iconProblems } from '../brand/icons.mjs';
+import { buildDictation } from './dictation.mjs';
 
 const { NOT_PACKED } = createRequire(import.meta.url)('../../desktop/not-packed.cjs');
 
@@ -21,12 +23,7 @@ const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const app = describeBuild(process.cwd());
 mkdirSync('out/desktop', { recursive: true });
 writeFileSync('out/desktop/build.json', JSON.stringify(app));
-const common = { define: { 'process.env.VANILLA_BUILD': JSON.stringify(app.version), 'process.env.VANILLA_BUILT_AT': JSON.stringify(new Date().toISOString()) }, bundle: true, platform: 'node', target: 'node22', packages: 'external', sourcemap: 'linked', logLevel: 'warning', metafile: true };
-
-const results = await Promise.all([
-  build({ ...common, entryPoints: ['src/desktop/main.ts'], outfile: 'out/desktop/main.mjs', format: 'esm' }),
-  build({ ...common, entryPoints: ['src/desktop/preload.ts'], outfile: 'out/desktop/preload.cjs', format: 'cjs' }),
-]);
+const results = await Promise.all(bundles(app).map((options) => build(options)));
 
 const builtin = new Set(builtinModules);
 const packageOf = (spec) => spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
@@ -43,5 +40,14 @@ const unpacked = Object.keys(NOT_PACKED).filter((p) => loadedAtStart.has(p));
 if (unpacked.length) {
   console.error(`The desktop bundle imports ${unpacked.join(', ')} at start, which desktop/not-packed.cjs leaves out of the app: import it dynamically where it is used.`);
   process.exit(1);
+}
+// The chat's microphone on the Mac (src/desktop/dictation.swift); swiftc comes with the Xcode command line tools.
+if (process.platform === 'darwin') {
+  try {
+    buildDictation();
+  } catch (e) {
+    console.error(`desktop:build refused, the speech recognizer did not build (xcode-select --install gives swiftc): ${e.message}`);
+    process.exit(1);
+  }
 }
 console.log(`out/desktop: main.mjs, preload.cjs, build ${app.version} (packages: ${[...imported].sort().join(', ')})`);
