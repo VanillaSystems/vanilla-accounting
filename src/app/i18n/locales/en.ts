@@ -2891,6 +2891,8 @@ export default {
     'terminal.install.link': "Install {cli}",
     'terminal.install.after': "Paste the page's command into Terminal, then start “claude” or “codex” once and sign in.",
     'terminal.install.again': "Check again",
+  'terminal.handover.context': 'So far in the chat',
+  'terminal.handover.empty': 'I want to keep working on my books. What is next?',
     'ai.terminal.title': "In the terminal",
     'ai.terminal.intro': "What the sidebar's AI cannot do (run programs, merge files), «Open in Terminal» hands to Claude Code or Codex in your books folder.",
     'ai.terminal.installed': "installed",
