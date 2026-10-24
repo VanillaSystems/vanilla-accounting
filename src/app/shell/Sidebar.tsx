@@ -364,9 +364,10 @@ export function Sidebar({ page, books, onGo }: Props) {
   const [text, setText] = useState('');
   const [pick, setPick] = useState(0);
   const [picking, setPicking] = useState(false);
-  const [ear] = useState(recognizer);
+  const [ear] = useState(() => recognizer());
   const [listening, setListening] = useState<(() => void) | null>(null);
   const [heardError, setHeardError] = useState<DictationError>();
+  const [preparing, setPreparing] = useState(false);
   const plus = useRef<HTMLButtonElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -395,7 +396,7 @@ export function Sidebar({ page, books, onGo }: Props) {
     if (listening) { listening(); return; }
     const before = text;
     setHeardError(undefined);
-    const stop = ear.start(dictationLang(language()), (heard) => setText(withHeard(before, heard)), (error) => { setListening(null); setHeardError(error); area.current?.focus(); });
+    const stop = ear.start(dictationLang(language()), (heard) => setText(withHeard(before, heard)), (error) => { setListening(null); setHeardError(error); area.current?.focus(); }, setPreparing);
     setListening(() => stop);
   };
   const empty = !text.trim() || waiting;
@@ -511,7 +512,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                 type="button" className="aiplus" aria-label={t('assistant.mention')} title={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
                 ref={plus} onClick={() => setPicking(!picking)}
               >{ICONS.plus}</button>
-              {listening && ear?.online ? <small className="aiheard" aria-live="polite">{t('assistant.dictation.online')}</small> : null}
+              {listening && (preparing || ear?.online) ? <small className="aiheard" aria-live="polite">{t(preparing ? 'assistant.dictation.preparing' : 'assistant.dictation.online')}</small> : null}
               {ear ? (
                 <button
                   type="button" className={`aimic${listening ? ' on' : ''}`} aria-pressed={!!listening} data-testid="dictate"
