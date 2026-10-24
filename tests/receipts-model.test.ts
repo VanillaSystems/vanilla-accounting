@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
-import { badgeCount, candidates, groups, ledgerOf, lockedRefuses, suggestion, visible, type ToChf } from '../src/app/areas/receipts/model.js';
+import { parseIban } from '../src/workspace/banks.js';
+import { badgeCount, candidates, groups, ledgerOf, lockedRefuses, needsYou, suggestion, visible, type ToChf } from '../src/app/areas/receipts/model.js';
 
 const receipt = (id: string, x: Partial<Receipt>): Receipt => ({
   id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: '', extractionMethod: 'pdftotext',
@@ -133,4 +134,24 @@ test('a receipt linked to a payment of the period shows there too: a June invoic
   assert.deepEqual(visible(lp, q3, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'paid in Q3, so in Q3; the May one, paid in May, is not');
   assert.deepEqual(visible(lp, q3, undefined, undefined).counts.zugeordnet, 1);
   assert.deepEqual(visible(lp, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id).sort(), ['june', 'may']);
+});
+
+test('a bank statement among the receipts never needs you; Belege hides one Kontoauszüge places and lists the others as no receipt (#151)', () => {
+  const head = (iban: string) => ['Kontoauszug 01.07.2026 - 31.07.2026', `IBAN ${iban}`, 'Saldovortrag 01.07.2026: 1 000.00', 'Schlusssaldo 31.07.2026: 950.00'].join('\n');
+  const accounts = [{ bank: 'Bank', currency: 'CHF', account: '1021', iban: parseIban('CH6580808000000000001') }];
+  const ls = ledgerOf({ ...books, receipts: [...books.receipts,
+    receipt('placed', { kind: 'statement', date: '2026-07-31', extractedText: head('CH65 8080 8000 0000 0000 1') }),
+    receipt('stranger', { kind: 'statement', date: '2026-07-31', extractedText: head('CH93 0076 2011 6238 5295 7') }),
+    receipt('nodate', { kind: 'statement', extractedText: head('CH93 0076 2011 6238 5295 7') }),
+  ] }, '2026-07-01');
+  const v = visible(ls, q3, undefined, undefined, accounts);
+  const ids = (xs: { r: Receipt }[]) => xs.map((x) => x.r.id);
+  assert.equal(ls.byId.get('placed')!.statement?.to, '2026-07-31');
+  assert.ok(!ids(v.rows).some((id) => ['placed', 'stranger', 'nodate'].includes(id)), 'no statement is a receipt row');
+  assert.ok(!ids(v.hidden).includes('placed'), 'the placed one lives with the bank');
+  assert.deepEqual(v.hidden.filter((x) => x.r.id === 'stranger').map((x) => x.noneWhy), ['statement'], 'one no account fits stays under Belege, said to be a statement');
+  assert.deepEqual(v.counts, visible(l, q3, undefined, undefined).counts, 'they count in no filter, «ohne Datum» neither');
+  assert.ok(['placed', 'stranger', 'nodate'].every((id) => !needsYou(ls.byId.get(id)!, ls)));
+  assert.equal(badgeCount(ls), badgeCount(l));
+  assert.ok(ids(visible(ls, q3, undefined, undefined).hidden).includes('placed'), 'without the manifest\'s accounts nothing places it');
 });

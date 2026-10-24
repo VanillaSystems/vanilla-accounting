@@ -10,6 +10,7 @@ import { RECEIPT_FILTERS, type ReceiptFilter, type RouteOf } from '../../shell/r
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { useFx } from '../../hooks/use-fx.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 import { periodName, monthName } from '../../lib/period-label.js';
 import { fmt, formatAmount, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
@@ -46,7 +47,8 @@ function List(props: Props) {
   const { rates } = useFx();
   const l = ledgerFor(books);
   const toChf = useMemo(() => chfOf(rates), [rates]);
-  const { rows, counts, hidden } = useMemo(() => visible(l, period, query.filter, query.q), [l, period, query.filter, query.q]);
+  const accounts = useWorkspace()?.bankAccounts;
+  const { rows, counts, hidden } = useMemo(() => visible(l, period, query.filter, query.q, accounts ?? []), [l, period, query.filter, query.q, accounts]);
   const suggestions = useMemo(() => {
     const out = new Map<string, Candidate>();
     for (const v of rows) { const c = suggestion(v, l, toChf); if (c) out.set(v.r.id, c); }
