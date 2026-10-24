@@ -124,7 +124,11 @@ npm start
 ```
 
 `npm run desktop` runs the Mac app from the checkout, and `npm run desktop:build` builds the two
-`.dmg` files ([docs/desktop.md](docs/desktop.md)).
+`.dmg` files ([docs/desktop.md](docs/desktop.md)). `npm run desktop:dev` runs the Mac app while you
+edit: a change under `src/app` shows in the window at once through Vite, and a change to the main
+process or the server restarts Electron. It keeps its own data in
+`~/Library/Application Support/vanilla-accounting-dev` and runs beside the installed app
+([docs/desktop.md](docs/desktop.md#dev-mode)).
 
 ### Next
 

@@ -27,6 +27,13 @@ import { readState, writeState, type Bounds } from './state.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
 const SMOKE = app.commandLine.hasSwitch('vanilla-smoke');
+const DEV = devMode();
+// Before the single-instance lock, which lives in the user data folder: dev never meets the installed app's.
+if (DEV) {
+  app.setPath('userData', DEV.userData);
+  // The runner restarts it with SIGTERM, which Chromium alone takes 20 s and more to act on; app.quit() takes a moment.
+  process.on('SIGTERM', () => app.quit());
+}
 
 // The sheet's text is laid out as puppeteer prints it (src/invoices/pdf.ts launches Chrome so).
 app.commandLine.appendSwitch('font-render-hinting', 'none');
@@ -49,6 +56,7 @@ async function start(): Promise<void> {
     demoRoot: join(app.getPath('userData'), 'Demo'),
     booksHome: app.getPath('documents'),
     dist: join(APP_ROOT, 'dist'),
+    devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
     onOpen: () => refreshMenu(),
   });
@@ -183,11 +191,32 @@ function createWindow(stateFile: string): BrowserWindow {
     },
   });
   if (saved?.maximized) win.maximize();
+  if (DEV) markDev(win);
   void win.webContents.setVisualZoomLevelLimits(1, 1);
   win.on('close', () => {
     writeState(stateFile, { ...readState(stateFile), bounds: { ...win.getNormalBounds(), maximized: win.isMaximized() } });
   });
   return win;
+}
+
+/**
+ * `npm run desktop:dev` (tools/desktop/dev.mjs): the UI from Vite and a user data folder of its own,
+ * both named by the runner. Never in the packed app, whatever its environment says.
+ */
+function devMode(): { ui: string; userData: string } | undefined {
+  const { VANILLA_DEV_UI: ui, VANILLA_DEV_USER_DATA: userData } = process.env;
+  return !app.isPackaged && ui && userData ? { ui, userData } : undefined;
+}
+
+/** DEV in the title, on the Dock icon and in the page's corner, so it is never taken for the installed app. */
+function markDev(win: BrowserWindow): void {
+  app.dock?.setBadge('DEV');
+  win.on('page-title-updated', (e, title) => { e.preventDefault(); win.setTitle(`DEV · ${title}`); });
+  win.webContents.on('dom-ready', () => {
+    void win.webContents.insertCSS(`html::after { content: 'DEV'; position: fixed; left: 50%; top: 6px; transform: translateX(-50%); z-index: 2147483647;
+      pointer-events: none; padding: 2px 8px; border-radius: 4px; font: 700 11px/1.4 system-ui; letter-spacing: .08em;
+      background: var(--warn); color: var(--bg); }`);
+  });
 }
 
 /** The saved bounds when they still lie on a screen (a display may have been unplugged). */

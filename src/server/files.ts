@@ -32,5 +32,5 @@ router.use('/bank-statements', yearFile('statements'));
 const DIST = process.env.APP_DIST || join(APP_ROOT, 'dist');
 if (existsSync(join(DIST, 'index.html'))) {
   router.use(express.static(DIST, { index: false }));
-  router.get(/.*/, (req, res, next) => (isAppPath(req.path) ? res.sendFile(join(DIST, 'index.html')) : next()));
+  router.get(/.*/, (req, res, next) => (isAppPath(req.path) ? res.sendFile('index.html', { root: DIST }) : next()));
 }
