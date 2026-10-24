@@ -61,13 +61,8 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/transactions/manual', body: { date: '2026-06-20', description: 'rückdatiert', amount: 1, currency: 'CHF' }, status: 403 },
   { method: 'DELETE', path: '/api/receipts/rc', status: 403 },
   { method: 'POST', path: '/api/receipts/rx/restore', status: 403 },
-  { method: 'PATCH', path: '/api/receipts/rc', body: { description: 'neu' }, status: 403 },
-  { method: 'PATCH', path: '/api/receipts/rc', body: { remarks: 'neu' }, status: 403 },
-  { method: 'PATCH', path: '/api/receipts/rc', body: { date: '2026-05-11' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { amount: 11, currency: 'CHF' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { filename: 'neu.pdf' }, status: 403 },
-  { method: 'PATCH', path: '/api/receipts/rc', body: { kind: 'noise' }, status: 403 },
-  { method: 'PATCH', path: '/api/receipts/rc', body: { date: null }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { vat: { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 0.81 }] } }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { amount: null }, status: 403 },
   { method: 'POST', path: '/api/receipts/rc/twin', body: { answer: 'same', of: 'ro' }, status: 403 },
@@ -130,6 +125,21 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => i.transactions.some((t) => t.ref === 'M2026-003' && t.date === '2026-08-01') },
   { method: 'PATCH', path: '/api/receipts/ro', body: { remarks: 'Notiz' },
     check: (i) => i.receipts.find((r) => r.id === 'ro')?.remarks === 'Notiz' },
+  // A filed link freezes a receipt's amount, currency, VAT facts and file; its date, text and kind are in no return and under no seal (#151).
+  { method: 'PATCH', path: '/api/receipts/rc', body: { description: 'neu' },
+    check: (i) => i.receipts.find((r) => r.id === 'rc')?.description === 'neu' },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { remarks: 'neu' },
+    check: (i) => i.receipts.find((r) => r.id === 'rc')?.remarks === 'neu' },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { date: '2026-05-11' },
+    check: (i) => i.receipts.find((r) => r.id === 'rc')?.date === '2026-05-11' },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { date: null },
+    check: (i) => { const r = i.receipts.find((x) => x.id === 'rc'); return !!r && !('date' in r); } },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { kind: 'noise' },
+    check: (i) => { const r = i.receipts.find((x) => x.id === 'rc'); return r?.kind === 'noise' && r.kindBy === 'human' && i.mappings.some((m) => m.receiptId === 'rc' && m.transactionRef === 'C1'); } },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { kind: 'statement' },
+    check: (i) => { const r = i.receipts.find((x) => x.id === 'rc'); return r?.kind === 'statement' && r.kindBy === 'human'; } },
+  { method: 'PATCH', path: '/api/receipts/rc', body: { kind: null },
+    check: (i) => { const r = i.receipts.find((x) => x.id === 'rc'); return !!r && !('kind' in r) && !('kindBy' in r); } },
   { method: 'POST', path: '/api/receipts/rc/twin', body: { answer: 'distinct', of: 'ro' },
     check: (i) => i.receipts.find((r) => r.id === 'ro')?.distinctFrom?.includes('rc') === true && !i.receipts.find((r) => r.id === 'rc')?.distinctFrom },
   { method: 'PATCH', path: '/api/receipts/ro', body: { kind: 'noise' },
@@ -246,11 +256,12 @@ test('the closed period is still exactly as in the fixture', () => {
   const closed = (i: Index) => ({
     transactions: i.transactions.filter((t) => t.date <= '2026-06-30').sort((a, b) => a.ref.localeCompare(b.ref)),
     entries: i.journalEntries!.filter((j) => j.date <= '2026-06-30').sort((a, b) => a.id.localeCompare(b.id)),
-    receipt: i.receipts.find((r) => r.id === 'rc'),
+    receipt: (({ id, filename, amount, currency, hasSwissVat, vatSummary, vatId }) => ({ id, filename, amount, currency, hasSwissVat, vatSummary, vatId }))(i.receipts.find((r) => r.id === 'rc')!),
     mappings: i.mappings.filter((m) => m.transactionRef === 'C1'),
     closedThrough: i.config?.closedThrough,
   });
   assert.deepEqual(closed(now), closed(fixture));
+  assert.deepEqual(closedPart(now as Books, '2026-06-30'), closedPart(fixture as Books, '2026-06-30'), 'the sealed part is unchanged');
 });
 
 test('open period: POST /api/workspace/logo succeeds: a logo is no dated record, the books stay as they were', async () => {

@@ -49,9 +49,9 @@ export function filedReceipt(books: Pick<Books, 'config' | 'mappings' | 'transac
   return dates.length ? dates.every(lock.isClosed) : !!r.date && lock.isClosed(r.date);
 }
 
-/** The receipts the step takes up: what the run view lists as read is what the step works on. Facts a person set are never taken up, not even with `force`. */
+/** The receipts the step takes up: what the run view lists as read is what the step works on. Facts a person set are never taken up, not even with `force`; a bank statement has no VAT facts. */
 export const vatCandidates = (books: Books, force = false): Receipt[] =>
-  books.receipts.filter((r) => r.vatBy !== 'human' && (force || (!hasFacts(r) && !r.needsVisionReview && !filedReceipt(books, r))));
+  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || (!hasFacts(r) && !r.needsVisionReview && !filedReceipt(books, r))));
 
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {

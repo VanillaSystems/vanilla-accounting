@@ -14,6 +14,9 @@
  */
 import { isMap, isSeq, type Document } from 'yaml';
 import { roleBefore } from './banks.js';
+import { documents } from '../engines/index.js';
+import { statementFacts } from '../intake/statement-facts.js';
+import type { Receipt } from '../types/index.js';
 
 /**
  * 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts).
@@ -24,8 +27,11 @@ import { roleBefore } from './banks.js';
  * filter and group by. An app of schema 3 would keep the field it does not know on an entry it
  * edits, but not offer it, check it or carry it into the bookings it makes from that entry
  * (a copy, a correction, an undo), so it must refuse these books.
+ * 5: bank statements among the receipts are typed and dated on load (#151); no record of a filed
+ * period changes, receipts are not sealed; an older app would show them as receipts again, which
+ * is harmless, but the number makes npm run update write the result.
  */
-export const BOOKS_SCHEMA = 4;
+export const BOOKS_SCHEMA = 5;
 /** 2: every money account names its `role` (#88). */
 export const WORKSPACE_SCHEMA = 2;
 export const INVOICES_SCHEMA = 1;
@@ -41,6 +47,26 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   2: (doc) => doc,
   // No record has tags before; the number makes an older app refuse the books.
   3: (doc) => doc,
+  // A receipt nobody typed that reads as a bank statement becomes one, dated on its period's last
+  // day unless it has a date of its own (a day read off its name is none). The words are the
+  // jurisdiction's: every workspace open loads it (tests: tests/support/jurisdiction.js); without
+  // one the books stay as they are.
+  4: (doc) => {
+    let words: ReturnType<typeof documents>;
+    try { words = documents(); } catch { return doc; }
+    const receipts = doc.receipts as Receipt[] | undefined;
+    if (!receipts) return doc;
+    return {
+      ...doc,
+      receipts: receipts.map((r) => {
+        const facts = r.kind ? undefined : statementFacts(r, words);
+        if (!facts) return r;
+        const { dateSource, ...undated } = r;
+        const dated = facts.to && (!r.date || dateSource === 'captured') ? { ...undated, date: facts.to } : r;
+        return { ...dated, kind: 'statement', kindBy: 'rule', kindRule: 'document:statement' };
+      }),
+    };
+  },
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {
