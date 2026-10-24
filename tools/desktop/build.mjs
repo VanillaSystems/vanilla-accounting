@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
+import { bundles } from './bundles.mjs';
 import { describeBuild } from '../../src/version.ts';
 import { iconProblems } from '../brand/icons.mjs';
 
@@ -21,12 +22,7 @@ const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const app = describeBuild(process.cwd());
 mkdirSync('out/desktop', { recursive: true });
 writeFileSync('out/desktop/build.json', JSON.stringify(app));
-const common = { define: { 'process.env.VANILLA_BUILD': JSON.stringify(app.version), 'process.env.VANILLA_BUILT_AT': JSON.stringify(new Date().toISOString()) }, bundle: true, platform: 'node', target: 'node22', packages: 'external', sourcemap: 'linked', logLevel: 'warning', metafile: true };
-
-const results = await Promise.all([
-  build({ ...common, entryPoints: ['src/desktop/main.ts'], outfile: 'out/desktop/main.mjs', format: 'esm' }),
-  build({ ...common, entryPoints: ['src/desktop/preload.ts'], outfile: 'out/desktop/preload.cjs', format: 'cjs' }),
-]);
+const results = await Promise.all(bundles(app).map((options) => build(options)));
 
 const builtin = new Set(builtinModules);
 const packageOf = (spec) => spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
