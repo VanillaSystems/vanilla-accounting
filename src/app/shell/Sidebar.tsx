@@ -40,6 +40,8 @@ import { api } from '../lib/api.js';
 import { RuleDraft, ShareOffers } from '../areas/company/RulesSection.js';
 import { MailboxCard } from '../areas/company/MailboxCard.js';
 import { TerminalCard } from '../assistant/TerminalCard.js';
+import { TerminalButton } from '../assistant/TerminalButton.js';
+import { handover } from '../../assistant/handover.js';
 import { SourceCard } from '../areas/company/SourceCard.js';
 import { questionText } from '../questions/Questions.js';
 import { dropFiles } from './DropDialog.js';
@@ -517,6 +519,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                   onClick={listen}
                 >{ICONS.mic}</button>
               ) : null}
+              {setup ? null : <TerminalButton request={() => handover(text, s.turns, t('terminal.handover.context'))} />}
               {s.sending
                 ? <button type="button" className="aisend" aria-label={t('assistant.stop')} title={t('assistant.stop')} onClick={stopAnswer}>{ICONS.stop}</button>
                 : <button type="button" className="aisend" aria-label={t('assistant.send')} title={t('assistant.send')} aria-disabled={empty} onClick={send}>{ICONS.arrowUp}</button>}

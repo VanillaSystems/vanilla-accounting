@@ -2891,6 +2891,8 @@ export default {
     'terminal.install.link': "Installare {cli}",
     'terminal.install.after': "Incolla il comando della pagina nel Terminale, poi avvia una volta «claude» o «codex» e accedi.",
     'terminal.install.again': "Verifica di nuovo",
+  'terminal.handover.context': 'Finora nella chat',
+  'terminal.handover.empty': 'Voglio continuare a lavorare sulla mia contabilità. Cosa c’è da fare?',
     'ai.terminal.title': "Nel Terminale",
     'ai.terminal.intro': "Ciò che l'IA della barra laterale non può fare (eseguire programmi, unire file), «Apri nel Terminale» lo affida a Claude Code o Codex nella cartella della tua contabilità.",
     'ai.terminal.installed': "installato",

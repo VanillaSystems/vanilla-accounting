@@ -17,9 +17,10 @@ import { SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, wit
 import { createWorkspace } from '../src/workspace/create.js';
 import { changesIn, terminalRequest, withoutChanges } from '../src/assistant/changes.js';
 import { proposalId } from '../src/assistant/terminal-drafts.js';
+import { CONTEXT_MAX, QUESTION_MAX, handover } from '../src/assistant/handover.js';
 import { loadBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
-import type { AssistantEvent, Conversation, ConversationSummary } from '../src/types/assistant.js';
+import type { AssistantEvent, Conversation, ConversationSummary, Turn } from '../src/types/assistant.js';
 import type { Index } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
@@ -149,6 +150,32 @@ test('the sidebar\'s offer: a vanilla-terminal block is the request, never shown
   assert.deepEqual(changesIn(said), []);
   assert.equal(terminalRequest('```vanilla-terminal\n\n```'), undefined);
   assert.equal(withoutChanges('Moment.\n\n```vanilla-terminal\nFüge die Bel'), 'Moment.', 'an unfinished block is not shown while it streams');
+});
+
+test('the composer\'s terminal button hands over the typed words; with none, the last question and one line of the answer, capped', () => {
+  const at = '2026-10-24T10:00:00Z';
+  const me = (text: string): Turn => ({ role: 'me', text, at, context: [{ kind: 'entry', id: 'e-1', label: 'Buchung 1' }] });
+  const ai = (text: string): Turn => ({ role: 'ai', text, at, tools: [{ name: 'Read', detail: 'secret/path.json' }], done: true });
+  const turns = [
+    me('Wie viel Umsatz im Q2?'), ai('Im Q2 waren es 12 000.'),
+    me('Fasse die **Belege** von Q3 zu\neinem PDF zusammen.'),
+    ai('## Das geht hier nicht\nIch habe keine Shell.\n\n```vanilla-changes\n[]\n```'),
+  ];
+
+  assert.equal(handover('  Exportiere alles nach output/  ', turns, 'Bisher im Chat'), 'Exportiere alles nach output/', 'typed words win, trimmed');
+  assert.equal(handover('', turns, 'Bisher im Chat'), 'Fasse die Belege von Q3 zu einem PDF zusammen.\n\nBisher im Chat: Das geht hier nicht',
+    'the last question on one line without Markdown, and the first line of its answer: no earlier turns, no references, no tool details');
+  assert.equal(handover(' \n ', turns.slice(0, 3), 'Bisher im Chat'), 'Fasse die Belege von Q3 zu einem PDF zusammen.', 'no answer yet: the question alone');
+  assert.equal(handover('', [], 'Bisher im Chat'), '', 'nothing asked: nothing to hand over (the button says a request of its own)');
+
+  const long = handover('', [me('x'.repeat(5000)), ai(`${'y'.repeat(5000)}\nmehr`)], 'K');
+  const [question, context] = long.split('\n\nK: ');
+  assert.equal(question.length, QUESTION_MAX, 'the question is cut');
+  assert.ok(question.endsWith('…'));
+  assert.equal(context.length, CONTEXT_MAX, 'the context line is cut');
+  assert.ok(!context.includes('mehr'), 'one line only');
+  const typed = 'z'.repeat(5000);
+  assert.equal(handover(typed, turns, 'K'), typed, 'typed words are not cut here: the open path caps them at REQUEST_MAX');
 });
 
 test('end to end: the sidebar offers the terminal, the button starts the CLI in the books folder on the request; a proposal from the terminal waits for «Übernehmen»', async (t) => {
