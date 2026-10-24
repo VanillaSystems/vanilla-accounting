@@ -22,7 +22,7 @@ const RECEIPT = 3;
 const WEAK = 1;
 
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const wordsRe = (words: readonly string[]) => new RegExp(`(?<![\\p{L}\\d])(?:${[...words].sort((a, b) => b.length - a.length).map(escape).join('|')})(?![\\p{L}])`, 'iu');
+export const wordsRe = (words: readonly string[]) => new RegExp(`(?<![\\p{L}\\d])(?:${[...words].sort((a, b) => b.length - a.length).map(escape).join('|')})(?![\\p{L}])`, 'iu');
 
 /** The first match of each list in `text`, by its position. */
 function firstOf<K extends string>(lists: Record<K, string[]>, text: string): Array<{ key: K; at: number }> {

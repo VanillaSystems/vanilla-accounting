@@ -9,6 +9,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
 import { pdfText } from '../parsers/pdf-text.js';
+import { statementPdf } from '../intake/statement-facts.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
@@ -96,18 +97,7 @@ export function withinBooks(transactions: BankTransaction[], config: Index['conf
   return { kept: transactions.filter((t) => t.date >= opens), before: opens };
 }
 
-// ─── Bank statements from PDF filenames ─────────────────────────────────────
-
-/** The period (and for Wise the currency) a statement PDF's name gives, as Raiffeisen and Wise name them. */
-export function statementPdf(filename: string): { fromDate: string; toDate: string; currency?: string } | null {
-  // "Kontoauszug 01.01.2026 - 31.01.2026 - CH... - 2026-01-31.pdf"
-  const r = filename.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
-  if (r) return { fromDate: `${r[3]}-${r[2]}-${r[1]}`, toDate: `${r[6]}-${r[5]}-${r[4]}` };
-  // "statement_12345678_CHF_2026-01-01_2026-01-31.pdf"
-  const w = filename.match(/statement_\d+_([A-Z]{3})_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})\.pdf/);
-  if (w) return { currency: w[1], fromDate: w[2], toDate: w[3] };
-  return null;
-}
+// ─── Bank statements from PDF filenames (src/intake/statement-facts.ts statementPdf) ────────
 
 type Read = Extract<StatementFile, { status: 'read' }>;
 

@@ -27,3 +27,7 @@ other:
 # A bank statement names itself in its first lines, before any receipt word (src/intake/document-kind.ts
 # namesStatement): «Kontoauszug», «CHF statement» of a currency account, «Relevé de compte».
 statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statement, Relevé de compte, Relevé bancaire, Extrait de compte, Estratto conto]
+
+# The balance lines of a statement (src/intake/statement-facts.ts): with the title, an IBAN and a
+# period they tell a statement among the receipts from an invoice that only mentions one.
+balance: [Saldovortrag, Anfangssaldo, Schlusssaldo, Eröffnungssaldo, Endsaldo, Saldo, Opening balance, Closing balance, Balance brought forward, Balance, Solde initial, Solde final, Solde, Saldo iniziale, Saldo finale]
