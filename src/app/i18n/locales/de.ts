@@ -2888,6 +2888,8 @@ export const messages = {
   'terminal.install.link': "{cli} installieren",
   'terminal.install.after': "Den Befehl der Seite ins Terminal einfügen, danach einmal «claude» oder «codex» starten und anmelden.",
   'terminal.install.again': "Nochmals prüfen",
+  'terminal.handover.context': 'Bisher im Chat',
+  'terminal.handover.empty': 'Ich möchte in meiner Buchhaltung weiterarbeiten. Was steht an?',
   'ai.terminal.title': "Im Terminal",
   'ai.terminal.intro': "Was die KI in der Seitenleiste nicht kann (Programme ausführen, Dateien zusammenführen), öffnet «Im Terminal öffnen» mit Claude Code oder Codex im Ordner deiner Buchhaltung.",
   'ai.terminal.installed': "installiert",
