@@ -303,8 +303,9 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
 
   if (opts.devUi) {
-    app.use((req, res, next) => (books ? books(req, res, next) : next()));
+    // Before the books' API: it serves the checkout's own dist folder (src/server/files.ts), a stale build under desktop:dev.
     app.use((req, res, next) => (isApiPath(req.path) ? next() : forwardTo(opts.devUi!, req, res)));
+    app.use((req, res, next) => (books ? books(req, res, next) : next()));
   } else {
     app.use(express.static(opts.dist, { index: false }));
     app.use((req, res, next) => (books ? books(req, res, next) : next()));

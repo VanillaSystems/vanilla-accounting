@@ -26,6 +26,8 @@ desktop.allowHost(`127.0.0.1:${port}`);
 const dist = join(home, '.claude', 'dist');
 mkdirSync(dist, { recursive: true });
 writeFileSync(join(dist, 'index.html'), '<!doctype html><title>built</title>');
+// The books' API serves this built UI too (src/server/files.ts), as a checkout with a dist folder has it.
+process.env.APP_DIST = dist;
 const built = desktopServer({ stateFile: join(home, 'built.json'), demoRoot: join(home, 'Demo'), booksHome: home, dist });
 const builtServer = createServer(built.app);
 const builtPort = await listening(builtServer);
@@ -70,4 +72,15 @@ test('without devUi nothing is forwarded: the built UI answers every app path', 
     assert.match(res.text, /<title>built<\/title>/, path);
   }
   assert.deepEqual(seen, []);
+});
+
+test('with books open, pages still come from Vite, not from the built UI the books\' API serves', async () => {
+  await desktop.openDemo();
+  seen.length = 0;
+  for (const path of ['/', '/journal/M2026-001', '/src/main.tsx?t=2']) {
+    const res = await get(path);
+    assert.equal(res.text, `vite ${path} 127.0.0.1:${vitePort}`, path);
+  }
+  assert.equal((await get('/api/status')).status, 200);
+  assert.deepEqual(seen, ['/', '/journal/M2026-001', '/src/main.tsx?t=2']);
 });
