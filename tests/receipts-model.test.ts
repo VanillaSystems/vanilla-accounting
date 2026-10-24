@@ -141,8 +141,8 @@ test('a bank statement among the receipts never needs you; Belege hides one Kont
   const accounts = [{ bank: 'Bank', currency: 'CHF', account: '1021', iban: parseIban('CH6580808000000000001') }];
   const ls = ledgerOf({ ...books, receipts: [...books.receipts,
     receipt('placed', { kind: 'statement', date: '2026-07-31', extractedText: head('CH65 8080 8000 0000 0000 1') }),
-    receipt('stranger', { kind: 'statement', date: '2026-07-31', extractedText: head('CH93 0076 2011 6238 5295 7') }),
-    receipt('nodate', { kind: 'statement', extractedText: head('CH93 0076 2011 6238 5295 7') }),
+    receipt('stranger', { kind: 'statement', date: '2026-07-31', extractedText: head('CH00 1234 5678 9012 3456 7') }),
+    receipt('nodate', { kind: 'statement', extractedText: head('CH00 1234 5678 9012 3456 7') }),
   ] }, '2026-07-01');
   const v = visible(ls, q3, undefined, undefined, accounts);
   const ids = (xs: { r: Receipt }[]) => xs.map((x) => x.r.id);

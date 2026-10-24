@@ -277,7 +277,7 @@ test('a bank statement filed among the receipts shows at the statements of its a
   const withFiled = books({ receipts: [...plain.receipts,
     filed('july', '01.07.2026', '31.07.2026', 'CH65 8080 8000 0000 0000 1'),
     filed('august', '01.08.2026', '31.08.2026', 'CH65 8080 8000 0000 0000 1'),
-    filed('stranger', '01.07.2026', '31.07.2026', 'CH93 0076 2011 6238 5295 7'),
+    filed('stranger', '01.07.2026', '31.07.2026', 'CH00 1234 5678 9012 3456 7'),
   ] });
   const b = bankOf(withFiled, accounts, '2026-09-15');
   const ids = (s: Statement | undefined) => s?.receipts?.map((x) => x.id);
