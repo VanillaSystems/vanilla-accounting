@@ -86,8 +86,15 @@ module.exports = {
     hardenedRuntime: true,
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',
-    // What macOS shows when the app first asks Mail for its accounts (Firma › Quellen, «Mail-Programm auf diesem Mac»).
-    extendInfo: { NSAppleEventsUsageDescription: 'Vanilla Accounting reads the invoices in your Mail accounts that you choose, and saves their attachments into your books. It never sends or changes mail.' },
+    extendInfo: {
+      // What macOS shows when the app first asks Mail for its accounts (Firma › Quellen, «Mail-Programm auf diesem Mac»).
+      NSAppleEventsUsageDescription: 'Vanilla Accounting reads the invoices in your Mail accounts that you choose, and saves their attachments into your books. It never sends or changes mail.',
+      // The chat's microphone (src/desktop/dictation.swift); tools/desktop/dictation.mjs puts the same texts into the helper.
+      NSMicrophoneUsageDescription: 'Vanilla Accounting hört über das Mikrofon zu, wenn du im Chat diktierst. Die Sprache wird auf diesem Mac erkannt und nicht ins Internet geschickt.',
+      NSSpeechRecognitionUsageDescription: 'Vanilla Accounting wandelt deine Sprache auf diesem Mac in Text um, wenn du im Chat diktierst. Nichts davon verlässt den Mac.',
+    },
+    // The speech recognizer, built by tools/desktop/build.mjs; signed with the app (entitlementsInherit).
+    extraFiles: [{ from: 'out/desktop/vanilla-dictation', to: 'MacOS/vanilla-dictation' }],
     // null: no signing, even when the keychain holds an identity.
     identity: signed ? undefined : null,
     notarize,

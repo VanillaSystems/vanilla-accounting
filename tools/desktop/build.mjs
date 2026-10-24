@@ -10,6 +10,7 @@ import { build } from 'esbuild';
 import { bundles } from './bundles.mjs';
 import { describeBuild } from '../../src/version.ts';
 import { iconProblems } from '../brand/icons.mjs';
+import { buildDictation } from './dictation.mjs';
 
 const { NOT_PACKED } = createRequire(import.meta.url)('../../desktop/not-packed.cjs');
 
@@ -39,5 +40,14 @@ const unpacked = Object.keys(NOT_PACKED).filter((p) => loadedAtStart.has(p));
 if (unpacked.length) {
   console.error(`The desktop bundle imports ${unpacked.join(', ')} at start, which desktop/not-packed.cjs leaves out of the app: import it dynamically where it is used.`);
   process.exit(1);
+}
+// The chat's microphone on the Mac (src/desktop/dictation.swift); swiftc comes with the Xcode command line tools.
+if (process.platform === 'darwin') {
+  try {
+    buildDictation();
+  } catch (e) {
+    console.error(`desktop:build refused, the speech recognizer did not build (xcode-select --install gives swiftc): ${e.message}`);
+    process.exit(1);
+  }
 }
 console.log(`out/desktop: main.mjs, preload.cjs, build ${app.version} (packages: ${[...imported].sort().join(', ')})`);
