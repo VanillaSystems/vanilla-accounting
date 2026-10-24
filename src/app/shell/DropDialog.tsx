@@ -123,7 +123,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
   const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   return (
-    <div className={`droprow s-${r.state}`}>
+    <div className={`droprow s-${r.state}`} data-testid="drop-row" data-file={r.name} data-state={r.state}>
       <div className="dn">
         <b className="mono">{r.name}</b>
         <small>{metaOf(r)}</small>
@@ -139,8 +139,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
         {asked ? (
           <span className="dacts">
-            <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
-            <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
+            <button type="button" className="linkbtn" data-testid="drop-twin-same" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
+            <button type="button" className="linkbtn" data-testid="drop-twin-distinct" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
           </span>
         ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount
           ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
@@ -245,7 +245,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
   return (
     <>
-      <div className={`droprow s-taken${shown ? ' open' : ''}`}>
+      <div className={`droprow s-taken${shown ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={x.kind}>
         <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
@@ -285,7 +285,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
   return (
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={closeDrop} />
-      <div className="palette dropdlg" role="dialog" aria-label={t('drop.dialog')}>
+      <div className="palette dropdlg" role="dialog" aria-label={t('drop.dialog')} data-testid="drop-dialog" data-working={working}>
         <div className="dhd">
           <b>{!taken.length ? t('drop.dialog') : working ? t('drop.titleWorking') : t('drop.titleDone')}</b>
           {s.adding ? <span className="wfpill st-running">{t('drop.reading', { n: s.adding })}</span> : null}
@@ -317,7 +317,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
         {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
         <div className="dfoot">
           <span className="m">{taken.length ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'runs' })}>{t('drop.toRuns')}</button> : t('drop.moreHint')}</span>
-          <button type="button" className="btn primary" onClick={closeDrop}>{working ? t('drop.background') : t('common.close')}</button>
+          <button type="button" className="btn primary" data-testid="drop-close" onClick={closeDrop}>{working ? t('drop.background') : t('common.close')}</button>
         </div>
       </div>
     </>
