@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index } from '../src/types/index.js';
-import { badgeCount, bankOf, payText, troubled, unbookedPayments, type Account } from '../src/app/areas/bank/model.js';
+import { badgeCount, bankOf, payText, troubled, unbookedPayments, type Account, type Statement } from '../src/app/areas/bank/model.js';
+import { parseIban } from '../src/workspace/banks.js';
 import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
 
@@ -264,4 +265,33 @@ test('r10h-7: statements whose balances do not chain name the days between them 
   assert.equal(b.check(earlier).gap, undefined);
   assert.deepEqual(b.check(later).gap, { from: '2026-10-15', to: '2026-10-15', bank: 900, open: 403.85, diff: -496.15 }, 'the bank moved 496.15 between the statements without a statement');
   assert.deepEqual([b.check(later).ok, troubled(b, later), troubled(b, earlier)], [true, true, false], 'the later statement itself adds up, yet it is a problem');
+});
+
+test('a bank statement filed among the receipts shows at the statements of its account it overlaps, with or without a file; one no account fits nowhere (#151)', () => {
+  const accounts = ACCOUNTS.map((a) => (a.account === '1021' ? { ...a, iban: parseIban('CH6580808000000000001') } : a));
+  const filed = (id: string, from: string, to: string, iban: string) => ({
+    id, filename: `${id}.pdf`, kind: 'statement', date: to,
+    extractedText: [`Kontoauszug ${from} - ${to}`, `IBAN ${iban}`, 'Schlusssaldo: 950.00'].join('\n'),
+  }) as Index['receipts'][number];
+  const plain = books();
+  const withFiled = books({ receipts: [...plain.receipts,
+    filed('july', '01.07.2026', '31.07.2026', 'CH65 8080 8000 0000 0000 1'),
+    filed('august', '01.08.2026', '31.08.2026', 'CH65 8080 8000 0000 0000 1'),
+    filed('stranger', '01.07.2026', '31.07.2026', 'CH93 0076 2011 6238 5295 7'),
+  ] });
+  const b = bankOf(withFiled, accounts, '2026-09-15');
+  const ids = (s: Statement | undefined) => s?.receipts?.map((x) => x.id);
+  const july = b.byKey('1021-2026-07')!;
+  assert.ok(july.file, 'July of 1021 has its own file');
+  assert.deepEqual(ids(july), ['july']);
+  const august = b.byKey('1021-2026-08')!;
+  assert.deepEqual([august.file, ids(august)], [undefined, ['august']], 'August has no file: the receipt is there all the same');
+  const all = b.statements('2026-01-01', '2026-09-30');
+  assert.ok(!all.some((s) => ids(s)?.includes('stranger')), 'an IBAN no account has places it nowhere');
+  assert.equal(ids(b.byKey('1023-2026-07')), undefined, 'another account of the same month gets none');
+  const before = bankOf(plain, accounts, '2026-09-15');
+  assert.deepEqual(all.map((s) => troubled(b, s)), before.statements('2026-01-01', '2026-09-30').map((s) => troubled(before, s)));
+  assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), badgeCount(before, '2026-07-01', '2026-09-15'));
+  const late = bankOf(books({ receipts: [filed('may', '01.05.2026', '31.05.2026', 'CH65 8080 8000 0000 0000 1')], config: { closedThrough: '2026-06-30' } }), accounts, '2026-09-15');
+  assert.deepEqual(ids(late.statements('2026-05-01', '2026-05-31').find((s) => s.account.account === '1021')), ['may'], 'a month before the account\'s first payment gets its row');
 });

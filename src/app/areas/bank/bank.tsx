@@ -195,7 +195,7 @@ function List(props: Props) {
 
 function StatementRow({ r, byMonth, same, sel, searching, bad, onSelect }: { r: Row; byMonth: boolean; same: boolean; sel: boolean; searching: boolean; bad: boolean; onSelect(key: string): void }) {
   const { s } = r;
-  const sub = !s.file ? t(s.running ? 'bank.running' : s.missing ? 'bank.missing' : 'bank.without') : searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
+  const sub = !s.file ? t(s.receipts ? 'bank.receiptStatement' : s.running ? 'bank.running' : s.missing ? 'bank.missing' : 'bank.without') : searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
   return (
     <div className={`row${sel ? ' sel' : ''}${s.missing ? ' missing' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-stmt={s.key} onClick={() => onSelect(s.key)}>
       <span className="d mono">{same ? <span className="sr">{formatDate(s.to)}</span> : <><span className="dl">{formatDate(s.to)}</span><span className="ds">{formatDate(s.to).slice(0, 6)}</span></>}</span>

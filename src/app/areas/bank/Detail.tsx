@@ -94,6 +94,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const file = s.file && sources.statement(s.file.bank, s.file.filename);
   const camt = !!s.file && isCamt(s.file);
   const src = camt ? undefined : file;
+  // A month with no paper of its own (none, or the bank's XML) shows the statement filed among the receipts.
+  const filedPaper = !src && s.receipts?.[0];
   const wise = s.account.statements === 'wise';
   const mark: Mark | undefined = tx && { tx, fee: b.feeOf(tx.ref), wise };
   const choose = (ref: string | undefined) => nav.select({ area: 'bank', statement: s.key, ...(ref && { payment: ref }) });
@@ -134,6 +136,13 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.checkDiff', { diff: fmt(c!.diff) })}</span>
         )}
       </div>
+      {s.receipts?.map((x) => (
+        <div key={x.id} className="status">
+          <button type="button" className="golink" data-testid="statement-receipt" onClick={() => nav.go(at({ area: 'receipts', id: x.id }, x.to, query.period))}>
+            {t('bank.receiptStatementLink', { filename: x.filename })} <span className="arr">→</span>
+          </button>
+        </div>
+      ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
 
       <div className="body">
@@ -153,13 +162,21 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             <div className="paper real stmt" role="button" tabIndex={0} aria-label={t('bank.openLarge')} onClick={() => setUi({ overlay: 'quick' })}>
               <StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.detail')} />
             </div>
-          ) : camt ? (
-            <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>
-          ) : !s.running && s.account.statements && canEdit && !closed ? (
-            <button type="button" className="well" style={{ width: '100%', maxWidth: 640 }} onClick={() => pickStatements((files) => importStatements(files, nav, { account: s.account, month: s.from.slice(0, 7) }))}>
-              <span><b>{t('bank.well')}</b>{t('bank.wellFor', { bank: s.account.bank })}</span>
-            </button>
-          ) : null}
+          ) : (
+            <>
+              {camt && <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>}
+              {filedPaper && (
+                <div className="paper real stmt" data-testid="statement-receipt-paper">
+                  <StatementPaper key={filedPaper.id} src={sources.receipt(filedPaper.id)} scroller={(el) => el.closest('.detail')} />
+                </div>
+              )}
+              {!camt && !s.running && s.account.statements && canEdit && !closed ? (
+                <button type="button" className="well" style={{ width: '100%', maxWidth: 640 }} onClick={() => pickStatements((files) => importStatements(files, nav, { account: s.account, month: s.from.slice(0, 7) }))}>
+                  <span><b>{t('bank.well')}</b>{t('bank.wellFor', { bank: s.account.bank })}</span>
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
         <aside className="margin" aria-label={t('receipts.details')}>
           {pays.length > 0 && (

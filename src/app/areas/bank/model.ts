@@ -12,9 +12,13 @@ import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-
 import { fromRappen, toRappen } from '../../../accounting/rappen.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { splitTitle } from '../receipts/model.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, documents } from '../../../engines/index.js';
+import { accountOfStatement, statementFacts } from '../../../intake/statement-facts.js';
 
-export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements'>;
+export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements' | 'iban'>;
+
+/** A bank statement filed among the receipts (#151), placed at its account by its facts. */
+export interface StatementReceipt { id: string; filename: string; from: IsoDate; to: IsoDate }
 
 export interface Statement {
   /**
@@ -36,6 +40,8 @@ export interface Statement {
    * no problem (#88): the account's own history decides, no setting.
    */
   missing?: true;
+  /** Statements among the receipts of this account whose days overlap this one's. */
+  receipts?: StatementReceipt[];
 }
 
 export interface Check {
@@ -181,6 +187,19 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   const entries = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries ?? []) (entries.get(e.transactionRef) ?? entries.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
 
+  const filedAsReceipt = new Map<string, StatementReceipt[]>(banked.map((a) => [a.account, []]));
+  for (const r of books.receipts) {
+    if (r.kind !== 'statement') continue;
+    const facts = statementFacts(r, documents());
+    const a = facts?.to ? accountOfStatement(facts, r, banked) : undefined;
+    if (!a) continue;
+    filedAsReceipt.get(a.account)!.push({ id: r.id, filename: r.filename, from: facts!.from ?? `${facts!.to!.slice(0, 7)}-01`, to: facts!.to! });
+  }
+  const withReceipts = (s: Statement): Statement => {
+    const overlap = filedAsReceipt.get(s.account.account)!.filter((x) => x.from <= s.to && x.to >= s.from);
+    return overlap.length ? { ...s, receipts: overlap } : s;
+  };
+
   const files = new Map<string, Statement[]>(banked.map((a) => [a.account, []]));
   const received = new Set<string>();
   for (const f of books.bankStatements) {
@@ -200,13 +219,13 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
       const from = first === s.from.slice(0, 7) ? s.from : `${first}-01`;
       return [{ ...s, key: statementKey(account, from), from }];
     });
-    files.set(account, keyed(account, [...pdfs, ...camts]));
+    files.set(account, keyed(account, [...pdfs, ...camts]).map(withReceipts));
   }
 
   // An account's months start with its first statement or payment, or the year its books open.
   const opens = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
   const startOf = new Map(banked.map((a) => {
-    const firsts = [...files.get(a.account)!.map((s) => s.from), ...byAccount.get(a.account)!.map((t) => t.date)].sort();
+    const firsts = [...files.get(a.account)!.map((s) => s.from), ...byAccount.get(a.account)!.map((t) => t.date), ...filedAsReceipt.get(a.account)!.map((x) => x.from)].sort();
     const first = opens && firsts[0] && `${opens}-01-01` < firsts[0] ? `${opens}-01-01` : firsts[0];
     return [a.account, first] as const;
   }));
@@ -221,7 +240,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
         if (coversMonth(files.get(a.account)!, first, last)) continue;
         const running = last >= today;
         if (running && !byAccount.get(a.account)!.some((t) => t.date >= first)) continue;
-        missing.push({ key: statementKey(a.account, first), account: a, from: first, to: last, ...(running ? { running } : received.has(a.account) && { missing: true as const }) });
+        missing.push(withReceipts({ key: statementKey(a.account, first), account: a, from: first, to: last, ...(running ? { running } : received.has(a.account) && { missing: true as const }) }));
       }
     }
     return [...have, ...missing];
