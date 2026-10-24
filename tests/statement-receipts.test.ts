@@ -67,6 +67,8 @@ test('statementPeriod reads a dash, «bis» or «to» between two days, in eithe
   assert.deepEqual(statementPdf('statement_12345678_CHF_2026-02-01_2026-02-28.pdf'), { currency: 'CHF', fromDate: '2026-02-01', toDate: '2026-02-28' });
   assert.deepEqual(statementPdf('Kontoauszug 01.01.2026 - 31.01.2026 - CH6580808000000000001 - 2026-01-31.pdf'), { fromDate: '2026-01-01', toDate: '2026-01-31' });
   assert.equal(statementPdf('20260105-example-cloud-invoice-2026-01.pdf'), null);
+  assert.equal(statementPdf('Kontoauszug 01.02.2026 - 31.02.2026.pdf'), null, 'a day the calendar has not is no period');
+  assert.equal(statementPeriod('01.04.2026 - 31.04.2026'), undefined);
 });
 
 test('books 4 → 5: a receipt nobody typed that reads as a statement is typed and dated; a person\'s kind, an own date and an invoice stay; the step runs twice to the same result', () => {

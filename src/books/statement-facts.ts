@@ -31,7 +31,8 @@ const PERIOD_DMY = new RegExp(`(?<!\\d)${DMY}${BETWEEN}${DMY}(?!\\d)`);
 const PERIOD_ISO = new RegExp(`(?<!\\d)${ISO}${BETWEEN}${ISO}(?!\\d)`);
 
 const iso = (y: string, m: string | number, d: string | number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-const validDay = (d: string) => { const [y, m, day] = d.split('-').map(Number); return m >= 1 && m <= 12 && day >= 1 && day <= 31 && y > 2000; };
+/** A day the calendar has: «31.02.2026» is none. */
+const validDay = (d: string) => { const [y, m, day] = d.split('-').map(Number); const t = new Date(Date.UTC(y, m - 1, day)); return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === day; };
 
 /** The first period two days delimit in `text`, the earlier day first. */
 export function statementPeriod(text: string): { from: string; to: string } | undefined {
@@ -46,10 +47,9 @@ export function statementPeriod(text: string): { from: string; to: string } | un
 /** The period (and the currency, when the name has it) a statement file's name gives: «Kontoauszug 01.01.2026 - 31.01.2026 - CH… - 2026-01-31.pdf», «statement_12345678_CHF_2026-01-01_2026-01-31.pdf». */
 export function statementPdf(filename: string): { fromDate: string; toDate: string; currency?: string } | null {
   const r = filename.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2})\.(\d{2})\.(\d{4})/);
-  if (r) return { fromDate: `${r[3]}-${r[2]}-${r[1]}`, toDate: `${r[6]}-${r[5]}-${r[4]}` };
-  const w = filename.match(/statement_\d+_([A-Z]{3})_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})\.pdf/);
-  if (w) return { currency: w[1], fromDate: w[2], toDate: w[3] };
-  return null;
+  const w = r ? null : filename.match(/statement_\d+_([A-Z]{3})_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})\.pdf/);
+  const named = r ? { fromDate: `${r[3]}-${r[2]}-${r[1]}`, toDate: `${r[6]}-${r[5]}-${r[4]}` } : w ? { currency: w[1], fromDate: w[2], toDate: w[3] } : null;
+  return named && validDay(named.fromDate) && validDay(named.toDate) ? named : null;
 }
 
 type Named = Pick<Receipt, 'extractedText' | 'filename' | 'originalFilename'>;
